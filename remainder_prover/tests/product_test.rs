@@ -2,14 +2,13 @@ use remainder::expression::abstract_expr::AbstractExpr;
 use remainder::expression::generic_expr::Expression;
 use remainder::layouter::compiling::LayouterCircuit;
 use remainder::layouter::component::{Component, ComponentSet};
-use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
+use remainder::layouter::nodes::circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType};
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::sector::Sector;
-use remainder::layouter::nodes::{CircuitNode, ClaimableNode, Context};
-use remainder::mle::evals::MultilinearExtension;
+use remainder::layouter::nodes::{CircuitNode, Context};
 use remainder::prover::helpers::test_circuit;
-use remainder::utils::get_input_shred_from_num_vars;
+use remainder::utils::get_input_shred_and_data_from_vec;
 use remainder_shared_types::{FieldExt, Fr};
 
 pub struct ProductCheckerComponent<F: FieldExt> {
@@ -20,20 +19,15 @@ impl<F: FieldExt> ProductCheckerComponent<F> {
     /// Checks that factor1 * factor2 - expected_product == 0.
     pub fn new(
         ctx: &Context,
-        factor1: &dyn ClaimableNode<F>,
-        factor2: &dyn ClaimableNode<F>,
-        expected_product: &dyn ClaimableNode<F>,
+        factor1: &dyn CircuitNode,
+        factor2: &dyn CircuitNode,
+        expected_product: &dyn CircuitNode,
     ) -> Self {
-        let sector = Sector::new(
-            ctx,
-            &[factor1, factor2, expected_product],
-            |input_nodes| {
-                assert_eq!(input_nodes.len(), 3);
-                Expression::<F, AbstractExpr>::products(vec![input_nodes[0], input_nodes[1]])
-                    - input_nodes[2].expr()
-            },
-            |data| MultilinearExtension::new_sized_zero(data[0].num_vars()),
-        );
+        let sector = Sector::new(ctx, &[factor1, factor2, expected_product], |input_nodes| {
+            assert_eq!(input_nodes.len(), 3);
+            Expression::<F, AbstractExpr>::products(vec![input_nodes[0], input_nodes[1]])
+                - input_nodes[2].expr()
+        });
         Self { sector }
     }
 }
@@ -71,9 +65,17 @@ fn test_product_checker() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let factor1_shred = get_input_shred_from_num_vars(factor1.clone(), ctx, &input_layer);
-        let factor2_shred = get_input_shred_from_num_vars(factor2.clone(), ctx, &input_layer);
-        let product_shred = get_input_shred_from_num_vars(product.clone(), ctx, &input_layer);
+        let (factor1_shred, factor1_shred_data) =
+            get_input_shred_and_data_from_vec(factor1.clone(), ctx, &input_layer);
+        let (factor2_shred, factor2_shred_data) =
+            get_input_shred_and_data_from_vec(factor2.clone(), ctx, &input_layer);
+        let (product_shred, product_shred_data) =
+            get_input_shred_and_data_from_vec(product.clone(), ctx, &input_layer);
+        let input_data = InputLayerData::new(
+            input_layer.id(),
+            vec![factor1_shred_data, factor2_shred_data, product_shred_data],
+            None,
+        );
 
         let checker =
             ProductCheckerComponent::new(ctx, &factor1_shred, &factor2_shred, &product_shred);
@@ -88,7 +90,10 @@ fn test_product_checker() {
             checker.sector.into(),
             output.into(),
         ];
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_data],
+        )
     });
     test_circuit(circuit, None);
 }

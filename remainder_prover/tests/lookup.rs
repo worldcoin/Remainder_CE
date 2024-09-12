@@ -3,10 +3,11 @@ use remainder::{
         compiling::LayouterCircuit,
         component::ComponentSet,
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
             lookup::{LookupConstraint, LookupTable},
             node_enum::NodeEnum,
-            random::VerifierChallengeNode,
+            verifier_challenge::VerifierChallengeNode,
+            CircuitNode,
         },
     },
     prover::helpers::test_circuit,
@@ -14,7 +15,7 @@ use remainder::{
 use remainder_shared_types::Fr;
 
 pub mod utils;
-use utils::get_input_shred_from_vec;
+use utils::get_input_shred_and_data_from_vec;
 
 /// Test the case where there is only one LookupConstraint for the LookupTable i.e. just one constrained
 /// MLE.
@@ -22,11 +23,14 @@ use utils::get_input_shred_from_vec;
 pub fn single_shred_test() {
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let table =
-            get_input_shred_from_vec(vec![Fr::from(0u64), Fr::from(1u64)], ctx, &input_layer);
+        let (table, table_data) = get_input_shred_and_data_from_vec(
+            vec![Fr::from(0u64), Fr::from(1u64)],
+            ctx,
+            &input_layer,
+        );
         let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new(ctx, &table, false, verifier_challenge_node);
-        let constrained = get_input_shred_from_vec(
+        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, verifier_challenge_node);
+        let (constrained, constrained_data) = get_input_shred_and_data_from_vec(
             vec![
                 Fr::from(0u64),
                 Fr::from(1u64),
@@ -36,10 +40,18 @@ pub fn single_shred_test() {
             ctx,
             &input_layer,
         );
-        let multiplicities =
-            get_input_shred_from_vec(vec![Fr::from(1u64), Fr::from(3u64)], ctx, &input_layer);
+        let (multiplicities, multiplicities_data) = get_input_shred_and_data_from_vec(
+            vec![Fr::from(1u64), Fr::from(3u64)],
+            ctx,
+            &input_layer,
+        );
+        let input_data = InputLayerData::new(
+            input_layer.id(),
+            vec![table_data, constrained_data, multiplicities_data],
+            None,
+        );
         let lookup_constraint =
-            LookupConstraint::new(ctx, &lookup_table, &constrained, &multiplicities);
+            LookupConstraint::new::<Fr>(ctx, &lookup_table, &constrained, &multiplicities);
 
         let nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
@@ -49,7 +61,10 @@ pub fn single_shred_test() {
             multiplicities.into(),
             lookup_constraint.into(),
         ];
-        ComponentSet::<NodeEnum<Fr>>::new_raw(nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(nodes),
+            vec![input_data],
+        )
     });
     test_circuit(circuit, None)
 }
@@ -59,12 +74,15 @@ pub fn single_shred_test() {
 pub fn multi_shred_test() {
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let table =
-            get_input_shred_from_vec(vec![Fr::from(3u64), Fr::from(4u64)], ctx, &input_layer);
+        let (table, table_data) = get_input_shred_and_data_from_vec(
+            vec![Fr::from(3u64), Fr::from(4u64)],
+            ctx,
+            &input_layer,
+        );
         let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new(ctx, &table, false, verifier_challenge_node);
+        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, verifier_challenge_node);
 
-        let constrained_0 = get_input_shred_from_vec(
+        let (constrained_0, constrained_0_data) = get_input_shred_and_data_from_vec(
             vec![
                 Fr::from(3u64),
                 Fr::from(3u64),
@@ -74,12 +92,15 @@ pub fn multi_shred_test() {
             ctx,
             &input_layer,
         );
-        let multiplicities_0 =
-            get_input_shred_from_vec(vec![Fr::from(3u64), Fr::from(1u64)], ctx, &input_layer);
+        let (multiplicities_0, multiplicities_0_data) = get_input_shred_and_data_from_vec(
+            vec![Fr::from(3u64), Fr::from(1u64)],
+            ctx,
+            &input_layer,
+        );
         let lookup_constraint_0 =
-            LookupConstraint::new(ctx, &lookup_table, &constrained_0, &multiplicities_0);
+            LookupConstraint::new::<Fr>(ctx, &lookup_table, &constrained_0, &multiplicities_0);
 
-        let constrained_1 = get_input_shred_from_vec(
+        let (constrained_1, constrained_1_data) = get_input_shred_and_data_from_vec(
             vec![
                 Fr::from(4u64),
                 Fr::from(4u64),
@@ -89,12 +110,15 @@ pub fn multi_shred_test() {
             ctx,
             &input_layer,
         );
-        let multiplicities_1 =
-            get_input_shred_from_vec(vec![Fr::from(0u64), Fr::from(4u64)], ctx, &input_layer);
+        let (multiplicities_1, multiplicities_1_data) = get_input_shred_and_data_from_vec(
+            vec![Fr::from(0u64), Fr::from(4u64)],
+            ctx,
+            &input_layer,
+        );
         let lookup_constraint_1 =
-            LookupConstraint::new(ctx, &lookup_table, &constrained_1, &multiplicities_1);
+            LookupConstraint::new::<Fr>(ctx, &lookup_table, &constrained_1, &multiplicities_1);
 
-        let constrained_2 = get_input_shred_from_vec(
+        let (constrained_2, constrained_2_data) = get_input_shred_and_data_from_vec(
             vec![
                 Fr::from(4u64),
                 Fr::from(3u64),
@@ -104,12 +128,15 @@ pub fn multi_shred_test() {
             ctx,
             &input_layer,
         );
-        let multiplicities_2 =
-            get_input_shred_from_vec(vec![Fr::from(2u64), Fr::from(2u64)], ctx, &input_layer);
+        let (multiplicities_2, multiplicities_2_data) = get_input_shred_and_data_from_vec(
+            vec![Fr::from(2u64), Fr::from(2u64)],
+            ctx,
+            &input_layer,
+        );
         let lookup_constraint_2 =
-            LookupConstraint::new(ctx, &lookup_table, &constrained_2, &multiplicities_2);
+            LookupConstraint::new::<Fr>(ctx, &lookup_table, &constrained_2, &multiplicities_2);
 
-        let constrained_3 = get_input_shred_from_vec(
+        let (constrained_3, constrained_3_data) = get_input_shred_and_data_from_vec(
             vec![
                 Fr::from(4u64),
                 Fr::from(4u64),
@@ -119,10 +146,29 @@ pub fn multi_shred_test() {
             ctx,
             &input_layer,
         );
-        let multiplicities_3 =
-            get_input_shred_from_vec(vec![Fr::from(1u64), Fr::from(3u64)], ctx, &input_layer);
+        let (multiplicities_3, multiplicities_3_data) = get_input_shred_and_data_from_vec(
+            vec![Fr::from(1u64), Fr::from(3u64)],
+            ctx,
+            &input_layer,
+        );
         let lookup_constraint_3 =
-            LookupConstraint::new(ctx, &lookup_table, &constrained_3, &multiplicities_3);
+            LookupConstraint::new::<Fr>(ctx, &lookup_table, &constrained_3, &multiplicities_3);
+
+        let input_data = InputLayerData::new(
+            input_layer.id(),
+            vec![
+                table_data,
+                constrained_0_data,
+                multiplicities_0_data,
+                constrained_1_data,
+                multiplicities_1_data,
+                constrained_2_data,
+                multiplicities_2_data,
+                constrained_3_data,
+                multiplicities_3_data,
+            ],
+            None,
+        );
 
         let nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
@@ -141,7 +187,10 @@ pub fn multi_shred_test() {
             multiplicities_3.into(),
             lookup_constraint_3.into(),
         ];
-        ComponentSet::<NodeEnum<Fr>>::new_raw(nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(nodes),
+            vec![input_data],
+        )
     });
     test_circuit(circuit, None)
 }
@@ -152,11 +201,14 @@ pub fn multi_shred_test() {
 pub fn test_not_satisfied() {
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let table =
-            get_input_shred_from_vec(vec![Fr::from(0u64), Fr::from(1u64)], ctx, &input_layer);
+        let (table, table_data) = get_input_shred_and_data_from_vec(
+            vec![Fr::from(0u64), Fr::from(1u64)],
+            ctx,
+            &input_layer,
+        );
         let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new(ctx, &table, false, verifier_challenge_node);
-        let constrained = get_input_shred_from_vec(
+        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, verifier_challenge_node);
+        let (constrained, constrained_data) = get_input_shred_and_data_from_vec(
             vec![
                 Fr::from(3u64),
                 Fr::from(1u64),
@@ -166,10 +218,18 @@ pub fn test_not_satisfied() {
             ctx,
             &input_layer,
         );
-        let multiplicities =
-            get_input_shred_from_vec(vec![Fr::from(1u64), Fr::from(3u64)], ctx, &input_layer);
+        let (multiplicities, multiplicities_data) = get_input_shred_and_data_from_vec(
+            vec![Fr::from(1u64), Fr::from(3u64)],
+            ctx,
+            &input_layer,
+        );
         let lookup_constraint =
-            LookupConstraint::new(ctx, &lookup_table, &constrained, &multiplicities);
+            LookupConstraint::new::<Fr>(ctx, &lookup_table, &constrained, &multiplicities);
+        let input_layer_data = InputLayerData::new(
+            input_layer.id(),
+            vec![table_data, constrained_data, multiplicities_data],
+            None,
+        );
 
         let nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
@@ -179,7 +239,10 @@ pub fn test_not_satisfied() {
             multiplicities.into(),
             lookup_constraint.into(),
         ];
-        ComponentSet::<NodeEnum<Fr>>::new_raw(nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(nodes),
+            vec![input_layer_data],
+        )
     });
     test_circuit(circuit, None)
 }

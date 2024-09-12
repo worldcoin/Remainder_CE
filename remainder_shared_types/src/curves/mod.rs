@@ -6,19 +6,13 @@ use ark_std::{
     rand::{self, RngCore},
     test_rng,
 };
-use halo2curves::{
-    bn256::{Fq, Fr},
-    group::Curve,
-};
+use halo2curves::bn256::{Fq, Fr};
 use itertools::Itertools;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha3::{
-    digest::{
-        core_api::{CoreWrapper, XofReaderCoreWrapper},
-        XofReader,
-    },
-    Shake256Core, Shake256ReaderCore,
+    digest::{core_api::XofReaderCoreWrapper, XofReader},
+    Shake256ReaderCore,
 };
 /// Traits and implementations for elliptic curves of prime order.
 ///

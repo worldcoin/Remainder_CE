@@ -1,22 +1,21 @@
 use ark_std::test_rng;
-use itertools::Itertools;
 use remainder::{
     layouter::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, ClaimableNode, Context,
+            CircuitNode, Context,
         },
     },
-    mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
+    mle::{dense::DenseMle, Mle},
     prover::helpers::test_circuit,
 };
 use remainder_shared_types::{FieldExt, Fr};
-use utils::{get_dummy_random_mle, get_input_shred_from_vec};
+use utils::{get_dummy_random_mle, get_input_shred_and_data_from_vec};
 pub mod utils;
 
 pub struct DataParallelRecombinationInterleaveBuilder<F: FieldExt> {
@@ -26,52 +25,23 @@ pub struct DataParallelRecombinationInterleaveBuilder<F: FieldExt> {
 impl<F: FieldExt> DataParallelRecombinationInterleaveBuilder<F> {
     pub fn new(
         ctx: &Context,
-        mle_1: &dyn ClaimableNode<F>,
-        mle_2: &dyn ClaimableNode<F>,
-        mle_3: &dyn ClaimableNode<F>,
-        mle_4: &dyn ClaimableNode<F>,
+        mle_1: &dyn CircuitNode,
+        mle_2: &dyn CircuitNode,
+        mle_3: &dyn CircuitNode,
+        mle_4: &dyn CircuitNode,
     ) -> Self {
-        let combine_sector = Sector::new(
-            ctx,
-            &[mle_1, mle_2, mle_3, mle_4],
-            |input_nodes| {
-                assert_eq!(input_nodes.len(), 4);
-                let mle_1_id = input_nodes[0];
-                let mle_2_id = input_nodes[1];
-                let mle_3_id = input_nodes[2];
-                let mle_4_id = input_nodes[3];
+        let combine_sector = Sector::new(ctx, &[mle_1, mle_2, mle_3, mle_4], |input_nodes| {
+            assert_eq!(input_nodes.len(), 4);
+            let mle_1_id = input_nodes[0];
+            let mle_2_id = input_nodes[1];
+            let mle_3_id = input_nodes[2];
+            let mle_4_id = input_nodes[3];
 
-                let lhs = mle_2_id.expr().concat_expr(mle_1_id.expr());
-                let rhs = mle_4_id.expr().concat_expr(mle_3_id.expr());
+            let lhs = mle_2_id.expr().concat_expr(mle_1_id.expr());
+            let rhs = mle_4_id.expr().concat_expr(mle_3_id.expr());
 
-                rhs.concat_expr(lhs)
-            },
-            |data| {
-                let mle_1_data = data[0];
-                let mle_2_data = data[1];
-                let mle_3_data = data[2];
-                let mle_4_data = data[3];
-
-                let lhs_bt = mle_1_data
-                    .get_evals_vector()
-                    .iter()
-                    .zip(mle_2_data.get_evals_vector())
-                    .flat_map(|(elem_1, elem_2)| vec![elem_1, elem_2]);
-
-                let rhs_bt = mle_3_data
-                    .get_evals_vector()
-                    .iter()
-                    .zip(mle_4_data.get_evals_vector())
-                    .flat_map(|(elem_1, elem_2)| vec![elem_1, elem_2]);
-
-                let final_bt = lhs_bt
-                    .zip(rhs_bt)
-                    .flat_map(|(elem_1, elem_2)| vec![*elem_1, *elem_2])
-                    .collect_vec();
-
-                MultilinearExtension::new(final_bt)
-            },
-        );
+            rhs.concat_expr(lhs)
+        });
 
         Self {
             first_layer_sector: combine_sector,
@@ -99,43 +69,23 @@ pub struct DataParallelRecombinationStackBuilder<F: FieldExt> {
 impl<F: FieldExt> DataParallelRecombinationStackBuilder<F> {
     pub fn new(
         ctx: &Context,
-        mle_1: &dyn ClaimableNode<F>,
-        mle_2: &dyn ClaimableNode<F>,
-        mle_3: &dyn ClaimableNode<F>,
-        mle_4: &dyn ClaimableNode<F>,
+        mle_1: &dyn CircuitNode,
+        mle_2: &dyn CircuitNode,
+        mle_3: &dyn CircuitNode,
+        mle_4: &dyn CircuitNode,
     ) -> Self {
-        let combine_sector = Sector::new(
-            ctx,
-            &[mle_1, mle_2, mle_3, mle_4],
-            |input_nodes| {
-                assert_eq!(input_nodes.len(), 4);
-                let mle_1_id = input_nodes[0];
-                let mle_2_id = input_nodes[1];
-                let mle_3_id = input_nodes[2];
-                let mle_4_id = input_nodes[3];
+        let combine_sector = Sector::new(ctx, &[mle_1, mle_2, mle_3, mle_4], |input_nodes| {
+            assert_eq!(input_nodes.len(), 4);
+            let mle_1_id = input_nodes[0];
+            let mle_2_id = input_nodes[1];
+            let mle_3_id = input_nodes[2];
+            let mle_4_id = input_nodes[3];
 
-                let lhs = mle_2_id.expr().concat_expr(mle_1_id.expr());
-                let rhs = mle_4_id.expr().concat_expr(mle_3_id.expr());
+            let lhs = mle_2_id.expr().concat_expr(mle_1_id.expr());
+            let rhs = mle_4_id.expr().concat_expr(mle_3_id.expr());
 
-                rhs.concat_expr(lhs)
-            },
-            |data| {
-                let mle_1_data = data[0];
-                let mle_2_data = data[1];
-                let mle_3_data = data[2];
-                let mle_4_data = data[3];
-
-                let final_bt = mle_1_data
-                    .get_evals_vector()
-                    .clone()
-                    .into_iter()
-                    .chain(mle_2_data.get_evals_vector().clone().into_iter())
-                    .chain(mle_3_data.get_evals_vector().clone().into_iter())
-                    .chain(mle_4_data.get_evals_vector().clone().into_iter())
-                    .collect_vec();
-                MultilinearExtension::new(final_bt)
-            },
-        );
+            rhs.concat_expr(lhs)
+        });
 
         Self {
             first_layer_sector: combine_sector,
@@ -158,26 +108,18 @@ where
 
 pub struct DiffTwoInputsBuilder<F: FieldExt> {
     pub first_layer_sector: Sector<F>,
-    pub output_sector: OutputNode<F>,
+    pub output_sector: OutputNode,
 }
 
 impl<F: FieldExt> DiffTwoInputsBuilder<F> {
-    pub fn new(ctx: &Context, mle_1: &dyn ClaimableNode<F>, mle_2: &dyn ClaimableNode<F>) -> Self {
-        let first_layer_sector = Sector::new(
-            ctx,
-            &[mle_1, mle_2],
-            |input_nodes| {
-                assert_eq!(input_nodes.len(), 2);
-                let mle_1_id = input_nodes[0];
-                let mle_2_id = input_nodes[1];
+    pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
+        let first_layer_sector = Sector::new(ctx, &[mle_1, mle_2], |input_nodes| {
+            assert_eq!(input_nodes.len(), 2);
+            let mle_1_id = input_nodes[0];
+            let mle_2_id = input_nodes[1];
 
-                mle_1_id.expr() - mle_2_id.expr()
-            },
-            |data| {
-                let mle_1_data = data[0];
-                MultilinearExtension::new_sized_zero(mle_1_data.num_vars())
-            },
-        );
+            mle_1_id.expr() - mle_2_id.expr()
+        });
 
         let output_node = OutputNode::new_zero(ctx, &first_layer_sector);
 
@@ -187,7 +129,7 @@ impl<F: FieldExt> DiffTwoInputsBuilder<F> {
         }
     }
 
-    pub fn get_output_sector(&self) -> &OutputNode<F> {
+    pub fn get_output_sector(&self) -> &OutputNode {
         &self.output_sector
     }
 }
@@ -222,12 +164,27 @@ fn test_dataparallel_recombination_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let input_shred_1 = get_input_shred_from_vec(vecs_vec[0].clone(), ctx, &input_layer);
-        let input_shred_2 = get_input_shred_from_vec(vecs_vec[1].clone(), ctx, &input_layer);
-        let input_shred_3 = get_input_shred_from_vec(vecs_vec[2].clone(), ctx, &input_layer);
-        let input_shred_4 = get_input_shred_from_vec(vecs_vec[3].clone(), ctx, &input_layer);
-        let dataparallel_shred =
-            get_input_shred_from_vec(combined_mle_vec.to_vec(), ctx, &input_layer);
+        let (input_shred_1, input_shred_1_data) =
+            get_input_shred_and_data_from_vec(vecs_vec[0].clone(), ctx, &input_layer);
+        let (input_shred_2, input_shred_2_data) =
+            get_input_shred_and_data_from_vec(vecs_vec[1].clone(), ctx, &input_layer);
+        let (input_shred_3, input_shred_3_data) =
+            get_input_shred_and_data_from_vec(vecs_vec[2].clone(), ctx, &input_layer);
+        let (input_shred_4, input_shred_4_data) =
+            get_input_shred_and_data_from_vec(vecs_vec[3].clone(), ctx, &input_layer);
+        let (dataparallel_shred, dataparallel_shred_data) =
+            get_input_shred_and_data_from_vec(combined_mle_vec.to_vec(), ctx, &input_layer);
+        let input_data = InputLayerData::new(
+            input_layer.id(),
+            vec![
+                input_shred_1_data,
+                input_shred_2_data,
+                input_shred_3_data,
+                input_shred_4_data,
+                dataparallel_shred_data,
+            ],
+            None,
+        );
 
         // Stack currently fails at layer 0, because expr and witgen for the first component is inconsistent.
         // But if you change from stack to interleave, then it fails at layer 1, because the subtraction of the dataparallel
@@ -241,7 +198,7 @@ fn test_dataparallel_recombination_newmainder() {
         );
 
         let component_2 =
-            DiffTwoInputsBuilder::new(ctx, component_1.get_output_sector(), &dataparallel_shred);
+            DiffTwoInputsBuilder::new(ctx, &component_1.get_output_sector(), &dataparallel_shred);
 
         let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
@@ -255,7 +212,10 @@ fn test_dataparallel_recombination_newmainder() {
         all_nodes.extend(component_1.yield_nodes());
         all_nodes.extend(component_2.yield_nodes());
 
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_data],
+        )
     });
 
     test_circuit(circuit, None)

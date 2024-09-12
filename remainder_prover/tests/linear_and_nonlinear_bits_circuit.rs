@@ -1,5 +1,4 @@
 use ark_std::test_rng;
-use itertools::Itertools;
 
 use remainder::{
     expression::abstract_expr::ExprBuilder,
@@ -7,17 +6,16 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, ClaimableNode, Context,
+            CircuitNode, Context,
         },
     },
-    mle::evals::MultilinearExtension,
     prover::helpers::test_circuit,
 };
 use remainder_shared_types::{FieldExt, Fr};
-use utils::{get_dummy_input_shred, DifferenceBuilderComponent};
+use utils::{get_dummy_input_shred_and_data, DifferenceBuilderComponent};
 
 pub mod utils;
 
@@ -35,47 +33,16 @@ pub struct LastBitLinearBuilderComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> LastBitLinearBuilderComponent<F> {
-    pub fn new(
-        ctx: &Context,
-        sel_node: &dyn ClaimableNode<F>,
-        prod_node: &dyn ClaimableNode<F>,
-    ) -> Self {
-        let last_bit_linear_sector = Sector::new(
-            ctx,
-            &[sel_node, prod_node],
-            |input_nodes| {
-                assert_eq!(input_nodes.len(), 2);
-                let sel_mle = input_nodes[0];
-                let prod_mle = input_nodes[1];
+    pub fn new(ctx: &Context, sel_node: &dyn CircuitNode, prod_node: &dyn CircuitNode) -> Self {
+        let last_bit_linear_sector = Sector::new(ctx, &[sel_node, prod_node], |input_nodes| {
+            assert_eq!(input_nodes.len(), 2);
+            let sel_mle = input_nodes[0];
+            let prod_mle = input_nodes[1];
 
-                let lhs_sum_expr = sel_mle.expr().concat_expr(sel_mle.expr());
-                let rhs_sum_expr = ExprBuilder::<F>::products(vec![prod_mle, prod_mle]);
-                lhs_sum_expr + rhs_sum_expr
-            },
-            |data| {
-                let sel_mle = data[0];
-                let prod_mle = data[1];
-                let sel_bt = sel_mle
-                    .get_evals_vector()
-                    .iter()
-                    .zip(sel_mle.get_evals_vector().iter())
-                    .flat_map(|(elem_1, elem_2)| vec![elem_1, elem_2]);
-
-                let mut prod_bt = prod_mle
-                    .get_evals_vector()
-                    .iter()
-                    .map(|elem| *elem * elem)
-                    .collect_vec();
-                prod_bt.extend(prod_bt.clone());
-
-                let final_bt = sel_bt
-                    .zip(prod_bt)
-                    .map(|(elem_1, elem_2)| *elem_1 + elem_2)
-                    .collect_vec();
-
-                MultilinearExtension::new(final_bt)
-            },
-        );
+            let lhs_sum_expr = sel_mle.expr().concat_expr(sel_mle.expr());
+            let rhs_sum_expr = ExprBuilder::<F>::products(vec![prod_mle, prod_mle]);
+            lhs_sum_expr + rhs_sum_expr
+        });
 
         Self {
             first_layer_sector: last_bit_linear_sector,
@@ -108,30 +75,15 @@ pub struct FirstBitLinearBuilderComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> FirstBitLinearBuilderComponent<F> {
-    pub fn new(ctx: &Context, sel_node: &dyn ClaimableNode<F>) -> Self {
-        let last_bit_linear_sector = Sector::new(
-            ctx,
-            &[sel_node],
-            |input_nodes| {
-                assert_eq!(input_nodes.len(), 1);
-                let sel_mle = input_nodes[0];
+    pub fn new(ctx: &Context, sel_node: &dyn CircuitNode) -> Self {
+        let last_bit_linear_sector = Sector::new(ctx, &[sel_node], |input_nodes| {
+            assert_eq!(input_nodes.len(), 1);
+            let sel_mle = input_nodes[0];
 
-                sel_mle
-                    .expr()
-                    .concat_expr(ExprBuilder::<F>::products(vec![sel_mle, sel_mle]))
-            },
-            |data| {
-                let sel_mle = data[0];
-                let final_bt = sel_mle
-                    .get_evals_vector()
-                    .iter()
-                    .zip(sel_mle.get_evals_vector().iter())
-                    .flat_map(|(elem_1, elem_2)| vec![*elem_1 * elem_1, *elem_2])
-                    .collect_vec();
-
-                MultilinearExtension::new(final_bt)
-            },
-        );
+            sel_mle
+                .expr()
+                .concat_expr(ExprBuilder::<F>::products(vec![sel_mle, sel_mle]))
+        });
 
         Self {
             first_layer_sector: last_bit_linear_sector,
@@ -170,13 +122,21 @@ fn test_linear_and_nonlinear_bits_circuit_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let sel_input = get_dummy_input_shred(VARS_SEL_SIDE, &mut rng, ctx, &input_layer);
-        let prod_input = get_dummy_input_shred(VARS_PROD_SIDE, &mut rng, ctx, &input_layer);
+        let (sel_input, sel_input_data) =
+            get_dummy_input_shred_and_data(VARS_SEL_SIDE, &mut rng, ctx, &input_layer);
+        let (prod_input, prod_input_data) =
+            get_dummy_input_shred_and_data(VARS_PROD_SIDE, &mut rng, ctx, &input_layer);
+        let input_data = InputLayerData::new(
+            input_layer.id(),
+            vec![sel_input_data, prod_input_data],
+            None,
+        );
 
         let component_1 = LastBitLinearBuilderComponent::new(ctx, &sel_input, &prod_input);
-        let component_2 = FirstBitLinearBuilderComponent::new(ctx, component_1.get_output_sector());
+        let component_2 =
+            FirstBitLinearBuilderComponent::new(ctx, &component_1.get_output_sector());
         let output_component =
-            DifferenceBuilderComponent::new(ctx, component_2.get_output_sector());
+            DifferenceBuilderComponent::new(ctx, &component_2.get_output_sector());
 
         let mut all_nodes: Vec<NodeEnum<Fr>> =
             vec![input_layer.into(), sel_input.into(), prod_input.into()];
@@ -185,7 +145,10 @@ fn test_linear_and_nonlinear_bits_circuit_newmainder() {
         all_nodes.extend(component_2.yield_nodes());
         all_nodes.extend(output_component.yield_nodes());
 
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_data],
+        )
     });
 
     test_circuit(circuit, None)

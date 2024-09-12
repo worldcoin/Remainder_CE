@@ -6,18 +6,17 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, ClaimableNode, Context,
+            CircuitNode, Context,
         },
     },
-    mle::evals::MultilinearExtension,
     prover::helpers::test_circuit,
 };
 use remainder_shared_types::{FieldExt, Fr};
 
-use crate::utils::{get_dummy_input_shred, DifferenceBuilderComponent};
+use crate::utils::{get_dummy_input_shred_and_data, DifferenceBuilderComponent};
 pub mod utils;
 
 /// A builder which returns the following expression:
@@ -39,10 +38,10 @@ pub struct NonlinearSelectorBuilderComponent<F: FieldExt> {
 impl<F: FieldExt> NonlinearSelectorBuilderComponent<F> {
     pub fn new(
         ctx: &Context,
-        left_sel_mle: &dyn ClaimableNode<F>,
-        right_sel_mle: &dyn ClaimableNode<F>,
-        right_sum_mle_1: &dyn ClaimableNode<F>,
-        right_sum_mle_2: &dyn ClaimableNode<F>,
+        left_sel_mle: &dyn CircuitNode,
+        right_sel_mle: &dyn CircuitNode,
+        right_sum_mle_1: &dyn CircuitNode,
+        right_sum_mle_2: &dyn CircuitNode,
     ) -> Self {
         let nonlinear_selector_sector = Sector::new(
             ctx,
@@ -65,33 +64,6 @@ impl<F: FieldExt> NonlinearSelectorBuilderComponent<F> {
                 let right_sum_side =
                     ExprBuilder::<F>::products(vec![right_sum_mle_1_id, right_sum_mle_2_id]);
                 left_sum_side + right_sum_side
-            },
-            |data| {
-                assert_eq!(data.len(), 4);
-                let left_sel_mle_data = data[0];
-                let right_sel_mle_data = data[1];
-                let right_sum_mle_1_data = data[2];
-                let right_sum_mle_2_data = data[3];
-
-                // --- Actual ---
-                let right_side_product_bt: Vec<F> = right_sum_mle_1_data
-                    .get_evals_vector()
-                    .iter()
-                    .zip(right_sum_mle_2_data.get_evals_vector().iter())
-                    .map(|(elem_1, elem_2)| *elem_1 * elem_2)
-                    .collect();
-                let left_side_concat_bt: Vec<F> = left_sel_mle_data
-                    .get_evals_vector()
-                    .iter()
-                    .zip(right_sel_mle_data.get_evals_vector().iter())
-                    .flat_map(|(elem_1, elem_2)| vec![*elem_1, *elem_2])
-                    .collect();
-                let sum_bt: Vec<F> = left_side_concat_bt
-                    .iter()
-                    .zip(right_side_product_bt)
-                    .map(|(left_sum, right_sum)| *left_sum + right_sum)
-                    .collect();
-                MultilinearExtension::new(sum_bt)
             },
         );
 
@@ -130,10 +102,14 @@ fn test_nonlinear_sel_circuit_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let left_sel_mle = get_dummy_input_shred(VARS_SEL_SIDE, &mut rng, ctx, &input_layer);
-        let right_sel_mle = get_dummy_input_shred(VARS_SEL_SIDE, &mut rng, ctx, &input_layer);
-        let right_sum_mle_1 = get_dummy_input_shred(VARS_PRODUCT_SIDE, &mut rng, ctx, &input_layer);
-        let right_sum_mle_2 = get_dummy_input_shred(VARS_PRODUCT_SIDE, &mut rng, ctx, &input_layer);
+        let (left_sel_mle, left_sel_mle_data) =
+            get_dummy_input_shred_and_data(VARS_SEL_SIDE, &mut rng, ctx, &input_layer);
+        let (right_sel_mle, right_sel_mle_data) =
+            get_dummy_input_shred_and_data(VARS_SEL_SIDE, &mut rng, ctx, &input_layer);
+        let (right_sum_mle_1, right_sum_mle_1_data) =
+            get_dummy_input_shred_and_data(VARS_PRODUCT_SIDE, &mut rng, ctx, &input_layer);
+        let (right_sum_mle_2, right_sum_mle_2_data) =
+            get_dummy_input_shred_and_data(VARS_PRODUCT_SIDE, &mut rng, ctx, &input_layer);
 
         let component_1 = NonlinearSelectorBuilderComponent::new(
             ctx,
@@ -142,7 +118,17 @@ fn test_nonlinear_sel_circuit_newmainder() {
             &right_sum_mle_1,
             &right_sum_mle_2,
         );
-        let component_2 = DifferenceBuilderComponent::new(ctx, component_1.get_output_sector());
+        let component_2 = DifferenceBuilderComponent::new(ctx, &component_1.get_output_sector());
+        let input_data = InputLayerData::new(
+            input_layer.id(),
+            vec![
+                left_sel_mle_data,
+                right_sel_mle_data,
+                right_sum_mle_1_data,
+                right_sum_mle_2_data,
+            ],
+            None,
+        );
 
         let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
@@ -154,7 +140,10 @@ fn test_nonlinear_sel_circuit_newmainder() {
 
         all_nodes.extend(component_1.yield_nodes());
         all_nodes.extend(component_2.yield_nodes());
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_data],
+        )
     });
 
     test_circuit(circuit, None)

@@ -6,18 +6,20 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, ClaimableNode, Context,
+            CircuitNode, Context,
         },
     },
     mle::{dense::DenseMle, Mle},
     prover::helpers::test_circuit,
 };
 use remainder_shared_types::{FieldExt, Fr};
-use utils::{get_input_shred_from_vec, DifferenceBuilderComponent, ProductScaledBuilderComponent};
+use utils::{
+    get_input_shred_and_data_from_vec, DifferenceBuilderComponent, ProductScaledBuilderComponent,
+};
 
 use crate::utils::get_dummy_random_mle_vec;
 pub mod utils;
@@ -44,14 +46,14 @@ impl<F: FieldExt> NonSelectorDataparallelComponent<F> {
     /// additionally contains a [DifferenceBuilderComponent] for zero output
     pub fn new(
         ctx: &Context,
-        mle_1_input: &dyn ClaimableNode<F>,
-        mle_2_input: &dyn ClaimableNode<F>,
+        mle_1_input: &dyn CircuitNode,
+        mle_2_input: &dyn CircuitNode,
     ) -> Self {
         let first_layer_component =
             ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);
 
         let output_component =
-            DifferenceBuilderComponent::new(ctx, first_layer_component.get_output_sector());
+            DifferenceBuilderComponent::new(ctx, &first_layer_component.get_output_sector());
 
         Self {
             first_layer_component,
@@ -101,15 +103,22 @@ fn test_dataparallel_simple_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let dataparallel_input_mle_1 = get_input_shred_from_vec(
-            dataparallel_mle_1.bookkeeping_table().to_vec(),
-            ctx,
-            &input_layer,
-        );
-        let dataparallel_input_mle_2 = get_input_shred_from_vec(
-            dataparallel_mle_2.bookkeeping_table().to_vec(),
-            ctx,
-            &input_layer,
+        let (dataparallel_input_mle_1, dataparallel_input_mle_1_data) =
+            get_input_shred_and_data_from_vec(
+                dataparallel_mle_1.bookkeeping_table().to_vec(),
+                ctx,
+                &input_layer,
+            );
+        let (dataparallel_input_mle_2, dataparallel_input_mle_2_data) =
+            get_input_shred_and_data_from_vec(
+                dataparallel_mle_2.bookkeeping_table().to_vec(),
+                ctx,
+                &input_layer,
+            );
+        let input_data = InputLayerData::new(
+            input_layer.id(),
+            vec![dataparallel_input_mle_1_data, dataparallel_input_mle_2_data],
+            None,
         );
 
         let component_1 = NonSelectorDataparallelComponent::new(
@@ -125,7 +134,10 @@ fn test_dataparallel_simple_newmainder() {
         ];
 
         all_nodes.extend(component_1.yield_nodes());
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_data],
+        )
     });
 
     test_circuit(circuit, None)

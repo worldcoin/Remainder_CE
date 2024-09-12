@@ -6,11 +6,11 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, ClaimableNode, Context,
+            CircuitNode, Context,
         },
     },
     mle::{dense::DenseMle, Mle},
@@ -21,7 +21,7 @@ use remainder_shared_types::{FieldExt, Fr};
 pub mod utils;
 
 use utils::{
-    get_dummy_input_shred, get_input_shred_from_vec, DifferenceBuilderComponent,
+    get_dummy_input_shred_and_data, get_input_shred_and_data_from_vec, DifferenceBuilderComponent,
     ProductScaledBuilderComponent, TripleNestedBuilderComponent,
 };
 
@@ -45,19 +45,21 @@ impl<F: FieldExt> DataParallelComponent<F> {
     /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
     pub fn new(
         ctx: &Context,
-        mle_1_input: &dyn ClaimableNode<F>,
-        mle_2_input: &dyn ClaimableNode<F>,
+        mle_1_input: &dyn CircuitNode,
+        mle_2_input: &dyn CircuitNode,
     ) -> Self {
         let product_scaled_component =
             ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);
 
         let product_scaled_meta_component = ProductScaledBuilderComponent::new(
             ctx,
-            product_scaled_component.get_output_sector(),
-            product_scaled_component.get_output_sector(),
+            &product_scaled_component.get_output_sector(),
+            &product_scaled_component.get_output_sector(),
         );
-        let output_component =
-            DifferenceBuilderComponent::new(ctx, product_scaled_meta_component.get_output_sector());
+        let output_component = DifferenceBuilderComponent::new(
+            ctx,
+            &product_scaled_meta_component.get_output_sector(),
+        );
 
         Self {
             first_layer_component: product_scaled_component,
@@ -105,15 +107,15 @@ impl<F: FieldExt> TripleNestedSelectorComponent<F> {
     /// the size of `inner_sel_mle`
     pub fn new(
         ctx: &Context,
-        inner_inner_sel: &dyn ClaimableNode<F>,
-        inner_sel: &dyn ClaimableNode<F>,
-        outer_sel: &dyn ClaimableNode<F>,
+        inner_inner_sel: &dyn CircuitNode,
+        inner_sel: &dyn CircuitNode,
+        outer_sel: &dyn CircuitNode,
     ) -> Self {
         let triple_nested_selector_component =
             TripleNestedBuilderComponent::new(ctx, inner_inner_sel, inner_sel, outer_sel);
         let output_component = DifferenceBuilderComponent::new(
             ctx,
-            triple_nested_selector_component.get_output_sector(),
+            &triple_nested_selector_component.get_output_sector(),
         );
 
         Self {
@@ -153,14 +155,14 @@ impl<F: FieldExt> ScaledProductComponent<F> {
     /// * `mle_2` - An MLE with arbitrary bookkeeping table values, same size as `mle_1`.
     pub fn new(
         ctx: &Context,
-        mle_1_input: &dyn ClaimableNode<F>,
-        mle_2_input: &dyn ClaimableNode<F>,
+        mle_1_input: &dyn CircuitNode,
+        mle_2_input: &dyn CircuitNode,
     ) -> Self {
         let product_scaled_component =
             ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);
 
         let output_component =
-            DifferenceBuilderComponent::new(ctx, product_scaled_component.get_output_sector());
+            DifferenceBuilderComponent::new(ctx, &product_scaled_component.get_output_sector());
 
         Self {
             first_layer_component: product_scaled_component,
@@ -219,12 +221,30 @@ fn test_combined_dataparallel_nondataparallel_circuit_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let input_shred_1 = get_input_shred_from_vec(mle_1_vec_raw.to_vec(), ctx, &input_layer);
-        let input_shred_2 = get_input_shred_from_vec(mle_2_vec_raw.to_vec(), ctx, &input_layer);
-        let input_shred_3 = get_dummy_input_shred(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
-        let input_shred_4 = get_dummy_input_shred(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
-        let input_shred_5 = get_dummy_input_shred(VARS_MLE_3, &mut rng, ctx, &input_layer);
-        let input_shred_6 = get_dummy_input_shred(VARS_MLE_4, &mut rng, ctx, &input_layer);
+        let (input_shred_1, input_shred_1_data) =
+            get_input_shred_and_data_from_vec(mle_1_vec_raw.to_vec(), ctx, &input_layer);
+        let (input_shred_2, input_shred_2_data) =
+            get_input_shred_and_data_from_vec(mle_2_vec_raw.to_vec(), ctx, &input_layer);
+        let (input_shred_3, input_shred_3_data) =
+            get_dummy_input_shred_and_data(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
+        let (input_shred_4, input_shred_4_data) =
+            get_dummy_input_shred_and_data(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
+        let (input_shred_5, input_shred_5_data) =
+            get_dummy_input_shred_and_data(VARS_MLE_3, &mut rng, ctx, &input_layer);
+        let (input_shred_6, input_shred_6_data) =
+            get_dummy_input_shred_and_data(VARS_MLE_4, &mut rng, ctx, &input_layer);
+        let input_data = InputLayerData::new(
+            input_layer.id(),
+            vec![
+                input_shred_1_data,
+                input_shred_2_data,
+                input_shred_3_data,
+                input_shred_4_data,
+                input_shred_5_data,
+                input_shred_6_data,
+            ],
+            None,
+        );
 
         let component_1 = DataParallelComponent::new(ctx, &input_shred_1, &input_shred_2);
         let component_2 =
@@ -244,7 +264,10 @@ fn test_combined_dataparallel_nondataparallel_circuit_newmainder() {
         all_nodes.extend(component_1.yield_nodes());
         all_nodes.extend(component_2.yield_nodes());
         all_nodes.extend(component_3.yield_nodes());
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_data],
+        )
     });
 
     test_circuit(circuit, None)

@@ -6,18 +6,18 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, ClaimableNode, Context,
+            CircuitNode, Context,
         },
     },
-    mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
+    mle::{dense::DenseMle, Mle},
     prover::helpers::test_circuit,
 };
 use remainder_shared_types::{FieldExt, Fr};
-use utils::{get_dummy_random_mle, get_input_shred_from_vec};
+use utils::{get_dummy_random_mle, get_input_shred_and_data_from_vec};
 pub mod utils;
 
 pub struct DataparallelDistributedMultiplication<F: FieldExt> {
@@ -25,35 +25,14 @@ pub struct DataparallelDistributedMultiplication<F: FieldExt> {
 }
 
 impl<F: FieldExt> DataparallelDistributedMultiplication<F> {
-    pub fn new(
-        ctx: &Context,
-        smaller_mle: &dyn ClaimableNode<F>,
-        bigger_mle: &dyn ClaimableNode<F>,
-    ) -> Self {
-        let combine_sector = Sector::new(
-            ctx,
-            &[smaller_mle, bigger_mle],
-            |input_nodes| {
-                assert_eq!(input_nodes.len(), 2);
-                let smaller_mle_id = input_nodes[0];
-                let bigger_mle_id = input_nodes[1];
+    pub fn new(ctx: &Context, smaller_mle: &dyn CircuitNode, bigger_mle: &dyn CircuitNode) -> Self {
+        let combine_sector = Sector::new(ctx, &[smaller_mle, bigger_mle], |input_nodes| {
+            assert_eq!(input_nodes.len(), 2);
+            let smaller_mle_id = input_nodes[0];
+            let bigger_mle_id = input_nodes[1];
 
-                ExprBuilder::<F>::products(vec![bigger_mle_id, smaller_mle_id])
-            },
-            |data| {
-                let smaller_mle_data = data[0];
-                let bigger_mle_data = data[1];
-
-                let final_bt = bigger_mle_data
-                    .get_evals_vector()
-                    .iter()
-                    .zip(smaller_mle_data.get_evals_vector().iter().cycle())
-                    .map(|(big_elem, small_elem)| *big_elem * *small_elem)
-                    .collect_vec();
-
-                MultilinearExtension::new(final_bt)
-            },
-        );
+            ExprBuilder::<F>::products(vec![bigger_mle_id, smaller_mle_id])
+        });
 
         Self {
             first_layer_sector: combine_sector,
@@ -76,26 +55,18 @@ where
 
 pub struct DiffTwoInputsBuilder<F: FieldExt> {
     pub first_layer_sector: Sector<F>,
-    pub output_sector: OutputNode<F>,
+    pub output_sector: OutputNode,
 }
 
 impl<F: FieldExt> DiffTwoInputsBuilder<F> {
-    pub fn new(ctx: &Context, mle_1: &dyn ClaimableNode<F>, mle_2: &dyn ClaimableNode<F>) -> Self {
-        let first_layer_sector = Sector::new(
-            ctx,
-            &[mle_1, mle_2],
-            |input_nodes| {
-                assert_eq!(input_nodes.len(), 2);
-                let mle_1_id = input_nodes[0];
-                let mle_2_id = input_nodes[1];
+    pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
+        let first_layer_sector = Sector::new(ctx, &[mle_1, mle_2], |input_nodes| {
+            assert_eq!(input_nodes.len(), 2);
+            let mle_1_id = input_nodes[0];
+            let mle_2_id = input_nodes[1];
 
-                mle_1_id.expr() - mle_2_id.expr()
-            },
-            |data| {
-                let mle_1_data = data[0];
-                MultilinearExtension::new_sized_zero(mle_1_data.num_vars())
-            },
-        );
+            mle_1_id.expr() - mle_2_id.expr()
+        });
 
         let output_node = OutputNode::new_zero(ctx, &first_layer_sector);
 
@@ -105,7 +76,7 @@ impl<F: FieldExt> DiffTwoInputsBuilder<F> {
         }
     }
 
-    pub fn get_output_sector(&self) -> &OutputNode<F> {
+    pub fn get_output_sector(&self) -> &OutputNode {
         &self.output_sector
     }
 }
@@ -162,18 +133,26 @@ fn test_batching_wraparound_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let input_shred_1 =
-            get_input_shred_from_vec(smaller_combined_mle_vec.to_vec(), ctx, &input_layer);
-        let input_shred_2 =
-            get_input_shred_from_vec(bigger_combined_mle_vec.to_vec(), ctx, &input_layer);
-        let input_shred_3 =
-            get_input_shred_from_vec(combined_prod_mle_expected_vec.to_vec(), ctx, &input_layer);
+        let (input_shred_1, input_shred_1_data) =
+            get_input_shred_and_data_from_vec(smaller_combined_mle_vec.to_vec(), ctx, &input_layer);
+        let (input_shred_2, input_shred_2_data) =
+            get_input_shred_and_data_from_vec(bigger_combined_mle_vec.to_vec(), ctx, &input_layer);
+        let (input_shred_3, input_shred_3_data) = get_input_shred_and_data_from_vec(
+            combined_prod_mle_expected_vec.to_vec(),
+            ctx,
+            &input_layer,
+        );
+        let input_data = InputLayerData::new(
+            input_layer.id(),
+            vec![input_shred_1_data, input_shred_2_data, input_shred_3_data],
+            None,
+        );
 
         let component_1 =
             DataparallelDistributedMultiplication::new(ctx, &input_shred_1, &input_shred_2);
 
         let component_2 =
-            DiffTwoInputsBuilder::new(ctx, component_1.get_output_sector(), &input_shred_3);
+            DiffTwoInputsBuilder::new(ctx, &component_1.get_output_sector(), &input_shred_3);
 
         let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
@@ -185,7 +164,10 @@ fn test_batching_wraparound_newmainder() {
         all_nodes.extend(component_1.yield_nodes());
         all_nodes.extend(component_2.yield_nodes());
 
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_data],
+        )
     });
 
     test_circuit(circuit, None)

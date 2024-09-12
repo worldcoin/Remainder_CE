@@ -6,11 +6,11 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, ClaimableNode, Context,
+            CircuitNode, Context,
         },
     },
     mle::{dense::DenseMle, Mle},
@@ -20,7 +20,7 @@ use remainder_shared_types::{FieldExt, Fr};
 use utils::DifferenceBuilderComponent;
 use utils::{ProductScaledBuilderComponent, TripleNestedBuilderComponent};
 
-use crate::utils::{get_dummy_random_mle_vec, get_input_shred_from_vec};
+use crate::utils::{get_dummy_random_mle_vec, get_input_shred_and_data_from_vec};
 
 pub mod utils;
 
@@ -34,18 +34,15 @@ impl<F: FieldExt> DataparallelTripleNestedSelectorComponent<F> {
     /// additionally contains a [DifferenceBuilderComponent] for zero output
     pub fn new(
         ctx: &Context,
-        mle_1_input: &dyn ClaimableNode<F>,
-        mle_2_input: &dyn ClaimableNode<F>,
-        mle_3_input: &dyn ClaimableNode<F>,
+        mle_1_input: &dyn CircuitNode,
+        mle_2_input: &dyn CircuitNode,
+        mle_3_input: &dyn CircuitNode,
     ) -> Self {
-        dbg!(&mle_1_input.get_data().num_vars());
-        dbg!(&mle_2_input.get_data().num_vars());
-        dbg!(&mle_3_input.get_data().num_vars());
         let first_layer_component =
             TripleNestedBuilderComponent::new(ctx, mle_1_input, mle_2_input, mle_3_input);
 
         let output_component =
-            DifferenceBuilderComponent::new(ctx, first_layer_component.get_output_sector());
+            DifferenceBuilderComponent::new(ctx, &first_layer_component.get_output_sector());
 
         Self {
             first_layer_component,
@@ -138,25 +135,39 @@ fn test_dataparallel_selector_alt_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let dataparallel_input_mle_1 = get_input_shred_from_vec(
-            dataparallel_mle_1.bookkeeping_table().to_vec(),
-            ctx,
-            &input_layer,
-        );
-        let dataparallel_input_mle_2 = get_input_shred_from_vec(
-            dataparallel_mle_2.bookkeeping_table().to_vec(),
-            ctx,
-            &input_layer,
-        );
-        let dataparallel_input_mle_3 = get_input_shred_from_vec(
-            dataparallel_mle_3.bookkeeping_table().to_vec(),
-            ctx,
-            &input_layer,
-        );
-        let dataparallel_input_mle_4 = get_input_shred_from_vec(
-            dataparallel_mle_4.bookkeeping_table().to_vec(),
-            ctx,
-            &input_layer,
+        let (dataparallel_input_mle_1, dataparallel_input_mle_1_data) =
+            get_input_shred_and_data_from_vec(
+                dataparallel_mle_1.bookkeeping_table().to_vec(),
+                ctx,
+                &input_layer,
+            );
+        let (dataparallel_input_mle_2, dataparallel_input_mle_2_data) =
+            get_input_shred_and_data_from_vec(
+                dataparallel_mle_2.bookkeeping_table().to_vec(),
+                ctx,
+                &input_layer,
+            );
+        let (dataparallel_input_mle_3, dataparallel_input_mle_3_data) =
+            get_input_shred_and_data_from_vec(
+                dataparallel_mle_3.bookkeeping_table().to_vec(),
+                ctx,
+                &input_layer,
+            );
+        let (dataparallel_input_mle_4, dataparallel_input_mle_4_data) =
+            get_input_shred_and_data_from_vec(
+                dataparallel_mle_4.bookkeeping_table().to_vec(),
+                ctx,
+                &input_layer,
+            );
+        let input_data = InputLayerData::new(
+            input_layer.id(),
+            vec![
+                dataparallel_input_mle_1_data,
+                dataparallel_input_mle_2_data,
+                dataparallel_input_mle_3_data,
+                dataparallel_input_mle_4_data,
+            ],
+            None,
         );
 
         let component_1 = ProductScaledBuilderComponent::new(
@@ -166,7 +177,7 @@ fn test_dataparallel_selector_alt_newmainder() {
         );
         let component_2 = DataparallelTripleNestedSelectorComponent::new(
             ctx,
-            component_1.get_output_sector(),
+            &component_1.get_output_sector(),
             &dataparallel_input_mle_3,
             &dataparallel_input_mle_4,
         );
@@ -181,7 +192,10 @@ fn test_dataparallel_selector_alt_newmainder() {
 
         all_nodes.extend(component_1.yield_nodes());
         all_nodes.extend(component_2.yield_nodes());
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_data],
+        )
     });
 
     test_circuit(circuit, None)

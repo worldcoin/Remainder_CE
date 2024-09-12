@@ -1,13 +1,12 @@
-use ark_std::log2;
 use itertools::Itertools;
 use rand::Rng;
 use remainder::expression::abstract_expr::ExprBuilder;
 use remainder::layer::LayerId;
 use remainder::layouter::component::Component;
-use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputShred};
+use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputShred, InputShredData};
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::nodes::sector::Sector;
-use remainder::layouter::nodes::{CircuitNode, ClaimableNode, Context};
+use remainder::layouter::nodes::{CircuitNode, Context};
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
 
 use remainder::mle::dense::DenseMle;
@@ -35,38 +34,33 @@ pub fn get_dummy_random_vec(num_vars: usize, rng: &mut impl Rng) -> Vec<Fr> {
 }
 
 /// Returns an [InputShred] with the appropriate [MultilinearExtension] as the data generated from random u64
-pub fn get_dummy_input_shred(
+pub fn get_dummy_input_shred_and_data(
     num_vars: usize,
     rng: &mut impl Rng,
     ctx: &Context,
-    input_node: &InputLayerNode<Fr>,
-) -> InputShred<Fr> {
+    input_node: &InputLayerNode,
+) -> (InputShred, InputShredData<Fr>) {
     // let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
     let mle_vec = (0..(1 << num_vars))
         .map(|_| Fr::from(rng.gen::<u64>()))
         .collect_vec();
-    InputShred::new(
-        ctx,
-        MultilinearExtension::new_from_evals(Evaluations::new(num_vars, mle_vec)),
-        input_node,
-    )
+    let data = MultilinearExtension::new_from_evals(Evaluations::new(num_vars, mle_vec));
+    let input_shred = InputShred::new(ctx, data.num_vars(), input_node);
+    let input_shred_data = InputShredData::new(input_shred.id(), data);
+    (input_shred, input_shred_data)
 }
 
 /// Returns an [InputShred] with the appropriate [MultilinearExtension], but given as input an mle_vec
-pub fn get_input_shred_from_vec(
+pub fn get_input_shred_and_data_from_vec(
     mle_vec: Vec<Fr>,
     ctx: &Context,
-    input_node: &InputLayerNode<Fr>,
-) -> InputShred<Fr> {
+    input_node: &InputLayerNode,
+) -> (InputShred, InputShredData<Fr>) {
     assert!(mle_vec.len().is_power_of_two());
-    InputShred::new(
-        ctx,
-        MultilinearExtension::new_from_evals(Evaluations::new(
-            log2(mle_vec.len()) as usize,
-            mle_vec,
-        )),
-        input_node,
-    )
+    let data = MultilinearExtension::new(mle_vec);
+    let input_shred = InputShred::new(ctx, data.num_vars(), input_node);
+    let input_shred_data = InputShredData::new(input_shred.id(), data);
+    (input_shred, input_shred_data)
 }
 
 /// Returns a vector of MLEs for dataparallel testing according to the number of variables and
@@ -105,9 +99,9 @@ pub struct TripleNestedBuilderComponent<F: FieldExt> {
 impl<F: FieldExt> TripleNestedBuilderComponent<F> {
     pub fn new(
         ctx: &Context,
-        inner_inner_sel: &dyn ClaimableNode<F>,
-        inner_sel: &dyn ClaimableNode<F>,
-        outer_sel: &dyn ClaimableNode<F>,
+        inner_inner_sel: &dyn CircuitNode,
+        inner_sel: &dyn CircuitNode,
+        outer_sel: &dyn CircuitNode,
     ) -> Self {
         let triple_nested_selector_sector = Sector::new(
             ctx,
@@ -150,11 +144,11 @@ where
 
 pub struct DifferenceBuilderComponent<F: FieldExt> {
     pub output_sector: Sector<F>,
-    pub output_node: OutputNode<F>,
+    pub output_node: OutputNode,
 }
 
 impl<F: FieldExt> DifferenceBuilderComponent<F> {
-    pub fn new(ctx: &Context, input: &dyn ClaimableNode<F>) -> Self {
+    pub fn new(ctx: &Context, input: &dyn CircuitNode) -> Self {
         let zero_output_sector = Sector::new(ctx, &[input], |input_vec| {
             assert_eq!(input_vec.len(), 1);
             let input_data = input_vec[0];
@@ -190,7 +184,7 @@ pub struct ProductScaledBuilderComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> ProductScaledBuilderComponent<F> {
-    pub fn new(ctx: &Context, mle_1: &dyn ClaimableNode<F>, mle_2: &dyn ClaimableNode<F>) -> Self {
+    pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
         let product_scaled_sector = Sector::new(ctx, &[mle_1, mle_2], |product_scaled_nodes| {
             assert_eq!(product_scaled_nodes.len(), 2);
             let mle_1 = product_scaled_nodes[0];
@@ -231,7 +225,7 @@ pub struct ProductSumBuilderComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> ProductSumBuilderComponent<F> {
-    pub fn new(ctx: &Context, mle_1: &dyn ClaimableNode<F>, mle_2: &dyn ClaimableNode<F>) -> Self {
+    pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
         let product_sum_sector = Sector::new(ctx, &[mle_1, mle_2], |product_sum_nodes| {
             assert_eq!(product_sum_nodes.len(), 2);
             let mle_1 = product_sum_nodes[0];
@@ -271,7 +265,7 @@ pub struct ConstantScaledSumBuilderComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> ConstantScaledSumBuilderComponent<F> {
-    pub fn new(ctx: &Context, mle_1: &dyn ClaimableNode<F>, mle_2: &dyn ClaimableNode<F>) -> Self {
+    pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
         let constant_scaled_sector = Sector::new(ctx, &[mle_1, mle_2], |constant_scaled_nodes| {
             assert_eq!(constant_scaled_nodes.len(), 2);
             let mle_1 = constant_scaled_nodes[0];
