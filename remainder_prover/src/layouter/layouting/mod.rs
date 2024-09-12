@@ -6,7 +6,7 @@ mod tests;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use thiserror::Error;
 
 use crate::{
@@ -183,18 +183,18 @@ pub fn topo_sort<N: CircuitNode>(nodes: Vec<N>) -> Result<Vec<N>, DAGError> {
     Ok(out)
 }
 
-enum IntermediateNode<F: FieldExt, Pf> {
+enum IntermediateNode<F: Field, Pf> {
     CompilableNode(Box<dyn CompilableNode<F, Pf>>),
     Sector(Sector<F>),
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F>> IntermediateNode<F, Pf> {
+impl<F: Field, Pf: ProofSystem<F>> IntermediateNode<F, Pf> {
     fn new<N: CompilableNode<F, Pf> + 'static>(node: N) -> Self {
         Self::CompilableNode(Box::new(node) as Box<dyn CompilableNode<F, Pf>>)
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F>> CircuitNode for IntermediateNode<F, Pf> {
+impl<F: Field, Pf: ProofSystem<F>> CircuitNode for IntermediateNode<F, Pf> {
     fn id(&self) -> NodeId {
         match self {
             IntermediateNode::CompilableNode(node) => node.id(),
@@ -227,7 +227,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> CircuitNode for IntermediateNode<F, Pf> {
 /// Returns a vector of [CompilableNode] in which inputs are first, then intermediates
 /// (topologically sorted), then lookups, then outputs.
 pub fn layout<
-    F: FieldExt,
+    F: Field,
     Pf: ProofSystem<
         F,
         Layer = LayerEnum<F>,

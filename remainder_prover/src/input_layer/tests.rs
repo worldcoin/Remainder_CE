@@ -2,7 +2,7 @@ use std::cmp::max;
 
 use ark_std::test_rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit;
-use remainder_shared_types::{transcript::ProverTranscript, FieldExt, Fr};
+use remainder_shared_types::{transcript::ProverTranscript, Field, Fr};
 
 use crate::{
     builders::{
@@ -35,10 +35,10 @@ use super::{
 ///
 /// ## Arguments
 /// * `mle` - Input MLE. Can be any length.
-struct RandomCircuit<F: FieldExt> {
+struct RandomCircuit<F: Field> {
     mle: DenseMle<F>,
 }
-impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
+impl<F: Field> GKRCircuit<F> for RandomCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
@@ -124,11 +124,11 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
 ///
 /// ## Arguments
 /// * `mle_1`, `mle_2` - MLEs whose bookkeeping tables are to be added together.
-struct WraparoundAddBuilder<F: FieldExt> {
+struct WraparoundAddBuilder<F: Field> {
     mle_1: DenseMle<F>,
     mle_2: DenseMle<F>,
 }
-impl<F: FieldExt> LayerBuilder<F> for WraparoundAddBuilder<F> {
+impl<F: Field> LayerBuilder<F> for WraparoundAddBuilder<F> {
     type Successor = DenseMle<F>;
 
     fn build_expression(&self) -> Expression<F, crate::expression::prover_expr::ProverExpr> {
@@ -160,7 +160,7 @@ impl<F: FieldExt> LayerBuilder<F> for WraparoundAddBuilder<F> {
         out
     }
 }
-impl<F: FieldExt> WraparoundAddBuilder<F> {
+impl<F: Field> WraparoundAddBuilder<F> {
     fn new(mle_1: DenseMle<F>, mle_2: DenseMle<F>) -> Self {
         Self { mle_1, mle_2 }
     }
@@ -178,13 +178,13 @@ impl<F: FieldExt> WraparoundAddBuilder<F> {
 ///     the same input layer.
 /// * `input_layer_2_mle_1`, `input_layer_2_mle_2` - MLEs to be combined in
 ///     the same input layer.
-struct MultiInputLayerCircuit<F: FieldExt> {
+struct MultiInputLayerCircuit<F: Field> {
     input_layer_1_mle_1: DenseMle<F>,
     input_layer_1_mle_2: DenseMle<F>,
     input_layer_2_mle_1: DenseMle<F>,
     input_layer_2_mle_2: DenseMle<F>,
 }
-impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
+impl<F: Field> GKRCircuit<F> for MultiInputLayerCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
@@ -265,7 +265,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
     }
 }
 
-impl<F: FieldExt> MultiInputLayerCircuit<F> {
+impl<F: Field> MultiInputLayerCircuit<F> {
     pub fn new(
         input_layer_1_mle_1: DenseMle<F>,
         input_layer_1_mle_2: DenseMle<F>,
@@ -293,11 +293,11 @@ impl<F: FieldExt> MultiInputLayerCircuit<F> {
 ///
 /// ## Arguments
 /// * `mle`, `mle_2` - MLEs of any size.
-struct SimplePrecommitCircuit<F: FieldExt> {
+struct SimplePrecommitCircuit<F: Field> {
     mle: DenseMle<F>,
     mle_2: DenseMle<F>,
 }
-impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
+impl<F: Field> GKRCircuit<F> for SimplePrecommitCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
@@ -354,7 +354,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
         }
     }
 }
-impl<F: FieldExt> SimplePrecommitCircuit<F> {
+impl<F: Field> SimplePrecommitCircuit<F> {
     fn new(mle: DenseMle<F>, mle_2: DenseMle<F>) -> Self {
         Self { mle, mle_2 }
     }

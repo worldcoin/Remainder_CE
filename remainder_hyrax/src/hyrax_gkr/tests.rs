@@ -37,7 +37,7 @@ use remainder_shared_types::transcript::ec_transcript::{
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
-    FieldExt, Poseidon,
+    Field, Poseidon,
 };
 use remainder_shared_types::{transcript::Transcript, Fr};
 
@@ -48,7 +48,7 @@ type Base = <Bn256Point as CurveExt>::Base;
 
 /// Evaluates (a copy of) the MLE at a given point.
 /// Helper function for the tests.
-pub fn evaluate_mle<F: FieldExt>(mle: &DenseMle<F>, point: &Vec<F>) -> F {
+pub fn evaluate_mle<F: Field>(mle: &DenseMle<F>, point: &Vec<F>) -> F {
     let mut mle = mle.clone();
     mle.index_mle_indices(0);
     point.iter().enumerate().for_each(|(i, coord)| {

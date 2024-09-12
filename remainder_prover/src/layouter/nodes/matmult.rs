@@ -1,6 +1,6 @@
 //! A Module for adding `Matmult` Layers to components
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
@@ -17,7 +17,7 @@ use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
-pub struct MatMultNode<F: FieldExt> {
+pub struct MatMultNode<F: Field> {
     id: NodeId,
     matrix_a: NodeId,
     num_rows_cols_a: (usize, usize),
@@ -26,7 +26,7 @@ pub struct MatMultNode<F: FieldExt> {
     data: MultilinearExtension<F>,
 }
 
-impl<F: FieldExt> CircuitNode for MatMultNode<F> {
+impl<F: Field> CircuitNode for MatMultNode<F> {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -36,7 +36,7 @@ impl<F: FieldExt> CircuitNode for MatMultNode<F> {
     }
 }
 
-impl<F: FieldExt> MatMultNode<F> {
+impl<F: Field> MatMultNode<F> {
     /// Constructs a new MatMultNode and computes the data it generates
     pub fn new(
         ctx: &Context,
@@ -70,7 +70,7 @@ impl<F: FieldExt> MatMultNode<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode for MatMultNode<F> {
+impl<F: Field> ClaimableNode for MatMultNode<F> {
     type F = F;
 
     fn get_data(&self) -> &MultilinearExtension<Self::F> {
@@ -82,7 +82,7 @@ impl<F: FieldExt> ClaimableNode for MatMultNode<F> {
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> CompilableNode<F, Pf>
+impl<F: Field, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> CompilableNode<F, Pf>
     for MatMultNode<F>
 {
     fn compile<'a>(

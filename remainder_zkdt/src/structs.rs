@@ -1,5 +1,5 @@
 use remainder::mle::circuit_mle::FlatMles;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
 // ------------------------------------ ACTUAL DATA STRUCTS ------------------------------------
@@ -65,7 +65,7 @@ pub type BinDecomp16BitMle<F> = FlatMles<F, 16>;
 
 // ------------------------------------ FROM IMPL FOR BINDECOMP ------------------------------------
 
-impl<F: FieldExt> From<Vec<bool>> for BinDecomp16Bit<F> {
+impl<F: Field> From<Vec<bool>> for BinDecomp16Bit<F> {
     fn from(bits: Vec<bool>) -> Self {
         BinDecomp16Bit::<F> {
             bits: bits
@@ -78,7 +78,7 @@ impl<F: FieldExt> From<Vec<bool>> for BinDecomp16Bit<F> {
     }
 }
 
-impl<F: FieldExt> From<Vec<bool>> for BinDecomp8Bit<F> {
+impl<F: Field> From<Vec<bool>> for BinDecomp8Bit<F> {
     fn from(bits: Vec<bool>) -> Self {
         BinDecomp8Bit::<F> {
             bits: bits

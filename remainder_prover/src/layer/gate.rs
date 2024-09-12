@@ -15,7 +15,7 @@ use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 use serde::{Deserialize, Serialize};
 
@@ -53,7 +53,7 @@ pub enum BinaryOperation {
 
 impl BinaryOperation {
     /// Method to perform the respective operation.
-    pub fn perform_operation<F: FieldExt>(&self, a: F, b: F) -> F {
+    pub fn perform_operation<F: Field>(&self, a: F, b: F) -> F {
         match self {
             BinaryOperation::Add => a + b,
             BinaryOperation::Mul => a * b,
@@ -66,8 +66,8 @@ impl BinaryOperation {
 /// is specified by `num_dataparallel_bits` in order to account for batched and un-batched
 /// gates.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct Gate<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct Gate<F: Field> {
     /// The layer id associated with this gate layer.
     pub layer_id: LayerId,
     /// The number of bits representing the number of "dataparallel" copies of the circuit.
@@ -90,7 +90,7 @@ pub struct Gate<F: FieldExt> {
     challenges: Vec<F>,
 }
 
-impl<F: FieldExt> Layer<F> for Gate<F> {
+impl<F: Field> Layer<F> for Gate<F> {
     type CircuitLayer = CircuitGateLayer<F>;
 
     /// Gets this layer's id.
@@ -221,8 +221,8 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
 
 /// The circuit-description counterpart of a Gate layer description.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct CircuitGateLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct CircuitGateLayer<F: Field> {
     /// The layer id associated with this gate layer.
     id: LayerId,
 
@@ -256,7 +256,7 @@ const DATAPARALLEL_ROUND_ADD_NUM_EVALS: usize = 3;
 const NON_DATAPARALLEL_ROUND_MUL_NUM_EVALS: usize = 3;
 const NON_DATAPARALLEL_ROUND_ADD_NUM_EVALS: usize = 3;
 
-impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
+impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
     type VerifierLayer = VerifierGateLayer<F>;
 
     /// Gets this layer's id.
@@ -474,7 +474,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
     }
 }
 
-impl<F: FieldExt> VerifierGateLayer<F> {
+impl<F: Field> VerifierGateLayer<F> {
     /// Computes the oracle query's value for a given [VerifierGateLayer].
     pub fn evaluate(&self, claim: &Claim<F>) -> F {
         let g2_challenges = claim.get_point()[..self.num_dataparallel_rounds].to_vec();
@@ -526,8 +526,8 @@ impl<F: FieldExt> VerifierGateLayer<F> {
 
 /// The verifier's counterpart of a Gate layer.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct VerifierGateLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct VerifierGateLayer<F: Field> {
     /// The layer id associated with this gate layer.
     layer_id: LayerId,
 
@@ -563,13 +563,13 @@ pub struct VerifierGateLayer<F: FieldExt> {
     last_v_challenges: Vec<F>,
 }
 
-impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
+impl<F: Field> VerifierLayer<F> for VerifierGateLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for Gate<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for Gate<F> {
     /// Get the claims that this layer makes on other layers.
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
@@ -619,7 +619,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for Gate<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         // Grab the claim on the left side.
         // TODO!(ryancao): Do error handling here!
@@ -685,7 +685,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldWLXEvals<F> for Gate<F> {
+impl<F: Field> YieldWLXEvals<F> for Gate<F> {
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &[Vec<F>],
@@ -729,7 +729,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for Gate<F> {
     }
 }
 
-impl<F: FieldExt> Gate<F> {
+impl<F: Field> Gate<F> {
     /// Construct a new gate layer
     ///
     /// # Arguments
@@ -1218,13 +1218,13 @@ impl<F: FieldExt> Gate<F> {
 }
 
 /// For circuit serialization to hash the circuit description into the transcript.
-impl<F: std::fmt::Debug + FieldExt> Gate<F> {
+impl<F: std::fmt::Debug + Field> Gate<F> {
     pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct GateCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a Gate<F>);
+        struct GateCircuitDesc<'a, F: std::fmt::Debug + Field>(&'a Gate<F>);
 
-        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for GateCircuitDesc<'a, F> {
+        impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for GateCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("Gate")
                     .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())

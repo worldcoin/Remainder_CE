@@ -3,7 +3,7 @@ use ark_std::log2;
 use itertools::Itertools;
 use ndarray::{Array, Array2, Array3};
 use ndarray_npy::read_npy;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use std::path::PathBuf;
 
 use crate::digits::{complementary_decomposition, digits_to_field};
@@ -17,7 +17,7 @@ use crate::utils::mle::pad_with;
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two 2x1 kernels (1, 0).T and (6, -1).T
 /// The rewirings are trivial: the image _is_ the LH multiplicand of matmult.
-pub fn trivial_wiring_2x2_circuit_data<F: FieldExt>() -> CircuitData<F, 2, 2, 2, 16, 1> {
+pub fn trivial_wiring_2x2_circuit_data<F: Field>() -> CircuitData<F, 2, 2, 2, 16, 1> {
     CircuitData::build_worldcoin_circuit_data(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
         Array3::from_shape_vec((2, 2, 1), vec![1, 0, 6, -1]).unwrap(),
@@ -31,7 +31,7 @@ pub fn trivial_wiring_2x2_circuit_data<F: FieldExt>() -> CircuitData<F, 2, 2, 2,
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two 3x1 kernels.
 /// The rewirings are trivial: the image _is_ the LH multiplicand of matmult.
-pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: FieldExt>(
+pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: Field>(
 ) -> CircuitData<F, 2, 2, 4, 16, 1> {
     CircuitData::build_worldcoin_circuit_data(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
@@ -49,7 +49,7 @@ pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: FieldExt>(
 /// + `MATMULT_NUM_COLS` is number of columns of the result of matmult.  A power of two.
 /// + `MATMULT_INTERNAL_DIM` is the internal dimension size of matmult = number of cols of LH multiplicand = number of rows of RH multiplicand.  A power of two.
 pub struct CircuitData<
-    F: FieldExt,
+    F: Field,
     const MATMULT_NUM_ROWS: usize,
     const MATMULT_NUM_COLS: usize,
     const MATMULT_INTERNAL_DIM: usize,
@@ -83,7 +83,7 @@ pub struct CircuitData<
 }
 
 impl<
-        F: FieldExt,
+        F: Field,
         const MATMULT_NUM_ROWS: usize,
         const MATMULT_NUM_COLS: usize,
         const MATMULT_INTERNAL_DIM: usize,
@@ -269,7 +269,7 @@ impl<
 ///   `image_path` is the path to an image file (could be the iris or the mask).
 ///   `is_mask` indicates whether to load the files for the mask or the iris.
 pub fn load_worldcoin_data<
-    F: FieldExt,
+    F: Field,
     const MATMULT_NUM_ROWS: usize,
     const MATMULT_NUM_COLS: usize,
     const MATMULT_INTERNAL_DIM: usize,

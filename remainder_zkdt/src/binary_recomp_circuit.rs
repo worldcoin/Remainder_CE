@@ -2,7 +2,7 @@ use remainder::{
     expression::abstract_expr::ExprBuilder,
     layouter::{component::Component, nodes::ClaimableNode},
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use remainder::{
     layouter::nodes::{circuit_outputs::OutputNode, sector::Sector, CircuitNode, Context},
@@ -18,11 +18,11 @@ use remainder::{
 ///     `pos_recomp` - `diff` + 2 * `sign_bit` * `diff`.
 /// conceptually b_s is the sign bit of the binary decomposition, and
 /// it checks that diff and bin_decomp match each other
-pub struct BinRecompCheckerComponent<F: FieldExt> {
+pub struct BinRecompCheckerComponent<F: Field> {
     bin_recomp_checker_sector: Sector<F>,
 }
 
-impl<F: FieldExt> BinRecompCheckerComponent<F> {
+impl<F: Field> BinRecompCheckerComponent<F> {
     /// # Arguments
     /// + `unsigned_recomp` is an instance of [remainder::digits::components::UnsignedRecomposition].
     pub fn new(
@@ -64,7 +64,7 @@ impl<F: FieldExt> BinRecompCheckerComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for BinRecompCheckerComponent<F>
+impl<F: Field, N> Component<N> for BinRecompCheckerComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
 {

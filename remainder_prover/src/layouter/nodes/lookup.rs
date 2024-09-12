@@ -7,7 +7,7 @@ use crate::mle::zero::ZeroMle;
 use crate::mle::Mle;
 use crate::mle::{evals::Evaluations, MleIndex};
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::{abstract_expr::ExprBuilder, generic_expr::Expression},
@@ -40,7 +40,7 @@ impl LookupConstraint {
     /// # Requires:
     ///   if `constrained` has length not a power of two, then `multiplicitites` must also count the
     ///   implicit padding!
-    pub fn new<F: FieldExt>(
+    pub fn new<F: Field>(
         ctx: &Context,
         lookup_table: &LookupTable,
         constrained: &dyn ClaimableNode<F = F>,
@@ -91,7 +91,7 @@ impl LookupTable {
     /// 
     /// # Requires
     ///     - `table` must have length a power of two.
-    pub fn new<F: FieldExt>(
+    pub fn new<F: Field>(
         ctx: &Context,
         table: &dyn ClaimableNode<F = F>,
         secret_constrained_values: bool,
@@ -132,7 +132,7 @@ impl CircuitNode for LookupTable {
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL, Layer = L, OutputLayer = OL>, IL, L, OL>
+impl<F: Field, Pf: ProofSystem<F, InputLayer = IL, Layer = L, OutputLayer = OL>, IL, L, OL>
     CompilableNode<F, Pf> for LookupTable
 where
     IL: From<PublicInputLayer<F>>,
@@ -374,7 +374,7 @@ where
 }
 
 /// Extract the prefix bits from a DenseMle.
-fn extract_prefix_bits<F: FieldExt>(mle: &DenseMle<F>) -> Vec<bool> {
+fn extract_prefix_bits<F: Field>(mle: &DenseMle<F>) -> Vec<bool> {
     mle.mle_indices()
         .iter()
         .map(|mle_index| match mle_index {
@@ -387,7 +387,7 @@ fn extract_prefix_bits<F: FieldExt>(mle: &DenseMle<F>) -> Vec<bool> {
 
 /// Split a DenseMle into two DenseMles, with the left half containing the even-indexed elements and
 /// the right half containing the odd-indexed elements, setting the prefix bits accordingly.
-fn split_dense_mle<F: FieldExt>(mle: &DenseMle<F>) -> (DenseMle<F>, DenseMle<F>) {
+fn split_dense_mle<F: Field>(mle: &DenseMle<F>) -> (DenseMle<F>, DenseMle<F>) {
     let data = mle.current_mle.clone();
     let prefix_bits = extract_prefix_bits(mle);
     let left: Vec<F> = data.get_evals_vector().iter().step_by(2).cloned().collect();
@@ -414,7 +414,7 @@ fn split_dense_mle<F: FieldExt>(mle: &DenseMle<F>) -> (DenseMle<F>, DenseMle<F>)
 /// Given two Mles of the same length representing the numerators and denominators of a sequence of
 /// fractions, add layers that perform a sum of the fractions, return a new pair of length-1 Mles
 /// representing the numerator and denominator of the sum.
-fn build_fractional_sum<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L>(
+fn build_fractional_sum<F: Field, Pf: ProofSystem<F, Layer = L>, L>(
     numerator: DenseMle<F>,
     denominator: DenseMle<F>,
     witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,

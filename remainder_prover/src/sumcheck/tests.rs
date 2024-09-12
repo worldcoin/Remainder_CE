@@ -8,7 +8,7 @@ use rand::Rng;
 use remainder_shared_types::Fr;
 
 /// Does a dummy version of sumcheck with a testing RNG.
-pub fn dummy_sumcheck<F: FieldExt>(
+pub fn dummy_sumcheck<F: Field>(
     expr: &mut Expression<F, ProverExpr>,
     rng: &mut impl Rng,
     layer_claim: Claim<F>,
@@ -69,7 +69,7 @@ pub fn dummy_sumcheck<F: FieldExt>(
 /// Returns the curr random challenge if verified correctly, otherwise verify error
 /// can change this to take prev round random challenge, and then compute the new random challenge
 /// TODO!(ryancao): Change this to take in the expression as well and do the final sumcheck check
-pub fn verify_sumcheck_messages<F: FieldExt>(
+pub fn verify_sumcheck_messages<F: Field>(
     messages: Vec<(Vec<F>, Option<F>)>,
     mut expression: Expression<F, ProverExpr>,
     layer_claim: Claim<F>,
@@ -133,7 +133,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
     Ok(chal)
 }
 
-pub fn get_dummy_claim<F: FieldExt>(
+pub fn get_dummy_claim<F: Field>(
     mle_ref: DenseMle<F>,
     rng: &mut impl Rng,
     challenges: Option<Vec<F>>,
@@ -164,7 +164,7 @@ pub fn get_dummy_claim<F: FieldExt>(
     Claim::new(claim, eval)
 }
 
-pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
+pub(crate) fn get_dummy_expression_eval<F: Field>(
     expression: &Expression<F, ProverExpr>,
     rng: &mut impl Rng,
 ) -> Claim<F> {

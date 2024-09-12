@@ -6,15 +6,15 @@ use crate::expression::prover_expr::ProverExpr;
 use crate::layer::LayerId;
 use crate::mle::dense::DenseMle;
 use crate::mle::{zero::ZeroMle, Mle, MleIndex};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use std::cmp::max;
 
 /// takes a DenseMle and subtracts it from itself to get all zeroes.
-pub struct ZeroBuilder<F: FieldExt> {
+pub struct ZeroBuilder<F: Field> {
     mle: DenseMle<F>,
 }
 
-impl<F: FieldExt> LayerBuilder<F> for ZeroBuilder<F> {
+impl<F: Field> LayerBuilder<F> for ZeroBuilder<F> {
     type Successor = ZeroMle<F>;
     fn build_expression(&self) -> Expression<F, ProverExpr> {
         Expression::<F, ProverExpr>::mle(self.mle.clone())
@@ -26,7 +26,7 @@ impl<F: FieldExt> LayerBuilder<F> for ZeroBuilder<F> {
     }
 }
 
-impl<F: FieldExt> ZeroBuilder<F> {
+impl<F: Field> ZeroBuilder<F> {
     /// create new leaf node packed
     pub fn new(mle: DenseMle<F>) -> Self {
         Self { mle }
@@ -35,12 +35,12 @@ impl<F: FieldExt> ZeroBuilder<F> {
 
 /// calculates the difference between two mles
 /// and contrains it to be a `ZeroMle`
-pub struct EqualityCheck<F: FieldExt> {
+pub struct EqualityCheck<F: Field> {
     mle_1: DenseMle<F>,
     mle_2: DenseMle<F>,
 }
 
-impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
+impl<F: Field> LayerBuilder<F> for EqualityCheck<F> {
     type Successor = ZeroMle<F>;
     // the difference between two mles, should be zero valued
     fn build_expression(&self) -> Expression<F, ProverExpr> {
@@ -57,7 +57,7 @@ impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
     }
 }
 
-impl<F: FieldExt> EqualityCheck<F> {
+impl<F: Field> EqualityCheck<F> {
     /// creates new difference mle
     pub fn new(mle_1: DenseMle<F>, mle_2: DenseMle<F>) -> Self {
         Self { mle_1, mle_2 }

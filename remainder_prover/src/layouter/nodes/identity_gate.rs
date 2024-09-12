@@ -1,7 +1,7 @@
 //! A Module for adding `Gate` Layers to components
 
 use ark_std::log2;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
@@ -18,14 +18,14 @@ use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
-pub struct IdentityGateNode<F: FieldExt> {
+pub struct IdentityGateNode<F: Field> {
     id: NodeId,
     nonzero_gates: Vec<(usize, usize)>,
     pre_routed_data: NodeId,
     data: MultilinearExtension<F>,
 }
 
-impl<F: FieldExt> CircuitNode for IdentityGateNode<F> {
+impl<F: Field> CircuitNode for IdentityGateNode<F> {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -35,7 +35,7 @@ impl<F: FieldExt> CircuitNode for IdentityGateNode<F> {
     }
 }
 
-impl<F: FieldExt> IdentityGateNode<F> {
+impl<F: Field> IdentityGateNode<F> {
     /// Constructs a new IdentityGateNode and computes the data it generates
     pub fn new(
         ctx: &Context,
@@ -69,7 +69,7 @@ impl<F: FieldExt> IdentityGateNode<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode for IdentityGateNode<F> {
+impl<F: Field> ClaimableNode for IdentityGateNode<F> {
     type F = F;
 
     fn get_data(&self) -> &MultilinearExtension<Self::F> {
@@ -81,7 +81,7 @@ impl<F: FieldExt> ClaimableNode for IdentityGateNode<F> {
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<IdentityGate<F>>> CompilableNode<F, Pf>
+impl<F: Field, Pf: ProofSystem<F, Layer = L>, L: From<IdentityGate<F>>> CompilableNode<F, Pf>
     for IdentityGateNode<F>
 {
     fn compile<'a>(

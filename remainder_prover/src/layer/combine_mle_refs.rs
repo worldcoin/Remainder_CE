@@ -15,7 +15,7 @@ use rayon::{
     iter::{IntoParallelIterator, IntoParallelRefMutIterator},
     prelude::{IndexedParallelIterator, ParallelIterator},
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use thiserror::Error;
 
 use super::LayerId;
@@ -32,7 +32,7 @@ pub enum CombineMleRefError {
 }
 
 /// this fixes mle refs with shared points in the claims so that we don't have to keep doing them
-pub fn pre_fix_mle_refs<F: FieldExt>(
+pub fn pre_fix_mle_refs<F: Field>(
     mle_refs: &mut [MleEnum<F>],
     chal_point: &[F],
     common_idx: Vec<usize>,
@@ -49,7 +49,7 @@ pub fn pre_fix_mle_refs<F: FieldExt>(
 /// function that prepares all the mle refs to be fixed, then combined. this involves filtering out for
 /// unique original mle indices, then splitting the mles with iterated bits within prefix bits, then
 /// indexing them so that their mutable bookkeeping table is the original bookkeeping table.
-pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>> {
+pub fn get_og_mle_refs<F: Field>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>> {
     // first we want to filter out for mle_refs that are duplicates. we look at their original indices
     // instead of their bookkeeping tables because sometimes two mle_refs can have the same original_bookkeeping_table
     // but have different prefix bits. if they have the same prefix bits, they must be duplicates.
@@ -96,7 +96,7 @@ pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>
 /// this is equivalent to combining all of these mle refs according to their prefix bits, and then fixing
 /// variable on this combined mle ref using the challenge point
 /// instead, we fix variable as we combine as this keeps the bookkeeping table sizes at one and is faster to compute
-pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
+pub fn combine_mle_refs_with_aggregate<F: Field>(
     mle_refs: &[MleEnum<F>],
     chal_point: &[F],
 ) -> Result<F, CombineMleRefError> {
@@ -158,7 +158,7 @@ pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
 /// Takes the individual bookkeeping tables from the MleRefs within an MLE
 /// and merges them with padding, using a little-endian representation
 /// merge strategy. Assumes that ALL MleRefs are the same size.
-pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMle<F>>) -> DenseMle<F> {
+pub fn combine_mle_refs<F: Field>(items: Vec<DenseMle<F>>) -> DenseMle<F> {
     let num_fields = items.len();
 
     // --- All the items within should be the same size ---
@@ -196,7 +196,7 @@ pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMle<F>>) -> DenseMle<F> {
 /// NOTE we assume that this function is called on an mle ref that has an iterated bit within
 /// a bunch of fixed bits (note how it is used in the `collapse_mles_with_iterated_in_prefix`
 /// function)
-fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
+fn split_mle_ref<F: Field>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
     // get the index of the first iterated bit in the mle ref
     let first_iterated_idx: usize = mle_ref.original_mle_indices().iter().enumerate().fold(
         mle_ref.original_mle_indices().len(),
@@ -288,7 +288,7 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
 }
 
 /// this function will take a list of mle refs and update the list to contain mle_refs where all fixed bits are contiguous
-fn collapse_mles_with_iterated_in_prefix<F: FieldExt>(mle_refs: &[MleEnum<F>]) -> Vec<MleEnum<F>> {
+fn collapse_mles_with_iterated_in_prefix<F: Field>(mle_refs: &[MleEnum<F>]) -> Vec<MleEnum<F>> {
     mle_refs
         .iter()
         .flat_map(|mle_ref| {
@@ -317,7 +317,7 @@ fn collapse_mles_with_iterated_in_prefix<F: FieldExt>(mle_refs: &[MleEnum<F>]) -
 /// returns a tuple of an option of the index of the least significant bit and an option of the mle
 /// ref that contributes to this lsb
 /// if there are no fixed bits in any of the mle refs, it returns a `(None, None)` tuple
-fn get_lsb_fixed_var<F: FieldExt>(mle_refs: &[MleEnum<F>]) -> (Option<usize>, Option<MleEnum<F>>) {
+fn get_lsb_fixed_var<F: Field>(mle_refs: &[MleEnum<F>]) -> (Option<usize>, Option<MleEnum<F>>) {
     mle_refs
         .iter()
         .fold((None, None), |(acc_idx, acc_mle), mle_ref| {
@@ -364,7 +364,7 @@ fn get_lsb_fixed_var<F: FieldExt>(mle_refs: &[MleEnum<F>]) -> (Option<usize>, Op
 /// to the correct index in the challenge point.
 ///
 /// if there is no pair, then this is assumed to be an mle_ref with all 0s.
-fn combine_pair<F: FieldExt>(
+fn combine_pair<F: Field>(
     mle_ref_first: MleEnum<F>,
     mle_ref_second: Option<MleEnum<F>>,
     lsb_idx: usize,
@@ -440,7 +440,7 @@ fn combine_pair<F: FieldExt>(
 /// given a list of mle refs, the lsb fixed var index, and the mle ref that contributes to it, this will go through all of them
 /// and find its pair (if none exists, that's fine) and combine the two
 /// it will then update the original list of mle refs to contain the combined mle ref and remove the original ones that were paired
-fn find_pair_and_combine<F: FieldExt>(
+fn find_pair_and_combine<F: Field>(
     all_refs: &[MleEnum<F>],
     lsb_idx: usize,
     mle_ref_of_lsb: MleEnum<F>,

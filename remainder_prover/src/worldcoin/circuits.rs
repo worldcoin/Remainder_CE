@@ -13,7 +13,7 @@ use crate::digits::components::{ComplementaryRecompChecker, UnsignedRecompositio
 use crate::worldcoin::components::Subtractor;
 use crate::worldcoin::data::CircuitData;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 
 /// Builds the iriscode circuit.
@@ -38,7 +38,7 @@ use remainder_shared_types::FieldExt;
 /// + the length of the MLE `to_reroute`.
 ///
 /// See [CircuitData] for a detailed description of each generic and argument.
-pub fn build_circuit<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, const MATMULT_INTERNAL_DIM: usize, const BASE: u64, const NUM_DIGITS: usize>(
+pub fn build_circuit<F: Field, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, const MATMULT_INTERNAL_DIM: usize, const BASE: u64, const NUM_DIGITS: usize>(
     data: CircuitData<F, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>,
 ) -> LayouterCircuit<F, ComponentSet<NodeEnum<F>>, impl FnMut(&Context) -> ComponentSet<NodeEnum<F>>>
 {

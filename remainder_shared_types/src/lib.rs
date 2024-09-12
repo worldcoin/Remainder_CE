@@ -4,16 +4,18 @@ pub mod transcript;
 
 use std::hash::Hash;
 
-use halo2curves::ff::{Field, FromUniformBytes, WithSmallOrderMulGroup};
+use halo2curves::ff::{FromUniformBytes, WithSmallOrderMulGroup};
 use serde::{Deserialize, Serialize};
+
+pub use halo2curves::ff::Field as ff_field;
 
 pub use halo2curves;
 pub use halo2curves::bn256::Fr;
 pub use poseidon::Poseidon;
 
 ///External definition of Field element trait, will remain an Alias for now
-pub trait FieldExt:
-    Field
+pub trait Field:
+ff_field
     + FromUniformBytes<64> // only need this bc of Poseidon transcript,
                               // see func `next_field_element_without_rejection`
 
@@ -33,7 +35,7 @@ pub trait FieldExt:
 }
 
 impl<
-        F: Field
+        F: ff_field
             + FromUniformBytes<64>
             + WithSmallOrderMulGroup<3>
             + Hash
@@ -41,7 +43,7 @@ impl<
             + Serialize
             + for<'de> Deserialize<'de>
             + HasByteRepresentation,
-    > FieldExt for F
+    > Field for F
 {
 }
 

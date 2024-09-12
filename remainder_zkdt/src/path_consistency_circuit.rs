@@ -3,7 +3,7 @@ use remainder::{
     expression::abstract_expr::ExprBuilder,
     layouter::{component::Component, nodes::ClaimableNode},
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use remainder::{
     layouter::nodes::{circuit_outputs::OutputNode, sector::Sector, CircuitNode, Context},
@@ -26,11 +26,11 @@ fn leaf_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
 /// checks that the paths that the decision node paths and the leaf node paths
 /// are consistent with the binary decomposition's (signed bit): going left or right
 /// down the decision tree
-pub struct PathCheckComponent<F: FieldExt> {
+pub struct PathCheckComponent<F: Field> {
     next_node_id_sector: Sector<F>,
 }
 
-impl<F: FieldExt> PathCheckComponent<F> {
+impl<F: Field> PathCheckComponent<F> {
     pub fn new(
         ctx: &Context,
         decision_node_ids: impl ClaimableNode<F = F>,
@@ -89,7 +89,7 @@ impl<F: FieldExt> PathCheckComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for PathCheckComponent<F>
+impl<F: Field, N> Component<N> for PathCheckComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
 {

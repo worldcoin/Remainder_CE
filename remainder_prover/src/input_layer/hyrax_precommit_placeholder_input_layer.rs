@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +19,7 @@ use super::{InputLayer, InputLayerError, MleInputLayer, VerifierInputLayer};
 /// An Input Layer in which the data is sent to the verifier as a placeholder
 /// representing a Hyrax input layer that has a precommitment.
 #[derive(Debug)]
-pub struct HyraxPrecommitPlaceholderInputLayer<F: FieldExt> {
+pub struct HyraxPrecommitPlaceholderInputLayer<F: Field> {
     /// The MLE that is being committed to.
     pub mle: MultilinearExtension<F>,
     pub(crate) layer_id: LayerId,
@@ -28,14 +28,14 @@ pub struct HyraxPrecommitPlaceholderInputLayer<F: FieldExt> {
 /// The verifier version of the [HyraxPrecommitPlaceholderInputLayer], which is
 /// also a placeholder.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(bound = "F: FieldExt")]
-pub struct VerifierHyraxPrecommitPlaceholderInputLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct VerifierHyraxPrecommitPlaceholderInputLayer<F: Field> {
     layer_id: LayerId,
     num_bits: usize,
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> VerifierHyraxPrecommitPlaceholderInputLayer<F> {
+impl<F: Field> VerifierHyraxPrecommitPlaceholderInputLayer<F> {
     /// To be used only for internal testing!
     /// Generates a new [VerifierPublicInputLayer] from given raw data.
     /// Normally, such a layer would be produced through the
@@ -49,7 +49,7 @@ impl<F: FieldExt> VerifierHyraxPrecommitPlaceholderInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> InputLayer<F> for HyraxPrecommitPlaceholderInputLayer<F> {
+impl<F: Field> InputLayer<F> for HyraxPrecommitPlaceholderInputLayer<F> {
     type Commitment = Vec<F>;
 
     type VerifierInputLayer = VerifierHyraxPrecommitPlaceholderInputLayer<F>;
@@ -88,13 +88,13 @@ impl<F: FieldExt> InputLayer<F> for HyraxPrecommitPlaceholderInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> MleInputLayer<F> for HyraxPrecommitPlaceholderInputLayer<F> {
+impl<F: Field> MleInputLayer<F> for HyraxPrecommitPlaceholderInputLayer<F> {
     fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
         Self { mle, layer_id }
     }
 }
 
-impl<F: FieldExt> VerifierInputLayer<F> for VerifierHyraxPrecommitPlaceholderInputLayer<F> {
+impl<F: Field> VerifierInputLayer<F> for VerifierHyraxPrecommitPlaceholderInputLayer<F> {
     type Commitment = Vec<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -118,7 +118,7 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierHyraxPrecommitPlaceholderInp
     }
 }
 
-impl<F: FieldExt> YieldWLXEvals<F> for HyraxPrecommitPlaceholderInputLayer<F> {
+impl<F: Field> YieldWLXEvals<F> for HyraxPrecommitPlaceholderInputLayer<F> {
     /// Computes the V_d(l(x)) evaluations for the input layer V_d.
     fn get_wlx_evaluations(
         &self,

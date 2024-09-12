@@ -16,7 +16,7 @@ use crate::{
         GKRCircuit, Witness,
     },
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use super::{
     component::Component,
@@ -27,13 +27,13 @@ use super::{
 /// An intermediate struct that allows a `Witness` to be built
 /// one layer at a time
 #[derive(Clone, Debug, Default)]
-pub struct WitnessBuilder<F: FieldExt, Pf: ProofSystem<F>> {
+pub struct WitnessBuilder<F: Field, Pf: ProofSystem<F>> {
     input_layers: Vec<Pf::InputLayer>,
     layers: Layers<F, Pf::Layer>,
     output_layers: Vec<Pf::OutputLayer>,
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F>> WitnessBuilder<F, Pf> {
+impl<F: Field, Pf: ProofSystem<F>> WitnessBuilder<F, Pf> {
     /// Creates an empty `WitnessBuilder`
     pub fn new() -> Self {
         Self {
@@ -86,12 +86,12 @@ impl<F: FieldExt, Pf: ProofSystem<F>> WitnessBuilder<F, Pf> {
 }
 
 /// A basic circuit that uses the Layouter to construct the witness
-pub struct LayouterCircuit<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> {
+pub struct LayouterCircuit<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> {
     witness_builder: Fn,
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> LayouterCircuit<F, C, Fn> {
+impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> LayouterCircuit<F, C, Fn> {
     /// Constructs a `LayouterCircuit` by taking in a closure that computes a Component
     /// that contains all the nodes that will be layedout and compiled into the witness
     pub fn new(witness_builder: Fn) -> Self {
@@ -102,7 +102,7 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> LayouterC
     }
 }
 
-impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircuit<F>
+impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircuit<F>
     for LayouterCircuit<F, C, Fn>
 {
     type ProofSystem = DefaultProofSystem;

@@ -5,7 +5,7 @@ use std::path::Path;
 
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
@@ -23,7 +23,7 @@ use super::{
 use remainder::{layer::LayerId, mle::circuit_mle::to_slice_of_vectors};
 
 #[derive(Clone)]
-pub struct BatchedZKDTCircuitMles<F: FieldExt> {
+pub struct BatchedZKDTCircuitMles<F: Field> {
     pub input_samples_mle_vec: Vec<InputAttributeMle<F>>,
     pub permuted_input_samples_mle_vec: Vec<InputAttributeMle<F>>,
     pub decision_node_paths_mle_vec: Vec<DecisionNodeMle<F>>,
@@ -37,7 +37,7 @@ pub struct BatchedZKDTCircuitMles<F: FieldExt> {
 }
 
 #[derive(Clone)]
-pub struct BatchedZKDTCircuitMlesMultiTree<F: FieldExt> {
+pub struct BatchedZKDTCircuitMlesMultiTree<F: Field> {
     pub input_samples_mle_vec: Vec<InputAttributeMle<F>>,
     pub permuted_input_samples_mle_vec_vec: Vec<Vec<InputAttributeMle<F>>>,
     pub decision_node_paths_mle_vec_vec: Vec<Vec<DecisionNodeMle<F>>>,
@@ -64,7 +64,7 @@ pub struct ZKDTCircuitData<F> {
     pub multiplicities_bin_decomp_input: Vec<Vec<BinDecomp8Bit<F>>>, // Binary decomp of multiplicities, of input
 }
 
-impl<F: FieldExt> ZKDTCircuitData<F> {
+impl<F: Field> ZKDTCircuitData<F> {
     /// Constructor
     pub fn new(
         input_data: Vec<Vec<InputAttribute<F>>>,
@@ -94,7 +94,7 @@ impl<F: FieldExt> ZKDTCircuitData<F> {
 }
 
 #[instrument(skip(zkdt_circuit_data))]
-pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
+pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: Field>(
     zkdt_circuit_data: Vec<ZKDTCircuitData<F>>,
 ) -> BatchedZKDTCircuitMlesMultiTree<F> {
     let (
@@ -310,7 +310,7 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
 /// Takes the output from presumably something like [`read_upshot_data_single_tree_branch_from_filepath`]
 /// and converts it into `BatchedCatboostMles<F>`, i.e. the input to the circuit.
 #[instrument(skip(zkdt_circuit_data))]
-pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
+pub fn convert_zkdt_circuit_data_into_mles<F: Field>(
     zkdt_circuit_data: ZKDTCircuitData<F>,
     tree_height: usize,
     input_len: usize,
@@ -488,7 +488,7 @@ pub struct MinibatchData {
 /// ## TODOs
 /// * Throw an error if `sample_minibatch_number` causes us to go out of bounds!
 #[instrument]
-pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
+pub fn load_upshot_data_single_tree_batch<F: Field>(
     maybe_minibatch_data: Option<MinibatchData>,
     tree_idx: usize,
     raw_trees_model_path: &Path,
@@ -555,7 +555,7 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
 }
 
 #[instrument]
-pub fn load_upshot_data_multi_tree_batch<F: FieldExt>(
+pub fn load_upshot_data_multi_tree_batch<F: Field>(
     maybe_minibatch_data: Option<MinibatchData>,
     raw_trees_model_path: &Path,
     raw_samples_path: &Path,

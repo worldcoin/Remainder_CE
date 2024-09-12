@@ -53,9 +53,7 @@ extern crate serde;
 extern crate serde_json;
 
 use crate::data_pipeline::trees::*;
-use crate::structs::{
-    BinDecomp16Bit, BinDecomp8Bit, DecisionNode, InputAttribute, LeafNode,
-};
+use crate::structs::{BinDecomp16Bit, BinDecomp8Bit, DecisionNode, InputAttribute, LeafNode};
 
 use ark_serialize::Read;
 use ark_std::cfg_into_iter;
@@ -65,7 +63,7 @@ use num_bigint::{BigInt, Sign};
 use num_traits::cast::ToPrimitive;
 use rand::Rng;
 use rayon::prelude::*;
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fs::File;
@@ -107,7 +105,7 @@ pub struct TreesModel {
 /// extra "dummy" decision node so that the number of decision nodes is a power of two (equal to
 /// the number of leaf nodes).
 /// The dummy decision node has node id 2^depth - 1.
-pub struct CircuitizedTrees<F: FieldExt> {
+pub struct CircuitizedTrees<F: Field> {
     /// indexed by tree, then by node (sorted by node id)
     pub decision_nodes: Vec<Vec<DecisionNode<F>>>,
     /// indexed by tree, then by node (sorted by node id)
@@ -145,7 +143,7 @@ pub type CircuitizedSamples<F> = Vec<Vec<InputAttribute<F>>>;
 /// * `differences` is a signed decomposition, with the sign bit at the end.
 /// * Each vector in `node_multiplicities` has length `2.pow(trees_model.depth)`; it is indexed by
 /// node_id for decision nodes, and by node id + 1 for leaf nodes.
-pub struct CircuitizedAuxiliaries<F: FieldExt> {
+pub struct CircuitizedAuxiliaries<F: Field> {
     /// indexed by trees, samples, steps in path
     pub decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>,
     /// indexed by trees, samples, steps in path
@@ -236,7 +234,7 @@ impl From<&RawSamples> for Samples {
 }
 
 /// Conversion TreePath -> LeafNode
-impl<F: FieldExt> From<&TreePath<i64>> for LeafNode<F> {
+impl<F: Field> From<&TreePath<i64>> for LeafNode<F> {
     fn from(tree_path: &TreePath<i64>) -> Self {
         LeafNode {
             node_id: F::from(tree_path.leaf_node_id as u64),
@@ -245,7 +243,7 @@ impl<F: FieldExt> From<&TreePath<i64>> for LeafNode<F> {
     }
 }
 
-impl<F: FieldExt> From<&Samples> for CircuitizedSamples<F> {
+impl<F: Field> From<&Samples> for CircuitizedSamples<F> {
     fn from(samples: &Samples) -> Self {
         cfg_into_iter!(&samples.values)
             .map(build_sample_witness)
@@ -254,7 +252,7 @@ impl<F: FieldExt> From<&Samples> for CircuitizedSamples<F> {
 }
 
 type DecisionPath<F> = Vec<DecisionNode<F>>;
-impl<F: FieldExt, T: Copy> From<&TreePath<T>> for DecisionPath<F> {
+impl<F: Field, T: Copy> From<&TreePath<T>> for DecisionPath<F> {
     fn from(tree_path: &TreePath<T>) -> Self {
         tree_path
             .path_steps
@@ -270,7 +268,7 @@ impl<F: FieldExt, T: Copy> From<&TreePath<T>> for DecisionPath<F> {
 
 type AttributesOnPath<F> = Vec<InputAttribute<F>>;
 // conversion from tree path to attributes on path
-impl<F: FieldExt> From<&TreePath<i64>> for AttributesOnPath<F> {
+impl<F: Field> From<&TreePath<i64>> for AttributesOnPath<F> {
     fn from(tree_path: &TreePath<i64>) -> Self {
         tree_path
             .path_steps
@@ -284,7 +282,7 @@ impl<F: FieldExt> From<&TreePath<i64>> for AttributesOnPath<F> {
 }
 
 type DifferencesBits<F> = Vec<BinDecomp16Bit<F>>;
-impl<F: FieldExt> From<&TreePath<i64>> for DifferencesBits<F> {
+impl<F: Field> From<&TreePath<i64>> for DifferencesBits<F> {
     fn from(tree_path: &TreePath<i64>) -> Self {
         tree_path
             .path_steps
@@ -297,19 +295,17 @@ impl<F: FieldExt> From<&TreePath<i64>> for DifferencesBits<F> {
     }
 }
 
-fn build_differences_bindecomp<F: FieldExt>(difference: i32) -> BinDecomp16Bit<F> {
+fn build_differences_bindecomp<F: Field>(difference: i32) -> BinDecomp16Bit<F> {
     let bits = build_signed_bit_decomposition(difference, 16).unwrap();
     BinDecomp16Bit::<F>::from(bits)
 }
 
-fn build_node_multiplicity_bindecomp<F: FieldExt>(multiplicity: usize) -> BinDecomp16Bit<F> {
+fn build_node_multiplicity_bindecomp<F: Field>(multiplicity: usize) -> BinDecomp16Bit<F> {
     let bits = build_unsigned_bit_decomposition(multiplicity as u32, 16).unwrap();
     BinDecomp16Bit::<F>::from(bits)
 }
 
-fn build_8bit_attribute_multiplicity_bindecomp<F: FieldExt>(
-    multiplicity: usize,
-) -> BinDecomp8Bit<F> {
+fn build_8bit_attribute_multiplicity_bindecomp<F: Field>(multiplicity: usize) -> BinDecomp8Bit<F> {
     let bits = build_unsigned_bit_decomposition(multiplicity as u32, 8).unwrap();
     //  assert_eq!(recomp_8bit(&bits), multiplicity);
     let recomp = recomp_8bit(&bits);
@@ -330,7 +326,7 @@ fn recomp_8bit(bits: &Vec<bool>) -> usize {
 }
 
 /// Build the witnesses for a single sample.
-fn build_sample_witness<F: FieldExt>(sample: &Vec<u16>) -> Vec<InputAttribute<F>> {
+fn build_sample_witness<F: Field>(sample: &Vec<u16>) -> Vec<InputAttribute<F>> {
     sample
         .iter()
         .enumerate()
@@ -347,7 +343,7 @@ fn build_sample_witness<F: FieldExt>(sample: &Vec<u16>) -> Vec<InputAttribute<F>
 /// The following preconditions are required to ensure attribute multiplicities fit in 8 bit bindecomp:
 /// Pre: trees_model.trees.len() <= 2^5
 /// Pre: trees_model.depth <= 2^3 + 1
-pub fn circuitize_auxiliaries<F: FieldExt>(
+pub fn circuitize_auxiliaries<F: Field>(
     samples_in: &Samples,
     trees_model: &TreesModel,
 ) -> CircuitizedAuxiliaries<F> {
@@ -465,7 +461,7 @@ pub fn count_node_multiplicities<T: Copy>(
     multiplicities
 }
 
-impl<F: FieldExt> From<&TreesModel> for CircuitizedTrees<F> {
+impl<F: Field> From<&TreesModel> for CircuitizedTrees<F> {
     /// Extract the DecisionNode and LeafNode instances from the TreesModel instance to
     /// obtain a CircuitizedTrees.
     fn from(trees_model: &TreesModel) -> Self {

@@ -2,7 +2,7 @@
 
 mod compile_inputs;
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
@@ -19,7 +19,7 @@ pub struct InputShred<F> {
     data: MultilinearExtension<F>,
 }
 
-impl<F: FieldExt> CircuitNode for InputShred<F> {
+impl<F: Field> CircuitNode for InputShred<F> {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -29,7 +29,7 @@ impl<F: FieldExt> CircuitNode for InputShred<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode for InputShred<F> {
+impl<F: Field> ClaimableNode for InputShred<F> {
     type F = F;
 
     fn get_data(&self) -> &MultilinearExtension<Self::F> {
@@ -41,7 +41,7 @@ impl<F: FieldExt> ClaimableNode for InputShred<F> {
     }
 }
 
-impl<F: FieldExt> InputShred<F> {
+impl<F: Field> InputShred<F> {
     /// Creates a new InputShred from data
     ///
     /// Specifying a source indicates to the layouter that this
@@ -86,7 +86,7 @@ pub struct InputLayerNode<F> {
     pub(in crate::layouter) input_layer_type: InputLayerType,
 }
 
-impl<F: FieldExt> CircuitNode for InputLayerNode<F> {
+impl<F: Field> CircuitNode for InputLayerNode<F> {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -100,7 +100,7 @@ impl<F: FieldExt> CircuitNode for InputLayerNode<F> {
     }
 }
 
-impl<F: FieldExt> InputLayerNode<F> {
+impl<F: Field> InputLayerNode<F> {
     /// A constructor for an InputLayerNode. Can either be initialized empty
     /// or with some children.
     pub fn new(

@@ -5,20 +5,20 @@ use remainder::{
     expression::abstract_expr::ExprBuilder,
     layouter::{component::Component, nodes::ClaimableNode},
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use remainder::{
     layouter::nodes::{circuit_outputs::OutputNode, sector::Sector, CircuitNode, Context},
     mle::evals::MultilinearExtension,
 };
 
-pub struct InputExpoComponent<F: FieldExt> {
+pub struct InputExpoComponent<F: Field> {
     r_minus_x_powers_sectors: Vec<Sector<F>>,
     bit_exponentiation_sectors: Vec<Sector<F>>,
     product_sector: Sector<F>,
 }
 
-impl<F: FieldExt> InputExpoComponent<F> {
+impl<F: Field> InputExpoComponent<F> {
     pub fn new(
         ctx: &Context,
         attr_inputs: [&dyn ClaimableNode<F = F>; 2],
@@ -173,7 +173,7 @@ impl<F: FieldExt> InputExpoComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for InputExpoComponent<F>
+impl<F: Field, N> Component<N> for InputExpoComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
 {

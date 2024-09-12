@@ -4,9 +4,9 @@ use ark_std::log2;
 use rand::Rng;
 use remainder::layer::LayerId;
 use remainder_shared_types::curves::PrimeOrderCurve;
-use remainder_shared_types::halo2curves::ff::Field;
+use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use super::proof_of_equality::ProofOfEquality;
 use super::proof_of_opening::ProofOfOpening;
@@ -249,7 +249,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
 /// Specifically, if f(0), .. , f(n_evals) are the evaluations of a polynomial f,
 /// and `weights` is the return value of this function, then the evaluation of f at `point` is
 /// `f(point) = sum(f(i) * weights[i])`.
-pub fn barycentric_weights<F: FieldExt>(point: F, n_evals: usize) -> Vec<F> {
+pub fn barycentric_weights<F: Field>(point: F, n_evals: usize) -> Vec<F> {
     (0..n_evals)
         .map(
             // Create an iterator of everything except current value

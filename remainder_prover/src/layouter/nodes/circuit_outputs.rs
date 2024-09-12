@@ -2,7 +2,7 @@
 
 use std::marker::PhantomData;
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     layouter::layouting::CircuitLocation,
@@ -21,7 +21,7 @@ pub struct OutputNode<F> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> CircuitNode for OutputNode<F> {
+impl<F: Field> CircuitNode for OutputNode<F> {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -31,7 +31,7 @@ impl<F: FieldExt> CircuitNode for OutputNode<F> {
     }
 }
 
-impl<F: FieldExt> OutputNode<F> {
+impl<F: Field> OutputNode<F> {
     /// Creates a new OutputNode from a source w/ some data
     pub fn new(ctx: &Context, source: &impl ClaimableNode<F = F>) -> Self {
         Self {
@@ -53,7 +53,7 @@ impl<F: FieldExt> OutputNode<F> {
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F, OutputLayer = O>, O: From<DenseMle<F>> + From<ZeroMle<F>>>
+impl<F: Field, Pf: ProofSystem<F, OutputLayer = O>, O: From<DenseMle<F>> + From<ZeroMle<F>>>
     CompilableNode<F, Pf> for OutputNode<F>
 {
     fn compile<'a>(

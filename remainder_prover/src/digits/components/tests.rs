@@ -1,3 +1,6 @@
+use super::{BitsAreBinary, ComplementaryRecompChecker, UnsignedRecomposition};
+use crate::components::EqualityChecker;
+use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::layer::LayerId;
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::ComponentSet;
@@ -7,20 +10,18 @@ use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::ClaimableNode;
 use crate::mle::circuit_mle::{to_slice_of_vectors, CircuitMle, FlatMles};
 use crate::prover::helpers::test_circuit;
-use crate::digits::{complementary_decomposition, digits_to_field};
-use crate::utils::mle::get_input_shred_from_vec;
-use super::{ComplementaryRecompChecker, BitsAreBinary, UnsignedRecomposition};
-use crate::components::EqualityChecker;
 use crate::utils::arithmetic::i64_to_field;
+use crate::utils::mle::get_input_shred_from_vec;
 use ark_std::iterable::Iterable;
 use itertools::Itertools;
-use remainder_shared_types::halo2curves::ff::Field;
+use remainder_shared_types::ff_field;
 use remainder_shared_types::Fr;
 
 #[test]
 fn test_complementary_recomposition_vertical() {
     let values = [-3, -2, -1, 0, 1, 2, 3, 4];
-    let (digits_raw, bits): (Vec<_>, Vec<_>) = values.clone()
+    let (digits_raw, bits): (Vec<_>, Vec<_>) = values
+        .clone()
         .into_iter()
         .map(|value| complementary_decomposition::<2, 2>(value).unwrap())
         .unzip();
@@ -39,11 +40,17 @@ fn test_complementary_recomposition_vertical() {
             .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
             .collect_vec();
         let bits_input_shred = get_input_shred_from_vec(
-            bits.iter().map(|b| if *b { Fr::ONE } else { Fr::ZERO }).collect(),
-                ctx, &input_layer);
+            bits.iter()
+                .map(|b| if *b { Fr::ONE } else { Fr::ZERO })
+                .collect(),
+            ctx,
+            &input_layer,
+        );
         let values_input_shred = get_input_shred_from_vec(
             values.iter().map(|value| i64_to_field(value)).collect(),
-            ctx, &input_layer);
+            ctx,
+            &input_layer,
+        );
 
         let recomp = UnsignedRecomposition::new(ctx, &digits_refs, 2);
         let comp_checker = ComplementaryRecompChecker::new(
@@ -52,7 +59,7 @@ fn test_complementary_recomposition_vertical() {
             &bits_input_shred,
             &recomp.sector,
             2,
-            2
+            2,
         );
 
         let output = OutputNode::new_zero(ctx, &comp_checker.sector);
@@ -94,12 +101,7 @@ fn test_unsigned_recomposition() {
         ],
     ];
     assert_eq!(digits.len(), num_digits);
-    let expected = vec![
-        Fr::from(19),
-        Fr::from(2),
-        Fr::from(33),
-        Fr::from(48),
-    ];
+    let expected = vec![Fr::from(19), Fr::from(2), Fr::from(33), Fr::from(48)];
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
@@ -180,10 +182,8 @@ fn test_complementary_recomposition() {
                 get_input_shred_from_vec(digits_at_place.clone(), ctx, &input_layer)
             })
             .collect_vec();
-        let bits_input_shred =
-            get_input_shred_from_vec(bits.clone(), ctx, &input_layer);
-        let expected_input_shred =
-            get_input_shred_from_vec(expected.clone(), ctx, &input_layer);
+        let bits_input_shred = get_input_shred_from_vec(bits.clone(), ctx, &input_layer);
+        let expected_input_shred = get_input_shred_from_vec(expected.clone(), ctx, &input_layer);
 
         let digits_input_refs = digits_input_shreds
             .iter()

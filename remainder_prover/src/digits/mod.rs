@@ -1,6 +1,6 @@
 //! Module containing functions for deriving digital decompositions and building associated circuit
 //! components.
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 /// Components for digital recomposition.
 pub mod components;
@@ -68,7 +68,7 @@ pub fn complementary_decomposition<const BASE: u64, const N: usize>(value: i64) 
 /// use remainder_shared_types::Fr;
 /// assert_eq!(digits_to_field::<Fr, 3>(&[1, 2, 3]), [Fr::from(1), Fr::from(2), Fr::from(3)]);
 /// ```
-pub fn digits_to_field<F: FieldExt, const N: usize>(digits: &[u16; N]) -> [F; N] {
+pub fn digits_to_field<F: Field, const N: usize>(digits: &[u16; N]) -> [F; N] {
     digits.iter().map(|x| F::from(*x as u64)).collect::<Vec<_>>().try_into().unwrap()
 }
 

@@ -1,6 +1,6 @@
 use ark_std::test_rng;
 use rand::Rng;
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 
 use crate::{
     builders::{
@@ -27,11 +27,11 @@ use super::BinaryOperation;
 /// * `mle` - An MLE with arbitrary bookkeeping table values.
 /// * `neg_mle` - An MLE whose bookkeeping table is the element-wise negation
 ///     of that of `mle`.
-struct AddGateCircuit<F: FieldExt> {
+struct AddGateCircuit<F: Field> {
     mle: DenseMle<F>,
     neg_mle: DenseMle<F>,
 }
-impl<F: FieldExt> GKRCircuit<F> for AddGateCircuit<F> {
+impl<F: Field> GKRCircuit<F> for AddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
@@ -70,7 +70,7 @@ impl<F: FieldExt> GKRCircuit<F> for AddGateCircuit<F> {
         }
     }
 }
-impl<F: FieldExt> AddGateCircuit<F> {
+impl<F: Field> AddGateCircuit<F> {
     fn new(mle: DenseMle<F>, neg_mle: DenseMle<F>) -> Self {
         assert_eq!(mle.num_iterated_vars(), neg_mle.num_iterated_vars());
         Self { mle, neg_mle }
@@ -86,11 +86,11 @@ impl<F: FieldExt> AddGateCircuit<F> {
 /// * `mle` - An MLE with arbitrary bookkeeping table values.
 /// * `neg_mle` - An MLE whose bookkeeping table is the element-wise negation
 ///     of that of `mle`.
-struct UnevenAddGateCircuit<F: FieldExt> {
+struct UnevenAddGateCircuit<F: Field> {
     mle: DenseMle<F>,
     neg_mle: DenseMle<F>,
 }
-impl<F: FieldExt> GKRCircuit<F> for UnevenAddGateCircuit<F> {
+impl<F: Field> GKRCircuit<F> for UnevenAddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
@@ -124,7 +124,7 @@ impl<F: FieldExt> GKRCircuit<F> for UnevenAddGateCircuit<F> {
         }
     }
 }
-impl<F: FieldExt> UnevenAddGateCircuit<F> {
+impl<F: Field> UnevenAddGateCircuit<F> {
     fn new(mle: DenseMle<F>, neg_mle: DenseMle<F>) -> Self {
         Self { mle, neg_mle }
     }
@@ -143,12 +143,12 @@ impl<F: FieldExt> UnevenAddGateCircuit<F> {
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values.
 /// * `neg_mle_2` - An MLE whose bookkeeping table is the element-wise negation
 ///     of that of `mle_2`.
-struct MulAddGateCircuit<F: FieldExt> {
+struct MulAddGateCircuit<F: Field> {
     mle_1: DenseMle<F>,
     mle_2: DenseMle<F>,
     neg_mle_2: DenseMle<F>,
 }
-impl<F: FieldExt> GKRCircuit<F> for MulAddGateCircuit<F> {
+impl<F: Field> GKRCircuit<F> for MulAddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
@@ -204,7 +204,7 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddGateCircuit<F> {
         }
     }
 }
-impl<F: FieldExt> MulAddGateCircuit<F> {
+impl<F: Field> MulAddGateCircuit<F> {
     fn new(mle_1: DenseMle<F>, mle_2: DenseMle<F>, neg_mle_2: DenseMle<F>) -> Self {
         assert_eq!(mle_1.num_iterated_vars(), mle_2.num_iterated_vars());
         assert_eq!(mle_2.num_iterated_vars(), neg_mle_2.num_iterated_vars());
@@ -227,13 +227,13 @@ impl<F: FieldExt> MulAddGateCircuit<F> {
 ///     these are interpreted to be dataparallel MLEs with
 ///     `2^num_dataparallel_bits` copies of smaller MLEs.
 /// * `num_dataparallel_bits` - Defines the log_2 of the number of circuit copies.
-struct DataparallelMulAddGateCircuit<F: FieldExt> {
+struct DataparallelMulAddGateCircuit<F: Field> {
     mle_1_dataparallel: DenseMle<F>,
     mle_2_dataparallel: DenseMle<F>,
     neg_mle_2_dataparallel: DenseMle<F>,
     num_dataparallel_bits: usize,
 }
-impl<F: FieldExt> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
+impl<F: Field> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
@@ -293,7 +293,7 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
         }
     }
 }
-impl<F: FieldExt> DataparallelMulAddGateCircuit<F> {
+impl<F: Field> DataparallelMulAddGateCircuit<F> {
     fn new(
         mle_1_dataparallel: DenseMle<F>,
         mle_2_dataparallel: DenseMle<F>,
@@ -329,12 +329,12 @@ impl<F: FieldExt> DataparallelMulAddGateCircuit<F> {
 ///     these are interpreted to be dataparallel MLEs with
 ///     `2^num_dataparallel_bits` copies of smaller MLEs.
 /// * `num_dataparallel_bits` - Defines the log_2 of the number of circuit copies.
-struct DataparallelAddGateCircuit<F: FieldExt> {
+struct DataparallelAddGateCircuit<F: Field> {
     mle_dataparallel: DenseMle<F>,
     neg_mle_dataparallel: DenseMle<F>,
     num_dataparallel_bits: usize,
 }
-impl<F: FieldExt> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
+impl<F: Field> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
@@ -374,7 +374,7 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
         }
     }
 }
-impl<F: FieldExt> DataparallelAddGateCircuit<F> {
+impl<F: Field> DataparallelAddGateCircuit<F> {
     fn new(
         mle_dataparallel: DenseMle<F>,
         neg_mle_dataparallel: DenseMle<F>,
@@ -404,12 +404,12 @@ impl<F: FieldExt> DataparallelAddGateCircuit<F> {
 ///     these are interpreted to be dataparallel MLEs with
 ///     `2^num_dataparallel_bits` copies of smaller MLEs.
 /// * `num_dataparallel_bits` - Defines the log_2 of the number of circuit copies.
-struct DataparallelUnevenAddGateCircuit<F: FieldExt> {
+struct DataparallelUnevenAddGateCircuit<F: Field> {
     mle_dataparallel: DenseMle<F>,
     neg_mle_dataparallel: DenseMle<F>,
     num_dataparallel_bits: usize,
 }
-impl<F: FieldExt> GKRCircuit<F> for DataparallelUnevenAddGateCircuit<F> {
+impl<F: Field> GKRCircuit<F> for DataparallelUnevenAddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
@@ -447,7 +447,7 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelUnevenAddGateCircuit<F> {
         }
     }
 }
-impl<F: FieldExt> DataparallelUnevenAddGateCircuit<F> {
+impl<F: Field> DataparallelUnevenAddGateCircuit<F> {
     fn new(
         mle_dataparallel: DenseMle<F>,
         neg_mle_dataparallel: DenseMle<F>,

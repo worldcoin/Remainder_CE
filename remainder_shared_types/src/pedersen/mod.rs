@@ -2,7 +2,6 @@
 
 use std::ops::{Add, Mul};
 
-use ff::Field;
 use num::PrimInt;
 use serde::{Deserialize, Serialize};
 use sha3::digest::ExtendableOutput;

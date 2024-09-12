@@ -1,7 +1,7 @@
 //! Helper struct that combines multiple `Layer` implementations into
 //! a single struct that can represent many types of `Layer`
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
 use crate::claims::YieldClaim;
@@ -17,7 +17,7 @@ use super::LayerError;
 
 layer_enum!(LayerEnum, (Regular: RegularLayer<F>), (Gate: Gate<F>), (IdentityGate: IdentityGate<F>), (MatMult: MatMult<F>));
 
-impl<F: FieldExt> LayerEnum<F> {
+impl<F: Field> LayerEnum<F> {
     ///Gets the size of the Layer as a whole in terms of number of bits
     pub fn layer_size(&self) -> usize {
         let expression = match self {
@@ -44,7 +44,7 @@ impl<F: FieldExt> LayerEnum<F> {
     }
 }
 
-impl<F: FieldExt> YieldWLXEvals<F> for LayerEnum<F> {
+impl<F: Field> YieldWLXEvals<F> for LayerEnum<F> {
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &[Vec<F>],
@@ -86,7 +86,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for LayerEnum<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for LayerEnum<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for LayerEnum<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
             LayerEnum::Regular(layer) => layer.get_claims(),

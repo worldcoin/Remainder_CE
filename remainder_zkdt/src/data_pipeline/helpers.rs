@@ -2,10 +2,10 @@
 use crate::data_pipeline::trees::*;
 use crate::structs::{DecisionNode, LeafNode};
 use remainder_ligero::utils::get_least_significant_bits_to_usize_little_endian;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 /// Helper function for conversion to field elements, handling negative values.
-pub fn i32_to_field<F: FieldExt>(value: i32) -> F {
+pub fn i32_to_field<F: Field>(value: i32) -> F {
     if value >= 0 {
         F::from(value as u64)
     } else {
@@ -14,7 +14,7 @@ pub fn i32_to_field<F: FieldExt>(value: i32) -> F {
 }
 
 /// Helper function for conversion to field elements, handling negative values.
-pub fn i64_to_field<F: FieldExt>(value: i64) -> F {
+pub fn i64_to_field<F: Field>(value: i64) -> F {
     if value >= 0 {
         F::from(value as u64)
     } else {
@@ -68,14 +68,14 @@ pub fn build_unsigned_bit_decomposition(mut value: u32, bit_length: usize) -> Op
 
 /// Return a Vec containing a [`DecisionNode`] for each Node::Internal appearing in this tree, in arbitrary order.
 /// Pre: if `node` is any descendent of this Node then `node.get_id()` is not None.
-pub fn extract_decision_nodes<T: Copy, F: FieldExt>(tree: &Node<T>) -> Vec<DecisionNode<F>> {
+pub fn extract_decision_nodes<T: Copy, F: Field>(tree: &Node<T>) -> Vec<DecisionNode<F>> {
     let mut decision_nodes = Vec::new();
     append_decision_nodes(tree, &mut decision_nodes);
     decision_nodes
 }
 
 /// Helper function to [`extract_decision_nodes`].
-fn append_decision_nodes<T: Copy, F: FieldExt>(
+fn append_decision_nodes<T: Copy, F: Field>(
     tree: &Node<T>,
     decision_nodes: &mut Vec<DecisionNode<F>>,
 ) {
@@ -99,14 +99,14 @@ fn append_decision_nodes<T: Copy, F: FieldExt>(
 
 /// Return a Vec containing a [`LeafNode`] for each Node::Leaf appearing in this tree, in order of
 /// id, where the ids are allocated as in [`extract_decision_nodes`].
-pub fn extract_leaf_nodes<F: FieldExt>(tree: &Node<i64>) -> Vec<LeafNode<F>> {
+pub fn extract_leaf_nodes<F: Field>(tree: &Node<i64>) -> Vec<LeafNode<F>> {
     let mut leaf_nodes = Vec::new();
     append_leaf_nodes(tree, &mut leaf_nodes);
     leaf_nodes
 }
 
 /// Helper function for extract_leaf_nodes.
-fn append_leaf_nodes<F: FieldExt>(tree: &Node<i64>, leaf_nodes: &mut Vec<LeafNode<F>>) {
+fn append_leaf_nodes<F: Field>(tree: &Node<i64>, leaf_nodes: &mut Vec<LeafNode<F>>) {
     match tree {
         Node::Leaf { id, value } => {
             leaf_nodes.push(LeafNode {
@@ -121,7 +121,7 @@ fn append_leaf_nodes<F: FieldExt>(tree: &Node<i64>, leaf_nodes: &mut Vec<LeafNod
     }
 }
 
-pub fn get_field_val_as_usize_vec<F: FieldExt>(value: F) -> Vec<usize> {
+pub fn get_field_val_as_usize_vec<F: Field>(value: F) -> Vec<usize> {
     let value_le_bytes = value.to_repr().as_ref().to_vec();
     let first_result =
         get_least_significant_bits_to_usize_little_endian(value_le_bytes.clone(), 64);

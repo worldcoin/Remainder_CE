@@ -1,6 +1,6 @@
 use crate::ligero_ml_helper::get_ml_inner_outer_tensors;
 use crate::ligero_structs::{LigeroAuxInfo, LigeroCommit, LigeroRoot};
-use crate::FieldExt;
+use crate::Field;
 use crate::{verify, ProverError};
 use remainder_shared_types::transcript::{ProverTranscript, TranscriptSponge};
 use remainder_shared_types::transcript::{TranscriptReader, VerifierTranscript};
@@ -31,7 +31,7 @@ use super::{commit, prove};
 /// // TODO!(ryancao) -- see tests below!
 /// ```
 #[instrument(skip_all, level = "debug")]
-pub fn remainder_ligero_commit<F: FieldExt>(
+pub fn remainder_ligero_commit<F: Field>(
     input_mle_bookkeeping_table: &[F],
     rho_inv: u8,
     ratio: f64,
@@ -81,7 +81,7 @@ pub fn remainder_ligero_commit<F: FieldExt>(
 /// ```
 /// // TODO!(ryancao) -- see tests below!
 /// ```
-pub fn remainder_ligero_eval_prove<F: FieldExt>(
+pub fn remainder_ligero_eval_prove<F: Field>(
     input_layer_bookkeeping_table: &[F],
     challenge_coord: &[F],
     transcript_writer: &mut impl ProverTranscript<F>,
@@ -114,7 +114,7 @@ pub fn remainder_ligero_eval_prove<F: FieldExt>(
 /// ```
 /// // TODO!(ryancao) -- see tests below!
 /// ```
-pub fn remainder_ligero_verify<F: FieldExt>(
+pub fn remainder_ligero_verify<F: Field>(
     commit_root: F,
     aux: &LigeroAuxInfo<F>,
     tr: &mut impl VerifierTranscript<F>,

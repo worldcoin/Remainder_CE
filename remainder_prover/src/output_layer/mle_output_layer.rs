@@ -9,7 +9,7 @@
 use num::Zero;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 use serde::{Deserialize, Serialize};
 
@@ -32,13 +32,13 @@ use super::{
 /// The Prover's default type of an [crate::output_layer::OutputLayer].
 /// Contains an [MleEnum] which can be either a [DenseMle] or a [ZeroMle].
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(bound = "F: FieldExt")]
-pub struct MleOutputLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct MleOutputLayer<F: Field> {
     mle: MleEnum<F>,
 }
 
 /// Required for output layer shenanigans within `layout`
-impl<F: FieldExt> From<DenseMle<F>> for MleOutputLayer<F> {
+impl<F: Field> From<DenseMle<F>> for MleOutputLayer<F> {
     fn from(value: DenseMle<F>) -> Self {
         Self {
             mle: MleEnum::Dense(value),
@@ -46,7 +46,7 @@ impl<F: FieldExt> From<DenseMle<F>> for MleOutputLayer<F> {
     }
 }
 
-impl<F: FieldExt> From<ZeroMle<F>> for MleOutputLayer<F> {
+impl<F: Field> From<ZeroMle<F>> for MleOutputLayer<F> {
     fn from(value: ZeroMle<F>) -> Self {
         Self {
             mle: MleEnum::Zero(value),
@@ -54,7 +54,7 @@ impl<F: FieldExt> From<ZeroMle<F>> for MleOutputLayer<F> {
     }
 }
 
-impl<F: FieldExt> MleOutputLayer<F> {
+impl<F: Field> MleOutputLayer<F> {
     /// Returns the MLE contained within. For PROVER use only!
     pub fn get_mle(&self) -> &MleEnum<F> {
         &self.mle
@@ -89,7 +89,7 @@ impl<F: FieldExt> MleOutputLayer<F> {
     }
 }
 
-impl<F: FieldExt> OutputLayer<F> for MleOutputLayer<F> {
+impl<F: Field> OutputLayer<F> for MleOutputLayer<F> {
     type CircuitOutputLayer = CircuitMleOutputLayer<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -134,8 +134,8 @@ impl<F: FieldExt> OutputLayer<F> for MleOutputLayer<F> {
 /// The circuit description type for the defaul Output Layer consisting of an
 /// MLE.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(bound = "F: FieldExt")]
-pub struct CircuitMleOutputLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct CircuitMleOutputLayer<F: Field> {
     /// The metadata of this MLE: indices and associated layer.
     pub mle: CircuitMle<F>,
 
@@ -143,7 +143,7 @@ pub struct CircuitMleOutputLayer<F: FieldExt> {
     is_zero: bool,
 }
 
-impl<F: FieldExt> CircuitMleOutputLayer<F> {
+impl<F: Field> CircuitMleOutputLayer<F> {
     /// Generate an output layer containing a verifier equivalent of a
     /// [DenseMle], with a given `layer_id` and `mle_indices`.
     pub fn new_dense(_layer_id: LayerId, _mle_indices: &[MleIndex<F>]) -> Self {
@@ -165,7 +165,7 @@ impl<F: FieldExt> CircuitMleOutputLayer<F> {
     }
 }
 
-impl<F: FieldExt> CircuitOutputLayer<F> for CircuitMleOutputLayer<F> {
+impl<F: Field> CircuitOutputLayer<F> for CircuitMleOutputLayer<F> {
     type VerifierOutputLayer = VerifierMleOutputLayer<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -209,8 +209,8 @@ impl<F: FieldExt> CircuitOutputLayer<F> for CircuitMleOutputLayer<F> {
 /// The verifier counterpart type for the defaul Output Layer consisting of an
 /// MLE.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(bound = "F: FieldExt")]
-pub struct VerifierMleOutputLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct VerifierMleOutputLayer<F: Field> {
     /// A description of this layer's fully-bound MLE.
     mle: VerifierMle<F>,
 
@@ -218,7 +218,7 @@ pub struct VerifierMleOutputLayer<F: FieldExt> {
     is_zero: bool,
 }
 
-impl<F: FieldExt> VerifierMleOutputLayer<F> {
+impl<F: Field> VerifierMleOutputLayer<F> {
     /// Generate an output layer containing a verifier equivalent of a
     /// [DenseMle], with a given `layer_id` and `mle_indices`.
     pub fn new_dense(_layer_id: LayerId, _mle_indices: &[MleIndex<F>]) -> Self {
@@ -244,13 +244,13 @@ impl<F: FieldExt> VerifierMleOutputLayer<F> {
     }
 }
 
-impl<F: FieldExt> VerifierOutputLayer<F> for VerifierMleOutputLayer<F> {
+impl<F: Field> VerifierOutputLayer<F> for VerifierMleOutputLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.mle.layer_id()
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MleOutputLayer<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for MleOutputLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.mle.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
@@ -279,7 +279,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MleOutputLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         // We do not support non-zero MLEs on Output Layers at this point!
         assert!(self.is_zero());

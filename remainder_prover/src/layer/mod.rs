@@ -21,7 +21,7 @@ use crate::{
 };
 use remainder_shared_types::{
     transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 
 /// Errors to do with working with a type implementing [Layer].
@@ -93,7 +93,7 @@ pub enum VerificationError {
 ///
 /// Each `Layer` is a sub-protocol that takes in some `Claim` and creates a proof
 /// that the `Claim` is correct
-pub trait Layer<F: FieldExt> {
+pub trait Layer<F: Field> {
     /// TEMP
     // type VerifierLayer: VerifierLayer<F> + Debug + Serialize + for<'a> Deserialize<'a>;
 
@@ -148,7 +148,7 @@ pub trait Layer<F: FieldExt> {
 }
 
 /// A circuit-description counterpart of the GKR [Layer] trait.
-pub trait CircuitLayer<F: FieldExt> {
+pub trait CircuitLayer<F: Field> {
     /// The associated type that the verifier uses to work with a layer of this
     /// kind.
     type VerifierLayer: VerifierLayer<F> + Debug + Serialize + for<'a> Deserialize<'a>;
@@ -189,7 +189,7 @@ pub trait CircuitLayer<F: FieldExt> {
 }
 
 /// A verifier counterpart of a GKR [Layer] trait.
-pub trait VerifierLayer<F: FieldExt> {
+pub trait VerifierLayer<F: Field> {
     /// Returns this layer's ID.
     fn layer_id(&self) -> LayerId;
 }
