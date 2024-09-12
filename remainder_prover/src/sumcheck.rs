@@ -1,11 +1,46 @@
-//! Contains cryptographic algorithms for going through the sumcheck protocol
+//! Contains cryptographic algorithms for going through the sumcheck protocol in
+//! the context of a GKR prover.
+//!
+//! Let `P: F^n -> F` denote the polynomial [Expression] used to define some GKR
+//! Layer. This means that the value at a certain index `b \in {0, 1}^n` of the
+//! layer is given by `P(b)`. Denote by `V: {0, 1}^n -> F` the restriction
+//! of `P` on the hypercube.
+//!
+//! As part of the GKR protocol, the prover needs to assert the following
+//! statement about the multilinear extention `\tilde{V}: F^n -> F` of `V`:
+//! ```text
+//!     \tilde{V}(g_1, ..., g_n) = r \in F`,
+//!         for some challenges g_1, ..., g_n \in F                    (1)
+//! ```
+//! (Note that, in general, `P` and `\tilde{V}` are different functions.
+//!  They are both extensions of `V`, but `\tilde{V}` is a linear polynomial
+//!  on each of it's variables).
+//!
+//! The left-hand side of (1) can be expressed as a sum over the hypercube
+//! as follows:
+//! ```text
+//!     \sum_{b_1 \in {0, 1}}
+//!     \sum_{b_2 \in {0, 1}}
+//!         ...
+//!     \sum_{b_n \in {0, 1}}
+//!        \beta(b_1, ..., b_n, g_1, ..., g_n) * P(b_1, b_2, ..., b_n) = r  (2)
+//! ```
+//! where `\beta` is the following polynomial extending the equality predicate:
+//! ```text
+//!     \beta(b_1, ..., b_n, g_1, ..., g_n) =
+//!         \prod_{i = 1}^n [ b_i * g_i + (1 - b_i) * (1 - g_i) ]
+//! ```
+//!
+//! The functions in this module run the sumcheck protocol on expressions
+//! of the form described in equation (2). See the documentation of
+//! `compute_sumcheck_message_beta_cascade` for more information.
 
 use std::{
     iter::repeat,
     ops::{Add, Mul, Neg},
 };
 
-/// tests for sumcheck with various expressions
+/// Tests for sumcheck with various expressions.
 #[cfg(test)]
 pub mod tests;
 
@@ -25,41 +60,47 @@ use crate::{
 };
 use remainder_shared_types::FieldExt;
 
+/// Errors to do with the evaluation of MleRefs.
 #[derive(Error, Debug, Clone, PartialEq)]
-///Errors to do with the evaluation of MleRefs
 pub enum MleError {
+    /// Passed list of Mles is empty.
     #[error("Passed list of Mles is empty")]
-    ///Passed list of Mles is empty
     EmptyMleList,
+
+    /// Beta table not yet initialized for Mle.
     #[error("Beta table not yet initialized for Mle")]
-    ///Beta table not yet initialized for Mle
     NoBetaTable,
+
+    /// Layer does not have claims yet.
     #[error("Layer does not have claims yet")]
-    ///Layer does not have claims yet
     NoClaim,
+
+    /// Unable to eval beta.
     #[error("Unable to eval beta")]
-    ///Unable to eval beta
     BetaEvalError,
+
+    /// Cannot compute sumcheck message on un-indexed MLE.
     #[error("Cannot compute sumcheck message on un-indexed MLE")]
-    ///Cannot compute sumcheck message on un-indexed MLE
     NotIndexedError,
 }
 
+/// Verification error.
 #[derive(Error, Debug, Clone)]
-///Verification error
 pub enum VerifyError {
+    /// Failed sumcheck round.
     #[error("Failed sumcheck round")]
-    ///Failed sumcheck round
     SumcheckBad,
 }
+
+/// Error when Interpolating a univariate polynomial.
 #[derive(Error, Debug, Clone)]
-///Error when Interpolating a univariate polynomial
 pub enum InterpError {
+    /// Too few evaluation points.
     #[error("Too few evaluation points")]
-    ///Too few evaluation points
     EvalLessThanDegree,
+
+    /// No possible polynomial.
     #[error("No possible polynomial")]
-    ///No possible polynomial
     NoInverse,
 }
 
