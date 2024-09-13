@@ -31,8 +31,8 @@ pub fn trivial_wiring_2x2_circuit_data<F: Field>() -> CircuitData<F, 2, 2, 2, 16
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two 3x1 kernels.
 /// The rewirings are trivial: the image _is_ the LH multiplicand of matmult.
-pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: FieldExt>(
-) -> CircuitData<F, 1, 1, 2, 16, 1> {
+pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: Field>() -> CircuitData<F, 1, 1, 2, 16, 1>
+{
     CircuitData::build_worldcoin_circuit_data(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
         Array3::from_shape_vec((2, 3, 1), vec![1, 0, -4, 6, -1, 3]).unwrap(),
@@ -49,7 +49,7 @@ pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: FieldExt>(
 /// + `MATMULT_NUM_COLS` is number of columns of the result of matmult.  A power of two.
 /// + `MATMULT_INTERNAL_DIM` is the internal dimension size of matmult = number of cols of LH multiplicand = number of rows of RH multiplicand.  A power of two.
 pub struct CircuitData<
-    F: FieldExt,
+    F: Field,
     const MATMULT_NUM_ROWS_VARS: usize,
     const MATMULT_NUM_COLS_VARS: usize,
     const MATMULT_INTERNAL_DIM_VARS: usize,
