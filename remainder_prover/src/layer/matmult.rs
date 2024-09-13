@@ -26,41 +26,37 @@ use crate::{
     mle::{dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
     sumcheck::evaluate_at_a_point,
 };
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// Used to represent a matrix, along with its optional prefix bits (in circuit)
 /// basically an equivalence of DenseMle<F>, but uninstantiated, until preprocessing
 /// TODO(vishady): NEED TO PAD THIS BEFORE CALLING `::new` SO IT SHOULD ALWAYS TAKE IN LOG DIMENSIONS!
-/// ASSERT THAT THE BOOKKEEPING TABLE IS A POWER OF TWO WITH CORRECT DIMS
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: Field")]
 pub struct Matrix<F: Field> {
     /// The underlying and padded MLE that represents this matrix.
     pub mle: DenseMle<F>,
-    num_rows_vars: usize,
-    num_cols_vars: usize,
+    rows_num_vars: usize,
+    cols_num_vars: usize,
 }
 
 impl<F: Field> Matrix<F> {
-    /// Create a new matrix, note that we require num_rows, and later converts this
-    /// parameter to log(num_rows). This is necessary to check all dims are powers of 2
-    pub fn new(mle: DenseMle<F>, num_rows_vars: usize, num_cols_vars: usize) -> Matrix<F> {
-        dbg!(&num_rows_vars, num_cols_vars);
+    /// Create a new matrix.
+    pub fn new(mle: DenseMle<F>, rows_num_vars: usize, cols_num_vars: usize) -> Matrix<F> {
         assert_eq!(
             mle.bookkeeping_table().len(),
-            (1 << num_rows_vars) * (1 << num_cols_vars)
+            (1 << rows_num_vars) * (1 << cols_num_vars)
         );
 
         Matrix {
             mle,
-            num_rows_vars: num_rows_vars,
-            num_cols_vars: num_cols_vars,
+            rows_num_vars,
+            cols_num_vars,
         }
     }
 
     /// get the dimension of this matrix
-    pub fn num_vars_rows_cols(&self) -> (usize, usize) {
-        (self.num_rows_vars, self.num_cols_vars)
+    pub fn rows_cols_num_vars(&self) -> (usize, usize) {
+        (self.rows_num_vars, self.cols_num_vars)
     }
 }
 
@@ -91,17 +87,17 @@ impl<F: Field> MatMult<F> {
 
         // check that both matrices are padded
         assert_eq!(
-            (1 << self.matrix_a.num_cols_vars) * (1 << self.matrix_a.num_rows_vars),
+            (1 << self.matrix_a.cols_num_vars) * (1 << self.matrix_a.rows_num_vars),
             matrix_a_mle.bookkeeping_table().len()
         );
         assert_eq!(
-            (1 << self.matrix_b.num_cols_vars) * (1 << self.matrix_b.num_rows_vars),
+            (1 << self.matrix_b.cols_num_vars) * (1 << self.matrix_b.rows_num_vars),
             matrix_b_mle.bookkeeping_table().len()
         );
 
         // check to make sure the dimensions match
-        if self.matrix_a.num_cols_vars == self.matrix_b.num_rows_vars {
-            self.num_vars_middle_ab = Some(self.matrix_a.num_cols_vars);
+        if self.matrix_a.cols_num_vars == self.matrix_b.rows_num_vars {
+            self.num_vars_middle_ab = Some(self.matrix_a.cols_num_vars);
         } else {
             panic!("Matrix dimensions do not match")
         }
@@ -192,7 +188,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError> {
         let mut claim_b = claim.get_point().clone();
-        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
+        let claim_a = claim_b.split_off(self.matrix_b.cols_num_vars);
         self.pre_processing_step(claim_a, claim_b);
 
         let mut challenges: Vec<F> = vec![];
@@ -225,7 +221,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
 
     fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
         let mut claim_b = claim_point.to_vec();
-        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
+        let claim_a = claim_b.split_off(self.matrix_b.cols_num_vars);
         self.pre_processing_step(claim_a, claim_b);
         Ok(())
     }
@@ -268,8 +264,8 @@ impl<F: Field> Layer<F> for MatMult<F> {
 #[serde(bound = "F: Field")]
 pub struct CircuitMatrix<F: Field> {
     mle: CircuitMle<F>,
-    num_rows_vars: usize,
-    num_cols_vars: usize,
+    rows_num_vars: usize,
+    cols_num_vars: usize,
 }
 
 impl<F: Field> From<Matrix<F>> for CircuitMatrix<F> {
@@ -278,8 +274,8 @@ impl<F: Field> From<Matrix<F>> for CircuitMatrix<F> {
         indexed_mle.index_mle_indices(0);
         CircuitMatrix {
             mle: CircuitMle::from_dense_mle(&indexed_mle).unwrap(),
-            num_rows_vars: matrix.num_rows_vars,
-            num_cols_vars: matrix.num_cols_vars,
+            rows_num_vars: matrix.rows_num_vars,
+            cols_num_vars: matrix.cols_num_vars,
         }
     }
 }
@@ -333,8 +329,8 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
         let mut prev_challenge = F::ZERO;
 
         // Get the number of rounds, which is exactly the inner dimension of the matrix product.
-        assert_eq!(self.matrix_a.num_cols_vars, self.matrix_b.num_rows_vars);
-        let num_rounds = self.matrix_a.num_cols_vars;
+        assert_eq!(self.matrix_a.cols_num_vars, self.matrix_b.rows_num_vars);
+        let num_rounds = self.matrix_a.cols_num_vars;
 
         // For round 1 <= i <= n, perform the check:
         for _round in 0..num_rounds {
@@ -381,8 +377,8 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        assert_eq!(self.matrix_a.num_cols_vars, self.matrix_b.num_rows_vars);
-        (0..self.matrix_a.num_cols_vars).collect_vec()
+        assert_eq!(self.matrix_a.cols_num_vars, self.matrix_b.rows_num_vars);
+        (0..self.matrix_a.cols_num_vars).collect_vec()
     }
 
     fn into_verifier_layer(
@@ -393,7 +389,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
     ) -> Result<Self::VerifierLayer, VerificationError> {
         // Split the claim into the claims made on matrix A rows and matrix B cols.
         let mut claim_b = claim_point.to_vec();
-        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
+        let claim_a = claim_b.split_off(self.matrix_b.cols_num_vars);
 
         // Construct the full claim made on A using the claim made on the layer and the sumcheck bindings.
         let full_claim_chals_a = sumcheck_bindings
@@ -411,11 +407,11 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
         // Shape checks.
         assert_eq!(
             full_claim_chals_a.len(),
-            self.matrix_a.num_rows_vars + self.matrix_a.num_cols_vars
+            self.matrix_a.rows_num_vars + self.matrix_a.cols_num_vars
         );
         assert_eq!(
             full_claim_chals_b.len(),
-            self.matrix_b.num_rows_vars + self.matrix_b.num_cols_vars
+            self.matrix_b.rows_num_vars + self.matrix_b.cols_num_vars
         );
 
         // Construct the verifier matrices given these fully bound points.
@@ -425,8 +421,8 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
                 .mle
                 .into_verifier_mle(&full_claim_chals_a, transcript_reader)
                 .unwrap(),
-            num_rows_vars: self.matrix_a.num_rows_vars,
-            num_cols_vars: self.matrix_a.num_cols_vars,
+            rows_num_vars: self.matrix_a.rows_num_vars,
+            cols_num_vars: self.matrix_a.cols_num_vars,
         };
         let matrix_b = VerifierMatrix {
             mle: self
@@ -434,8 +430,8 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
                 .mle
                 .into_verifier_mle(&full_claim_chals_b, transcript_reader)
                 .unwrap(),
-            num_rows_vars: self.matrix_b.num_rows_vars,
-            num_cols_vars: self.matrix_b.num_cols_vars,
+            rows_num_vars: self.matrix_b.rows_num_vars,
+            cols_num_vars: self.matrix_b.cols_num_vars,
         };
 
         Ok(VerifierMatMultLayer {
@@ -452,7 +448,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
         let mut pre_bound_matrix_a_mle = self.matrix_a.mle.clone();
-        let claim_chals_matrix_a = claim_challenges[self.matrix_b.num_cols_vars..].to_vec();
+        let claim_chals_matrix_a = claim_challenges[self.matrix_b.cols_num_vars..].to_vec();
         let mut indexed_index_counter = 0;
         let mut bound_index_counter = 0;
 
@@ -463,7 +459,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
             .iter()
             .map(|mle_idx| match mle_idx {
                 &MleIndex::IndexedBit(_) => {
-                    if indexed_index_counter < self.matrix_a.num_cols_vars {
+                    if indexed_index_counter < self.matrix_a.cols_num_vars {
                         let ret = MleIndex::IndexedBit(indexed_index_counter);
                         indexed_index_counter += 1;
                         ret
@@ -484,7 +480,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
         pre_bound_matrix_a_mle.set_mle_indices(matrix_a_new_indices);
 
         let mut pre_bound_matrix_b_mle = self.matrix_b.mle.clone();
-        let claim_chals_matrix_b = claim_challenges[..self.matrix_b.num_cols_vars].to_vec();
+        let claim_chals_matrix_b = claim_challenges[..self.matrix_b.cols_num_vars].to_vec();
         let mut bound_index_counter = 0;
         let mut indexed_index_counter = 0;
         let matrix_b_new_indices = self
@@ -494,7 +490,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
             .iter()
             .map(|mle_idx| match mle_idx {
                 &MleIndex::IndexedBit(_) => {
-                    if bound_index_counter < self.matrix_b.num_cols_vars {
+                    if bound_index_counter < self.matrix_b.cols_num_vars {
                         let ret = MleIndex::Bound(
                             claim_chals_matrix_b[bound_index_counter],
                             bound_index_counter,
@@ -532,8 +528,8 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
 #[serde(bound = "F: Field")]
 pub struct VerifierMatrix<F: Field> {
     mle: VerifierMle<F>,
-    num_rows_vars: usize,
-    num_cols_vars: usize,
+    rows_num_vars: usize,
+    cols_num_vars: usize,
 }
 
 /// The verifier's counterpart of a [MatMult] layer.
@@ -688,8 +684,8 @@ impl<F: Field> YieldWLXEvals<F> for MatMult<F> {
 
 impl<F: std::fmt::Debug + Field> MatMult<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
-        // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
-        // --- so that it can be returned as an `impl std::fmt::Display` ---
+        // Dummy struct which simply exists to implement `std::fmt::Display`
+        // so that it can be returned as an `impl std::fmt::Display`
         struct MatMultCircuitDesc<'a, F: std::fmt::Debug + Field>(&'a MatMult<F>);
 
         impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for MatMultCircuitDesc<'a, F> {
@@ -699,7 +695,7 @@ impl<F: std::fmt::Debug + Field> MatMult<F> {
                     .field("matrix_a_mle_indices", &self.0.matrix_a.mle.mle_indices)
                     .field("matrix_b_layer_id", &self.0.matrix_b.mle.layer_id)
                     .field("matrix_b_mle_indices", &self.0.matrix_b.mle.mle_indices)
-                    .field("num_vars_middle_ab", &self.0.matrix_a.num_cols_vars)
+                    .field("num_vars_middle_ab", &self.0.matrix_a.cols_num_vars)
                     .finish()
             }
         }
@@ -709,8 +705,8 @@ impl<F: std::fmt::Debug + Field> MatMult<F> {
 
 /// Generate the transpose of a matrix, uses Array2 from ndarray
 pub fn gen_transpose_matrix<F: Field>(matrix: &Matrix<F>) -> Matrix<F> {
-    let num_rows = 1 << matrix.num_rows_vars;
-    let num_cols = 1 << matrix.num_cols_vars;
+    let num_rows = 1 << matrix.rows_num_vars;
+    let num_cols = 1 << matrix.cols_num_vars;
 
     // Memory-efficient, sequential implementation.
     let mut matrix_transp_vec = Vec::with_capacity(num_cols * num_rows);
@@ -728,12 +724,12 @@ pub fn gen_transpose_matrix<F: Field>(matrix: &Matrix<F>) -> Matrix<F> {
         &matrix.mle.mle_indices,
     );
 
-    Matrix::new(mle, matrix.num_cols_vars, matrix.num_rows_vars)
+    Matrix::new(mle, matrix.cols_num_vars, matrix.rows_num_vars)
 }
 
 /// Multiply two matrices together, with a transposed matrix_b
 pub fn product_two_matrices<F: Field>(matrix_a: &Matrix<F>, matrix_b: &Matrix<F>) -> Vec<F> {
-    let num_middle_ab = 1 << matrix_a.num_cols_vars;
+    let num_middle_ab = 1 << matrix_a.cols_num_vars;
 
     let matrix_b_transpose = gen_transpose_matrix(matrix_b);
 
