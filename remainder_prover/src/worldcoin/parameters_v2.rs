@@ -15,8 +15,10 @@ pub const BASE: u64 = 256;
 /// Where to look for the thresholds and the kernel values, i.e. the data that is the same for every
 /// run of the circuit.
 /// Contains a file `wirings.npy`, a 2d array of type u16 encoding the input `wirings` of
-/// [CircuitData::build_worldcoin_circuit_data].
+/// [remainder::worldcoin::data::CircuitData::build_worldcoin_circuit_data].
 /// Contains two subfolders "iris" and "mask" each containing:
-/// + `thresholds.npy` - (i64) the thresholds for each placement and kernel combination (so has shape (num_placements, num_kernels)).
-/// + `kernel_values.npy` - (i64) the 3d array of kernel values with dimensions (num_kernels, num_kernel_rows, num_kernel_cols).
+/// + `thresholds.npy` - (i64) the thresholds for each placement and kernel combination (so has
+///   shape (num_placements, num_kernels)).
+/// + `kernel_values.npy` - (i64) the 3d array of kernel values with dimensions (num_kernels,
+///   num_kernel_rows, num_kernel_cols).
 pub const CONSTANT_DATA_FOLDER: &str = "worldcoin/v2/";
