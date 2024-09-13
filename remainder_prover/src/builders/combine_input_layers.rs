@@ -5,7 +5,7 @@ use itertools::Itertools;
 use remainder_ligero::{
     ligero_structs::LigeroAuxInfo, poseidon_ligero::PoseidonSpongeHasher, LcCommit, LcRoot,
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     layer::LayerId,
@@ -17,7 +17,7 @@ use crate::input_layer::{ligero_input_layer::LigeroInputLayer, MleInputLayer};
 
 /// Function which returns a vector of `MleIndex::Fixed` for prefix bits according to which
 /// position we are in the range from 0 to `total_num_bits` - `num_iterated_bits`.
-fn get_prefix_bits_from_capacity<F: FieldExt>(
+fn get_prefix_bits_from_capacity<F: Field>(
     capacity: u32,
     total_num_bits: usize,
     num_iterated_bits: usize,
@@ -41,7 +41,7 @@ fn get_prefix_bits_from_capacity<F: FieldExt>(
 /// * `opposite_endian_bookkeeping_table` - MLE bookkeeping table, which, when
 ///     indexed (b_n, ..., b_1) rather than (b_1, ..., b_n), yields the same
 ///     result.
-fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F> {
+fn invert_mle_bookkeeping_table<F: Field>(bookkeeping_table: Vec<F>) -> Vec<F> {
     // --- This should only happen the first time!!! ---
     let padded_bookkeeping_table = pad_to_nearest_power_of_two(&bookkeeping_table);
 
@@ -74,7 +74,7 @@ pub struct InputLayerBuilder<F> {
     layer_id: LayerId,
 }
 
-impl<F: FieldExt> InputLayerBuilder<F> {
+impl<F: Field> InputLayerBuilder<F> {
     /// Creates a new InputLayerBuilder that will yield an InputLayer from many MLEs
     ///
     /// Note that `extra_mle_num_vars` refers to the length of any MLE you want to be a part of this

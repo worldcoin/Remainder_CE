@@ -29,7 +29,7 @@ use remainder_shared_types::transcript::ProverTranscript;
 use remainder_shared_types::transcript::{
     Transcript, TranscriptReader, TranscriptReaderError, TranscriptWriter,
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 use thiserror::Error;
@@ -79,7 +79,7 @@ pub enum GKRError {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SumcheckProof<F>(pub Vec<Vec<F>>);
 
-impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
+impl<F: Field> From<Vec<Vec<F>>> for SumcheckProof<F> {
     fn from(value: Vec<Vec<F>>) -> Self {
         Self(value)
     }
@@ -87,7 +87,7 @@ impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
 
 /// The witness of a GKR circuit, used to actually prove the circuit
 #[derive(Debug)]
-pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
+pub struct Witness<F: Field, Pf: ProofSystem<F>> {
     /// The intermediate layers of the circuit, as defined by the ProofSystem
     pub layers: Layers<F, Pf::Layer>,
     /// The output layers of the circuit, as defined by the ProofSystem
@@ -96,7 +96,7 @@ pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
     pub input_layers: Vec<Pf::InputLayer>,
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F>> Witness<F, Pf> {
+impl<F: Field, Pf: ProofSystem<F>> Witness<F, Pf> {
     /// Returns the circuit description associated with this Witness to be used
     /// by the verifier.
     pub fn generate_verifier_key(&self) -> Result<GKRVerifierKey<F, Pf>, GKRError> {
@@ -153,7 +153,7 @@ type WitnessCommitmentsKey<F, C> = (
 );
 
 /// A GKRCircuit ready to be proven
-pub trait GKRCircuit<F: FieldExt> {
+pub trait GKRCircuit<F: Field> {
     /// The ProofSystem that describes the allowed cryptographic operations this Circuit uses
     type ProofSystem: ProofSystem<F>;
 
@@ -366,7 +366,7 @@ where {
 /// The Verifier Key associated with a GKR proof of a [ProofSystem].
 /// It consists of consice GKR Circuit description to be use by the Verifier.
 #[derive(Debug)]
-pub struct GKRVerifierKey<F: FieldExt, Pf: ProofSystem<F>> {
+pub struct GKRVerifierKey<F: Field, Pf: ProofSystem<F>> {
     pub input_layers:
         Vec<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::VerifierInputLayer>,
     pub intermediate_layers: Vec<<<Pf as ProofSystem<F>>::Layer as Layer<F>>::CircuitLayer>,
@@ -374,7 +374,7 @@ pub struct GKRVerifierKey<F: FieldExt, Pf: ProofSystem<F>> {
         Vec<<<Pf as ProofSystem<F>>::OutputLayer as OutputLayer<F>>::CircuitOutputLayer>,
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
+impl<F: Field, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
     /// Verifies a GKR proof produced by the `prove` method.
     /// # Arguments
     /// * `transcript_reader`: servers as the proof.

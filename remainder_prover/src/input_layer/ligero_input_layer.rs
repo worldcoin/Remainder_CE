@@ -12,7 +12,7 @@ use remainder_ligero::{
 };
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 use serde::{Deserialize, Serialize};
 
@@ -29,7 +29,7 @@ use super::{
 /// An input layer in which `mle` will be committed to using the Ligero polynomial
 /// commitment scheme.
 #[derive(Debug)]
-pub struct LigeroInputLayer<F: FieldExt> {
+pub struct LigeroInputLayer<F: Field> {
     /// The MLE which we wish to commit to.
     pub mle: MultilinearExtension<F>,
     /// The ID corresponding to this layer.
@@ -56,8 +56,8 @@ pub struct LigeroInputLayer<F: FieldExt> {
 
 /// The Ligero evaluation proof that the prover needs to send to the verifier.
 #[derive(Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub struct LigeroInputProof<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct LigeroInputProof<F: Field> {
     /// The auxiliary information required to generate a Ligero proof.
     pub aux: LigeroAuxInfo<F>,
 
@@ -70,8 +70,8 @@ pub struct LigeroInputProof<F: FieldExt> {
 pub type LigeroCommitment<F> = LcRoot<LigeroAuxInfo<F>, F>;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(bound = "F: FieldExt")]
-pub struct VerifierLigeroInputLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct VerifierLigeroInputLayer<F: Field> {
     /// The ID of this Ligero Input Layer.
     layer_id: LayerId,
 
@@ -84,7 +84,7 @@ pub struct VerifierLigeroInputLayer<F: FieldExt> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> VerifierLigeroInputLayer<F> {
+impl<F: Field> VerifierLigeroInputLayer<F> {
     /// To be used only for internal testing!
     /// Generates a new [VerifierLigeroInputLayer] given raw data.
     /// Normally, a [VerifierLigeroInputLayer] is generated through
@@ -99,7 +99,7 @@ impl<F: FieldExt> VerifierLigeroInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
+impl<F: Field> InputLayer<F> for LigeroInputLayer<F> {
     type Commitment = LigeroCommitment<F>;
 
     type VerifierInputLayer = VerifierLigeroInputLayer<F>;
@@ -187,7 +187,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> VerifierInputLayer<F> for VerifierLigeroInputLayer<F> {
+impl<F: Field> VerifierInputLayer<F> for VerifierLigeroInputLayer<F> {
     type Commitment = LigeroCommitment<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -222,7 +222,7 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierLigeroInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> MleInputLayer<F> for LigeroInputLayer<F> {
+impl<F: Field> MleInputLayer<F> for LigeroInputLayer<F> {
     fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
         Self {
             mle,
@@ -237,7 +237,7 @@ impl<F: FieldExt> MleInputLayer<F> for LigeroInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> LigeroInputLayer<F> {
+impl<F: Field> LigeroInputLayer<F> {
     /// Creates new Ligero input layer WITH a precomputed Ligero commitment
     pub fn new_with_ligero_commitment(
         mle: MultilinearExtension<F>,
@@ -281,7 +281,7 @@ impl<F: FieldExt> LigeroInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldWLXEvals<F> for LigeroInputLayer<F> {
+impl<F: Field> YieldWLXEvals<F> for LigeroInputLayer<F> {
     /// Computes the V_d(l(x)) evaluations for the input layer V_d.
     fn get_wlx_evaluations(
         &self,
@@ -305,12 +305,12 @@ impl<F: FieldExt> YieldWLXEvals<F> for LigeroInputLayer<F> {
 #[cfg(test)]
 mod tests {
     use remainder_shared_types::{
-        halo2curves::ff::Field,
         transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
         Fr,
     };
 
     use crate::claims::Claim;
+    use remainder_shared_types::ff_field;
 
     use super::*;
 

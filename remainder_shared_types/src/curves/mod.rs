@@ -1,6 +1,7 @@
+use crate::ff_field;
 use crate::{
-    halo2curves::{bn256::G1 as Bn256, group::ff::Field, CurveExt},
-    FieldExt, HasByteRepresentation,
+    halo2curves::{bn256::G1 as Bn256, CurveExt},
+    Field, HasByteRepresentation,
 };
 use ark_std::{
     rand::{self, RngCore},
@@ -55,10 +56,10 @@ pub trait PrimeOrderCurve:
     + for<'de> Deserialize<'de>
 {
     /// The scalar field of the curve.
-    type Scalar: FieldExt;
+    type Scalar: Field;
 
     /// The base field of the curve.
-    type Base: FieldExt;
+    type Base: Field;
 
     /// The byte sizes for the serialized representations.
     const UNCOMPRESSED_CURVE_POINT_BYTEWIDTH: usize;
@@ -137,7 +138,7 @@ impl HasByteRepresentation for Fq {
 /// TODO(ryancao): Do another manual test to ensure that the integer-interpretable
 /// values of the translation between an [Fr] and an [Fq] element are equal
 /// (and in particular, equal to the original `u64` value)!
-fn test_byte_repr_identity<F: FieldExt>() {
+fn test_byte_repr_identity<F: Field>() {
     let mut rng = test_rng();
 
     (0..100).for_each(|_| {

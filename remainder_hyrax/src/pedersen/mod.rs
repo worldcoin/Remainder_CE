@@ -2,10 +2,10 @@
 
 use std::ops::{Add, Mul};
 
-use ff::Field;
 use num::PrimInt;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::curves::Sha3XofReaderWrapper;
+use remainder_shared_types::ff_field;
 use serde::{Deserialize, Serialize};
 use sha3::digest::ExtendableOutput;
 use sha3::digest::Update;

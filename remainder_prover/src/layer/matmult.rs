@@ -6,7 +6,7 @@ use itertools::Itertools;
 use ndarray::Array2;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 
 use super::{
@@ -33,70 +33,28 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 /// TODO(vishady): NEED TO PAD THIS BEFORE CALLING `::new` SO IT SHOULD ALWAYS TAKE IN LOG DIMENSIONS!
 /// ASSERT THAT THE BOOKKEEPING TABLE IS A POWER OF TWO WITH CORRECT DIMS
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(bound = "F: FieldExt")]
-pub struct Matrix<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct Matrix<F: Field> {
     /// The underlying and padded MLE that represents this matrix.
     pub mle: DenseMle<F>,
     num_rows_vars: usize,
     num_cols_vars: usize,
 }
 
-impl<F: FieldExt> Matrix<F> {
+impl<F: Field> Matrix<F> {
     /// Create a new matrix, note that we require num_rows, and later converts this
     /// parameter to log(num_rows). This is necessary to check all dims are powers of 2
-    pub fn new(mle: DenseMle<F>, num_rows: usize, num_cols: usize) -> Matrix<F> {
-        assert_eq!(mle.bookkeeping_table().len(), num_rows * num_cols);
-
-        /*
-        let mut new_bookkeeping_table = Vec::new();
-        // pad the columns
-        if 1 << log2(num_cols) != num_cols {
-            assert!((1 << log2(num_cols) as usize) > num_cols);
-            let num_to_pad_each_row = (1 << log2(num_cols) as usize) - num_cols;
-            for chunk in mle.bookkeeping_table().chunks(num_cols) {
-                new_bookkeeping_table.extend(
-                    [chunk.to_vec(), vec![F::ZERO; num_to_pad_each_row]]
-                        .into_iter()
-                        .concat(),
-                )
-            }
-        } else {
-            new_bookkeeping_table = mle.bookkeeping_table().to_vec();
-        }
-
-        // pad the rows
-        let padded_matrix_len = (1 << log2(num_rows) as usize) * (1 << log2(num_cols) as usize);
-        if new_bookkeeping_table.len() != padded_matrix_len {
-            assert!((1 << log2(num_rows) as usize) > num_rows);
-            let num_need_to_pad = padded_matrix_len - new_bookkeeping_table.len();
-            new_bookkeeping_table = [new_bookkeeping_table, vec![F::ZERO; num_need_to_pad]]
-                .into_iter()
-                .concat()
-        }
-
-        // pad the MLE indices as well!
-        let expected_num_iterated_vars = (log2(num_rows) + log2(num_cols)) as usize;
-        let new_indices = if mle.num_iterated_vars() != expected_num_iterated_vars {
-            assert!(expected_num_iterated_vars > mle.num_iterated_vars());
-            let num_iterated_vars_to_add = expected_num_iterated_vars - mle.num_iterated_vars();
-            let padding_indices = vec![MleIndex::Iterated; num_iterated_vars_to_add];
-            &[mle.mle_indices.to_vec(), padding_indices].concat()
-        } else {
-            mle.mle_indices()
-        };
-        */
-
-        let new_bookkeeping_table = mle.bookkeeping_table();
-        let padded_matrix_len = num_rows * num_cols;
-        let mle =
-            DenseMle::new_with_indices(&new_bookkeeping_table, mle.layer_id(), &mle.mle_indices);
-
-        assert_eq!(padded_matrix_len, mle.bookkeeping_table().len());
+    pub fn new(mle: DenseMle<F>, num_rows_vars: usize, num_cols_vars: usize) -> Matrix<F> {
+        dbg!(&num_rows_vars, num_cols_vars);
+        assert_eq!(
+            mle.bookkeeping_table().len(),
+            (1 << num_rows_vars) * (1 << num_cols_vars)
+        );
 
         Matrix {
             mle,
-            num_rows_vars: log2(num_rows) as usize,
-            num_cols_vars: log2(num_cols) as usize,
+            num_rows_vars: num_rows_vars,
+            num_cols_vars: num_cols_vars,
         }
     }
 
@@ -108,15 +66,15 @@ impl<F: FieldExt> Matrix<F> {
 
 /// Used to represent a matrix multiplication layer
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(bound = "F: FieldExt")]
-pub struct MatMult<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct MatMult<F: Field> {
     layer_id: LayerId,
     matrix_a: Matrix<F>,
     matrix_b: Matrix<F>,
     num_vars_middle_ab: Option<usize>,
 }
 
-impl<F: FieldExt> MatMult<F> {
+impl<F: Field> MatMult<F> {
     /// Create a new matrix multiplication layer
     pub fn new(layer_id: LayerId, matrix_a: Matrix<F>, matrix_b: Matrix<F>) -> MatMult<F> {
         MatMult {
@@ -224,7 +182,7 @@ impl<F: FieldExt> MatMult<F> {
     }
 }
 
-impl<F: FieldExt> Layer<F> for MatMult<F> {
+impl<F: Field> Layer<F> for MatMult<F> {
     // type Proof = Option<SumcheckProof<F>>;
     type CircuitLayer = CircuitMatMultLayer<F>;
 
@@ -307,14 +265,14 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
 
 /// The circuit description counterpart of a [Matrix].
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct CircuitMatrix<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct CircuitMatrix<F: Field> {
     mle: CircuitMle<F>,
     num_rows_vars: usize,
     num_cols_vars: usize,
 }
 
-impl<F: FieldExt> From<Matrix<F>> for CircuitMatrix<F> {
+impl<F: Field> From<Matrix<F>> for CircuitMatrix<F> {
     fn from(matrix: Matrix<F>) -> Self {
         let mut indexed_mle = matrix.mle.clone();
         indexed_mle.index_mle_indices(0);
@@ -327,8 +285,8 @@ impl<F: FieldExt> From<Matrix<F>> for CircuitMatrix<F> {
 }
 /// The circuit description counterpart of a [MatMult] layer.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct CircuitMatMultLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct CircuitMatMultLayer<F: Field> {
     /// The layer id associated with this matmult layer.
     layer_id: LayerId,
 
@@ -339,7 +297,7 @@ pub struct CircuitMatMultLayer<F: FieldExt> {
     matrix_b: CircuitMatrix<F>,
 }
 
-impl<F: FieldExt> From<MatMult<F>> for CircuitMatMultLayer<F> {
+impl<F: Field> From<MatMult<F>> for CircuitMatMultLayer<F> {
     /// Convert a [MatMult] to a [CircuitMatmultLayer].
     fn from(matmult_layer: MatMult<F>) -> Self {
         CircuitMatMultLayer {
@@ -350,7 +308,7 @@ impl<F: FieldExt> From<MatMult<F>> for CircuitMatMultLayer<F> {
     }
 }
 
-impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
+impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
     type VerifierLayer = VerifierMatMultLayer<F>;
 
     /// Gets this layer's id.
@@ -571,8 +529,8 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
 
 /// The verifier's counterpart of a [Matrix].
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct VerifierMatrix<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct VerifierMatrix<F: Field> {
     mle: VerifierMle<F>,
     num_rows_vars: usize,
     num_cols_vars: usize,
@@ -580,8 +538,8 @@ pub struct VerifierMatrix<F: FieldExt> {
 
 /// The verifier's counterpart of a [MatMult] layer.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct VerifierMatMultLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct VerifierMatMultLayer<F: Field> {
     /// The layer id associated with this gate layer.
     layer_id: LayerId,
 
@@ -592,19 +550,19 @@ pub struct VerifierMatMultLayer<F: FieldExt> {
     matrix_b: VerifierMatrix<F>,
 }
 
-impl<F: FieldExt> VerifierLayer<F> for VerifierMatMultLayer<F> {
+impl<F: Field> VerifierLayer<F> for VerifierMatMultLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 }
 
-impl<F: FieldExt> VerifierMatMultLayer<F> {
+impl<F: Field> VerifierMatMultLayer<F> {
     fn evaluate(&self) -> F {
         self.matrix_a.mle.value() * self.matrix_b.mle.value()
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let claims = vec![&self.matrix_a, &self.matrix_b]
             .into_iter()
@@ -646,7 +604,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MatMult<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for MatMult<F> {
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let claims = vec![&self.matrix_a.mle, &self.matrix_b.mle]
@@ -679,7 +637,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MatMult<F> {
     }
 }
 
-impl<F: FieldExt> YieldWLXEvals<F> for MatMult<F> {
+impl<F: Field> YieldWLXEvals<F> for MatMult<F> {
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &[Vec<F>],
@@ -728,13 +686,13 @@ impl<F: FieldExt> YieldWLXEvals<F> for MatMult<F> {
     }
 }
 
-impl<F: std::fmt::Debug + FieldExt> MatMult<F> {
+impl<F: std::fmt::Debug + Field> MatMult<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct MatMultCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a MatMult<F>);
+        struct MatMultCircuitDesc<'a, F: std::fmt::Debug + Field>(&'a MatMult<F>);
 
-        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for MatMultCircuitDesc<'a, F> {
+        impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for MatMultCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("MatMult")
                     .field("matrix_a_layer_id", &self.0.matrix_a.mle.layer_id)
@@ -750,7 +708,7 @@ impl<F: std::fmt::Debug + FieldExt> MatMult<F> {
 }
 
 /// Generate the transpose of a matrix, uses Array2 from ndarray
-pub fn gen_transpose_matrix<F: FieldExt>(matrix: &Matrix<F>) -> Matrix<F> {
+pub fn gen_transpose_matrix<F: Field>(matrix: &Matrix<F>) -> Matrix<F> {
     let num_rows = 1 << matrix.num_rows_vars;
     let num_cols = 1 << matrix.num_cols_vars;
 
@@ -770,11 +728,11 @@ pub fn gen_transpose_matrix<F: FieldExt>(matrix: &Matrix<F>) -> Matrix<F> {
         &matrix.mle.mle_indices,
     );
 
-    Matrix::new(mle, num_rows, num_cols)
+    Matrix::new(mle, matrix.num_cols_vars, matrix.num_rows_vars)
 }
 
 /// Multiply two matrices together, with a transposed matrix_b
-pub fn product_two_matrices<F: FieldExt>(matrix_a: &Matrix<F>, matrix_b: &Matrix<F>) -> Vec<F> {
+pub fn product_two_matrices<F: Field>(matrix_a: &Matrix<F>, matrix_b: &Matrix<F>) -> Vec<F> {
     let num_middle_ab = 1 << matrix_a.num_cols_vars;
 
     let matrix_b_transpose = gen_transpose_matrix(matrix_b);
@@ -828,8 +786,8 @@ mod test {
         ];
         let mle_vec_b = vec![Fr::from(3), Fr::from(5), Fr::from(9), Fr::from(6)];
 
-        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 4, 2);
-        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 2, 2);
+        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 2, 1);
+        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 1, 1);
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
@@ -894,8 +852,8 @@ mod test {
             Fr::from(4),
         ];
 
-        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 8, 4);
-        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 4, 2);
+        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 3, 2);
+        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 2, 1);
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
@@ -919,73 +877,5 @@ mod test {
         ];
 
         assert_eq!(res_product, exp_product);
-    }
-
-    /// We currently do not support matrices whose dimensions are not exact
-    /// powers of two. Ignore this test.
-    #[test]
-    #[ignore]
-    fn test_product_irregular_matrices() {
-        let mle_vec_a = vec![
-            Fr::from(1),
-            Fr::from(2),
-            Fr::from(9),
-            Fr::from(10),
-            Fr::from(13),
-            Fr::from(1),
-            Fr::from(3),
-            Fr::from(10),
-            Fr::from(2),
-            Fr::from(9),
-            Fr::from(10),
-            Fr::from(1),
-            Fr::from(3),
-            Fr::from(10),
-            Fr::from(2),
-        ];
-        let mle_vec_b = vec![
-            Fr::from(3),
-            Fr::from(5),
-            Fr::from(9),
-            Fr::from(6),
-            Fr::from(5),
-            Fr::from(9),
-            Fr::from(6),
-            Fr::from(1),
-            Fr::from(3),
-        ];
-
-        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 5, 3);
-        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 3, 3);
-
-        let res_product = product_two_matrices(&matrix_a, &matrix_b);
-
-        // 1  2  9
-        // 10 13 1       3  5  9
-        // 3  10 2   `   6  5  9
-        // 9  10 1       6  1  3
-        // 3  10 2
-
-        let exp_product = vec![
-            Fr::from(1 * 3 + 2 * 6 + 9 * 6),
-            Fr::from(1 * 5 + 2 * 5 + 9 * 1),
-            Fr::from(1 * 9 + 2 * 9 + 9 * 3),
-            Fr::from(10 * 3 + 13 * 6 + 1 * 6),
-            Fr::from(10 * 5 + 13 * 5 + 1 * 1),
-            Fr::from(10 * 9 + 13 * 9 + 1 * 3),
-            Fr::from(3 * 3 + 10 * 6 + 2 * 6),
-            Fr::from(3 * 5 + 10 * 5 + 2 * 1),
-            Fr::from(3 * 9 + 10 * 9 + 2 * 3),
-            Fr::from(9 * 3 + 10 * 6 + 1 * 6),
-            Fr::from(9 * 5 + 10 * 5 + 1 * 1),
-            Fr::from(9 * 9 + 10 * 9 + 1 * 3),
-            Fr::from(3 * 3 + 10 * 6 + 2 * 6),
-            Fr::from(3 * 5 + 10 * 5 + 2 * 1),
-            Fr::from(3 * 9 + 10 * 9 + 2 * 3),
-        ];
-
-        let matrix_out = Matrix::new(DenseMle::new_from_raw(exp_product, LayerId::Layer(0)), 5, 3);
-
-        assert_eq!(res_product, matrix_out.mle.bookkeeping_table());
     }
 }

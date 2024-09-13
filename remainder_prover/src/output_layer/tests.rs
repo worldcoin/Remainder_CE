@@ -2,8 +2,8 @@
 
 use pretty_assertions::{assert_eq, assert_ne};
 
+use remainder_shared_types::ff_field;
 use remainder_shared_types::{
-    halo2curves::ff::Field,
     transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
     Fr,
 };

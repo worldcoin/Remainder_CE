@@ -1,5 +1,5 @@
 use itertools::repeat_n;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use std::ops::Neg;
 
 /// Performs conversion from evaluations of a polynomial of degree d at 0, 1, ..., d to the d+1
@@ -15,7 +15,7 @@ use std::ops::Neg;
 /// Akmaz, 2004, specifically equations 4.4 - 4.6, all evaluated at q=1.  Identities 2.6 and 2.9
 /// (both evaluated at q=1) tell us how to extend the U^-1, L^-1 (D^-1 being obvious).
 #[derive(Debug)]
-pub struct VandermondeInverse<F: FieldExt> {
+pub struct VandermondeInverse<F: Field> {
     /// The matrix L^-1, in row major order.
     pub l_inv: Vec<Vec<F>>,
     /// The diagonal matrix D^-1 (just the diagonal entries)
@@ -26,7 +26,7 @@ pub struct VandermondeInverse<F: FieldExt> {
     pub rank: usize,
 }
 
-impl<F: FieldExt> VandermondeInverse<F> {
+impl<F: Field> VandermondeInverse<F> {
     /// Create a new VandermondeInverse with rank 1 (rank grows elastically as needed).
     pub fn new() -> Self {
         VandermondeInverse {

@@ -1,5 +1,5 @@
 use rand::Rng;
-use remainder_shared_types::halo2curves::ff::Field;
+use remainder_shared_types::ff_field;
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},

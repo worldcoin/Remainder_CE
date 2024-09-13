@@ -3,7 +3,7 @@ use remainder::expression::generic_expr::Expression;
 use remainder::layouter::nodes::sector::Sector;
 use remainder::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use remainder::mle::evals::MultilinearExtension;
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 use remainder::layouter::compiling::LayouterCircuit;
 use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
@@ -12,11 +12,11 @@ use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::utils::mle::get_input_shred_from_vec;
 use remainder::prover::helpers::test_circuit;
 
-pub struct ProductCheckerComponent<F: FieldExt> {
+pub struct ProductCheckerComponent<F: Field> {
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> ProductCheckerComponent<F> {
+impl<F: Field> ProductCheckerComponent<F> {
     /// Checks that factor1 * factor2 - expected_product == 0.
     pub fn new(
         ctx: &Context,
@@ -42,7 +42,7 @@ impl<F: FieldExt> ProductCheckerComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for ProductCheckerComponent<F>
+impl<F: Field, N> Component<N> for ProductCheckerComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {

@@ -15,7 +15,7 @@ use thiserror::Error;
 
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge},
-    FieldExt,
+    Field,
 };
 
 use super::{
@@ -27,8 +27,8 @@ use super::{
 /// A [VerifierMle] stores a fully bound MLE along with its evaluation.
 /// It is used to represent the leaves of an `Expression<F, VerifierExpr>`.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(bound = "F: FieldExt")]
-pub struct VerifierMle<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct VerifierMle<F: Field> {
     /// Layer whose data this MLE is a subset of.
     layer_id: LayerId,
 
@@ -40,7 +40,7 @@ pub struct VerifierMle<F: FieldExt> {
     eval: F,
 }
 
-impl<F: FieldExt> VerifierMle<F> {
+impl<F: Field> VerifierMle<F> {
     pub fn new(layer_id: LayerId, var_indices: Vec<MleIndex<F>>, eval: F) -> Self {
         Self {
             layer_id,
@@ -93,12 +93,12 @@ pub struct VerifierExpr;
 //     type MLENodeRepr = usize,
 //     type MleVec = Vec<VerifierMle<F>>,
 // ```
-impl<F: FieldExt> ExpressionType<F> for VerifierExpr {
+impl<F: Field> ExpressionType<F> for VerifierExpr {
     type MLENodeRepr = VerifierMle<F>;
     type MleVec = ();
 }
 
-impl<F: FieldExt> Expression<F, VerifierExpr> {
+impl<F: Field> Expression<F, VerifierExpr> {
     /// Create a mle Expression that contains one MLE
     pub fn mle(mle: VerifierMle<F>) -> Self {
         let mle_node = ExpressionNode::Mle(mle);
@@ -153,7 +153,7 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
     }
 }
 
-impl<F: FieldExt> ExpressionNode<F, VerifierExpr> {
+impl<F: Field> ExpressionNode<F, VerifierExpr> {
     /// Evaluate the polynomial using the provided closures to perform the
     /// operations.
     #[allow(clippy::too_many_arguments)]
@@ -330,7 +330,7 @@ impl<F: FieldExt> ExpressionNode<F, VerifierExpr> {
     }
 }
 
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, VerifierExpr> {
+impl<F: std::fmt::Debug + Field> std::fmt::Debug for Expression<F, VerifierExpr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Circuit Expression")
             .field("Expression_Node", &self.expression_node)
@@ -338,7 +338,7 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, VerifierEx
     }
 }
 
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, VerifierExpr> {
+impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, VerifierExpr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExpressionNode::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),

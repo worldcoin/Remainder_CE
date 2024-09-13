@@ -1,6 +1,6 @@
 //! Module for components that can be used to build a circuit.
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     layouter::nodes::{
@@ -11,12 +11,12 @@ use crate::{
 
 /// Use this component to check if the values of two ClaimableNodes are equal, by adding self.sector
 /// to the circuit as an output layer.
-pub struct EqualityChecker<F: FieldExt> {
+pub struct EqualityChecker<F: Field> {
     /// To be added to the circuit as an output layer by the caller.
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> EqualityChecker<F> {
+impl<F: Field> EqualityChecker<F> {
     /// Create a new EqualityChecker.
     pub fn new(
         ctx: &Context,

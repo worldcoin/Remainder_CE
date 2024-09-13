@@ -1,7 +1,7 @@
 //! A node that can alter the claims made on it's source `ClaimableNode`
 
 use itertools::{repeat_n, Itertools};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
@@ -18,14 +18,14 @@ use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 /// The new nodes represent the input node split
 /// by a selector bit.
 #[derive(Clone, Debug)]
-pub struct SplitNode<F: FieldExt> {
+pub struct SplitNode<F: Field> {
     id: NodeId,
     data: MultilinearExtension<F>,
     source: NodeId,
     prefix_bits: Vec<bool>,
 }
 
-impl<F: FieldExt> SplitNode<F> {
+impl<F: Field> SplitNode<F> {
     /// Creates 2^num_vars `SplitNodes` from a single ClaimableNode
     pub fn new(ctx: &Context, node: &impl ClaimableNode<F = F>, num_vars: usize) -> Vec<Self> {
         let data = node.get_data();
@@ -56,7 +56,7 @@ impl<F: FieldExt> SplitNode<F> {
     }
 }
 
-impl<F: FieldExt> CircuitNode for SplitNode<F> {
+impl<F: Field> CircuitNode for SplitNode<F> {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -66,7 +66,7 @@ impl<F: FieldExt> CircuitNode for SplitNode<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode for SplitNode<F> {
+impl<F: Field> ClaimableNode for SplitNode<F> {
     type F = F;
 
     fn get_data(&self) -> &MultilinearExtension<Self::F> {
@@ -83,7 +83,7 @@ impl<F: FieldExt> ClaimableNode for SplitNode<F> {
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F>> CompilableNode<F, Pf> for SplitNode<F> {
+impl<F: Field, Pf: ProofSystem<F>> CompilableNode<F, Pf> for SplitNode<F> {
     fn compile<'a>(
         &'a self,
         _: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,

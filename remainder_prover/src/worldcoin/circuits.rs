@@ -1,3 +1,6 @@
+use crate::digits::components::{
+    BitsAreBinary, ComplementaryRecompChecker, DigitsConcatenator, UnsignedRecomposition,
+};
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::{Component, ComponentSet};
 use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
@@ -9,12 +12,10 @@ use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use crate::mle::circuit_mle::CircuitMle;
 use crate::utils::mle::get_input_shred_from_vec;
-use crate::digits::components::{ComplementaryRecompChecker, UnsignedRecomposition, BitsAreBinary, DigitsConcatenator};
 use crate::worldcoin::components::Subtractor;
 use crate::worldcoin::data::CircuitData;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
-
+use remainder_shared_types::Field;
 
 /// Builds the iriscode circuit.
 ///
@@ -38,8 +39,22 @@ use remainder_shared_types::FieldExt;
 /// + the length of the MLE `to_reroute`.
 ///
 /// See [CircuitData] for a detailed description of each generic and argument.
-pub fn build_circuit<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, const MATMULT_INTERNAL_DIM: usize, const BASE: u64, const NUM_DIGITS: usize>(
-    data: CircuitData<F, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>,
+pub fn build_circuit<
+    F: Field,
+    const MATMULT_NUM_ROWS_VARS: usize,
+    const MATMULT_NUM_COLS_VARS: usize,
+    const MATMULT_INTERNAL_DIM_VARS: usize,
+    const BASE: u64,
+    const NUM_DIGITS: usize,
+>(
+    data: CircuitData<
+        F,
+        MATMULT_NUM_ROWS_VARS,
+        MATMULT_NUM_COLS_VARS,
+        MATMULT_INTERNAL_DIM_VARS,
+        BASE,
+        NUM_DIGITS,
+    >,
 ) -> LayouterCircuit<F, ComponentSet<NodeEnum<F>>, impl FnMut(&Context) -> ComponentSet<NodeEnum<F>>>
 {
     LayouterCircuit::new(move |ctx| {
@@ -50,7 +65,7 @@ pub fn build_circuit<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_N
             digits,
             sign_bits,
             digit_multiplicities,
-            to_sub_from_matmult
+            to_sub_from_matmult,
         } = &data;
         let mut output_nodes = vec![];
 
@@ -59,24 +74,25 @@ pub fn build_circuit<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_N
         // TODO shouldn't have to clone here, but need to change library functions
         let to_reroute = get_input_shred_from_vec(to_reroute.clone(), ctx, &input_layer);
         println!("{:?} = Image to_reroute input", to_reroute.id());
-        let to_sub_from_matmult = get_input_shred_from_vec(
-            to_sub_from_matmult.clone(),
-            ctx,
-            &input_layer,
-        );
+        let to_sub_from_matmult =
+            get_input_shred_from_vec(to_sub_from_matmult.clone(), ctx, &input_layer);
         println!("{:?} = input to sub from matmult", to_sub_from_matmult.id());
         let rerouted_image = IdentityGateNode::new(ctx, &to_reroute, reroutings.clone());
         println!("{:?} = Identity gate", rerouted_image.id());
 
-        let rh_matmult_multiplicand = get_input_shred_from_vec(rh_matmult_multiplicand.clone(), ctx, &input_layer);
-        println!("{:?} = Kernel values (RH multiplicand of matmult) input", rh_matmult_multiplicand.id());
+        let rh_matmult_multiplicand =
+            get_input_shred_from_vec(rh_matmult_multiplicand.clone(), ctx, &input_layer);
+        println!(
+            "{:?} = Kernel values (RH multiplicand of matmult) input",
+            rh_matmult_multiplicand.id()
+        );
 
         let matmult = MatMultNode::new(
             ctx,
             &rerouted_image,
-            (MATMULT_NUM_ROWS, MATMULT_INTERNAL_DIM),
+            (MATMULT_NUM_ROWS_VARS, MATMULT_INTERNAL_DIM_VARS),
             &rh_matmult_multiplicand,
-            (MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS),
+            (MATMULT_INTERNAL_DIM_VARS, MATMULT_NUM_COLS_VARS),
         );
         println!("{:?} = Matmult", matmult.id());
 
@@ -113,11 +129,7 @@ pub fn build_circuit<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_N
 
         let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE as u64);
 
-        let sign_bits = get_input_shred_from_vec(
-            sign_bits.clone(),
-            ctx,
-            &input_layer,
-        );
+        let sign_bits = get_input_shred_from_vec(sign_bits.clone(), ctx, &input_layer);
         println!("{:?} = Sign bits (iris code) input", sign_bits.id());
         let complementary_checker = ComplementaryRecompChecker::new(
             ctx,

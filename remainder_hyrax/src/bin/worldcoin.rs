@@ -74,16 +74,16 @@ fn test_hyrax_worldcoin<
 
 fn main() {
     use remainder::worldcoin::parameters_v2::{
-        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS, MATMULT_NUM_ROWS,
-        NUM_DIGITS,
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM_VARS, MATMULT_NUM_COLS_VARS,
+        MATMULT_NUM_ROWS_VARS, NUM_DIGITS,
     };
     let path = Path::new("./").join(CONSTANT_DATA_FOLDER).to_path_buf();
     let image_path = path.join("iris/test_image.npy");
     let data = load_worldcoin_data::<
         Scalar,
-        MATMULT_NUM_ROWS,
-        MATMULT_NUM_COLS,
-        MATMULT_INTERNAL_DIM,
+        MATMULT_NUM_ROWS_VARS,
+        MATMULT_NUM_COLS_VARS,
+        MATMULT_INTERNAL_DIM_VARS,
         BASE,
         NUM_DIGITS,
     >(path.clone(), image_path, false);

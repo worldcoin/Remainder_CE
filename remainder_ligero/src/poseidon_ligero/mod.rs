@@ -1,9 +1,9 @@
 /// Version of Digest (as found in standard Rust library)
-/// but working with Poseidon hash function and FieldExt
+/// but working with Poseidon hash function and Field
 pub mod poseidon_digest;
 
 use self::poseidon_digest::FieldHashFnDigest;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use remainder_shared_types::Poseidon;
 use std::marker::PhantomData;
 
@@ -11,18 +11,18 @@ use std::marker::PhantomData;
 /// for [FieldHashFnDigest] (the trait whose implementation is necessary for
 /// usage within the column hashing/Merkle hashing within Ligero).
 #[derive(Clone, Debug)]
-pub struct PoseidonSpongeHasher<F: FieldExt> {
+pub struct PoseidonSpongeHasher<F: Field> {
     halo2_sponge: Poseidon<F, 3, 2>,
     phantom_data: PhantomData<F>,
 }
 
 // ------------------------ FOR HALO2 POSEIDON ------------------------
 // NOTE: These are SUPER slow. Don't use them except in tiny tests
-fn get_new_halo2_sponge<F: FieldExt>() -> Poseidon<F, 3, 2> {
+fn get_new_halo2_sponge<F: Field>() -> Poseidon<F, 3, 2> {
     Poseidon::<F, 3, 2>::new(8, 57)
 }
 
-fn get_new_halo2_sponge_with_params<F: FieldExt>(
+fn get_new_halo2_sponge_with_params<F: Field>(
     poseidon_params: PoseidonParams,
 ) -> Poseidon<F, 3, 2> {
     Poseidon::<F, 3, 2>::new(poseidon_params.full_rounds, poseidon_params.partial_rounds)
@@ -53,7 +53,7 @@ impl PoseidonParams {
     }
 }
 
-impl<F: FieldExt> FieldHashFnDigest<F> for PoseidonSpongeHasher<F> {
+impl<F: Field> FieldHashFnDigest<F> for PoseidonSpongeHasher<F> {
     type HashFnParams = PoseidonParams;
 
     /// Initializes with generic Halo2 [Poseidon] sponge.

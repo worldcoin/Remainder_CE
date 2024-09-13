@@ -5,7 +5,7 @@ mod helpers;
 
 pub mod claim_group;
 use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::claims::wlx_eval::claim_group::ClaimGroup;
 use crate::claims::wlx_eval::helpers::{
@@ -41,13 +41,13 @@ use super::{Claim, ClaimAggregator, YieldClaim};
 /// Collects additional information in the [ClaimMle] struct to make computation
 /// of evaluations easier, most importantly the `original_bookkeeping_table`.
 #[derive(Debug)]
-pub struct WLXAggregator<F: FieldExt, L, LI> {
+pub struct WLXAggregator<F: Field, L, LI> {
     claims: HashMap<LayerId, Vec<ClaimMle<F>>>,
     _marker: std::marker::PhantomData<(L, LI)>,
 }
 
 impl<
-        F: FieldExt,
+        F: Field,
         L: Layer<F> + YieldWLXEvals<F> + YieldClaim<ClaimMle<F>>,
         LI: InputLayer<F> + YieldWLXEvals<F>,
     > ClaimAggregator<F> for WLXAggregator<F, L, LI>
@@ -133,7 +133,7 @@ impl<
 }
 
 impl<
-        F: FieldExt,
+        F: Field,
         L: Layer<F> + YieldWLXEvals<F> + YieldClaim<ClaimMle<F>>,
         LI: InputLayer<F> + YieldWLXEvals<F>,
     > WLXAggregator<F, L, LI>
@@ -164,7 +164,7 @@ impl<
 }
 
 ///The trait that layers must implement to be compatible with the WLXEval based claim aggregator
-pub trait YieldWLXEvals<F: FieldExt> {
+pub trait YieldWLXEvals<F: Field> {
     ///Get W(l(x)) evaluations
     fn get_wlx_evaluations(
         &self,
@@ -180,8 +180,8 @@ pub trait YieldWLXEvals<F: FieldExt> {
 /// information through `from_layer_id` and `to_layer_id`. This information can
 /// be used to speed up claim aggregation.
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
-#[serde(bound = "F: FieldExt")]
-pub struct ClaimMle<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct ClaimMle<F: Field> {
     /// The underlying raw Claim.
     claim: Claim<F>,
 
@@ -197,7 +197,7 @@ pub struct ClaimMle<F: FieldExt> {
     pub mle_ref: Option<MleEnum<F>>,
 }
 
-impl<F: FieldExt> ClaimMle<F> {
+impl<F: Field> ClaimMle<F> {
     /// To be used internally only!
     /// Generate new raw claim without any origin/destination information.
     pub fn new_raw(point: Vec<F>, result: F) -> Self {
@@ -256,7 +256,7 @@ impl<F: FieldExt> ClaimMle<F> {
     }
 }
 
-impl<F: fmt::Debug + FieldExt> fmt::Debug for ClaimMle<F> {
+impl<F: fmt::Debug + Field> fmt::Debug for ClaimMle<F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Claim")
             .field("point", self.claim.get_point())
@@ -283,7 +283,7 @@ impl<F: fmt::Debug + FieldExt> fmt::Debug for ClaimMle<F> {
 /// claim_vecs.len()`.
 /// # Panics
 ///  if `claim_vecs` is empty.
-pub fn get_num_wlx_evaluations<F: FieldExt>(
+pub fn get_num_wlx_evaluations<F: Field>(
     claim_vecs: &[Vec<F>],
 ) -> (usize, Option<Vec<usize>>, Vec<usize>) {
     let num_claims = claim_vecs.len();

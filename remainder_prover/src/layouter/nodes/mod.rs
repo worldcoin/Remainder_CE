@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 pub use itertools::Either;
-pub use remainder_shared_types::{FieldExt, Fr};
+pub use remainder_shared_types::{Field, Fr};
 use serde::{Deserialize, Serialize};
 
 use crate::prover::proof_system::ProofSystem;
@@ -65,7 +65,7 @@ impl NodeId {
     }
 
     /// creates an [Expression<F, AbstractExpr>] from this NodeId
-    pub fn expr<F: FieldExt>(self) -> Expression<F, AbstractExpr> {
+    pub fn expr<F: Field>(self) -> Expression<F, AbstractExpr> {
         Expression::<F, AbstractExpr>::mle(self)
     }
 }
@@ -95,7 +95,7 @@ pub trait CircuitNode {
 /// Yields the MLE that any claim made on this node would be the evaluation of
 pub trait ClaimableNode: CircuitNode {
     /// The Field this node uses
-    type F: FieldExt;
+    type F: Field;
     /// A function for getting the MLE that this node generates in the circuit
     ///
     /// Any claim made against this node will be evaluated on this MLE
@@ -108,7 +108,7 @@ pub trait ClaimableNode: CircuitNode {
 /// A Node that contains the information neccessary to Compile itself
 ///
 /// Implement this for any node that does not need additional Layingout before compilation
-pub trait CompilableNode<F: FieldExt, Pf: ProofSystem<F>>: CircuitNode {
+pub trait CompilableNode<F: Field, Pf: ProofSystem<F>>: CircuitNode {
     /// Compiles the node by adding any layers neccessary to the `WitnessBuilder`
     ///
     /// If any `ClaimableNode` is added to the witness it is the responsibility
