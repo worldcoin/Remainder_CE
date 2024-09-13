@@ -20,9 +20,9 @@ use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 pub struct MatMultNode<F: Field> {
     id: NodeId,
     matrix_a: NodeId,
-    num_rows_cols_vars_a: (usize, usize),
+    rows_cols_num_vars_a: (usize, usize),
     matrix_b: NodeId,
-    num_rows_cols_vars_b: (usize, usize),
+    rows_cols_num_vars_b: (usize, usize),
     data: MultilinearExtension<F>,
 }
 
@@ -41,30 +41,30 @@ impl<F: Field> MatMultNode<F> {
     pub fn new(
         ctx: &Context,
         matrix_node_a: &impl ClaimableNode<F = F>,
-        num_rows_cols_vars_a: (usize, usize),
+        rows_cols_num_vars_a: (usize, usize),
         matrix_node_b: &impl ClaimableNode<F = F>,
-        num_rows_cols_vars_b: (usize, usize),
+        rows_cols_num_vars_b: (usize, usize),
     ) -> Self {
         let matrix_a_mle = DenseMle::new_from_raw(
             matrix_node_a.get_data().get_evals_vector().to_vec(),
             LayerId::Layer(0),
         );
-        let matrix_a = Matrix::new(matrix_a_mle, num_rows_cols_vars_a.0, num_rows_cols_vars_a.1);
+        let matrix_a = Matrix::new(matrix_a_mle, rows_cols_num_vars_a.0, rows_cols_num_vars_a.1);
 
         let matrix_b_mle = DenseMle::new_from_raw(
             matrix_node_b.get_data().get_evals_vector().to_vec(),
             LayerId::Layer(0),
         );
-        let matrix_b = Matrix::new(matrix_b_mle, num_rows_cols_vars_b.0, num_rows_cols_vars_b.1);
+        let matrix_b = Matrix::new(matrix_b_mle, rows_cols_num_vars_b.0, rows_cols_num_vars_b.1);
 
         let data = MultilinearExtension::new(product_two_matrices(&matrix_a, &matrix_b));
 
         Self {
             id: ctx.get_new_id(),
             matrix_a: matrix_node_a.id(),
-            num_rows_cols_vars_a,
+            rows_cols_num_vars_a,
             matrix_b: matrix_node_b.id(),
-            num_rows_cols_vars_b,
+            rows_cols_num_vars_b,
             data,
         }
     }
@@ -101,8 +101,8 @@ impl<F: Field, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> CompilableNod
         // Matrix A and matrix B are not padded because the data from the previous layer is only stored as the raw [MultilinearExtension].
         let matrix_a = Matrix::new(
             mle_a,
-            self.num_rows_cols_vars_a.0,
-            self.num_rows_cols_vars_a.1,
+            self.rows_cols_num_vars_a.0,
+            self.rows_cols_num_vars_a.1,
         );
         let (matrix_b_location, matrix_b_data) = circuit_map.get_node(&self.matrix_b)?;
 
@@ -115,8 +115,8 @@ impl<F: Field, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> CompilableNod
         // should already been padded
         let matrix_b = Matrix::new(
             mle_b,
-            self.num_rows_cols_vars_b.0,
-            self.num_rows_cols_vars_b.1,
+            self.rows_cols_num_vars_b.0,
+            self.rows_cols_num_vars_b.1,
         );
 
         let layer_id = witness_builder.next_layer();
