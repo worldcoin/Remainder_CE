@@ -25,7 +25,7 @@ use crate::{
     },
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension},
+    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, MleIndex},
     sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
 };
 
@@ -259,39 +259,56 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
         dbg!(mle_outputs_necessary);
         let mut counter = 0;
         let mut all_populatable = true;
-        mle_outputs_necessary.into_iter().for_each(
-            |mle_output_necessary| {
+
+        // TODO(ryancao, vishady): A workaround for now due to the fact
+        // that [super::expression::abstract_expr] is unable to construct
+        // the correct "selector tree" expression as a result of not having
+        // access to the sizes of the MLEs within the LHS and RHSs of the
+        // expression within. Instead, the current strategy is to simply
+        // compute the entire bookkeeping table and only "select" the values
+        // we need at the end.
+        let mut implicit_selector_bits: Vec<bool> = vec![];
+
+        mle_outputs_necessary
+            .into_iter()
+            .for_each(|mle_output_necessary| {
                 let prefix_bits = mle_output_necessary.prefix_bits();
                 dbg!(&self.expression);
                 dbg!(&prefix_bits);
                 let expression_node_to_compile = prefix_bits.iter().fold(
-                    &self.expression.expression_node, |acc, bit| {
-                        match acc {
-                            ExpressionNode::Selector(_mle_index, lhs, rhs) => {
-                                if *bit {
-                                    rhs
-                                } else {
-                                    lhs
-                                }
-                            },
-                            _ => panic!("Exists a prefix bit for an expression node that does not contain any more selectors!")
+                    &self.expression.expression_node,
+                    |acc, bit| match acc {
+                        ExpressionNode::Selector(_mle_index, lhs, rhs) => {
+                            if *bit {
+                                rhs
+                            } else {
+                                lhs
+                            }
                         }
-                    }
+                        _ => {
+                            implicit_selector_bits.push(*bit);
+                            acc
+                        }
+                    },
                 );
                 let maybe_data = expression_node_to_compile.compute_bookkeeping_table(&circuit_map);
                 if maybe_data.is_none() {
                     counter += 1;
                     all_populatable = false;
-                }
-                else {
+                } else {
                     dbg!(&mle_output_necessary);
                     dbg!(&expression_node_to_compile);
                     let data = maybe_data.unwrap();
                     dbg!(data.get_evals_vector().len());
-                    circuit_map.add_node(CircuitLocation::new(self.layer_id(), prefix_bits), data);
+
+                    let actual_evaluations = filter_with_selectors(data);
+
+                    circuit_map.add_node(
+                        CircuitLocation::new(self.layer_id(), prefix_bits),
+                        actual_evaluations,
+                    );
                 }
-            }
-        );
+            });
         all_populatable
     }
 
