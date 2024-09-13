@@ -15,16 +15,16 @@ use remainder::{
     mle::evals::MultilinearExtension,
     prover::helpers::test_circuit,
 };
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 
 use crate::utils::{get_dummy_input_shred, DifferenceBuilderComponent};
 pub mod utils;
 
-pub struct NonlinearNestedSelectorBuilderComponent<F: FieldExt> {
+pub struct NonlinearNestedSelectorBuilderComponent<F: Field> {
     pub first_layer_sector: Sector<F>,
 }
 
-impl<F: FieldExt> NonlinearNestedSelectorBuilderComponent<F> {
+impl<F: Field> NonlinearNestedSelectorBuilderComponent<F> {
     /// A builder which returns the following expression:
     /// - sel(sel(`left_inner_sel_mle`, `right_inner_sel_mle`), `right_outer_sel_mle`)
     ///   + `right_sum_mle_1` * `right_sum_mle_2`
@@ -117,7 +117,7 @@ impl<F: FieldExt> NonlinearNestedSelectorBuilderComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for NonlinearNestedSelectorBuilderComponent<F>
+impl<F: Field, N> Component<N> for NonlinearNestedSelectorBuilderComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {

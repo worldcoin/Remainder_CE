@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     layouter::{
@@ -13,12 +13,12 @@ use crate::{
 
 /// Calculates `matmult - thresholds`, making the result available as self.sector.
 /// It is assumed that `matmult` and `thresholds` have the same length.
-pub struct Subtractor<F: FieldExt> {
+pub struct Subtractor<F: Field> {
     /// The sector that containing the result of the calculation.
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> Subtractor<F> {
+impl<F: Field> Subtractor<F> {
     /// Create a new [Thresholder] component.
     pub fn new(ctx: &Context, a: &dyn ClaimableNode<F = F>, b: &dyn ClaimableNode<F = F>) -> Self {
         let sector = Sector::new(
@@ -43,7 +43,7 @@ impl<F: FieldExt> Subtractor<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for Subtractor<F>
+impl<F: Field, N> Component<N> for Subtractor<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {

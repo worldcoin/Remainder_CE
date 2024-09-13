@@ -16,7 +16,7 @@ use remainder::{
     mle::{dense::DenseMle, Mle},
     prover::helpers::test_circuit,
 };
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 
 pub mod utils;
 
@@ -27,13 +27,13 @@ use utils::{
 
 use crate::utils::get_dummy_random_mle;
 
-struct DataParallelComponent<F: FieldExt> {
+struct DataParallelComponent<F: Field> {
     first_layer_component: ProductScaledBuilderComponent<F>,
     second_layer_component: ProductScaledBuilderComponent<F>,
     output_component: DifferenceBuilderComponent<F>,
 }
 
-impl<F: FieldExt> DataParallelComponent<F> {
+impl<F: Field> DataParallelComponent<F> {
     /// A circuit which takes in two vectors of MLEs of the same size:
     /// * Layer 0: [ProductScaledBuilderComponent] with the two inputs
     /// * Layer 1: [ProductScaledBuilderComponent] with the output of Layer 0 and output of Layer 0.
@@ -67,7 +67,7 @@ impl<F: FieldExt> DataParallelComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DataParallelComponent<F>
+impl<F: Field, N> Component<N> for DataParallelComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
 {
@@ -85,12 +85,12 @@ where
     }
 }
 
-struct TripleNestedSelectorComponent<F: FieldExt> {
+struct TripleNestedSelectorComponent<F: Field> {
     first_layer_component: TripleNestedBuilderComponent<F>,
     output_component: DifferenceBuilderComponent<F>,
 }
 
-impl<F: FieldExt> TripleNestedSelectorComponent<F> {
+impl<F: Field> TripleNestedSelectorComponent<F> {
     /// A circuit in which:
     /// * Layer 0: [TripleNestedSelectorBuilder] with the three inputs
     /// * Layer 1: [ZeroBuilder] with output of Layer 0 and itself.
@@ -123,7 +123,7 @@ impl<F: FieldExt> TripleNestedSelectorComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for TripleNestedSelectorComponent<F>
+impl<F: Field, N> Component<N> for TripleNestedSelectorComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
 {
@@ -136,12 +136,12 @@ where
     }
 }
 
-struct ScaledProductComponent<F: FieldExt> {
+struct ScaledProductComponent<F: Field> {
     first_layer_component: ProductScaledBuilderComponent<F>,
     output_component: DifferenceBuilderComponent<F>,
 }
 
-impl<F: FieldExt> ScaledProductComponent<F> {
+impl<F: Field> ScaledProductComponent<F> {
     /// A circuit in which:
     /// * Layer 0: [ProductScaledBuilder] with the two inputs
     /// * Layer 1: [ZeroBuilder] with output of Layer 0 and itself.
@@ -169,7 +169,7 @@ impl<F: FieldExt> ScaledProductComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for ScaledProductComponent<F>
+impl<F: Field, N> Component<N> for ScaledProductComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
 {

@@ -1,6 +1,6 @@
 //! A default Enum for a representation of all possible DAG Nodes
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::node_enum;
 
@@ -17,7 +17,7 @@ use super::{
     NodeGroup, YieldNode,
 };
 
-node_enum!(NodeEnum: FieldExt,
+node_enum!(NodeEnum: Field,
     (InputShred: InputShred<F>),
     (InputLayer: InputLayerNode<F>),
     (Output: OutputNode<F>),
@@ -33,7 +33,7 @@ node_enum!(NodeEnum: FieldExt,
 );
 
 /// Organizational wrapper for a vec of `NodeEnum`s
-pub struct NodeEnumGroup<F: FieldExt> {
+pub struct NodeEnumGroup<F: Field> {
     input_shreds: Option<Vec<InputShred<F>>>,
     input_layers: Option<Vec<InputLayerNode<F>>>,
     output: Option<Vec<OutputNode<F>>>,
@@ -48,7 +48,7 @@ pub struct NodeEnumGroup<F: FieldExt> {
     lookup_constraints: Option<Vec<LookupConstraint>>,
 }
 
-impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
+impl<F: Field> NodeGroup for NodeEnumGroup<F> {
     type NodeEnum = NodeEnum<F>;
 
     fn new(nodes: Vec<Self::NodeEnum>) -> Self {
@@ -89,69 +89,69 @@ impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
     }
 }
 
-impl<F: FieldExt> YieldNode<InputShred<F>> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<InputShred<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<InputShred<F>> {
         self.input_shreds.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<InputLayerNode<F>> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<InputLayerNode<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<InputLayerNode<F>> {
         self.input_layers.take().unwrap_or_default()
     }
 }
-impl<F: FieldExt> YieldNode<OutputNode<F>> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<OutputNode<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<OutputNode<F>> {
         self.output.take().unwrap_or_default()
     }
 }
-impl<F: FieldExt> YieldNode<DebugNode> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<DebugNode> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<DebugNode> {
         self.debugs.take().unwrap_or_default()
     }
 }
-impl<F: FieldExt> YieldNode<Sector<F>> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<Sector<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<Sector<F>> {
         self.sectors.take().unwrap_or_default()
     }
 }
-impl<F: FieldExt> YieldNode<SectorGroup<F>> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<SectorGroup<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<SectorGroup<F>> {
         self.sector_groups.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<GateNode<F>> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<GateNode<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<GateNode<F>> {
         self.gate_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<IdentityGateNode<F>> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<IdentityGateNode<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<IdentityGateNode<F>> {
         self.identity_gate_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<SplitNode<F>> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<SplitNode<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<SplitNode<F>> {
         self.split_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<MatMultNode<F>> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<MatMultNode<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<MatMultNode<F>> {
         self.matmult_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<LookupTable> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<LookupTable> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<LookupTable> {
         self.lookup_tables.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<LookupConstraint> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<LookupConstraint> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<LookupConstraint> {
         self.lookup_constraints.take().unwrap_or_default()
     }

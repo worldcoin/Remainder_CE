@@ -1,6 +1,6 @@
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     input_layer::{
@@ -37,7 +37,7 @@ fn get_prefix_bits_from_capacity(
         .collect()
 }
 
-fn index_input_mles<F: FieldExt>(
+fn index_input_mles<F: Field>(
     input_mles: &[&MultilinearExtension<F>],
 ) -> (Vec<Vec<bool>>, Vec<usize>) {
     let input_mle_num_vars = input_mles
@@ -79,7 +79,7 @@ fn index_input_mles<F: FieldExt>(
 
 /// Combines the list of input MLEs in the input layer into one giant MLE by interleaving them
 /// assuming that the indices of the bookkeeping table are stored in little endian.
-fn combine_input_mles<F: FieldExt>(
+fn combine_input_mles<F: Field>(
     input_mles: &[&MultilinearExtension<F>],
 ) -> MultilinearExtension<F> {
     let mle_combine_indices = argsort(
@@ -130,7 +130,7 @@ fn combine_input_mles<F: FieldExt>(
 /// * `opposite_endian_bookkeeping_table` - MLE bookkeeping table, which, when
 ///     indexed (b_n, ..., b_1) rather than (b_1, ..., b_n), yields the same
 ///     result.
-fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F> {
+fn invert_mle_bookkeeping_table<F: Field>(bookkeeping_table: Vec<F>) -> Vec<F> {
     // --- This should only happen the first time!!! ---
     let padded_bookkeeping_table = pad_to_nearest_power_of_two(&bookkeeping_table);
 
@@ -156,7 +156,7 @@ fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F
         .collect()
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL>, IL> CompilableNode<F, Pf>
+impl<F: Field, Pf: ProofSystem<F, InputLayer = IL>, IL> CompilableNode<F, Pf>
     for InputLayerNode<F>
 where
     IL: InputLayer<F>

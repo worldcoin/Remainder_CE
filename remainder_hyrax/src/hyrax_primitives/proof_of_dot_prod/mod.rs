@@ -1,7 +1,8 @@
 use itertools::Itertools;
 use rand::Rng;
+use remainder_shared_types::curves::PrimeOrderCurve;
+use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
-use remainder_shared_types::{curves::PrimeOrderCurve, halo2curves::group::ff::Field};
 use serde::{Deserialize, Serialize};
 
 use crate::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
@@ -133,9 +134,20 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
             .get_scalar_field_challenge("challenge c")
             .unwrap();
 
-        assert_eq!(&transcript.consume_scalar_points("PoDP z_vector", z_vector.len()).unwrap(), z_vector);
-        assert_eq!(&transcript.consume_scalar_point("PoDP z_delta").unwrap(), z_delta);
-        assert_eq!(&transcript.consume_scalar_point("PoDP z_beta").unwrap(), z_beta);
+        assert_eq!(
+            &transcript
+                .consume_scalar_points("PoDP z_vector", z_vector.len())
+                .unwrap(),
+            z_vector
+        );
+        assert_eq!(
+            &transcript.consume_scalar_point("PoDP z_delta").unwrap(),
+            z_delta
+        );
+        assert_eq!(
+            &transcript.consume_scalar_point("PoDP z_beta").unwrap(),
+            z_beta
+        );
 
         // we compute <z, a> and then commitments to z and <z, a> based off of the blinding factors and values in
         // the evaluation proof.

@@ -10,7 +10,7 @@ use rayon::{
     prelude::{IntoParallelIterator, ParallelIterator},
     slice::ParallelSlice,
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -119,7 +119,7 @@ pub struct Evaluations<F> {
     zero: F,
 }
 
-impl<F: FieldExt> Evaluations<F> {
+impl<F: Field> Evaluations<F> {
     /// Returns a representation of the constant function on zero variables
     /// equal to `F::ZERO`.
     pub fn new_zero() -> Self {
@@ -268,7 +268,7 @@ impl<F: FieldExt> Evaluations<F> {
 
 /// Provides a vector-like interface to evaluations; useful during refactoring
 /// but also for implementing `EvaluationsIterator`.
-impl<F: FieldExt> Index<usize> for Evaluations<F> {
+impl<F: Field> Index<usize> for Evaluations<F> {
     type Output = F;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -279,7 +279,7 @@ impl<F: FieldExt> Index<usize> for Evaluations<F> {
 /// An iterator over evaluations indexed by vertices of a projection of the
 /// boolean hypercube on `num_vars - 1` dimensions. See documentation for
 /// `Evaluations::iter` for more information.
-pub struct EvaluationsPairIterator<'a, F: FieldExt> {
+pub struct EvaluationsPairIterator<'a, F: Field> {
     /// Reference to original bookkeeping table.
     evals: &'a Evaluations<F>,
 
@@ -294,7 +294,7 @@ pub struct EvaluationsPairIterator<'a, F: FieldExt> {
     current_pair_index: usize,
 }
 
-impl<'a, F: FieldExt> Iterator for EvaluationsPairIterator<'a, F> {
+impl<'a, F: Field> Iterator for EvaluationsPairIterator<'a, F> {
     type Item = (F, F);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -355,7 +355,7 @@ pub struct MultilinearExtension<F> {
     dim_info: Option<DimInfo>,
 }
 
-impl<F: FieldExt> MultilinearExtension<F> {
+impl<F: Field> MultilinearExtension<F> {
     /// create a new MultilinearExtension from a [Vec<F>] of evaluations.
     pub fn new(evals_vec: Vec<F>) -> Self {
         let num_vars = log2(evals_vec.len()) as usize;
@@ -689,7 +689,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
 
 /// Provides a vector-like interface to MultilinearExtensions;
 /// useful during refactoring.
-impl<F: FieldExt> Index<usize> for MultilinearExtension<F> {
+impl<F: Field> Index<usize> for MultilinearExtension<F> {
     type Output = F;
 
     fn index(&self, index: usize) -> &Self::Output {

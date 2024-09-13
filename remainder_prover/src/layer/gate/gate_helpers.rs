@@ -8,7 +8,7 @@ use crate::{
     mle::{betavalues::BetaValues, Mle},
     sumcheck::*,
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::mle::{dense::DenseMle, MleIndex};
 use thiserror::Error;
@@ -49,11 +49,11 @@ pub enum GateError {
 /// * `mle_refs` - MLEs pointing to the actual bookkeeping tables for the above
 /// * `independent_variable` - whether the `x` from above resides within at least one of the `mle_refs`
 /// * `degree` - degree of `g_k(x)`, i.e. number of evaluations to send (minus one!)
-pub fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
+pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
     mle_refs: &[&impl Mle<F>],
     independent_variable: bool,
     degree: usize,
-) -> Result<Evals<F>, MleError> {
+) -> Result<SumcheckEvals<F>, MleError> {
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
@@ -119,7 +119,7 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
             },
         );
 
-        Ok(Evals(evals))
+        Ok(SumcheckEvals(evals))
     } else {
         // There is no independent variable and we can sum over everything
         let sum = cfg_into_iter!((0..(1 << max_num_vars))).fold(
@@ -158,12 +158,12 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
         #[cfg(feature = "parallel")]
         let sum = sum.reduce(|| F::ZERO, |acc, partial| acc + partial);
 
-        Ok(Evals(vec![sum; degree]))
+        Ok(SumcheckEvals(vec![sum; degree]))
     }
 }
 
 /// checks whether mle was bound correctly to all the challenge points!!!!!!!!!!
-pub fn check_fully_bound<F: FieldExt>(
+pub fn check_fully_bound<F: Field>(
     mle_refs: &mut [impl Mle<F>],
     challenges: Vec<F>,
 ) -> Result<F, GateError> {
@@ -199,14 +199,14 @@ pub fn check_fully_bound<F: FieldExt>(
 }
 
 /// Index mle indices for an array of mles.
-pub fn index_mle_indices_gate<F: FieldExt>(mle_refs: &mut [impl Mle<F>], index: usize) {
+pub fn index_mle_indices_gate<F: Field>(mle_refs: &mut [impl Mle<F>], index: usize) {
     mle_refs.iter_mut().for_each(|mle_ref| {
         mle_ref.index_mle_indices(index);
     })
 }
 
 /// Fixes variable for the MLEs of a round of sumcheck for add/mul gates.
-pub fn bind_round_gate<F: FieldExt>(
+pub fn bind_round_gate<F: Field>(
     round_index: usize,
     challenge: F,
     mle_refs: &mut [Vec<DenseMle<F>>],
@@ -219,7 +219,7 @@ pub fn bind_round_gate<F: FieldExt>(
 }
 
 /// Computes a round of the sumcheck protocol on a binary gate layer.
-pub fn compute_sumcheck_message_gate<F: FieldExt>(
+pub fn compute_sumcheck_message_gate<F: Field>(
     round_index: usize,
     mle_refs: &[Vec<&DenseMle<F>>],
 ) -> Vec<F> {
@@ -235,13 +235,15 @@ pub fn compute_sumcheck_message_gate<F: FieldExt>(
         .clone()
         .into_iter()
         .skip(1)
-        .fold(Evals(evals_vec[0].clone()), |acc, elem| acc + Evals(elem));
-    let Evals(final_vec_evals) = final_evals;
+        .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
+            acc + SumcheckEvals(elem)
+        });
+    let SumcheckEvals(final_vec_evals) = final_evals;
     final_vec_evals
 }
 
 /// Fixes variable for the MLEs of a round of sumcheck for identity gates.
-pub fn bind_round_identity<F: FieldExt>(
+pub fn bind_round_identity<F: Field>(
     round_index: usize,
     challenge: F,
     mle_refs: &mut [DenseMle<F>],
@@ -252,7 +254,7 @@ pub fn bind_round_identity<F: FieldExt>(
 }
 
 /// Computes a round of sumcheck protocol on a unary gate layer.
-pub fn compute_sumcheck_message_identity<F: FieldExt>(
+pub fn compute_sumcheck_message_identity<F: Field>(
     round_index: usize,
     mle_refs: &[&DenseMle<F>],
 ) -> Result<Vec<F>, GateError> {
@@ -268,12 +270,12 @@ pub fn compute_sumcheck_message_identity<F: FieldExt>(
     let evals =
         evaluate_mle_ref_product_no_beta_table(mle_refs, independent_variable, mle_refs.len())
             .unwrap();
-    let Evals(evaluations) = evals;
+    let SumcheckEvals(evaluations) = evals;
     Ok(evaluations)
 }
 
 /// Fully evaluates a gate expression (for both the batched and non-batched case, add and mul gates).
-pub fn compute_full_gate<F: FieldExt>(
+pub fn compute_full_gate<F: Field>(
     challenges: Vec<F>,
     lhs: &mut DenseMle<F>,
     rhs: &mut DenseMle<F>,
@@ -337,7 +339,7 @@ pub fn compute_full_gate<F: FieldExt>(
 }
 
 /// Compute the full value of the gate wiring function for an identity gate.
-pub fn compute_full_gate_identity<F: FieldExt>(
+pub fn compute_full_gate_identity<F: Field>(
     challenges: Vec<F>,
     mle_ref: &mut DenseMle<F>,
     nonzero_gates: &Vec<(usize, usize)>,
@@ -357,7 +359,7 @@ pub fn compute_full_gate_identity<F: FieldExt>(
 }
 
 /// Compute sumcheck message without a beta table.
-pub fn compute_sumcheck_message_no_beta_table<F: FieldExt>(
+pub fn compute_sumcheck_message_no_beta_table<F: Field>(
     mles: &[&impl Mle<F>],
     round_index: usize,
     degree: usize,
@@ -374,14 +376,14 @@ pub fn compute_sumcheck_message_no_beta_table<F: FieldExt>(
         .ok_or(GateError::EmptyMleList)?;
     let eval = evaluate_mle_ref_product_no_beta_table(mles, independent_variable, degree).unwrap();
 
-    let Evals(evaluations) = eval;
+    let SumcheckEvals(evaluations) = eval;
 
     Ok(evaluations)
 }
 
 /// Does all the necessary updates when proving a round for batched gate mles.
 #[allow(clippy::too_many_arguments)]
-pub fn prove_round_dataparallel_phase<F: FieldExt>(
+pub fn prove_round_dataparallel_phase<F: Field>(
     lhs: &mut DenseMle<F>,
     rhs: &mut DenseMle<F>,
     beta_g1: &DenseMle<F>,
@@ -410,7 +412,7 @@ pub fn prove_round_dataparallel_phase<F: FieldExt>(
 /// Get the evals for a batched mul gate. Note that this specifically refers to
 /// computing the prover message while binding the dataparallel bits of a `Gate`
 /// expression.
-pub fn libra_giraffe<F: FieldExt>(
+pub fn libra_giraffe<F: Field>(
     f2_p2_x: &DenseMle<F>,
     f3_p2_y: &DenseMle<F>,
     beta_g2: &DenseMle<F>,

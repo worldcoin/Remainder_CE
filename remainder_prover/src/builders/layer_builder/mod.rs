@@ -4,7 +4,7 @@ pub mod simple_builders;
 use std::marker::PhantomData;
 
 use itertools::repeat_n;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
@@ -16,7 +16,7 @@ use crate::{
 ///
 /// A intermediate trait for defining components that can be combined/modified
 /// before being 'build' into an `Expression`
-pub trait LayerBuilder<F: FieldExt> {
+pub trait LayerBuilder<F: Field> {
     /// The layer that makes claims on this layer in the GKR protocol. The next layer in the GKR protocol
     type Successor;
 
@@ -59,7 +59,7 @@ pub trait LayerBuilder<F: FieldExt> {
 
 /// Creates a simple layer from an mle, with closures for defining how the mle turns into an expression and a next layer
 pub fn from_mle<
-    F: FieldExt,
+    F: Field,
     M,
     EFn: Fn(&M) -> Expression<F, ProverExpr>,
     S,
@@ -90,14 +90,14 @@ pub enum Padding {
 }
 
 /// The layerbuilder that represents two layers concatonated together
-pub struct ConcatLayer<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> {
+pub struct ConcatLayer<F: Field, A: LayerBuilder<F>, B: LayerBuilder<F>> {
     first: A,
     second: B,
     padding: Padding,
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for ConcatLayer<F, A, B> {
+impl<F: Field, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for ConcatLayer<F, A, B> {
     type Successor = (A::Successor, B::Successor);
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
@@ -177,7 +177,7 @@ pub struct SimpleLayer<M, EFn, LFn> {
 }
 
 impl<
-        F: FieldExt,
+        F: Field,
         M,
         EFn: Fn(&M) -> Expression<F, ProverExpr>,
         S,

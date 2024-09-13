@@ -1,5 +1,5 @@
 // use remainder_shared_types::curves::PrimeOrderCurve;
-// use remainder_shared_types::halo2curves::group::ff::Field;
+// use remainder_shared_types::ff_field;
 // use remainder_shared_types::transcript::Transcript;
 // use serde::Deserialize;
 // use serde::Serialize;

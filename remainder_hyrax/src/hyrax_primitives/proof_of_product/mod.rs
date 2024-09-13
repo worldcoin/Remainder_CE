@@ -1,6 +1,6 @@
 use rand::Rng;
 use remainder_shared_types::curves::PrimeOrderCurve;
-use remainder_shared_types::halo2curves::group::ff::Field;
+use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};

@@ -80,7 +80,7 @@ fn build_random_mle_layer(num_vars: usize) -> RegularLayer<Fr> {
 }
 
 /*
-fn compute_claim_wlx<F: FieldExt, Sp: TranscriptSponge<F>>(
+fn compute_claim_wlx<F: Field, Sp: TranscriptSponge<F>>(
     claims: &ClaimGroup<F>,
     layer: &impl YieldWLXEvals<F>,
 ) -> (Claim<F>, Vec<Vec<F>>) {

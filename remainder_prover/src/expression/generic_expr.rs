@@ -1,10 +1,10 @@
 use crate::mle::MleIndex;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
 /// Different Expression Types corresponds to different stages in the
 /// lift cycle of an expression
-pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
+pub trait ExpressionType<F: Field>: Serialize + for<'de> Deserialize<'de> {
     /// What the expression is over
     /// for prover expression, it's over DenseMle
     /// for verifier expression, it's over Vec<F>
@@ -20,8 +20,8 @@ pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
 
 /// Generic Expressions
 #[derive(Serialize, Deserialize, Clone)]
-#[serde(bound = "F: FieldExt")]
-pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
+#[serde(bound = "F: Field")]
+pub enum ExpressionNode<F: Field, E: ExpressionType<F>> {
     /// This is a constant polynomial
     Constant(F),
     /// This is a virtual selector
@@ -48,14 +48,14 @@ pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
 
 /// Generic Expressions
 #[derive(Serialize, Deserialize, Clone)]
-#[serde(bound = "F: FieldExt")]
-pub struct Expression<F: FieldExt, E: ExpressionType<F>> {
+#[serde(bound = "F: Field")]
+pub struct Expression<F: Field, E: ExpressionType<F>> {
     pub(super) expression_node: ExpressionNode<F, E>,
     pub(super) mle_vec: E::MleVec,
 }
 
 /// generic methods shared across all types of expressions
-impl<F: FieldExt, E: ExpressionType<F>> Expression<F, E> {
+impl<F: Field, E: ExpressionType<F>> Expression<F, E> {
     /// Create a new expression
     pub fn new(expression_node: ExpressionNode<F, E>, mle_vec: E::MleVec) -> Self {
         Self {
@@ -96,7 +96,7 @@ impl<F: FieldExt, E: ExpressionType<F>> Expression<F, E> {
 }
 
 /// generic methods shared across all types of expressions
-impl<F: FieldExt, E: ExpressionType<F>> ExpressionNode<F, E> {
+impl<F: Field, E: ExpressionType<F>> ExpressionNode<F, E> {
     /// traverse the expression tree, and applies the observer_fn to all child node / the mle_vec reference
     pub fn traverse_node<D>(
         &self,

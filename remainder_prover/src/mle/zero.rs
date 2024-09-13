@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::claims::{wlx_eval::ClaimMle, Claim};
 use crate::claims::{ClaimError, YieldClaim};
 use crate::layer::{LayerError, LayerId};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use super::Mle;
 use super::{mle_enum::MleEnum, MleIndex};
@@ -25,7 +25,7 @@ pub struct ZeroMle<F> {
     indexed: bool,
 }
 
-impl<F: FieldExt> ZeroMle<F> {
+impl<F: Field> ZeroMle<F> {
     /// Constructs a new `ZeroMle` on `num_vars` variables with the
     /// appropriate `prefix_bits` for a layer with ID `layer_id`.
     pub fn new(num_vars: usize, prefix_bits: Option<Vec<MleIndex<F>>>, layer_id: LayerId) -> Self {
@@ -65,7 +65,7 @@ impl<F: FieldExt> ZeroMle<F> {
     }
 }
 
-impl<F: FieldExt> Mle<F> for ZeroMle<F> {
+impl<F: Field> Mle<F> for ZeroMle<F> {
     fn bookkeeping_table(&self) -> &[F] {
         &self.zero
     }
@@ -156,7 +156,7 @@ impl<F: FieldExt> Mle<F> for ZeroMle<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for ZeroMle<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for ZeroMle<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));

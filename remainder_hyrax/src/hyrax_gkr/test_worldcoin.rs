@@ -12,7 +12,7 @@ use remainder_shared_types::{
         poseidon_transcript::PoseidonSponge,
         test_transcript::TestSponge,
     },
-    FieldExt, Poseidon,
+    Field, Poseidon,
 };
 
 use crate::{

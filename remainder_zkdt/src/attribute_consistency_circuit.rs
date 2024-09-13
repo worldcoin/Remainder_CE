@@ -1,5 +1,5 @@
 use remainder::layouter::{component::Component, nodes::ClaimableNode};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use remainder::{
     layouter::nodes::{circuit_outputs::OutputNode, sector::Sector, CircuitNode, Context},
@@ -7,11 +7,11 @@ use remainder::{
 };
 
 /// this really is an equality component, will need to deduplicate this
-pub struct AttributeConsistencyComponent<F: FieldExt> {
+pub struct AttributeConsistencyComponent<F: Field> {
     attr_cons_sector: Sector<F>,
 }
 
-impl<F: FieldExt> AttributeConsistencyComponent<F> {
+impl<F: Field> AttributeConsistencyComponent<F> {
     pub fn new(
         ctx: &Context,
         permuted_input: impl ClaimableNode<F = F>,
@@ -34,7 +34,7 @@ impl<F: FieldExt> AttributeConsistencyComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for AttributeConsistencyComponent<F>
+impl<F: Field, N> Component<N> for AttributeConsistencyComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
 {

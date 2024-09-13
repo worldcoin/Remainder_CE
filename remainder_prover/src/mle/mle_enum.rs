@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::{
     transcript::{TranscriptSponge, TranscriptWriter},
-    FieldExt,
+    Field,
 };
 
 use crate::{
@@ -17,15 +17,15 @@ use super::{dense::DenseMle, zero::ZeroMle, MleIndex};
 
 /// A wrapper type for various kinds of [MleRef]s.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(bound = "F: FieldExt")]
-pub enum MleEnum<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub enum MleEnum<F: Field> {
     /// A [DenseMle] variant.
     Dense(DenseMle<F>),
     /// A [ZeroMle] variant.
     Zero(ZeroMle<F>),
 }
 
-impl<F: FieldExt> Mle<F> for MleEnum<F> {
+impl<F: Field> Mle<F> for MleEnum<F> {
     fn bookkeeping_table(&self) -> &[F] {
         match self {
             MleEnum::Dense(item) => item.bookkeeping_table(),
@@ -124,7 +124,7 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MleEnum<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for MleEnum<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
             MleEnum::Dense(layer) => layer.get_claims(),
@@ -133,13 +133,13 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MleEnum<F> {
     }
 }
 
-impl<F: FieldExt> From<DenseMle<F>> for MleEnum<F> {
+impl<F: Field> From<DenseMle<F>> for MleEnum<F> {
     fn from(value: DenseMle<F>) -> Self {
         Self::Dense(value)
     }
 }
 
-impl<F: FieldExt> From<ZeroMle<F>> for MleEnum<F> {
+impl<F: Field> From<ZeroMle<F>> for MleEnum<F> {
     fn from(value: ZeroMle<F>) -> Self {
         Self::Zero(value)
     }

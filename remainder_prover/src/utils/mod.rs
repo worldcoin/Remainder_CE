@@ -15,7 +15,7 @@ pub(crate) mod test_utils;
 /// FIXME the functions below are uncategorized and probably should be moved to a more appropriate
 /// module or submodule.
 
-use remainder_shared_types::{FieldExt, Poseidon};
+use remainder_shared_types::{Field, Poseidon};
 
 use crate::{
     layer::layer_enum::LayerEnum,
@@ -25,7 +25,7 @@ use crate::{
 
 /// Hashes the layers of a GKR circuit by calling their circuit descriptions
 /// Returns one single Field element
-pub fn hash_layers<F: FieldExt>(layers: &Layers<F, LayerEnum<F>>) -> F {
+pub fn hash_layers<F: Field>(layers: &Layers<F, LayerEnum<F>>) -> F {
     let mut sponge: Poseidon<F, 3, 2> = Poseidon::new(8, 57);
 
     layers.layers.iter().for_each(|layer| {

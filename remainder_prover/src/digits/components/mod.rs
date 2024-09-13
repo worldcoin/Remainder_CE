@@ -1,5 +1,5 @@
 use itertools::{all, Itertools};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::{abstract_expr::{calculate_selector_values, AbstractExpr}, generic_expr::Expression},
@@ -16,12 +16,12 @@ use crate::{
 mod tests;
 
 /// Component performing digital recomposition of an unsigned integer, i.e. deriving the number from its digits.
-pub struct UnsignedRecomposition<F: FieldExt> {
+pub struct UnsignedRecomposition<F: Field> {
     /// The recomposed numbers
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> UnsignedRecomposition<F> {
+impl<F: Field> UnsignedRecomposition<F> {
     /// Each of the Nodes in `mles` specifies the digits for a different "decimal place".  Most
     /// significant digit comes first.
     pub fn new(ctx: &Context, mles: &[&dyn ClaimableNode<F = F>], base: u64) -> Self {
@@ -65,7 +65,7 @@ impl<F: FieldExt> UnsignedRecomposition<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for UnsignedRecomposition<F>
+impl<F: Field, N> Component<N> for UnsignedRecomposition<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -78,12 +78,12 @@ where
 /// To be used in conjunction with [UnsignedRecomposition].
 /// See [crate::digits::complementary_decomposition] and [Notion](https://www.notion.so/Constraining-for-the-response-zero-case-using-the-complementary-representation-d77ddfe258a74a9ab949385cc6f7eda4).
 /// Add self.sector to the circuit as an output layer to enforce this constraint.
-pub struct ComplementaryRecompChecker<F: FieldExt> {
+pub struct ComplementaryRecompChecker<F: Field> {
     /// To be added to the circuit as an output layer by the caller.
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> ComplementaryRecompChecker<F> {
+impl<F: Field> ComplementaryRecompChecker<F> {
     /// Create a new ComplementaryDecompChecker.
     /// `values` are the original values.
     /// `bits` are the bits of the complementary decomposition.
@@ -133,7 +133,7 @@ impl<F: FieldExt> ComplementaryRecompChecker<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for ComplementaryRecompChecker<F>
+impl<F: Field, N> Component<N> for ComplementaryRecompChecker<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -144,12 +144,12 @@ where
 
 /// Ensures that each bit is either 0 or 1. Add self.sector to the circuit as an output layer to
 /// enforce this constraint.
-pub struct BitsAreBinary<F: FieldExt> {
+pub struct BitsAreBinary<F: Field> {
     /// To be added to the circuit as an output layer by the caller.
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> BitsAreBinary<F> {
+impl<F: Field> BitsAreBinary<F> {
     /// Creates a new BitsAreBinary component.
     pub fn new(
         ctx: &Context,
@@ -179,7 +179,7 @@ impl<F: FieldExt> BitsAreBinary<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for BitsAreBinary<F>
+impl<F: Field, N> Component<N> for BitsAreBinary<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -191,12 +191,12 @@ where
 /// A component that concatenates all the separate digit MLEs (there is one for each digital place)
 /// into a single MLE using a selector tree.
 /// (Necessary to interact with logup).
-pub struct DigitsConcatenator<F: FieldExt> {
+pub struct DigitsConcatenator<F: Field> {
     /// The sector that concatenates the digits (to be constrained by the lookup)
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> DigitsConcatenator<F> {
+impl<F: Field> DigitsConcatenator<F> {
     /// Create a new DigitsConcatenator component.
     pub fn new(ctx: &Context, mles: &[&dyn ClaimableNode<F = F>]) -> Self {
         let num_digits = mles.len();
@@ -230,7 +230,7 @@ impl<F: FieldExt> DigitsConcatenator<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DigitsConcatenator<F>
+impl<F: Field, N> Component<N> for DigitsConcatenator<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {

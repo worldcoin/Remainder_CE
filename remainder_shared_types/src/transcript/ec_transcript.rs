@@ -1,10 +1,9 @@
 use crate::{curves, HasByteRepresentation};
 use ff::PrimeField;
-use halo2curves::group::ff::Field;
 use itertools::Itertools;
 use tracing::warn;
 
-use crate::{curves::PrimeOrderCurve, FieldExt};
+use crate::{curves::PrimeOrderCurve, Field};
 
 use super::{
     Operation, ProverTranscript, Transcript, TranscriptReaderError, TranscriptSponge,
@@ -443,7 +442,7 @@ impl<C: PrimeOrderCurve, T: Default> ECTranscriptReader<C, T> {
 
 impl<
         C: PrimeOrderCurve,
-        F: FieldExt<Repr = <C::Base as PrimeField>::Repr>,
+        F: Field<Repr = <C::Base as PrimeField>::Repr>,
         T: TranscriptSponge<F>,
     > VerifierTranscript<F> for ECTranscriptReader<C, T>
 {

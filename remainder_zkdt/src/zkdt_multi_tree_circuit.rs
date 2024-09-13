@@ -1,7 +1,7 @@
-// use remainder_shared_types::FieldExt;
+// use remainder_shared_types::Field;
 
 // /// The actual ZKDT circuit!
-// pub struct ZKDTMultiTreeCircuit<F: FieldExt> {
+// pub struct ZKDTMultiTreeCircuit<F: Field> {
 //     /// All of the input MLEs coming from the data generation pipeline
 //     pub batched_zkdt_circuit_mles_tree: BatchedZKDTCircuitMlesMultiTree<F>,
 //     /// The filepath to the precommitted tree that we are proving

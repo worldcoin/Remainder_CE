@@ -16,7 +16,7 @@ use remainder::{
     mle::{dense::DenseMle, Mle},
     prover::helpers::test_circuit,
 };
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 use utils::{get_input_shred_from_vec, DifferenceBuilderComponent, ProductScaledBuilderComponent};
 
 use crate::utils::get_dummy_random_mle_vec;
@@ -34,12 +34,12 @@ pub mod utils;
 ///
 /// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
 
-struct NonSelectorDataparallelComponent<F: FieldExt> {
+struct NonSelectorDataparallelComponent<F: Field> {
     first_layer_component: ProductScaledBuilderComponent<F>,
     output_component: DifferenceBuilderComponent<F>,
 }
 
-impl<F: FieldExt> NonSelectorDataparallelComponent<F> {
+impl<F: Field> NonSelectorDataparallelComponent<F> {
     /// A simple wrapper around the [TripleNestedBuilderComponent] which
     /// additionally contains a [DifferenceBuilderComponent] for zero output
     pub fn new(
@@ -60,7 +60,7 @@ impl<F: FieldExt> NonSelectorDataparallelComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for NonSelectorDataparallelComponent<F>
+impl<F: Field, N> Component<N> for NonSelectorDataparallelComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
 {

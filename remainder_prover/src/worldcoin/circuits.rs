@@ -15,7 +15,7 @@ use crate::utils::mle::get_input_shred_from_vec;
 use crate::worldcoin::components::Subtractor;
 use crate::worldcoin::data::CircuitData;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 /// Builds the iriscode circuit.
 ///

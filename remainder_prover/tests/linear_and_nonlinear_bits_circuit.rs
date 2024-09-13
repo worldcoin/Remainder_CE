@@ -16,7 +16,7 @@ use remainder::{
     mle::evals::MultilinearExtension,
     prover::helpers::test_circuit,
 };
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 use utils::{get_dummy_input_shred, DifferenceBuilderComponent};
 
 pub mod utils;
@@ -30,11 +30,11 @@ pub mod utils;
 /// * `sel_mle` - An MLE with arbitrary bookkeeping table values.
 /// * `prod_mle` - An MLE with arbitrary bookkeeping table values; same size as `sel_mle`.
 
-pub struct LastBitLinearBuilderComponent<F: FieldExt> {
+pub struct LastBitLinearBuilderComponent<F: Field> {
     pub first_layer_sector: Sector<F>,
 }
 
-impl<F: FieldExt> LastBitLinearBuilderComponent<F> {
+impl<F: Field> LastBitLinearBuilderComponent<F> {
     pub fn new(
         ctx: &Context,
         sel_node: &dyn ClaimableNode<F = F>,
@@ -87,7 +87,7 @@ impl<F: FieldExt> LastBitLinearBuilderComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for LastBitLinearBuilderComponent<F>
+impl<F: Field, N> Component<N> for LastBitLinearBuilderComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -103,11 +103,11 @@ where
 ///
 /// ## Arguments
 /// * `sel_mle` - An MLE with arbitrary bookkeeping table values.
-pub struct FirstBitLinearBuilderComponent<F: FieldExt> {
+pub struct FirstBitLinearBuilderComponent<F: Field> {
     pub first_layer_sector: Sector<F>,
 }
 
-impl<F: FieldExt> FirstBitLinearBuilderComponent<F> {
+impl<F: Field> FirstBitLinearBuilderComponent<F> {
     pub fn new(ctx: &Context, sel_node: &dyn ClaimableNode<F = F>) -> Self {
         let last_bit_linear_sector = Sector::new(
             ctx,
@@ -143,7 +143,7 @@ impl<F: FieldExt> FirstBitLinearBuilderComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for FirstBitLinearBuilderComponent<F>
+impl<F: Field, N> Component<N> for FirstBitLinearBuilderComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {

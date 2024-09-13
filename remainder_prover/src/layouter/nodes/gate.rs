@@ -1,7 +1,7 @@
 //! A Module for adding `Gate` Layers to components
 
 use ark_std::log2;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
@@ -18,7 +18,7 @@ use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
-pub struct GateNode<F: FieldExt> {
+pub struct GateNode<F: Field> {
     id: NodeId,
     num_dataparallel_bits: Option<usize>,
     nonzero_gates: Vec<(usize, usize, usize)>,
@@ -28,7 +28,7 @@ pub struct GateNode<F: FieldExt> {
     data: MultilinearExtension<F>,
 }
 
-impl<F: FieldExt> CircuitNode for GateNode<F> {
+impl<F: Field> CircuitNode for GateNode<F> {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -38,7 +38,7 @@ impl<F: FieldExt> CircuitNode for GateNode<F> {
     }
 }
 
-impl<F: FieldExt> GateNode<F> {
+impl<F: Field> GateNode<F> {
     /// Constructs a new GateNode and computes the data it generates
     pub fn new(
         ctx: &Context,
@@ -95,7 +95,7 @@ impl<F: FieldExt> GateNode<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode for GateNode<F> {
+impl<F: Field> ClaimableNode for GateNode<F> {
     type F = F;
 
     fn get_data(&self) -> &MultilinearExtension<Self::F> {
@@ -107,7 +107,7 @@ impl<F: FieldExt> ClaimableNode for GateNode<F> {
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Gate<F>>> CompilableNode<F, Pf>
+impl<F: Field, Pf: ProofSystem<F, Layer = L>, L: From<Gate<F>>> CompilableNode<F, Pf>
     for GateNode<F>
 {
     fn compile<'a>(

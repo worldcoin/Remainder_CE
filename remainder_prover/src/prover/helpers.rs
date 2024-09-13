@@ -3,7 +3,7 @@ use ark_std::{end_timer, start_timer};
 
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use serde_json;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
@@ -12,7 +12,7 @@ use std::path::Path;
 use super::proof_system::ProofSystem;
 
 /// Boilerplate code for testing a circuit
-pub fn test_circuit<F: FieldExt, C: GKRCircuit<F, ProofSystem = PR>, PR>(
+pub fn test_circuit<F: Field, C: GKRCircuit<F, ProofSystem = PR>, PR>(
     mut circuit: C,
     path: Option<&Path>,
 ) where

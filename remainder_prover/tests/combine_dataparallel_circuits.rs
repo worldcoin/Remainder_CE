@@ -16,7 +16,7 @@ use remainder::{
     mle::{dense::DenseMle, Mle},
     prover::helpers::test_circuit,
 };
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 use utils::{
     ConstantScaledSumBuilderComponent, DifferenceBuilderComponent, ProductScaledBuilderComponent,
     ProductSumBuilderComponent,
@@ -25,13 +25,13 @@ use utils::{
 use crate::utils::{get_dummy_random_mle, get_input_shred_from_vec};
 pub mod utils;
 
-struct DataParallelConstantScaledCircuitAltComponent<F: FieldExt> {
+struct DataParallelConstantScaledCircuitAltComponent<F: Field> {
     first_layer_component: ConstantScaledSumBuilderComponent<F>,
     second_layer_component: ProductScaledBuilderComponent<F>,
     output_component: DifferenceBuilderComponent<F>,
 }
 
-impl<F: FieldExt> DataParallelConstantScaledCircuitAltComponent<F> {
+impl<F: Field> DataParallelConstantScaledCircuitAltComponent<F> {
     /// A circuit which takes in two vectors of MLEs of the same size:
     /// * Layer 0: [ConstantScaledSumBuilderComponent] with the two inputs
     /// * Layer 1: [ProductScaledBuilderComponent] with the output of Layer 0 and `mle_1_vec`
@@ -67,7 +67,7 @@ impl<F: FieldExt> DataParallelConstantScaledCircuitAltComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DataParallelConstantScaledCircuitAltComponent<F>
+impl<F: Field, N> Component<N> for DataParallelConstantScaledCircuitAltComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
 {
@@ -81,13 +81,13 @@ where
     }
 }
 
-struct DataParallelSumConstantCircuitAltComponent<F: FieldExt> {
+struct DataParallelSumConstantCircuitAltComponent<F: Field> {
     first_layer_component: ProductSumBuilderComponent<F>,
     second_layer_component: ConstantScaledSumBuilderComponent<F>,
     output_component: DifferenceBuilderComponent<F>,
 }
 
-impl<F: FieldExt> DataParallelSumConstantCircuitAltComponent<F> {
+impl<F: Field> DataParallelSumConstantCircuitAltComponent<F> {
     /// A circuit which takes in two vectors of MLEs of the same size:
     /// * Layer 0: [ProductSumBuilderComponent] with the two inputs
     /// * Layer 1: [ConstantScaledSumBuilderComponent] with the output of Layer 0 and `mle_1_vec`
@@ -122,7 +122,7 @@ impl<F: FieldExt> DataParallelSumConstantCircuitAltComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DataParallelSumConstantCircuitAltComponent<F>
+impl<F: Field, N> Component<N> for DataParallelSumConstantCircuitAltComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
 {
@@ -136,13 +136,13 @@ where
     }
 }
 
-struct DataParallelProductScaledSumCircuitAltComponent<F: FieldExt> {
+struct DataParallelProductScaledSumCircuitAltComponent<F: Field> {
     first_layer_component: ProductScaledBuilderComponent<F>,
     second_layer_component: ProductSumBuilderComponent<F>,
     output_component: DifferenceBuilderComponent<F>,
 }
 
-impl<F: FieldExt> DataParallelProductScaledSumCircuitAltComponent<F> {
+impl<F: Field> DataParallelProductScaledSumCircuitAltComponent<F> {
     /// A circuit which takes in two vectors of MLEs of the same size:
     /// * Layer 0: [ProductScaledBuilderComponent] with the two inputs
     /// * Layer 1: [ProductSumBuilderComponent] with the output of Layer 0 and `mle_1_vec`
@@ -178,7 +178,7 @@ impl<F: FieldExt> DataParallelProductScaledSumCircuitAltComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DataParallelProductScaledSumCircuitAltComponent<F>
+impl<F: Field, N> Component<N> for DataParallelProductScaledSumCircuitAltComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
 {

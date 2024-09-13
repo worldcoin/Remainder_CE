@@ -15,15 +15,15 @@ use remainder::{
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     prover::helpers::test_circuit,
 };
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 use utils::{get_dummy_random_mle, get_input_shred_from_vec};
 pub mod utils;
 
-pub struct DataParallelRecombinationInterleaveBuilder<F: FieldExt> {
+pub struct DataParallelRecombinationInterleaveBuilder<F: Field> {
     pub first_layer_sector: Sector<F>,
 }
 
-impl<F: FieldExt> DataParallelRecombinationInterleaveBuilder<F> {
+impl<F: Field> DataParallelRecombinationInterleaveBuilder<F> {
     pub fn new(
         ctx: &Context,
         mle_1: &dyn ClaimableNode<F = F>,
@@ -83,7 +83,7 @@ impl<F: FieldExt> DataParallelRecombinationInterleaveBuilder<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DataParallelRecombinationInterleaveBuilder<F>
+impl<F: Field, N> Component<N> for DataParallelRecombinationInterleaveBuilder<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -92,11 +92,11 @@ where
     }
 }
 
-pub struct DataParallelRecombinationStackBuilder<F: FieldExt> {
+pub struct DataParallelRecombinationStackBuilder<F: Field> {
     pub first_layer_sector: Sector<F>,
 }
 
-impl<F: FieldExt> DataParallelRecombinationStackBuilder<F> {
+impl<F: Field> DataParallelRecombinationStackBuilder<F> {
     pub fn new(
         ctx: &Context,
         mle_1: &dyn ClaimableNode<F = F>,
@@ -147,7 +147,7 @@ impl<F: FieldExt> DataParallelRecombinationStackBuilder<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DataParallelRecombinationStackBuilder<F>
+impl<F: Field, N> Component<N> for DataParallelRecombinationStackBuilder<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -156,12 +156,12 @@ where
     }
 }
 
-pub struct DiffTwoInputsBuilder<F: FieldExt> {
+pub struct DiffTwoInputsBuilder<F: Field> {
     pub first_layer_sector: Sector<F>,
     pub output_sector: OutputNode<F>,
 }
 
-impl<F: FieldExt> DiffTwoInputsBuilder<F> {
+impl<F: Field> DiffTwoInputsBuilder<F> {
     pub fn new(
         ctx: &Context,
         mle_1: &dyn ClaimableNode<F = F>,
@@ -196,7 +196,7 @@ impl<F: FieldExt> DiffTwoInputsBuilder<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DiffTwoInputsBuilder<F>
+impl<F: Field, N> Component<N> for DiffTwoInputsBuilder<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
 {

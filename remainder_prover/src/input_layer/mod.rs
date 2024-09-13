@@ -8,7 +8,7 @@ use crate::layer::regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIM
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use rayon::prelude::*;
-use remainder_shared_types::{transcript::TranscriptReaderError, FieldExt};
+use remainder_shared_types::{transcript::TranscriptReaderError, Field};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -70,7 +70,7 @@ pub enum InputLayerError {
 use log::{debug, info};
 /// The InputLayer trait in which the evaluation proof, commitment, and proof/verification
 /// process takes place for input layers.
-pub trait InputLayer<F: FieldExt> {
+pub trait InputLayer<F: Field> {
     /// The struct that contains the commitment to the contents of the input_layer.
     type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
 
@@ -111,7 +111,7 @@ pub trait InputLayer<F: FieldExt> {
     fn get_padded_mle(&self) -> DenseMle<F>;
 }
 
-pub trait VerifierInputLayer<F: FieldExt> {
+pub trait VerifierInputLayer<F: Field> {
     /// The struct that contains the commitment to the contents of the input_layer.
     type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
 
@@ -135,13 +135,13 @@ pub trait VerifierInputLayer<F: FieldExt> {
 }
 
 /// Adapter for InputLayerBuilder, implement for InputLayers that can be built out of flat MLEs.
-pub trait MleInputLayer<F: FieldExt>: InputLayer<F> {
+pub trait MleInputLayer<F: Field>: InputLayer<F> {
     /// Creates a new InputLayer from a flat mle.
     fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self;
 }
 
 /// Computes the V_d(l(x)) evaluations for the input layer V_d.
-fn get_wlx_evaluations_helper<F: FieldExt>(
+fn get_wlx_evaluations_helper<F: Field>(
     mut mle_ref: MultilinearExtension<F>,
     claim_vecs: &[Vec<F>],
     claimed_vals: &[F],
