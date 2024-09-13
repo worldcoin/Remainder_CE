@@ -5,7 +5,6 @@ members = [
     "remainder_shared_types",
     "remainder_ligero",
     "remainder_hyrax",
-    "remainder_zkdt",
 ]
 
 resolver = "2"
