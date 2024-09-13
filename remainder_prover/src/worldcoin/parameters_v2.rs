@@ -1,9 +1,9 @@
-/// The number of rows of the result of the matrix multiplication
-pub const MATMULT_NUM_ROWS: usize = 1 << 12;
-/// The number of columns of the result of the matrix multiplication
-pub const MATMULT_NUM_COLS: usize = 4;
-/// The internal dimension of the matrix multiplication
-pub const MATMULT_INTERNAL_DIM: usize = 1 << 11;
+/// The number of variables for the rows of the result of the matrix multiplication
+pub const MATMULT_NUM_ROWS_VARS: usize = 12;
+/// The number of variables for the columns of the result of the matrix multiplication
+pub const MATMULT_NUM_COLS_VARS: usize = 2;
+/// The number of internal dimension variables of the matrix multiplication
+pub const MATMULT_INTERNAL_DIM_VARS: usize = 11;
 
 // Constants defining the digit decomposition of the WC circuit.
 const LOG_NUM_DIGITS: usize = 2;

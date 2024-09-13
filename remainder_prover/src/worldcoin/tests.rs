@@ -27,16 +27,16 @@ fn test_trivial_wiring_2x2_odd_kernel_dims_circuit_data() {
 #[test]
 fn test_worldcoin_circuit_iris_v2() {
     use super::parameters_v2::{
-        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS, MATMULT_NUM_ROWS,
-        NUM_DIGITS,
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM_VARS, MATMULT_NUM_COLS_VARS,
+        MATMULT_NUM_ROWS_VARS, NUM_DIGITS,
     };
     let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
     let image_path = path.join("iris/test_image.npy");
     let data = load_worldcoin_data::<
         Fr,
-        MATMULT_NUM_ROWS,
-        MATMULT_NUM_COLS,
-        MATMULT_INTERNAL_DIM,
+        MATMULT_NUM_ROWS_VARS,
+        MATMULT_NUM_COLS_VARS,
+        MATMULT_INTERNAL_DIM_VARS,
         BASE,
         NUM_DIGITS,
     >(path.clone(), image_path, false);
@@ -48,16 +48,16 @@ fn test_worldcoin_circuit_iris_v2() {
 #[test]
 fn test_worldcoin_circuit_mask_v2() {
     use super::parameters_v2::{
-        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS, MATMULT_NUM_ROWS,
-        NUM_DIGITS,
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM_VARS, MATMULT_NUM_COLS_VARS,
+        MATMULT_NUM_ROWS_VARS, NUM_DIGITS,
     };
     let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
     let image_path = path.join("mask/test_image.npy");
     let data = load_worldcoin_data::<
         Fr,
-        MATMULT_NUM_ROWS,
-        MATMULT_NUM_COLS,
-        MATMULT_INTERNAL_DIM,
+        MATMULT_NUM_ROWS_VARS,
+        MATMULT_NUM_COLS_VARS,
+        MATMULT_INTERNAL_DIM_VARS,
         BASE,
         NUM_DIGITS,
     >(path.clone(), image_path, true);
@@ -112,8 +112,8 @@ fn test_worldcoin_circuit_mask_v3() {
 /// the CircuitData instance can be constructed.
 fn test_load_worldcoin_data_v2() {
     use super::parameters_v2::{
-        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS, MATMULT_NUM_ROWS,
-        NUM_DIGITS,
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM_VARS, MATMULT_NUM_COLS_VARS,
+        MATMULT_NUM_ROWS_VARS, NUM_DIGITS,
     };
     use remainder_shared_types::Fr;
     use std::path::Path;
@@ -122,9 +122,9 @@ fn test_load_worldcoin_data_v2() {
     let image_path = path.join("iris/test_image.npy");
     let data = load_worldcoin_data::<
         Fr,
-        MATMULT_NUM_ROWS,
-        MATMULT_NUM_COLS,
-        MATMULT_INTERNAL_DIM,
+        MATMULT_NUM_ROWS_VARS,
+        MATMULT_NUM_COLS_VARS,
+        MATMULT_INTERNAL_DIM_VARS,
         BASE,
         NUM_DIGITS,
     >(path.clone(), image_path, false);
@@ -133,9 +133,9 @@ fn test_load_worldcoin_data_v2() {
     let image_path = path.join("mask/test_image.npy");
     let data = load_worldcoin_data::<
         Fr,
-        MATMULT_NUM_ROWS,
-        MATMULT_NUM_COLS,
-        MATMULT_INTERNAL_DIM,
+        MATMULT_NUM_ROWS_VARS,
+        MATMULT_NUM_COLS_VARS,
+        MATMULT_INTERNAL_DIM_VARS,
         BASE,
         NUM_DIGITS,
     >(path.clone(), image_path, true);
