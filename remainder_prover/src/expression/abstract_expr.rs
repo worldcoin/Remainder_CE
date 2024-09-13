@@ -11,10 +11,12 @@ use std::{
 use remainder_shared_types::Field;
 
 use crate::{
-    expression, layouter::{
+    expression,
+    layouter::{
         layouting::{CircuitMap, DAGError},
         nodes::NodeId,
-    }, mle::{dense::DenseMle, MleIndex}
+    },
+    mle::{dense::DenseMle, MleIndex},
 };
 
 use super::{
