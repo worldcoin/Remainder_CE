@@ -68,6 +68,18 @@ macro_rules! layer_enum {
                     }
                 }
 
+                fn compute_data_outputs(
+                    &self,
+                    mle_outputs_necessary: &[&crate::expression::circuit_expr::CircuitMle<F>],
+                    circuit_map: &mut crate::layouter::layouting::CircuitMap<F>,
+                ) -> bool {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.compute_data_outputs(mle_outputs_necessary, circuit_map),
+                        )*
+                    }
+                }
+
                 fn verify_rounds(
                     &self,
                     claim: $crate::claims::Claim<F>,
@@ -247,18 +259,6 @@ macro_rules! layer_enum {
                 match self {
                     $(
                         Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges),
-                    )*
-                }
-            }
-
-            fn compute_data_outputs(
-                &self,
-                mle_outputs_necessary: &[&crate::expression::circuit_expr::CircuitMle<F>],
-                circuit_map: &mut crate::layouter::layouting::CircuitMap<F>,
-            ) {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.compute_data_outputs(mle_outputs_necessary, circuit_map),
                     )*
                 }
             }
