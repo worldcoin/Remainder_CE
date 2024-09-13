@@ -73,6 +73,9 @@ impl<F: FieldExt> ExpressionType<F> for ProverExpr {
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
 impl<F: FieldExt> Expression<F, ProverExpr> {
     /// Concatenates two expressions together
+    ///
+    /// See documentation in [super::circuit_expr::CircuitExpr]'s `concat_expr`
+    /// function for more details!
     pub fn concat_expr(mut self, lhs: Expression<F, ProverExpr>) -> Self {
         let offset = lhs.num_mle_ref();
         self.increment_mle_vec_indices(offset);
@@ -80,8 +83,48 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         let (lhs_node, lhs_mle_vec) = lhs.deconstruct();
         let (rhs_node, rhs_mle_vec) = self.deconstruct();
 
-        let concat_node =
-            ExpressionNode::Selector(MleIndex::Iterated, Box::new(lhs_node), Box::new(rhs_node));
+        // --- Compute the difference in number of iterated bits, to add the appropriate number of selectors ---
+        let lhs_num_vars = lhs_node.get_expression_size_node(0, &lhs_mle_vec);
+        let rhs_num_vars = rhs_node.get_expression_size_node(0, &rhs_mle_vec);
+        let num_left_selectors = max(0, rhs_num_vars - lhs_num_vars);
+        let num_right_selectors = max(0, lhs_num_vars - rhs_num_vars);
+
+        let lhs_subtree = if num_left_selectors > 0 {
+            // --- Always "go left" and "concatenate" against a constant zero ---
+            (0..num_left_selectors).fold(lhs_node, |cur_subtree, _| {
+                ExpressionNode::Selector(
+                    MleIndex::Iterated,
+                    Box::new(cur_subtree),
+                    Box::new(ExpressionNode::Constant(F::ZERO)),
+                )
+            })
+        } else {
+            lhs_node
+        };
+
+        let rhs_subtree = if num_right_selectors > 0 {
+            // --- Always "go left" and "concatenate" against a constant zero ---
+            (0..num_right_selectors).fold(rhs_node, |cur_subtree, _| {
+                ExpressionNode::Selector(
+                    MleIndex::Iterated,
+                    Box::new(cur_subtree),
+                    Box::new(ExpressionNode::Constant(F::ZERO)),
+                )
+            })
+        } else {
+            rhs_node
+        };
+
+        // --- Sanitycheck ---
+        let lhs_subtree_num_vars = lhs_subtree.get_expression_size_node(0, &lhs_mle_vec);
+        let rhs_subtree_num_vars = rhs_subtree.get_expression_size_node(0, &rhs_mle_vec);
+        debug_assert_eq!(lhs_subtree_num_vars, rhs_subtree_num_vars);
+
+        let concat_node = ExpressionNode::Selector(
+            MleIndex::Iterated,
+            Box::new(lhs_subtree),
+            Box::new(rhs_subtree),
+        );
         let concat_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect_vec();
 
         Expression::new(concat_node, concat_mle_vec)
