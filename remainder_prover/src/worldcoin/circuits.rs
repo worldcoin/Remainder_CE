@@ -40,7 +40,7 @@ use remainder_shared_types::Field;
 ///
 /// See [CircuitData] for a detailed description of each generic and argument.
 pub fn build_circuit<
-    F: FieldExt,
+    F: Field,
     const MATMULT_NUM_ROWS_VARS: usize,
     const MATMULT_NUM_COLS_VARS: usize,
     const MATMULT_INTERNAL_DIM_VARS: usize,
