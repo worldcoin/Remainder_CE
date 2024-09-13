@@ -4,13 +4,13 @@ use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 use crate::utils::{get_ligero_matrix_dims, halo2_fft};
-use crate::FieldExt;
+use crate::Field;
 use crate::{def_labels, LcCommit, LcEncoding, LcEvalProof, LcRoot};
 
 /// Auxiliary struct which simply keeps track of Ligero hyperparameters, e.g.
 /// the matrix width and code rate.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct LigeroAuxInfo<F: FieldExt> {
+pub struct LigeroAuxInfo<F: Field> {
     /// Width of the M matrix representing the original polynomial's coeffs
     pub orig_num_cols: usize,
     /// Width of the M' matrix representing the encoded version of M's rows
@@ -31,7 +31,7 @@ pub const N_COL_OPENS: usize = 200usize;
 
 impl<F> LigeroAuxInfo<F>
 where
-    F: FieldExt,
+    F: Field,
 {
     /// Grabs the matrix dimensions for M and M'
     pub fn get_dims(len: usize, rho_inv: u8, ratio: f64) -> (usize, usize, usize) {
@@ -73,7 +73,7 @@ where
 
 impl<F> LcEncoding<F> for LigeroAuxInfo<F>
 where
-    F: FieldExt,
+    F: Field,
 {
     type Err = &'static str;
 

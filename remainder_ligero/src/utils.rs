@@ -1,7 +1,7 @@
 use std::iter::repeat_with;
 
 use crate::log2;
-use crate::FieldExt;
+use crate::Field;
 use halo2_proofs::poly::EvaluationDomain;
 use rand::Rng;
 
@@ -11,7 +11,7 @@ use rand::Rng;
 /// ## Arguments
 /// * `ml_num_vars` - Number of variables within the MLE.
 /// * `rng` - RNG to be used for generation.
-pub fn get_random_coeffs_for_multilinear_poly<F: FieldExt>(
+pub fn get_random_coeffs_for_multilinear_poly<F: Field>(
     ml_num_vars: usize,
     rng: &mut impl Rng,
 ) -> Vec<F> {
@@ -65,7 +65,7 @@ pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8, ratio: f64) -> (usiz
 /// ## Returns
 /// * `evals` - Evaluations over the roots-of-unity subset of polynomial p
 ///     represented by `coeffs`.
-pub fn halo2_fft<F: FieldExt>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
+pub fn halo2_fft<F: Field>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
     // --- Sanitycheck ---
     debug_assert!(coeffs.len().is_power_of_two());
     debug_assert!(rho_inv.is_power_of_two());
@@ -94,7 +94,7 @@ pub fn halo2_fft<F: FieldExt>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
 ///
 /// ## Returns
 /// * `coeffs` - Coefficients of univariate polynomial p.
-pub fn halo2_ifft<F: FieldExt>(evals: Vec<F>, rho_inv: u8) -> Vec<F> {
+pub fn halo2_ifft<F: Field>(evals: Vec<F>, rho_inv: u8) -> Vec<F> {
     // --- Sanitycheck ---
     debug_assert!(evals.len().is_power_of_two());
     debug_assert!(rho_inv.is_power_of_two());

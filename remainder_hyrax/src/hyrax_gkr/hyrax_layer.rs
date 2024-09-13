@@ -19,9 +19,9 @@ use remainder::{claims::wlx_eval::claim_group::ClaimGroup, layer::layer_enum::Ci
 use remainder::{claims::wlx_eval::ClaimMle, layer::CircuitLayer};
 use remainder::{claims::wlx_eval::YieldWLXEvals, layer::layer_enum::LayerEnum};
 use remainder_shared_types::curves::PrimeOrderCurve;
-use remainder_shared_types::halo2curves::group::ff::Field;
+use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 /// This struct represents what a proof looks like for one layer of GKR, but Hyrax version.
 pub struct HyraxLayerProof<C: PrimeOrderCurve> {
     /// This is the proof of the sumcheck rounds for that layer.
@@ -406,7 +406,7 @@ pub fn evaluate_committed_psl<C: PrimeOrderCurve>(
 }
 
 /// Return the claims made on other layers by the atomic factors of this product.
-pub fn get_claims_from_product<F: FieldExt, T: Clone>(
+pub fn get_claims_from_product<F: Field, T: Clone>(
     product: &Product<F, T>,
 ) -> Vec<HyraxClaim<F, T>> {
     product
@@ -457,7 +457,7 @@ impl<C: PrimeOrderCurve> HyraxClaim<C::Scalar, CommittedScalar<C>> {
 ///     to interface with claim aggregation code in remainder
 ///     C (this is the verifier's view, i.e. just the commitment)
 #[derive(Clone, Debug)]
-pub struct HyraxClaim<F: FieldExt, T> {
+pub struct HyraxClaim<F: Field, T> {
     /// Id of the layer upon which the claim is made
     pub to_layer_id: LayerId,
     /// The evaluation point

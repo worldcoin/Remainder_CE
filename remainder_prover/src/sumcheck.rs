@@ -1,11 +1,46 @@
-//! Contains cryptographic algorithms for going through the sumcheck protocol
+//! Contains cryptographic algorithms for going through the sumcheck protocol in
+//! the context of a GKR prover.
+//!
+//! Let `P: F^n -> F` denote the polynomial [Expression] used to define some GKR
+//! Layer. This means that the value at a certain index `b \in {0, 1}^n` of the
+//! layer is given by `P(b)`. Denote by `V: {0, 1}^n -> F` the restriction
+//! of `P` on the hypercube.
+//!
+//! As part of the GKR protocol, the prover needs to assert the following
+//! statement about the multilinear extention `\tilde{V}: F^n -> F` of `V`:
+//! ```text
+//!     \tilde{V}(g_1, ..., g_n) = r \in F`,
+//!         for some challenges g_1, ..., g_n \in F                    (1)
+//! ```
+//! (Note that, in general, `P` and `\tilde{V}` are different functions.
+//!  They are both extensions of `V`, but `\tilde{V}` is a linear polynomial
+//!  on each of it's variables).
+//!
+//! The left-hand side of (1) can be expressed as a sum over the hypercube
+//! as follows:
+//! ```text
+//!     \sum_{b_1 \in {0, 1}}
+//!     \sum_{b_2 \in {0, 1}}
+//!         ...
+//!     \sum_{b_n \in {0, 1}}
+//!        \beta(b_1, ..., b_n, g_1, ..., g_n) * P(b_1, b_2, ..., b_n) = r  (2)
+//! ```
+//! where `\beta` is the following polynomial extending the equality predicate:
+//! ```text
+//!     \beta(b_1, ..., b_n, g_1, ..., g_n) =
+//!         \prod_{i = 1}^n [ b_i * g_i + (1 - b_i) * (1 - g_i) ]
+//! ```
+//!
+//! The functions in this module run the sumcheck protocol on expressions
+//! of the form described in equation (2). See the documentation of
+//! `compute_sumcheck_message_beta_cascade` for more information.
 
 use std::{
     iter::repeat,
     ops::{Add, Mul, Neg},
 };
 
-/// tests for sumcheck with various expressions
+/// Tests for sumcheck with various expressions.
 #[cfg(test)]
 pub mod tests;
 
@@ -23,65 +58,73 @@ use crate::{
     },
     mle::{betavalues::BetaValues, dense::DenseMle, Mle, MleIndex},
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
+/// Errors to do with the evaluation of MleRefs.
 #[derive(Error, Debug, Clone, PartialEq)]
-///Errors to do with the evaluation of MleRefs
 pub enum MleError {
+    /// Passed list of Mles is empty.
     #[error("Passed list of Mles is empty")]
-    ///Passed list of Mles is empty
     EmptyMleList,
+
+    /// Beta table not yet initialized for Mle.
     #[error("Beta table not yet initialized for Mle")]
-    ///Beta table not yet initialized for Mle
     NoBetaTable,
+
+    /// Layer does not have claims yet.
     #[error("Layer does not have claims yet")]
-    ///Layer does not have claims yet
     NoClaim,
+
+    /// Unable to eval beta.
     #[error("Unable to eval beta")]
-    ///Unable to eval beta
     BetaEvalError,
+
+    /// Cannot compute sumcheck message on un-indexed MLE.
     #[error("Cannot compute sumcheck message on un-indexed MLE")]
-    ///Cannot compute sumcheck message on un-indexed MLE
     NotIndexedError,
 }
 
+/// Verification error.
 #[derive(Error, Debug, Clone)]
-///Verification error
 pub enum VerifyError {
+    /// Failed sumcheck round.
     #[error("Failed sumcheck round")]
-    ///Failed sumcheck round
     SumcheckBad,
 }
+
+/// Error when Interpolating a univariate polynomial.
 #[derive(Error, Debug, Clone)]
-///Error when Interpolating a univariate polynomial
 pub enum InterpError {
+    /// Too few evaluation points.
     #[error("Too few evaluation points")]
-    ///Too few evaluation points
     EvalLessThanDegree,
+
+    /// No possible polynomial.
     #[error("No possible polynomial")]
-    ///No possible polynomial
     NoInverse,
 }
 
-/// A type representing the univariate message g_i(x) which the prover
-/// sends to the verifier in each round of sumcheck. Note that the prover
-/// in our case always sends evaluations g_i(0), ..., g_i(d) to the verifier,
-/// and thus the struct is called `Evals`.
+/// TODO(Makis): Give this type more structure.
+/// A type representing the univariate polynomial `g_i: F -> F` which the prover
+/// sends to the verifier in each round of sumcheck.
+/// Note that we are using an evaluation representation of polynomials,
+/// which means this type just holds the evaluations:
+/// `[g_i(0), g_i(1), ..., g_i(d)]`, where `d` is the degree of `g_i`.
 #[derive(PartialEq, Debug, Clone)]
-pub struct Evals<F: FieldExt>(pub Vec<F>);
+pub struct SumcheckEvals<F: Field>(pub Vec<F>);
 
-impl<F: FieldExt> Neg for Evals<F> {
+impl<F: Field> Neg for SumcheckEvals<F> {
     type Output = Self;
     fn neg(self) -> Self::Output {
         // --- Negation for a bunch of eval points is just element-wise negation ---
-        Evals(self.0.into_iter().map(|eval| eval.neg()).collect_vec())
+        SumcheckEvals(self.0.into_iter().map(|eval| eval.neg()).collect_vec())
     }
 }
 
-impl<F: FieldExt> Add for Evals<F> {
+impl<F: Field> Add for SumcheckEvals<F> {
     type Output = Self;
     fn add(self, rhs: Self) -> Self {
-        Evals(
+        SumcheckEvals(
             self.0
                 .into_iter()
                 .zip(rhs.0)
@@ -91,10 +134,10 @@ impl<F: FieldExt> Add for Evals<F> {
     }
 }
 
-impl<F: FieldExt> Mul<F> for Evals<F> {
+impl<F: Field> Mul<F> for SumcheckEvals<F> {
     type Output = Self;
     fn mul(self, rhs: F) -> Self {
-        Evals(
+        SumcheckEvals(
             self.0
                 .into_iter()
                 .zip(repeat(rhs))
@@ -104,10 +147,10 @@ impl<F: FieldExt> Mul<F> for Evals<F> {
     }
 }
 
-impl<F: FieldExt> Mul<&F> for Evals<F> {
+impl<F: Field> Mul<&F> for SumcheckEvals<F> {
     type Output = Self;
     fn mul(self, rhs: &F) -> Self {
-        Evals(
+        SumcheckEvals(
             self.0
                 .into_iter()
                 .zip(repeat(rhs))
@@ -117,21 +160,76 @@ impl<F: FieldExt> Mul<&F> for Evals<F> {
     }
 }
 
-/// this is the function to compute a sumcheck message using the beta cascade algorithm. instead
-/// of using a beta table to linearize an expression, we utilize the fact that for each specific
-/// node in an expression tree, we only need exactly the beta values corresponding to the
-/// indices present in that node.
-/// each different type of expression node (constant, selector, product, sum, neg, scaled, mle) is
-/// treated differently, so we create closures for each which are then evaluated by the
-/// `evaluate_sumcheck_beta_cascade` function.
-pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
+/// This is the function to compute a single-round sumcheck message using the
+/// beta cascade algorithm.
+///
+/// # Arguments
+///
+/// * `expr`: the Expression `P` defining a GKR layer. The caller is expected to
+/// have already fixed the variables of previous rounds.
+/// * `round_index`: the MLE index corresponding to the variable that is going
+/// to be the independent variable for this round. The caller is expected to
+/// have already fixed variables `1 .. (round_index - 1)` in expression `P` to
+/// the verifier's challanges.
+/// * `max_degree`: the degree of the polynomial to be exchanged in this round's
+/// sumcheck message.
+/// * `beta_value`: the `beta` function associated with expression `exp`.  It is
+/// the caller's responsibility to keep this consistent with `expr` before/after
+/// each call.
+///
+/// In particular, if `round_index == k`, and the current GKR layer expression
+/// was originally on `n` variables, `expr` is expected to represent a polynomial
+/// expression on `n - k + 1` variables:
+/// `P(r_1, r_2, ..., r_{k-1}, x_k, x_{k+1}, ..., x_n): F^{n - k + 1} -> F`,
+/// with the first `k - 1` iterated variables already fixed to random
+/// challenges `r_1, ..., r_{k-1}`.
+/// Similarly, `beta_values` should represent the polynomial:
+/// `\beta(r_1, ..., r_{k-1}, b_k, ..., b_n, g_1, ..., g_n)` whose
+/// unbound variables are `b_k, ..., b_n`.
+///
+/// # Returns
+///
+/// If successful, this functions returns a representation of the univariate
+/// polynomial:
+/// ```text
+///     g_{round_index}(x) =
+///         \sum_{b_{k+1} \in {0, 1}}
+///         \sum_{b_{k+2} \in {0, 1}}
+///             ...
+///         \sum_{b_{n} \in {0, 1}}
+///             \beta(r_1, ..., r_k, x, b_{k+1}, ..., b_{n}, g_1, ..., g_n)
+///                 * P(r_1, ..., r_k, x, b_{k+1}, ..., b_n)
+/// ```
+///
+/// # TODOs (Makis)
+/// 1. This function should be responsible for mutating `expr` and `beta_values`
+/// by fixing variables (if any) *after* the sumcheck round. It should maintain
+/// the invariant that `expr` and `beta_values` are consistent with each other!
+/// 2. `max_degree` should NOT be the caller's responsibility to compute. The
+/// degree should be determined through `expr` and `round_index`.  It is
+/// error-prone to allow for sumcheck message to go through with an arbitrary
+/// degree.
+///
+/// # Beta cascade
+///
+/// TODO(Makis): Move this paragraph somewhere else.
+/// Instead of using a beta table to linearize an expression, we
+/// utilize the fact that for each specific node in an expression tree, we only
+/// need exactly the beta values corresponding to the indices present in that
+/// node.
+pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     expr: &Expression<F, ProverExpr>,
     round_index: usize,
     max_degree: usize,
     beta_values: &BetaValues<F>,
-) -> Result<Evals<F>, ExpressionError> {
-    // a constant does not have any variables, so we do not need a beta table at all. therefore we just repeat
-    // the constant evaluation for the degree+1 number of times as this is how many evaluations we need.
+) -> Result<SumcheckEvals<F>, ExpressionError> {
+    // Each different type of expression node (constant, selector, product, sum,
+    // neg, scaled, mle) is treated differently, so we create closures for each
+    // which are then evaluated by the `evaluate_sumcheck_beta_cascade` function.
+
+    // A constant does not have any variables, so we do not need a beta table at
+    // all. Therefore we just repeat the constant evaluation for the `degree +
+    // 1` number of times as this is how many evaluations we need.
     let constant = |constant, beta_table: &BetaValues<F>| {
         let constant_updated_vals = beta_values.updated_values.values().copied().collect_vec();
         let index_claim = beta_table.unbound_values.get(&round_index).unwrap();
@@ -174,9 +272,9 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
                     // this is when the selector index is the independent variable! this means the beta
                     // value at this index also has an independent variable.
                     let first = a?;
-                    let second: Evals<F> = b?;
+                    let second: SumcheckEvals<F> = b?;
 
-                    let (Evals(first_evals), Evals(second_evals)) = (first, second);
+                    let (SumcheckEvals(first_evals), SumcheckEvals(second_evals)) = (first, second);
                     if first_evals.len() == second_evals.len() {
                         // therefore we compute the successors of the beta values as well, as the successors
                         // correspond to evaluations at the points 0, 1, ... for the independent variable.
@@ -192,7 +290,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
 
                         // the selector index also has an independent variable so we factor this as well
                         // as the corresponding beta successor at this index.
-                        let first_evals = Evals(
+                        let first_evals = SumcheckEvals(
                             first_evals
                                 .into_iter()
                                 .enumerate()
@@ -202,7 +300,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
                                 .collect(),
                         );
 
-                        let second_evals = Evals(
+                        let second_evals = SumcheckEvals(
                             second_evals
                                 .into_iter()
                                 .enumerate()
@@ -231,8 +329,8 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
                 .updated_values
                 .get(bound_round_idx)
                 .unwrap_or(one);
-            let a: Evals<F> = a?;
-            let b: Evals<F> = b?;
+            let a: SumcheckEvals<F> = a?;
+            let b: SumcheckEvals<F> = b?;
 
             // the evaluation is just scaled by the beta bound value
             Ok(((b * coeff) + (a * coeff_neg)) * *beta_bound_val)
@@ -245,7 +343,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
     let mle_eval = |mle_ref: &DenseMle<F>,
                     unbound_beta_vals: &[F],
                     bound_beta_vals: &[F]|
-     -> Result<Evals<F>, ExpressionError> {
+     -> Result<SumcheckEvals<F>, ExpressionError> {
         Ok(beta_cascade(
             &[&mle_ref.clone()],
             max_degree,
@@ -256,12 +354,12 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
     };
 
     // --- Just invert ---
-    let negated = |a: Result<_, _>| a.map(|a: Evals<F>| a.neg());
+    let negated = |a: Result<_, _>| a.map(|a: SumcheckEvals<F>| a.neg());
 
     // when we have a sum, we can evaluate both parts of the expression separately and just add the evaluations
     let sum = |a, b| {
-        let a: Evals<F> = a?;
-        let b: Evals<F> = b?;
+        let a: SumcheckEvals<F> = a?;
+        let b: SumcheckEvals<F> = b?;
         Ok(a + b)
     };
 
@@ -271,7 +369,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
     let product = |mle_refs: &[&DenseMle<F>],
                    unbound_beta_vals: &[F],
                    bound_beta_vals: &[F]|
-     -> Result<Evals<F>, ExpressionError> {
+     -> Result<SumcheckEvals<F>, ExpressionError> {
         Ok(beta_cascade(
             mle_refs,
             max_degree,
@@ -311,7 +409,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
 /// the resulting vector will always be size (degree + 1) * (2 ^ (max_num_vars - 1))
 ///
 /// this function assumes that the first variable is an independent variable.
-pub fn successors_from_mle_ref_product<F: FieldExt>(
+pub fn successors_from_mle_ref_product<F: Field>(
     mle_refs: &[&impl Mle<F>],
     degree: usize,
 ) -> Result<Vec<F>, MleError> {
@@ -384,7 +482,7 @@ pub fn successors_from_mle_ref_product<F: FieldExt>(
 /// this function performs the same funcionality as the above, except it is when the mle refs we
 /// are working with have no independent variable. therefore, we are actually just taking the
 /// sum over all of the variables and do not need evaluations.
-pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
+pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: Field>(
     mle_refs: &[&impl Mle<F>],
 ) -> Result<Vec<F>, MleError> {
     let max_num_vars = mle_refs
@@ -426,7 +524,7 @@ pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
 
 /// this is one step of the beta cascade algorithm. essentially we are doing
 /// (1 - beta_val) * mle[index] + beta_val * mle[index + half_vec_len] (big-endian version of fix variable)
-pub(crate) fn beta_cascade_step<F: FieldExt>(mle_successor_vec: &mut [F], beta_val: F) -> Vec<F> {
+pub(crate) fn beta_cascade_step<F: Field>(mle_successor_vec: &mut [F], beta_val: F) -> Vec<F> {
     let (one_minus_beta_val, beta_val) = (F::ONE - beta_val, beta_val);
     let half_vec_len = mle_successor_vec.len() / 2;
     let new_successor = cfg_into_iter!((0..half_vec_len)).map(|idx| {
@@ -437,12 +535,13 @@ pub(crate) fn beta_cascade_step<F: FieldExt>(mle_successor_vec: &mut [F], beta_v
     new_successor.collect()
 }
 
-/// this is the final step of beta cascade, where we take all the "bound" beta values
-/// and scale all of the evaluations by the product of all of these values
-fn apply_updated_beta_values_to_evals<F: FieldExt>(
+/// This is the final step of beta cascade, where we take all the "bound" beta
+/// values and scale all of the evaluations by the product of all of these
+/// values.
+fn apply_updated_beta_values_to_evals<F: Field>(
     evals: Vec<F>,
     beta_updated_vals: &[F],
-) -> Evals<F> {
+) -> SumcheckEvals<F> {
     let beta_total_updated_product = beta_updated_vals
         .iter()
         .fold(F::ONE, |acc, elem| acc * elem);
@@ -451,7 +550,7 @@ fn apply_updated_beta_values_to_evals<F: FieldExt>(
         .map(|elem| beta_total_updated_product * elem)
         .collect_vec();
 
-    Evals(evals)
+    SumcheckEvals(evals)
 }
 
 /// if there is no independent variable, beta cascade can be done the little-endian fix variable way
@@ -459,12 +558,12 @@ fn apply_updated_beta_values_to_evals<F: FieldExt>(
 ///
 /// regardless of the degree, since there is no independent variable this evaluates to a constant,
 /// so we just repeat this (degree + 1) times.
-fn beta_cascade_no_independent_variable<F: FieldExt>(
+fn beta_cascade_no_independent_variable<F: Field>(
     mle_refs: &[&impl Mle<F>],
     beta_vals: &[F],
     degree: usize,
     beta_updated_vals: &[F],
-) -> Evals<F> {
+) -> SumcheckEvals<F> {
     let mut mle_successor_vec = successors_from_mle_ref_product_no_ind_var(mle_refs).unwrap();
     if mle_successor_vec.len() > 1 {
         beta_vals.iter().for_each(|beta_val| {
@@ -487,13 +586,13 @@ fn beta_cascade_no_independent_variable<F: FieldExt>(
 /// vectors (which are unbound beta values, and the bound beta values)
 /// there are (degree + 1) evaluations that are returned which are the evaluations of the univariate
 /// polynomial where the "round_index"-th bit is the independent variable.
-pub fn beta_cascade<F: FieldExt>(
+pub fn beta_cascade<F: Field>(
     mle_refs: &[&impl Mle<F>],
     degree: usize,
     round_index: usize,
     beta_vals: &[F],
     beta_updated_vals: &[F],
-) -> Evals<F> {
+) -> SumcheckEvals<F> {
     // determine whether there is an independent variable within these mle refs by iterating through
     // all of their indices and determining whether there is an indexed bit at the round index.
     let mles_have_independent_variable = mle_refs
@@ -539,7 +638,7 @@ pub fn beta_cascade<F: FieldExt>(
 
 /// Returns the maximum degree of b_{curr_round} within an expression
 /// (and therefore the number of prover messages we need to send)
-pub(crate) fn get_round_degree<F: FieldExt>(
+pub(crate) fn get_round_degree<F: Field>(
     expr: &Expression<F, ProverExpr>,
     curr_round: usize,
 ) -> usize {
@@ -578,7 +677,7 @@ pub(crate) fn get_round_degree<F: FieldExt>(
 }
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary point
-pub fn evaluate_at_a_point<F: FieldExt>(given_evals: &[F], point: F) -> Result<F, InterpError> {
+pub fn evaluate_at_a_point<F: Field>(given_evals: &[F], point: F) -> Result<F, InterpError> {
     // Special case for the constant polynomial.
     if given_evals.len() == 1 {
         return Ok(given_evals[0]);
@@ -627,10 +726,10 @@ pub fn evaluate_at_a_point<F: FieldExt>(given_evals: &[F], point: F) -> Result<F
 /// sum_{x_2, ..., x_n} V_1(X, x_2, ..., x_n) * V_2(X, x_2, ..., x_n) * V_2(X, x_2, x_3),
 /// evaluated at X = 0, 1, ..., degree
 /// note that when one of the mle_refs have less variables, there's a wrap around: % max
-pub fn evaluate_mle_ref_product<F: FieldExt>(
+pub fn evaluate_mle_ref_product<F: Field>(
     mle_refs: &[&impl Mle<F>],
     degree: usize,
-) -> Result<Evals<F>, MleError> {
+) -> Result<SumcheckEvals<F>, MleError> {
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
@@ -696,5 +795,5 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
         },
     );
 
-    Ok(Evals(evals))
+    Ok(SumcheckEvals(evals))
 }
