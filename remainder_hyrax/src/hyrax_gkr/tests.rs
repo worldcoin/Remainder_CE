@@ -244,7 +244,7 @@ fn matmult_hyrax_layer_test() {
         vec![Fr::one(), Fr::from(4_u64), Fr::from(3_u64), Fr::from(5_u64)],
         LayerId::Layer(0),
     );
-    let matrix_a = Matrix::new(mle_1, 2, 2);
+    let matrix_a = Matrix::new(mle_1, 1, 1);
     let mle_2: DenseMle<Fr> = DenseMle::new_from_raw(
         vec![
             Fr::from(7_u64),
@@ -256,7 +256,7 @@ fn matmult_hyrax_layer_test() {
     );
 
     // Construct the Matmult layer using the above.
-    let matrix_b = Matrix::new(mle_2, 2, 2);
+    let matrix_b = Matrix::new(mle_2, 1, 1);
     let matmult_layer: MatMult<Scalar> = MatMult::new(LayerId::Layer(0), matrix_a, matrix_b);
     let mut layer_enum = LayerEnum::MatMult(Box::new(matmult_layer));
 
@@ -1123,7 +1123,7 @@ fn matmult_hyrax_input_layer_test() {
             InputLayerNode::new(ctx, None, InputLayerType::HyraxPlaceholderInputLayer);
         let input_shred = InputShred::new(ctx, input_multilinear_extension, &input_layer);
 
-        let matmult_layer = MatMultNode::new(ctx, &input_shred, (2, 2), &input_shred, (2, 2));
+        let matmult_layer = MatMultNode::new(ctx, &input_shred, (1, 1), &input_shred, (1, 1));
 
         // Middle layer 1: subtract middle layer 0 from itself.
         let subtract_sector = Sector::new(
@@ -1337,7 +1337,7 @@ fn regular_identity_matmult_hyrax_input_layer_test() {
         let id_layer_b = IdentityGateNode::new(ctx, &squaring_sector, nonzero_gate_wiring_b);
 
         // Create matmult layer, multiply id_output by itself
-        let matmult_layer = MatMultNode::new(ctx, &id_layer_a, (2, 2), &id_layer_b, (2, 2));
+        let matmult_layer = MatMultNode::new(ctx, &id_layer_a, (1, 1), &id_layer_b, (1, 1));
 
         // Middle layer 5: subtract middle layer 4 from itself.
         let subtract_sector = Sector::new(
