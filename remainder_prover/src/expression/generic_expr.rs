@@ -1,3 +1,9 @@
+//! Functionality which is common to all "expression"s (see documentation within
+//! [crate::expression]). The high-level idea is that an [Expression] is generic
+//! over [ExpressionType], and contains within it a single parent [ExpressionNode]
+//! as well as an [ExpressionType::MleVec] containing the unique leaf representations
+//! for the leaves of the [ExpressionNode] tree.
+
 use crate::mle::MleIndex;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};

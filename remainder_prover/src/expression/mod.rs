@@ -49,11 +49,7 @@
 //! contains all the information within [circuit_expr::CircuitExpr], but contains
 //! [verifier_expr::VerifierMle]s rather than [circuit_expr::CircuitMle]s.
 
-/// the generic expression type, consists of
-///     - abstract expression,
-///     - prover expression,
-///     - verifier expression
-/// Common methods shared by these expressions are implemented here.
+///
 pub mod generic_expr;
 
 /// the abstract expression type, in the life cycle of an expression,
