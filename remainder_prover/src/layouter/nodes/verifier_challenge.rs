@@ -59,7 +59,10 @@ impl VerifierChallengeNode {
 
         circuit_description_map.add_node(
             self.id,
-            (CircuitLocation::new(*layer_id, vec![]), self.get_num_vars()),
+            (
+                CircuitLocation::new(verifier_challenge_layer_id, vec![]),
+                self.get_num_vars(),
+            ),
         );
 
         verifier_challenge_layer

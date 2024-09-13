@@ -182,7 +182,9 @@ impl LookupTable {
             verifier_challenge_mle.expression(),
             CE::negated(constrained_expr.build_circuit_expr(circuit_description_map)?),
         );
+        dbg!(&expr);
         let expr_num_vars = expr.num_vars();
+        dbg!(&expr_num_vars);
 
         let layer_id = intermediate_layer_id.get_and_inc();
         let layer = CircuitRegularLayer::new_raw(layer_id, expr);
@@ -206,6 +208,8 @@ impl LookupTable {
         );
         intermediate_layers.push(CircuitLayerEnum::Regular(layer));
         let lhs_numerator_desc = CircuitMle::new(layer_id, &lhs_denominator_vars);
+
+        dbg!(&lhs_numerator_desc, &lhs_denominator_desc);
 
         // Build the numerator and denominator of the sum of the fractions
         let (lhs_numerator, lhs_denominator) = build_fractional_sum(
@@ -320,7 +324,10 @@ impl LookupTable {
         let lhs_denom_inverse_layer_id = input_layer_id.get_and_inc();
         let lhs_denom_circuit_location =
             CircuitLocation::new(lhs_denominator.layer_id(), lhs_denominator.prefix_bits());
+        dbg!(&lhs_denominator);
+        dbg!(&rhs_denominator);
         let inverse_function = |mle: &MultilinearExtension<F>| {
+            dbg!(&mle);
             assert_eq!(mle.get_evals_vector().len(), 1);
             MultilinearExtension::new(vec![mle.get_evals_vector()[0].invert().unwrap()])
         };
@@ -505,6 +512,10 @@ fn build_fractional_sum<F: FieldExt>(
     let mut numerator_desc = numerator_desc;
     let mut denominator_desc = denominator_desc;
 
+    if numerator_desc.num_iterated_vars() == 0 {
+        dbg!("Yeah it's zero");
+    }
+
     for i in 0..numerator_desc.num_iterated_vars() {
         let numerators = split_circuit_mle(&numerator_desc);
         let denominators = split_circuit_mle(&denominator_desc);
@@ -523,6 +534,8 @@ fn build_fractional_sum<F: FieldExt>(
 
         // Create the circuit layer by combining the two
         let layer_id = current_layer_id.get_and_inc();
+        dbg!("Fractional sumcheck, layer ", i);
+        dbg!(layer_id);
         let layer = CircuitRegularLayer::new_raw(
             layer_id,
             next_numerator_expr.concat_expr(next_denominator_expr),
@@ -547,7 +560,7 @@ fn build_fractional_sum<F: FieldExt>(
                 .collect_vec(),
         );
     }
-    debug_assert_eq!(numerator_desc.num_iterated_vars(), 0);
-    debug_assert_eq!(denominator_desc.num_iterated_vars(), 0);
+    assert_eq!(numerator_desc.num_iterated_vars(), 0);
+    assert_eq!(denominator_desc.num_iterated_vars(), 0);
     (numerator_desc, denominator_desc)
 }

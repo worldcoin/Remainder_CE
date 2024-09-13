@@ -87,7 +87,7 @@ impl<F: FieldExt> CircuitMle<F> {
     pub fn num_iterated_vars(&self) -> usize {
         self.var_indices.iter().fold(0, |acc, idx| {
             acc + match idx {
-                MleIndex::IndexedBit(_) => 1,
+                MleIndex::Iterated => 1,
                 _ => 0,
             }
         })
@@ -333,76 +333,82 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
     pub fn compute_bookkeeping_table(
         &self,
         circuit_map: &CircuitMap<F>,
-    ) -> MultilinearExtension<F> {
-        let output_data: MultilinearExtension<F> = match self {
+    ) -> Option<MultilinearExtension<F>> {
+        let output_data: Option<MultilinearExtension<F>> = match self {
             ExpressionNode::Mle(circuit_mle) => {
-                let mle = circuit_map.get_data_from_circuit_mle(circuit_mle);
-                mle.unwrap().clone()
+                dbg!(&circuit_mle);
+                let maybe_mle = circuit_map.get_data_from_circuit_mle(circuit_mle);
+                if maybe_mle.is_err() {
+                    return None;
+                } else {
+                    dbg!(&maybe_mle);
+                    Some(maybe_mle.unwrap().clone())
+                }
             }
             ExpressionNode::Product(circuit_mles) => {
                 let mle_bookkeeping_tables = circuit_mles
                     .iter()
                     .map(|circuit_mle| {
                         circuit_map
-                            .get_data_from_circuit_mle(circuit_mle)
-                            .unwrap()
-                            .get_evals_vector()
-                            .as_slice()
+                            .get_data_from_circuit_mle(circuit_mle) // Returns Result
+                            .map(|data| data.get_evals_vector().as_slice()) // Map Ok value to slice
                     })
-                    .collect_vec();
-                evaluate_bookkeeping_tables_given_operation(
+                    .collect::<Result<Vec<&[F]>, _>>() // Collect all into a Result
+                    .ok()?;
+                dbg!(&mle_bookkeeping_tables);
+                Some(evaluate_bookkeeping_tables_given_operation(
                     &mle_bookkeeping_tables,
                     BinaryOperation::Mul,
-                )
+                ))
             }
             ExpressionNode::Sum(a, b) => {
-                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map);
-                let b_bookkeeping_table = b.compute_bookkeeping_table(circuit_map);
-                evaluate_bookkeeping_tables_given_operation(
+                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map)?;
+                let b_bookkeeping_table = b.compute_bookkeeping_table(circuit_map)?;
+                Some(evaluate_bookkeeping_tables_given_operation(
                     &[
                         &a_bookkeeping_table.get_evals_vector(),
                         &b_bookkeeping_table.get_evals_vector(),
                     ],
                     BinaryOperation::Add,
-                )
+                ))
             }
             ExpressionNode::Negated(a) => {
-                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map);
-                MultilinearExtension::new(
+                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map)?;
+                Some(MultilinearExtension::new(
                     a_bookkeeping_table
                         .get_evals_vector()
                         .iter()
                         .map(|elem| elem.neg())
                         .collect_vec(),
-                )
+                ))
             }
             ExpressionNode::Scaled(a, scale) => {
-                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map);
-                MultilinearExtension::new(
+                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map)?;
+                Some(MultilinearExtension::new(
                     a_bookkeeping_table
                         .get_evals_vector()
                         .iter()
                         .map(|elem| *elem * scale)
                         .collect_vec(),
-                )
+                ))
             }
             ExpressionNode::Selector(_mle_index, a, b) => {
-                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map);
-                let b_bookkeeping_table = b.compute_bookkeeping_table(circuit_map);
+                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map)?;
+                let b_bookkeeping_table = b.compute_bookkeeping_table(circuit_map)?;
                 assert_eq!(
                     a_bookkeeping_table.num_vars(),
                     b_bookkeeping_table.num_vars()
                 );
-                MultilinearExtension::new(
+                Some(MultilinearExtension::new(
                     a_bookkeeping_table
                         .get_evals_vector()
                         .iter()
                         .zip(b_bookkeeping_table.get_evals_vector())
                         .flat_map(|(a, b)| vec![*a, *b])
                         .collect_vec(),
-                )
+                ))
             }
-            ExpressionNode::Constant(value) => MultilinearExtension::new(vec![*value]),
+            ExpressionNode::Constant(value) => Some(MultilinearExtension::new(vec![*value])),
         };
 
         output_data

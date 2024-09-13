@@ -286,6 +286,7 @@ impl<
                                 "Verifier challenges for fiat shamir",
                                 verifier_challenge_input_layer_description.num_bits,
                             ));
+                        dbg!("Verifier challenge layer adding to circuit map");
                         circuit_map.add_node(
                             CircuitLocation::new(
                                 verifier_challenge_input_layer_description.layer_id(),
@@ -306,21 +307,22 @@ impl<
         // forward pass of the layers
         // convert the circuit layer into a prover layer using circuit map -> populate a GKRCircuit as you do this
         // prover layer ( mle_claim_map ) -> populates circuit map
-        let mut prover_intermediate_layers: Vec<LayerEnum<F>> = Vec::new();
+        let mut uninstantiated_intermediate_layers: Vec<&CircuitLayerEnum<F>> = Vec::new();
         intermediate_layer_descriptions
             .iter()
             .for_each(|intermediate_layer_description| {
-                let prover_intermediate_layer =
-                    intermediate_layer_description.into_prover_layer(&circuit_map);
                 let mle_outputs_necessary = mle_claim_map
                     .get(&intermediate_layer_description.layer_id())
                     .unwrap();
-                prover_intermediate_layer
+                let populatable = intermediate_layer_description
                     .compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
-                prover_intermediate_layers.push(prover_intermediate_layer);
+                if !populatable {
+                    dbg!(intermediate_layer_description.layer_id());
+                    uninstantiated_intermediate_layers.push(intermediate_layer_description);
+                }
             });
 
-        while hint_input_layers.len() > 0 {
+        while hint_input_layers.len() > 0 || uninstantiated_intermediate_layers.len() > 0 {
             let mut data_updated = false;
             hint_input_layers = hint_input_layers
                 .iter()
@@ -328,6 +330,8 @@ impl<
                     let (hint_circuit_location, hint_function) = input_layer_hint_map
                         .get_hint_function(&hint_input_layer_description.layer_id());
                     if let Some(data) = circuit_map.get_data_from_location(hint_circuit_location) {
+                        dbg!(hint_circuit_location);
+                        dbg!(&data);
                         let function_applied_to_data = hint_function(data);
                         // also here @ryan do we actually need to add to circuit map? also there are several places (see: logup) where we never add to circuit
                         // map, even before this refactor, actually... this means we won't make claims on these so that's actually fine? idk
@@ -344,15 +348,46 @@ impl<
                             transcript_writer,
                         );
                         prover_input_layers.push(prover_input_layer);
+                        dbg!("helo hint");
                         data_updated = true;
                         None
                     } else {
+                        dbg!("bye hint");
                         Some(*hint_input_layer_description)
                     }
                 })
                 .collect_vec();
+            uninstantiated_intermediate_layers = uninstantiated_intermediate_layers
+                .iter()
+                .filter_map(|uninstantiated_intermediate_layer| {
+                    let mle_outputs_necessary = mle_claim_map
+                        .get(&uninstantiated_intermediate_layer.layer_id())
+                        .unwrap();
+                    let populatable = uninstantiated_intermediate_layer
+                        .compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
+                    if populatable {
+                        dbg!("helo intermediate");
+                        data_updated = true;
+                        None
+                    } else {
+                        dbg!("bye intermediate");
+                        Some(*uninstantiated_intermediate_layer)
+                    }
+                })
+                .collect();
             assert!(data_updated);
         }
+        assert_eq!(circuit_description_map.0.len(), circuit_map.0.len());
+
+        let mut prover_intermediate_layers: Vec<LayerEnum<F>> =
+            Vec::with_capacity(intermediate_layer_descriptions.len());
+        intermediate_layer_descriptions
+            .iter()
+            .for_each(|intermediate_layer_description| {
+                let prover_intermediate_layer =
+                    intermediate_layer_description.into_prover_layer(&circuit_map);
+                prover_intermediate_layers.push(prover_intermediate_layer)
+            });
 
         let mut prover_output_layers: Vec<MleOutputLayer<F>> = Vec::new();
         output_layer_descriptions
@@ -362,7 +397,6 @@ impl<
                     output_layer_description.into_prover_output_layer(&circuit_map);
                 prover_output_layers.push(prover_output_layer)
             });
-
         let gkr_circuit = InstantiatedCircuit {
             input_layers: prover_input_layers,
             layers: Layers::new_with_layers(prover_intermediate_layers),

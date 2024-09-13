@@ -254,7 +254,11 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
         &self,
         mle_outputs_necessary: &[&CircuitMle<F>],
         circuit_map: &mut CircuitMap<F>,
-    ) {
+    ) -> bool {
+        dbg!("Compute data outputs; layer id =", self.layer_id());
+        dbg!(mle_outputs_necessary);
+        let mut counter = 0;
+        let mut all_populatable = true;
         mle_outputs_necessary.into_iter().for_each(
             |mle_output_necessary| {
                 let prefix_bits = mle_output_necessary.prefix_bits();
@@ -274,10 +278,21 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
                         }
                     }
                 );
-                let data: MultilinearExtension<F> = expression_node_to_compile.compute_bookkeeping_table(&circuit_map);
-                circuit_map.add_node(CircuitLocation::new(self.layer_id(), prefix_bits), data);
+                let maybe_data = expression_node_to_compile.compute_bookkeeping_table(&circuit_map);
+                if maybe_data.is_none() {
+                    counter += 1;
+                    all_populatable = false;
+                }
+                else {
+                    dbg!(&mle_output_necessary);
+                    dbg!(&expression_node_to_compile);
+                    let data = maybe_data.unwrap();
+                    dbg!(data.get_evals_vector().len());
+                    circuit_map.add_node(CircuitLocation::new(self.layer_id(), prefix_bits), data);
+                }
             }
         );
+        all_populatable
     }
 
     fn verify_rounds(

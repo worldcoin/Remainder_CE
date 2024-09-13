@@ -10,7 +10,7 @@ pub mod regular_layer;
 
 use std::fmt::Debug;
 
-use layer_enum::{LayerEnum, VerifierLayerEnum};
+use layer_enum::{CircuitLayerEnum, LayerEnum, VerifierLayerEnum};
 use product::PostSumcheckLayer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -197,7 +197,7 @@ pub trait CircuitLayer<F: FieldExt> {
         &self,
         mle_outputs_necessary: &[&CircuitMle<F>],
         circuit_map: &mut CircuitMap<F>,
-    );
+    ) -> bool;
 
     /// The Circuit MLEs that make up the leaves of the expression in this layer.
     fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>>;

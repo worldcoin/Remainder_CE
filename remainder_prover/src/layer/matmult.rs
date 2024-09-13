@@ -459,17 +459,21 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
         &self,
         mle_outputs_necessary: &[&CircuitMle<F>],
         circuit_map: &mut CircuitMap<F>,
-    ) {
+    ) -> bool {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary[0];
         dbg!(&mle_output_necessary);
 
-        let matrix_a_data = circuit_map
-            .get_data_from_circuit_mle(&self.matrix_a.mle)
-            .unwrap();
-        let matrix_b_data = circuit_map
-            .get_data_from_circuit_mle(&self.matrix_b.mle)
-            .unwrap();
+        let maybe_matrix_a_data = circuit_map.get_data_from_circuit_mle(&self.matrix_a.mle);
+        if maybe_matrix_a_data.is_err() {
+            return false;
+        }
+        let matrix_a_data = maybe_matrix_a_data.unwrap();
+        let maybe_matrix_b_data = circuit_map.get_data_from_circuit_mle(&self.matrix_b.mle);
+        if maybe_matrix_b_data.is_err() {
+            return false;
+        }
+        let matrix_b_data = maybe_matrix_b_data.unwrap();
         let product = product_two_matrices_from_flattened_vectors(
             matrix_a_data.get_evals_vector(),
             matrix_b_data.get_evals_vector(),
@@ -486,6 +490,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
+        true
     }
 
     fn into_verifier_layer(
