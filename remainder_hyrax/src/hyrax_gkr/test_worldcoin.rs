@@ -23,17 +23,17 @@ type Base = <Bn256Point as CurveExt>::Base;
 
 /// Helper function that runs the Hyrax Worldcoin test against a given data set.
 fn test_hyrax_worldcoin<
-    const MATMULT_NUM_ROWS: usize,
-    const MATMULT_NUM_COLS: usize,
-    const MATMULT_INTERNAL_DIM: usize,
+    const MATMULT_ROWS_NUM_VARS: usize,
+    const MATMULT_COLS_NUM_VARS: usize,
+    const MATMULT_INTERNAL_DIM_NUM_VARS: usize,
     const BASE: u64,
     const NUM_DIGITS: usize,
 >(
     data: CircuitData<
         Scalar,
-        MATMULT_NUM_ROWS,
-        MATMULT_NUM_COLS,
-        MATMULT_INTERNAL_DIM,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
         BASE,
         NUM_DIGITS,
     >,
@@ -77,16 +77,16 @@ fn test_hyrax_worldcoin<
 #[test]
 fn test_hyrax_worldcoin_v2_iris() {
     use remainder::worldcoin::parameters_v2::{
-        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM_VARS, MATMULT_NUM_COLS_VARS,
-        MATMULT_NUM_ROWS_VARS, NUM_DIGITS,
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_COLS_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
     };
     let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
     let image_path = path.join("iris/test_image.npy");
     let data = load_worldcoin_data::<
         Scalar,
-        MATMULT_NUM_ROWS_VARS,
-        MATMULT_NUM_COLS_VARS,
-        MATMULT_INTERNAL_DIM_VARS,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
         BASE,
         NUM_DIGITS,
     >(path.clone(), image_path, false);
@@ -96,16 +96,16 @@ fn test_hyrax_worldcoin_v2_iris() {
 #[test]
 fn test_hyrax_worldcoin_v2_mask() {
     use remainder::worldcoin::parameters_v2::{
-        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM_VARS, MATMULT_NUM_COLS_VARS,
-        MATMULT_NUM_ROWS_VARS, NUM_DIGITS,
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_COLS_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
     };
     let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
     let image_path = path.join("mask/test_image.npy");
     let data = load_worldcoin_data::<
         Scalar,
-        MATMULT_NUM_ROWS_VARS,
-        MATMULT_NUM_COLS_VARS,
-        MATMULT_INTERNAL_DIM_VARS,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
         BASE,
         NUM_DIGITS,
     >(path.clone(), image_path, true);
@@ -115,16 +115,16 @@ fn test_hyrax_worldcoin_v2_mask() {
 #[test]
 fn test_hyrax_worldcoin_v3_iris() {
     use remainder::worldcoin::parameters_v3::{
-        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS, MATMULT_NUM_ROWS,
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_COLS_NUM_VARS, MATMULT_ROWS_NUM_VARS,
         NUM_DIGITS,
     };
     let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
     let image_path = path.join("iris/test_image.npy");
     let data = load_worldcoin_data::<
         Scalar,
-        MATMULT_NUM_ROWS,
-        MATMULT_NUM_COLS,
-        MATMULT_INTERNAL_DIM,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
         BASE,
         NUM_DIGITS,
     >(path.clone(), image_path, false);
@@ -134,16 +134,16 @@ fn test_hyrax_worldcoin_v3_iris() {
 #[test]
 fn test_hyrax_worldcoin_v3_mask() {
     use remainder::worldcoin::parameters_v3::{
-        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS, MATMULT_NUM_ROWS,
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_COLS_NUM_VARS, MATMULT_ROWS_NUM_VARS,
         NUM_DIGITS,
     };
     let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
     let image_path = path.join("mask/test_image.npy");
     let data = load_worldcoin_data::<
         Scalar,
-        MATMULT_NUM_ROWS,
-        MATMULT_NUM_COLS,
-        MATMULT_INTERNAL_DIM,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
         BASE,
         NUM_DIGITS,
     >(path.clone(), image_path, true);

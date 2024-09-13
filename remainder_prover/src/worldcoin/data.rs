@@ -45,14 +45,14 @@ pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: Field>() -> CircuitDat
 #[derive(Debug, Clone)]
 /// Used for instantiating the circuit.
 /// + `BASE` and `NUM_DIGITS` are powers of two.
-/// + `MATMULT_NUM_ROWS` is number of rows of the result of matmult.  A power of two.
-/// + `MATMULT_NUM_COLS` is number of columns of the result of matmult.  A power of two.
-/// + `MATMULT_INTERNAL_DIM` is the internal dimension size of matmult = number of cols of LH multiplicand = number of rows of RH multiplicand.  A power of two.
+/// + `MATMULT_ROWS_NUM_VARS` is the log2 number of rows of the result of matmult.
+/// + `MATMULT_COLS_NUM_VARS` is the log2 number of columns of the result of matmult.
+/// + `MATMULT_INTERNAL_DIM_NUM_VARS` is the log2 of the internal dimension size of matmult = number of cols of LH multiplicand = number of rows of RH multiplicand.
 pub struct CircuitData<
     F: Field,
-    const MATMULT_NUM_ROWS_VARS: usize,
-    const MATMULT_NUM_COLS_VARS: usize,
-    const MATMULT_INTERNAL_DIM_VARS: usize,
+    const MATMULT_ROWS_NUM_VARS: usize,
+    const MATMULT_COLS_NUM_VARS: usize,
+    const MATMULT_INTERNAL_DIM_NUM_VARS: usize,
     const BASE: u64,
     const NUM_DIGITS: usize,
 > {
@@ -63,38 +63,38 @@ pub struct CircuitData<
     /// multiplication, as pairs of gate labels.
     pub reroutings: Vec<(usize, usize)>,
     /// The MLE of the RH multiplicand of the matrix multiplication.
-    /// Length is `MATMULT_INTERNAL_DIM * MATMULT_NUM_COLS`.
+    /// Length is `1 << (MATMULT_INTERNAL_DIM_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
     pub rh_matmult_multiplicand: Vec<F>,
     /// The digits of the complementary digital decompositions (base BASE) of matmult minus `to_sub_from_matmult`.
-    /// Length of each MLE is `MATMULT_NUM_ROWS * MATMULT_NUM_COLS`.
+    /// Length of each MLE is `1 << (MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
     pub digits: FlatMles<F, NUM_DIGITS>,
     /// The bits of the complementary digital decompositions of the values
     ///     matmult - to_sub_from_matmult.
     /// (This is the iris code (if processing the iris image) or the mask code (if processing the mask).)
-    /// Length is `MATMULT_NUM_ROWS * MATMULT_NUM_COLS`.
+    /// Length is `1 << (MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
     pub sign_bits: Vec<F>,
     /// The number of times each digit 0 .. BASE - 1 occurs in the complementary digital decompositions of
     /// response - threshold.
     /// Length is `BASE`.
     pub digit_multiplicities: Vec<F>,
     /// Values to be subtracted from the result of the matrix multiplication.
-    /// Length is `MATMULT_NUM_ROWS * MATMULT_NUM_COLS`.
+    /// Length is `1 << (MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
     pub to_sub_from_matmult: Vec<F>,
 }
 
 impl<
         F: Field,
-        const MATMULT_NUM_ROWS_VARS: usize,
-        const MATMULT_NUM_COLS_VARS: usize,
-        const MATMULT_INTERNAL_DIM_VARS: usize,
+        const MATMULT_ROWS_NUM_VARS: usize,
+        const MATMULT_COLS_NUM_VARS: usize,
+        const MATMULT_INTERNAL_DIM_NUM_VARS: usize,
         const BASE: u64,
         const NUM_DIGITS: usize,
     >
     CircuitData<
         F,
-        MATMULT_NUM_ROWS_VARS,
-        MATMULT_NUM_COLS_VARS,
-        MATMULT_INTERNAL_DIM_VARS,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
         BASE,
         NUM_DIGITS,
     >
@@ -124,18 +124,18 @@ impl<
         assert!(NUM_DIGITS.is_power_of_two());
         let (_, im_num_cols) = image.dim();
         let (num_kernels, kernel_num_rows, kernel_num_cols) = kernel_values.dim();
-        assert_eq!(num_kernels, (1 << MATMULT_NUM_COLS_VARS));
-        assert!(kernel_num_rows * kernel_num_cols <= (1 << MATMULT_INTERNAL_DIM_VARS));
-        assert!(thresholds_matrix.dim().0 <= (1 << MATMULT_NUM_ROWS_VARS));
-        assert_eq!(thresholds_matrix.dim().1, (1 << MATMULT_NUM_COLS_VARS));
+        assert_eq!(num_kernels, (1 << MATMULT_COLS_NUM_VARS));
+        assert!(kernel_num_rows * kernel_num_cols <= (1 << MATMULT_INTERNAL_DIM_NUM_VARS));
+        assert!(thresholds_matrix.dim().0 <= (1 << MATMULT_ROWS_NUM_VARS));
+        assert_eq!(thresholds_matrix.dim().1, (1 << MATMULT_COLS_NUM_VARS));
         assert_eq!(wirings.dim().1, 4);
 
         // Derive the re-routings from the wirings (this is what is needed for identity gate)
         // And calculate the left-hand side of the matrix multiplication
         let mut reroutings = Vec::new();
         let mut rerouted_matrix: Array2<i64> = Array::zeros((
-            (1 << MATMULT_NUM_ROWS_VARS),
-            (1 << MATMULT_INTERNAL_DIM_VARS),
+            (1 << MATMULT_ROWS_NUM_VARS),
+            (1 << MATMULT_INTERNAL_DIM_NUM_VARS),
         ));
         wirings.outer_iter().for_each(|row| {
             let (im_row, im_col, a_row, a_col) = (
@@ -144,32 +144,32 @@ impl<
                 row[2] as usize,
                 row[3] as usize,
             );
-            let a_gate_label = a_row * (1 << MATMULT_INTERNAL_DIM_VARS) + a_col;
+            let a_gate_label = a_row * (1 << MATMULT_INTERNAL_DIM_NUM_VARS) + a_col;
             let im_gate_label = im_row * im_num_cols + im_col;
             reroutings.push((a_gate_label, im_gate_label));
             rerouted_matrix[[a_row, a_col]] = image[[im_row, im_col]] as i64;
         });
 
-        // Reshape and pad kernel values to have dimensions (MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS).
+        // Reshape and pad kernel values to have dimensions (MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_COLS_NUM_VARS).
         // This is the RH multiplicand of the matrix multiplication.
         let rh_multiplicand: Array2<i64> = pad_with_rows(
             kernel_values
                 .into_shape((
-                    (1 << MATMULT_NUM_COLS_VARS),
+                    (1 << MATMULT_COLS_NUM_VARS),
                     kernel_num_rows * kernel_num_cols,
                 ))
                 .unwrap()
                 .t()
                 .to_owned()
                 .mapv(|elem| elem as i64),
-            1 << MATMULT_INTERNAL_DIM_VARS,
+            1 << MATMULT_INTERNAL_DIM_NUM_VARS,
         );
 
         // Pad the thresholds matrix with extra rows of zeros so that it has dimensions
-        // (MATMULT_NUM_ROWS, MATMULT_NUM_COLS).
-        let thresholds_matrix = pad_with_rows(thresholds_matrix, 1 << MATMULT_NUM_ROWS_VARS);
+        // (MATMULT_ROWS_NUM_VARS, MATMULT_COLS_NUM_VARS).
+        let thresholds_matrix = pad_with_rows(thresholds_matrix, 1 << MATMULT_ROWS_NUM_VARS);
 
-        // Calculate the matrix product. Has dimensions (MATMULT_NUM_ROWS, MATMULT_NUM_COLS).
+        // Calculate the matrix product. Has dimensions (1 << MATMULT_ROWS_NUM_VARS, 1 << MATMULT_COLS_NUM_VARS).
         let responses = rerouted_matrix.dot(&rh_multiplicand);
 
         // Calculate the thresholded responses, which are the responses minus the thresholds. We pad
@@ -251,22 +251,22 @@ impl<
         assert!(self.to_reroute.len().is_power_of_two());
         assert_eq!(
             self.rh_matmult_multiplicand.len(),
-            (1 << MATMULT_INTERNAL_DIM_VARS) * (1 << MATMULT_NUM_COLS_VARS)
+            (1 << MATMULT_INTERNAL_DIM_NUM_VARS) * (1 << MATMULT_COLS_NUM_VARS)
         );
         self.digits.get_mle_refs().iter().for_each(|mle| {
             assert_eq!(
                 mle.original_num_vars(),
-                MATMULT_NUM_ROWS_VARS + MATMULT_NUM_COLS_VARS
+                MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS
             );
         });
         assert_eq!(
             self.sign_bits.len(),
-            (1 << MATMULT_NUM_ROWS_VARS) * (1 << MATMULT_NUM_COLS_VARS)
+            (1 << MATMULT_ROWS_NUM_VARS) * (1 << MATMULT_COLS_NUM_VARS)
         );
         assert_eq!(self.digit_multiplicities.len(), BASE as usize);
         assert_eq!(
             self.to_sub_from_matmult.len(),
-            (1 << MATMULT_NUM_ROWS_VARS) * (1 << MATMULT_NUM_COLS_VARS)
+            (1 << MATMULT_ROWS_NUM_VARS) * (1 << MATMULT_COLS_NUM_VARS)
         );
     }
 }
@@ -280,9 +280,9 @@ impl<
 ///   `is_mask` indicates whether to load the files for the mask or the iris.
 pub fn load_worldcoin_data<
     F: Field,
-    const MATMULT_NUM_ROWS_VARS: usize,
-    const MATMULT_NUM_COLS_VARS: usize,
-    const MATMULT_INTERNAL_DIM_VARS: usize,
+    const MATMULT_ROWS_NUM_VARS: usize,
+    const MATMULT_COLS_NUM_VARS: usize,
+    const MATMULT_INTERNAL_DIM_NUM_VARS: usize,
     const BASE: u64,
     const NUM_DIGITS: usize,
 >(
@@ -291,9 +291,9 @@ pub fn load_worldcoin_data<
     is_mask: bool,
 ) -> CircuitData<
     F,
-    MATMULT_NUM_ROWS_VARS,
-    MATMULT_NUM_COLS_VARS,
-    MATMULT_INTERNAL_DIM_VARS,
+    MATMULT_ROWS_NUM_VARS,
+    MATMULT_COLS_NUM_VARS,
+    MATMULT_INTERNAL_DIM_NUM_VARS,
     BASE,
     NUM_DIGITS,
 > {

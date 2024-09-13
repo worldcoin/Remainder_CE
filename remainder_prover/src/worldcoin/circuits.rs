@@ -34,24 +34,24 @@ use remainder_shared_types::Field;
 /// The structure of the circuit is determined by:
 /// + the `reroutings`, which determine how to build the MLE of left-hand multiplicand of the matrix
 ///   multiplication from the MLE of the input `to_reroute`;
-/// + the generics `BASE`, `NUM_DIGITS`, `MATMULT_NUM_ROWS`, `MATMULT_NUM_COLS`,
-///   `MATMULT_INTERNAL_DIM`;
+/// + the generics `BASE`, `NUM_DIGITS`, `MATMULT_ROWS_NUM_VARS`, `MATMULT_COLS_NUM_VARS`,
+///   `MATMULT_INTERNAL_DIM_NUM_VARS`;
 /// + the length of the MLE `to_reroute`.
 ///
 /// See [CircuitData] for a detailed description of each generic and argument.
 pub fn build_circuit<
     F: Field,
-    const MATMULT_NUM_ROWS_VARS: usize,
-    const MATMULT_NUM_COLS_VARS: usize,
-    const MATMULT_INTERNAL_DIM_VARS: usize,
+    const MATMULT_ROWS_NUM_VARS: usize,
+    const MATMULT_COLS_NUM_VARS: usize,
+    const MATMULT_INTERNAL_DIM_NUM_VARS: usize,
     const BASE: u64,
     const NUM_DIGITS: usize,
 >(
     data: CircuitData<
         F,
-        MATMULT_NUM_ROWS_VARS,
-        MATMULT_NUM_COLS_VARS,
-        MATMULT_INTERNAL_DIM_VARS,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
         BASE,
         NUM_DIGITS,
     >,
@@ -90,9 +90,9 @@ pub fn build_circuit<
         let matmult = MatMultNode::new(
             ctx,
             &rerouted_image,
-            (MATMULT_NUM_ROWS_VARS, MATMULT_INTERNAL_DIM_VARS),
+            (MATMULT_ROWS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS),
             &rh_matmult_multiplicand,
-            (MATMULT_INTERNAL_DIM_VARS, MATMULT_NUM_COLS_VARS),
+            (MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_COLS_NUM_VARS),
         );
         println!("{:?} = Matmult", matmult.id());
 
