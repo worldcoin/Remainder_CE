@@ -44,59 +44,17 @@ pub struct Matrix<F: FieldExt> {
 impl<F: FieldExt> Matrix<F> {
     /// Create a new matrix, note that we require num_rows, and later converts this
     /// parameter to log(num_rows). This is necessary to check all dims are powers of 2
-    pub fn new(mle: DenseMle<F>, num_rows: usize, num_cols: usize) -> Matrix<F> {
-        assert_eq!(mle.bookkeeping_table().len(), num_rows * num_cols);
-
-        /*
-        let mut new_bookkeeping_table = Vec::new();
-        // pad the columns
-        if 1 << log2(num_cols) != num_cols {
-            assert!((1 << log2(num_cols) as usize) > num_cols);
-            let num_to_pad_each_row = (1 << log2(num_cols) as usize) - num_cols;
-            for chunk in mle.bookkeeping_table().chunks(num_cols) {
-                new_bookkeeping_table.extend(
-                    [chunk.to_vec(), vec![F::ZERO; num_to_pad_each_row]]
-                        .into_iter()
-                        .concat(),
-                )
-            }
-        } else {
-            new_bookkeeping_table = mle.bookkeeping_table().to_vec();
-        }
-
-        // pad the rows
-        let padded_matrix_len = (1 << log2(num_rows) as usize) * (1 << log2(num_cols) as usize);
-        if new_bookkeeping_table.len() != padded_matrix_len {
-            assert!((1 << log2(num_rows) as usize) > num_rows);
-            let num_need_to_pad = padded_matrix_len - new_bookkeeping_table.len();
-            new_bookkeeping_table = [new_bookkeeping_table, vec![F::ZERO; num_need_to_pad]]
-                .into_iter()
-                .concat()
-        }
-
-        // pad the MLE indices as well!
-        let expected_num_iterated_vars = (log2(num_rows) + log2(num_cols)) as usize;
-        let new_indices = if mle.num_iterated_vars() != expected_num_iterated_vars {
-            assert!(expected_num_iterated_vars > mle.num_iterated_vars());
-            let num_iterated_vars_to_add = expected_num_iterated_vars - mle.num_iterated_vars();
-            let padding_indices = vec![MleIndex::Iterated; num_iterated_vars_to_add];
-            &[mle.mle_indices.to_vec(), padding_indices].concat()
-        } else {
-            mle.mle_indices()
-        };
-        */
-
-        let new_bookkeeping_table = mle.bookkeeping_table();
-        let padded_matrix_len = num_rows * num_cols;
-        let mle =
-            DenseMle::new_with_indices(&new_bookkeeping_table, mle.layer_id(), &mle.mle_indices);
-
-        assert_eq!(padded_matrix_len, mle.bookkeeping_table().len());
+    pub fn new(mle: DenseMle<F>, num_rows_vars: usize, num_cols_vars: usize) -> Matrix<F> {
+        dbg!(&num_rows_vars, num_cols_vars);
+        assert_eq!(
+            mle.bookkeeping_table().len(),
+            (1 << num_rows_vars) * (1 << num_cols_vars)
+        );
 
         Matrix {
             mle,
-            num_rows_vars: log2(num_rows) as usize,
-            num_cols_vars: log2(num_cols) as usize,
+            num_rows_vars: num_rows_vars,
+            num_cols_vars: num_cols_vars,
         }
     }
 
@@ -770,7 +728,7 @@ pub fn gen_transpose_matrix<F: FieldExt>(matrix: &Matrix<F>) -> Matrix<F> {
         &matrix.mle.mle_indices,
     );
 
-    Matrix::new(mle, num_rows, num_cols)
+    Matrix::new(mle, matrix.num_cols_vars, matrix.num_rows_vars)
 }
 
 /// Multiply two matrices together, with a transposed matrix_b
@@ -828,8 +786,8 @@ mod test {
         ];
         let mle_vec_b = vec![Fr::from(3), Fr::from(5), Fr::from(9), Fr::from(6)];
 
-        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 4, 2);
-        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 2, 2);
+        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 2, 1);
+        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 1, 1);
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
@@ -894,8 +852,8 @@ mod test {
             Fr::from(4),
         ];
 
-        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 8, 4);
-        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 4, 2);
+        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 3, 2);
+        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 2, 1);
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
@@ -919,73 +877,5 @@ mod test {
         ];
 
         assert_eq!(res_product, exp_product);
-    }
-
-    /// We currently do not support matrices whose dimensions are not exact
-    /// powers of two. Ignore this test.
-    #[test]
-    #[ignore]
-    fn test_product_irregular_matrices() {
-        let mle_vec_a = vec![
-            Fr::from(1),
-            Fr::from(2),
-            Fr::from(9),
-            Fr::from(10),
-            Fr::from(13),
-            Fr::from(1),
-            Fr::from(3),
-            Fr::from(10),
-            Fr::from(2),
-            Fr::from(9),
-            Fr::from(10),
-            Fr::from(1),
-            Fr::from(3),
-            Fr::from(10),
-            Fr::from(2),
-        ];
-        let mle_vec_b = vec![
-            Fr::from(3),
-            Fr::from(5),
-            Fr::from(9),
-            Fr::from(6),
-            Fr::from(5),
-            Fr::from(9),
-            Fr::from(6),
-            Fr::from(1),
-            Fr::from(3),
-        ];
-
-        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 5, 3);
-        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 3, 3);
-
-        let res_product = product_two_matrices(&matrix_a, &matrix_b);
-
-        // 1  2  9
-        // 10 13 1       3  5  9
-        // 3  10 2   `   6  5  9
-        // 9  10 1       6  1  3
-        // 3  10 2
-
-        let exp_product = vec![
-            Fr::from(1 * 3 + 2 * 6 + 9 * 6),
-            Fr::from(1 * 5 + 2 * 5 + 9 * 1),
-            Fr::from(1 * 9 + 2 * 9 + 9 * 3),
-            Fr::from(10 * 3 + 13 * 6 + 1 * 6),
-            Fr::from(10 * 5 + 13 * 5 + 1 * 1),
-            Fr::from(10 * 9 + 13 * 9 + 1 * 3),
-            Fr::from(3 * 3 + 10 * 6 + 2 * 6),
-            Fr::from(3 * 5 + 10 * 5 + 2 * 1),
-            Fr::from(3 * 9 + 10 * 9 + 2 * 3),
-            Fr::from(9 * 3 + 10 * 6 + 1 * 6),
-            Fr::from(9 * 5 + 10 * 5 + 1 * 1),
-            Fr::from(9 * 9 + 10 * 9 + 1 * 3),
-            Fr::from(3 * 3 + 10 * 6 + 2 * 6),
-            Fr::from(3 * 5 + 10 * 5 + 2 * 1),
-            Fr::from(3 * 9 + 10 * 9 + 2 * 3),
-        ];
-
-        let matrix_out = Matrix::new(DenseMle::new_from_raw(exp_product, LayerId::Layer(0)), 5, 3);
-
-        assert_eq!(res_product, matrix_out.mle.bookkeeping_table());
     }
 }
