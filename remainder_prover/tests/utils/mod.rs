@@ -10,7 +10,7 @@ use remainder::layouter::nodes::{CircuitNode, Context};
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
 
 use remainder::mle::dense::DenseMle;
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 
 /// Returns an MLE with all Fr::one() for testing according to the number of variables.
 pub fn get_dummy_one_mle(num_vars: usize) -> DenseMle<Fr> {
@@ -92,11 +92,11 @@ pub fn get_dummy_random_mle_vec(
 /// * `outer_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
 /// the size of `inner_sel_mle`
 
-pub struct TripleNestedBuilderComponent<F: FieldExt> {
+pub struct TripleNestedBuilderComponent<F: Field> {
     pub first_layer_sector: Sector<F>,
 }
 
-impl<F: FieldExt> TripleNestedBuilderComponent<F> {
+impl<F: Field> TripleNestedBuilderComponent<F> {
     pub fn new(
         ctx: &Context,
         inner_inner_sel: &dyn CircuitNode,
@@ -131,7 +131,7 @@ impl<F: FieldExt> TripleNestedBuilderComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for TripleNestedBuilderComponent<F>
+impl<F: Field, N> Component<N> for TripleNestedBuilderComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -142,12 +142,12 @@ where
 
 /// A builder which takes the difference of an MLE from itself to return a zero layer.
 
-pub struct DifferenceBuilderComponent<F: FieldExt> {
+pub struct DifferenceBuilderComponent<F: Field> {
     pub output_sector: Sector<F>,
     pub output_node: OutputNode,
 }
 
-impl<F: FieldExt> DifferenceBuilderComponent<F> {
+impl<F: Field> DifferenceBuilderComponent<F> {
     pub fn new(ctx: &Context, input: &dyn CircuitNode) -> Self {
         let zero_output_sector = Sector::new(ctx, &[input], |input_vec| {
             assert_eq!(input_vec.len(), 1);
@@ -164,7 +164,7 @@ impl<F: FieldExt> DifferenceBuilderComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DifferenceBuilderComponent<F>
+impl<F: Field, N> Component<N> for DifferenceBuilderComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
@@ -179,11 +179,11 @@ where
 /// ## Arguments
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
-pub struct ProductScaledBuilderComponent<F: FieldExt> {
+pub struct ProductScaledBuilderComponent<F: Field> {
     pub first_layer_sector: Sector<F>,
 }
 
-impl<F: FieldExt> ProductScaledBuilderComponent<F> {
+impl<F: Field> ProductScaledBuilderComponent<F> {
     pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
         let product_scaled_sector = Sector::new(ctx, &[mle_1, mle_2], |product_scaled_nodes| {
             assert_eq!(product_scaled_nodes.len(), 2);
@@ -204,7 +204,7 @@ impl<F: FieldExt> ProductScaledBuilderComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for ProductScaledBuilderComponent<F>
+impl<F: Field, N> Component<N> for ProductScaledBuilderComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -220,11 +220,11 @@ where
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
 
-pub struct ProductSumBuilderComponent<F: FieldExt> {
+pub struct ProductSumBuilderComponent<F: Field> {
     pub first_layer_sector: Sector<F>,
 }
 
-impl<F: FieldExt> ProductSumBuilderComponent<F> {
+impl<F: Field> ProductSumBuilderComponent<F> {
     pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
         let product_sum_sector = Sector::new(ctx, &[mle_1, mle_2], |product_sum_nodes| {
             assert_eq!(product_sum_nodes.len(), 2);
@@ -244,7 +244,7 @@ impl<F: FieldExt> ProductSumBuilderComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for ProductSumBuilderComponent<F>
+impl<F: Field, N> Component<N> for ProductSumBuilderComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -260,11 +260,11 @@ where
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
 
-pub struct ConstantScaledSumBuilderComponent<F: FieldExt> {
+pub struct ConstantScaledSumBuilderComponent<F: Field> {
     pub first_layer_sector: Sector<F>,
 }
 
-impl<F: FieldExt> ConstantScaledSumBuilderComponent<F> {
+impl<F: Field> ConstantScaledSumBuilderComponent<F> {
     pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
         let constant_scaled_sector = Sector::new(ctx, &[mle_1, mle_2], |constant_scaled_nodes| {
             assert_eq!(constant_scaled_nodes.len(), 2);
@@ -285,7 +285,7 @@ impl<F: FieldExt> ConstantScaledSumBuilderComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for ConstantScaledSumBuilderComponent<F>
+impl<F: Field, N> Component<N> for ConstantScaledSumBuilderComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {

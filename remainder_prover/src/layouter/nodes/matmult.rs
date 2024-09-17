@@ -1,7 +1,7 @@
 //! A Module for adding `Matmult` Layers to components
 
 use ark_std::log2;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::circuit_expr::CircuitMle,
@@ -18,12 +18,12 @@ use super::{CircuitNode, CompilableNode, Context, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
-pub struct MatMultNode {
+pub struct MatMultNod {
     id: NodeId,
     matrix_a: NodeId,
-    num_rows_cols_a: (usize, usize),
+    rows_cols_num_vars_a: (usize, usize),
     matrix_b: NodeId,
-    num_rows_cols_b: (usize, usize),
+    rows_cols_num_vars_b: (usize, usize),
     num_vars: usize,
 }
 
@@ -46,17 +46,28 @@ impl MatMultNode {
     pub fn new(
         ctx: &Context,
         matrix_node_a: &impl CircuitNode,
-        num_rows_cols_a: (usize, usize),
+        rows_cols_num_vars_a: (usize, usize),
         matrix_node_b: &impl CircuitNode,
-        num_rows_cols_b: (usize, usize),
+        rows_cols_num_vars_b: (usize, usize),
     ) -> Self {
-        assert_eq!(num_rows_cols_a.1, num_rows_cols_b.0);
-        let num_product_vars = (log2(num_rows_cols_a.0) + log2(num_rows_cols_b.1)) as usize;
+        let matrix_a_mle = DenseMle::new_from_raw(
+            matrix_node_a.get_data().get_evals_vector().to_vec(),
+            LayerId::Layer(0),
+        );
+        let matrix_a = Matrix::new(matrix_a_mle, rows_cols_num_vars_a.0, rows_cols_num_vars_a.1);
+
+        let matrix_b_mle = DenseMle::new_from_raw(
+            matrix_node_b.get_data().get_evals_vector().to_vec(),
+            LayerId::Layer(0),
+        );
+        let matrix_b = Matrix::new(matrix_b_mle, rows_cols_num_vars_b.0, rows_cols_num_vars_b.1);
+
+        let num_product_vars = rows_cols_num_vars_a.0 + rows_cols_num_vars_b.1;
 
         Self {
             id: ctx.get_new_id(),
             matrix_a: matrix_node_a.id(),
-            num_rows_cols_a,
+            rows_cols_num_vars_a,
             matrix_b: matrix_node_b.id(),
             num_rows_cols_b,
             num_vars: num_product_vars,
@@ -64,7 +75,7 @@ impl MatMultNode {
     }
 }
 
-impl<F: FieldExt> CompilableNode<F> for MatMultNode {
+impl<F: Field> CompilableNode<F> for MatMultNode {
     fn generate_circuit_description<'a>(
         &'a self,
         layer_id: &mut LayerId,
@@ -79,9 +90,16 @@ impl<F: FieldExt> CompilableNode<F> for MatMultNode {
 
         // Matrix A and matrix B are not padded because the data from the previous layer is only stored as the raw [MultilinearExtension].
         let matrix_a = CircuitMatrix::new(
-            circuit_mle_a,
-            log2(self.num_rows_cols_a.0) as usize,
-            log2(self.num_rows_cols_a.1) as usize,
+            mle_a,
+            self.rows_cols_num_vars_a.0,
+            self.rows_cols_num_vars_a.1,
+        );
+        let (matrix_b_location, matrix_b_data) = circuit_map.get_node(&self.matrix_b)?;
+
+        let mle_b = DenseMle::new_with_prefix_bits(
+            MultilinearExtension::new(matrix_b_data.get_evals_vector().clone()),
+            matrix_b_location.layer_id,
+            matrix_b_location.prefix_bits.clone(),
         );
         let (matrix_b_location, matrix_b_num_vars) =
             circuit_description_map.get_node(&self.matrix_b)?;
@@ -91,9 +109,9 @@ impl<F: FieldExt> CompilableNode<F> for MatMultNode {
 
         // should already been padded
         let matrix_b = CircuitMatrix::new(
-            circuit_mle_b,
-            log2(self.num_rows_cols_b.0) as usize,
-            log2(self.num_rows_cols_b.1) as usize,
+            mle_b,
+            self.rows_cols_num_vars_b.0,
+            self.rows_cols_num_vars_b.1,
         );
 
         let matmult_layer_id = layer_id.get_and_inc();
@@ -188,7 +206,7 @@ mod test {
             );
 
             let matmult_sector =
-                MatMultNode::new(ctx, &input_matrix_a, (4, 2), &input_matrix_b, (2, 2));
+                MatMultNode::new(ctx, &input_matrix_a, (2, 1), &input_matrix_b, (1, 1));
 
             let difference_sector =
                 Sector::new(ctx, &[&matmult_sector, &input_matrix_product], |inputs| {

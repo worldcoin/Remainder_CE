@@ -15,7 +15,7 @@ use crate::{
 use ark_std::{cfg_into_iter, log2};
 use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::max,
@@ -47,12 +47,12 @@ impl MleVecIndex {
     }
 
     /// return the actual mle_ref in the vec within the prover expression
-    pub fn get_mle<'a, F: FieldExt>(&self, mle_ref_vec: &'a [DenseMle<F>]) -> &'a DenseMle<F> {
+    pub fn get_mle<'a, F: Field>(&self, mle_ref_vec: &'a [DenseMle<F>]) -> &'a DenseMle<F> {
         &mle_ref_vec[self.0]
     }
 
     /// return the actual mle_ref in the vec within the prover expression
-    pub fn get_mle_mut<'a, F: FieldExt>(
+    pub fn get_mle_mut<'a, F: Field>(
         &self,
         mle_ref_vec: &'a mut [DenseMle<F>],
     ) -> &'a mut DenseMle<F> {
@@ -64,14 +64,14 @@ impl MleVecIndex {
 /// the leaf nodes of the expression tree are DenseMleRefs
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProverExpr;
-impl<F: FieldExt> ExpressionType<F> for ProverExpr {
+impl<F: Field> ExpressionType<F> for ProverExpr {
     type MLENodeRepr = MleVecIndex;
     type MleVec = Vec<DenseMle<F>>;
 }
 
 /// this is what the prover manipulates to prove the correctness of the computation.
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
-impl<F: FieldExt> Expression<F, ProverExpr> {
+impl<F: Field> Expression<F, ProverExpr> {
     /// Concatenates two expressions together
     ///
     /// See documentation in [super::circuit_expr::CircuitExpr]'s `concat_expr`
@@ -423,7 +423,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     }
 }
 
-impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
+impl<F: Field> ExpressionNode<F, ProverExpr> {
     /// Transforms the expression to a verifier expression
     /// should only be called when no variables are bound in the expression.
     /// Traverses the expression and changes the DenseMle to CircuitMle.
@@ -1106,7 +1106,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
     }
 }
 
-impl<F: FieldExt> Neg for Expression<F, ProverExpr> {
+impl<F: Field> Neg for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn neg(self) -> Self::Output {
         Expression::<F, ProverExpr>::negated(self)
@@ -1114,21 +1114,21 @@ impl<F: FieldExt> Neg for Expression<F, ProverExpr> {
 }
 
 /// implement the Add, Sub, and Mul traits for the Expression
-impl<F: FieldExt> Add for Expression<F, ProverExpr> {
+impl<F: Field> Add for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn add(self, rhs: Expression<F, ProverExpr>) -> Expression<F, ProverExpr> {
         Expression::<F, ProverExpr>::sum(self, rhs)
     }
 }
 
-impl<F: FieldExt> Sub for Expression<F, ProverExpr> {
+impl<F: Field> Sub for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn sub(self, rhs: Expression<F, ProverExpr>) -> Expression<F, ProverExpr> {
         self.add(rhs.neg())
     }
 }
 
-impl<F: FieldExt> Mul<F> for Expression<F, ProverExpr> {
+impl<F: Field> Mul<F> for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn mul(self, rhs: F) -> Self::Output {
         Expression::<F, ProverExpr>::scaled(self, rhs)
@@ -1136,7 +1136,7 @@ impl<F: FieldExt> Mul<F> for Expression<F, ProverExpr> {
 }
 
 // defines how the Expressions are printed and displayed
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, ProverExpr> {
+impl<F: std::fmt::Debug + Field> std::fmt::Debug for Expression<F, ProverExpr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Expression")
             .field("Expression_Node", &self.expression_node)
@@ -1146,7 +1146,7 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, ProverExpr
 }
 
 // defines how the ExpressionNodes are printed and displayed
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, ProverExpr> {
+impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, ProverExpr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExpressionNode::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
@@ -1171,14 +1171,14 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, Prover
 }
 
 /// describes the circuit given the expression (includes all the info of the data that the expression is instantiated with)
-impl<F: std::fmt::Debug + FieldExt> Expression<F, ProverExpr> {
+impl<F: std::fmt::Debug + Field> Expression<F, ProverExpr> {
     pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
-        struct CircuitDesc<'a, F: FieldExt>(
+        struct CircuitDesc<'a, F: Field>(
             &'a ExpressionNode<F, ProverExpr>,
             &'a <ProverExpr as ExpressionType<F>>::MleVec,
         );
 
-        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for CircuitDesc<'a, F> {
+        impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for CircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self.0 {
                     ExpressionNode::Constant(scalar) => {

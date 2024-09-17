@@ -16,15 +16,15 @@ use remainder::{
     mle::{dense::DenseMle, Mle},
     prover::helpers::test_circuit,
 };
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 use utils::{get_dummy_random_mle, get_input_shred_and_data_from_vec};
 pub mod utils;
 
-pub struct DataparallelDistributedMultiplication<F: FieldExt> {
+pub struct DataparallelDistributedMultiplication<F: Field> {
     pub first_layer_sector: Sector<F>,
 }
 
-impl<F: FieldExt> DataparallelDistributedMultiplication<F> {
+impl<F: Field> DataparallelDistributedMultiplication<F> {
     pub fn new(ctx: &Context, smaller_mle: &dyn CircuitNode, bigger_mle: &dyn CircuitNode) -> Self {
         let combine_sector = Sector::new(ctx, &[smaller_mle, bigger_mle], |input_nodes| {
             assert_eq!(input_nodes.len(), 2);
@@ -44,7 +44,7 @@ impl<F: FieldExt> DataparallelDistributedMultiplication<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DataparallelDistributedMultiplication<F>
+impl<F: Field, N> Component<N> for DataparallelDistributedMultiplication<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -53,12 +53,12 @@ where
     }
 }
 
-pub struct DiffTwoInputsBuilder<F: FieldExt> {
+pub struct DiffTwoInputsBuilder<F: Field> {
     pub first_layer_sector: Sector<F>,
     pub output_sector: OutputNode,
 }
 
-impl<F: FieldExt> DiffTwoInputsBuilder<F> {
+impl<F: Field> DiffTwoInputsBuilder<F> {
     pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
         let first_layer_sector = Sector::new(ctx, &[mle_1, mle_2], |input_nodes| {
             assert_eq!(input_nodes.len(), 2);
@@ -81,7 +81,7 @@ impl<F: FieldExt> DiffTwoInputsBuilder<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DiffTwoInputsBuilder<F>
+impl<F: Field, N> Component<N> for DiffTwoInputsBuilder<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {

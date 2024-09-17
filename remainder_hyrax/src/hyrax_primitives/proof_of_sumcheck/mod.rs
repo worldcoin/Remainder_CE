@@ -1,8 +1,8 @@
 use rand::Rng;
 use remainder::layer::product::PostSumcheckLayer;
+use remainder_shared_types::ff_field;
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
-    halo2curves::ff::Field,
     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
 };
 use std::ops::Neg;

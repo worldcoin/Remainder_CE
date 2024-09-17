@@ -4,16 +4,16 @@
 use std::marker::PhantomData;
 
 use super::TranscriptSponge;
-use crate::FieldExt;
+use crate::Field;
 use itertools::Itertools;
 
 /// An implementation of a transcript sponge that always returns 1.
 #[derive(Clone, Default)]
-pub struct TestSponge<F: FieldExt> {
+pub struct TestSponge<F: Field> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> TranscriptSponge<F> for TestSponge<F> {
+impl<F: Field> TranscriptSponge<F> for TestSponge<F> {
     fn absorb(&mut self, _elem: F) {}
 
     fn absorb_elements(&mut self, _elements: &[F]) {}

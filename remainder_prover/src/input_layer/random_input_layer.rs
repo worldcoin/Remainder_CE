@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 use serde::{Deserialize, Serialize};
 
@@ -28,15 +28,15 @@ use crate::mle::Mle;
 /// form of coefficients of an MLE that we can use for packing constants.
 
 #[derive(Debug, Clone)]
-pub struct VerifierChallengeInputLayer<F: FieldExt> {
+pub struct VerifierChallengeInputLayer<F: Field> {
     mle: MultilinearExtension<F>,
     pub(crate) layer_id: LayerId,
 }
 
 /// Verifier's description of a Random Input Layer.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(bound = "F: FieldExt")]
-pub struct CircuitVerifierChallengeInputLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct CircuitVerifierChallengeInputLayer<F: Field> {
     /// The ID of this Random Input Layer.
     layer_id: LayerId,
 
@@ -46,7 +46,7 @@ pub struct CircuitVerifierChallengeInputLayer<F: FieldExt> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> CircuitVerifierChallengeInputLayer<F> {
+impl<F: Field> CircuitVerifierChallengeInputLayer<F> {
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         Self {
             layer_id,
@@ -56,7 +56,7 @@ impl<F: FieldExt> CircuitVerifierChallengeInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> InputLayer<F> for VerifierChallengeInputLayer<F> {
+impl<F: Field> InputLayer<F> for VerifierChallengeInputLayer<F> {
     type ProverCommitment = Vec<F>;
     type VerifierCommitment = Vec<F>;
 
@@ -105,7 +105,7 @@ impl<F: FieldExt> InputLayer<F> for VerifierChallengeInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> CircuitInputLayer<F> for CircuitVerifierChallengeInputLayer<F> {
+impl<F: Field> CircuitInputLayer<F> for CircuitVerifierChallengeInputLayer<F> {
     type Commitment = Vec<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -165,7 +165,7 @@ impl<F: FieldExt> CircuitInputLayer<F> for CircuitVerifierChallengeInputLayer<F>
     }
 }
 
-impl<F: FieldExt> VerifierChallengeInputLayer<F> {
+impl<F: Field> VerifierChallengeInputLayer<F> {
     pub fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
         Self { mle, layer_id }
     }
@@ -176,7 +176,7 @@ impl<F: FieldExt> VerifierChallengeInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldWLXEvals<F> for VerifierChallengeInputLayer<F> {
+impl<F: Field> YieldWLXEvals<F> for VerifierChallengeInputLayer<F> {
     /// Computes the V_d(l(x)) evaluations for the input layer V_d.
     fn get_wlx_evaluations(
         &self,
@@ -199,8 +199,8 @@ impl<F: FieldExt> YieldWLXEvals<F> for VerifierChallengeInputLayer<F> {
 
 #[cfg(test)]
 mod tests {
+    use remainder_shared_types::ff_field;
     use remainder_shared_types::{
-        halo2curves::ff::Field,
         transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
         Fr,
     };

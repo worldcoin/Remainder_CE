@@ -30,8 +30,8 @@ use super::{
 /// Descrption.  A [CircuitMle] is stored in the leaves of an `Expression<F,
 /// CircuitExpr>` tree.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
-#[serde(bound = "F: FieldExt")]
-pub struct CircuitMle<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct CircuitMle<F: Field> {
     /// Layer whose data this MLE is a subset of.
     layer_id: LayerId,
 
@@ -39,7 +39,7 @@ pub struct CircuitMle<F: FieldExt> {
     var_indices: Vec<MleIndex<F>>,
 }
 
-impl<F: FieldExt> CircuitMle<F> {
+impl<F: Field> CircuitMle<F> {
     /// Create a new [CircuitMle] given its layer id and the [MleIndex]s that it holds.
     /// This is effectively the "shape" of a [DenseMle].
     pub fn new(layer_id: LayerId, var_indices: &[MleIndex<F>]) -> Self {
@@ -178,12 +178,12 @@ pub struct CircuitExpr;
 //     type MLENodeRepr = usize,
 //     type MleVec = Vec<CircuitMle<F>>,
 // ```
-impl<F: FieldExt> ExpressionType<F> for CircuitExpr {
+impl<F: Field> ExpressionType<F> for CircuitExpr {
     type MLENodeRepr = CircuitMle<F>;
     type MleVec = ();
 }
 
-impl<F: FieldExt> Expression<F, CircuitExpr> {
+impl<F: Field> Expression<F, CircuitExpr> {
     /// Binds the variables of this expression to `point`, and retrieves the
     /// leaf MLE values from the `transcript_reader`.  Returns a `Expression<F,
     /// VerifierExpr>` version of `self`.
@@ -280,7 +280,7 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
     }
 }
 
-impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
+impl<F: Field> ExpressionNode<F, CircuitExpr> {
     /// Turn this expression into a [VerifierExpr] which represents a fully bound expression.
     /// Should only be applicable after a full layer of sumcheck.
     pub fn into_verifier_node(
@@ -786,59 +786,6 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
 }
 
 impl<F: FieldExt> Expression<F, CircuitExpr> {
-    /// Computes the num_vars of this expression (how many rounds of sumcheck it would take to prove)
-    /// TODO(ryancao): Aight figure out either where this is or write it
-    // pub fn num_vars(&self, num_vars_map: &HashMap<NodeId, usize>) -> Result<usize, DAGError> {
-    //     self.expression_node.get_num_vars(num_vars_map)
-    // }
-
-    /// Builds the ProverExpression using the AbstractExpression as a template.
-    ///
-    /// Gets the information the prover needs by consulting the CircuitMap to get
-    /// the data and the prefix_bits
-    ///
-    /// TODO(ryancao): We'll do this during the data round!
-    // pub fn build_prover_expr(
-    //     self,
-    //     circuit_map: &CircuitMap<'_, F>,
-    // ) -> Result<Expression<F, ProverExpr>, DAGError> {
-    //     // First we get all the mles that this expression will need to store
-    //     let mut nodes = self.expression_node.get_node_ids(vec![]);
-    //     nodes.sort();
-    //     nodes.dedup();
-
-    //     let mut node_map = HashMap::<NodeId, usize>::new();
-
-    //     let mle_vec: Result<Vec<_>, _> = nodes
-    //         .into_iter()
-    //         .enumerate()
-    //         .map(|(idx, node_id)| {
-    //             let (location, data) = circuit_map.get_node(&node_id)?;
-
-    //             let data = (*data).clone();
-
-    //             let data = DenseMle::new_with_prefix_bits(
-    //                 data,
-    //                 location.layer_id,
-    //                 location.prefix_bits.clone(),
-    //             );
-
-    //             node_map.insert(node_id, idx);
-    //             Ok(data)
-    //         })
-    //         .collect();
-    //     let mle_vec = mle_vec?;
-
-    //     // Then we replace the NodeIds in the AbstractExpr w/ indices of our stored MLEs
-
-    //     let expression_node = self.expression_node.build_prover_node(&node_map)?;
-
-    //     Ok(Expression::<F, ProverExpr> {
-    //         expression_node,
-    //         mle_vec,
-    //     })
-    // }
-
     /// Returns the total number of variables (i.e. number of rounds of sumcheck)
     /// within the MLE representing the output "data" of this particular expression.
     ///
@@ -1070,7 +1017,7 @@ impl<F: FieldExt> Mul<F> for Expression<F, CircuitExpr> {
     }
 }
 
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, CircuitExpr> {
+impl<F: std::fmt::Debug + Field> std::fmt::Debug for Expression<F, CircuitExpr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Circuit Expression")
             .field("Expression_Node", &self.expression_node)
@@ -1078,7 +1025,7 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, CircuitExp
     }
 }
 
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, CircuitExpr> {
+impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, CircuitExpr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExpressionNode::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),

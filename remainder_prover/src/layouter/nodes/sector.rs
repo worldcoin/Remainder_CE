@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
@@ -15,13 +15,13 @@ use super::{CircuitNode, CompilableNode, Context, NodeId};
 
 #[derive(Debug, Clone)]
 /// A sector node in the circuit DAG, can have multiple inputs, and a single output
-pub struct Sector<F: FieldExt> {
+pub struct Sector<F: Field> {
     id: NodeId,
     expr: Expression<F, AbstractExpr>,
     num_vars: usize,
 }
 
-impl<F: FieldExt> Sector<F> {
+impl<F: Field> Sector<F> {
     /// creates a new sector node
     pub fn new(
         ctx: &Context,
@@ -44,7 +44,7 @@ impl<F: FieldExt> Sector<F> {
     }
 }
 
-impl<F: FieldExt> CircuitNode for Sector<F> {
+impl<F: Field> CircuitNode for Sector<F> {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -59,7 +59,7 @@ impl<F: FieldExt> CircuitNode for Sector<F> {
 }
 
 //todo remove this super jank workaround
-impl<'a, F: FieldExt> CircuitNode for &'a Sector<F> {
+impl<'a, F: Field> CircuitNode for &'a Sector<F> {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -78,12 +78,12 @@ impl<'a, F: FieldExt> CircuitNode for &'a Sector<F> {
 /// Creating a SectorGroup as part of a Component before layouting will
 /// prevent the layouter from joining any more Sectors to the SectorGroup
 #[derive(Clone, Debug)]
-pub struct SectorGroup<F: FieldExt> {
+pub struct SectorGroup<F: Field> {
     children: Vec<Sector<F>>,
     id: NodeId,
 }
 
-impl<F: FieldExt> SectorGroup<F> {
+impl<F: Field> SectorGroup<F> {
     /// Creates a new SectorGroup
     pub fn new(ctx: &Context, children: Vec<Sector<F>>) -> Self {
         Self {
@@ -98,7 +98,7 @@ impl<F: FieldExt> SectorGroup<F> {
     }
 }
 
-impl<F: FieldExt> CircuitNode for SectorGroup<F> {
+impl<F: Field> CircuitNode for SectorGroup<F> {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -119,7 +119,7 @@ impl<F: FieldExt> CircuitNode for SectorGroup<F> {
     }
 }
 
-impl<F: FieldExt> CompilableNode<F> for SectorGroup<F> {
+impl<F: Field> CompilableNode<F> for SectorGroup<F> {
     fn generate_circuit_description<'a>(
         &'a self,
         layer_id: &mut LayerId,
@@ -169,7 +169,7 @@ impl<F: FieldExt> CompilableNode<F> for SectorGroup<F> {
 
 /// Takes some sectors that all belong in a single layer and
 /// builds the layer/adds their locations to the circuit map
-fn compile_layer<'a, F: FieldExt>(
+fn compile_layer<'a, F: Field>(
     children: &[&'a Sector<F>],
     layer_id: &mut LayerId,
     circuit_description_map: &mut CircuitDescriptionMap,

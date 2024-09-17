@@ -6,7 +6,7 @@ use core::fmt::Debug;
 use serde::{Deserialize, Serialize};
 
 use crate::{claims::Claim, layer::LayerId};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use self::mle_enum::MleEnum;
 use dyn_clonable::*;
@@ -42,7 +42,7 @@ pub mod bundled_input_mle;
 /// IntoIterator and FromIterator, this is to ensure that the semantic ordering
 /// within T is always consistent.
 #[clonable]
-pub trait Mle<F: FieldExt>: Clone + Debug + Send + Sync {
+pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     /// Returns the number of iterated variables this Mle is defined on.
     /// Equivalently, this is the log_2 of the size of the *whole* bookkeeping
     /// table.
@@ -126,7 +126,7 @@ pub enum MleIndex<F> {
     Bound(F, usize),
 }
 
-impl<F: FieldExt> MleIndex<F> {
+impl<F: Field> MleIndex<F> {
     /// If `self` is an `Iterated` bit, turns it into an `IndexedBit(bit)`.
     /// Otherwise, `self` is not modified.
     ///

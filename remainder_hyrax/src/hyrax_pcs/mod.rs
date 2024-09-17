@@ -6,9 +6,11 @@ use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use ndarray::Array2;
 use rand::Rng;
+use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
+use remainder_shared_types::curves::PrimeOrderCurve;
+use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
-use remainder_shared_types::{curves::PrimeOrderCurve, halo2curves::group::ff::Field};
 use serde::{Deserialize, Serialize};
 
 pub mod tests;

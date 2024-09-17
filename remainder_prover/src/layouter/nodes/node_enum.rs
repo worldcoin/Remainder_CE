@@ -1,6 +1,6 @@
 //! A default Enum for a representation of all possible DAG Nodes
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::node_enum;
 
@@ -18,7 +18,7 @@ use super::{
     NodeGroup, YieldNode,
 };
 
-node_enum!(NodeEnum: FieldExt,
+node_enum!(NodeEnum: Field,
     (InputShred: InputShred),
     (InputLayer: InputLayerNode),
     (VerifierChallengeNode: VerifierChallengeNode),
@@ -35,7 +35,7 @@ node_enum!(NodeEnum: FieldExt,
 );
 
 /// Organizational wrapper for a vec of `NodeEnum`s
-pub struct NodeEnumGroup<F: FieldExt> {
+pub struct NodeEnumGroup<F: Field> {
     input_shreds: Option<Vec<InputShred>>,
     input_layers: Option<Vec<InputLayerNode>>,
     verifier_challenge_nodes: Option<Vec<VerifierChallengeNode>>,
@@ -51,7 +51,7 @@ pub struct NodeEnumGroup<F: FieldExt> {
     lookup_constraints: Option<Vec<LookupConstraint>>,
 }
 
-impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
+impl<F: Field> NodeGroup for NodeEnumGroup<F> {
     type NodeEnum = NodeEnum<F>;
 
     fn new(nodes: Vec<Self::NodeEnum>) -> Self {
@@ -98,76 +98,76 @@ impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
     }
 }
 
-impl<F: FieldExt> YieldNode<InputShred> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<InputShred> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<InputShred> {
         self.input_shreds.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<InputLayerNode> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<InputLayerNode> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<InputLayerNode> {
         self.input_layers.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<VerifierChallengeNode> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<VerifierChallengeNode> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<VerifierChallengeNode> {
         self.verifier_challenge_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<OutputNode> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<OutputNode> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<OutputNode> {
         self.output.take().unwrap_or_default()
     }
 }
-impl<F: FieldExt> YieldNode<DebugNode> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<DebugNode> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<DebugNode> {
         self.debugs.take().unwrap_or_default()
     }
 }
-impl<F: FieldExt> YieldNode<Sector<F>> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<Sector<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<Sector<F>> {
         self.sectors.take().unwrap_or_default()
     }
 }
-impl<F: FieldExt> YieldNode<SectorGroup<F>> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<SectorGroup<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<SectorGroup<F>> {
         self.sector_groups.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<GateNode> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<GateNode> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<GateNode> {
         self.gate_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<IdentityGateNode> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<IdentityGateNode> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<IdentityGateNode> {
         self.identity_gate_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<SplitNode> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<SplitNode> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<SplitNode> {
         self.split_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<MatMultNode> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<MatMultNode> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<MatMultNode> {
         self.matmult_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<LookupTable> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<LookupTable> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<LookupTable> {
         self.lookup_tables.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<LookupConstraint> for NodeEnumGroup<F> {
+impl<F: Field> YieldNode<LookupConstraint> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<LookupConstraint> {
         self.lookup_constraints.take().unwrap_or_default()
     }

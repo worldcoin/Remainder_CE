@@ -12,7 +12,7 @@ use crate::layouter::layouting::{CircuitDescriptionMap, CircuitMap};
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use rayon::prelude::*;
-use remainder_shared_types::{transcript::TranscriptReaderError, FieldExt};
+use remainder_shared_types::{transcript::TranscriptReaderError, Field};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -67,7 +67,7 @@ pub enum InputLayerError {
 use log::{debug, info};
 /// The InputLayer trait in which the evaluation proof, commitment, and proof/verification
 /// process takes place for input layers.
-pub trait InputLayer<F: FieldExt> {
+pub trait InputLayer<F: Field> {
     /// The struct that contains the commitment to the contents of the input_layer in the prover's view.
     type ProverCommitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
 
@@ -112,7 +112,7 @@ pub trait InputLayer<F: FieldExt> {
     fn get_padded_mle(&self) -> DenseMle<F>;
 }
 
-pub trait CircuitInputLayer<F: FieldExt> {
+pub trait CircuitInputLayer<F: Field> {
     /// The struct that contains the commitment to the contents of the input_layer.
     type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
 
@@ -143,7 +143,7 @@ pub trait CircuitInputLayer<F: FieldExt> {
 }
 
 /// Computes the V_d(l(x)) evaluations for the input layer V_d.
-fn get_wlx_evaluations_helper<F: FieldExt>(
+fn get_wlx_evaluations_helper<F: Field>(
     mut mle_ref: MultilinearExtension<F>,
     claim_vecs: &[Vec<F>],
     claimed_vals: &[F],

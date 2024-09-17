@@ -7,8 +7,8 @@ use ark_std::test_rng;
 use rand::Rng;
 use remainder_shared_types::Fr;
 
-/// Does a dummy version of sumcheck with a testing RNG
-pub fn dummy_sumcheck<F: FieldExt>(
+/// Does a dummy version of sumcheck with a testing RNG.
+pub fn dummy_sumcheck<F: Field>(
     expr: &mut Expression<F, ProverExpr>,
     rng: &mut impl Rng,
     layer_claim: Claim<F>,
@@ -48,7 +48,7 @@ pub fn dummy_sumcheck<F: FieldExt>(
         // --- Gives back the evaluations g(0), g(1), ..., g(d - 1) ---
         let eval = compute_sumcheck_message_beta_cascade(expr, round_index, degree, &newbeta);
 
-        if let Ok(Evals(evaluations)) = eval {
+        if let Ok(SumcheckEvals(evaluations)) = eval {
             // dbg!(&evaluations);
             messages.push((evaluations, challenge))
         } else {
@@ -69,7 +69,7 @@ pub fn dummy_sumcheck<F: FieldExt>(
 /// Returns the curr random challenge if verified correctly, otherwise verify error
 /// can change this to take prev round random challenge, and then compute the new random challenge
 /// TODO!(ryancao): Change this to take in the expression as well and do the final sumcheck check
-pub fn verify_sumcheck_messages<F: FieldExt>(
+pub fn verify_sumcheck_messages<F: Field>(
     messages: Vec<(Vec<F>, Option<F>)>,
     mut expression: Expression<F, ProverExpr>,
     layer_claim: Claim<F>,
@@ -133,7 +133,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
     Ok(chal)
 }
 
-pub fn get_dummy_claim<F: FieldExt>(
+pub fn get_dummy_claim<F: Field>(
     mle_ref: DenseMle<F>,
     rng: &mut impl Rng,
     challenges: Option<Vec<F>>,
@@ -164,7 +164,7 @@ pub fn get_dummy_claim<F: FieldExt>(
     Claim::new(claim, eval)
 }
 
-pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
+pub(crate) fn get_dummy_expression_eval<F: Field>(
     expression: &Expression<F, ProverExpr>,
     rng: &mut impl Rng,
 ) -> Claim<F> {
@@ -188,8 +188,7 @@ pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
 
     let beta = BetaValues::new(challenges_enumerate);
     let eval = compute_sumcheck_message_beta_cascade(&expression, 0, 2, &beta).unwrap();
-    let Evals(evals) = eval;
-    dbg!(&evals);
+    let SumcheckEvals(evals) = eval;
     let result = if evals.len() > 1 {
         evals[0] + evals[1]
     } else {
@@ -206,7 +205,7 @@ fn eval_expr_nums() {
     let mut expression1: Expression<Fr, ProverExpr> =
         Expression::<Fr, ProverExpr>::constant(Fr::from(6));
     let res = compute_sumcheck_message_beta_cascade(&mut expression1, 0, 1, &new_beta);
-    let exp = Evals(vec![Fr::from(0), Fr::from(6)]);
+    let exp = SumcheckEvals(vec![Fr::from(0), Fr::from(6)]);
     assert_eq!(res.unwrap(), exp);
 }
 
@@ -260,7 +259,7 @@ fn test_linear_sum() {
     mleexpr.fix_variable_at_index(1, Fr::from(4));
 
     let res = compute_sumcheck_message_beta_cascade(&mut mleexpr, 1, 0, &newbeta);
-    let exp = Evals(vec![Fr::from(29)]);
+    let exp = SumcheckEvals(vec![Fr::from(29)]);
     assert_eq!(res.unwrap(), exp);
 }
 
@@ -279,7 +278,7 @@ fn test_quadratic_sum() {
     expression.index_mle_indices(0);
 
     let res = compute_sumcheck_message_beta_cascade(&mut expression, 1, 3, &new_beta);
-    let exp = Evals(vec![
+    let exp = SumcheckEvals(vec![
         Fr::from(2).neg(),
         Fr::from(120),
         Fr::from(780),
@@ -314,7 +313,7 @@ fn test_quadratic_sum_differently_sized_mles2() {
     expression.fix_variable_at_index(2, Fr::from(3));
 
     let res = compute_sumcheck_message_beta_cascade(&mut expression, 1, 3, &new_beta);
-    let exp = Evals(vec![
+    let exp = SumcheckEvals(vec![
         Fr::from(12).neg(),
         Fr::from(230),
         Fr::from(1740),
@@ -652,7 +651,7 @@ fn test_beta_cascade_1() {
     mle_ref_1.index_mle_indices(0);
     let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
     let betacascade_evals = beta_cascade(&[&mle_ref_1], 2, 0, &beta_vals, &[]);
-    let expected_evals = Evals(vec![Fr::from(4).neg(), Fr::from(10), Fr::from(30)]);
+    let expected_evals = SumcheckEvals(vec![Fr::from(4).neg(), Fr::from(10), Fr::from(30)]);
     assert_eq!(betacascade_evals, expected_evals);
 }
 
@@ -666,7 +665,7 @@ fn test_beta_cascade_2() {
     mle_ref_2.index_mle_indices(0);
     let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
     let betacascade_evals = beta_cascade(&[&mle_ref_1, &mle_ref_2], 3, 0, &beta_vals, &[]);
-    let expected_evals = Evals(vec![
+    let expected_evals = SumcheckEvals(vec![
         Fr::from(10).neg(),
         Fr::from(2),
         Fr::from(60).neg(),
@@ -690,7 +689,7 @@ fn test_beta_cascade_3() {
     let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
     let betacascade_evals =
         beta_cascade(&[&mle_ref_1, &mle_ref_2, &mle_ref_3], 4, 0, &beta_vals, &[]);
-    let expected_evals = Evals(vec![
+    let expected_evals = SumcheckEvals(vec![
         Fr::from(28).neg(),
         Fr::from(22),
         Fr::from(240).neg(),

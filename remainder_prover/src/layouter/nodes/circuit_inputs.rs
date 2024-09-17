@@ -2,8 +2,7 @@
 
 pub mod compile_inputs;
 
-use log::MetadataBuilder;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     input_layer::CommitmentEnum,

@@ -16,7 +16,7 @@ use crate::output_layer::mle_output_layer::CircuitMleOutputLayer;
 use crate::utils::get_total_mle_indices;
 
 use itertools::{repeat_n, Itertools};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::expression::generic_expr::Expression;
 
@@ -41,7 +41,11 @@ impl LookupConstraint {
     /// responsible for the yielding of all nodes (including `constrained` and `multiplicities`).
     /// The adding of lookup specific input- and output layers is handled automatically by
     /// compile().
-    pub fn new<F: FieldExt>(
+    ///
+    /// # Requires:
+    ///   if `constrained` has length not a power of two, then `multiplicitites` must also count the
+    ///   implicit padding!
+    pub fn new<F: Field>(
         ctx: &Context,
         lookup_table: &LookupTable,
         constrained: &dyn CircuitNode,
@@ -97,8 +101,8 @@ impl LookupTable {
     /// does not hide the constrained values themselves - that is up to the caller).
     ///
     /// # Requires
-    ///     - The length of `table` must be a power of two.
-    pub fn new<F: FieldExt>(
+    ///     - The length of the table must be a power of two.
+    pub fn new<F: Field>(
         ctx: &Context,
         table: &dyn CircuitNode,
         secret_constrained_values: bool,
@@ -124,7 +128,7 @@ impl LookupTable {
         self.constraints.push(constraint);
     }
 
-    pub fn generate_lookup_circuit_description<F: FieldExt>(
+    pub fn generate_lookup_circuit_description<F: Field>(
         &self,
         input_layer_id: &mut LayerId,
         intermediate_layer_id: &mut LayerId,
@@ -192,17 +196,6 @@ impl LookupTable {
 
         let lhs_denominator_vars = repeat_n(MleIndex::Iterated, expr_num_vars).collect_vec();
         let lhs_denominator_desc = CircuitMle::new(layer_id, &lhs_denominator_vars);
-
-        // // Build the numerator: is all ones (create explicitly since don't want to pad with zeros)
-        // let expr = ExprBuilder::<F>::constant(F::from(1u64))
-        //     .build_circuit_expr(circuit_description_map)?;
-        // let layer_id = intermediate_layer_id.get_and_inc();
-        // let layer = CircuitRegularLayer::new_raw(layer_id, expr);
-        // println!(
-        //     "Layer that sets the numerators to 1 has layer id: {:?}",
-        //     layer_id
-        // );
-        // intermediate_layers.push(CircuitLayerEnum::Regular(layer));
 
         // --- Super special case: need to create a 0-variable MLE for the numerator which is JUST derived from an expression producing the constant 1 ---
         let maybe_lhs_numerator_desc = if lhs_denominator_vars.len() == 0 {
@@ -456,7 +449,7 @@ impl CircuitNode for LookupTable {
 }
 
 /// Extract the prefix bits from a DenseMle.
-fn extract_prefix_num_iterated_bits<F: FieldExt>(mle: &CircuitMle<F>) -> (Vec<MleIndex<F>>, usize) {
+fn extract_prefix_num_iterated_bits<F: Field>(mle: &CircuitMle<F>) -> (Vec<MleIndex<F>>, usize) {
     let mut num_iterated_bits = 0;
     let prefix_bits = mle
         .mle_indices()
@@ -476,7 +469,7 @@ fn extract_prefix_num_iterated_bits<F: FieldExt>(mle: &CircuitMle<F>) -> (Vec<Ml
 
 /// Split a DenseMle into two DenseMles, with the left half containing the even-indexed elements and
 /// the right half containing the odd-indexed elements, setting the prefix bits accordingly.
-fn split_circuit_mle<F: FieldExt>(mle_desc: &CircuitMle<F>) -> (CircuitMle<F>, CircuitMle<F>) {
+fn split_circuit_mle<F: Field>(mle_desc: &CircuitMle<F>) -> (CircuitMle<F>, CircuitMle<F>) {
     let (prefix_bits, num_iterated_bits) = extract_prefix_num_iterated_bits(mle_desc);
 
     let left_mle_desc = CircuitMle::new(
@@ -503,7 +496,7 @@ fn split_circuit_mle<F: FieldExt>(mle_desc: &CircuitMle<F>) -> (CircuitMle<F>, C
 /// Given two Mles of the same length representing the numerators and denominators of a sequence of
 /// fractions, add layers that perform a sum of the fractions, return a new pair of length-1 Mles
 /// representing the numerator and denominator of the sum.
-fn build_fractional_sum<F: FieldExt>(
+fn build_fractional_sum<F: Field>(
     maybe_numerator_desc: Option<CircuitMle<F>>,
     denominator_desc: CircuitMle<F>,
     layers: &mut Vec<CircuitLayerEnum<F>>,

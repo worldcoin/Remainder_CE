@@ -1,6 +1,6 @@
 use rand::Rng;
 use remainder_shared_types::curves::PrimeOrderCurve;
-use remainder_shared_types::halo2curves::group::ff::Field;
+use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
@@ -59,6 +59,12 @@ impl<C: PrimeOrderCurve> ProofOfProduct<C> {
         let z4 = b_4 + c * y.blinding;
         let z5 = b_5 + c * (z.blinding - x.blinding * y.value);
 
+        transcript.append_scalar_point("PoP z1", z1);
+        transcript.append_scalar_point("PoP z2", z2);
+        transcript.append_scalar_point("PoP z3", z3);
+        transcript.append_scalar_point("PoP z4", z4);
+        transcript.append_scalar_point("PoP z5", z5);
+
         Self {
             alpha,
             beta,
@@ -92,6 +98,17 @@ impl<C: PrimeOrderCurve> ProofOfProduct<C> {
 
         // A scalar field element $c$ is sampled from the transcript.
         let c = transcript.get_scalar_field_challenge("PoP c").unwrap();
+
+        let z1 = transcript.consume_scalar_point("PoO z1").unwrap();
+        assert_eq!(z1, self.z1);
+        let z2 = transcript.consume_scalar_point("PoO z2").unwrap();
+        assert_eq!(z2, self.z2);
+        let z3 = transcript.consume_scalar_point("PoO z3").unwrap();
+        assert_eq!(z3, self.z3);
+        let z4 = transcript.consume_scalar_point("PoO z4").unwrap();
+        assert_eq!(z4, self.z4);
+        let z5 = transcript.consume_scalar_point("PoO z5").unwrap();
+        assert_eq!(z5, self.z5);
 
         // Check the following:
         // \alpha \cdot X^c \overset{?}{=} g^{z_1}\cdot h^{z_2} \\

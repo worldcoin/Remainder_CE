@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use ark_std::log2;
 use itertools::Itertools;
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::circuit_expr::CircuitMle,
@@ -17,7 +17,7 @@ use crate::{
         nodes::{CircuitNode, NodeId},
     },
     mle::evals::{Evaluations, MultilinearExtension},
-    utils::{argsort, get_total_mle_indices, pad_to_nearest_power_of_two},
+    utils::mle::{argsort, get_total_mle_indices, pad_to_nearest_power_of_two},
 };
 
 use super::{InputLayerData, InputLayerNode, InputLayerType};
@@ -70,7 +70,7 @@ fn index_input_mles(input_mle_num_vars: &[usize]) -> (Vec<Vec<bool>>, Vec<usize>
 
 /// Combines the list of input MLEs in the input layer into one giant MLE by interleaving them
 /// assuming that the indices of the bookkeeping table are stored in little endian.
-pub fn combine_input_mles<F: FieldExt>(
+pub fn combine_input_mles<F: Field>(
     input_mles: &[&MultilinearExtension<F>],
 ) -> MultilinearExtension<F> {
     let mle_combine_indices = argsort(
@@ -121,9 +121,9 @@ pub fn combine_input_mles<F: FieldExt>(
 /// * `opposite_endian_bookkeeping_table` - MLE bookkeeping table, which, when
 ///     indexed (b_n, ..., b_1) rather than (b_1, ..., b_n), yields the same
 ///     result.
-fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F> {
+fn invert_mle_bookkeeping_table<F: Field>(bookkeeping_table: Vec<F>) -> Vec<F> {
     // --- This should only happen the first time!!! ---
-    let padded_bookkeeping_table = pad_to_nearest_power_of_two(bookkeeping_table);
+    let padded_bookkeeping_table = pad_to_nearest_power_of_two(&bookkeeping_table);
 
     // --- 2 or fewer elements: No-op ---
     if padded_bookkeeping_table.len() <= 2 {
@@ -148,7 +148,7 @@ fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F
 }
 
 impl InputLayerNode {
-    pub fn generate_input_circuit_description<F: FieldExt>(
+    pub fn generate_input_circuit_description<F: Field>(
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,

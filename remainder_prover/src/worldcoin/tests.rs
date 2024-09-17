@@ -1,245 +1,178 @@
-#[cfg(test)]
-mod tests {
-    use crate::layouter::compiling::LayouterCircuit;
-    use crate::layouter::component::ComponentSet;
-    use crate::layouter::nodes::circuit_inputs::{
-        InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+use crate::prover::helpers::test_circuit;
+use crate::worldcoin::circuits::build_circuit;
+use crate::worldcoin::data::{
+    load_worldcoin_data, trivial_wiring_2x2_circuit_data,
+    trivial_wiring_2x2_odd_kernel_dims_circuit_data,
+};
+use remainder_shared_types::Fr;
+use std::path::Path;
+
+#[test]
+fn test_trivial_wiring_2x2_circuit_data() {
+    let data = trivial_wiring_2x2_circuit_data::<Fr>();
+    dbg!(&data);
+    let circuit = build_circuit(data);
+    test_circuit(circuit, None);
+}
+
+#[test]
+fn test_trivial_wiring_2x2_odd_kernel_dims_circuit_data() {
+    let data = trivial_wiring_2x2_odd_kernel_dims_circuit_data::<Fr>();
+    dbg!(&data);
+    let circuit = build_circuit(data);
+    test_circuit(circuit, None);
+}
+
+#[ignore] // takes 90 seconds!
+#[test]
+fn test_worldcoin_circuit_iris_v2() {
+    use super::parameters_v2::{
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
     };
-    use crate::layouter::nodes::circuit_outputs::OutputNode;
-    use crate::layouter::nodes::node_enum::NodeEnum;
-    use crate::layouter::nodes::CircuitNode;
-    use crate::prover::helpers::test_circuit;
-    use crate::utils::get_input_shred_and_data_from_vec;
-    use crate::worldcoin::circuits::build_circuit_public_il;
-    use crate::worldcoin::components::SignCheckerComponent;
-    use crate::worldcoin::components::{BitsAreBinary, DigitalRecompositionComponent};
-    use crate::worldcoin::data::{
-        load_data, medium_worldcoin_data, tiny_worldcoin_data, WorldcoinCircuitData,
+    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
+    let image_path = path.join("iris/test_image.npy");
+    let data = load_worldcoin_data::<
+        Fr,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
+        BASE,
+        NUM_DIGITS,
+    >(path.clone(), image_path, false);
+    let circuit = build_circuit(data);
+    test_circuit(circuit, None);
+}
+
+#[ignore] // takes 90 seconds!
+#[test]
+fn test_worldcoin_circuit_mask_v2() {
+    use super::parameters_v2::{
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
     };
-    use itertools::Itertools;
+    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
+    let image_path = path.join("mask/test_image.npy");
+    let data = load_worldcoin_data::<
+        Fr,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
+        BASE,
+        NUM_DIGITS,
+    >(path.clone(), image_path, true);
+    let circuit = build_circuit(data);
+    test_circuit(circuit, None);
+}
+
+#[ignore] // takes 90 seconds!
+#[test]
+fn test_worldcoin_circuit_iris_v3() {
+    use super::parameters_v3::{
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
+    };
+    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
+    let image_path = path.join("iris/test_image.npy");
+    let data = load_worldcoin_data::<
+        Fr,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
+        BASE,
+        NUM_DIGITS,
+    >(path.clone(), image_path, false);
+    let circuit = build_circuit(data);
+    test_circuit(circuit, None);
+}
+
+#[ignore] // takes 90 seconds!
+#[test]
+fn test_worldcoin_circuit_mask_v3() {
+    use super::parameters_v3::{
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
+    };
+    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
+    let image_path = path.join("mask/test_image.npy");
+    let data = load_worldcoin_data::<
+        Fr,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
+        BASE,
+        NUM_DIGITS,
+    >(path.clone(), image_path, true);
+    let circuit = build_circuit(data);
+    test_circuit(circuit, None);
+}
+
+#[test]
+/// Simply checks that the test files for v2 are available (in both the iris and mask case) and that
+/// the CircuitData instance can be constructed.
+fn test_load_worldcoin_data_v2() {
+    use super::parameters_v2::{
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
+    };
     use remainder_shared_types::Fr;
     use std::path::Path;
+    // iris
+    let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
+    let image_path = path.join("iris/test_image.npy");
+    let data = load_worldcoin_data::<
+        Fr,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
+        BASE,
+        NUM_DIGITS,
+    >(path.clone(), image_path, false);
+    data.ensure_guarantees();
+    // mask
+    let image_path = path.join("mask/test_image.npy");
+    let data = load_worldcoin_data::<
+        Fr,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
+        BASE,
+        NUM_DIGITS,
+    >(path.clone(), image_path, true);
+    data.ensure_guarantees();
+}
 
-    #[test]
-    fn test_sign_checker() {
-        let values = vec![Fr::from(3u64), Fr::from(2u64).neg()];
-        let abs_values = vec![Fr::from(3u64), Fr::from(2u64)];
-        let sign_bits = vec![
-            Fr::from(1u64), // positive
-            Fr::from(0u64), // negative
-        ];
-
-        let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let (abs_values_shred, abs_values_shred_data) =
-                get_input_shred_and_data_from_vec(abs_values.clone(), ctx, &input_layer);
-            let (sign_bits_input_shred, sign_bits_input_shred_data) =
-                get_input_shred_and_data_from_vec(sign_bits.clone(), ctx, &input_layer);
-            let (values_input_shred, values_input_shred_data) =
-                get_input_shred_and_data_from_vec(values.clone(), ctx, &input_layer);
-            let input_layer_data = InputLayerData::new(
-                input_layer.id(),
-                vec![
-                    abs_values_shred_data,
-                    sign_bits_input_shred_data,
-                    values_input_shred_data,
-                ],
-                None,
-            );
-
-            let sign_checker = SignCheckerComponent::new(
-                ctx,
-                &values_input_shred,
-                &sign_bits_input_shred,
-                &abs_values_shred,
-            );
-
-            let output = OutputNode::new_zero(ctx, &sign_checker.sector);
-
-            let all_nodes: Vec<NodeEnum<Fr>> = vec![
-                input_layer.into(),
-                abs_values_shred.into(),
-                sign_bits_input_shred.into(),
-                values_input_shred.into(),
-                sign_checker.sector.into(),
-                output.into(),
-            ];
-
-            (
-                ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-                vec![input_layer_data],
-            )
-        });
-
-        test_circuit(circuit, None);
-    }
-
-    #[test]
-    fn test_recomposition() {
-        let base = 16;
-        // a length 2 decomposition of four values
-        let digits = vec![
-            vec![
-                // MSBs
-                Fr::from(1u64),
-                Fr::from(0u64),
-                Fr::from(2u64),
-                Fr::from(3u64),
-            ],
-            vec![
-                // LSBs
-                Fr::from(3u64),
-                Fr::from(2u64),
-                Fr::from(1u64),
-                Fr::from(0u64),
-            ],
-        ];
-        let sign_bits = vec![
-            // 1 means positive, 0 means negative
-            Fr::from(1u64),
-            Fr::from(0u64),
-            Fr::from(1u64),
-            Fr::from(0u64),
-        ];
-        let expected = vec![
-            Fr::from(19u64),
-            Fr::from(2u64).neg(),
-            Fr::from(33u64),
-            Fr::from(48u64).neg(),
-        ];
-
-        let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let mut input_shred_data_vec: Vec<InputShredData<Fr>> = Vec::new();
-            let (digits_input_shreds, digits_input_shreds_data): (
-                Vec<InputShred>,
-                Vec<InputShredData<Fr>>,
-            ) = digits
-                .iter()
-                .map(|digits_at_place| {
-                    get_input_shred_and_data_from_vec(digits_at_place.clone(), ctx, &input_layer)
-                })
-                .unzip();
-            let (sign_bits_input_shred, sign_bits_input_shred_data) =
-                get_input_shred_and_data_from_vec(sign_bits.clone(), ctx, &input_layer);
-            let (expected_input_shred, expected_input_shred_data) =
-                get_input_shred_and_data_from_vec(expected.clone(), ctx, &input_layer);
-            input_shred_data_vec
-                .extend(vec![sign_bits_input_shred_data, expected_input_shred_data]);
-            input_shred_data_vec.extend(digits_input_shreds_data);
-            let input_layer_data =
-                InputLayerData::new(input_layer.id(), input_shred_data_vec, None);
-
-            let digits_input_refs = digits_input_shreds
-                .iter()
-                .map(|shred| shred as &dyn CircuitNode)
-                .collect_vec();
-            let recomp_of_abs_value =
-                DigitalRecompositionComponent::new(ctx, &digits_input_refs, base);
-
-            let signed_recomp_checker = SignCheckerComponent::new(
-                ctx,
-                &expected_input_shred,
-                &sign_bits_input_shred,
-                &&recomp_of_abs_value.sector,
-            );
-
-            let output = OutputNode::new_zero(ctx, &signed_recomp_checker.sector);
-
-            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
-                input_layer.into(),
-                sign_bits_input_shred.into(),
-                expected_input_shred.into(),
-                recomp_of_abs_value.sector.into(),
-                signed_recomp_checker.sector.into(),
-                output.into(),
-            ];
-
-            all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
-
-            (
-                ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-                vec![input_layer_data],
-            )
-        });
-
-        test_circuit(circuit, None);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_bits_are_binary_soundness() {
-        let bits = vec![Fr::from(3u64)];
-        let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let (shred, shred_data) =
-                get_input_shred_and_data_from_vec(bits.clone(), ctx, &input_layer);
-            let input_layer_data = InputLayerData::new(input_layer.id(), vec![shred_data], None);
-            let component = BitsAreBinary::new(ctx, &shred);
-            let output = OutputNode::new_zero(ctx, &component.sector);
-            let all_nodes: Vec<NodeEnum<Fr>> = vec![
-                input_layer.into(),
-                shred.into(),
-                component.sector.into(),
-                output.into(),
-            ];
-            (
-                ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-                vec![input_layer_data],
-            )
-        });
-        test_circuit(circuit, None);
-    }
-
-    #[test]
-    fn test_bits_are_binary() {
-        let bits = vec![
-            Fr::from(1u64),
-            Fr::from(1u64),
-            Fr::from(1u64),
-            Fr::from(0u64),
-        ];
-        let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let (shred, shred_data) =
-                get_input_shred_and_data_from_vec(bits.clone(), ctx, &input_layer);
-            let input_layer_data = InputLayerData::new(input_layer.id(), vec![shred_data], None);
-            let component = BitsAreBinary::new(ctx, &shred);
-            let output = OutputNode::new_zero(ctx, &component.sector);
-            let all_nodes: Vec<NodeEnum<Fr>> = vec![
-                input_layer.into(),
-                shred.into(),
-                component.sector.into(),
-                output.into(),
-            ];
-            (
-                ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-                vec![input_layer_data],
-            )
-        });
-        test_circuit(circuit, None);
-    }
-
-    #[test]
-    fn test_worldcoin_circuit_tiny() {
-        let data = tiny_worldcoin_data::<Fr>();
-        dbg!(&data);
-        let circuit = build_circuit_public_il(data);
-        test_circuit(circuit, None);
-    }
-
-    #[test]
-    fn test_worldcoin_circuit_medium() {
-        let data = medium_worldcoin_data::<Fr>();
-        let circuit = build_circuit_public_il(data);
-        test_circuit(circuit, None);
-    }
-
-    #[test]
-    fn test_worldcoin_circuit() {
-        let data: WorldcoinCircuitData<Fr> =
-            load_data(Path::new("worldcoin_witness_data").to_path_buf());
-        let circuit = build_circuit_public_il(data);
-        test_circuit(circuit, None);
-    }
+#[test]
+/// Simply checks that the test files for v3 are available (in both the iris and mask case) and that
+/// the CircuitData instance can be constructed.
+fn test_load_worldcoin_data_v3() {
+    use super::parameters_v3::{
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
+    };
+    use remainder_shared_types::Fr;
+    use std::path::Path;
+    // iris
+    let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
+    let image_path = path.join("iris/test_image.npy");
+    let data = load_worldcoin_data::<
+        Fr,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
+        BASE,
+        NUM_DIGITS,
+    >(path.clone(), image_path, false);
+    data.ensure_guarantees();
+    // mask
+    let image_path = path.join("mask/test_image.npy");
+    let data = load_worldcoin_data::<
+        Fr,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
+        BASE,
+        NUM_DIGITS,
+    >(path.clone(), image_path, true);
+    data.ensure_guarantees();
 }

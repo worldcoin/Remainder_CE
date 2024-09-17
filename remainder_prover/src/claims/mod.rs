@@ -5,7 +5,7 @@ pub mod wlx_eval;
 
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 use thiserror::Error;
 
@@ -70,8 +70,8 @@ pub enum ClaimError {
 /// `\tilde{V} : F^n -> F` is the MLE of a layer, then this claim asserts:
 /// `\tilde{V}(point) == result`.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(bound = "F: FieldExt")]
-pub struct Claim<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct Claim<F: Field> {
     /// The point in F^n where the layer MLE is to be evaluated on.
     point: Vec<F>,
 
@@ -79,7 +79,7 @@ pub struct Claim<F: FieldExt> {
     result: F,
 }
 
-impl<F: FieldExt> Claim<F> {
+impl<F: Field> Claim<F> {
     /// Constructs a new `Claim` from a given `point` and `result`.
     pub fn new(point: Vec<F>, result: F) -> Self {
         Self { point, result }
@@ -102,7 +102,7 @@ impl<F: FieldExt> Claim<F> {
 }
 
 /// A trait that defines a protocol for the tracking/aggregation of many claims.
-pub trait ClaimAggregator<F: FieldExt> {
+pub trait ClaimAggregator<F: Field> {
     /// The struct the claim aggregator takes in.
     /// Is typically composed of the `Claim` struct and additional information.
     type Claim: std::fmt::Debug + Clone + Serialize + for<'a> Deserialize<'a>;

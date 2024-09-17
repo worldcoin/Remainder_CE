@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::warn;
 
-use crate::FieldExt;
+use crate::Field;
 
 pub mod ec_transcript;
 pub mod keccak_transcript;
@@ -111,7 +111,7 @@ pub struct TranscriptWriter<F, T> {
     transcript: Transcript<F>,
 }
 
-impl<F: FieldExt, Tr: TranscriptSponge<F>> ProverTranscript<F> for TranscriptWriter<F, Tr> {
+impl<F: Field, Tr: TranscriptSponge<F>> ProverTranscript<F> for TranscriptWriter<F, Tr> {
     /// Append an element to the sponge and record the operation to the
     /// transcript. `label` is an identifier for this operation and is used for
     /// sanity checking by the `TranscriptReader`.
@@ -157,7 +157,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> ProverTranscript<F> for TranscriptWri
     }
 }
 
-impl<F: FieldExt, Tr: TranscriptSponge<F>> TranscriptWriter<F, Tr> {
+impl<F: Field, Tr: TranscriptSponge<F>> TranscriptWriter<F, Tr> {
     /// Destructively extract the transcript produced by this writer.
     /// This should be the last operation performed on a `TranscriptWriter`.
     pub fn get_transcript(self) -> Transcript<F> {
@@ -232,7 +232,7 @@ pub struct TranscriptReader<F, T> {
     next_element: (usize, usize),
 }
 
-impl<F: FieldExt, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReader<F, T> {
+impl<F: Field, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReader<F, T> {
     /// Reads off a single element from the transcript and returns it if
     /// successful.
     /// The operation can fail with:

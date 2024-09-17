@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 pub use itertools::Either;
 use remainder_shared_types::transcript::ProverTranscript;
-pub use remainder_shared_types::{FieldExt, Fr};
+pub use remainder_shared_types::{Field, Fr};
 use serde::{Deserialize, Serialize};
 
 use crate::expression::{abstract_expr::AbstractExpr, generic_expr::Expression};
@@ -65,7 +65,7 @@ impl NodeId {
     }
 
     /// creates an [Expression<F, AbstractExpr>] from this NodeId
-    pub fn expr<F: FieldExt>(self) -> Expression<F, AbstractExpr> {
+    pub fn expr<F: Field>(self) -> Expression<F, AbstractExpr> {
         Expression::<F, AbstractExpr>::mle(self)
     }
 }
@@ -95,7 +95,7 @@ pub trait CircuitNode {
 /// A Node that contains the information neccessary to Compile itself
 ///
 /// Implement this for any node that does not need additional Layingout before compilation
-pub trait CompilableNode<F: FieldExt>: CircuitNode {
+pub trait CompilableNode<F: Field>: CircuitNode {
     fn generate_circuit_description<'a>(
         &'a self,
         layer_id: &mut LayerId,

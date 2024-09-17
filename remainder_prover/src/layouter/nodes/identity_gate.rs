@@ -1,7 +1,7 @@
 //! A Module for adding `Gate` Layers to components
 
 use ark_std::log2;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::circuit_expr::CircuitMle,
@@ -59,7 +59,7 @@ impl IdentityGateNode {
     }
 }
 
-impl<F: FieldExt> CompilableNode<F> for IdentityGateNode {
+impl<F: Field> CompilableNode<F> for IdentityGateNode {
     fn generate_circuit_description<'a>(
         &'a self,
         layer_id: &mut LayerId,

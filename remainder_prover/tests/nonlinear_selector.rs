@@ -14,7 +14,7 @@ use remainder::{
     },
     prover::helpers::test_circuit,
 };
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 
 use crate::utils::{get_dummy_input_shred_and_data, DifferenceBuilderComponent};
 pub mod utils;
@@ -31,11 +31,11 @@ pub mod utils;
 /// * `right_sum_mle_1`, `right_sum_mle_2` - MLEs with arbitrary bookkeeping table values, same size,
 /// one more variable than `right_sel_mle`.
 
-pub struct NonlinearSelectorBuilderComponent<F: FieldExt> {
+pub struct NonlinearSelectorBuilderComponent<F: Field> {
     pub first_layer_sector: Sector<F>,
 }
 
-impl<F: FieldExt> NonlinearSelectorBuilderComponent<F> {
+impl<F: Field> NonlinearSelectorBuilderComponent<F> {
     pub fn new(
         ctx: &Context,
         left_sel_mle: &dyn CircuitNode,
@@ -77,7 +77,7 @@ impl<F: FieldExt> NonlinearSelectorBuilderComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for NonlinearSelectorBuilderComponent<F>
+impl<F: Field, N> Component<N> for NonlinearSelectorBuilderComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {

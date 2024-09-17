@@ -16,7 +16,7 @@ use remainder::{
     mle::{dense::DenseMle, Mle},
     prover::helpers::test_circuit,
 };
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 use utils::DifferenceBuilderComponent;
 use utils::{ProductScaledBuilderComponent, TripleNestedBuilderComponent};
 
@@ -24,12 +24,12 @@ use crate::utils::{get_dummy_random_mle_vec, get_input_shred_and_data_from_vec};
 
 pub mod utils;
 
-struct DataparallelTripleNestedSelectorComponent<F: FieldExt> {
+struct DataparallelTripleNestedSelectorComponent<F: Field> {
     first_layer_component: TripleNestedBuilderComponent<F>,
     output_component: DifferenceBuilderComponent<F>,
 }
 
-impl<F: FieldExt> DataparallelTripleNestedSelectorComponent<F> {
+impl<F: Field> DataparallelTripleNestedSelectorComponent<F> {
     /// A simple wrapper around the [TripleNestedBuilderComponent] which
     /// additionally contains a [DifferenceBuilderComponent] for zero output
     pub fn new(
@@ -51,7 +51,7 @@ impl<F: FieldExt> DataparallelTripleNestedSelectorComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DataparallelTripleNestedSelectorComponent<F>
+impl<F: Field, N> Component<N> for DataparallelTripleNestedSelectorComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {

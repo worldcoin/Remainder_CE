@@ -6,7 +6,7 @@ mod tests;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use thiserror::Error;
 use utils::is_subset;
 
@@ -274,18 +274,18 @@ pub fn topo_sort<N: CircuitNode>(nodes: Vec<N>) -> Result<Vec<N>, DAGError> {
     Ok(out)
 }
 
-enum IntermediateNode<F: FieldExt> {
+enum IntermediateNode<F: Field> {
     CompilableNode(Box<dyn CompilableNode<F>>),
     Sector(Sector<F>),
 }
 
-impl<F: FieldExt> IntermediateNode<F> {
+impl<F: Field> IntermediateNode<F> {
     fn new<N: CompilableNode<F> + 'static>(node: N) -> Self {
         Self::CompilableNode(Box::new(node) as Box<dyn CompilableNode<F>>)
     }
 }
 
-impl<F: FieldExt> CircuitNode for IntermediateNode<F> {
+impl<F: Field> CircuitNode for IntermediateNode<F> {
     fn id(&self) -> NodeId {
         match self {
             IntermediateNode::CompilableNode(node) => node.id(),
@@ -324,7 +324,7 @@ impl<F: FieldExt> CircuitNode for IntermediateNode<F> {
 /// specific layer size / its constituent nodes's numvars, etc.
 /// Returns a vector of [CompilableNode] in which inputs are first, then intermediates
 /// (topologically sorted), then lookups, then outputs.
-pub fn layout<F: FieldExt>(
+pub fn layout<F: Field>(
     ctx: Context,
     nodes: Vec<NodeEnum<F>>,
 ) -> Result<

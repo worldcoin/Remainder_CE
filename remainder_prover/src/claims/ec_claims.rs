@@ -1,7 +1,7 @@
 use remainder_shared_types::{
     halo2curves::CurveExt,
     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
-    FieldExt,
+    Field,
 };
 use serde::{Deserialize, Serialize};
 
@@ -31,7 +31,7 @@ pub struct ECClaimAndProof<C: CurveExt, P> {
 
 pub trait ECClaimAggregator<C: CurveExt>
 where
-    C::ScalarExt: FieldExt,
+    C::ScalarExt: Field,
 {
     ///The struct the claim aggregator takes in.
     ///

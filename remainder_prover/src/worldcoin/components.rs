@@ -1,5 +1,5 @@
-use itertools::{all, Itertools};
-use remainder_shared_types::FieldExt;
+use itertools::Itertools;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::{
@@ -11,23 +11,23 @@ use crate::{
         nodes::{sector::Sector, CircuitNode, Context},
     },
     mle::evals::MultilinearExtension,
-    worldcoin::digit_decomposition::NUM_DIGITS,
 };
 
-/// Calculates LHS - RHS, making the result available as self.sector.
-pub struct SubtractionComponent<F: FieldExt> {
-    /// The sector that calculates LHS - RHS.
+/// Calculates `matmult - thresholds`, making the result available as self.sector.
+/// It is assumed that `matmult` and `thresholds` have the same length.
+pub struct Subtractor<F: Field> {
+    /// The sector that containing the result of the calculation.
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> SubtractionComponent<F> {
-    /// Create a new [SubtractionComponent] component.
-    pub fn new(ctx: &Context, lhs: &dyn CircuitNode, rhs: &dyn CircuitNode) -> Self {
-        let sector = Sector::new(ctx, &[lhs, rhs], |nodes| {
+impl<F: Field> Subtractor<F> {
+    /// Create a new [Thresholder] component.
+    pub fn new(ctx: &Context, a: &dyn CircuitNode, b: &dyn CircuitNode) -> Self {
+        let sector = Sector::new(ctx, &[a, b], |nodes| {
             assert_eq!(nodes.len(), 2);
             nodes[0].expr() - nodes[1].expr()
         });
-        println!("SubtractionComponent sector = {:?}", sector.id());
+        println!("{:?} = Thresholder sector", sector.id());
         Self { sector }
     }
 }
@@ -137,56 +137,6 @@ impl<F: FieldExt> BitsAreBinary<F> {
 }
 
 impl<F: FieldExt, N> Component<N> for BitsAreBinary<F>
-where
-    N: CircuitNode + From<Sector<F>>,
-{
-    fn yield_nodes(self) -> Vec<N> {
-        vec![self.sector.into()]
-    }
-}
-
-/// Component that checks that the decomposition of a number into (sign bit, absolute value) is
-/// correct. Sign bit of 0 indicates negative, 1 indicates positive.
-/// Add self.sector to the circuit as an output layer to enforce this constraint.
-pub struct SignCheckerComponent<F: FieldExt> {
-    /// To be added to the circuit as an output layer by the caller.
-    pub sector: Sector<F>,
-}
-
-impl<F: FieldExt> SignCheckerComponent<F> {
-    /// Create a new SignCheckerComponent. Checks that `abs_values` are the absolute value of
-    /// `values` and that the sign bits of `values` are given by `sign_bits`, where 0 indicates
-    /// negative and 1 indicates positive.
-    pub fn new(
-        ctx: &Context,
-        values: &dyn CircuitNode,
-        sign_bits: &dyn CircuitNode,
-        abs_values: &dyn CircuitNode,
-    ) -> Self {
-        let sector = Sector::new(ctx, &[values, sign_bits, abs_values], |input_nodes| {
-            assert_eq!(input_nodes.len(), 3);
-
-            let values_mle_ref = input_nodes[0];
-            let sign_bits_mle_ref = input_nodes[1];
-            let abs_values_mle_ref = input_nodes[2];
-
-            // (values + abs_values) + -2 * sign_bits * abs_values
-            let first_summand = abs_values_mle_ref.expr() + values_mle_ref.expr();
-            let second_summand = Expression::<F, AbstractExpr>::scaled(
-                Expression::<F, AbstractExpr>::products(vec![
-                    abs_values_mle_ref,
-                    sign_bits_mle_ref,
-                ]),
-                F::from(2).neg(),
-            );
-            first_summand + second_summand
-        });
-        println!("SignCheckerComponent sector = {:?}", sector.id());
-        Self { sector }
-    }
-}
-
-impl<F: FieldExt, N> Component<N> for SignCheckerComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {

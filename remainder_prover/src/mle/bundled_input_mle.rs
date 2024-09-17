@@ -1,4 +1,4 @@
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     layer::LayerId,
@@ -18,7 +18,7 @@ use super::{
 use itertools::Itertools;
 
 /// Helper function that converts a [Vec<F; N>] into a [Vec<F>; N]
-pub fn to_flat_mles<F: FieldExt, const N: usize>(inputs: Vec<[F; N]>) -> [Vec<F>; N] {
+pub fn to_flat_mles<F: Field, const N: usize>(inputs: Vec<[F; N]>) -> [Vec<F>; N] {
     // converts a [Vec<F; N>] into a [Vec<F>; N]
     let mut result: [Vec<F>; N] = vec![Vec::new(); N].try_into().unwrap();
     for subarray in inputs {
@@ -48,7 +48,7 @@ fn test_to_flat_mles() {
 
 /// A trait for a MLE(s) that are the input(s) to a circuit,
 /// but are bundled together for semantic reasons.
-pub trait BundledInputMle<F: FieldExt, const N: usize> {
+pub trait BundledInputMle<F: Field, const N: usize> {
     /// returns the references to all the underlying MLEs
     fn get_mle_refs(&self) -> &[DenseMle<F>; N];
 
@@ -62,11 +62,11 @@ pub trait BundledInputMle<F: FieldExt, const N: usize> {
 
 /// A struct that bundles N MLEs together for semantic reasons.
 #[derive(Debug, Clone)]
-pub struct FlatMles<F: FieldExt, const N: usize> {
+pub struct FlatMles<F: Field, const N: usize> {
     mles: [DenseMle<F>; N],
 }
 
-impl<F: FieldExt, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
+impl<F: Field, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
     fn get_mle_refs(&self) -> &[DenseMle<F>; N] {
         &self.mles
     }
@@ -94,7 +94,7 @@ impl<F: FieldExt, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
     }
 }
 
-impl<F: FieldExt, const N: usize> FlatMles<F, N> {
+impl<F: Field, const N: usize> FlatMles<F, N> {
     /// Creates a new [FlatMles] from raw data.
     pub fn new_from_raw(data: [Vec<F>; N], layer_id: LayerId) -> Self {
         let mles = data

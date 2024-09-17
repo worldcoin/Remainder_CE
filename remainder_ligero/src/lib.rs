@@ -49,9 +49,9 @@ pub mod tests;
 /// Helper functions
 pub mod utils;
 
-/// Trait wrapper over `FieldExt` which gives a field element the ability to be
+/// Trait wrapper over `Field` which gives a field element the ability to be
 /// absorbed into a [FieldHashFnDigest], as well as a [TranscriptSponge].
-pub trait PoseidonFieldHash: FieldExt {
+pub trait PoseidonFieldHash: Field {
     /// Update the digest `d` with the `self` (since `self` should already be a field element)
     fn digest_update<D: FieldHashFnDigest<Self>>(&self, d: &mut D) {
         d.update(&[*self])
@@ -63,7 +63,7 @@ pub trait PoseidonFieldHash: FieldExt {
     }
 }
 
-impl<F: FieldExt> PoseidonFieldHash for F {
+impl<F: Field> PoseidonFieldHash for F {
     fn digest_update<D: FieldHashFnDigest<F>>(&self, d: &mut D) {
         d.update(&[*self])
     }
@@ -79,7 +79,7 @@ impl<F: FieldExt> PoseidonFieldHash for F {
 /// degree tests required (in the multilinear GKR + Ligero PCS case, none!)
 ///
 /// Additionally, provides metadata around
-pub trait LcEncoding<F: FieldExt>: Clone + std::fmt::Debug + Sync {
+pub trait LcEncoding<F: Field>: Clone + std::fmt::Debug + Sync {
     /// Domain separation label - degree test (see def_labels!())
     const LABEL_DT: &'static [u8];
     /// Domain separation label - random lin combs (see def_labels!())
@@ -198,7 +198,7 @@ pub struct LcCommit<D, E, F> {
 impl<D, E, F> LcCommit<D, E, F>
 where
     D: FieldHashFnDigest<F> + Send + Sync,
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     /// Returns the Merkle root of this polynomial commitment (which is the commitment itself)
@@ -254,10 +254,10 @@ where
 
 /// A Merkle root corresponding to a committed polynomial.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
+#[serde(bound = "F: Field")]
 pub struct LcRoot<E, F>
 where
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     /// The root of the Merkle tree is a single field element
@@ -267,7 +267,7 @@ where
 
 impl<E, F> LcRoot<E, F>
 where
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     /// Convert this value into a raw F
@@ -286,7 +286,7 @@ where
 
 impl<E, F> AsRef<F> for LcRoot<E, F>
 where
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     fn as_ref(&self) -> &F {
@@ -298,7 +298,7 @@ where
 #[derive(Debug, Clone)]
 pub struct LcColumn<E, F>
 where
-    F: FieldExt,
+    F: Field,
     E: Send + Sync,
 {
     /// The column index within M'
@@ -315,7 +315,7 @@ where
 pub struct LcEvalProof<D, E, F>
 where
     D: FieldHashFnDigest<F> + Send + Sync,
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     /// Width of M'
@@ -331,7 +331,7 @@ where
 impl<D, E, F> LcEvalProof<D, E, F>
 where
     D: FieldHashFnDigest<F> + Send + Sync,
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     /// Get the number of elements in an encoded vector
@@ -383,7 +383,7 @@ const LOG_MIN_NCOLS: usize = 5;
 /// * `commitment` - Ligero commitment to be used by the prover
 fn commit<D, E, F>(coeffs_in: &[F], enc: &E) -> ProverResult<LcCommit<D, E, F>, ErrT<E, F>>
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -455,7 +455,7 @@ where
 fn check_comm<D, E, F>(comm: &LcCommit<D, E, F>, enc: &E) -> ProverResult<(), ErrT<E, F>>
 where
     D: FieldHashFnDigest<F> + Send + Sync,
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     // --- M' total flattened length must be M' rows * M' cols ---
@@ -487,7 +487,7 @@ where
 /// * `comm` - Ligero commitment struct whose `hashes` field is to be populated.
 fn merkleize<D, E, F>(comm: &mut LcCommit<D, E, F>)
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -539,7 +539,7 @@ fn hash_columns<D, E, F>(
     offset: usize,
     master_default_poseidon_column_hasher: &Poseidon<F, 3, 2>,
 ) where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -612,7 +612,7 @@ fn merkle_tree<D, F>(
     outs: &mut [F],
     master_default_poseidon_merkle_hasher: &Poseidon<F, 3, 2>,
 ) where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
 {
     // --- The outs (i.e. rest of the tree) should be 2^{h - 1} - 1 while the ins should be 2^{h - 1} ---
@@ -640,7 +640,7 @@ fn merkle_layer<D, F>(
     outs: &mut [F],
     master_default_poseidon_merkle_hasher: &Poseidon<F, 3, 2>,
 ) where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
 {
     assert_eq!(ins.len(), 2 * outs.len());
@@ -686,7 +686,7 @@ fn open_column<D, E, F>(
     mut column: usize,
 ) -> ProverResult<LcColumn<E, F>, ErrT<E, F>>
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -763,7 +763,7 @@ fn verify<E, F>(
     transcript_reader: &mut impl VerifierTranscript<F>,
 ) -> VerifierResult<F, ErrT<E, F>>
 where
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     // --- Grab ONE global copy of Merkle + column hashing Poseidon ---
@@ -852,11 +852,11 @@ where
 
     // step 4: evaluate and return
     // --- Computes dot product between inner_tensor (i.e. a) and proof.p_eval (i.e. b^T M) ---
-    Ok(inner_tensor
-        .par_iter()
+    Ok(cfg_into_iter!(inner_tensor)
         .zip(&p_eval[..])
-        .fold(|| F::ZERO, |a, (t, e)| a + *t * e)
-        .reduce(|| F::ZERO, |a, v| a + v))
+        .map(|(t, e)| *t * e)
+        .reduce(|a, v| a + v)
+        .unwrap_or(F::ZERO))
 }
 
 /// Check a column opening by
@@ -879,7 +879,7 @@ fn verify_column_path<E, F>(
     master_default_poseidon_column_hasher: &Poseidon<F, 3, 2>,
 ) -> bool
 where
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     // --- New Poseidon params + Poseidon hasher ---
@@ -920,7 +920,7 @@ where
 /// * `poly_eval` - The RLC'd, evaluated version b^T M'[j]
 fn verify_column_value<E, F>(column: &LcColumn<E, F>, tensor: &[F], poly_eval: &F) -> bool
 where
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     let tensor_eval = tensor
@@ -944,7 +944,7 @@ where
 ///
 /// ## Returns
 /// * `col_idx` - a value 0 \leq col_idx < encoded_num_cols
-fn compute_col_idx_from_transcript_challenge<F: FieldExt>(
+fn compute_col_idx_from_transcript_challenge<F: Field>(
     challenge: F,
     encoded_num_cols: usize,
 ) -> usize {
@@ -976,7 +976,7 @@ fn prove<D, E, F>(
     tr: &mut impl ProverTranscript<F>,
 ) -> ProverResult<(), ErrT<E, F>>
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -1011,9 +1011,7 @@ where
             .collect();
 
         // --- Send columns + Merkle paths to verifier ---
-        cols_to_open
-            // .par_iter()
-            .iter()
+        cfg_into_iter!(&cols_to_open)
             .map(|&col| open_column(tr, comm, col))
             .collect::<ProverResult<Vec<LcColumn<E, F>>, ErrT<E, F>>>()?
     };
@@ -1037,7 +1035,7 @@ pub fn collapse_columns<E, F>(
     orig_num_cols: usize,
     offset: usize,
 ) where
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     if poly.len() <= (1 << LOG_MIN_NCOLS) {
@@ -1070,7 +1068,7 @@ fn merkleize_ser<D, E, F>(
     master_default_poseidon_merkle_hasher: &Poseidon<F, 3, 2>,
     master_default_poseidon_column_hasher: &Poseidon<F, 3, 2>,
 ) where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -1109,7 +1107,7 @@ fn merkleize_ser<D, E, F>(
 #[cfg(test)]
 fn eval_outer<D, E, F>(comm: &LcCommit<D, E, F>, tensor: &[F]) -> ProverResult<Vec<F>, ErrT<E, F>>
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -1131,7 +1129,7 @@ fn eval_outer_ser<D, E, F>(
     tensor: &[F],
 ) -> ProverResult<Vec<F>, ErrT<E, F>>
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -1161,7 +1159,7 @@ fn eval_outer_fft<D, E, F>(
     tensor: &[F],
 ) -> ProverResult<Vec<F>, ErrT<E, F>>
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {

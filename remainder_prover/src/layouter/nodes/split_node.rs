@@ -1,7 +1,7 @@
 //! A node that can alter the claims made on it's source `ClaimableNode`
 
 use itertools::{repeat_n, Itertools};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     layer::{layer_enum::CircuitLayerEnum, LayerId},
@@ -55,7 +55,7 @@ impl CircuitNode for SplitNode {
     }
 }
 
-impl<F: FieldExt> CompilableNode<F> for SplitNode {
+impl<F: Field> CompilableNode<F> for SplitNode {
     fn generate_circuit_description(
         &self,
         _layer_id: &mut LayerId,

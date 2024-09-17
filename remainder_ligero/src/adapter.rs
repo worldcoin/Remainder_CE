@@ -5,7 +5,7 @@ use crate::{LcColumn, LcEncoding};
 use crate::poseidon_ligero::PoseidonSpongeHasher;
 use crate::{ligero_structs::LigeroAuxInfo, ligero_structs::LigeroEvalProof};
 
-use crate::FieldExt;
+use crate::Field;
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -38,7 +38,7 @@ pub struct LigeroClaim<F> {
 }
 
 /// Converts a lcpc-style Ligero proof/root into the above data structure.
-pub fn convert_lcpc_to_halo<F: FieldExt>(
+pub fn convert_lcpc_to_halo<F: Field>(
     root: LigeroRoot<F>,
     pf: LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroAuxInfo<F>, F>,
 ) -> LigeroProof<F> {
@@ -93,7 +93,7 @@ pub fn convert_halo_to_lcpc<D, E, F>(
     halo2_ligero_proof: LigeroProof<F>,
 ) -> (LigeroRoot<F>, LigeroEvalProof<D, E, F>, LigeroAuxInfo<F>)
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {

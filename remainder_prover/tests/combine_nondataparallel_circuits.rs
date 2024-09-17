@@ -15,7 +15,7 @@ use remainder::{
     },
     prover::helpers::test_circuit,
 };
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 
 use utils::{
     ConstantScaledSumBuilderComponent, DifferenceBuilderComponent, ProductScaledBuilderComponent,
@@ -25,13 +25,13 @@ use utils::{
 use crate::utils::get_dummy_input_shred_and_data;
 pub mod utils;
 
-struct ConstantScaledCircuitComponent<F: FieldExt> {
+struct ConstantScaledCircuitComponent<F: Field> {
     first_layer_component: ConstantScaledSumBuilderComponent<F>,
     second_layer_component: ProductScaledBuilderComponent<F>,
     output_component: DifferenceBuilderComponent<F>,
 }
 
-impl<F: FieldExt> ConstantScaledCircuitComponent<F> {
+impl<F: Field> ConstantScaledCircuitComponent<F> {
     /// A circuit which takes in two MLEs of the same size:
     /// * Layer 0: [ConstantScaledSumBuilderComponent] with the two inputs
     /// * Layer 1: [ProductScaledBuilderComponent] with the output of Layer 0 and `mle_1`
@@ -67,7 +67,7 @@ impl<F: FieldExt> ConstantScaledCircuitComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for ConstantScaledCircuitComponent<F>
+impl<F: Field, N> Component<N> for ConstantScaledCircuitComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
@@ -81,13 +81,13 @@ where
     }
 }
 
-struct SumConstantCircuitComponent<F: FieldExt> {
+struct SumConstantCircuitComponent<F: Field> {
     first_layer_component: ProductSumBuilderComponent<F>,
     second_layer_component: ConstantScaledSumBuilderComponent<F>,
     output_component: DifferenceBuilderComponent<F>,
 }
 
-impl<F: FieldExt> SumConstantCircuitComponent<F> {
+impl<F: Field> SumConstantCircuitComponent<F> {
     /// A circuit which takes in two MLEs of the same size:
     /// * Layer 0: [ProductSumBuilderComponent] with the two inputs
     /// * Layer 1: [ConstantScaledSumBuilderComponent] with the output of Layer 0 and `mle_1`
@@ -122,7 +122,7 @@ impl<F: FieldExt> SumConstantCircuitComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for SumConstantCircuitComponent<F>
+impl<F: Field, N> Component<N> for SumConstantCircuitComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
@@ -136,13 +136,13 @@ where
     }
 }
 
-struct ProductScaledSumCircuitComponent<F: FieldExt> {
+struct ProductScaledSumCircuitComponent<F: Field> {
     first_layer_component: ProductScaledBuilderComponent<F>,
     second_layer_component: ProductSumBuilderComponent<F>,
     output_component: DifferenceBuilderComponent<F>,
 }
 
-impl<F: FieldExt> ProductScaledSumCircuitComponent<F> {
+impl<F: Field> ProductScaledSumCircuitComponent<F> {
     /// A circuit which takes in two MLEs of the same size:
     /// * Layer 0: [ProductScaledBuilderComponent] with the two inputs
     /// * Layer 1: [ProductSumBuilderComponent] with the output of Layer 0 and `mle_1`
@@ -178,7 +178,7 @@ impl<F: FieldExt> ProductScaledSumCircuitComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for ProductScaledSumCircuitComponent<F>
+impl<F: Field, N> Component<N> for ProductScaledSumCircuitComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {

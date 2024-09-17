@@ -38,7 +38,7 @@ use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 use remainder_shared_types::transcript::{
     Transcript, TranscriptReader, TranscriptReaderError, TranscriptWriter,
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -89,7 +89,7 @@ pub enum GKRError {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SumcheckProof<F>(pub Vec<Vec<F>>);
 
-impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
+impl<F: Field> From<Vec<Vec<F>>> for SumcheckProof<F> {
     fn from(value: Vec<Vec<F>>) -> Self {
         Self(value)
     }
@@ -97,7 +97,7 @@ impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
 
 /// The witness of a GKR circuit, used to actually prove the circuit
 #[derive(Debug)]
-pub struct InstantiatedCircuit<F: FieldExt> {
+pub struct InstantiatedCircuit<F: Field> {
     /// The intermediate layers of the circuit, as defined by the ProofSystem
     pub layers: Layers<F, LayerEnum<F>>,
     /// The output layers of the circuit, as defined by the ProofSystem
@@ -114,13 +114,13 @@ pub type WitnessAndCircuitDescription<F> = (InstantiatedCircuit<F>, GKRCircuitDe
 /// The Verifier Key associated with a GKR proof of a [ProofSystem].
 /// It consists of consice GKR Circuit description to be use by the Verifier.
 #[derive(Debug)]
-pub struct GKRCircuitDescription<F: FieldExt> {
+pub struct GKRCircuitDescription<F: Field> {
     pub input_layers: Vec<CircuitInputLayerEnum<F>>,
     pub intermediate_layers: Vec<CircuitLayerEnum<F>>,
     pub output_layers: Vec<CircuitMleOutputLayer<F>>,
 }
 
-impl<F: FieldExt> GKRCircuitDescription<F> {
+impl<F: Field> GKRCircuitDescription<F> {
     /// Constructs a new `GKRCircuitDescription` via circuit description layers
     pub fn new(
         input_layers: Vec<CircuitInputLayerEnum<F>>,

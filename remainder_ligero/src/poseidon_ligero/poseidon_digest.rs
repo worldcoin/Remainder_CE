@@ -1,9 +1,9 @@
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use remainder_shared_types::Poseidon;
 
 /// FieldHashFnDigest gives you a trait which is basically `Digest` but compatible
-/// with FieldExt-based hash functions.
-pub trait FieldHashFnDigest<F: FieldExt> {
+/// with Field-based hash functions.
+pub trait FieldHashFnDigest<F: Field> {
     /// Parameters to pass into `new_with_params` such that a digest instance
     /// with specific hash function parameters can be created.
     type HashFnParams;

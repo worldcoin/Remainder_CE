@@ -1,12 +1,20 @@
-//! Module for generating and manipulating mles, also includes a function to
-//! generate the description of circuits.
+//! Module for useful functions
+/// Helpful arithmetic functions.
+pub mod arithmetic;
+/// Helpful functions for manipulating ndarray Array objects (e.g. padding)
+pub mod array;
+/// Helpful functions for debugging.
+pub mod debug;
+/// Helpful functions for manipulating MLEs (e.g. padding).
+pub mod mle;
 
-use std::{fs, iter::repeat_with};
+#[cfg(test)]
+/// Utilities that are only useful for tests
+pub(crate) mod test_utils;
 
-use ark_std::{log2, test_rng};
-use itertools::{repeat_n, Itertools};
-use rand::Rng;
-use remainder_shared_types::{FieldExt, Fr, Poseidon};
+/// FIXME the functions below are uncategorized and probably should be moved to a more appropriate
+/// module or submodule.
+use remainder_shared_types::{Field, Poseidon};
 
 use crate::{
     layer::{layer_enum::LayerEnum, LayerId},
@@ -33,7 +41,7 @@ pub fn get_input_shred_from_num_vars(
     InputShred::new(ctx, num_vars, input_node)
 }
 
-pub fn get_input_shred_and_data_from_vec<F: FieldExt>(
+pub fn get_input_shred_and_data_from_vec<F: Field>(
     mle_vec: Vec<F>,
     ctx: &Context,
     input_node: &InputLayerNode,
@@ -56,7 +64,7 @@ pub fn get_input_shred_and_data_from_vec<F: FieldExt>(
 ///
 /// * `padded_coeffs` - The coeffients, zero-padded to the nearest power of two
 ///   (in length)
-pub fn pad_to_nearest_power_of_two<F: FieldExt>(coeffs: Vec<F>) -> Vec<F> {
+pub fn pad_to_nearest_power_of_two<F: Field>(coeffs: Vec<F>) -> Vec<F> {
     // --- No need to duplicate things if we're already a power of two! ---
     if coeffs.len().is_power_of_two() {
         return coeffs;
@@ -87,9 +95,9 @@ pub fn argsort<T: Ord>(slice: &[T], invert: bool) -> Vec<usize> {
 }
 
 /// Helper function to create random MLE with specific number of vars
-// pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) ->
+// pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) ->
 // DenseMle<F,> {
-pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F> {
+pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F> {
     let capacity = 2_u32.pow(num_vars as u32);
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
         .take(capacity as usize)
@@ -98,7 +106,7 @@ pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) -> Dense
 }
 
 /// Helper function to create random MLE with specific number of vars
-pub fn get_range_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F> {
+pub fn get_range_mle<F: Field>(num_vars: usize) -> DenseMle<F> {
     // let mut rng = test_rng();
     let capacity = 2_u32.pow(num_vars as u32);
     let bookkeeping_table = (0..capacity)
@@ -109,7 +117,7 @@ pub fn get_range_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F> {
 }
 
 /// Helper function to create random MLE with specific length
-pub fn get_random_mle_with_capacity<F: FieldExt>(capacity: usize) -> DenseMle<F> {
+pub fn get_random_mle_with_capacity<F: Field>(capacity: usize) -> DenseMle<F> {
     let mut rng = test_rng();
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
         .take(capacity)
@@ -119,7 +127,7 @@ pub fn get_random_mle_with_capacity<F: FieldExt>(capacity: usize) -> DenseMle<F>
 
 /// Returns a vector of MLEs for dataparallel testing according to the number of variables and
 /// number of dataparallel bits.
-pub fn get_dummy_random_mle_vec<F: FieldExt>(
+pub fn get_dummy_random_mle_vec<F: Field>(
     num_vars: usize,
     num_dataparallel_bits: usize,
     rng: &mut impl Rng,
@@ -138,7 +146,7 @@ pub fn get_dummy_random_mle_vec<F: FieldExt>(
 /// num_bits
 ///
 /// 0,0,0 -> 0,0,1 -> 0,1,0 -> 0,1,1 -> 1,0,0 -> 1,0,1 -> 1,1,0 -> 1,1,1
-pub(crate) fn bits_iter<F: FieldExt>(num_bits: usize) -> impl Iterator<Item = Vec<MleIndex<F>>> {
+pub(crate) fn bits_iter<F: Field>(num_bits: usize) -> impl Iterator<Item = Vec<MleIndex<F>>> {
     std::iter::successors(
         Some(vec![MleIndex::<F>::Fixed(false); num_bits]),
         move |prev| {
@@ -169,7 +177,7 @@ pub(crate) fn bits_iter<F: FieldExt>(num_bits: usize) -> impl Iterator<Item = Ve
 /// Returns the total MLE indices given a Vec<bool>
 /// for the prefix bits and then the number of iterated
 /// bits after.
-pub fn get_total_mle_indices<F: FieldExt>(
+pub fn get_total_mle_indices<F: Field>(
     prefix_bits: &[bool],
     num_iterated_bits: usize,
 ) -> Vec<MleIndex<F>> {
@@ -183,7 +191,7 @@ pub fn get_total_mle_indices<F: FieldExt>(
 /// Returns the specific bit decomp for a given index,
 /// using `num_bits` bits. Note that this returns the
 /// decomposition in BIG ENDIAN!
-pub fn get_mle_idx_decomp_for_idx<F: FieldExt>(idx: usize, num_bits: usize) -> Vec<MleIndex<F>> {
+pub fn get_mle_idx_decomp_for_idx<F: Field>(idx: usize, num_bits: usize) -> Vec<MleIndex<F>> {
     (0..(num_bits))
         .rev()
         .map(|cur_num_bits| {
@@ -206,7 +214,7 @@ pub fn file_exists(file_path: &String) -> bool {
 
 /// Hashes the layers of a GKR circuit by calling their circuit descriptions
 /// Returns one single Field element
-pub fn hash_layers<F: FieldExt>(layers: &Layers<F, LayerEnum<F>>) -> F {
+pub fn hash_layers<F: Field>(layers: &Layers<F, LayerEnum<F>>) -> F {
     let mut sponge: Poseidon<F, 3, 2> = Poseidon::new(8, 57);
 
     layers.layers.iter().for_each(|layer| {
@@ -227,7 +235,7 @@ pub fn hash_layers<F: FieldExt>(layers: &Layers<F, LayerEnum<F>>) -> F {
                     })
                     .0
             })
-            .collect_vec();
+            .collect::<Vec<_>>();
 
         sponge.update(&elements);
     });

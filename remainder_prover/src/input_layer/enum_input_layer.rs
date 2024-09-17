@@ -1,6 +1,6 @@
 //! A wrapper type that makes working with variants of InputLayer easier.
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{claims::wlx_eval::YieldWLXEvals, input_layer_enum, layer::LayerId};
 
@@ -16,7 +16,7 @@ input_layer_enum!(
     (RandomInputLayer: VerifierChallengeInputLayer<F>)
 );
 
-impl<F: FieldExt> InputLayerEnum<F> {
+impl<F: Field> InputLayerEnum<F> {
     /// This function sets the layer ID of the corresponding input layer.
     pub fn set_layer_id(&mut self, layer_id: LayerId) {
         match self {
@@ -27,7 +27,7 @@ impl<F: FieldExt> InputLayerEnum<F> {
     }
 }
 
-impl<F: FieldExt> YieldWLXEvals<F> for InputLayerEnum<F> {
+impl<F: Field> YieldWLXEvals<F> for InputLayerEnum<F> {
     /// Get the evaluations of the bookkeeping table of this layer over enumerated points
     /// in order to perform claim aggregation.
     fn get_wlx_evaluations(

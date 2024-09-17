@@ -2,7 +2,7 @@
 
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     expression::circuit_expr::CircuitMle,
@@ -77,7 +77,7 @@ impl GateNode {
     }
 }
 
-impl<F: FieldExt> CompilableNode<F> for GateNode {
+impl<F: Field> CompilableNode<F> for GateNode {
     fn generate_circuit_description(
         &self,
         layer_id: &mut LayerId,

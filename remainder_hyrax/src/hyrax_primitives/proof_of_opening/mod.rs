@@ -1,5 +1,5 @@
 use rand::Rng;
-use remainder_shared_types::halo2curves::ff::Field;
+use remainder_shared_types::ff_field;
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
@@ -48,6 +48,8 @@ impl<C: PrimeOrderCurve> ProofOfOpening<C> {
         // Compute $z_1 = x\cdot c + t_1$ and $z_2 = r \cdot c + t_2$.
         let z1 = x.value * c + t_1;
         let z2 = x.blinding * c + t_2;
+        transcript.append_scalar_point("PoO z1", z1);
+        transcript.append_scalar_point("PoO z2", z2);
 
         Self { z1, z2, alpha }
     }
@@ -67,6 +69,11 @@ impl<C: PrimeOrderCurve> ProofOfOpening<C> {
 
         // A scalar field element $c$ is sampled from the transcript.
         let c = transcript.get_scalar_field_challenge("PoO c").unwrap();
+
+        let z1 = transcript.consume_scalar_point("PoO z1").unwrap();
+        assert_eq!(z1, self.z1);
+        let z2 = transcript.consume_scalar_point("PoO z2").unwrap();
+        assert_eq!(z2, self.z2);
 
         // Check: $g^{z_1} \cdot h^{z_2} \overset{?}{=} C_0^c \cdot \alpha$.
         assert_eq!(

@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     builders::layer_builder::LayerBuilder,
@@ -16,13 +16,13 @@ use crate::mle::Mle;
 
 #[derive(Clone, Debug)]
 /// The list of Layers that make up the GKR circuit
-pub struct Layers<F: FieldExt, T: Layer<F>> {
+pub struct Layers<F: Field, T: Layer<F>> {
     /// A Vec of pointers to various layer types
     pub layers: Vec<T>,
     marker: PhantomData<F>,
 }
 
-impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
+impl<F: Field, T: Layer<F>> Layers<F, T> {
     /// Add a GKRLayer to a list of layers
     pub fn add_gkr<B: LayerBuilder<F>>(&mut self, new_layer: B) -> B::Successor
     where
@@ -132,7 +132,7 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
     }
 }
 
-impl<F: FieldExt, T: Layer<F>> Default for Layers<F, T> {
+impl<F: Field, T: Layer<F>> Default for Layers<F, T> {
     fn default() -> Self {
         Self::new()
     }

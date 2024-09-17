@@ -6,14 +6,14 @@ use std::fmt::Debug;
 use crate::{
     claims::Claim,
     transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 
 /// A layer is the smallest component of the GKR protocol.
 ///
 /// Each `Layer` is a sub-protocol that takes in some `Claim` and creates a proof
 /// that the `Claim` is correct
-pub trait Layer<F: FieldExt> {
+pub trait Layer<F: Field> {
     /// The struct that contains the proof this `Layer` generates
     type Proof: Debug + Serialize + for<'a> Deserialize<'a>;
 

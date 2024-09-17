@@ -9,13 +9,13 @@ use remainder::layouter::nodes::sector::Sector;
 use remainder::layouter::nodes::{CircuitNode, Context};
 use remainder::prover::helpers::test_circuit;
 use remainder::utils::get_input_shred_and_data_from_vec;
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 
-pub struct ProductCheckerComponent<F: FieldExt> {
+pub struct ProductCheckerComponent<F: Field> {
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> ProductCheckerComponent<F> {
+impl<F: Field> ProductCheckerComponent<F> {
     /// Checks that factor1 * factor2 - expected_product == 0.
     pub fn new(
         ctx: &Context,
@@ -32,7 +32,7 @@ impl<F: FieldExt> ProductCheckerComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for ProductCheckerComponent<F>
+impl<F: Field, N> Component<N> for ProductCheckerComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {

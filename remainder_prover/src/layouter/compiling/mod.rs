@@ -28,7 +28,7 @@ use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use log::info;
 use remainder_shared_types::transcript::{ProverTranscript, Transcript, TranscriptWriter};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use super::layouting::{CircuitDescriptionMap, CircuitLocation, InputLayerHintMap, InputNodeMap};
 use super::nodes::circuit_inputs::InputLayerData;
@@ -40,7 +40,7 @@ use super::{
 
 /// A basic circuit that uses the Layouter to construct the witness
 pub struct LayouterCircuit<
-    F: FieldExt,
+    F: Field,
     C: Component<NodeEnum<F>>,
     Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>),
 > {
@@ -48,11 +48,8 @@ pub struct LayouterCircuit<
     _marker: PhantomData<F>,
 }
 
-impl<
-        F: FieldExt,
-        C: Component<NodeEnum<F>>,
-        Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>),
-    > LayouterCircuit<F, C, Fn>
+impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>)>
+    LayouterCircuit<F, C, Fn>
 {
     /// Constructs a `LayouterCircuit` by taking in a closure that computes a Component
     /// that contains all the nodes that will be layedout and compiled into the witness
@@ -64,11 +61,8 @@ impl<
     }
 }
 
-impl<
-        F: FieldExt,
-        C: Component<NodeEnum<F>>,
-        Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>),
-    > LayouterCircuit<F, C, Fn>
+impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>)>
+    LayouterCircuit<F, C, Fn>
 {
     fn generate_circuit_description(
         &mut self,

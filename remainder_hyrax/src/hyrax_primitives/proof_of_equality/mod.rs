@@ -1,5 +1,5 @@
 use rand::Rng;
-use remainder_shared_types::halo2curves::ff::Field;
+use remainder_shared_types::ff_field;
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
@@ -44,6 +44,7 @@ impl<C: PrimeOrderCurve> ProofOfEquality<C> {
 
         // Compute $z = c \cdot(s_1 - s_2) + r$.
         let z = c * (commit0.blinding - commit1.blinding) + r;
+        transcript.append_scalar_point("PoE z", z);
 
         Self { alpha, z }
     }
@@ -62,6 +63,9 @@ impl<C: PrimeOrderCurve> ProofOfEquality<C> {
 
         // A scalar field element $c$ is sampled from the transcript.
         let c = transcript.get_scalar_field_challenge("PoE c").unwrap();
+
+        let z = transcript.consume_scalar_point("Po z").unwrap();
+        assert_eq!(z, self.z);
 
         // Check: $h^z \overset{?}{=} (c_0 \cdot (c_1)^{-1})^c\cdot \alpha$
         let h = committer.blinding_generator;

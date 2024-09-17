@@ -1,6 +1,6 @@
 use ark_std::test_rng;
 use rand::Rng;
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 use std::iter;
 
 use crate::{
@@ -28,12 +28,12 @@ use crate::{
 
 /// A builder which takes the difference of an MLE from itself to return a zero layer.
 
-pub struct DifferenceBuilderComponent<F: FieldExt> {
+pub struct DifferenceBuilderComponent<F: Field> {
     pub output_sector: Sector<F>,
     pub output_node: OutputNode,
 }
 
-impl<F: FieldExt> DifferenceBuilderComponent<F> {
+impl<F: Field> DifferenceBuilderComponent<F> {
     pub fn new(ctx: &Context, input: &dyn CircuitNode) -> Self {
         let zero_output_sector = Sector::new(ctx, &[input], |input_vec| {
             assert_eq!(input_vec.len(), 1);
@@ -50,7 +50,7 @@ impl<F: FieldExt> DifferenceBuilderComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DifferenceBuilderComponent<F>
+impl<F: Field, N> Component<N> for DifferenceBuilderComponent<F>
 where
     N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {

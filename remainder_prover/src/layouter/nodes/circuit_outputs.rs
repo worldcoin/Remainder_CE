@@ -1,7 +1,7 @@
 //! The nodes that represent circuit outputs in the circuit DAG
 
 use itertools::{repeat_n, Itertools};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation},
@@ -52,7 +52,7 @@ impl OutputNode {
         }
     }
 
-    pub fn compile_output<F: FieldExt>(
+    pub fn compile_output<F: Field>(
         &self,
         circuit_map: &mut CircuitDescriptionMap,
     ) -> Result<CircuitMleOutputLayer<F>, crate::layouter::layouting::DAGError> {

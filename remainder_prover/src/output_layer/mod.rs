@@ -5,7 +5,7 @@ use remainder_shared_types::{
         ProverTranscript, TranscriptReader, TranscriptReaderError, TranscriptSponge,
         TranscriptWriter, VerifierTranscript,
     },
-    FieldExt,
+    Field,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -46,7 +46,7 @@ pub enum VerifierOutputLayerError {
 /// Output layers are "virtual layers" in the sense that they are not assigned a
 /// separate [LayerId]. Instead they are associated with the ID of an existing
 /// intermediate/input layer on which they generate claims for.
-pub trait OutputLayer<F: FieldExt> {
+pub trait OutputLayer<F: Field> {
     /// The associated type for the circuit-description analogue of this Ouput
     /// Layer.
     type CircuitOutputLayer: CircuitOutputLayer<F>
@@ -75,7 +75,7 @@ pub trait OutputLayer<F: FieldExt> {
 }
 
 /// The interface for the circuit description counterpart of an Output Layer.
-pub trait CircuitOutputLayer<F: FieldExt> {
+pub trait CircuitOutputLayer<F: Field> {
     /// The associated type used by the verifier for manipulating an Ouput
     /// Layer.
     type VerifierOutputLayer: VerifierOutputLayer<F> + Serialize + for<'a> Deserialize<'a>;
@@ -103,7 +103,7 @@ pub trait CircuitOutputLayer<F: FieldExt> {
 
 /// The interface for the verifier's counterpart of an Output Layer.
 /// This trait should be able to yield claims!
-pub trait VerifierOutputLayer<F: FieldExt> {
+pub trait VerifierOutputLayer<F: Field> {
     /// Returns the [LayerId] of the intermediate/input layer that his output
     /// layer is associated with.
     fn layer_id(&self) -> LayerId;

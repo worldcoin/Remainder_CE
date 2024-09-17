@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use itertools::Itertools;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 use serde::{Deserialize, Serialize};
 
@@ -28,20 +28,20 @@ use crate::mle::Mle;
 /// An Input Layer in which the data is sent to the verifier
 /// "in the clear" (i.e. without a commitment).
 #[derive(Debug, Clone)]
-pub struct PublicInputLayer<F: FieldExt> {
+pub struct PublicInputLayer<F: Field> {
     mle: MultilinearExtension<F>,
     pub(crate) layer_id: LayerId,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(bound = "F: FieldExt")]
-pub struct CircuitPublicInputLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct CircuitPublicInputLayer<F: Field> {
     layer_id: LayerId,
     num_bits: usize,
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> CircuitPublicInputLayer<F> {
+impl<F: Field> CircuitPublicInputLayer<F> {
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         Self {
             layer_id,
@@ -51,7 +51,7 @@ impl<F: FieldExt> CircuitPublicInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
+impl<F: Field> InputLayer<F> for PublicInputLayer<F> {
     type ProverCommitment = Vec<F>;
     type VerifierCommitment = Vec<F>;
 
@@ -100,13 +100,13 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> PublicInputLayer<F> {
+impl<F: Field> PublicInputLayer<F> {
     pub fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
         Self { mle, layer_id }
     }
 }
 
-impl<F: FieldExt> CircuitInputLayer<F> for CircuitPublicInputLayer<F> {
+impl<F: Field> CircuitInputLayer<F> for CircuitPublicInputLayer<F> {
     type Commitment = Vec<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -166,7 +166,7 @@ impl<F: FieldExt> CircuitInputLayer<F> for CircuitPublicInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldWLXEvals<F> for PublicInputLayer<F> {
+impl<F: Field> YieldWLXEvals<F> for PublicInputLayer<F> {
     /// Computes the V_d(l(x)) evaluations for the input layer V_d.
     fn get_wlx_evaluations(
         &self,
@@ -189,8 +189,8 @@ impl<F: FieldExt> YieldWLXEvals<F> for PublicInputLayer<F> {
 
 #[cfg(test)]
 mod tests {
+    use remainder_shared_types::ff_field;
     use remainder_shared_types::{
-        halo2curves::ff::Field,
         transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
         Fr,
     };

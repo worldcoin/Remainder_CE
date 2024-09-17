@@ -4,7 +4,7 @@ use std::cmp::min;
 
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use thiserror::Error;
 
 use crate::layer::{Layer, LayerId};
@@ -16,7 +16,7 @@ use crate::{
     },
     layer::{layer_enum::LayerEnum, regular_layer::RegularLayer},
     mle::{mle_enum::MleEnum, Mle, MleIndex},
-    utils::{argsort, bits_iter},
+    utils::mle::{argsort, bits_iter},
 };
 
 #[derive(Error, Debug)]
@@ -28,7 +28,7 @@ type IntermediateAndOutputLayers<F> = (Layers<F, LayerEnum<F>>, Vec<MleEnum<F>>)
 
 /// Utility for combining sub-circuits into a single circuit
 /// DOES NOT WORK FOR GATE MLE
-pub fn combine_layers<F: FieldExt>(
+pub fn combine_layers<F: Field>(
     mut layers: Vec<Layers<F, LayerEnum<F>>>,
     mut output_layers: Vec<Vec<MleEnum<F>>>,
 ) -> Result<IntermediateAndOutputLayers<F>, CombineError> {
@@ -172,7 +172,7 @@ pub fn combine_layers<F: FieldExt>(
 
 ///Add all the extra bits that represent selectors between the sub-circuits to
 ///the future DenseMleRefs that refer to the modified layer
-fn add_bits_to_layer_refs<F: FieldExt>(
+fn add_bits_to_layer_refs<F: Field>(
     layers: &mut [LayerEnum<F>],
     output_layers: &mut Vec<MleEnum<F>>,
     new_bits: Vec<MleIndex<F>>,
@@ -270,7 +270,7 @@ fn add_bits_to_layer_refs<F: FieldExt>(
 }
 
 ///Combine expression w/ padding using selectors
-fn combine_expressions<F: FieldExt>(
+fn combine_expressions<F: Field>(
     mut exprs: Vec<Expression<F, ProverExpr>>,
 ) -> Expression<F, ProverExpr> {
     let _floor_size = exprs
@@ -319,7 +319,7 @@ fn combine_expressions<F: FieldExt>(
 ///Function that adds padding to a layer with a selector, left aligned, pads with zero
 ///
 /// Basically turns V(b_1) = \[1, 2\] to V(b_1, b_2) = \[1, 2, 0, 0\] but with expressions
-fn add_padding<F: FieldExt>(
+fn add_padding<F: Field>(
     mut expr: Expression<F, ProverExpr>,
     num_padding: usize,
 ) -> Expression<F, ProverExpr> {

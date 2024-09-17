@@ -5,7 +5,7 @@ use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
     transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 use tracing::{debug, info};
 
@@ -39,7 +39,7 @@ use super::{claim_group::ClaimGroup, evaluate_at_a_point, YieldWLXEvals};
 /// either contains no evaluations (in the trivial case of aggregating a single
 /// claim) or contains `k` vectors, the wlx evaluations produced during each of
 /// the `k` naive claim aggregations performed.
-pub fn prover_aggregate_claims_helper<F: FieldExt>(
+pub fn prover_aggregate_claims_helper<F: Field>(
     claims: &ClaimGroup<F>,
     layer: &impl YieldWLXEvals<F>,
     transcript_writer: &mut impl ProverTranscript<F>,
@@ -107,7 +107,7 @@ pub fn prover_aggregate_claims_helper<F: FieldExt>(
 /// # Returns
 ///
 /// If successful, returns a single aggregated claim.
-pub fn verifier_aggregate_claims_helper<F: FieldExt>(
+pub fn verifier_aggregate_claims_helper<F: Field>(
     claims: &ClaimGroup<F>,
     transcript_reader: &mut impl VerifierTranscript<F>,
 ) -> Result<Claim<F>, TranscriptReaderError> {
@@ -171,7 +171,7 @@ pub fn verifier_aggregate_claims_helper<F: FieldExt>(
 /// operating on the points and not on the results. However, the ClaimGroup API
 /// is convenient for accessing columns and makes the implementation more
 /// readable. We should consider alternative designs.
-pub fn compute_aggregated_challenges<F: FieldExt>(
+pub fn compute_aggregated_challenges<F: Field>(
     claims: &ClaimGroup<F>,
     r_star: F,
 ) -> Result<Vec<F>, ClaimError> {
@@ -215,7 +215,7 @@ pub fn compute_aggregated_challenges<F: FieldExt>(
 /// # Returns
 ///
 /// If successful, returns a single aggregated claim.
-fn prover_aggregate_claims_in_one_round<F: FieldExt>(
+fn prover_aggregate_claims_in_one_round<F: Field>(
     claims: &ClaimGroup<F>,
     layer_mle_refs: &[MleEnum<F>],
     layer: &impl YieldWLXEvals<F>,
@@ -273,7 +273,7 @@ fn prover_aggregate_claims_in_one_round<F: FieldExt>(
     Ok(claim)
 }
 
-fn verifier_aggregate_claims_in_one_round<F: FieldExt>(
+fn verifier_aggregate_claims_in_one_round<F: Field>(
     claims: &ClaimGroup<F>,
     transcript_reader: &mut impl VerifierTranscript<F>,
 ) -> Result<Claim<F>, TranscriptReaderError> {
