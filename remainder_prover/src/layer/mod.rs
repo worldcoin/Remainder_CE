@@ -10,7 +10,7 @@ pub mod regular_layer;
 
 use std::{collections::HashSet, fmt::Debug};
 
-use layer_enum::{CircuitLayerEnum, LayerEnum, VerifierLayerEnum};
+use layer_enum::{LayerEnum, VerifierLayerEnum};
 use product::PostSumcheckLayer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -179,6 +179,8 @@ pub trait CircuitLayer<F: FieldExt> {
     /// The maximum degree for any univariate in the sumcheck protocol.
     fn max_degree(&self) -> usize;
 
+    /// Label the MLE indices, starting from the `start_index` by
+    /// converting [MleIndex::Iterated] to [MleIndex::IndexedBit].
     fn index_mle_indices(&mut self, start_index: usize);
 
     /// Given the [CircuitMle]s of which outputs are expected of this layer, compute the data

@@ -39,7 +39,7 @@ pub use self::gate_helpers::{
 };
 
 use super::{
-    layer_enum::{CircuitLayerEnum, LayerEnum, VerifierLayerEnum},
+    layer_enum::{LayerEnum, VerifierLayerEnum},
     CircuitLayer, VerifierLayer,
 };
 
@@ -225,6 +225,7 @@ pub struct CircuitGateLayer<F: FieldExt> {
 }
 
 impl<F: FieldExt> CircuitGateLayer<F> {
+    /// Constructor for a [CircuitGateLayer].
     pub fn new(
         num_dataparallel_bits: Option<usize>,
         wiring: Vec<(usize, usize, usize)>,

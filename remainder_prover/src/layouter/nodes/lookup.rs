@@ -18,7 +18,7 @@ use crate::utils::get_total_mle_indices;
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::FieldExt;
 
-use crate::expression::{abstract_expr::ExprBuilder, generic_expr::Expression};
+use crate::expression::generic_expr::Expression;
 
 use super::verifier_challenge::VerifierChallengeNode;
 use super::{CircuitNode, Context, NodeId};
