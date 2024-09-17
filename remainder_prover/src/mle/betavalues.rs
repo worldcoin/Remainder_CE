@@ -4,7 +4,7 @@ use std::{collections::HashMap, fmt::Debug};
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
 use crate::layer::LayerId;
@@ -25,9 +25,11 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 /// Instead, we choose to store just the individual values in a hash map as we
 /// don't need the entire representation in order to perform the computations
 /// with beta tables.
+///
+// TODO(Makis): Remove `HashMaps`! We can use plain `Vec`s here.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub struct BetaValues<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct BetaValues<F: Field> {
     /// The challenges in the claim that have not yet been "bound" in the
     /// sumcheck protocol. Keys are the "round" of sumcheck and values are
     /// which challenge in the claim that corresponds to. Every key in
@@ -43,7 +45,7 @@ pub struct BetaValues<F: FieldExt> {
     pub updated_values: HashMap<usize, F>,
 }
 
-impl<F: FieldExt> BetaValues<F> {
+impl<F: Field> BetaValues<F> {
     /// Constructs a new beta table using a vector of the challenge points in a
     /// claim along with it's corresponding round index as a tuple.
     pub fn new(layer_claim_vars_and_index: Vec<(usize, F)>) -> Self {

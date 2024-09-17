@@ -13,7 +13,7 @@ use remainder_ligero::{
 };
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 use serde::{Deserialize, Serialize};
 
@@ -36,7 +36,7 @@ use super::{
 /// An input layer in which `mle` will be committed to using the Ligero polynomial
 /// commitment scheme.
 #[derive(Debug)]
-pub struct LigeroInputLayer<F: FieldExt> {
+pub struct LigeroInputLayer<F: Field> {
     /// The MLE which we wish to commit to.
     pub mle: MultilinearExtension<F>,
     /// The ID corresponding to this layer.
@@ -51,8 +51,8 @@ pub struct LigeroInputLayer<F: FieldExt> {
 
 /// The Ligero evaluation proof that the prover needs to send to the verifier.
 #[derive(Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub struct LigeroInputProof<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct LigeroInputProof<F: Field> {
     /// The auxiliary information required to generate a Ligero proof.
     pub aux: LigeroAuxInfo<F>,
 
@@ -67,8 +67,8 @@ pub type LigeroCommitment<F> = LcCommit<PoseidonSpongeHasher<F>, LigeroAuxInfo<F
 pub type LigeroRoot<F> = LcRoot<LigeroAuxInfo<F>, F>;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(bound = "F: FieldExt")]
-pub struct CircuitLigeroInputLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct CircuitLigeroInputLayer<F: Field> {
     /// The ID of this Ligero Input Layer.
     layer_id: LayerId,
 
@@ -81,7 +81,7 @@ pub struct CircuitLigeroInputLayer<F: FieldExt> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> CircuitLigeroInputLayer<F> {
+impl<F: Field> CircuitLigeroInputLayer<F> {
     pub fn new(layer_id: LayerId, num_bits: usize, aux: LigeroAuxInfo<F>) -> Self {
         Self {
             layer_id,
@@ -92,7 +92,7 @@ impl<F: FieldExt> CircuitLigeroInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
+impl<F: Field> InputLayer<F> for LigeroInputLayer<F> {
     type ProverCommitment = LigeroCommitment<F>;
     type VerifierCommitment = LigeroRoot<F>;
 
@@ -165,7 +165,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> CircuitInputLayer<F> for CircuitLigeroInputLayer<F> {
+impl<F: Field> CircuitInputLayer<F> for CircuitLigeroInputLayer<F> {
     type Commitment = LigeroRoot<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -233,7 +233,7 @@ impl<F: FieldExt> CircuitInputLayer<F> for CircuitLigeroInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> LigeroInputLayer<F> {
+impl<F: Field> LigeroInputLayer<F> {
     /// Creates a new Ligero input layer depending on whether there is auxiliary information
     /// or a precommitment.
     pub fn new(
@@ -254,7 +254,7 @@ impl<F: FieldExt> LigeroInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldWLXEvals<F> for LigeroInputLayer<F> {
+impl<F: Field> YieldWLXEvals<F> for LigeroInputLayer<F> {
     /// Computes the V_d(l(x)) evaluations for the input layer V_d.
     fn get_wlx_evaluations(
         &self,
@@ -278,12 +278,12 @@ impl<F: FieldExt> YieldWLXEvals<F> for LigeroInputLayer<F> {
 #[cfg(test)]
 mod tests {
     use remainder_shared_types::{
-        halo2curves::ff::Field,
         transcript::{counting_transcript::CountingSponge, TranscriptReader, TranscriptWriter},
         Fr,
     };
 
     use crate::claims::Claim;
+    use remainder_shared_types::ff_field;
 
     use super::*;
 

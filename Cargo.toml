@@ -5,7 +5,16 @@ members = [
     "remainder_shared_types",
     "remainder_ligero",
     "remainder_hyrax",
-    "remainder_zkdt",
 ]
 
 resolver = "2"
+
+[profile.opt-with-debug]
+inherits = "release"
+debug = true
+
+[profile.mobile]
+inherits = "release"
+opt-level = "s"   # Optimize for size.
+lto = true
+codegen-units = 1

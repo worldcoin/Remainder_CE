@@ -1,5 +1,4 @@
 use ark_std::{cfg_into_iter, log2};
-use ff::Field;
 use itertools::Itertools;
 use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -19,6 +18,7 @@ use remainder::{
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     sumcheck::evaluate_at_a_point,
 };
+use remainder_shared_types::ff_field;
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
@@ -34,6 +34,8 @@ use crate::{
 };
 
 use super::hyrax_layer::HyraxClaim;
+
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// FIXME: temporary fix to work with hyrax input layer proofs and the generic input layer proof for
 /// [HyraxCircuitInputLayerEnum]. Need this for circuits that use multiple different types of input layers.

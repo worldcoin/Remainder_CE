@@ -7,7 +7,7 @@ use ark_std::{end_timer, start_timer};
 
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use serde_json;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
@@ -15,7 +15,7 @@ use std::path::Path;
 
 /// Boilerplate code for testing a circuit
 pub fn test_circuit<
-    F: FieldExt,
+    F: Field,
     C: Component<NodeEnum<F>>,
     Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>),
 >(

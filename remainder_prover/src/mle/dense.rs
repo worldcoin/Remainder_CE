@@ -20,7 +20,7 @@ use crate::{
 };
 use remainder_shared_types::{
     transcript::{TranscriptSponge, TranscriptWriter},
-    FieldExt,
+    Field,
 };
 
 /// An implementation of an [Mle] using a dense representation.
@@ -47,7 +47,7 @@ pub struct DenseMle<F> {
     pub original_mle_indices: Vec<MleIndex<F>>,
 }
 
-impl<F: FieldExt> Mle<F> for DenseMle<F> {
+impl<F: Field> Mle<F> for DenseMle<F> {
     fn num_iterated_vars(&self) -> usize {
         self.current_mle.num_vars()
     }
@@ -197,7 +197,7 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for DenseMle<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for DenseMle<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
@@ -223,7 +223,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for DenseMle<F> {
     }
 }
 
-impl<F: FieldExt> DenseMle<F> {
+impl<F: Field> DenseMle<F> {
     /// Constructs a new `DenseMle` with specified prefix_bits
     /// todo: change this to create a DenseMle with already specified IndexedBits
     pub fn new_with_prefix_bits(
@@ -316,10 +316,8 @@ impl<F: FieldExt> DenseMle<F> {
         let mle_indices: Vec<MleIndex<F>> =
             ((0..num_iterated_vars).map(|_| MleIndex::Iterated)).collect();
 
-        let current_mle = MultilinearExtension::new_from_evals(Evaluations::<F>::new(
-            num_iterated_vars,
-            items.clone(),
-        ));
+        let current_mle =
+            MultilinearExtension::new_from_evals(Evaluations::<F>::new(num_iterated_vars, items));
 
         Self {
             layer_id,
@@ -391,7 +389,7 @@ impl<F: FieldExt> DenseMle<F> {
     }
 }
 
-impl<F: FieldExt> IntoIterator for DenseMle<F> {
+impl<F: Field> IntoIterator for DenseMle<F> {
     type Item = F;
 
     type IntoIter = std::vec::IntoIter<Self::Item>;
@@ -407,7 +405,7 @@ impl<F: FieldExt> IntoIterator for DenseMle<F> {
 ///
 /// # Requires / Panics
 /// *All* MleRefs should be of the same size, otherwise panics.
-pub fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items: &[Vec<F>; L]) -> Vec<F> {
+pub fn get_padded_evaluations_for_list<F: Field, const L: usize>(items: &[Vec<F>; L]) -> Vec<F> {
     // All the items within should be the same size.
     let max_size = items.iter().map(|mle_ref| mle_ref.len()).max().unwrap();
     assert!(items.iter().all(|mle_ref| mle_ref.len() == max_size));
@@ -431,7 +429,7 @@ pub fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items: &[Vec
         .collect()
 }
 
-impl<F: FieldExt> DenseMle<F> {
+impl<F: Field> DenseMle<F> {
     /// Splits the MLE into a new MLE with a tuple of size 2 as its element.
     pub fn split(self) -> [DenseMle<F>; 2] {
         let first_iter = self

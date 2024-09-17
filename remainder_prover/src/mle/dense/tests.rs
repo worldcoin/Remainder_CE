@@ -1,5 +1,5 @@
 use crate::mle::evals::DimInfo;
-use crate::{mle::dense::DenseMle, utils::get_dummy_random_mle_vec};
+use crate::{mle::dense::DenseMle, utils::mle::get_dummy_random_mle_vec};
 
 use super::*;
 use ark_std::test_rng;

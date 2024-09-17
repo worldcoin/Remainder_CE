@@ -8,11 +8,12 @@ mod new_interface_tests;
 use std::{cmp::max, collections::HashSet};
 
 use ark_std::cfg_into_iter;
+use gate_helpers::bind_round_gate;
 use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 use serde::{Deserialize, Serialize};
 
@@ -29,13 +30,13 @@ use crate::{
         Mle, MleIndex,
     },
     prover::SumcheckProof,
-    sumcheck::{evaluate_at_a_point, Evals},
+    sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
 
 pub use self::gate_helpers::{
-    check_fully_bound, compute_full_gate, compute_sumcheck_message_no_beta_table,
-    index_mle_indices_gate, libra_giraffe, prove_round_dataparallel_phase, prove_round_gate,
-    GateError,
+    check_fully_bound, compute_full_gate, compute_sumcheck_message_gate,
+    compute_sumcheck_message_no_beta_table, index_mle_indices_gate, libra_giraffe,
+    prove_round_dataparallel_phase, GateError,
 };
 
 use super::{
@@ -57,7 +58,7 @@ pub enum BinaryOperation {
 
 impl BinaryOperation {
     /// Method to perform the respective operation.
-    pub fn perform_operation<F: FieldExt>(&self, a: F, b: F) -> F {
+    pub fn perform_operation<F: Field>(&self, a: F, b: F) -> F {
         match self {
             BinaryOperation::Add => a + b,
             BinaryOperation::Mul => a * b,
@@ -70,8 +71,8 @@ impl BinaryOperation {
 /// is specified by `num_dataparallel_bits` in order to account for batched and un-batched
 /// gates.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct GateLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct GateLayer<F: Field> {
     /// The layer id associated with this gate layer.
     pub layer_id: LayerId,
     /// The number of bits representing the number of "dataparallel" copies of the circuit.
@@ -94,7 +95,7 @@ pub struct GateLayer<F: FieldExt> {
     challenges: Vec<F>,
 }
 
-impl<F: FieldExt> Layer<F> for GateLayer<F> {
+impl<F: Field> Layer<F> for GateLayer<F> {
     /// Gets this layer's id.
     fn layer_id(&self) -> LayerId {
         self.layer_id
@@ -198,8 +199,8 @@ impl<F: FieldExt> Layer<F> for GateLayer<F> {
 
 /// The circuit-description counterpart of a Gate layer description.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct CircuitGateLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct CircuitGateLayer<F: Field> {
     /// The layer id associated with this gate layer.
     id: LayerId,
 
@@ -254,7 +255,7 @@ const DATAPARALLEL_ROUND_ADD_NUM_EVALS: usize = 3;
 const NON_DATAPARALLEL_ROUND_MUL_NUM_EVALS: usize = 3;
 const NON_DATAPARALLEL_ROUND_ADD_NUM_EVALS: usize = 3;
 
-impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
+impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
     type VerifierLayer = VerifierGateLayer<F>;
 
     /// Gets this layer's id.
@@ -557,9 +558,92 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
         true
     }
+
+    fn into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
+        let lhs_mle = self.lhs_mle.into_dense_mle(circuit_map);
+        let rhs_mle = self.rhs_mle.into_dense_mle(circuit_map);
+        let num_dataparallel_bits = if self.num_dataparallel_bits == 0 {
+            None
+        } else {
+            Some(self.num_dataparallel_bits)
+        };
+        let gate_layer = GateLayer::new(
+            num_dataparallel_bits,
+            self.wiring.clone(),
+            lhs_mle,
+            rhs_mle,
+            self.gate_operation,
+            self.layer_id(),
+        );
+        gate_layer.into()
+    }
+
+    fn index_mle_indices(&mut self, start_index: usize) {
+        self.lhs_mle.index_mle_indices(start_index);
+        self.rhs_mle.index_mle_indices(start_index);
+    }
+
+    fn compute_data_outputs(
+        &self,
+        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
+        circuit_map: &mut CircuitMap<F>,
+    ) -> bool {
+        // dbg!(&mle_outputs_necessary);
+        assert_eq!(mle_outputs_necessary.len(), 1);
+        let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
+
+        let max_gate_val = self
+            .wiring
+            .iter()
+            .fold(&0, |acc, (z, _, _)| std::cmp::max(acc, z));
+
+        // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
+        // evaluating over all values in the boolean hypercube which includes dataparallel bits
+        let num_dataparallel_vals = 1 << (self.num_dataparallel_bits);
+        let res_table_num_entries =
+            ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
+
+        let maybe_lhs_data = circuit_map.get_data_from_circuit_mle(&self.lhs_mle);
+        if maybe_lhs_data.is_err() {
+            return false;
+        }
+        let lhs_data = maybe_lhs_data.unwrap();
+
+        let maybe_rhs_data = circuit_map.get_data_from_circuit_mle(&self.rhs_mle);
+        if maybe_rhs_data.is_err() {
+            return false;
+        }
+        let rhs_data = maybe_rhs_data.unwrap();
+
+        let mut res_table = vec![F::ZERO; res_table_num_entries];
+        (0..num_dataparallel_vals).for_each(|idx| {
+            self.wiring.iter().for_each(|(z_ind, x_ind, y_ind)| {
+                let zero = F::ZERO;
+                let f2_val = lhs_data
+                    .get_evals_vector()
+                    .get(idx + (x_ind * num_dataparallel_vals))
+                    .unwrap_or(&zero);
+                let f3_val = rhs_data
+                    .get_evals_vector()
+                    .get(idx + (y_ind * num_dataparallel_vals))
+                    .unwrap_or(&zero);
+                res_table[idx + (z_ind * num_dataparallel_vals)] =
+                    self.gate_operation.perform_operation(*f2_val, *f3_val);
+            });
+        });
+
+        let output_data = MultilinearExtension::new(res_table);
+        assert_eq!(
+            output_data.num_vars(),
+            mle_output_necessary.mle_indices().len()
+        );
+
+        circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
+        true
+    }
 }
 
-impl<F: FieldExt> VerifierGateLayer<F> {
+impl<F: Field> VerifierGateLayer<F> {
     /// Computes the oracle query's value for a given [VerifierGateLayer].
     pub fn evaluate(&self, claim: &Claim<F>) -> F {
         let g2_challenges = claim.get_point()[..self.num_dataparallel_rounds].to_vec();
@@ -611,8 +695,8 @@ impl<F: FieldExt> VerifierGateLayer<F> {
 
 /// The verifier's counterpart of a Gate layer.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct VerifierGateLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct VerifierGateLayer<F: Field> {
     /// The layer id associated with this gate layer.
     layer_id: LayerId,
 
@@ -648,13 +732,13 @@ pub struct VerifierGateLayer<F: FieldExt> {
     last_v_challenges: Vec<F>,
 }
 
-impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
+impl<F: Field> VerifierLayer<F> for VerifierGateLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for GateLayer<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for GateLayer<F> {
     /// Get the claims that this layer makes on other layers.
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
@@ -704,7 +788,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for GateLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         // Grab the claim on the left side.
         // TODO!(ryancao): Do error handling here!
@@ -770,7 +854,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldWLXEvals<F> for GateLayer<F> {
+impl<F: Field> YieldWLXEvals<F> for GateLayer<F> {
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &[Vec<F>],
@@ -814,7 +898,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for GateLayer<F> {
     }
 }
 
-impl<F: FieldExt> GateLayer<F> {
+impl<F: Field> GateLayer<F> {
     /// Construct a new gate layer
     ///
     /// # Arguments
@@ -977,8 +1061,15 @@ impl<F: FieldExt> GateLayer<F> {
             .iter()
             .fold(0, |acc, elem| max(acc, elem.len()));
 
-        let evals_vec = phase_1_mles
-            .iter_mut()
+        let init_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_1_mles
+            .iter()
+            .map(|mle_vec| {
+                let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                mle_references
+            })
+            .collect();
+        let evals_vec = init_mle_refs
+            .iter()
             .map(|mle_vec| {
                 compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_bits, max_deg)
                     .unwrap()
@@ -988,8 +1079,10 @@ impl<F: FieldExt> GateLayer<F> {
             .clone()
             .into_iter()
             .skip(1)
-            .fold(Evals(evals_vec[0].clone()), |acc, elem| acc + Evals(elem));
-        let Evals(final_vec_evals) = final_evals;
+            .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
+                acc + SumcheckEvals(elem)
+            });
+        let SumcheckEvals(final_vec_evals) = final_evals;
         Ok(final_vec_evals)
     }
 
@@ -1055,8 +1148,15 @@ impl<F: FieldExt> GateLayer<F> {
             .iter()
             .fold(0, |acc, elem| max(acc, elem.len()));
 
-        let evals_vec = phase_2_mles
-            .iter_mut()
+        let init_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_2_mles
+            .iter()
+            .map(|mle_vec| {
+                let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                mle_references
+            })
+            .collect();
+        let evals_vec = init_mle_refs
+            .iter()
             .map(|mle_vec| {
                 compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_bits, max_deg)
                     .unwrap()
@@ -1066,8 +1166,10 @@ impl<F: FieldExt> GateLayer<F> {
             .clone()
             .into_iter()
             .skip(1)
-            .fold(Evals(evals_vec[0].clone()), |acc, elem| acc + Evals(elem));
-        let Evals(final_vec_evals) = final_evals;
+            .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
+                acc + SumcheckEvals(elem)
+            });
+        let SumcheckEvals(final_vec_evals) = final_evals;
         Ok(final_vec_evals)
     }
 
@@ -1165,11 +1267,21 @@ impl<F: FieldExt> GateLayer<F> {
                 let challenge = transcript_writer.get_challenge("Sumcheck challenge PHASE 1");
                 challenges.push(challenge);
                 // If there are dataparallel bits, we want to start at that index.
-                let eval =
-                    prove_round_gate(round + self.num_dataparallel_bits, challenge, phase_1_mles)
-                        .into_iter()
-                        .map(|eval| eval * beta_g2_fully_bound)
-                        .collect_vec();
+                bind_round_gate(round + self.num_dataparallel_bits, challenge, phase_1_mles);
+                let phase_1_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_1_mles
+                    .iter()
+                    .map(|mle_vec| {
+                        let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                        mle_references
+                    })
+                    .collect();
+                let eval = compute_sumcheck_message_gate(
+                    round + self.num_dataparallel_bits,
+                    &phase_1_mle_refs,
+                )
+                .into_iter()
+                .map(|eval| eval * beta_g2_fully_bound)
+                .collect_vec();
                 transcript_writer.append_elements("Sumcheck evaluations PHASE 1", &eval);
                 Ok::<_, LayerError>(eval)
             }))
@@ -1234,10 +1346,17 @@ impl<F: FieldExt> GateLayer<F> {
                 .chain((1..num_rounds_phase2).map(|round| {
                     let challenge = transcript_writer.get_challenge("Sumcheck challenge");
                     challenges.push(challenge);
-                    let eval = prove_round_gate(
+                    bind_round_gate(round + self.num_dataparallel_bits, challenge, phase_2_mles);
+                    let phase_2_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_2_mles
+                        .iter()
+                        .map(|mle_vec| {
+                            let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                            mle_references
+                        })
+                        .collect();
+                    let eval = compute_sumcheck_message_gate(
                         round + self.num_dataparallel_bits,
-                        challenge,
-                        phase_2_mles,
+                        &phase_2_mle_refs,
                     )
                     .into_iter()
                     .map(|eval| eval * beta_g2_fully_bound)
@@ -1268,13 +1387,13 @@ impl<F: FieldExt> GateLayer<F> {
 }
 
 /// For circuit serialization to hash the circuit description into the transcript.
-impl<F: std::fmt::Debug + FieldExt> GateLayer<F> {
+impl<F: std::fmt::Debug + Field> GateLayer<F> {
     pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct GateCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a GateLayer<F>);
+        struct GateCircuitDesc<'a, F: std::fmt::Debug + Field>(&'a GateLayer<F>);
 
-        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for GateCircuitDesc<'a, F> {
+        impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for GateCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("Gate")
                     .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())
