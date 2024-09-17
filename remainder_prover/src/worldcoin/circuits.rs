@@ -14,12 +14,12 @@ use crate::layouter::nodes::{CircuitNode, Context};
 use crate::mle::bundled_input_mle::BundledInputMle;
 use crate::utils::pad_to_nearest_power_of_two;
 use crate::utils::{get_input_shred_and_data_from_vec, get_input_shred_from_num_vars};
-use crate::worldcoin::components::SignCheckerComponent;
-use crate::worldcoin::components::{DigitalRecompositionComponent, SubtractionComponent};
-use crate::worldcoin::data::WorldcoinCircuitData;
-use crate::worldcoin::digit_decomposition::BASE;
+use crate::worldcoin::components::Subtractor;
+
 use itertools::Itertools;
 use remainder_shared_types::Field;
+
+use super::data::CircuitData;
 
 /// Builds the iriscode circuit.
 ///
@@ -43,7 +43,7 @@ use remainder_shared_types::Field;
 /// + the length of the MLE `to_reroute`.
 ///
 /// See [CircuitData] for a detailed description of each generic and argument with all public input layers.
-pub fn build_circuit_public_il<
+pub fn build_circuit<
     F: Field,
     const MATMULT_ROWS_NUM_VARS: usize,
     const MATMULT_COLS_NUM_VARS: usize,
@@ -82,7 +82,7 @@ pub fn build_circuit_public_il<
         let (to_reroute, to_reroute_data) =
             get_input_shred_and_data_from_vec(to_reroute.clone(), ctx, &input_layer);
         println!("{:?} = Image to_reroute input", to_reroute.id());
-        let (to_sub_from_matmult, to_sub_from_matmul_data) =
+        let (to_sub_from_matmult, to_sub_from_matmult_data) =
             get_input_shred_and_data_from_vec(to_sub_from_matmult.clone(), ctx, &input_layer);
         println!("{:?} = input to sub from matmult", to_sub_from_matmult.id());
         let rerouted_image = IdentityGateNode::new(ctx, &to_reroute, reroutings.clone());
@@ -107,7 +107,7 @@ pub fn build_circuit_public_il<
         let subtractor = Subtractor::new(ctx, &matmult, &to_sub_from_matmult);
 
         let (digits_input_shreds, digits_input_shreds_data) =
-            digits.make_input_shreds(ctx, &input_layer);
+            digits.make_input_shred_and_data(ctx, &input_layer);
         for (i, shred) in digits_input_shreds.iter().enumerate() {
             println!("{:?} = {}th digit input", shred.id(), i);
         }
@@ -149,9 +149,9 @@ pub fn build_circuit_public_il<
         println!("{:?} = Sign bits (iris code) input", sign_bits.id());
         let complementary_checker = ComplementaryRecompChecker::new(
             ctx,
-            &subtractor.sector,
+            &&subtractor.sector,
             &sign_bits,
-            &unsigned_recomp.sector,
+            &&unsigned_recomp.sector,
             BASE as u64,
             NUM_DIGITS,
         );
@@ -161,10 +161,10 @@ pub fn build_circuit_public_il<
         output_nodes.push(OutputNode::new_zero(ctx, &bits_are_binary.sector));
 
         let mut input_data_shreds = vec![
-            image_data,
-            kernel_matrix_data,
-            iris_code_data,
-            thresholds_data,
+            to_reroute_data,
+            rh_matmult_multiplicand_data,
+            sign_bits_data,
+            to_sub_from_matmult_data,
             digit_multiplicities_data,
             lookup_table_values_data,
         ];

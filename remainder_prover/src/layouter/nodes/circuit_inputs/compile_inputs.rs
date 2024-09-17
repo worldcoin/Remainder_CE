@@ -17,7 +17,7 @@ use crate::{
         nodes::{CircuitNode, NodeId},
     },
     mle::evals::{Evaluations, MultilinearExtension},
-    utils::mle::{argsort, get_total_mle_indices, pad_to_nearest_power_of_two},
+    utils::mle::{argsort, pad_to_nearest_power_of_two},
 };
 
 use super::{InputLayerData, InputLayerNode, InputLayerType};

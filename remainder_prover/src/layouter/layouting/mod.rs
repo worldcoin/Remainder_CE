@@ -38,7 +38,7 @@ pub mod utils;
 #[derive(Debug)]
 pub struct CircuitMap<F>(pub(crate) HashMap<CircuitLocation, MultilinearExtension<F>>);
 
-impl<F: FieldExt> CircuitMap<F> {
+impl<F: Field> CircuitMap<F> {
     pub(crate) fn new() -> Self {
         Self(HashMap::new())
     }
@@ -110,7 +110,7 @@ impl InputNodeMap {
     }
 }
 
-pub struct InputLayerHintMap<F: FieldExt>(
+pub struct InputLayerHintMap<F: Field>(
     pub(crate)  HashMap<
         LayerId,
         (
@@ -120,7 +120,7 @@ pub struct InputLayerHintMap<F: FieldExt>(
     >,
 );
 
-impl<F: FieldExt> InputLayerHintMap<F> {
+impl<F: Field> InputLayerHintMap<F> {
     pub(crate) fn new() -> Self {
         Self(HashMap::new())
     }

@@ -35,7 +35,7 @@ use crate::{
 use ark_std::{end_timer, start_timer};
 
 #[derive(Debug, Clone)]
-pub enum CommitmentEnum<F: FieldExt> {
+pub enum CommitmentEnum<F: Field> {
     LigeroCommitment(LigeroCommit<PoseidonSpongeHasher<F>, F>),
     PublicCommitment(Vec<F>),
 }

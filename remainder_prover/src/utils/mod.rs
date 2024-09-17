@@ -12,6 +12,11 @@ pub mod mle;
 /// Utilities that are only useful for tests
 pub(crate) mod test_utils;
 
+use std::{fs, iter::repeat_with};
+
+use ark_std::test_rng;
+use itertools::{repeat_n, Itertools};
+use rand::Rng;
 /// FIXME the functions below are uncategorized and probably should be moved to a more appropriate
 /// module or submodule.
 use remainder_shared_types::{Field, Poseidon};
@@ -29,9 +34,6 @@ use crate::{
     },
     prover::layers::Layers,
 };
-
-#[cfg(test)]
-pub(crate) mod test_utils;
 
 pub fn get_input_shred_from_num_vars(
     num_vars: usize,

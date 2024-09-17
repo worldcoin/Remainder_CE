@@ -3,9 +3,7 @@ use itertools::Itertools;
 use remainder_shared_types::Field;
 
 use crate::{
-    layouter::nodes::{
-            sector::Sector, CircuitNode, ClaimableNode, Context,
-        },
+    layouter::nodes::{sector::Sector, CircuitNode, Context},
     mle::evals::MultilinearExtension,
 };
 
@@ -18,26 +16,11 @@ pub struct EqualityChecker<F: Field> {
 
 impl<F: Field> EqualityChecker<F> {
     /// Create a new EqualityChecker.
-    pub fn new(
-        ctx: &Context,
-        lhs: &dyn ClaimableNode<F = F>,
-        rhs: &dyn ClaimableNode<F = F>,
-    ) -> Self {
-        let sector = Sector::new(
-            ctx,
-            &[lhs, rhs],
-            |nodes| {
-                assert_eq!(nodes.len(), 2);
-                nodes[0].expr() - nodes[1].expr()
-            },
-            |data| {
-                assert_eq!(data.len(), 2);
-                let result = data[0].get_evals_vector().iter().zip(data[1].get_evals_vector().iter())
-                    .map(|(a, b)| *a - *b)
-                    .collect_vec();
-                MultilinearExtension::new(result)
-            },
-        );
+    pub fn new(ctx: &Context, lhs: &dyn CircuitNode, rhs: &dyn CircuitNode) -> Self {
+        let sector = Sector::new(ctx, &[lhs, rhs], |nodes| {
+            assert_eq!(nodes.len(), 2);
+            nodes[0].expr() - nodes[1].expr()
+        });
         println!("{:?} = EqualityChecker sector", sector.id());
         Self { sector }
     }

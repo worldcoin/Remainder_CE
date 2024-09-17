@@ -265,12 +265,12 @@ pub struct CircuitMatrix<F: Field> {
     cols_num_vars: usize,
 }
 
-impl<F: FieldExt> CircuitMatrix<F> {
-    pub fn new(mle: CircuitMle<F>, num_rows_vars: usize, num_cols_vars: usize) -> Self {
+impl<F: Field> CircuitMatrix<F> {
+    pub fn new(mle: CircuitMle<F>, rows_num_vars: usize, cols_num_vars: usize) -> Self {
         Self {
             mle,
-            num_rows_vars,
-            num_cols_vars,
+            rows_num_vars,
+            cols_num_vars,
         }
     }
 
@@ -278,8 +278,8 @@ impl<F: FieldExt> CircuitMatrix<F> {
         let dense_mle = self.mle.into_dense_mle(circuit_map);
         Matrix {
             mle: dense_mle,
-            num_cols_vars: self.num_cols_vars,
-            num_rows_vars: self.num_rows_vars,
+            rows_num_vars: self.rows_num_vars,
+            cols_num_vars: self.cols_num_vars,
         }
     }
 }
@@ -405,47 +405,10 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
         let product = product_two_matrices_from_flattened_vectors(
             matrix_a_data.get_evals_vector(),
             matrix_b_data.get_evals_vector(),
-            1 << self.matrix_a.num_rows_vars,
-            1 << self.matrix_a.num_cols_vars,
-            1 << self.matrix_b.num_rows_vars,
-            1 << self.matrix_b.num_cols_vars,
-        );
-
-        let output_data = MultilinearExtension::new(product);
-        assert_eq!(
-            output_data.num_vars(),
-            mle_output_necessary.mle_indices().len()
-        );
-
-        circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
-        true
-    }
-
-    fn compute_data_outputs(
-        &self,
-        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
-        circuit_map: &mut CircuitMap<F>,
-    ) -> bool {
-        assert_eq!(mle_outputs_necessary.len(), 1);
-        let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
-
-        let maybe_matrix_a_data = circuit_map.get_data_from_circuit_mle(&self.matrix_a.mle);
-        if maybe_matrix_a_data.is_err() {
-            return false;
-        }
-        let matrix_a_data = maybe_matrix_a_data.unwrap();
-        let maybe_matrix_b_data = circuit_map.get_data_from_circuit_mle(&self.matrix_b.mle);
-        if maybe_matrix_b_data.is_err() {
-            return false;
-        }
-        let matrix_b_data = maybe_matrix_b_data.unwrap();
-        let product = product_two_matrices_from_flattened_vectors(
-            matrix_a_data.get_evals_vector(),
-            matrix_b_data.get_evals_vector(),
-            1 << self.matrix_a.num_rows_vars,
-            1 << self.matrix_a.num_cols_vars,
-            1 << self.matrix_b.num_rows_vars,
-            1 << self.matrix_b.num_cols_vars,
+            1 << self.matrix_a.rows_num_vars,
+            1 << self.matrix_a.cols_num_vars,
+            1 << self.matrix_b.rows_num_vars,
+            1 << self.matrix_b.cols_num_vars,
         );
 
         let output_data = MultilinearExtension::new(product);
@@ -848,7 +811,7 @@ pub fn product_two_matrices<F: Field>(matrix_a: &Matrix<F>, matrix_b: &Matrix<F>
     product_matrix
 }
 
-pub fn product_two_matrices_from_flattened_vectors<F: FieldExt>(
+pub fn product_two_matrices_from_flattened_vectors<F: Field>(
     matrix_a_vec: &[F],
     matrix_b_vec: &[F],
     matrix_a_num_rows: usize,

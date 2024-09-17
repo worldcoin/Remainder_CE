@@ -1,6 +1,6 @@
 use ark_std::log2;
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     input_layer::random_input_layer::CircuitVerifierChallengeInputLayer,
@@ -45,7 +45,7 @@ impl VerifierChallengeNode {
         }
     }
 
-    pub fn generate_circuit_description<F: FieldExt>(
+    pub fn generate_circuit_description<F: Field>(
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,

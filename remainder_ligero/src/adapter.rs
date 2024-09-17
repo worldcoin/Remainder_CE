@@ -5,9 +5,8 @@ use crate::{LcColumn, LcEncoding};
 use crate::poseidon_ligero::PoseidonSpongeHasher;
 use crate::{ligero_structs::LigeroAuxInfo, ligero_structs::LigeroEvalProof};
 
-use crate::Field;
-
 use itertools::Itertools;
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
 /// Struct containing all of the components of a Ligero commitment + evaluation

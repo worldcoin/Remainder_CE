@@ -19,8 +19,8 @@ use super::LayerError;
 layer_enum!(LayerEnum, (Regular: RegularLayer<F>), (Gate: GateLayer<F>), (IdentityGate: IdentityGate<F>), (MatMult: MatMult<F>));
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub enum CircuitLayerEnum<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub enum CircuitLayerEnum<F: Field> {
     Regular(CircuitRegularLayer<F>),
     Gate(CircuitGateLayer<F>),
     IdentityGate(CircuitIdentityGateLayer<F>),
@@ -28,8 +28,8 @@ pub enum CircuitLayerEnum<F: FieldExt> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub enum VerifierLayerEnum<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub enum VerifierLayerEnum<F: Field> {
     Regular(VerifierRegularLayer<F>),
     Gate(VerifierGateLayer<F>),
     IdentityGate(VerifierIdentityGateLayer<F>),

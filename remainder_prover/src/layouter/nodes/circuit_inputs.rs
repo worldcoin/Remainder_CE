@@ -14,13 +14,13 @@ use super::{CircuitNode, Context, NodeId};
 /// A struct that represents input data that will be used to populate a
 /// [GKRCircuitDescription] in order to generate a full circuit.
 #[derive(Debug, Clone)]
-pub struct InputLayerData<F: FieldExt> {
+pub struct InputLayerData<F: Field> {
     pub corresponding_input_node_id: NodeId,
     pub data: Vec<InputShredData<F>>,
     pub precommit: Option<CommitmentEnum<F>>,
 }
 
-impl<F: FieldExt> InputLayerData<F> {
+impl<F: Field> InputLayerData<F> {
     pub fn new(
         corresponding_input_node_id: NodeId,
         data: Vec<InputShredData<F>>,
@@ -35,12 +35,12 @@ impl<F: FieldExt> InputLayerData<F> {
 }
 
 #[derive(Debug, Clone)]
-pub struct InputShredData<F: FieldExt> {
+pub struct InputShredData<F: Field> {
     pub corresponding_input_shred_id: NodeId,
     pub data: MultilinearExtension<F>,
 }
 
-impl<F: FieldExt> InputShredData<F> {
+impl<F: Field> InputShredData<F> {
     pub fn new(corresponding_input_shred_id: NodeId, data: MultilinearExtension<F>) -> Self {
         Self {
             corresponding_input_shred_id,

@@ -4,14 +4,16 @@ use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::layer::LayerId;
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::ComponentSet;
-use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
+use crate::layouter::nodes::circuit_inputs::{
+    InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+};
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
-use crate::layouter::nodes::ClaimableNode;
-use crate::mle::circuit_mle::{to_slice_of_vectors, CircuitMle, FlatMles};
+use crate::layouter::nodes::CircuitNode;
+use crate::mle::bundled_input_mle::{to_slice_of_vectors, BundledInputMle, FlatMles};
 use crate::prover::helpers::test_circuit;
 use crate::utils::arithmetic::i64_to_field;
-use crate::utils::mle::get_input_shred_from_vec;
+use crate::utils::get_input_shred_and_data_from_vec;
 use ark_std::iterable::Iterable;
 use itertools::Itertools;
 use remainder_shared_types::ff_field;
@@ -34,19 +36,20 @@ fn test_complementary_recomposition_vertical() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
+        let (digits_input_shreds, digits_input_shreds_data) =
+            digits.make_input_shred_and_data(ctx, &input_layer);
         let digits_refs = digits_input_shreds
             .iter()
-            .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
+            .map(|shred| shred as &dyn CircuitNode)
             .collect_vec();
-        let bits_input_shred = get_input_shred_from_vec(
+        let (bits_input_shred, bits_input_shred_data) = get_input_shred_and_data_from_vec(
             bits.iter()
                 .map(|b| if *b { Fr::ONE } else { Fr::ZERO })
                 .collect(),
             ctx,
             &input_layer,
         );
-        let values_input_shred = get_input_shred_from_vec(
+        let (values_input_shred, values_input_shred_data) = get_input_shred_and_data_from_vec(
             values.iter().map(|value| i64_to_field(value)).collect(),
             ctx,
             &input_layer,
@@ -57,13 +60,16 @@ fn test_complementary_recomposition_vertical() {
             ctx,
             &values_input_shred,
             &bits_input_shred,
-            &recomp.sector,
+            &&recomp.sector,
             2,
             2,
         );
 
         let output = OutputNode::new_zero(ctx, &comp_checker.sector);
 
+        let mut input_shred_data = vec![values_input_shred_data, bits_input_shred_data];
+        input_shred_data.extend(digits_input_shreds_data);
+        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
         let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
             values_input_shred.into(),
@@ -74,7 +80,10 @@ fn test_complementary_recomposition_vertical() {
         ];
         all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
 
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_layer_data],
+        )
     });
 
     test_circuit(circuit, None);
@@ -105,22 +114,30 @@ fn test_unsigned_recomposition() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let digits_input_shreds = digits
+        let (digits_input_shreds, digits_input_shreds_data): (
+            Vec<InputShred>,
+            Vec<InputShredData<Fr>>,
+        ) = digits
             .iter()
             .map(|digits_at_place| {
-                get_input_shred_from_vec(digits_at_place.clone(), ctx, &input_layer)
+                get_input_shred_and_data_from_vec(digits_at_place.clone(), ctx, &input_layer)
             })
-            .collect_vec();
-        let expected_input_shred = get_input_shred_from_vec(expected.clone(), ctx, &input_layer);
+            .unzip();
+        let (expected_input_shred, expected_input_shred_data) =
+            get_input_shred_and_data_from_vec(expected.clone(), ctx, &input_layer);
 
         let digits_input_refs = digits_input_shreds
             .iter()
-            .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
+            .map(|shred| shred as &dyn CircuitNode)
             .collect_vec();
         let recomp = UnsignedRecomposition::new(ctx, &digits_input_refs, base);
 
-        let equality_checker = EqualityChecker::new(ctx, &expected_input_shred, &recomp.sector);
+        let equality_checker = EqualityChecker::new(ctx, &expected_input_shred, &&recomp.sector);
         let output = OutputNode::new_zero(ctx, &equality_checker.sector);
+
+        let mut input_shred_data = vec![expected_input_shred_data];
+        input_shred_data.extend(digits_input_shreds_data);
+        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
 
         let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
@@ -132,7 +149,10 @@ fn test_unsigned_recomposition() {
 
         all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
 
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_layer_data],
+        )
     });
 
     test_circuit(circuit, None);
@@ -176,18 +196,23 @@ fn test_complementary_recomposition() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let digits_input_shreds = digits
+        let (digits_input_shreds, digits_input_shreds_data): (
+            Vec<InputShred>,
+            Vec<InputShredData<Fr>>,
+        ) = digits
             .iter()
             .map(|digits_at_place| {
-                get_input_shred_from_vec(digits_at_place.clone(), ctx, &input_layer)
+                get_input_shred_and_data_from_vec(digits_at_place.clone(), ctx, &input_layer)
             })
-            .collect_vec();
-        let bits_input_shred = get_input_shred_from_vec(bits.clone(), ctx, &input_layer);
-        let expected_input_shred = get_input_shred_from_vec(expected.clone(), ctx, &input_layer);
+            .unzip();
+        let (bits_input_shred, bits_input_shred_data) =
+            get_input_shred_and_data_from_vec(bits.clone(), ctx, &input_layer);
+        let (expected_input_shred, expected_input_shred_data) =
+            get_input_shred_and_data_from_vec(expected.clone(), ctx, &input_layer);
 
         let digits_input_refs = digits_input_shreds
             .iter()
-            .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
+            .map(|shred| shred as &dyn CircuitNode)
             .collect_vec();
         let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_input_refs, base);
 
@@ -195,12 +220,16 @@ fn test_complementary_recomposition() {
             ctx,
             &expected_input_shred,
             &bits_input_shred,
-            &unsigned_recomp.sector,
+            &&unsigned_recomp.sector,
             base,
             num_digits,
         );
 
         let output = OutputNode::new_zero(ctx, &signed_recomp_checker.sector);
+
+        let mut input_shred_data = vec![bits_input_shred_data, expected_input_shred_data];
+        input_shred_data.extend(digits_input_shreds_data);
+        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
 
         let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
@@ -213,7 +242,10 @@ fn test_complementary_recomposition() {
 
         all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
 
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_layer_data],
+        )
     });
 
     test_circuit(circuit, None);
@@ -225,16 +257,22 @@ fn test_bits_are_binary_soundness() {
     let bits = vec![Fr::from(3u64)];
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let shred = get_input_shred_from_vec(bits.clone(), ctx, &input_layer);
+        let (shred, shred_data) =
+            get_input_shred_and_data_from_vec(bits.clone(), ctx, &input_layer);
         let component = BitsAreBinary::new(ctx, &shred);
         let output = OutputNode::new_zero(ctx, &component.sector);
+        let mut input_shred_data = vec![shred_data];
+        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
         let all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
             shred.into(),
             component.sector.into(),
             output.into(),
         ];
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_layer_data],
+        )
     });
     test_circuit(circuit, None);
 }
@@ -249,16 +287,22 @@ fn test_bits_are_binary() {
     ];
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let shred = get_input_shred_from_vec(bits.clone(), ctx, &input_layer);
+        let (shred, shred_data) =
+            get_input_shred_and_data_from_vec(bits.clone(), ctx, &input_layer);
         let component = BitsAreBinary::new(ctx, &shred);
         let output = OutputNode::new_zero(ctx, &component.sector);
+        let mut input_shred_data = vec![shred_data];
+        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
         let all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
             shred.into(),
             component.sector.into(),
             output.into(),
         ];
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_layer_data],
+        )
     });
     test_circuit(circuit, None);
 }

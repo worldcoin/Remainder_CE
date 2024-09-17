@@ -1,4 +1,4 @@
-use itertools::Itertools;
+use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder::expression::abstract_expr::ExprBuilder;
 use remainder::layer::LayerId;
@@ -10,6 +10,7 @@ use remainder::layouter::nodes::{CircuitNode, Context};
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
 
 use remainder::mle::dense::DenseMle;
+use remainder::mle::MleIndex;
 use remainder_shared_types::{Field, Fr};
 
 /// Returns an MLE with all Fr::one() for testing according to the number of variables.
@@ -78,6 +79,20 @@ pub fn get_dummy_random_mle_vec(
             DenseMle::new_from_raw(mle_vec, LayerId::Input(0))
         })
         .collect_vec()
+}
+
+/// Returns the total MLE indices given a Vec<bool>
+/// for the prefix bits and then the number of iterated
+/// bits after.
+pub fn get_total_mle_indices<F: Field>(
+    prefix_bits: &[bool],
+    num_iterated_bits: usize,
+) -> Vec<MleIndex<F>> {
+    prefix_bits
+        .iter()
+        .map(|bit| MleIndex::Fixed(*bit))
+        .chain(repeat_n(MleIndex::Iterated, num_iterated_bits))
+        .collect()
 }
 
 /// A builder which returns an expression with three nested selectors:

@@ -7,10 +7,11 @@ use crate::{
     expression::circuit_expr::CircuitMle,
     layer::{
         layer_enum::CircuitLayerEnum,
-        matmult::{CircuitMatMultLayer, CircuitMatrix},
+        matmult::{CircuitMatMultLayer, CircuitMatrix, Matrix},
         LayerId,
     },
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
+    mle::{dense::DenseMle, evals::MultilinearExtension},
     utils::get_total_mle_indices,
 };
 
@@ -18,7 +19,7 @@ use super::{CircuitNode, CompilableNode, Context, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
-pub struct MatMultNod {
+pub struct MatMultNode {
     id: NodeId,
     matrix_a: NodeId,
     rows_cols_num_vars_a: (usize, usize),
@@ -50,18 +51,7 @@ impl MatMultNode {
         matrix_node_b: &impl CircuitNode,
         rows_cols_num_vars_b: (usize, usize),
     ) -> Self {
-        let matrix_a_mle = DenseMle::new_from_raw(
-            matrix_node_a.get_data().get_evals_vector().to_vec(),
-            LayerId::Layer(0),
-        );
-        let matrix_a = Matrix::new(matrix_a_mle, rows_cols_num_vars_a.0, rows_cols_num_vars_a.1);
-
-        let matrix_b_mle = DenseMle::new_from_raw(
-            matrix_node_b.get_data().get_evals_vector().to_vec(),
-            LayerId::Layer(0),
-        );
-        let matrix_b = Matrix::new(matrix_b_mle, rows_cols_num_vars_b.0, rows_cols_num_vars_b.1);
-
+        assert_eq!(rows_cols_num_vars_a.1, rows_cols_num_vars_b.0);
         let num_product_vars = rows_cols_num_vars_a.0 + rows_cols_num_vars_b.1;
 
         Self {
@@ -69,7 +59,7 @@ impl MatMultNode {
             matrix_a: matrix_node_a.id(),
             rows_cols_num_vars_a,
             matrix_b: matrix_node_b.id(),
-            num_rows_cols_b,
+            rows_cols_num_vars_b,
             num_vars: num_product_vars,
         }
     }
@@ -90,16 +80,9 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
 
         // Matrix A and matrix B are not padded because the data from the previous layer is only stored as the raw [MultilinearExtension].
         let matrix_a = CircuitMatrix::new(
-            mle_a,
+            circuit_mle_a,
             self.rows_cols_num_vars_a.0,
             self.rows_cols_num_vars_a.1,
-        );
-        let (matrix_b_location, matrix_b_data) = circuit_map.get_node(&self.matrix_b)?;
-
-        let mle_b = DenseMle::new_with_prefix_bits(
-            MultilinearExtension::new(matrix_b_data.get_evals_vector().clone()),
-            matrix_b_location.layer_id,
-            matrix_b_location.prefix_bits.clone(),
         );
         let (matrix_b_location, matrix_b_num_vars) =
             circuit_description_map.get_node(&self.matrix_b)?;
@@ -109,7 +92,7 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
 
         // should already been padded
         let matrix_b = CircuitMatrix::new(
-            mle_b,
+            circuit_mle_b,
             self.rows_cols_num_vars_b.0,
             self.rows_cols_num_vars_b.1,
         );

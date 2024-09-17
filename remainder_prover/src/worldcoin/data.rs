@@ -8,7 +8,8 @@ use std::path::PathBuf;
 
 use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::layer::LayerId;
-use crate::mle::bundled_input_mle::{to_slice_of_vectors, CircuitMle, FlatMles};
+use crate::mle::bundled_input_mle::BundledInputMle;
+use crate::mle::bundled_input_mle::{to_slice_of_vectors, FlatMles};
 use crate::mle::Mle;
 use crate::utils::arithmetic::i64_to_field;
 use crate::utils::array::pad_with_rows;
