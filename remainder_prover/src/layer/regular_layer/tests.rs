@@ -6,9 +6,13 @@ use remainder_shared_types::{
 
 use crate::{
     claims::Claim,
-    expression::{generic_expr::Expression, prover_expr::ProverExpr},
+    expression::{
+        circuit_expr::{CircuitExpr, CircuitMle},
+        generic_expr::Expression,
+        prover_expr::ProverExpr,
+    },
     layer::{CircuitLayer, Layer, LayerId},
-    mle::dense::DenseMle,
+    mle::{dense::DenseMle, Mle},
 };
 
 use super::{CircuitRegularLayer, RegularLayer};
@@ -26,9 +30,14 @@ fn regular_layer_test_prove_verify_product() {
     let mle_ref_1 = mle_new;
     let mle_ref_2 = mle_2;
 
+    let circuit_mle_1 = CircuitMle::new(LayerId::Input(0), mle_ref_1.mle_indices());
+    let circuit_mle_2 = CircuitMle::new(LayerId::Input(0), mle_ref_2.mle_indices());
+    let mut circuit_expression =
+        Expression::<Fr, CircuitExpr>::products(vec![circuit_mle_1, circuit_mle_2]);
+    circuit_expression.index_mle_indices(0);
+
     let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_ref_1, mle_ref_2]);
     let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
-    dbg!(&claim);
 
     let mut layer = RegularLayer::new_raw(crate::layer::LayerId::Layer(0), expression.clone());
 
@@ -37,12 +46,10 @@ fn regular_layer_test_prove_verify_product() {
     layer.prove_rounds(claim.clone(), &mut transcript).unwrap();
 
     let transcript_raw = transcript.get_transcript();
-    dbg!(&transcript_raw);
     let mut transcript = TranscriptReader::<_, PoseidonSponge<_>>::new(transcript_raw);
 
     expression.index_mle_indices(0);
-    let circuit_expression = expression.transform_to_circuit_expression().unwrap();
-    dbg!(&circuit_expression);
+
     let verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
@@ -62,6 +69,12 @@ fn regular_layer_test_prove_verify_sum() {
     let mle_ref_1 = mle_new;
     let mle_ref_2 = mle_2;
 
+    let circuit_mle_1 = CircuitMle::new(LayerId::Input(0), mle_ref_1.mle_indices());
+    let circuit_mle_2 = CircuitMle::new(LayerId::Input(0), mle_ref_2.mle_indices());
+    let mut circuit_expression =
+        Expression::<Fr, CircuitExpr>::sum(circuit_mle_1.expression(), circuit_mle_2.expression());
+    circuit_expression.index_mle_indices(0);
+
     let lhs = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
     let rhs = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
     let mut expression = Expression::<Fr, ProverExpr>::sum(lhs, rhs);
@@ -80,7 +93,6 @@ fn regular_layer_test_prove_verify_sum() {
     let mut transcript = TranscriptReader::<_, PoseidonSponge<_>>::new(transcript_raw);
 
     expression.index_mle_indices(0);
-    let circuit_expression = expression.transform_to_circuit_expression().unwrap();
     dbg!(&circuit_expression);
     let verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
 
@@ -101,6 +113,14 @@ fn regular_layer_test_prove_verify_selector() {
     let mle_ref_1 = mle_new;
     let mle_ref_2 = mle_2;
 
+    let circuit_mle_1 = CircuitMle::new(LayerId::Input(0), mle_ref_1.mle_indices());
+    let circuit_mle_2 = CircuitMle::new(LayerId::Input(0), mle_ref_2.mle_indices());
+    let mut circuit_expression = Expression::<Fr, CircuitExpr>::selectors(vec![
+        circuit_mle_1.expression(),
+        circuit_mle_2.expression(),
+    ]);
+    circuit_expression.index_mle_indices(0);
+
     let lhs = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
     let rhs = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
     let mut expression = rhs.concat_expr(lhs);
@@ -119,8 +139,7 @@ fn regular_layer_test_prove_verify_selector() {
     let mut transcript = TranscriptReader::<_, PoseidonSponge<_>>::new(transcript_raw);
 
     expression.index_mle_indices(0);
-    let circuit_expression = expression.transform_to_circuit_expression().unwrap();
-    dbg!(&circuit_expression);
+
     let verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
@@ -141,6 +160,14 @@ fn regular_layer_test_prove_verify_complex() {
 
     let leaf_mle_1 = Expression::<Fr, ProverExpr>::mle(mle_1.clone());
     let leaf_mle_2 = Expression::<Fr, ProverExpr>::mle(mle_2.clone());
+
+    let circuit_mle_1 = CircuitMle::new(LayerId::Input(0), mle_1.mle_indices());
+    let circuit_mle_2 = CircuitMle::new(LayerId::Input(0), mle_2.mle_indices());
+    let mut circuit_expression = Expression::<Fr, CircuitExpr>::selectors(vec![
+        Expression::<Fr, CircuitExpr>::products(vec![circuit_mle_1.clone(), circuit_mle_2.clone()]),
+        circuit_mle_2.expression() + circuit_mle_1.expression(),
+    ]);
+    circuit_expression.index_mle_indices(0);
     let sum = Expression::<Fr, ProverExpr>::sum(leaf_mle_2, leaf_mle_1);
 
     let prod = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_2.clone()]);
@@ -161,7 +188,6 @@ fn regular_layer_test_prove_verify_complex() {
     let mut transcript = TranscriptReader::<_, PoseidonSponge<_>>::new(transcript_raw);
 
     root.index_mle_indices(0);
-    let circuit_expression = root.transform_to_circuit_expression().unwrap();
     dbg!(&circuit_expression);
     let verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
 
@@ -169,15 +195,3 @@ fn regular_layer_test_prove_verify_complex() {
         .verify_rounds(claim, &mut transcript)
         .unwrap();
 }
-
-// #[test]
-// /// Testing of the ability of `RegularLayer` to yield Claims after proving
-// fn regular_layer_test_yield_claims() {
-//     todo!()
-// }
-
-// #[test]
-// /// Testing of `RegularLayer`'s YieldWlxEvals implementation
-// fn regular_layer_test_get_wlx_evals() {
-//     todo!()
-// }
