@@ -86,7 +86,6 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for RegularLayer<F> {
                     ExpressionNode::Product(mle_vec_indices) => {
                         for mle_vec_index in mle_vec_indices {
                             let mle_ref = mle_vec_index.get_mle(mle_vec);
-
                             let fixed_mle_indices = mle_ref
                                 .mle_indices
                                 .iter()

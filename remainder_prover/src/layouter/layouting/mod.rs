@@ -17,7 +17,6 @@ use crate::{
     layouter::nodes::sector::{Sector, SectorGroup},
     mle::{evals::MultilinearExtension, mle_enum::MleEnum},
     output_layer::mle_output_layer::MleOutputLayer,
-    prover::proof_system::ProofSystem,
 };
 
 use super::nodes::{
@@ -57,9 +56,18 @@ impl<F: FieldExt> CircuitMap<F> {
     ) -> Result<&MultilinearExtension<F>, DAGError> {
         let circuit_location =
             CircuitLocation::new(circuit_mle.layer_id(), circuit_mle.prefix_bits());
-        self.0
+        let result = self
+            .0
             .get(&circuit_location)
-            .ok_or(DAGError::NoCircuitLocation)
+            .ok_or(DAGError::NoCircuitLocation);
+        if let Ok(actual_result) = result {
+            if actual_result.num_vars() != circuit_mle.num_iterated_vars() {
+                dbg!(&actual_result);
+                dbg!(&circuit_mle);
+            }
+            assert_eq!(actual_result.num_vars(), circuit_mle.num_iterated_vars());
+        }
+        result
     }
 
     /// Adds a new node to the CircuitMap

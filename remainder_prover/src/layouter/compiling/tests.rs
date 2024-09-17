@@ -43,12 +43,6 @@ fn test_basic_circuit() {
             )),
         );
 
-        let input_layer_data = InputLayerData::new(
-            input_layer.id(),
-            vec![input_shred_1_data, input_shred_2_data],
-            None,
-        );
-
         let sector_1 = Sector::new(ctx, &[&input_shred_1, &input_shred_2], |inputs| {
             Expression::<Fr, AbstractExpr>::mle(inputs[0])
                 + Expression::<Fr, AbstractExpr>::mle(inputs[1])
@@ -63,6 +57,24 @@ fn test_basic_circuit() {
         });
 
         let output_input = InputShred::new(ctx, out_sector.get_num_vars(), &input_layer);
+        let output_input_data = InputShredData::new(
+            output_input.id(),
+            MultilinearExtension::new_from_evals(Evaluations::new(
+                2,
+                vec![
+                    Fr::from(16 * 17),
+                    Fr::from(16 * 17),
+                    Fr::from(16 * 17),
+                    Fr::from(16 * 17),
+                ],
+            )),
+        );
+
+        let input_layer_data = InputLayerData::new(
+            input_layer.id(),
+            vec![input_shred_1_data, input_shred_2_data, output_input_data],
+            None,
+        );
 
         let final_sector = Sector::new(ctx, &[&&out_sector, &output_input], |inputs| {
             Expression::<Fr, AbstractExpr>::mle(inputs[0])

@@ -1,6 +1,8 @@
 //! Identity gate id(z, x) determines whether the xth gate from the
 //! i + 1th layer contributes to the zth gate in the ith layer.
 
+use std::collections::HashSet;
+
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
@@ -241,11 +243,11 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
 
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &[&CircuitMle<F>],
+        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
         circuit_map: &mut CircuitMap<F>,
     ) -> bool {
         assert_eq!(mle_outputs_necessary.len(), 1);
-        let mle_output_necessary = mle_outputs_necessary[0];
+        let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
         let maybe_source_mle_data = circuit_map.get_data_from_circuit_mle(&self.source_mle);
         if maybe_source_mle_data.is_err() {
             return false;
@@ -329,8 +331,6 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierIdentityGateLayer<F> {
 
 /// implement the layer trait for identitygate struct
 impl<F: FieldExt> Layer<F> for IdentityGate<F> {
-    type CircuitLayer = CircuitIdentityGateLayer<F>;
-
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
@@ -380,16 +380,6 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
             source_mle_reduced.bookkeeping_table()[0],
         );
         Ok(())
-    }
-
-    fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError> {
-        let mut source_mle_indexed = self.mle_ref.clone();
-        source_mle_indexed.index_mle_indices(0);
-        Ok(CircuitIdentityGateLayer {
-            id: self.layer_id,
-            wiring: self.nonzero_gates.clone(),
-            source_mle: CircuitMle::from_dense_mle(&source_mle_indexed).unwrap(),
-        })
     }
 
     fn layer_id(&self) -> LayerId {

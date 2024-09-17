@@ -3,8 +3,8 @@ use remainder_shared_types::FieldExt;
 use crate::{
     layer::LayerId,
     layouter::nodes::{
-        circuit_inputs::{InputLayerNode, InputShred},
-        Context,
+        circuit_inputs::{InputLayerNode, InputShred, InputShredData},
+        CircuitNode, Context,
     },
     mle::Mle,
 };
@@ -53,7 +53,11 @@ pub trait BundledInputMle<F: FieldExt, const N: usize> {
     fn get_mle_refs(&self) -> &[DenseMle<F>; N];
 
     /// returns all the MLEs as InputShreds
-    fn make_input_shreds(&self, ctx: &Context, source: &InputLayerNode) -> [InputShred; N];
+    fn make_input_shreds(
+        &self,
+        ctx: &Context,
+        source: &InputLayerNode,
+    ) -> (Vec<InputShred>, Vec<InputShredData<F>>);
 }
 
 /// A struct that bundles N MLEs together for semantic reasons.
@@ -67,7 +71,11 @@ impl<F: FieldExt, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
         &self.mles
     }
 
-    fn make_input_shreds(&self, ctx: &Context, source: &InputLayerNode) -> [InputShred; N] {
+    fn make_input_shreds(
+        &self,
+        ctx: &Context,
+        source: &InputLayerNode,
+    ) -> (Vec<InputShred>, Vec<InputShredData<F>>) {
         self.mles
             .clone()
             .into_iter()
@@ -76,9 +84,11 @@ impl<F: FieldExt, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
                 let mle: MultilinearExtension<F> = MultilinearExtension::new_from_evals(
                     Evaluations::<F>::new(mle.num_iterated_vars(), mle.get_padded_evaluations()),
                 );
-                InputShred::new(ctx, mle.num_vars(), source)
+                let input_shred = InputShred::new(ctx, mle.num_vars(), source);
+                let input_shred_data = InputShredData::new(input_shred.id(), mle);
+                (input_shred, input_shred_data)
             })
-            .collect_vec()
+            .unzip()
             .try_into()
             .unwrap()
     }

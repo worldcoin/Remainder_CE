@@ -8,7 +8,7 @@ pub mod matmult;
 pub mod product;
 pub mod regular_layer;
 
-use std::fmt::Debug;
+use std::{collections::HashSet, fmt::Debug};
 
 use layer_enum::{CircuitLayerEnum, LayerEnum, VerifierLayerEnum};
 use product::PostSumcheckLayer;
@@ -96,16 +96,6 @@ pub enum VerificationError {
 /// Each `Layer` is a sub-protocol that takes in some `Claim` and creates a proof
 /// that the `Claim` is correct
 pub trait Layer<F: FieldExt> {
-    /// TEMP
-    // type VerifierLayer: VerifierLayer<F> + Debug + Serialize + for<'a> Deserialize<'a>;
-
-    /// The associated type used to store a description of this layer as part
-    /// of a [GKRVerifierKey].
-    type CircuitLayer: CircuitLayer<F> + Debug + Serialize + for<'a> Deserialize<'a>;
-
-    /// Generates a description of this layer.
-    fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError>;
-
     /// Gets this layer's ID.
     fn layer_id(&self) -> LayerId;
 
@@ -195,7 +185,7 @@ pub trait CircuitLayer<F: FieldExt> {
     /// that populates these bookkeeping tables and mutate the circuit map to reflect this.
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &[&CircuitMle<F>],
+        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
         circuit_map: &mut CircuitMap<F>,
     ) -> bool;
 

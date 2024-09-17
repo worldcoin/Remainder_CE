@@ -9,7 +9,7 @@ pub mod proof_system;
 /// Struct for representing a list of layers
 pub mod layers;
 
-use self::{layers::Layers, proof_system::ProofSystem};
+use self::layers::Layers;
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::expression::circuit_expr::CircuitMle;
 use crate::expression::verifier_expr::VerifierMle;
@@ -34,7 +34,6 @@ use crate::{
 };
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
-use proof_system::DefaultProofSystem;
 use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 use remainder_shared_types::transcript::{
     Transcript, TranscriptReader, TranscriptReaderError, TranscriptWriter,
@@ -105,41 +104,6 @@ pub struct InstantiatedCircuit<F: FieldExt> {
     pub output_layers: Vec<MleOutputLayer<F>>,
     /// The input layers of the circuit, as defined by the ProofSystem
     pub input_layers: Vec<InputLayerEnum<F>>,
-}
-
-impl<F: FieldExt> InstantiatedCircuit<F> {
-    /// Returns the circuit description associated with this Witness to be used
-    /// by the verifier.
-    pub fn generate_verifier_key(&self) -> Result<GKRCircuitDescription<F>, GKRError> {
-        let input_layers: Vec<_> = self
-            .input_layers
-            .iter()
-            .map(|input_layer| input_layer.into_verifier_input_layer())
-            .collect();
-
-        let intermediate_layers: Vec<_> = self
-            .layers
-            .layers
-            .iter()
-            .map(|layer| {
-                layer
-                    .into_circuit_layer()
-                    .map_err(|_| GKRError::ErrorGeneratingVerifierKey)
-            })
-            .collect::<Result<Vec<_>, GKRError>>()?;
-
-        let output_layers: Vec<_> = self
-            .output_layers
-            .iter()
-            .map(|output_layer| output_layer.into_circuit_output_layer())
-            .collect();
-
-        Ok(GKRCircuitDescription::<F> {
-            input_layers,
-            intermediate_layers,
-            output_layers,
-        })
-    }
 }
 
 /// Controls claim aggregation behavior.
@@ -234,12 +198,10 @@ impl<F: FieldExt> GKRCircuitDescription<F> {
             let verifier_output_layer = circuit_output_layer
                 .retrieve_mle_from_transcript_and_fix_layer(transcript_reader)
                 .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
-            dbg!("checkpoint_1");
 
             aggregator
                 .extract_claims(&verifier_output_layer)
                 .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
-            dbg!("checkpoint_2");
         }
 
         // dbg!(&aggregator);
@@ -279,7 +241,6 @@ impl<F: FieldExt> GKRCircuitDescription<F> {
 
             end_timer!(sumcheck_msg_timer);
 
-            dbg!("ehllo");
             aggregator
                 .extract_claims(&verifier_layer)
                 .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;

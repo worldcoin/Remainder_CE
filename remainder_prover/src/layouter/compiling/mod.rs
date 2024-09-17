@@ -4,13 +4,13 @@
 mod tests;
 
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use tracing::{instrument, span, Level};
 
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::claims::ClaimAggregator;
-use crate::expression::circuit_expr::CircuitMle;
+use crate::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
 use crate::input_layer::enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum};
 use crate::input_layer::{CircuitInputLayer, InputLayer};
 use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
@@ -100,7 +100,6 @@ impl<
         let mut input_layers = input_nodes
             .iter()
             .map(|input_node| {
-                dbg!(&input_layer_id);
                 let input_circuit_description = input_node
                     .generate_input_circuit_description(
                         &mut input_layer_id,
@@ -127,7 +126,6 @@ impl<
             });
 
         for node in &intermediate_nodes {
-            dbg!(&intermediate_layer_id);
             let node_compiled_intermediate_layers = node
                 .generate_circuit_description(
                     &mut intermediate_layer_id,
@@ -185,12 +183,13 @@ impl<
         circuit_description_map: &CircuitDescriptionMap,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> InstantiatedCircuit<F> {
-        dbg!(&input_layer_to_node_map);
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
             intermediate_layers: intermediate_layer_descriptions,
             output_layers: output_layer_descriptions,
         } = gkr_circuit_description;
+
+        dbg!(&gkr_circuit_description);
 
         // Forward pass through input layer data to map input layer ID to the data that the circuit builder provides.
         let mut input_id_data_map = HashMap::<NodeId, &InputLayerData<F>>::new();
@@ -203,20 +202,22 @@ impl<
 
         // Forward pass to get the map of circuit MLEs whose data is expected to be "compiled"
         // for future layers.
-        let mut mle_claim_map = HashMap::<LayerId, Vec<&CircuitMle<F>>>::new();
+        let mut mle_claim_map = HashMap::<LayerId, HashSet<&CircuitMle<F>>>::new();
         intermediate_layer_descriptions
             .iter()
             .for_each(|intermediate_layer| {
                 let layer_source_circuit_mles = intermediate_layer.get_circuit_mles();
-                dbg!(&layer_source_circuit_mles);
                 layer_source_circuit_mles
                     .into_iter()
                     .for_each(|circuit_mle| {
                         let layer_id = circuit_mle.layer_id();
                         if mle_claim_map.get(&layer_id).is_none() {
-                            mle_claim_map.insert(layer_id, vec![circuit_mle]);
+                            mle_claim_map.insert(layer_id, HashSet::from([circuit_mle]));
                         } else {
-                            mle_claim_map.get_mut(&layer_id).unwrap().push(&circuit_mle);
+                            mle_claim_map
+                                .get_mut(&layer_id)
+                                .unwrap()
+                                .insert(&circuit_mle);
                         }
                     })
             });
@@ -225,16 +226,14 @@ impl<
             let layer_source_mle = &output_layer.mle;
             let layer_id = layer_source_mle.layer_id();
             if mle_claim_map.get(&layer_id).is_none() {
-                mle_claim_map.insert(layer_id, vec![&output_layer.mle]);
+                mle_claim_map.insert(layer_id, HashSet::from([&output_layer.mle]));
             } else {
                 mle_claim_map
                     .get_mut(&layer_id)
                     .unwrap()
-                    .push(&output_layer.mle);
+                    .insert(&output_layer.mle);
             }
         });
-
-        dbg!(&mle_claim_map);
 
         let mut circuit_map = CircuitMap::new();
 
@@ -249,7 +248,6 @@ impl<
             .iter()
             .for_each(|input_layer_description| {
                 let input_layer_id = input_layer_description.layer_id();
-                dbg!(&input_layer_id);
                 let maybe_input_node_id = input_layer_to_node_map.get_layer_id(&input_layer_id);
                 if let Some(input_node_id) = maybe_input_node_id {
                     assert!(input_id_data_map.contains_key(input_node_id));
@@ -257,20 +255,19 @@ impl<
                     let input_mles = corresponding_input_data
                         .data
                         .iter()
-                        .map(|input_shred_data| {
-                            let (input_shred_circuit_location, input_shred_num_vars) =
-                                circuit_description_map
-                                    .get_node(&input_shred_data.corresponding_input_shred_id)
-                                    .unwrap();
-                            assert_eq!(input_shred_num_vars, &input_shred_data.data.num_vars());
-                            circuit_map.add_node(
-                                input_shred_circuit_location.clone(),
-                                input_shred_data.data.clone(),
-                            );
-                            &input_shred_data.data
-                        });
+                        .map(|input_shred_data| &input_shred_data.data);
+
+                    dbg!(&input_mles);
 
                     let combined_mle = combine_input_mles(&input_mles.collect_vec());
+                    let mle_outputs_necessary = mle_claim_map.get(&input_layer_id).unwrap();
+                    mle_outputs_necessary.iter().for_each(|mle_output| {
+                        let prefix_bits = mle_output.prefix_bits();
+                        let output = filter_bookkeeping_table(&combined_mle, &prefix_bits);
+                        circuit_map
+                            .add_node(CircuitLocation::new(input_layer_id, prefix_bits), output);
+                    });
+
                     let mut prover_input_layer = input_layer_description
                         .into_prover_input_layer(combined_mle, &corresponding_input_data.precommit);
                     let commitment = prover_input_layer.commit().unwrap();
@@ -284,9 +281,8 @@ impl<
                         let verifier_challenge_mle =
                             MultilinearExtension::new(transcript_writer.get_challenges(
                                 "Verifier challenges for fiat shamir",
-                                verifier_challenge_input_layer_description.num_bits,
+                                1 << verifier_challenge_input_layer_description.num_bits,
                             ));
-                        dbg!("Verifier challenge layer adding to circuit map");
                         circuit_map.add_node(
                             CircuitLocation::new(
                                 verifier_challenge_input_layer_description.layer_id(),
@@ -317,7 +313,6 @@ impl<
                 let populatable = intermediate_layer_description
                     .compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
                 if !populatable {
-                    dbg!(intermediate_layer_description.layer_id());
                     uninstantiated_intermediate_layers.push(intermediate_layer_description);
                 }
             });
@@ -330,8 +325,6 @@ impl<
                     let (hint_circuit_location, hint_function) = input_layer_hint_map
                         .get_hint_function(&hint_input_layer_description.layer_id());
                     if let Some(data) = circuit_map.get_data_from_location(hint_circuit_location) {
-                        dbg!(hint_circuit_location);
-                        dbg!(&data);
                         let function_applied_to_data = hint_function(data);
                         // also here @ryan do we actually need to add to circuit map? also there are several places (see: logup) where we never add to circuit
                         // map, even before this refactor, actually... this means we won't make claims on these so that's actually fine? idk
@@ -348,11 +341,9 @@ impl<
                             transcript_writer,
                         );
                         prover_input_layers.push(prover_input_layer);
-                        dbg!("helo hint");
                         data_updated = true;
                         None
                     } else {
-                        dbg!("bye hint");
                         Some(*hint_input_layer_description)
                     }
                 })
@@ -366,18 +357,16 @@ impl<
                     let populatable = uninstantiated_intermediate_layer
                         .compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
                     if populatable {
-                        dbg!("helo intermediate");
                         data_updated = true;
                         None
                     } else {
-                        dbg!("bye intermediate");
                         Some(*uninstantiated_intermediate_layer)
                     }
                 })
                 .collect();
             assert!(data_updated);
         }
-        assert_eq!(circuit_description_map.0.len(), circuit_map.0.len());
+        // assert_eq!(circuit_description_map.0.len(), circuit_map.0.len());
 
         let mut prover_intermediate_layers: Vec<LayerEnum<F>> =
             Vec::with_capacity(intermediate_layer_descriptions.len());
@@ -402,7 +391,6 @@ impl<
             layers: Layers::new_with_layers(prover_intermediate_layers),
             output_layers: prover_output_layers,
         };
-
         dbg!(&gkr_circuit);
 
         gkr_circuit

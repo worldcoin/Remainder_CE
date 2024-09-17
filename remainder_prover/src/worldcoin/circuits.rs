@@ -73,7 +73,8 @@ pub fn build_circuit_public_il<F: FieldExt>(
 
         let subtract_thresholds = SubtractionComponent::new(ctx, &matmult, &thresholds);
 
-        let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
+        let (digits_input_shreds, digits_input_shreds_data) =
+            digits.make_input_shreds(ctx, &input_layer);
         for (i, shred) in digits_input_shreds.iter().enumerate() {
             println!("{}th digit input = {:?}", i, shred.id());
         }
@@ -128,18 +129,16 @@ pub fn build_circuit_public_il<F: FieldExt>(
         let bits_are_binary = BitsAreBinary::new(ctx, &iris_code);
         output_nodes.push(OutputNode::new_zero(ctx, &bits_are_binary.sector));
 
-        let input_layer_data = InputLayerData::new(
-            input_layer.id(),
-            vec![
-                image_data,
-                thresholds_data,
-                kernel_matrix_data,
-                lookup_table_values_data,
-                digit_multiplicities_data,
-                iris_code_data,
-            ],
-            None,
-        );
+        let mut input_data_shreds = vec![
+            image_data,
+            kernel_matrix_data,
+            iris_code_data,
+            thresholds_data,
+            digit_multiplicities_data,
+            lookup_table_values_data,
+        ];
+        input_data_shreds.extend(digits_input_shreds_data);
+        let input_layer_data = InputLayerData::new(input_layer.id(), input_data_shreds, None);
 
         // Collect all the nodes, starting with the input nodes
         let mut all_nodes: Vec<NodeEnum<F>> = vec![

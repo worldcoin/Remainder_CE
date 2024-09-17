@@ -35,7 +35,7 @@ use super::{
 /// A metadata-only version of [crate::mle::dense::DenseMle] used in the Circuit
 /// Descrption.  A [CircuitMle] is stored in the leaves of an `Expression<F,
 /// CircuitExpr>` tree.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[serde(bound = "F: FieldExt")]
 pub struct CircuitMle<F: FieldExt> {
     /// Layer whose data this MLE is a subset of.
@@ -88,6 +88,7 @@ impl<F: FieldExt> CircuitMle<F> {
         self.var_indices.iter().fold(0, |acc, idx| {
             acc + match idx {
                 MleIndex::Iterated => 1,
+                MleIndex::IndexedBit(_) => 1,
                 _ => 0,
             }
         })
@@ -152,30 +153,11 @@ impl<F: FieldExt> CircuitMle<F> {
 
         Ok(VerifierMle::new(self.layer_id, verifier_indices, eval))
     }
-
-    /// Generate a [CircuitMle] from a [DenseMle].
-    pub fn from_dense_mle(mle: &DenseMle<F>) -> Result<Self, ExpressionError> {
-        let layer_id = mle.get_layer_id();
-        let mle_indices = mle.mle_indices();
-
-        let all_indices_indexed = mle_indices.iter().all(|mle_index| match mle_index {
-            MleIndex::IndexedBit(_) => true,
-            MleIndex::Fixed(_) => true,
-            MleIndex::Bound(..) => true,
-            _ => false,
-        });
-
-        if !all_indices_indexed {
-            return Err(ExpressionError::EvaluateNotFullyIndexedError);
-        }
-
-        Ok(CircuitMle::new(layer_id, mle_indices))
-    }
 }
 
 /// Placeholder type for defining `Expression<F, CircuitExpr>`, the type used
 /// for representing expressions in the circuit description.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CircuitExpr;
 
 // The leaves of an expression of this type contain a [CircuitMle], an analogue
@@ -336,12 +318,10 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
     ) -> Option<MultilinearExtension<F>> {
         let output_data: Option<MultilinearExtension<F>> = match self {
             ExpressionNode::Mle(circuit_mle) => {
-                dbg!(&circuit_mle);
                 let maybe_mle = circuit_map.get_data_from_circuit_mle(circuit_mle);
                 if maybe_mle.is_err() {
                     return None;
                 } else {
-                    dbg!(&maybe_mle);
                     Some(maybe_mle.unwrap().clone())
                 }
             }
@@ -355,7 +335,6 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
                     })
                     .collect::<Result<Vec<&[F]>, _>>() // Collect all into a Result
                     .ok()?;
-                dbg!(&mle_bookkeeping_tables);
                 Some(evaluate_bookkeeping_tables_given_operation(
                     &mle_bookkeeping_tables,
                     BinaryOperation::Mul,
@@ -384,6 +363,7 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
             }
             ExpressionNode::Scaled(a, scale) => {
                 let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map)?;
+                dbg!(&a_bookkeeping_table);
                 Some(MultilinearExtension::new(
                     a_bookkeeping_table
                         .get_evals_vector()
@@ -989,6 +969,23 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
 
         Expression::new(ExpressionNode::Scaled(Box::new(node), scale), ())
     }
+}
+
+pub fn filter_bookkeeping_table<F: FieldExt>(
+    bookkeeping_table: &MultilinearExtension<F>,
+    unfiltered_prefix_bits: &[bool],
+) -> MultilinearExtension<F> {
+    let current_table = bookkeeping_table.get_evals_vector().to_vec();
+    let filtered_table = unfiltered_prefix_bits
+        .iter()
+        .fold(current_table, |acc, bit| {
+            if *bit {
+                acc.into_iter().skip(1).step_by(2).collect_vec()
+            } else {
+                acc.into_iter().step_by(2).collect_vec()
+            }
+        });
+    MultilinearExtension::new(filtered_table)
 }
 
 fn evaluate_bookkeeping_tables_given_operation<F: FieldExt>(

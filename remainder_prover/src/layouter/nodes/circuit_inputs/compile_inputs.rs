@@ -165,6 +165,8 @@ impl InputLayerNode {
             .map(|node| node.get_num_vars())
             .collect_vec();
 
+        dbg!(&children);
+
         let (prefix_bits, input_shred_indices, num_vars_combined_mle) =
             index_input_mles(&input_mle_num_vars);
         debug_assert_eq!(input_shred_indices.len(), children.len());

@@ -380,6 +380,7 @@ fn test_linear_mle_indices() {
         *expression_product,
         expression_mle.concat_expr(expression_product_2),
     );
+    dbg!(&expression_full);
     expression_full.index_mle_indices(0);
     let all_linear_indices = expression_full
         .expression_node

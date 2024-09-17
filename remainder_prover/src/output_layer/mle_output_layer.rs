@@ -212,7 +212,6 @@ impl<F: FieldExt> CircuitOutputLayer<F> for CircuitMleOutputLayer<F> {
         let evals = transcript_reader.consume_elements("Output Layer MLE evals", num_evals)?;
 
         if evals != vec![F::ZERO] {
-            dbg!(&evals);
             return Err(VerifierOutputLayerError::NonZeroEvalForZeroMle);
         }
 
@@ -311,9 +310,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MleOutputLayer<F> {
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         // We do not support non-zero MLEs on Output Layers at this point!
-        dbg!("hihihi");
         assert!(self.is_zero());
-        dbg!("checkpointttt");
 
         let layer_id = self.layer_id();
 
@@ -328,7 +325,6 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
             .map(|index| index.clone())
             .collect();
 
-        dbg!(&self.mle.mle_indices());
         let claim_point: Vec<F> = self
             .mle
             .mle_indices()

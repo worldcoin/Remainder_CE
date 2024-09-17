@@ -120,13 +120,13 @@ mod tests {
                     get_input_shred_and_data_from_vec(digits_at_place.clone(), ctx, &input_layer)
                 })
                 .unzip();
-            input_shred_data_vec.extend(digits_input_shreds_data);
             let (sign_bits_input_shred, sign_bits_input_shred_data) =
                 get_input_shred_and_data_from_vec(sign_bits.clone(), ctx, &input_layer);
             let (expected_input_shred, expected_input_shred_data) =
                 get_input_shred_and_data_from_vec(expected.clone(), ctx, &input_layer);
             input_shred_data_vec
                 .extend(vec![sign_bits_input_shred_data, expected_input_shred_data]);
+            input_shred_data_vec.extend(digits_input_shreds_data);
             let input_layer_data =
                 InputLayerData::new(input_layer.id(), input_shred_data_vec, None);
 
@@ -220,26 +220,26 @@ mod tests {
         test_circuit(circuit, None);
     }
 
-    // #[test]
-    // fn test_worldcoin_circuit_tiny() {
-    //     let data = tiny_worldcoin_data::<Fr>();
-    //     dbg!(&data);
-    //     let circuit = build_circuit_public_il(data);
-    //     test_circuit(circuit, None);
-    // }
+    #[test]
+    fn test_worldcoin_circuit_tiny() {
+        let data = tiny_worldcoin_data::<Fr>();
+        dbg!(&data);
+        let circuit = build_circuit_public_il(data);
+        test_circuit(circuit, None);
+    }
 
-    // #[test]
-    // fn test_worldcoin_circuit_medium() {
-    //     let data = medium_worldcoin_data::<Fr>();
-    //     let circuit = build_circuit_public_il(data);
-    //     test_circuit(circuit, None);
-    // }
+    #[test]
+    fn test_worldcoin_circuit_medium() {
+        let data = medium_worldcoin_data::<Fr>();
+        let circuit = build_circuit_public_il(data);
+        test_circuit(circuit, None);
+    }
 
-    // #[test]
-    // fn test_worldcoin_circuit() {
-    //     let data: WorldcoinCircuitData<Fr> =
-    //         load_data(Path::new("worldcoin_witness_data").to_path_buf());
-    //     let circuit = build_circuit_public_il(data);
-    //     test_circuit(circuit, None);
-    // }
+    #[test]
+    fn test_worldcoin_circuit() {
+        let data: WorldcoinCircuitData<Fr> =
+            load_data(Path::new("worldcoin_witness_data").to_path_buf());
+        let circuit = build_circuit_public_il(data);
+        test_circuit(circuit, None);
+    }
 }

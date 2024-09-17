@@ -156,10 +156,8 @@ impl LookupTable {
         // Build the LHS of the equation (defined by the constrained values)
         println!("Build the LHS of the equation (defined by the constrained values)");
 
-        dbg!("checkpoint 1");
         let (verifier_challenge_location, verifier_challenge_node_vars) =
             circuit_description_map.get_node(&self.random_node_id)?;
-        dbg!("checkpoint 2");
 
         let verifier_challenge_mle_indices = get_total_mle_indices(
             &verifier_challenge_location.prefix_bits,
@@ -182,9 +180,7 @@ impl LookupTable {
             verifier_challenge_mle.expression(),
             CE::negated(constrained_expr.build_circuit_expr(circuit_description_map)?),
         );
-        dbg!(&expr);
         let expr_num_vars = expr.num_vars();
-        dbg!(&expr_num_vars);
 
         let layer_id = intermediate_layer_id.get_and_inc();
         let layer = CircuitRegularLayer::new_raw(layer_id, expr);
@@ -197,23 +193,27 @@ impl LookupTable {
         let lhs_denominator_vars = repeat_n(MleIndex::Iterated, expr_num_vars).collect_vec();
         let lhs_denominator_desc = CircuitMle::new(layer_id, &lhs_denominator_vars);
 
-        // Build the numerator: is all ones (create explicitly since don't want to pad with zeros)
-        let expr = ExprBuilder::<F>::constant(F::from(1u64))
-            .build_circuit_expr(circuit_description_map)?;
-        let layer_id = intermediate_layer_id.get_and_inc();
-        let layer = CircuitRegularLayer::new_raw(layer_id, expr);
-        println!(
-            "Layer that sets the numerators to 1 has layer id: {:?}",
-            layer_id
-        );
-        intermediate_layers.push(CircuitLayerEnum::Regular(layer));
-        let lhs_numerator_desc = CircuitMle::new(layer_id, &lhs_denominator_vars);
+        // // Build the numerator: is all ones (create explicitly since don't want to pad with zeros)
+        // let expr = ExprBuilder::<F>::constant(F::from(1u64))
+        //     .build_circuit_expr(circuit_description_map)?;
+        // let layer_id = intermediate_layer_id.get_and_inc();
+        // let layer = CircuitRegularLayer::new_raw(layer_id, expr);
+        // println!(
+        //     "Layer that sets the numerators to 1 has layer id: {:?}",
+        //     layer_id
+        // );
+        // intermediate_layers.push(CircuitLayerEnum::Regular(layer));
 
-        dbg!(&lhs_numerator_desc, &lhs_denominator_desc);
+        // --- Super special case: need to create a 0-variable MLE for the numerator which is JUST derived from an expression producing the constant 1 ---
+        let maybe_lhs_numerator_desc = if lhs_denominator_vars.len() == 0 {
+            Some(CircuitMle::new(layer_id, &[]))
+        } else {
+            None
+        };
 
         // Build the numerator and denominator of the sum of the fractions
         let (lhs_numerator, lhs_denominator) = build_fractional_sum(
-            lhs_numerator_desc,
+            maybe_lhs_numerator_desc,
             lhs_denominator_desc,
             &mut intermediate_layers,
             intermediate_layer_id,
@@ -227,12 +227,10 @@ impl LookupTable {
             &circuit_description_map.0[&self.constraints[0].multiplicities_node_id];
         let mut rhs_numerator_desc = CircuitMle::new(
             multiplicities_location.layer_id,
-            &multiplicities_location
-                .prefix_bits
-                .iter()
-                .map(|prefix_bit_bool| MleIndex::Fixed(*prefix_bit_bool))
-                .chain(repeat_n(MleIndex::Iterated, *multiplicities_num_vars))
-                .collect_vec(),
+            &get_total_mle_indices(
+                &multiplicities_location.prefix_bits,
+                *multiplicities_num_vars,
+            ),
         );
 
         if self.constraints.len() > 1 {
@@ -242,20 +240,20 @@ impl LookupTable {
                 |acc, constraint| {
                     let (multiplicities_location, multiplicities_num_vars) =
                         &circuit_description_map.0[&constraint.multiplicities_node_id];
+                    dbg!(&multiplicities_location, multiplicities_num_vars);
                     let mult_constraint_mle_desc = CircuitMle::new(
                         multiplicities_location.layer_id,
-                        &multiplicities_location
-                            .prefix_bits
-                            .iter()
-                            .map(|prefix_bit_bool| MleIndex::Fixed(*prefix_bit_bool))
-                            .chain(repeat_n(MleIndex::Iterated, *multiplicities_num_vars))
-                            .collect_vec(),
+                        &get_total_mle_indices(
+                            &multiplicities_location.prefix_bits,
+                            *multiplicities_num_vars,
+                        ),
                     );
                     acc + mult_constraint_mle_desc.expression()
                 },
             );
             let layer_id = intermediate_layer_id.get_and_inc();
             let layer = CircuitRegularLayer::new_raw(layer_id, expr);
+            dbg!(&layer);
             intermediate_layers.push(CircuitLayerEnum::Regular(layer));
             println!(
                 "Layer that aggs the multiplicities has layer id: {:?}",
@@ -266,11 +264,11 @@ impl LookupTable {
             // It's just the element-wise sum of the elements within the bookkeeping tables
             // However, because we're only dealing with the circuit description, we can
             // just take the number of variables within the *first* constraint
-            let first_self_constraint_circuit_info =
+            let (_first_self_constraint_loc, first_self_constraint_num_vars) =
                 circuit_description_map.0[&self.constraints[0].multiplicities_node_id].clone();
             rhs_numerator_desc = CircuitMle::new(
                 layer_id,
-                &repeat_n(MleIndex::Iterated, first_self_constraint_circuit_info.1).collect_vec(),
+                &get_total_mle_indices(&vec![], first_self_constraint_num_vars),
             )
         }
 
@@ -281,14 +279,17 @@ impl LookupTable {
             circuit_description_map.0[&self.random_node_id].clone();
         let verifier_challenge_circuit_mle = CircuitMle::new(
             verifier_challenge_loc.layer_id,
-            &repeat_n(MleIndex::Iterated, verifier_challenge_num_vars).collect_vec(),
+            &get_total_mle_indices(
+                &verifier_challenge_loc.prefix_bits,
+                verifier_challenge_num_vars,
+            ),
         );
 
         // --- Next grab `table` as a `CircuitMle` from the `circuit_description_map` ---
         let (table_loc, table_num_vars) = circuit_description_map.0[&self.table_node_id].clone();
         let table_circuit_mle = CircuitMle::new(
             table_loc.layer_id,
-            &repeat_n(MleIndex::Iterated, table_num_vars).collect_vec(),
+            &get_total_mle_indices(&table_loc.prefix_bits, table_num_vars),
         );
 
         let expr = verifier_challenge_circuit_mle.expression() - table_circuit_mle.expression();
@@ -308,7 +309,7 @@ impl LookupTable {
 
         // Build the numerator and denominator of the sum of the fractions
         let (rhs_numerator, rhs_denominator) = build_fractional_sum(
-            rhs_numerator_desc,
+            Some(rhs_numerator_desc),
             rhs_denominator_desc,
             &mut intermediate_layers,
             intermediate_layer_id,
@@ -317,17 +318,12 @@ impl LookupTable {
         // Add an input layer for the inverse of the denominators of the LHS. This value holds
         // reveals some information about the constrained values, so we optionally use a
         // HyraxInputLayer.
-        // let mle =
-        //     MultilinearExtension::new(vec![lhs_denominator.current_mle.value().invert().unwrap()]);
-
         // --- Grab the layer ID for the new "input layer" to be added ---
         let lhs_denom_inverse_layer_id = input_layer_id.get_and_inc();
         let lhs_denom_circuit_location =
             CircuitLocation::new(lhs_denominator.layer_id(), lhs_denominator.prefix_bits());
-        dbg!(&lhs_denominator);
-        dbg!(&rhs_denominator);
+
         let inverse_function = |mle: &MultilinearExtension<F>| {
-            dbg!(&mle);
             assert_eq!(mle.get_evals_vector().len(), 1);
             MultilinearExtension::new(vec![mle.get_evals_vector()[0].invert().unwrap()])
         };
@@ -394,8 +390,17 @@ impl LookupTable {
         let mut output_layers = vec![output_layer];
 
         // Add a layer that calculates the difference between the fractions on the LHS and RHS
-        let expr = CE::<F>::products(vec![lhs_numerator.clone(), rhs_denominator.clone()])
-            - CE::<F>::products(vec![rhs_numerator.clone(), lhs_denominator.clone()]);
+        assert!(rhs_numerator.is_some());
+        let rhs_numerator = rhs_numerator.unwrap();
+        let expr = if lhs_numerator.is_none() {
+            CE::<F>::products(vec![rhs_denominator.clone()])
+                - CE::<F>::products(vec![rhs_numerator.clone(), lhs_denominator.clone()])
+        } else {
+            let lhs_numerator = lhs_numerator.unwrap();
+            CE::<F>::products(vec![lhs_numerator.clone(), rhs_denominator.clone()])
+                - CE::<F>::products(vec![rhs_numerator.clone(), lhs_denominator.clone()])
+        };
+
         let layer_id = intermediate_layer_id.get_and_inc();
         let layer = CircuitRegularLayer::new_raw(layer_id, expr);
         intermediate_layers.push(CircuitLayerEnum::Regular(layer));
@@ -499,30 +504,40 @@ fn split_circuit_mle<F: FieldExt>(mle_desc: &CircuitMle<F>) -> (CircuitMle<F>, C
 /// fractions, add layers that perform a sum of the fractions, return a new pair of length-1 Mles
 /// representing the numerator and denominator of the sum.
 fn build_fractional_sum<F: FieldExt>(
-    numerator_desc: CircuitMle<F>,
+    maybe_numerator_desc: Option<CircuitMle<F>>,
     denominator_desc: CircuitMle<F>,
     layers: &mut Vec<CircuitLayerEnum<F>>,
     current_layer_id: &mut LayerId,
-) -> (CircuitMle<F>, CircuitMle<F>) {
+) -> (Option<CircuitMle<F>>, CircuitMle<F>) {
     type CE<F> = Expression<F, CircuitExpr>;
-    assert_eq!(
-        numerator_desc.num_iterated_vars(),
-        denominator_desc.num_iterated_vars()
-    );
-    let mut numerator_desc = numerator_desc;
-    let mut denominator_desc = denominator_desc;
 
-    if numerator_desc.num_iterated_vars() == 0 {
-        dbg!("Yeah it's zero");
+    // --- Sanitycheck number of vars in numerator == number of vars in denominator ---
+    // --- EXCEPT when we're working with the fraction with constant 1 in the numerator ---
+    if let Some(numerator_desc) = maybe_numerator_desc.as_ref() {
+        assert_eq!(
+            numerator_desc.num_iterated_vars(),
+            denominator_desc.num_iterated_vars()
+        );
     }
 
-    for i in 0..numerator_desc.num_iterated_vars() {
-        let numerators = split_circuit_mle(&numerator_desc);
-        let denominators = split_circuit_mle(&denominator_desc);
+    let mut maybe_numerator_desc = maybe_numerator_desc;
+    let mut denominator_desc = denominator_desc;
 
-        // Calculate the new numerator
-        let next_numerator_expr = CE::products(vec![numerators.0.clone(), denominators.1.clone()])
-            + CE::products(vec![numerators.1.clone(), denominators.0.clone()]);
+    for i in 0..denominator_desc.num_iterated_vars() {
+        let denominators = split_circuit_mle(&denominator_desc);
+        let next_numerator_expr = if let Some(numerator_desc) = maybe_numerator_desc {
+            dbg!(&numerator_desc);
+            let numerators = split_circuit_mle(&numerator_desc);
+
+            // Calculate the new numerator
+            CE::products(vec![numerators.0.clone(), denominators.1.clone()])
+                + CE::products(vec![numerators.1.clone(), denominators.0.clone()])
+        } else {
+            // TODO(ryancao): Technically it should be this
+            // CE::scaled(denominators.1.expression(), F::ONE)
+            //     + CE::scaled(denominators.0.expression(), F::ONE)
+            denominators.1.clone().expression() + denominators.0.clone().expression()
+        };
 
         // Calculate the new denominator
         let next_denominator_expr =
@@ -534,17 +549,18 @@ fn build_fractional_sum<F: FieldExt>(
 
         // Create the circuit layer by combining the two
         let layer_id = current_layer_id.get_and_inc();
-        dbg!("Fractional sumcheck, layer ", i);
-        dbg!(layer_id);
+
         let layer = CircuitRegularLayer::new_raw(
             layer_id,
             next_numerator_expr.concat_expr(next_denominator_expr),
         );
+
+        dbg!(&layer);
         layers.push(CircuitLayerEnum::Regular(layer));
 
         println!(
             "Iteration {:?} of build_fractional_sumcheck has layer id: {:?}",
-            i, current_layer_id
+            i, layer_id
         );
 
         denominator_desc = CircuitMle::new(
@@ -553,14 +569,16 @@ fn build_fractional_sum<F: FieldExt>(
                 .chain(repeat_n(MleIndex::Iterated, next_denominator_num_vars))
                 .collect_vec(),
         );
-        numerator_desc = CircuitMle::new(
+        maybe_numerator_desc = Some(CircuitMle::new(
             layer_id,
             &std::iter::once(MleIndex::Fixed(true))
                 .chain(repeat_n(MleIndex::Iterated, next_numerator_num_vars))
                 .collect_vec(),
-        );
+        ));
     }
-    assert_eq!(numerator_desc.num_iterated_vars(), 0);
+    if let Some(numerator_desc) = maybe_numerator_desc.as_ref() {
+        assert_eq!(numerator_desc.num_iterated_vars(), 0);
+    }
     assert_eq!(denominator_desc.num_iterated_vars(), 0);
-    (numerator_desc, denominator_desc)
+    (maybe_numerator_desc, denominator_desc)
 }

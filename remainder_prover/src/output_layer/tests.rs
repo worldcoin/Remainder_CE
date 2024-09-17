@@ -130,7 +130,6 @@ fn test_output_layer_get_claims_with_prefix_bits() {
 
     let mut output_layer = MleOutputLayer::new_zero(mle.clone());
     let circuit_output_layer = output_layer.into_circuit_output_layer();
-    dbg!(&circuit_output_layer);
 
     // ---- Part 2: Fix output layer and generate claims.
 

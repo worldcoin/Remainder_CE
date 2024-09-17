@@ -5,7 +5,7 @@
 pub mod gate_helpers;
 mod new_interface_tests;
 
-use std::cmp::max;
+use std::{cmp::max, collections::HashSet};
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
@@ -95,8 +95,6 @@ pub struct GateLayer<F: FieldExt> {
 }
 
 impl<F: FieldExt> Layer<F> for GateLayer<F> {
-    type CircuitLayer = CircuitGateLayer<F>;
-
     /// Gets this layer's id.
     fn layer_id(&self) -> LayerId {
         self.layer_id
@@ -163,31 +161,6 @@ impl<F: FieldExt> Layer<F> for GateLayer<F> {
         // The concatenation of all of these rounds is the proof resulting from a gate layer.
         //Ok(sumcheck_rounds.into())
         Ok(())
-    }
-
-    /// NOTE: THIS ASSUMES THAT ALL MLE INDICES HAVE *NOT* BEEN BOUND ALREADY!!! THAT
-    /// IS NOT NECESSARILY A GOOD ASSUMPTION AND WE SHOULD HAVE A CIRCUIT DESCRIPTION
-    /// WHICH CAN BE GENERATED INDEPENDENTLY OF WHETHER THE PROVER HAS ALREADY
-    /// PERFORMED SUMCHECK OVER IT!!!
-    ///
-    /// ADDITIONALLY, WE SHOULD NOT BE INDEXING MLE INDICES HERE -- RATHER, WE
-    /// SHOULD DO IT ONCE AT THE VERY BEGINNING, AND GENERATE BOTH PROVER AND
-    /// VERIFIER CIRCUIT DESCRIPTIONS FROM SUCH
-    fn into_circuit_layer(&self) -> Result<CircuitGateLayer<F>, LayerError> {
-        let mut lhs_clone_indexed = self.lhs.clone();
-        let mut rhs_clone_indexed = self.rhs.clone();
-        lhs_clone_indexed.index_mle_indices(0);
-        rhs_clone_indexed.index_mle_indices(0);
-        let lhs_circuit_mle = CircuitMle::from_dense_mle(&lhs_clone_indexed).unwrap();
-        let rhs_circuit_mle = CircuitMle::from_dense_mle(&rhs_clone_indexed).unwrap();
-        Ok(CircuitGateLayer {
-            id: self.layer_id(),
-            gate_operation: self.gate_operation,
-            wiring: self.nonzero_gates.clone(),
-            lhs_mle: lhs_circuit_mle,
-            rhs_mle: rhs_circuit_mle,
-            num_dataparallel_bits: self.num_dataparallel_bits,
-        })
     }
 
     fn initialize_sumcheck(&mut self, _claim_point: &[F]) -> Result<(), LayerError> {
@@ -527,12 +500,12 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
 
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &[&CircuitMle<F>],
+        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
         circuit_map: &mut CircuitMap<F>,
     ) -> bool {
         // dbg!(&mle_outputs_necessary);
-        // assert_eq!(mle_outputs_necessary.len(), 1);
-        let mle_output_necessary = mle_outputs_necessary[0];
+        assert_eq!(mle_outputs_necessary.len(), 1);
+        let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
 
         let max_gate_val = self
             .wiring
@@ -579,7 +552,6 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
             output_data.num_vars(),
             mle_output_necessary.mle_indices().len()
         );
-        dbg!(&output_data);
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
         true
