@@ -25,6 +25,12 @@ pub struct VandermondeInverse<F: Field> {
     pub rank: usize,
 }
 
+impl<F: Field> Default for VandermondeInverse<F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<F: Field> VandermondeInverse<F> {
     /// Create a new VandermondeInverse with rank 1 (rank grows elastically as needed).
     pub fn new() -> Self {

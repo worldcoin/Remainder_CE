@@ -51,10 +51,10 @@ impl<C: PrimeOrderCurve> HyraxOutputLayer<C> {
         assert_eq!(self.underlying_mle.bookkeeping_table().len(), 1);
 
         let layer_id = self.underlying_mle.get_layer_id();
-        let claim_chal = if self.underlying_mle.mle_indices().len() > 0 {
+        let claim_chal = if !self.underlying_mle.mle_indices().is_empty() {
             self.underlying_mle
                 .mle_indices()
-                .into_iter()
+                .iter()
                 .map(|index| index.val().unwrap())
                 .collect_vec()
         } else {
@@ -126,10 +126,10 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
             .map(|mle_index| match mle_index {
                 MleIndex::Fixed(val) => C::Scalar::from(*val as u64),
                 MleIndex::IndexedBit(_) => {
-                    let challenge = transcript
+                    
+                    transcript
                         .get_scalar_field_challenge("output claim point")
-                        .unwrap();
-                    challenge
+                        .unwrap()
                 }
 
                 _ => {

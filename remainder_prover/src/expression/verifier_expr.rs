@@ -252,7 +252,7 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
                     let mut product_nonlinear_indices: HashSet<usize> = HashSet::new();
                     let mut product_indices_counts: HashMap<MleIndex<F>, usize> = HashMap::new();
 
-                    verifier_mles.into_iter().for_each(|verifier_mle| {
+                    verifier_mles.iter().for_each(|verifier_mle| {
                         verifier_mle.var_indices.iter().for_each(|mle_index| {
                             let curr_count = {
                                 if product_indices_counts.contains_key(mle_index) {

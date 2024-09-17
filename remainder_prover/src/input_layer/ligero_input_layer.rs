@@ -214,20 +214,18 @@ impl<F: Field> CircuitInputLayer<F> for CircuitLigeroInputLayer<F> {
                     self.aux.rho_inv,
                     (self.aux.orig_num_cols as f64) / (self.aux.num_rows as f64),
                 )
-            } else {
-                if precommit.is_none() {
-                    LigeroInputLayer::new(
-                        combined_mle,
-                        self.layer_id,
-                        None,
-                        self.aux.rho_inv,
-                        (self.aux.orig_num_cols as f64) / (self.aux.num_rows as f64),
-                    )
-                } else {
-                    panic!(
-                    "The commitment type needs to be a LigeroCommitment for a Ligero Input Layer!"
+            } else if precommit.is_none() {
+                LigeroInputLayer::new(
+                    combined_mle,
+                    self.layer_id,
+                    None,
+                    self.aux.rho_inv,
+                    (self.aux.orig_num_cols as f64) / (self.aux.num_rows as f64),
                 )
-                }
+            } else {
+                panic!(
+                "The commitment type needs to be a LigeroCommitment for a Ligero Input Layer!"
+            )
             };
 
         prover_ligero_layer.into()

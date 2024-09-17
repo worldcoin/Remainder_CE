@@ -38,9 +38,9 @@ mod tests {
             ECTranscriptReader::new(transcript);
 
         proof.verify(
-            &x.commitment,
-            &y.commitment,
-            &z.commitment,
+            x.commitment,
+            y.commitment,
+            z.commitment,
             &committer,
             &mut verifier_transcript,
         );
@@ -72,9 +72,9 @@ mod tests {
             ECTranscriptReader::new(transcript);
 
         proof.verify(
-            &x.commitment,
-            &y.commitment,
-            &z.commitment,
+            x.commitment,
+            y.commitment,
+            z.commitment,
             &committer,
             &mut verifier_transcript,
         );

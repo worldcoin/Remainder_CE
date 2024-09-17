@@ -97,8 +97,8 @@ pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
 impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
     pub fn prove(
         input_layer: &HyraxInputLayer<C>,
-        commitment: &Vec<C>,
-        committed_claims: &Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
+        commitment: &[C],
+        committed_claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],
         committer: &PedersenCommitter<C>,
         blinding_rng: &mut impl Rng,
         transcript: &mut impl ECProverTranscript<C>,
@@ -121,9 +121,9 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             ProofOfClaimAggregation<C>,
             HyraxClaim<C::Scalar, CommittedScalar<C>>,
         ) = ProofOfClaimAggregation::prove(
-            &committed_claims,
+            committed_claims,
             &interpolant_coeffs,
-            &committer,
+            committer,
             blinding_rng,
             transcript,
         );
@@ -143,14 +143,14 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         let proof_of_equality = ProofOfEquality::prove(
             &aggregated_claim.evaluation,
             &evaluation_proof.commitment_to_evaluation,
-            &committer,
+            committer,
             blinding_rng,
             transcript,
         );
 
         HyraxInputLayerProof {
             layer_id: input_layer.layer_id,
-            input_commitment: commitment.clone(),
+            input_commitment: commitment.to_vec(),
             claim_agg_proof: proof_of_claim_agg,
             evaluation_proof,
             proof_of_equality,
@@ -167,7 +167,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
     ) {
         // Verify the proof of claim aggregation
         let agg_claim = self.claim_agg_proof.verify(
-            &claim_commitments,
+            claim_commitments,
             &self.evaluation_proof.aux.committer,
             transcript,
         );
@@ -185,7 +185,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         self.proof_of_equality.verify(
             agg_claim.evaluation,
             self.evaluation_proof.commitment_to_evaluation.commitment,
-            &committer,
+            committer,
             transcript,
         );
     }

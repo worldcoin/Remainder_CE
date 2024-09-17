@@ -257,7 +257,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
             HashMap::<&ExpressionNode<F, CircuitExpr>, Vec<(Vec<bool>, Vec<bool>)>>::new();
 
         mle_outputs_necessary
-            .into_iter()
+            .iter()
             .for_each(|mle_output_necessary| {
                 let prefix_bits = mle_output_necessary.prefix_bits();
                 let mut unfiltered_prefix_bits: Vec<bool> = vec![];
@@ -299,7 +299,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
             .iter()
             .for_each(|(expression_node, prefix_bit_vec)| {
                 let maybe_full_bookkeeping_table =
-                    expression_node.compute_bookkeeping_table(&circuit_map);
+                    expression_node.compute_bookkeeping_table(circuit_map);
                 if maybe_full_bookkeeping_table.is_none() {
                     all_populatable = false;
                 } else {
@@ -360,7 +360,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
             //   representation is being used.
             let g_cur_round = transcript_reader
                 .consume_elements("Sumcheck message", degree + 1)
-                .map_err(|err| VerificationError::TranscriptError(err))?;
+                .map_err(VerificationError::TranscriptError)?;
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
@@ -459,7 +459,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
         let verifier_expr = self
             .expression
             .bind(sumcheck_challenges, transcript_reader)
-            .map_err(|err| VerificationError::ExpressionError(err))?;
+            .map_err(VerificationError::ExpressionError)?;
 
         let verifier_layer = VerifierRegularLayer::new_raw(self.layer_id(), verifier_expr);
         Ok(verifier_layer)
@@ -507,10 +507,10 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
 
         assert_eq!(nonlinear_round_index_counter, nonlinear_round_indices.len());
 
-        let res = self
+        
+        self
             .expression
-            .get_post_sumcheck_layer(fully_bound_beta, &all_bound_challenges);
-        res
+            .get_post_sumcheck_layer(fully_bound_beta, &all_bound_challenges)
     }
 
     fn max_degree(&self) -> usize {
