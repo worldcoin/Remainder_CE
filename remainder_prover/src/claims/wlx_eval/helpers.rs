@@ -16,7 +16,7 @@ use crate::{
     },
     layer::{
         combine_mle_refs::get_og_mle_refs,
-        regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerError,
+        regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
     },
     mle::mle_enum::MleEnum,
     prover::GKRError,

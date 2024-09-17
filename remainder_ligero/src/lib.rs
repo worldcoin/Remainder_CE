@@ -19,15 +19,12 @@ to the codebase.
 
 use crate::utils::get_least_significant_bits_to_usize_little_endian;
 use ark_std::{end_timer, start_timer};
-use halo2_proofs::poly::commitment::Prover;
 use itertools::Itertools;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
 use rayon::prelude::*;
 use remainder_shared_types::{
-    transcript::{
-        ProverTranscript, TranscriptReader, TranscriptSponge, TranscriptWriter, VerifierTranscript,
-    },
+    transcript::{ProverTranscript, TranscriptSponge, VerifierTranscript},
     FieldExt, Poseidon,
 };
 use serde::{Deserialize, Serialize};
@@ -1004,7 +1001,7 @@ where
 
     // --- Sample the appropriate number of columns to open from the transcript ---
     let n_col_opens = enc.get_n_col_opens();
-    let columns: Vec<LcColumn<E, F>> = {
+    let _columns: Vec<LcColumn<E, F>> = {
         let cols_to_open: Vec<usize> = tr
             .get_challenges("Columns", n_col_opens)
             .into_iter()

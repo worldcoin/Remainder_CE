@@ -97,7 +97,7 @@ impl LookupTable {
     /// does not hide the constrained values themselves - that is up to the caller).
     ///
     /// # Requires
-    ///     - `table` must have length a power of two.
+    ///     - The length of `table` must be a power of two.
     pub fn new<F: FieldExt>(
         ctx: &Context,
         table: &dyn CircuitNode,

@@ -2,8 +2,8 @@ use crate::ligero_ml_helper::get_ml_inner_outer_tensors;
 use crate::ligero_structs::{LigeroAuxInfo, LigeroCommit, LigeroRoot};
 use crate::FieldExt;
 use crate::{verify, ProverError};
-use remainder_shared_types::transcript::{ProverTranscript, TranscriptSponge};
-use remainder_shared_types::transcript::{TranscriptReader, VerifierTranscript};
+use remainder_shared_types::transcript::ProverTranscript;
+use remainder_shared_types::transcript::VerifierTranscript;
 use tracing::instrument;
 
 use super::poseidon_ligero::PoseidonSpongeHasher;
@@ -121,12 +121,9 @@ pub fn remainder_ligero_verify<F: FieldExt>(
 
 #[cfg(test)]
 pub mod tests {
+    use crate::ligero_ml_helper::naive_eval_mle_at_challenge_point;
     use crate::ligero_structs::LigeroAuxInfo;
     use crate::utils::get_random_coeffs_for_multilinear_poly;
-    use crate::{
-        ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_challenge_point},
-        verify,
-    };
     use ark_std::test_rng;
     use itertools::Itertools;
     use rand::Rng;
