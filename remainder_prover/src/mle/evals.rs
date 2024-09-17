@@ -6,10 +6,10 @@ use std::{error::Error, ops::Index};
 use ark_std::{cfg_into_iter, log2};
 use itertools::{EitherOrBoth::*, Itertools};
 use ndarray::{Array, ArrayView, Dimension, IxDyn};
-use rayon::{
-    prelude::{IntoParallelIterator, ParallelIterator},
-    slice::ParallelSlice,
-};
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
+#[cfg(feature = "parallel")]
+use rayon::prelude::ParallelSlice;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

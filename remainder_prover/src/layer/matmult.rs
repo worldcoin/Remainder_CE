@@ -3,9 +3,8 @@
 use std::collections::HashSet;
 
 use ::serde::{Deserialize, Serialize};
-use ark_std::{cfg_into_iter, log2};
+use ark_std::cfg_into_iter;
 use itertools::Itertools;
-use ndarray::Array2;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
@@ -30,6 +29,9 @@ use crate::{
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum, Mle, MleIndex},
     sumcheck::evaluate_at_a_point,
 };
+
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// Used to represent a matrix, along with its optional prefix bits (in circuit)
 /// basically an equivalence of DenseMle<F>, but uninstantiated, until preprocessing
@@ -266,6 +268,10 @@ pub struct CircuitMatrix<F: Field> {
 }
 
 impl<F: Field> CircuitMatrix<F> {
+    /// The constructor for a [CircuitMatrix], which is the circuit
+    /// description of matrix, only containing shape information
+    /// which is the number of variables in the rows and the number
+    /// of variables in the columns.
     pub fn new(mle: CircuitMle<F>, rows_num_vars: usize, cols_num_vars: usize) -> Self {
         Self {
             mle,
@@ -274,6 +280,8 @@ impl<F: Field> CircuitMatrix<F> {
         }
     }
 
+    /// Convert the circuit description of a matrix into the prover
+    /// view of a matrix, using the [CircuitMap].
     pub fn into_matrix(&self, circuit_map: &CircuitMap<F>) -> Matrix<F> {
         let dense_mle = self.mle.into_dense_mle(circuit_map);
         Matrix {
@@ -298,6 +306,8 @@ pub struct CircuitMatMultLayer<F: Field> {
 }
 
 impl<F: Field> CircuitMatMultLayer<F> {
+    /// Constructor for the [CircuitMatMultLayer], using the circuit description
+    /// of the matrices that make up this layer.
     pub fn new(layer_id: LayerId, matrix_a: CircuitMatrix<F>, matrix_b: CircuitMatrix<F>) -> Self {
         Self {
             layer_id,
@@ -811,6 +821,8 @@ pub fn product_two_matrices<F: Field>(matrix_a: &Matrix<F>, matrix_b: &Matrix<F>
     product_matrix
 }
 
+/// Compute the product of two matrices given flattened vectors rather than
+/// matrices.
 pub fn product_two_matrices_from_flattened_vectors<F: Field>(
     matrix_a_vec: &[F],
     matrix_b_vec: &[F],
@@ -848,7 +860,7 @@ mod test {
             matmult::{product_two_matrices, Matrix},
             LayerId,
         },
-        mle::{dense::DenseMle, Mle},
+        mle::dense::DenseMle,
     };
 
     #[test]

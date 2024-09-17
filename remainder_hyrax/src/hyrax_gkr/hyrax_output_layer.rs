@@ -2,8 +2,6 @@ use std::marker::PhantomData;
 
 use itertools::Itertools;
 use rand::Rng;
-use remainder::claims::{Claim, ClaimAggregator, YieldClaim};
-use remainder::expression::circuit_expr::CircuitMle;
 use remainder::mle::dense::DenseMle;
 use remainder::mle::mle_enum::MleEnum;
 use remainder::mle::{Mle, MleIndex};
@@ -11,7 +9,6 @@ use remainder::output_layer::mle_output_layer::CircuitMleOutputLayer;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
-use serde::{Deserialize, Serialize};
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 

@@ -1,6 +1,5 @@
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
 use std::{cmp::max, fmt::Debug};
 
@@ -14,6 +13,8 @@ use crate::mle::{dense::DenseMle, MleIndex};
 use thiserror::Error;
 
 use super::BinaryOperation;
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// Error handling for gate mle construction.
 #[derive(Error, Debug, Clone)]

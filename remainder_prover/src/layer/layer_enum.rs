@@ -20,19 +20,30 @@ layer_enum!(LayerEnum, (Regular: RegularLayer<F>), (Gate: GateLayer<F>), (Identi
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(bound = "F: Field")]
+/// An enum representing the different types of descriptions for each layer,
+/// each description containing the shape information of the corresponding layer.
 pub enum CircuitLayerEnum<F: Field> {
+    /// The circuit description for a regular layer variant.
     Regular(CircuitRegularLayer<F>),
+    /// The circuit description for a gate layer variant.
     Gate(CircuitGateLayer<F>),
+    /// The circuit description for a identity gate layer variant.
     IdentityGate(CircuitIdentityGateLayer<F>),
+    /// The circuit description for a matmult layer variant.
     MatMult(CircuitMatMultLayer<F>),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(bound = "F: Field")]
+/// An enum representing the different types of fully bound layers.
 pub enum VerifierLayerEnum<F: Field> {
+    /// The fully bound representation of a regular layer.
     Regular(VerifierRegularLayer<F>),
+    /// The fully bound representation of a gate layer.
     Gate(VerifierGateLayer<F>),
+    /// The fully bound representation of an identity gate layer.
     IdentityGate(VerifierIdentityGateLayer<F>),
+    /// The fully bound representation of a matmult layer.
     MatMult(VerifierMatMultLayer<F>),
 }
 

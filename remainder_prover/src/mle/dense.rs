@@ -18,10 +18,7 @@ use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::{LayerError, LayerId},
 };
-use remainder_shared_types::{
-    transcript::{TranscriptSponge, TranscriptWriter},
-    Field,
-};
+use remainder_shared_types::Field;
 
 /// An implementation of an [Mle] using a dense representation.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -452,6 +449,7 @@ impl<F: Field> DenseMle<F> {
         ]
     }
 
+    /// Get the point that an MLE is fully bound to.
     pub fn get_claim_point(&self) -> Vec<F> {
         self.mle_indices()
             .iter()

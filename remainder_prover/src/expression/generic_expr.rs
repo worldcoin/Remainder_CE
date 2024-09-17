@@ -56,7 +56,9 @@ pub enum ExpressionNode<F: Field, E: ExpressionType<F>> {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: Field")]
 pub struct Expression<F: Field, E: ExpressionType<F>> {
+    /// The head of the expression subtree.
     pub expression_node: ExpressionNode<F, E>,
+    /// The vector of MLEs that this expression computes data over.
     pub mle_vec: E::MleVec,
 }
 

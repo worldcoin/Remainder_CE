@@ -1,6 +1,6 @@
 //! Unit tests for [crate::output_layer::mle_output_layer].
 
-use pretty_assertions::{assert_eq, assert_ne};
+use pretty_assertions::assert_eq;
 
 use remainder_shared_types::ff_field;
 use remainder_shared_types::{
@@ -10,15 +10,8 @@ use remainder_shared_types::{
 
 use crate::{
     claims::{wlx_eval::ClaimMle, YieldClaim},
-    expression::{generic_expr::Expression, verifier_expr::VerifierExpr},
     layer::LayerId,
-    mle::{
-        dense::DenseMle,
-        evals::{Evaluations, MultilinearExtension},
-        mle_enum::MleEnum,
-        zero::ZeroMle,
-        Mle, MleIndex,
-    },
+    mle::{mle_enum::MleEnum, zero::ZeroMle, Mle, MleIndex},
     output_layer::{mle_output_layer::CircuitMleOutputLayer, CircuitOutputLayer},
 };
 

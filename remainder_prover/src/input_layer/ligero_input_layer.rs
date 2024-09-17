@@ -2,7 +2,6 @@
 
 use std::marker::PhantomData;
 
-use itertools::Itertools;
 use remainder_ligero::{
     ligero_commit::{
         remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify,
@@ -21,10 +20,6 @@ use crate::{
     claims::wlx_eval::YieldWLXEvals,
     input_layer::CommitmentEnum,
     layer::LayerId,
-    layouter::{
-        layouting::{CircuitDescriptionMap, CircuitMap},
-        nodes::circuit_inputs::{compile_inputs::combine_input_mles, InputLayerData},
-    },
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
@@ -68,6 +63,7 @@ pub type LigeroRoot<F> = LcRoot<LigeroAuxInfo<F>, F>;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: Field")]
+/// The circuit description of a [LigeroInputLayer]. Stores the shape information of this layer.
 pub struct CircuitLigeroInputLayer<F: Field> {
     /// The ID of this Ligero Input Layer.
     layer_id: LayerId,
@@ -82,6 +78,11 @@ pub struct CircuitLigeroInputLayer<F: Field> {
 }
 
 impl<F: Field> CircuitLigeroInputLayer<F> {
+    /// Constructor for the [CircuitLigeroInputLayer] using layer_id, num_bits
+    /// which is the number of variables in the underlying MLE, and auxiliary
+    /// information, which is [LigeroAuxInfo] and includes information about
+    /// the encoded num rows, num cols, of the matrix of coefficients and rho_inv
+    /// used for encoding.
     pub fn new(layer_id: LayerId, num_bits: usize, aux: LigeroAuxInfo<F>) -> Self {
         Self {
             layer_id,

@@ -1,20 +1,14 @@
 use super::{
-    circuit_expr::{CircuitExpr, CircuitMle},
     expr_errors::ExpressionError,
     generic_expr::{Expression, ExpressionNode, ExpressionType},
     verifier_expr::{VerifierExpr, VerifierMle},
 };
+use crate::{layer::product::PostSumcheckLayer, mle::Mle};
 use crate::{
     layer::product::Product,
     mle::{betavalues::BetaValues, dense::DenseMle, MleIndex},
 };
-use crate::{
-    layer::{gate::BinaryOperation, product::PostSumcheckLayer},
-    mle::{evals::MultilinearExtension, Mle},
-};
-use ark_std::{cfg_into_iter, log2};
 use itertools::Itertools;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -77,57 +71,10 @@ impl<F: Field> Expression<F, ProverExpr> {
     /// See documentation in [super::circuit_expr::CircuitExpr]'s `concat_expr`
     /// function for more details!
     pub fn concat_expr(mut self, lhs: Expression<F, ProverExpr>) -> Self {
-        let lhs_num_vars = lhs.get_expression_size(0);
-        let rhs_num_vars = self.get_expression_size(0);
-
         let offset = lhs.num_mle_ref();
         self.increment_mle_vec_indices(offset);
         let (lhs_node, lhs_mle_vec) = lhs.deconstruct();
         let (rhs_node, rhs_mle_vec) = self.deconstruct();
-
-        // --- Compute the difference in number of iterated bits, to add the appropriate number of selectors ---
-        let num_left_selectors = if rhs_num_vars > lhs_num_vars {
-            rhs_num_vars - lhs_num_vars
-        } else {
-            0
-        };
-
-        // let num_right_selectors = if lhs_num_vars > rhs_num_vars {
-        //     lhs_num_vars - rhs_num_vars
-        // } else {
-        //     0
-        // };
-
-        // let lhs_subtree = if num_left_selectors > 0 {
-        //     // --- Always "go left" and "concatenate" against a constant zero ---
-        //     (0..num_left_selectors).fold(lhs_node, |cur_subtree, _| {
-        //         ExpressionNode::Selector(
-        //             MleIndex::Iterated,
-        //             Box::new(cur_subtree),
-        //             Box::new(ExpressionNode::Constant(F::ZERO)),
-        //         )
-        //     })
-        // } else {
-        //     lhs_node
-        // };
-
-        // let rhs_subtree = if num_right_selectors > 0 {
-        //     // --- Always "go left" and "concatenate" against a constant zero ---
-        //     (0..num_right_selectors).fold(rhs_node, |cur_subtree, _| {
-        //         ExpressionNode::Selector(
-        //             MleIndex::Iterated,
-        //             Box::new(cur_subtree),
-        //             Box::new(ExpressionNode::Constant(F::ZERO)),
-        //         )
-        //     })
-        // } else {
-        //     rhs_node
-        // };
-
-        // --- Sanitycheck ---
-        // let lhs_subtree_num_vars = lhs_subtree.get_expression_size_node(0, &lhs.mle_vec);
-        // let rhs_subtree_num_vars = rhs_subtree.get_expression_size_node(0, &self.mle_vec);
-        // debug_assert_eq!(lhs_subtree_num_vars, rhs_subtree_num_vars);
 
         let concat_node =
             ExpressionNode::Selector(MleIndex::Iterated, Box::new(lhs_node), Box::new(rhs_node));

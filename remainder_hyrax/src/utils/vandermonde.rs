@@ -1,6 +1,5 @@
 use itertools::repeat_n;
 use remainder_shared_types::Field;
-use std::ops::Neg;
 
 /// Performs conversion from evaluations of a polynomial of degree d at 0, 1, ..., d to the d+1
 /// coefficients, using the Vandermonde matrix inverse V^-1.

@@ -8,11 +8,8 @@ use remainder::{
         Claim,
     },
     input_layer::{
-        // hyrax_placeholder_input_layer::HyraxPlaceholderInputLayer,
-        // hyrax_precommit_placeholder_input_layer::HyraxPrecommitPlaceholderInputLayer,
         public_input_layer::PublicInputLayer,
-        random_input_layer::VerifierChallengeInputLayer,
-        InputLayer,
+        verifier_challenge_input_layer::VerifierChallengeInputLayer, InputLayer,
     },
     layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
@@ -34,7 +31,7 @@ use crate::{
 };
 
 use super::hyrax_layer::HyraxClaim;
-
+#[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// FIXME: temporary fix to work with hyrax input layer proofs and the generic input layer proof for
@@ -266,58 +263,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
             comm: None,
         }
     }
-
-    fn new_with_mle_coeff_vec(
-        mle_coefficients_vector: MleCoefficientsVector<C>,
-        layer_id: LayerId,
-    ) -> Self {
-        assert!(mle_coefficients_vector.len().is_power_of_two());
-        let log_num_cols = (log2(mle_coefficients_vector.len()) / 2) as usize;
-        let num_rows = mle_coefficients_vector.len() / (1 << log_num_cols);
-        let committer = PedersenCommitter::new(
-            1 << log_num_cols + 1,
-            "abcdefghijklmnopqrstuvwxyz qwertyuiop",
-            None,
-        );
-
-        let mut seed_matrix = [0u8; 32];
-        OsRng.fill_bytes(&mut seed_matrix);
-        let mut prng = ChaCha20Rng::from_seed(seed_matrix);
-        let blinding_factors_matrix = (0..num_rows)
-            .map(|_| C::Scalar::random(&mut prng))
-            .collect_vec();
-        let mut seed_eval = [0u8; 32];
-        OsRng.fill_bytes(&mut seed_eval);
-        let mut prng = ChaCha20Rng::from_seed(seed_eval);
-        let blinding_factor_eval = C::Scalar::random(&mut prng);
-
-        Self {
-            mle: mle_coefficients_vector,
-            layer_id,
-            log_num_cols,
-            committer,
-            blinding_factors_matrix,
-            blinding_factor_eval,
-            comm: None,
-        }
-    }
-
-    // pub fn new_from_placeholder_with_commitment(
-    //     hyrax_placeholder_il: HyraxPrecommitPlaceholderInputLayer<C::Scalar>,
-    //     committer: &PedersenCommitter<C>,
-    //     blinding_factors_matrix: Vec<C::Scalar>,
-    //     log_num_cols: usize,
-    //     commitment: Vec<C>,
-    // ) -> Self {
-    //     HyraxInputLayer::new_with_hyrax_commitment(
-    //         MleCoefficientsVector::ScalarFieldVector(hyrax_placeholder_il.mle.f.to_vec()),
-    //         hyrax_placeholder_il.layer_id().clone(),
-    //         committer.clone(),
-    //         blinding_factors_matrix,
-    //         log_num_cols,
-    //         commitment,
-    //     )
-    // }
 
     /// Creates new Hyrax input layer WITH a precomputed Hyrax commitment
     pub fn new_with_hyrax_commitment(

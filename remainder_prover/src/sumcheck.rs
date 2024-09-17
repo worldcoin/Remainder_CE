@@ -46,8 +46,8 @@ pub mod tests;
 
 use ark_std::cfg_into_iter;
 use itertools::{repeat_n, Itertools};
+use rayon::prelude::ParallelIterator;
 use rayon::prelude::ParallelSlice;
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use thiserror::Error;
 
 use crate::{
@@ -58,6 +58,8 @@ use crate::{
     },
     mle::{betavalues::BetaValues, dense::DenseMle, Mle, MleIndex},
 };
+#[cfg(feature = "parallel")]
+use rayon::iter::IntoParallelIterator;
 use remainder_shared_types::Field;
 
 /// Errors to do with the evaluation of MleRefs.
