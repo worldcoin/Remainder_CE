@@ -18,14 +18,14 @@ to the codebase.
 */
 
 use crate::utils::get_least_significant_bits_to_usize_little_endian;
-use ark_std::{end_timer, start_timer};
+use ark_std::{cfg_into_iter, end_timer, start_timer};
 use itertools::Itertools;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
 use rayon::prelude::*;
 use remainder_shared_types::{
     transcript::{ProverTranscript, TranscriptSponge, VerifierTranscript},
-    FieldExt, Poseidon,
+    Field, Poseidon,
 };
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;

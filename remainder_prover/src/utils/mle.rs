@@ -10,7 +10,7 @@ use remainder_shared_types::{Field, Fr, Poseidon};
 use crate::{
     layer::{layer_enum::LayerEnum, LayerId},
     layouter::nodes::{
-        circuit_inputs::{InputLayerNode, InputShred},
+        circuit_inputs::{InputLayerNode, InputShred, InputShredData},
         Context,
     },
     mle::{
@@ -20,23 +20,6 @@ use crate::{
     },
     prover::layers::Layers,
 };
-
-/// Returns an [InputShred] with the appropriate [MultilinearExtension], but given as input an mle_vec
-pub fn get_input_shred_from_vec<F: Field>(
-    mle_vec: Vec<F>,
-    ctx: &Context,
-    input_node: &InputLayerNode<F>,
-) -> InputShred<F> {
-    assert!(mle_vec.len().is_power_of_two());
-    InputShred::new(
-        ctx,
-        MultilinearExtension::new_from_evals(Evaluations::new(
-            log2(mle_vec.len()) as usize,
-            mle_vec,
-        )),
-        input_node,
-    )
-}
 
 /// Return a vector containing a padded version of the input data, with the padding value at the end
 /// of the vector, such that the length is `data.len().next_power_of_two()`.  This is a no-op if the

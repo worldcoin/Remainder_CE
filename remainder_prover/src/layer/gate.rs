@@ -225,7 +225,7 @@ pub struct CircuitGateLayer<F: Field> {
     num_dataparallel_bits: usize,
 }
 
-impl<F: FieldExt> CircuitGateLayer<F> {
+impl<F: Field> CircuitGateLayer<F> {
     /// Constructor for a [CircuitGateLayer].
     pub fn new(
         num_dataparallel_bits: Option<usize>,
@@ -474,89 +474,6 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
 
     fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
         vec![&self.lhs_mle, &self.rhs_mle]
-    }
-
-    fn into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
-        let lhs_mle = self.lhs_mle.into_dense_mle(circuit_map);
-        let rhs_mle = self.rhs_mle.into_dense_mle(circuit_map);
-        let num_dataparallel_bits = if self.num_dataparallel_bits == 0 {
-            None
-        } else {
-            Some(self.num_dataparallel_bits)
-        };
-        let gate_layer = GateLayer::new(
-            num_dataparallel_bits,
-            self.wiring.clone(),
-            lhs_mle,
-            rhs_mle,
-            self.gate_operation,
-            self.layer_id(),
-        );
-        gate_layer.into()
-    }
-
-    fn index_mle_indices(&mut self, start_index: usize) {
-        self.lhs_mle.index_mle_indices(start_index);
-        self.rhs_mle.index_mle_indices(start_index);
-    }
-
-    fn compute_data_outputs(
-        &self,
-        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
-        circuit_map: &mut CircuitMap<F>,
-    ) -> bool {
-        // dbg!(&mle_outputs_necessary);
-        assert_eq!(mle_outputs_necessary.len(), 1);
-        let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
-
-        let max_gate_val = self
-            .wiring
-            .iter()
-            .fold(&0, |acc, (z, _, _)| std::cmp::max(acc, z));
-
-        // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
-        // evaluating over all values in the boolean hypercube which includes dataparallel bits
-        let num_dataparallel_vals = 1 << (self.num_dataparallel_bits);
-        let res_table_num_entries =
-            ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
-
-        let maybe_lhs_data = circuit_map.get_data_from_circuit_mle(&self.lhs_mle);
-        if maybe_lhs_data.is_err() {
-            return false;
-        }
-        let lhs_data = maybe_lhs_data.unwrap();
-
-        let maybe_rhs_data = circuit_map.get_data_from_circuit_mle(&self.rhs_mle);
-        if maybe_rhs_data.is_err() {
-            return false;
-        }
-        let rhs_data = maybe_rhs_data.unwrap();
-
-        let mut res_table = vec![F::ZERO; res_table_num_entries];
-        (0..num_dataparallel_vals).for_each(|idx| {
-            self.wiring.iter().for_each(|(z_ind, x_ind, y_ind)| {
-                let zero = F::ZERO;
-                let f2_val = lhs_data
-                    .get_evals_vector()
-                    .get(idx + (x_ind * num_dataparallel_vals))
-                    .unwrap_or(&zero);
-                let f3_val = rhs_data
-                    .get_evals_vector()
-                    .get(idx + (y_ind * num_dataparallel_vals))
-                    .unwrap_or(&zero);
-                res_table[idx + (z_ind * num_dataparallel_vals)] =
-                    self.gate_operation.perform_operation(*f2_val, *f3_val);
-            });
-        });
-
-        let output_data = MultilinearExtension::new(res_table);
-        assert_eq!(
-            output_data.num_vars(),
-            mle_output_necessary.mle_indices().len()
-        );
-
-        circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
-        true
     }
 
     fn into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {

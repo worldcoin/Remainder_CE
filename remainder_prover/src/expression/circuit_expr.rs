@@ -17,7 +17,7 @@ use std::{
     ops::{Add, Mul, Neg, Sub},
 };
 
-use remainder_shared_types::{transcript::VerifierTranscript, FieldExt};
+use remainder_shared_types::{transcript::VerifierTranscript, Field};
 
 use super::{
     expr_errors::ExpressionError,
@@ -785,7 +785,7 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
     }
 }
 
-impl<F: FieldExt> Expression<F, CircuitExpr> {
+impl<F: Field> Expression<F, CircuitExpr> {
     /// Returns the total number of variables (i.e. number of rounds of sumcheck)
     /// within the MLE representing the output "data" of this particular expression.
     ///
@@ -937,7 +937,7 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
 /// to filter it to the correct "view" that we want to see, assuming
 /// that the prefix bits are the most significant bits, and that
 /// the bookkeeping tables are stored in little endian.
-pub fn filter_bookkeeping_table<F: FieldExt>(
+pub fn filter_bookkeeping_table<F: Field>(
     bookkeeping_table: &MultilinearExtension<F>,
     unfiltered_prefix_bits: &[bool],
 ) -> MultilinearExtension<F> {
@@ -956,7 +956,7 @@ pub fn filter_bookkeeping_table<F: FieldExt>(
 
 /// Evaluate the bookkeeping tables by applying the element-wise operation,
 /// which can either be addition or multiplication.
-fn evaluate_bookkeeping_tables_given_operation<F: FieldExt>(
+fn evaluate_bookkeeping_tables_given_operation<F: Field>(
     mle_bookkeeping_tables: &[&[F]],
     binary_operation: BinaryOperation,
 ) -> MultilinearExtension<F> {
@@ -988,7 +988,7 @@ fn evaluate_bookkeeping_tables_given_operation<F: FieldExt>(
     MultilinearExtension::new(output_table)
 }
 
-impl<F: FieldExt> Neg for Expression<F, CircuitExpr> {
+impl<F: Field> Neg for Expression<F, CircuitExpr> {
     type Output = Expression<F, CircuitExpr>;
     fn neg(self) -> Self::Output {
         Expression::<F, CircuitExpr>::negated(self)
@@ -996,21 +996,21 @@ impl<F: FieldExt> Neg for Expression<F, CircuitExpr> {
 }
 
 /// implement the Add, Sub, and Mul traits for the Expression
-impl<F: FieldExt> Add for Expression<F, CircuitExpr> {
+impl<F: Field> Add for Expression<F, CircuitExpr> {
     type Output = Expression<F, CircuitExpr>;
     fn add(self, rhs: Expression<F, CircuitExpr>) -> Expression<F, CircuitExpr> {
         Expression::<F, CircuitExpr>::sum(self, rhs)
     }
 }
 
-impl<F: FieldExt> Sub for Expression<F, CircuitExpr> {
+impl<F: Field> Sub for Expression<F, CircuitExpr> {
     type Output = Expression<F, CircuitExpr>;
     fn sub(self, rhs: Expression<F, CircuitExpr>) -> Expression<F, CircuitExpr> {
         self.add(rhs.neg())
     }
 }
 
-impl<F: FieldExt> Mul<F> for Expression<F, CircuitExpr> {
+impl<F: Field> Mul<F> for Expression<F, CircuitExpr> {
     type Output = Expression<F, CircuitExpr>;
     fn mul(self, rhs: F) -> Self::Output {
         Expression::<F, CircuitExpr>::scaled(self, rhs)

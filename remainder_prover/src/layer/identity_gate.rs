@@ -59,7 +59,7 @@ pub struct CircuitIdentityGateLayer<F: Field> {
     source_mle: CircuitMle<F>,
 }
 
-impl<F: FieldExt> CircuitIdentityGateLayer<F> {
+impl<F: Field> CircuitIdentityGateLayer<F> {
     pub fn new(id: LayerId, wiring: Vec<(usize, usize)>, source_mle: CircuitMle<F>) -> Self {
         Self {
             id,
