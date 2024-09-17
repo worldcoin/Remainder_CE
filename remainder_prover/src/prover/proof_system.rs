@@ -36,25 +36,7 @@ macro_rules! layer_enum {
         }
 
         paste::paste! {
-            #[derive(serde::Serialize, serde::Deserialize, Debug)]
-            #[serde(bound = "F: FieldExt")]
-            #[doc = r"Circuit layer description enum"]
-            pub enum [<Circuit $type_name>]<F: FieldExt> {
-                $(
-                    #[doc = "Circuit layer description variant"]
-                    $var_name(<$variant as crate::layer::Layer<F>>::CircuitLayer),
-                )*
-            }
 
-            #[derive(serde::Serialize, serde::Deserialize, Debug)]
-            #[serde(bound = "F: FieldExt")]
-            #[doc = r"Verfier layer description enum"]
-            pub enum [<Verifier $type_name>]<F: FieldExt> {
-                $(
-                    #[doc = "Verifier layer description variant"]
-                    $var_name(<<$variant as crate::layer::Layer<F>>::CircuitLayer as crate::layer::CircuitLayer<F>>::VerifierLayer),
-                )*
-            }
 
 
             impl<F: FieldExt> $crate::layer::CircuitLayer<F> for [<Circuit$type_name>]<F> {
@@ -70,7 +52,7 @@ macro_rules! layer_enum {
 
                 fn compute_data_outputs(
                     &self,
-                    mle_outputs_necessary: &[&crate::expression::circuit_expr::CircuitMle<F>],
+                    mle_outputs_necessary: &std::collections::HashSet<&crate::expression::circuit_expr::CircuitMle<F>>,
                     circuit_map: &mut crate::layouter::layouting::CircuitMap<F>,
                 ) -> bool {
                     match self {
@@ -179,18 +161,6 @@ macro_rules! layer_enum {
         }
 
         impl<F: FieldExt> $crate::layer::Layer<F> for $type_name<F> {
-            paste::paste! {
-                type CircuitLayer = [<Circuit $type_name>]<F>;
-            }
-
-            fn into_circuit_layer(&self) -> Result<CircuitLayerEnum<F>, LayerError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => Ok(Self::CircuitLayer::$var_name(layer.into_circuit_layer()?)),
-                    )*
-                }
-            }
-
             fn layer_id(&self) -> super::LayerId {
                 match self {
                     $(
@@ -472,62 +442,4 @@ macro_rules! input_layer_enum {
             }
         )*
     }
-}
-
-/// A trait for bundling a group of types that define the interfaces that go
-/// into a GKR Prover.
-pub trait ProofSystem<F: FieldExt> {
-    /// A trait that defines the allowed Layer for this ProofSystem.
-    type Layer: Layer<
-            F,
-            CircuitLayer: CircuitLayer<
-                F,
-                VerifierLayer: YieldClaim<<Self::ClaimAggregator as ClaimAggregator<F>>::Claim>,
-            >,
-        > + Serialize
-        + for<'a> Deserialize<'a>
-        + Debug
-        + YieldClaim<<Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
-
-    /// A trait that defines the allowed InputLayer for this ProofSystem.
-    type InputLayer: InputLayer<F, CircuitInputLayer: CircuitInputLayer<F>> + Debug;
-
-    /// The Transcript this proofsystem uses for Fiat-Shamir.
-    type Transcript: TranscriptSponge<F>;
-
-    /// The MleRef type that serves as the output layer representation
-    type OutputLayer: OutputLayer<
-            F,
-            CircuitOutputLayer: CircuitOutputLayer<
-                F,
-                VerifierOutputLayer: YieldClaim<
-                    <Self::ClaimAggregator as ClaimAggregator<F>>::Claim,
-                >,
-            >,
-        > + YieldClaim<<Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
-        + Serialize
-        + for<'de> Deserialize<'de>
-        + Debug;
-
-    ///The logic that handles how to aggregate claims
-    /// As this trait defines the 'bridge' between layers, some helper traits may be neccessary to implement
-    /// on the other layer types
-    type ClaimAggregator: ClaimAggregator<F, Layer = Self::Layer, InputLayer = Self::InputLayer>
-        + Debug;
-}
-
-/// The default proof system for the remainder prover
-#[derive(Clone, Debug, PartialEq)]
-pub struct DefaultProofSystem;
-
-impl<F: FieldExt> ProofSystem<F> for DefaultProofSystem {
-    type Layer = LayerEnum<F>;
-
-    type InputLayer = InputLayerEnum<F>;
-
-    type Transcript = PoseidonSponge<F>;
-
-    type OutputLayer = MleOutputLayer<F>;
-
-    type ClaimAggregator = WLXAggregator<F, Self::Layer, Self::InputLayer>;
 }

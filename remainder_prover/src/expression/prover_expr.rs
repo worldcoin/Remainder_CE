@@ -77,54 +77,61 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     /// See documentation in [super::circuit_expr::CircuitExpr]'s `concat_expr`
     /// function for more details!
     pub fn concat_expr(mut self, lhs: Expression<F, ProverExpr>) -> Self {
+        let lhs_num_vars = lhs.get_expression_size(0);
+        let rhs_num_vars = self.get_expression_size(0);
+
         let offset = lhs.num_mle_ref();
         self.increment_mle_vec_indices(offset);
-
         let (lhs_node, lhs_mle_vec) = lhs.deconstruct();
         let (rhs_node, rhs_mle_vec) = self.deconstruct();
 
         // --- Compute the difference in number of iterated bits, to add the appropriate number of selectors ---
-        let lhs_num_vars = lhs_node.get_expression_size_node(0, &lhs_mle_vec);
-        let rhs_num_vars = rhs_node.get_expression_size_node(0, &rhs_mle_vec);
-        let num_left_selectors = max(0, rhs_num_vars - lhs_num_vars);
-        let num_right_selectors = max(0, lhs_num_vars - rhs_num_vars);
-
-        let lhs_subtree = if num_left_selectors > 0 {
-            // --- Always "go left" and "concatenate" against a constant zero ---
-            (0..num_left_selectors).fold(lhs_node, |cur_subtree, _| {
-                ExpressionNode::Selector(
-                    MleIndex::Iterated,
-                    Box::new(cur_subtree),
-                    Box::new(ExpressionNode::Constant(F::ZERO)),
-                )
-            })
+        let num_left_selectors = if rhs_num_vars > lhs_num_vars {
+            rhs_num_vars - lhs_num_vars
         } else {
-            lhs_node
+            0
         };
 
-        let rhs_subtree = if num_right_selectors > 0 {
-            // --- Always "go left" and "concatenate" against a constant zero ---
-            (0..num_right_selectors).fold(rhs_node, |cur_subtree, _| {
-                ExpressionNode::Selector(
-                    MleIndex::Iterated,
-                    Box::new(cur_subtree),
-                    Box::new(ExpressionNode::Constant(F::ZERO)),
-                )
-            })
-        } else {
-            rhs_node
-        };
+        // let num_right_selectors = if lhs_num_vars > rhs_num_vars {
+        //     lhs_num_vars - rhs_num_vars
+        // } else {
+        //     0
+        // };
+
+        // let lhs_subtree = if num_left_selectors > 0 {
+        //     // --- Always "go left" and "concatenate" against a constant zero ---
+        //     (0..num_left_selectors).fold(lhs_node, |cur_subtree, _| {
+        //         ExpressionNode::Selector(
+        //             MleIndex::Iterated,
+        //             Box::new(cur_subtree),
+        //             Box::new(ExpressionNode::Constant(F::ZERO)),
+        //         )
+        //     })
+        // } else {
+        //     lhs_node
+        // };
+
+        // let rhs_subtree = if num_right_selectors > 0 {
+        //     // --- Always "go left" and "concatenate" against a constant zero ---
+        //     (0..num_right_selectors).fold(rhs_node, |cur_subtree, _| {
+        //         ExpressionNode::Selector(
+        //             MleIndex::Iterated,
+        //             Box::new(cur_subtree),
+        //             Box::new(ExpressionNode::Constant(F::ZERO)),
+        //         )
+        //     })
+        // } else {
+        //     rhs_node
+        // };
 
         // --- Sanitycheck ---
-        let lhs_subtree_num_vars = lhs_subtree.get_expression_size_node(0, &lhs_mle_vec);
-        let rhs_subtree_num_vars = rhs_subtree.get_expression_size_node(0, &rhs_mle_vec);
-        debug_assert_eq!(lhs_subtree_num_vars, rhs_subtree_num_vars);
+        // let lhs_subtree_num_vars = lhs_subtree.get_expression_size_node(0, &lhs.mle_vec);
+        // let rhs_subtree_num_vars = rhs_subtree.get_expression_size_node(0, &self.mle_vec);
+        // debug_assert_eq!(lhs_subtree_num_vars, rhs_subtree_num_vars);
 
-        let concat_node = ExpressionNode::Selector(
-            MleIndex::Iterated,
-            Box::new(lhs_subtree),
-            Box::new(rhs_subtree),
-        );
+        let concat_node =
+            ExpressionNode::Selector(MleIndex::Iterated, Box::new(lhs_node), Box::new(rhs_node));
+
         let concat_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect_vec();
 
         Expression::new(concat_node, concat_mle_vec)
@@ -224,33 +231,6 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         };
 
         self.traverse_mut(&mut increment_closure).unwrap();
-    }
-
-    /// Transforms the prover expression to a circuit expression.
-    ///
-    /// Should only be called for indexed expressions without any bound
-    /// variables.
-    ///
-    /// Traverses the expression and changes the DenseMle to CircuitMle by
-    /// ignoring the MLE evaluations and
-    ///
-    /// If the bookkeeping table has more than 1 element, it
-    /// throws an ExpressionError::EvaluateNotFullyBoundError
-    pub fn transform_to_circuit_expression(
-        &mut self,
-    ) -> Result<Expression<F, CircuitExpr>, ExpressionError> {
-        self.index_mle_indices(0);
-
-        let (expression_node, mle_vec) = self.deconstruct_mut();
-
-        let expression = Expression::new(
-            expression_node
-                .transform_to_circuit_expression_node(&mle_vec)
-                .unwrap(),
-            (),
-        );
-
-        Ok(expression)
     }
 
     /// Transforms the prover expression to a verifier expression.
@@ -444,50 +424,6 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
 }
 
 impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
-    /// Transforms the expression to a circuit expression
-    /// should only be called when no variables are bound in the expression.
-    /// Traverses the expression and changes the DenseMle to CircuitMle.
-    pub fn transform_to_circuit_expression_node(
-        &mut self,
-        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
-    ) -> Result<ExpressionNode<F, CircuitExpr>, ExpressionError> {
-        match self {
-            ExpressionNode::Constant(scalar) => Ok(ExpressionNode::Constant(*scalar)),
-            ExpressionNode::Selector(index, a, b) => Ok(ExpressionNode::Selector(
-                index.clone(),
-                Box::new(a.transform_to_circuit_expression_node(mle_vec)?),
-                Box::new(b.transform_to_circuit_expression_node(mle_vec)?),
-            )),
-            ExpressionNode::Mle(mle_vec_idx) => {
-                let mle = mle_vec_idx.get_mle(mle_vec);
-                Ok(ExpressionNode::Mle(CircuitMle::from_dense_mle(mle)?))
-            }
-            ExpressionNode::Negated(a) => Ok(ExpressionNode::Negated(Box::new(
-                a.transform_to_circuit_expression_node(mle_vec)?,
-            ))),
-            ExpressionNode::Sum(a, b) => Ok(ExpressionNode::Sum(
-                Box::new(a.transform_to_circuit_expression_node(mle_vec)?),
-                Box::new(b.transform_to_circuit_expression_node(mle_vec)?),
-            )),
-            ExpressionNode::Product(mle_vec_indices) => {
-                let mles = mle_vec_indices
-                    .iter_mut()
-                    .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
-                    .collect_vec();
-
-                Ok(ExpressionNode::Product(
-                    mles.into_iter()
-                        .map(|mle| CircuitMle::from_dense_mle(mle).unwrap())
-                        .collect_vec(),
-                ))
-            }
-            ExpressionNode::Scaled(mle, scalar) => Ok(ExpressionNode::Scaled(
-                Box::new(mle.transform_to_circuit_expression_node(mle_vec)?),
-                *scalar,
-            )),
-        }
-    }
-
     /// Transforms the expression to a verifier expression
     /// should only be called when no variables are bound in the expression.
     /// Traverses the expression and changes the DenseMle to CircuitMle.

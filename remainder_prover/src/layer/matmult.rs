@@ -1,5 +1,7 @@
 //! This module contains the implementation of the matrix multiplication layer
 
+use std::collections::HashSet;
+
 use ::serde::{Deserialize, Serialize};
 use ark_std::{cfg_into_iter, log2};
 use itertools::Itertools;
@@ -222,9 +224,6 @@ impl<F: FieldExt> MatMult<F> {
 }
 
 impl<F: FieldExt> Layer<F> for MatMult<F> {
-    // type Proof = Option<SumcheckProof<F>>;
-    type CircuitLayer = CircuitMatMultLayer<F>;
-
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
@@ -256,10 +255,6 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
 
     fn layer_id(&self) -> LayerId {
         self.layer_id
-    }
-
-    fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError> {
-        Ok(self.clone().into())
     }
 
     fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
@@ -331,18 +326,6 @@ impl<F: FieldExt> CircuitMatrix<F> {
         }
     }
 }
-
-impl<F: FieldExt> From<Matrix<F>> for CircuitMatrix<F> {
-    fn from(matrix: Matrix<F>) -> Self {
-        let mut indexed_mle = matrix.mle.clone();
-        indexed_mle.index_mle_indices(0);
-        CircuitMatrix {
-            mle: CircuitMle::from_dense_mle(&indexed_mle).unwrap(),
-            num_rows_vars: matrix.num_rows_vars,
-            num_cols_vars: matrix.num_cols_vars,
-        }
-    }
-}
 /// The circuit description counterpart of a [MatMult] layer.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
@@ -355,17 +338,6 @@ pub struct CircuitMatMultLayer<F: FieldExt> {
 
     /// The RHS Matrix to be multiplied.
     matrix_b: CircuitMatrix<F>,
-}
-
-impl<F: FieldExt> From<MatMult<F>> for CircuitMatMultLayer<F> {
-    /// Convert a [MatMult] to a [CircuitMatmultLayer].
-    fn from(matmult_layer: MatMult<F>) -> Self {
-        CircuitMatMultLayer {
-            layer_id: matmult_layer.layer_id,
-            matrix_a: matmult_layer.matrix_a.into(),
-            matrix_b: matmult_layer.matrix_b.into(),
-        }
-    }
 }
 
 impl<F: FieldExt> CircuitMatMultLayer<F> {
@@ -457,12 +429,11 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
 
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &[&CircuitMle<F>],
+        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
         circuit_map: &mut CircuitMap<F>,
     ) -> bool {
         assert_eq!(mle_outputs_necessary.len(), 1);
-        let mle_output_necessary = mle_outputs_necessary[0];
-        dbg!(&mle_output_necessary);
+        let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
 
         let maybe_matrix_a_data = circuit_map.get_data_from_circuit_mle(&self.matrix_a.mle);
         if maybe_matrix_a_data.is_err() {

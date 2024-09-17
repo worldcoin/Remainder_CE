@@ -19,7 +19,7 @@ pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
 }
 
 /// Generic Expressions
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
 #[serde(bound = "F: FieldExt")]
 pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
     /// This is a constant polynomial

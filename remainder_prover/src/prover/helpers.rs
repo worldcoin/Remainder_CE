@@ -13,8 +13,6 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
-use super::proof_system::ProofSystem;
-
 /// Boilerplate code for testing a circuit
 pub fn test_circuit<
     F: FieldExt,

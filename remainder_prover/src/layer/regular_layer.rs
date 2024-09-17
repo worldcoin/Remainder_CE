@@ -6,6 +6,8 @@ pub mod claims;
 #[cfg(test)]
 mod tests;
 
+use std::collections::{HashMap, HashSet};
+
 use itertools::Itertools;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
@@ -18,7 +20,7 @@ use crate::{
     builders::layer_builder::LayerBuilder,
     claims::Claim,
     expression::{
-        circuit_expr::{CircuitExpr, CircuitMle},
+        circuit_expr::{filter_bookkeeping_table, CircuitExpr, CircuitMle},
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
         verifier_expr::VerifierExpr,
@@ -101,8 +103,6 @@ impl<F: FieldExt> VerifierRegularLayer<F> {
 }
 
 impl<F: FieldExt> Layer<F> for RegularLayer<F> {
-    type CircuitLayer = CircuitRegularLayer<F>;
-
     fn layer_id(&self) -> LayerId {
         self.id
     }
@@ -131,13 +131,6 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         self.append_leaf_mles_to_transcript(transcript_writer)?;
 
         Ok(())
-    }
-
-    fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError> {
-        let id = self.layer_id();
-        let expression = self.expression.clone().transform_to_circuit_expression()?;
-
-        Ok(Self::CircuitLayer { id, expression })
     }
 
     fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
@@ -252,29 +245,19 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
 
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &[&CircuitMle<F>],
+        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
         circuit_map: &mut CircuitMap<F>,
     ) -> bool {
-        dbg!("Compute data outputs; layer id =", self.layer_id());
-        dbg!(mle_outputs_necessary);
-        let mut counter = 0;
         let mut all_populatable = true;
 
-        // TODO(ryancao, vishady): A workaround for now due to the fact
-        // that [super::expression::abstract_expr] is unable to construct
-        // the correct "selector tree" expression as a result of not having
-        // access to the sizes of the MLEs within the LHS and RHSs of the
-        // expression within. Instead, the current strategy is to simply
-        // compute the entire bookkeeping table and only "select" the values
-        // we need at the end.
-        let mut implicit_selector_bits: Vec<bool> = vec![];
+        let mut expression_nodes_to_compile =
+            HashMap::<&ExpressionNode<F, CircuitExpr>, Vec<(Vec<bool>, Vec<bool>)>>::new();
 
         mle_outputs_necessary
             .into_iter()
             .for_each(|mle_output_necessary| {
                 let prefix_bits = mle_output_necessary.prefix_bits();
-                dbg!(&self.expression);
-                dbg!(&prefix_bits);
+                let mut unfiltered_prefix_bits: Vec<bool> = vec![];
                 let expression_node_to_compile = prefix_bits.iter().fold(
                     &self.expression.expression_node,
                     |acc, bit| match acc {
@@ -286,29 +269,54 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
                             }
                         }
                         _ => {
-                            implicit_selector_bits.push(*bit);
+                            unfiltered_prefix_bits.push(*bit);
                             acc
                         }
                     },
                 );
-                let maybe_data = expression_node_to_compile.compute_bookkeeping_table(&circuit_map);
-                if maybe_data.is_none() {
-                    counter += 1;
-                    all_populatable = false;
+                if expression_nodes_to_compile.contains_key(expression_node_to_compile) {
+                    expression_nodes_to_compile
+                        .get_mut(expression_node_to_compile)
+                        .unwrap()
+                        .push((unfiltered_prefix_bits.clone(), prefix_bits));
                 } else {
-                    dbg!(&mle_output_necessary);
-                    dbg!(&expression_node_to_compile);
-                    let data = maybe_data.unwrap();
-                    dbg!(data.get_evals_vector().len());
-
-                    let actual_evaluations = filter_with_selectors(data);
-
-                    circuit_map.add_node(
-                        CircuitLocation::new(self.layer_id(), prefix_bits),
-                        actual_evaluations,
+                    expression_nodes_to_compile.insert(
+                        expression_node_to_compile,
+                        vec![(unfiltered_prefix_bits.clone(), prefix_bits)],
                     );
                 }
             });
+
+        if self.layer_id() == LayerId::Layer(4) {
+            dbg!(&self.expression);
+            dbg!(&expression_nodes_to_compile);
+        }
+
+        expression_nodes_to_compile
+            .iter()
+            .for_each(|(expression_node, prefix_bit_vec)| {
+                let maybe_full_bookkeeping_table =
+                    expression_node.compute_bookkeeping_table(&circuit_map);
+                if maybe_full_bookkeeping_table.is_none() {
+                    all_populatable = false;
+                } else {
+                    prefix_bit_vec
+                        .iter()
+                        .for_each(|(unfiltered_prefix_bits, prefix_bits)| {
+                            let bookkeeping_table_to_filter =
+                                maybe_full_bookkeeping_table.as_ref().unwrap();
+                            let filtered_table = filter_bookkeeping_table(
+                                bookkeeping_table_to_filter,
+                                unfiltered_prefix_bits,
+                            );
+                            circuit_map.add_node(
+                                CircuitLocation::new(self.layer_id(), prefix_bits.clone()),
+                                filtered_table,
+                            );
+                        });
+                }
+            });
+
         all_populatable
     }
 
