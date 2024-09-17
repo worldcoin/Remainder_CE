@@ -4,11 +4,8 @@ use crate::{
         product::{PostSumcheckLayer, Product},
         LayerId,
     },
-    layouter::{
-        layouting::{CircuitLocation, CircuitMap},
-        nodes::CircuitNode,
-    },
-    mle::{dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
+    layouter::layouting::CircuitMap,
+    mle::{dense::DenseMle, evals::MultilinearExtension, MleIndex},
 };
 use ark_std::log2;
 use itertools::Itertools;
@@ -20,10 +17,7 @@ use std::{
     ops::{Add, Mul, Neg, Sub},
 };
 
-use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, VerifierTranscript},
-    FieldExt,
-};
+use remainder_shared_types::{transcript::VerifierTranscript, FieldExt};
 
 use super::{
     expr_errors::ExpressionError,
@@ -46,6 +40,8 @@ pub struct CircuitMle<F: FieldExt> {
 }
 
 impl<F: FieldExt> CircuitMle<F> {
+    /// Create a new [CircuitMle] given its layer id and the [MleIndex]s that it holds.
+    /// This is effectively the "shape" of a [DenseMle].
     pub fn new(layer_id: LayerId, var_indices: &[MleIndex<F>]) -> Self {
         Self {
             layer_id,
@@ -53,10 +49,14 @@ impl<F: FieldExt> CircuitMle<F> {
         }
     }
 
+    /// Replace the current MLE indices stored with custom MLE indices. Most
+    /// useful in [MatMult], where we do index manipulation.
     pub fn set_mle_indices(&mut self, new_mle_indices: Vec<MleIndex<F>>) {
         self.var_indices = new_mle_indices;
     }
 
+    /// Convert [MleIndex::Iterated] into [MleIndex::IndexedBit] with the correct
+    /// index labeling, given by start_index parameter.
     pub fn index_mle_indices(&mut self, start_index: usize) {
         let mut index_counter = start_index;
         self.var_indices
@@ -72,18 +72,23 @@ impl<F: FieldExt> CircuitMle<F> {
             });
     }
 
+    /// Returns the [LayerId] of this CircuitMle.
     pub fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 
+    /// Returns the MLE indices of this CircuitMle.
     pub fn mle_indices(&self) -> &[MleIndex<F>] {
         &self.var_indices
     }
 
+    /// Returns a [CircuitExpr] representing just this MLE.
     pub fn expression(self) -> Expression<F, CircuitExpr> {
         Expression::new(ExpressionNode::<F, CircuitExpr>::Mle(self), ())
     }
 
+    /// The number of Indexed OR Iterated bits in this MLE.
+    /// TODO(vishady): figure this out -- maybe just get rid of Iterated altogether.
     pub fn num_iterated_vars(&self) -> usize {
         self.var_indices.iter().fold(0, |acc, idx| {
             acc + match idx {
@@ -94,6 +99,7 @@ impl<F: FieldExt> CircuitMle<F> {
         })
     }
 
+    /// Get the bits in the MLE that are fixed bits.
     pub fn prefix_bits(&self) -> Vec<bool> {
         self.var_indices
             .iter()
@@ -104,12 +110,15 @@ impl<F: FieldExt> CircuitMle<F> {
             .collect()
     }
 
+    /// Convert this MLE into a [DenseMle] using the [CircuitMap],
+    /// which holds information using the prefix bits and layer id
+    /// on the data that should be stored in this MLE.
     pub fn into_dense_mle<'a>(&self, circuit_map: &CircuitMap<F>) -> DenseMle<F> {
         let data = circuit_map.get_data_from_circuit_mle(&self).unwrap();
         DenseMle::new_with_prefix_bits((*data).clone(), self.layer_id(), self.prefix_bits())
     }
 
-    // Bind the variable with index `var_index` to `value`.
+    /// Bind the variable with index `var_index` to `value`.
     pub fn fix_variable(&mut self, var_index: usize, value: F) {
         for mle_index in self.var_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(var_index) {
@@ -132,6 +141,7 @@ impl<F: FieldExt> CircuitMle<F> {
             .collect()
     }
 
+    /// Convert this MLE into a [VerifierMle], which represents a fully-bound MLE.
     pub fn into_verifier_mle(
         &self,
         point: &[F],
@@ -205,6 +215,7 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
         circuit_mles
     }
 
+    /// Label the iterated indices in an expression.
     pub fn index_mle_indices(&mut self, start_index: usize) {
         self.expression_node.index_mle_indices(start_index);
     }
@@ -215,8 +226,6 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
         &self,
         circuit_map: &CircuitMap<F>,
     ) -> Expression<F, ProverExpr> {
-        let circuit_mles = self.get_circuit_mles();
-
         self.expression_node.into_prover_expression(&circuit_map)
     }
 
@@ -242,7 +251,7 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
         let mut round_degree = 1;
 
         let mut get_degree_closure = |expr: &ExpressionNode<F, CircuitExpr>,
-                                      mle_vec: &<CircuitExpr as ExpressionType<F>>::MleVec|
+                                      _mle_vec: &<CircuitExpr as ExpressionType<F>>::MleVec|
          -> Result<(), ()> {
             let round_degree = &mut round_degree;
 
@@ -272,6 +281,8 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
 }
 
 impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
+    /// Turn this expression into a [VerifierExpr] which represents a fully bound expression.
+    /// Should only be applicable after a full layer of sumcheck.
     pub fn into_verifier_node(
         &self,
         point: &[F],
@@ -312,6 +323,9 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
         }
     }
 
+    /// Compute the expression-wise bookkeeping table (coefficients of the MLE representing the expression)
+    /// for a given [CircuitExpr]. This uses a [CircuitMap] in order to grab the correct data
+    /// corresponding to the [CircuitMle].
     pub fn compute_bookkeeping_table(
         &self,
         circuit_map: &CircuitMap<F>,
@@ -598,6 +612,7 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
         circuit_mles
     }
 
+    /// Label the MLE indices of an expression, starting from the `start_index`.
     pub fn index_mle_indices(&mut self, start_index: usize) {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
@@ -620,7 +635,7 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
                 mles.iter_mut()
                     .for_each(|mle| mle.index_mle_indices(start_index));
             }
-            ExpressionNode::Scaled(a, scale_factor) => {
+            ExpressionNode::Scaled(a, _scale_factor) => {
                 a.index_mle_indices(start_index);
             }
             ExpressionNode::Negated(a) => {
@@ -971,6 +986,10 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
     }
 }
 
+/// Given a bookkeeping table, use the according prefix bits in order
+/// to filter it to the correct "view" that we want to see, assuming
+/// that the prefix bits are the most significant bits, and that
+/// the bookkeeping tables are stored in little endian.
 pub fn filter_bookkeeping_table<F: FieldExt>(
     bookkeeping_table: &MultilinearExtension<F>,
     unfiltered_prefix_bits: &[bool],
@@ -988,6 +1007,8 @@ pub fn filter_bookkeeping_table<F: FieldExt>(
     MultilinearExtension::new(filtered_table)
 }
 
+/// Evaluate the bookkeeping tables by applying the element-wise operation,
+/// which can either be addition or multiplication.
 fn evaluate_bookkeeping_tables_given_operation<F: FieldExt>(
     mle_bookkeeping_tables: &[&[F]],
     binary_operation: BinaryOperation,
