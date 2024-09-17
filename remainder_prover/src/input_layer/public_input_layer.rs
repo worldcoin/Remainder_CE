@@ -2,7 +2,6 @@
 
 use std::marker::PhantomData;
 
-use itertools::Itertools;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
@@ -12,10 +11,6 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
     layer::LayerId,
-    layouter::{
-        layouting::{CircuitDescriptionMap, CircuitMap},
-        nodes::circuit_inputs::{compile_inputs::combine_input_mles, InputLayerData},
-    },
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
@@ -35,6 +30,8 @@ pub struct PublicInputLayer<F: Field> {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(bound = "F: Field")]
+/// The circuit description of a [PublicInputLayer] which stores
+/// the shape information of this input layer.
 pub struct CircuitPublicInputLayer<F: Field> {
     layer_id: LayerId,
     num_bits: usize,
@@ -42,6 +39,9 @@ pub struct CircuitPublicInputLayer<F: Field> {
 }
 
 impl<F: Field> CircuitPublicInputLayer<F> {
+    /// Constructor for the [CircuitPublicInputLayer] using the layer_id
+    /// and the number of variables in the MLE we are storing in the
+    /// input layer.
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         Self {
             layer_id,
@@ -101,6 +101,8 @@ impl<F: Field> InputLayer<F> for PublicInputLayer<F> {
 }
 
 impl<F: Field> PublicInputLayer<F> {
+    /// Constructor for the [PublicInputLayer] using the MLE in the input
+    /// and the layer_id.
     pub fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
         Self { mle, layer_id }
     }

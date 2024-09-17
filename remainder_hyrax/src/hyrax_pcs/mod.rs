@@ -6,7 +6,9 @@ use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use ndarray::Array2;
 use rand::Rng;
+#[cfg(feature = "parallel")]
 use rayon::iter::IntoParallelIterator;
+#[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;

@@ -1,5 +1,4 @@
 use ark_std::cfg_into_iter;
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::Field;
 
 use crate::layer::Layer;
@@ -24,6 +23,8 @@ use crate::{
 use crate::mle::Mle;
 
 use super::{RegularLayer, VerifierRegularLayer};
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// A flag representing whether we are using the constant
 /// column optimization for claim aggregation.

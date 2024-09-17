@@ -6,7 +6,7 @@ use crate::layouter::nodes::Context;
 use ark_std::{end_timer, start_timer};
 
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
-use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
+use remainder_shared_types::transcript::{TranscriptReader, TranscriptWriter};
 use remainder_shared_types::Field;
 use serde_json;
 use std::fs::File;

@@ -27,7 +27,7 @@ use crate::{
     },
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, MleIndex},
+    mle::{betavalues::BetaValues, dense::DenseMle},
     sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
 };
 
@@ -37,6 +37,9 @@ use super::{
 };
 
 use super::{CircuitLayer, VerifierLayer};
+
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// The most common implementation of [crate::layer::Layer].
 ///
@@ -649,7 +652,7 @@ impl<F: Field> RegularLayer<F> {
             }
         };
 
-        self.expression.traverse(&mut observer_fn);
+        let _ = self.expression.traverse(&mut observer_fn);
 
         Ok(())
     }

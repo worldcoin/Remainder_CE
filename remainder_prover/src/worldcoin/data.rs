@@ -1,5 +1,3 @@
-use ark_std::cfg_into_iter;
-use ark_std::log2;
 use itertools::Itertools;
 use ndarray::{Array, Array2, Array3};
 use ndarray_npy::read_npy;
@@ -298,6 +296,8 @@ pub fn load_worldcoin_data<
     BASE,
     NUM_DIGITS,
 > {
+    dbg!(&constant_data_folder);
+    println!("Current directory: {:?}", std::env::current_dir().unwrap());
     let wirings: Array2<u16> = read_npy(&constant_data_folder.join("wirings.npy")).unwrap();
     assert_eq!(wirings.dim().1, 4);
 

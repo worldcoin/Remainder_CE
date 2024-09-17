@@ -1,16 +1,11 @@
-use itertools::{all, Itertools};
 use remainder_shared_types::Field;
 
 use crate::{
-    expression::{
-        abstract_expr::{calculate_selector_values, AbstractExpr},
-        generic_expr::Expression,
-    },
+    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     layouter::{
         component::Component,
         nodes::{sector::Sector, CircuitNode, Context},
     },
-    mle::evals::MultilinearExtension,
 };
 
 #[cfg(test)]

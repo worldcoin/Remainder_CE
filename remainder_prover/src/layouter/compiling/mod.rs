@@ -20,7 +20,7 @@ use crate::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
 use crate::layouter::nodes::CircuitNode;
 use crate::mle::evals::MultilinearExtension;
 use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
-use crate::output_layer::{CircuitOutputLayer, OutputLayer};
+use crate::output_layer::OutputLayer;
 use crate::prover::layers::Layers;
 use crate::prover::{GKRCircuitDescription, GKRError, InstantiatedCircuit};
 use crate::{layer::LayerId, layouter::layouting::layout};
@@ -68,15 +68,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         &mut self,
         component: C,
         ctx: Context,
-    ) -> Result<
-        (
-            GKRCircuitDescription<F>,
-            InputNodeMap,
-            InputLayerHintMap<F>,
-            CircuitDescriptionMap,
-        ),
-        GKRError,
-    > {
+    ) -> Result<(GKRCircuitDescription<F>, InputNodeMap, InputLayerHintMap<F>), GKRError> {
         let nodes = component.yield_nodes();
         let (input_nodes, verifier_challenge_nodes, intermediate_nodes, lookup_nodes, output_nodes) =
             layout(ctx, nodes).unwrap();
@@ -101,7 +93,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                     )
                     .unwrap();
                 input_node_to_layer_map
-                    .add_node(&input_circuit_description.layer_id(), &input_node.id());
+                    .add_node_layer_id(&input_circuit_description.layer_id(), &input_node.id());
                 input_circuit_description
             })
             .collect_vec();
@@ -152,8 +144,9 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             output_nodes
                 .iter()
                 .fold(output_layers, |mut output_layer_acc, output_node| {
-                    output_layer_acc
-                        .extend(output_node.compile_output(&mut circuit_description_map));
+                    output_layer_acc.extend(
+                        output_node.generate_circuit_description(&mut circuit_description_map),
+                    );
                     output_layer_acc
                 });
 
@@ -164,7 +157,6 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             circuit_description,
             input_node_to_layer_map,
             input_layer_hint_map,
-            circuit_description_map,
         ))
     }
 
@@ -174,7 +166,6 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         input_layer_to_node_map: InputNodeMap,
         input_layer_hint_map: InputLayerHintMap<F>,
         data_input_layers: Vec<InputLayerData<F>>,
-        circuit_description_map: &CircuitDescriptionMap,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> InstantiatedCircuit<F> {
         let GKRCircuitDescription {
@@ -242,7 +233,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             .iter()
             .for_each(|input_layer_description| {
                 let input_layer_id = input_layer_description.layer_id();
-                let maybe_input_node_id = input_layer_to_node_map.get_layer_id(&input_layer_id);
+                let maybe_input_node_id = input_layer_to_node_map.get_node_id(&input_layer_id);
                 if let Some(input_node_id) = maybe_input_node_id {
                     assert!(input_id_data_map.contains_key(input_node_id));
                     let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
@@ -397,7 +388,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         let ctx = Context::new();
         let (component, input_layer_data) = (self.witness_builder)(&ctx);
         // TODO(vishady): ADD CIRCUIT DESCRIPTION TO TRANSCRIPT (maybe not here...)
-        let (circuit_description, input_node_map, input_hint_map, circuit_description_map) =
+        let (circuit_description, input_node_map, input_hint_map) =
             self.generate_circuit_description(component, ctx).unwrap();
 
         let instantiated_circuit = self.populate_circuit(
@@ -405,7 +396,6 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             input_node_map,
             input_hint_map,
             input_layer_data,
-            &circuit_description_map,
             transcript_writer,
         );
 

@@ -1,12 +1,8 @@
-use itertools::Itertools;
 use remainder_shared_types::Field;
 
-use crate::{
-    layouter::{
-        component::Component,
-        nodes::{sector::Sector, CircuitNode, Context},
-    },
-    mle::evals::MultilinearExtension,
+use crate::layouter::{
+    component::Component,
+    nodes::{sector::Sector, CircuitNode, Context},
 };
 
 /// Calculates `matmult - thresholds`, making the result available as self.sector.

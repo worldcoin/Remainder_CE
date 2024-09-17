@@ -2,14 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use remainder_shared_types::{
-    transcript::{TranscriptSponge, TranscriptWriter},
-    Field,
-};
+use remainder_shared_types::Field;
 
 use crate::{
     claims::{wlx_eval::ClaimMle, YieldClaim},
-    expression::circuit_expr::CircuitMle,
     layer::{LayerError, LayerId},
     mle::Mle,
 };

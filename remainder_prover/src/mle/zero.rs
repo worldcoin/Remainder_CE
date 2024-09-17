@@ -1,7 +1,6 @@
 //! A space-efficient implementation of an [MleRef] which contains only zeros.
 
 use itertools::{repeat_n, Itertools};
-use remainder_shared_types::transcript::{TranscriptSponge, TranscriptWriter};
 use serde::{Deserialize, Serialize};
 
 use crate::claims::{wlx_eval::ClaimMle, Claim};

@@ -8,10 +8,8 @@ use remainder_ligero::poseidon_ligero::PoseidonSpongeHasher;
 use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 
 use crate::layer::regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION;
-use crate::layouter::layouting::{CircuitDescriptionMap, CircuitMap};
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
-use rayon::prelude::*;
 use remainder_shared_types::{transcript::TranscriptReaderError, Field};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -25,7 +23,7 @@ pub mod ligero_input_layer;
 /// An input layer which requires no commitment and is openly evaluated at the random point.
 pub mod public_input_layer;
 /// An input layer in order to generate random challenges for Fiat-Shamir.
-pub mod random_input_layer;
+pub mod verifier_challenge_input_layer;
 
 use crate::{
     claims::wlx_eval::get_num_wlx_evaluations, mle::mle_enum::MleEnum,
@@ -33,10 +31,16 @@ use crate::{
 };
 
 use ark_std::{end_timer, start_timer};
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 #[derive(Debug, Clone)]
+/// An enum for representing the different types of commitments for each type
+/// of input layer.
 pub enum CommitmentEnum<F: Field> {
+    /// The commitment for a [LigeroInputLayer].
     LigeroCommitment(LigeroCommit<PoseidonSpongeHasher<F>, F>),
+    /// The commitment for a [PublicInputLayer]
     PublicCommitment(Vec<F>),
 }
 
@@ -112,6 +116,7 @@ pub trait InputLayer<F: Field> {
     fn get_padded_mle(&self) -> DenseMle<F>;
 }
 
+/// The trait representing methods necessary for the circuit description of an input layer.
 pub trait CircuitInputLayer<F: Field> {
     /// The struct that contains the commitment to the contents of the input_layer.
     type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;

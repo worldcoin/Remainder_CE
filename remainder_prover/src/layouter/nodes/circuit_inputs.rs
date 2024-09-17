@@ -1,13 +1,12 @@
-//! Nodes that represent inputs to a circuit in the circuit DAG\
+//! Nodes that represent inputs to a circuit in the circuit DAG.
 
+/// The module which contains functions that combine input data in order
+/// to create one layerwise bookkeeping table.
 pub mod compile_inputs;
 
 use remainder_shared_types::Field;
 
-use crate::{
-    input_layer::CommitmentEnum,
-    mle::{dense::DenseMle, evals::MultilinearExtension},
-};
+use crate::{input_layer::CommitmentEnum, mle::evals::MultilinearExtension};
 
 use super::{CircuitNode, Context, NodeId};
 
@@ -15,12 +14,19 @@ use super::{CircuitNode, Context, NodeId};
 /// [GKRCircuitDescription] in order to generate a full circuit.
 #[derive(Debug, Clone)]
 pub struct InputLayerData<F: Field> {
+    /// The input node ID in the circuit building process that corresponds to
+    /// this data.
     pub corresponding_input_node_id: NodeId,
+    /// The vector of data that goes in this input layer, as [InputShredData].
     pub data: Vec<InputShredData<F>>,
+    /// An option that is None if this layer has no precommit, but otherwise
+    /// the precommit of this input layer.
     pub precommit: Option<CommitmentEnum<F>>,
 }
 
 impl<F: Field> InputLayerData<F> {
+    /// Constructor for [InputLayerData], using the corresponding fields as
+    /// parameters.
     pub fn new(
         corresponding_input_node_id: NodeId,
         data: Vec<InputShredData<F>>,
@@ -35,12 +41,16 @@ impl<F: Field> InputLayerData<F> {
 }
 
 #[derive(Debug, Clone)]
+/// A struct that represents data that corresponds to an [InputShred].
 pub struct InputShredData<F: Field> {
+    /// The corresponding input shred ID that this data belongs to.
     pub corresponding_input_shred_id: NodeId,
+    /// The data itself, as a [MultilinearExtension].
     pub data: MultilinearExtension<F>,
 }
 
 impl<F: Field> InputShredData<F> {
+    /// Constructor for [InputShredData], with the fields as parameters.
     pub fn new(corresponding_input_shred_id: NodeId, data: MultilinearExtension<F>) -> Self {
         Self {
             corresponding_input_shred_id,

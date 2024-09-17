@@ -61,7 +61,7 @@ impl<F: Field> CompilableNode<F> for SplitNode {
         _layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError> {
-        let (source_location, _) = circuit_description_map.get_node(&self.source)?;
+        let (source_location, _) = circuit_description_map.get_location_num_vars_from_node_id(&self.source)?;
 
         let prefix_bits = source_location
             .prefix_bits
@@ -72,7 +72,7 @@ impl<F: Field> CompilableNode<F> for SplitNode {
 
         let location = CircuitLocation::new(source_location.layer_id, prefix_bits);
 
-        circuit_description_map.add_node(self.id, (location, self.get_num_vars()));
+        circuit_description_map.add_node_id_and_location_num_vars(self.id, (location, self.get_num_vars()));
         Ok(vec![])
     }
 }

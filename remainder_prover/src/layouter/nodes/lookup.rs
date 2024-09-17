@@ -1,7 +1,5 @@
 //! Nodes that implement LogUp.
 
-use std::collections::HashMap;
-
 use crate::expression::abstract_expr::AbstractExpr;
 use crate::expression::circuit_expr::{CircuitExpr, CircuitMle};
 use crate::input_layer::enum_input_layer::CircuitInputLayerEnum;
@@ -128,6 +126,10 @@ impl LookupTable {
         self.constraints.push(constraint);
     }
 
+    /// Create the circuit description of a lookup node by returning
+    /// the corresponding input circuit descriptions, intermediate
+    /// circuit descriptions, and output circuit descriptions needed
+    /// in order to verify the lookup.
     pub fn generate_lookup_circuit_description<F: Field>(
         &self,
         input_layer_id: &mut LayerId,
@@ -161,7 +163,7 @@ impl LookupTable {
         println!("Build the LHS of the equation (defined by the constrained values)");
 
         let (verifier_challenge_location, verifier_challenge_node_vars) =
-            circuit_description_map.get_node(&self.random_node_id)?;
+            circuit_description_map.get_location_num_vars_from_node_id(&self.random_node_id)?;
 
         let verifier_challenge_mle_indices = get_total_mle_indices(
             &verifier_challenge_location.prefix_bits,

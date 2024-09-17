@@ -1,19 +1,13 @@
 //! Traits and implementations for GKR Output Layers.
 
 use remainder_shared_types::{
-    transcript::{
-        ProverTranscript, TranscriptReader, TranscriptReaderError, TranscriptSponge,
-        TranscriptWriter, VerifierTranscript,
-    },
+    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
     Field,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{
-    expression::{generic_expr::Expression, verifier_expr::VerifierExpr},
-    layer::{LayerError, LayerId},
-};
+use crate::layer::{LayerError, LayerId};
 
 // The default implementation of an Output layer which is an MLE.
 pub mod mle_output_layer;

@@ -1,11 +1,7 @@
 //! Module for components that can be used to build a circuit.
-use itertools::Itertools;
 use remainder_shared_types::Field;
 
-use crate::{
-    layouter::nodes::{sector::Sector, CircuitNode, Context},
-    mle::evals::MultilinearExtension,
-};
+use crate::layouter::nodes::{sector::Sector, CircuitNode, Context};
 
 /// Use this component to check if the values of two ClaimableNodes are equal, by adding self.sector
 /// to the circuit as an output layer.

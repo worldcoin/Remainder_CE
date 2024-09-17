@@ -11,14 +11,15 @@ use crate::mle::{
 use ark_std::log2;
 use ark_std::{cfg_into_iter, cfg_iter_mut};
 use itertools::{repeat_n, Itertools};
-use rayon::{
-    iter::{IntoParallelIterator, IntoParallelRefMutIterator},
-    prelude::{IndexedParallelIterator, ParallelIterator},
-};
+
 use remainder_shared_types::Field;
 use thiserror::Error;
 
 use super::LayerId;
+#[cfg(feature = "parallel")]
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
+};
 
 /// Error handling for gate mle construction
 #[derive(Error, Debug, Clone)]

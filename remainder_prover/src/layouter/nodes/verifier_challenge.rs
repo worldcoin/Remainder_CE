@@ -1,9 +1,11 @@
+//! A verifier challenge node, the node representing when the
+//! verifier has to send challenges to the prover.
 use ark_std::log2;
 
 use remainder_shared_types::Field;
 
 use crate::{
-    input_layer::random_input_layer::CircuitVerifierChallengeInputLayer,
+    input_layer::verifier_challenge_input_layer::CircuitVerifierChallengeInputLayer,
     layer::LayerId,
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation},
 };
@@ -14,7 +16,6 @@ use super::{CircuitNode, Context, NodeId};
 /// The node representing the random challenge that the verifier supplies via Fiat-Shamir.
 pub struct VerifierChallengeNode {
     id: NodeId,
-    num_challenges: usize,
     num_vars: usize,
 }
 
@@ -37,14 +38,16 @@ impl CircuitNode for VerifierChallengeNode {
 }
 
 impl VerifierChallengeNode {
+    /// Constructor for a [VerifierChallengeNode].
     pub fn new(ctx: &Context, num_challenges: usize) -> Self {
         Self {
             id: ctx.get_new_id(),
-            num_challenges,
             num_vars: log2(num_challenges) as usize,
         }
     }
 
+    /// Generate a [CircuitVerifierChallengeInputLayer], which is the
+    /// circuit description for a [VerifierChallengeNode].
     pub fn generate_circuit_description<F: Field>(
         &self,
         layer_id: &mut LayerId,
@@ -57,7 +60,7 @@ impl VerifierChallengeNode {
             self.get_num_vars(),
         );
 
-        circuit_description_map.add_node(
+        circuit_description_map.add_node_id_and_location_num_vars(
             self.id,
             (
                 CircuitLocation::new(verifier_challenge_layer_id, vec![]),

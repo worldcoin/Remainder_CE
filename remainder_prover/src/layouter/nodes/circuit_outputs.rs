@@ -16,7 +16,7 @@ use super::{CircuitNode, Context, NodeId};
 pub struct OutputNode {
     id: NodeId,
     source: NodeId,
-    zero: bool,
+    _zero: bool,
 }
 
 impl CircuitNode for OutputNode {
@@ -39,7 +39,7 @@ impl OutputNode {
         Self {
             id: ctx.get_new_id(),
             source: source.id(),
-            zero: false,
+            _zero: false,
         }
     }
 
@@ -48,15 +48,18 @@ impl OutputNode {
         Self {
             id: ctx.get_new_id(),
             source: source.id(),
-            zero: true,
+            _zero: true,
         }
     }
 
-    pub fn compile_output<F: Field>(
+    /// Using the [CircuitDescriptionMap], create a [CircuitMleOutputLayer] which
+    /// represents the circuit description of an [OutputNode].
+    pub fn generate_circuit_description<F: Field>(
         &self,
         circuit_map: &mut CircuitDescriptionMap,
     ) -> Result<CircuitMleOutputLayer<F>, crate::layouter::layouting::DAGError> {
-        let (circuit_location, num_vars) = circuit_map.get_node(&self.source)?;
+        let (circuit_location, num_vars) =
+            circuit_map.get_location_num_vars_from_node_id(&self.source)?;
 
         let CircuitLocation {
             prefix_bits,

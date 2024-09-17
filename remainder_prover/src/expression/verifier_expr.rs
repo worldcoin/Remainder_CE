@@ -1,22 +1,11 @@
-use crate::{
-    layer::{
-        product::{PostSumcheckLayer, Product},
-        LayerId,
-    },
-    mle::MleIndex,
-};
-use ndarray::SliceInfoElem;
+use crate::{layer::LayerId, mle::MleIndex};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
 };
-use thiserror::Error;
 
-use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge},
-    Field,
-};
+use remainder_shared_types::Field;
 
 use super::{
     expr_errors::ExpressionError,
@@ -41,6 +30,9 @@ pub struct VerifierMle<F: Field> {
 }
 
 impl<F: Field> VerifierMle<F> {
+    /// Constructor for the [VerifierMle] using layer_id and the
+    /// MLE indices that will go into this MLE. Additionally includes
+    /// the eval, which is the evaluation of the fully bound MLE.
     pub fn new(layer_id: LayerId, var_indices: Vec<MleIndex<F>>, eval: F) -> Self {
         Self {
             layer_id,
@@ -49,18 +41,22 @@ impl<F: Field> VerifierMle<F> {
         }
     }
 
+    /// Returns the layer_id of this MLE.
     pub fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 
+    /// Returns the num_vars of this MLE.
     pub fn num_vars(&self) -> usize {
         self.var_indices.len()
     }
 
+    /// Returns the MLE indices of this MLE.
     pub fn mle_indices(&self) -> &[MleIndex<F>] {
         &self.var_indices
     }
 
+    /// Returns the fully bound value of this MLE.
     pub fn value(&self) -> F {
         self.eval
     }

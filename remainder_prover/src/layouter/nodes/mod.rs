@@ -4,16 +4,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 pub use itertools::Either;
-use remainder_shared_types::transcript::ProverTranscript;
 pub use remainder_shared_types::{Field, Fr};
 use serde::{Deserialize, Serialize};
 
 use crate::expression::{abstract_expr::AbstractExpr, generic_expr::Expression};
-use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::layer::layer_enum::CircuitLayerEnum;
 use crate::layer::LayerId;
 
-use super::layouting::{CircuitDescriptionMap, CircuitMap, DAGError};
+use super::layouting::{CircuitDescriptionMap, DAGError};
 
 pub mod circuit_inputs;
 pub mod circuit_outputs;
@@ -89,6 +87,7 @@ pub trait CircuitNode {
     /// directed edges of the DAG that terminate at this node.
     fn sources(&self) -> Vec<NodeId>;
 
+    /// Get the number of variables used to represent the data in this node.
     fn get_num_vars(&self) -> usize;
 }
 
@@ -96,6 +95,8 @@ pub trait CircuitNode {
 ///
 /// Implement this for any node that does not need additional Layingout before compilation
 pub trait CompilableNode<F: Field>: CircuitNode {
+    /// Generate the circuit description of a node, which represents the
+    /// shape of a certain layer.
     fn generate_circuit_description<'a>(
         &'a self,
         layer_id: &mut LayerId,

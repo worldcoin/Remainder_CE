@@ -12,8 +12,7 @@ use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::verifier_challenge::VerifierChallengeNode;
 use crate::layouter::nodes::{CircuitNode, Context};
 use crate::mle::bundled_input_mle::BundledInputMle;
-use crate::utils::pad_to_nearest_power_of_two;
-use crate::utils::{get_input_shred_and_data_from_vec, get_input_shred_from_num_vars};
+use crate::utils::get_input_shred_and_data_from_vec;
 use crate::worldcoin::components::Subtractor;
 
 use itertools::Itertools;

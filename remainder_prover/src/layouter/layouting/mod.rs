@@ -8,15 +8,12 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use itertools::Itertools;
 use remainder_shared_types::Field;
 use thiserror::Error;
-use utils::is_subset;
 
 use crate::{
     expression::circuit_expr::CircuitMle,
-    input_layer::enum_input_layer::InputLayerEnum,
-    layer::{layer_enum::LayerEnum, LayerId},
+    layer::LayerId,
     layouter::nodes::sector::{Sector, SectorGroup},
-    mle::{evals::MultilinearExtension, mle_enum::MleEnum},
-    output_layer::mle_output_layer::MleOutputLayer,
+    mle::evals::MultilinearExtension,
 };
 
 use super::nodes::{
@@ -32,9 +29,7 @@ use super::nodes::{
     CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode,
 };
 
-pub mod utils;
-
-/// A HashMap that records during circuit compilation where nodes live in the circuit and what data they yield
+/// A HashMap that records during circuit compilation where nodes live in the circuit and what data they yield.
 #[derive(Debug)]
 pub struct CircuitMap<F>(pub(crate) HashMap<CircuitLocation, MultilinearExtension<F>>);
 
@@ -43,6 +38,8 @@ impl<F: Field> CircuitMap<F> {
         Self(HashMap::new())
     }
 
+    /// Using the circuit location, which is a layer_id and prefix_bits tuple,
+    /// get the data that exists here.
     pub fn get_data_from_location(
         &self,
         circuit_location: &CircuitLocation,
@@ -50,6 +47,7 @@ impl<F: Field> CircuitMap<F> {
         self.0.get(&circuit_location)
     }
 
+    /// An alias to [get_data_from_location] above,
     pub fn get_data_from_circuit_mle(
         &self,
         circuit_mle: &CircuitMle<F>,
@@ -77,6 +75,9 @@ impl<F: Field> CircuitMap<F> {
 }
 
 #[derive(Debug)]
+/// A HashMap that associates the node ID to a tuple which contains the
+/// circuit location of that node, and the "shape" of that node, which
+/// is basically the number of variables of that MLE.
 pub struct CircuitDescriptionMap(pub(crate) HashMap<NodeId, (CircuitLocation, usize)>);
 
 impl CircuitDescriptionMap {
@@ -84,16 +85,29 @@ impl CircuitDescriptionMap {
         Self(HashMap::new())
     }
 
-    pub fn get_node(&self, node: &NodeId) -> Result<&(CircuitLocation, usize), DAGError> {
+    /// Using the node ID, retrieve the number of variables
+    /// and location of this node in the circuit.
+    pub fn get_location_num_vars_from_node_id(
+        &self,
+        node: &NodeId,
+    ) -> Result<&(CircuitLocation, usize), DAGError> {
         self.0.get(node).ok_or(DAGError::DanglingNodeId(*node))
     }
 
-    pub fn add_node(&mut self, node: NodeId, value: (CircuitLocation, usize)) {
+    /// Add a node ID and its corresponding circuit location
+    /// as well as number of variables to the hash map.
+    pub fn add_node_id_and_location_num_vars(
+        &mut self,
+        node: NodeId,
+        value: (CircuitLocation, usize),
+    ) {
         self.0.insert(node, value);
     }
 }
 
 #[derive(Debug)]
+/// A HashMap that maps layer ID to node ID, used specifically to associate
+/// input layer nodes to input layer IDs for circuit creation.
 pub struct InputNodeMap(pub(crate) HashMap<LayerId, NodeId>);
 
 impl InputNodeMap {
@@ -101,15 +115,19 @@ impl InputNodeMap {
         Self(HashMap::new())
     }
 
-    pub fn get_layer_id(&self, layer_id: &LayerId) -> Option<&NodeId> {
+    /// Get the node ID from a layer ID.
+    pub fn get_node_id(&self, layer_id: &LayerId) -> Option<&NodeId> {
         self.0.get(layer_id)
     }
 
-    pub fn add_node(&mut self, layer_id: &LayerId, node_id: &NodeId) {
+    /// Add a layer ID, node ID correspondence to the map.
+    pub fn add_node_layer_id(&mut self, layer_id: &LayerId, node_id: &NodeId) {
         self.0.insert(*layer_id, *node_id);
     }
 }
 
+/// A HashMap that maps a circuit location to the function that should
+/// be used on a MLE in order to generate its data.
 pub struct InputLayerHintMap<F: Field>(
     pub(crate)  HashMap<
         LayerId,
@@ -125,6 +143,8 @@ impl<F: Field> InputLayerHintMap<F> {
         Self(HashMap::new())
     }
 
+    /// Given a layer ID, get the hint function that generates
+    /// the data for this layer.
     pub fn get_hint_function(
         &self,
         layer_id: &LayerId,
@@ -135,6 +155,8 @@ impl<F: Field> InputLayerHintMap<F> {
         self.0.get(layer_id).unwrap()
     }
 
+    /// Add a corresponding hint function to a layer in the circuit,
+    /// given its layer ID.
     pub fn add_hint_function(
         &mut self,
         layer_id: &LayerId,

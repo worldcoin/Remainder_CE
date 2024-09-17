@@ -10,7 +10,6 @@ use std::{cmp::max, collections::HashSet};
 use ark_std::cfg_into_iter;
 use gate_helpers::bind_round_gate;
 use itertools::Itertools;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
@@ -43,6 +42,9 @@ use super::{
     layer_enum::{LayerEnum, VerifierLayerEnum},
     CircuitLayer, VerifierLayer,
 };
+
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug, Copy)]
 

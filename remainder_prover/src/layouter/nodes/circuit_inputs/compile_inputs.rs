@@ -1,26 +1,23 @@
-use std::collections::HashMap;
-
 use ark_std::log2;
 use itertools::Itertools;
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::Field;
 
 use crate::{
-    expression::circuit_expr::CircuitMle,
     input_layer::{
         enum_input_layer::CircuitInputLayerEnum, ligero_input_layer::CircuitLigeroInputLayer,
         public_input_layer::CircuitPublicInputLayer,
     },
     layer::LayerId,
     layouter::{
-        layouting::{CircuitDescriptionMap, CircuitLocation, CircuitMap, DAGError},
-        nodes::{CircuitNode, NodeId},
+        layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
+        nodes::CircuitNode,
     },
     mle::evals::{Evaluations, MultilinearExtension},
     utils::mle::{argsort, pad_to_nearest_power_of_two},
 };
 
-use super::{InputLayerData, InputLayerNode, InputLayerType};
+use super::{InputLayerNode, InputLayerType};
 
 /// Function which returns a vector of `MleIndex::Fixed` for prefix bits according to which
 /// position we are in the range from 0 to `total_num_bits` - `num_iterated_bits`.
@@ -148,6 +145,8 @@ fn invert_mle_bookkeeping_table<F: Field>(bookkeeping_table: Vec<F>) -> Vec<F> {
 }
 
 impl InputLayerNode {
+    /// From the circuit description map and a starting layer id,
+    /// create the circuit description of an input layer.
     pub fn generate_input_circuit_description<F: Field>(
         &self,
         layer_id: &mut LayerId,
@@ -199,7 +198,7 @@ impl InputLayerNode {
             .zip(prefix_bits)
             .for_each(|(input_shred_index, prefix_bits)| {
                 let input_shred = &children[*input_shred_index];
-                circuit_description_map.add_node(
+                circuit_description_map.add_node_id_and_location_num_vars(
                     input_shred.id,
                     (
                         CircuitLocation::new(input_layer_id, prefix_bits),

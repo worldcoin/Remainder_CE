@@ -2,7 +2,6 @@
 
 use ark_std::{cfg_into_iter, end_timer, start_timer};
 use itertools::Itertools;
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
     transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
     Field,
@@ -23,6 +22,8 @@ use crate::{
 };
 
 use super::{claim_group::ClaimGroup, evaluate_at_a_point, YieldWLXEvals};
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// Performs claim aggregation on the prover side.
 /// * `claims`: a group of claims, all on the same layer (same `to_layer_id`),

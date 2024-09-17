@@ -9,13 +9,13 @@ use crate::{
 use ark_std::iterable::Iterable;
 use itertools::Itertools;
 use rand::Rng;
+use remainder::claims::wlx_eval::claim_group::ClaimGroup;
 use remainder::layer::combine_mle_refs::get_og_mle_refs;
 use remainder::layer::product::{new_with_values, Product};
 use remainder::layer::product::{Intermediate, PostSumcheckLayer};
 use remainder::layer::Layer;
 use remainder::layer::LayerId;
 use remainder::mle::mle_enum::MleEnum;
-use remainder::{claims::wlx_eval::claim_group::ClaimGroup, layer::layer_enum::CircuitLayerEnum};
 use remainder::{claims::wlx_eval::ClaimMle, layer::CircuitLayer};
 use remainder::{claims::wlx_eval::YieldWLXEvals, layer::layer_enum::LayerEnum};
 use remainder_shared_types::curves::PrimeOrderCurve;
@@ -249,7 +249,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // made on that layer, we take the max of the number of variables in the expression and
         // the number of variables in the beta table.
         let num_sumcheck_rounds_expected = layer_desc.sumcheck_round_indices().len();
-        let sumcheck_round_indices = layer_desc.sumcheck_round_indices();
+        let _sumcheck_round_indices = layer_desc.sumcheck_round_indices();
 
         // Verify the proof of sumcheck
         // Add first sumcheck message to transcript, which is the proported sum.

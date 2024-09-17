@@ -3,6 +3,7 @@ pub mod tests;
 
 mod helpers;
 
+/// The module which performs claim aggregation algorithms.
 pub mod claim_group;
 use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 use remainder_shared_types::Field;

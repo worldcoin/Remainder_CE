@@ -62,12 +62,15 @@ pub mod abstract_expr;
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
 pub mod prover_expr;
 
+/// The circuit expression type, in the life cycle of an expression,
+/// this is the shape of the expression which is used to generate
+/// the circuit description.
+pub mod circuit_expr;
+
 /// the verifier expression type, in the life cycle of an expression,
 /// this is what the verifier manipulates to verify the correctness of the computation.
 /// Methods here include ones to gather and combine (claimed) evaluations of Mles.
 /// The verifier will verfity that these evaluations are correct using the GKR protocol.
-pub mod circuit_expr;
-
 pub mod verifier_expr;
 
 /// where the errors for the expression module are defined

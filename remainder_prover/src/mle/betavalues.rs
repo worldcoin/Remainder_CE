@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::layer::LayerId;
 
 use super::{dense::DenseMle, MleIndex};
+#[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// A struct that holds the claim and the relevant bound values for the beta

@@ -244,7 +244,7 @@ fn compile_layer<'a, F: Field>(
             .filter(|item| item.id == node_id)
             .collect_vec()[0]
             .get_num_vars();
-        circuit_description_map.add_node(
+        circuit_description_map.add_node_id_and_location_num_vars(
             node_id,
             (
                 CircuitLocation::new(regular_layer_id, prefix_bits),
@@ -296,14 +296,14 @@ mod tests {
 
         let sector_group = SectorGroup::new(&ctx, vec![sector_1, sector_2, sector_out]);
         let mut circuit_description_map = CircuitDescriptionMap::new();
-        circuit_description_map.add_node(
+        circuit_description_map.add_node_id_and_location_num_vars(
             input_shred_1.id(),
             (
                 CircuitLocation::new(LayerId::Input(0), vec![]),
                 input_shred_1.get_num_vars(),
             ),
         );
-        circuit_description_map.add_node(
+        circuit_description_map.add_node_id_and_location_num_vars(
             input_shred_2.id(),
             (
                 CircuitLocation::new(LayerId::Input(1), vec![]),

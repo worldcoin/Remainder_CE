@@ -83,7 +83,8 @@ impl<F: Field> CompilableNode<F> for GateNode {
         layer_id: &mut LayerId,
         circuit_description_map: &mut crate::layouter::layouting::CircuitDescriptionMap,
     ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError> {
-        let (lhs_location, lhs_num_vars) = circuit_description_map.get_node(&self.lhs)?;
+        let (lhs_location, lhs_num_vars) =
+            circuit_description_map.get_location_num_vars_from_node_id(&self.lhs)?;
         let total_indices = lhs_location
             .prefix_bits
             .iter()
@@ -92,7 +93,8 @@ impl<F: Field> CompilableNode<F> for GateNode {
             .collect_vec();
         let lhs_circuit_mle = CircuitMle::new(lhs_location.layer_id, &total_indices);
 
-        let (rhs_location, rhs_num_vars) = circuit_description_map.get_node(&self.rhs)?;
+        let (rhs_location, rhs_num_vars) =
+            circuit_description_map.get_location_num_vars_from_node_id(&self.rhs)?;
         let total_indices = rhs_location
             .prefix_bits
             .iter()
@@ -110,7 +112,7 @@ impl<F: Field> CompilableNode<F> for GateNode {
             gate_layer_id,
             self.gate_operation,
         );
-        circuit_description_map.add_node(
+        circuit_description_map.add_node_id_and_location_num_vars(
             self.id,
             (
                 CircuitLocation::new(gate_layer_id, vec![]),

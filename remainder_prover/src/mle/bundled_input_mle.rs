@@ -12,7 +12,6 @@ use crate::{
 use super::{
     dense::DenseMle,
     evals::{Evaluations, MultilinearExtension},
-    MleIndex,
 };
 
 use itertools::Itertools;

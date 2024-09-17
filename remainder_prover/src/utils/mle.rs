@@ -2,23 +2,14 @@
 
 use std::{fs, iter::repeat_with};
 
-use ark_std::{log2, test_rng};
+use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
-use remainder_shared_types::{Field, Fr, Poseidon};
+use remainder_shared_types::Field;
 
 use crate::{
-    layer::{layer_enum::LayerEnum, LayerId},
-    layouter::nodes::{
-        circuit_inputs::{InputLayerNode, InputShred, InputShredData},
-        Context,
-    },
-    mle::{
-        dense::DenseMle,
-        evals::{Evaluations, MultilinearExtension},
-        MleIndex,
-    },
-    prover::layers::Layers,
+    layer::LayerId,
+    mle::{dense::DenseMle, MleIndex},
 };
 
 /// Return a vector containing a padded version of the input data, with the padding value at the end

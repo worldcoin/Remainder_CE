@@ -1,6 +1,5 @@
 use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
-use ark_std::log2;
 use rand::Rng;
 use remainder::layer::LayerId;
 use remainder_shared_types::curves::PrimeOrderCurve;
@@ -143,21 +142,12 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
             .iter()
             .enumerate()
             .for_each(|(i, commit)| {
-                let x_label = format!("coeff {}, x-coord", i);
-                let y_label = format!("coeff {}, y-coord", i);
-
                 let label = format!("coeff {}", i);
 
                 let transcript_commit = transcript
                     .consume_ec_point(Box::leak(label.into_boxed_str()))
                     .unwrap();
                 assert_eq!(*commit, transcript_commit);
-                // append_x_y_to_transcript_single(
-                //     commit,
-                //     transcript,
-                //     Box::leak(x_label.into_boxed_str()),
-                //     Box::leak(y_label.into_boxed_str()),
-                // );
             });
 
         // Verify the proofs of opening for coefficients of the interpolating polynomial

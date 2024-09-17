@@ -1,17 +1,15 @@
 //! A Module for adding `Matmult` Layers to components
 
-use ark_std::log2;
 use remainder_shared_types::Field;
 
 use crate::{
     expression::circuit_expr::CircuitMle,
     layer::{
         layer_enum::CircuitLayerEnum,
-        matmult::{CircuitMatMultLayer, CircuitMatrix, Matrix},
+        matmult::{CircuitMatMultLayer, CircuitMatrix},
         LayerId,
     },
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
-    mle::{dense::DenseMle, evals::MultilinearExtension},
     utils::get_total_mle_indices,
 };
 
@@ -72,7 +70,7 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError> {
         let (matrix_a_location, matrix_a_num_vars) =
-            circuit_description_map.get_node(&self.matrix_a)?;
+            circuit_description_map.get_location_num_vars_from_node_id(&self.matrix_a)?;
 
         let mle_a_indices =
             get_total_mle_indices(&matrix_a_location.prefix_bits, *matrix_a_num_vars);
@@ -85,7 +83,7 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
             self.rows_cols_num_vars_a.1,
         );
         let (matrix_b_location, matrix_b_num_vars) =
-            circuit_description_map.get_node(&self.matrix_b)?;
+            circuit_description_map.get_location_num_vars_from_node_id(&self.matrix_b)?;
         let mle_b_indices =
             get_total_mle_indices(&matrix_b_location.prefix_bits, *matrix_b_num_vars);
         let circuit_mle_b = CircuitMle::new(matrix_b_location.layer_id.clone(), &mle_b_indices);
@@ -99,7 +97,7 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
 
         let matmult_layer_id = layer_id.get_and_inc();
         let matmult_layer = CircuitMatMultLayer::new(matmult_layer_id, matrix_a, matrix_b);
-        circuit_description_map.add_node(
+        circuit_description_map.add_node_id_and_location_num_vars(
             self.id,
             (
                 CircuitLocation::new(matmult_layer_id, vec![]),
@@ -118,10 +116,6 @@ mod test {
 
     use crate::{
         expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-        layer::{
-            matmult::{product_two_matrices, Matrix},
-            LayerId,
-        },
         layouter::{
             compiling::LayouterCircuit,
             component::ComponentSet,
@@ -135,7 +129,7 @@ mod test {
                 CircuitNode,
             },
         },
-        mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
+        mle::evals::MultilinearExtension,
         prover::helpers::test_circuit,
     };
 

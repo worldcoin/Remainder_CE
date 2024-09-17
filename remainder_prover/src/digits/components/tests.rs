@@ -261,7 +261,7 @@ fn test_bits_are_binary_soundness() {
             get_input_shred_and_data_from_vec(bits.clone(), ctx, &input_layer);
         let component = BitsAreBinary::new(ctx, &shred);
         let output = OutputNode::new_zero(ctx, &component.sector);
-        let mut input_shred_data = vec![shred_data];
+        let input_shred_data = vec![shred_data];
         let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
         let all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
@@ -291,7 +291,7 @@ fn test_bits_are_binary() {
             get_input_shred_and_data_from_vec(bits.clone(), ctx, &input_layer);
         let component = BitsAreBinary::new(ctx, &shred);
         let output = OutputNode::new_zero(ctx, &component.sector);
-        let mut input_shred_data = vec![shred_data];
+        let input_shred_data = vec![shred_data];
         let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
         let all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),

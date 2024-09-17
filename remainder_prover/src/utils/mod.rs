@@ -27,14 +27,12 @@ use crate::{
         circuit_inputs::{InputLayerNode, InputShred, InputShredData},
         CircuitNode, Context,
     },
-    mle::{
-        dense::DenseMle,
-        evals::{Evaluations, MultilinearExtension},
-        MleIndex,
-    },
+    mle::{dense::DenseMle, evals::MultilinearExtension, MleIndex},
     prover::layers::Layers,
 };
 
+/// Using the number of variables, get an input shred that represents
+/// this information.
 pub fn get_input_shred_from_num_vars(
     num_vars: usize,
     ctx: &Context,
@@ -43,6 +41,9 @@ pub fn get_input_shred_from_num_vars(
     InputShred::new(ctx, num_vars, input_node)
 }
 
+/// Using a data vector, get an [InputShred] which represents its
+/// shape, along with [InputShredData] which represents the
+/// corresponding data.
 pub fn get_input_shred_and_data_from_vec<F: Field>(
     mle_vec: Vec<F>,
     ctx: &Context,
@@ -142,38 +143,6 @@ pub fn get_dummy_random_mle_vec<F: Field>(
             DenseMle::new_from_raw(mle_vec, LayerId::Input(0))
         })
         .collect_vec()
-}
-
-///returns an iterator that wil give permutations of binary bits of size
-/// num_bits
-///
-/// 0,0,0 -> 0,0,1 -> 0,1,0 -> 0,1,1 -> 1,0,0 -> 1,0,1 -> 1,1,0 -> 1,1,1
-pub(crate) fn bits_iter<F: Field>(num_bits: usize) -> impl Iterator<Item = Vec<MleIndex<F>>> {
-    std::iter::successors(
-        Some(vec![MleIndex::<F>::Fixed(false); num_bits]),
-        move |prev| {
-            let mut prev = prev.clone();
-            let mut removed_bits = 0;
-            for index in (0..num_bits).rev() {
-                let curr = prev.remove(index);
-                if curr == MleIndex::Fixed(false) {
-                    prev.push(MleIndex::Fixed(true));
-                    break;
-                } else {
-                    removed_bits += 1;
-                }
-            }
-            if removed_bits == num_bits {
-                None
-            } else {
-                Some(
-                    prev.into_iter()
-                        .chain(repeat_n(MleIndex::Fixed(false), removed_bits))
-                        .collect_vec(),
-                )
-            }
-        },
-    )
 }
 
 /// Returns the total MLE indices given a Vec<bool>

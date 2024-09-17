@@ -1,37 +1,36 @@
-use std::convert;
-use std::{collections::HashMap, marker::PhantomData};
+// use std::convert;
+// use std::{collections::HashMap, marker::PhantomData};
 
-use crate::pedersen::{CommittedScalar, PedersenCommitter};
-use crate::utils::vandermonde::VandermondeInverse;
-use ark_std::{end_timer, start_timer};
-use hyrax_input_layer::{
-    verify_public_and_random_input_layer, CommitmentEnum, HyraxCircuitInputLayerEnum,
-    HyraxInputLayer, HyraxInputLayerProof, InputProofEnum,
-};
-use hyrax_layer::HyraxClaim;
-use hyrax_output_layer::HyraxOutputLayerProof;
-use itertools::Itertools;
-use rand::Rng;
-use remainder::input_layer::InputLayer;
-use remainder::layer::layer_enum::LayerEnum;
-use remainder::layer::{CircuitLayer, Layer};
-use remainder::layouter::compiling::LayouterCircuit;
-use remainder::layouter::component::ComponentSet;
-use remainder::layouter::nodes::node_enum::NodeEnum;
-use remainder::layouter::nodes::Context;
-use remainder::mle::Mle;
-use remainder::prover::proof_system::DefaultProofSystem;
-use remainder::prover::{GKRCircuit, GKRCircuitDescription, InstantiatedCircuit};
-use remainder::{
-    claims::wlx_eval::ClaimMle, input_layer::enum_input_layer::InputLayerEnum, layer::LayerId,
-};
+// use crate::pedersen::{CommittedScalar, PedersenCommitter};
+// use crate::utils::vandermonde::VandermondeInverse;
+// use ark_std::{end_timer, start_timer};
+// use hyrax_input_layer::{
+//     verify_public_and_random_input_layer, CommitmentEnum, HyraxCircuitInputLayerEnum,
+//     HyraxInputLayer, HyraxInputLayerProof, InputProofEnum,
+// };
+// use hyrax_layer::HyraxClaim;
+// use hyrax_output_layer::HyraxOutputLayerProof;
+// use itertools::Itertools;
+// use rand::Rng;
+// use remainder::input_layer::InputLayer;
+// use remainder::layer::layer_enum::LayerEnum;
+// use remainder::layer::{CircuitLayer, Layer};
+// use remainder::layouter::compiling::LayouterCircuit;
+// use remainder::layouter::component::ComponentSet;
+// use remainder::layouter::nodes::node_enum::NodeEnum;
+// use remainder::layouter::nodes::Context;
+// use remainder::mle::Mle;
+// use remainder::prover::{GKRCircuitDescription, InstantiatedCircuit};
+// use remainder::{
+//     claims::wlx_eval::ClaimMle, input_layer::enum_input_layer::InputLayerEnum, layer::LayerId,
+// };
 
-use remainder_shared_types::{
-    curves::PrimeOrderCurve,
-    transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
-};
+// use remainder_shared_types::{
+//     curves::PrimeOrderCurve,
+//     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
+// };
 
-use self::{hyrax_layer::HyraxLayerProof, hyrax_output_layer::HyraxOutputLayer};
+// use self::{hyrax_layer::HyraxLayerProof, hyrax_output_layer::HyraxOutputLayer};
 
 /// The module that contains all functions necessary to do operations on an
 /// output layer, [HyraxInputLayer]

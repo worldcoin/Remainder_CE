@@ -5,7 +5,6 @@ use std::collections::HashSet;
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -42,6 +41,9 @@ use super::{
     CircuitLayer, Layer, LayerId, VerifierLayer,
 };
 
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
+
 /// The Circuit Description for an [IdentityGate].
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: Field")]
@@ -60,6 +62,8 @@ pub struct CircuitIdentityGateLayer<F: Field> {
 }
 
 impl<F: Field> CircuitIdentityGateLayer<F> {
+    /// Constructor for the [CircuitIdentityGateLayer] using the gate wiring, the source mle
+    /// for the rerouting, and the layer_id.
     pub fn new(id: LayerId, wiring: Vec<(usize, usize)>, source_mle: CircuitMle<F>) -> Self {
         Self {
             id,
@@ -459,7 +463,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
-        claim_challenges: &[F],
+        _claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F> {
         let [_, mle_ref] = self.phase_1_mles.as_ref().unwrap();
         let beta_u = BetaValues::new_beta_equality_mle(round_challenges.to_vec());

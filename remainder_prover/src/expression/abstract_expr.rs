@@ -11,19 +11,17 @@ use std::{
 use remainder_shared_types::Field;
 
 use crate::{
-    expression,
     layouter::{
-        layouting::{CircuitDescriptionMap, CircuitLocation, CircuitMap, DAGError},
+        layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
         nodes::NodeId,
     },
-    mle::{dense::DenseMle, MleIndex},
+    mle::MleIndex,
     utils::get_total_mle_indices,
 };
 
 use super::{
     circuit_expr::{CircuitExpr, CircuitMle},
     generic_expr::{Expression, ExpressionNode, ExpressionType},
-    prover_expr::{MleVecIndex, ProverExpr},
 };
 
 /// Abstract Expression
@@ -64,6 +62,9 @@ impl<F: Field> Expression<F, AbstractExpr> {
         self.expression_node.get_num_vars(num_vars_map)
     }
 
+    /// Convert the abstract expression into a circuit expression, which
+    /// stores information on the shape of the expression, using the
+    /// [CircuitDescriptionMap].
     pub fn build_circuit_expr(
         self,
         circuit_description_map: &CircuitDescriptionMap,
@@ -75,8 +76,10 @@ impl<F: Field> Expression<F, AbstractExpr> {
 
         let mut node_map = HashMap::<NodeId, (usize, &CircuitLocation)>::new();
 
-        nodes.into_iter().enumerate().for_each(|(idx, node_id)| {
-            let (location, num_vars) = circuit_description_map.get_node(&node_id).unwrap();
+        nodes.into_iter().enumerate().for_each(|(_idx, node_id)| {
+            let (location, num_vars) = circuit_description_map
+                .get_location_num_vars_from_node_id(&node_id)
+                .unwrap();
             node_map.insert(node_id, (*num_vars, location));
         });
 
@@ -187,56 +190,6 @@ impl<F: Field> Expression<F, AbstractExpr> {
 }
 
 impl<F: Field> ExpressionNode<F, AbstractExpr> {
-    /// Map the node_ids in the AbstractExpr to the resolved list of MLEs stored by the ProverExpr
-    fn build_prover_node(
-        self,
-        node_map: &HashMap<NodeId, usize>,
-    ) -> Result<ExpressionNode<F, ProverExpr>, DAGError> {
-        // Note that the node_map is the map of node_ids to the internal vec of MLEs, not the circuit_map
-        match self {
-            ExpressionNode::Constant(val) => Ok(ExpressionNode::Constant(val)),
-            ExpressionNode::Selector(mle_index, lhs, rhs) => {
-                let lhs = lhs.build_prover_node(node_map)?;
-                let rhs = rhs.build_prover_node(node_map)?;
-                Ok(ExpressionNode::Selector(
-                    mle_index,
-                    Box::new(lhs),
-                    Box::new(rhs),
-                ))
-            }
-            ExpressionNode::Mle(node_id) => Ok(ExpressionNode::Mle(MleVecIndex::new(
-                *node_map
-                    .get(&node_id)
-                    .ok_or(DAGError::DanglingNodeId(node_id))?,
-            ))),
-            ExpressionNode::Negated(expr) => Ok(ExpressionNode::Negated(Box::new(
-                expr.build_prover_node(node_map)?,
-            ))),
-            ExpressionNode::Sum(lhs, rhs) => {
-                let lhs = lhs.build_prover_node(node_map)?;
-                let rhs = rhs.build_prover_node(node_map)?;
-                Ok(ExpressionNode::Sum(Box::new(lhs), Box::new(rhs)))
-            }
-            ExpressionNode::Product(nodes) => {
-                let mle_vec_indices = nodes
-                    .into_iter()
-                    .map(|node_id| {
-                        Ok(MleVecIndex::new(
-                            *node_map
-                                .get(&node_id)
-                                .ok_or(DAGError::DanglingNodeId(node_id))?,
-                        ))
-                    })
-                    .collect::<Result<_, _>>()?;
-                Ok(ExpressionNode::Product(mle_vec_indices))
-            }
-            ExpressionNode::Scaled(expr, scalar) => {
-                let expr = expr.build_prover_node(node_map)?;
-                Ok(ExpressionNode::Scaled(Box::new(expr), scalar))
-            }
-        }
-    }
-
     fn build_circuit_node(
         self,
         node_map: &HashMap<NodeId, (usize, &CircuitLocation)>,

@@ -11,37 +11,24 @@ pub mod layers;
 
 use self::layers::Layers;
 use crate::claims::wlx_eval::WLXAggregator;
-use crate::expression::circuit_expr::CircuitMle;
-use crate::expression::verifier_expr::VerifierMle;
 use crate::input_layer::enum_input_layer::{
     CircuitInputLayerEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
 };
 use crate::input_layer::CircuitInputLayer;
 use crate::layer::layer_enum::{CircuitLayerEnum, VerifierLayerEnum};
 use crate::layer::CircuitLayer;
-use crate::layouter::layouting::{CircuitDescriptionMap, InputLayerHintMap, InputNodeMap};
-use crate::layouter::nodes::circuit_inputs::InputLayerData;
-use crate::layouter::nodes::NodeId;
-use crate::mle::Mle;
 use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
-use crate::output_layer::{CircuitOutputLayer, OutputLayer};
+use crate::output_layer::CircuitOutputLayer;
 use crate::{
     claims::ClaimAggregator,
-    input_layer::{InputLayer, InputLayerError},
-    layer::{layer_enum::LayerEnum, Layer, LayerError, LayerId},
-    mle::MleIndex,
-    utils::hash_layers,
+    input_layer::InputLayerError,
+    layer::{layer_enum::LayerEnum, LayerError, LayerId},
 };
 use ark_std::{end_timer, start_timer};
-use itertools::Itertools;
-use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
-use remainder_shared_types::transcript::{
-    Transcript, TranscriptReader, TranscriptReaderError, TranscriptWriter,
-};
+use remainder_shared_types::transcript::TranscriptReaderError;
+use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::marker::PhantomData;
 use thiserror::Error;
 use tracing::{debug, info};
 use tracing::{instrument, span, Level};
@@ -109,14 +96,15 @@ pub struct InstantiatedCircuit<F: Field> {
 /// Controls claim aggregation behavior.
 pub const ENABLE_OPTIMIZATION: bool = true;
 
-pub type WitnessAndCircuitDescription<F> = (InstantiatedCircuit<F>, GKRCircuitDescription<F>);
-
 /// The Verifier Key associated with a GKR proof of a [ProofSystem].
 /// It consists of consice GKR Circuit description to be use by the Verifier.
 #[derive(Debug)]
 pub struct GKRCircuitDescription<F: Field> {
+    /// The circuit descriptions of the input layers.
     pub input_layers: Vec<CircuitInputLayerEnum<F>>,
+    /// The circuit descriptions of the intermediate layers.
     pub intermediate_layers: Vec<CircuitLayerEnum<F>>,
+    /// The circuit desriptions of the output layers.
     pub output_layers: Vec<CircuitMleOutputLayer<F>>,
 }
 
@@ -134,6 +122,8 @@ impl<F: Field> GKRCircuitDescription<F> {
         }
     }
 
+    /// Label the MLE indices contained within a circuit description, starting
+    /// each layer with the start_index.
     pub fn index_mle_indices(&mut self, start_index: usize) {
         let GKRCircuitDescription {
             input_layers: _,

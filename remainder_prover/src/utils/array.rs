@@ -1,4 +1,4 @@
-use ndarray::{s, Array, Array2};
+use ndarray::{s, Array2};
 
 /// Pads an `Array2<i64>` with extra rows of zeros.
 ///

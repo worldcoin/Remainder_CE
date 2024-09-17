@@ -6,7 +6,7 @@ use crate::{claims::wlx_eval::YieldWLXEvals, input_layer_enum, layer::LayerId};
 
 use super::{
     ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
-    random_input_layer::VerifierChallengeInputLayer, InputLayer,
+    verifier_challenge_input_layer::VerifierChallengeInputLayer, InputLayer,
 };
 
 input_layer_enum!(

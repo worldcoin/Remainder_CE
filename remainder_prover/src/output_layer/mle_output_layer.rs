@@ -6,8 +6,6 @@
 //! intermediate/input layer whose [LayerId] it inherits. The MLE it stores is a
 //! restriction of an MLE defining its associated layer.
 
-use itertools::Itertools;
-use num::Zero;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
@@ -15,12 +13,8 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::{wlx_eval::ClaimMle, Claim, ClaimError, YieldClaim},
-    expression::{
-        circuit_expr::CircuitMle,
-        generic_expr::Expression,
-        verifier_expr::{VerifierExpr, VerifierMle},
-    },
+    claims::{wlx_eval::ClaimMle, ClaimError, YieldClaim},
+    expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
     layer::{LayerError, LayerId},
     layouter::layouting::CircuitMap,
     mle::{dense::DenseMle, mle_enum::MleEnum, zero::ZeroMle, Mle, MleIndex},
@@ -162,14 +156,18 @@ impl<F: Field> CircuitMleOutputLayer<F> {
         }
     }
 
+    /// Determine whether the MLE Output layer contains an MLE whose
+    /// coefficients are all 0.
     pub fn is_zero(&self) -> bool {
         self.is_zero
     }
 
+    /// Label the MLE indices in this layer, starting from the start_index.
     pub fn index_mle_indices(&mut self, start_index: usize) {
         self.mle.index_mle_indices(start_index);
     }
 
+    /// Convert this into the prover view of an output layer, using the [CircuitMap].
     pub fn into_prover_output_layer(&self, circuit_map: &CircuitMap<F>) -> MleOutputLayer<F> {
         let output_mle = circuit_map.get_data_from_circuit_mle(&self.mle).unwrap();
         let prefix_bits = self.mle.prefix_bits();
@@ -263,10 +261,13 @@ impl<F: Field> VerifierMleOutputLayer<F> {
         }
     }
 
+    /// Determine whether this output layer represents an MLE
+    /// whose coefficients are all 0.
     pub fn is_zero(&self) -> bool {
         self.is_zero
     }
 
+    /// The number of variables used to represent the underlying MLE.
     pub fn num_vars(&self) -> usize {
         self.mle.num_vars()
     }
@@ -319,7 +320,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
             .mle_indices()
             .iter()
             .filter(|index| match index {
-                MleIndex::Fixed(b) => true,
+                MleIndex::Fixed(_) => true,
                 _ => false,
             })
             .map(|index| index.clone())
