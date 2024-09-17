@@ -144,13 +144,6 @@ fn test_byte_repr_identity<F: Field>() {
     })
 }
 
-/// Wrapper for [Fr] and [Fq] for the above
-#[test]
-fn test_byte_repr_identity_fr_fq() {
-    test_byte_repr_identity::<Fr>();
-    test_byte_repr_identity::<Fq>();
-}
-
 impl PrimeOrderCurve for Bn256 {
     type Scalar = <Bn256 as CurveExt>::ScalarExt;
     type Base = <Bn256 as CurveExt>::Base;

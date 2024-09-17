@@ -144,7 +144,7 @@ impl<F: Field> MatMult<F> {
 
         mle_a.mle_indices = new_a_indices
             .into_iter()
-            .chain(bound_indices_a.into_iter())
+            .chain(bound_indices_a)
             .collect_vec();
         mle_a.index_mle_indices(0);
 
@@ -351,7 +351,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
 
             let g_cur_round = transcript_reader
                 .consume_elements("Sumcheck message", degree + 1)
-                .map_err(|err| VerificationError::TranscriptError(err))?;
+                .map_err(VerificationError::TranscriptError)?;
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
@@ -445,13 +445,13 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
         let full_claim_chals_a = sumcheck_bindings
             .to_vec()
             .into_iter()
-            .chain(claim_a.into_iter())
+            .chain(claim_a)
             .collect_vec();
 
         // Construct the full claim made on B using the claim made on the layer and the sumcheck bindings.
         let full_claim_chals_b = claim_b
             .into_iter()
-            .chain(sumcheck_bindings.to_vec().into_iter())
+            .chain(sumcheck_bindings.to_vec())
             .collect_vec();
 
         // Shape checks.
@@ -560,12 +560,12 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
             .collect_vec();
         pre_bound_matrix_b_mle.set_mle_indices(matrix_b_new_indices);
         let mle_refs = vec![pre_bound_matrix_a_mle, pre_bound_matrix_b_mle];
-        let res = PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
+        
+        PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
             &mle_refs,
             F::ONE,
             round_challenges,
-        )]);
-        res
+        )])
     }
 
     fn max_degree(&self) -> usize {
@@ -632,7 +632,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
                 let matrix_fixed_indices = matrix
                     .mle
                     .mle_indices()
-                    .into_iter()
+                    .iter()
                     .map(|index| {
                         index
                             .val()
@@ -654,7 +654,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
                 let claim: ClaimMle<F> = ClaimMle::new(
                     matrix_fixed_indices,
                     matrix_claimed_val,
-                    Some(self.layer_id.clone()),
+                    Some(self.layer_id),
                     Some(matrix.mle.layer_id()),
                     Some(mle_ref),
                 );
@@ -674,7 +674,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for MatMult<F> {
             .map(|matrix_mle| {
                 let matrix_fixed_indices = matrix_mle
                     .mle_indices()
-                    .into_iter()
+                    .iter()
                     .map(|index| {
                         index
                             .val()
@@ -687,7 +687,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for MatMult<F> {
                 let claim: ClaimMle<F> = ClaimMle::new(
                     matrix_fixed_indices,
                     matrix_val,
-                    Some(self.layer_id.clone()),
+                    Some(self.layer_id),
                     Some(matrix_mle.layer_id),
                     Some(MleEnum::Dense(matrix_mle.clone())),
                 );
@@ -749,7 +749,7 @@ impl<F: Field> YieldWLXEvals<F> for MatMult<F> {
 }
 
 impl<F: std::fmt::Debug + Field> MatMult<F> {
-    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
+    pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
         // Dummy struct which simply exists to implement `std::fmt::Display`
         // so that it can be returned as an `impl std::fmt::Display`
         struct MatMultCircuitDesc<'a, F: std::fmt::Debug + Field>(&'a MatMult<F>);
@@ -802,7 +802,7 @@ pub fn product_two_matrices<F: Field>(matrix_a: &Matrix<F>, matrix_b: &Matrix<F>
     let product_matrix = matrix_a
         .mle
         .bookkeeping_table()
-        .chunks(num_middle_ab as usize)
+        .chunks(num_middle_ab)
         .flat_map(|chunk_a| {
             matrix_b_transpose
                 .mle

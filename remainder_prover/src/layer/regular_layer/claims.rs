@@ -63,7 +63,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for RegularLayer<F> {
                         if mle_ref.bookkeeping_table().len() > 1 {
                             return Err(ClaimError::MleRefMleError);
                         }
-                        if mle_ref.bookkeeping_table().len() == 0 {
+                        if mle_ref.bookkeeping_table().is_empty() {
                             return Err(ClaimError::IntermediateZeroMLERefError);
                         }
                         let claimed_value = mle_ref.bookkeeping_table()[0];

@@ -120,8 +120,8 @@ impl<F: Field> CircuitNode for SectorGroup<F> {
 }
 
 impl<F: Field> CompilableNode<F> for SectorGroup<F> {
-    fn generate_circuit_description<'a>(
-        &'a self,
+    fn generate_circuit_description(
+        &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError> {
@@ -169,8 +169,8 @@ impl<F: Field> CompilableNode<F> for SectorGroup<F> {
 
 /// Takes some sectors that all belong in a single layer and
 /// builds the layer/adds their locations to the circuit map
-fn compile_layer<'a, F: Field>(
-    children: &[&'a Sector<F>],
+fn compile_layer<F: Field>(
+    children: &[&Sector<F>],
     layer_id: &mut LayerId,
     circuit_description_map: &mut CircuitDescriptionMap,
 ) -> Result<CircuitRegularLayer<F>, DAGError> {

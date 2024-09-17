@@ -39,6 +39,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
     /// Generate the associated \alpha_i commitment for round i. This is
     /// essentially the coefficients to the univariate committed to (using the appropriate
     /// generators for that round, i.e. accounting for the zero padding of the sumcheck messages).
+    #[allow(clippy::too_many_arguments)]
     fn commit_to_round(
         underlying_layer: &mut LayerEnum<C::Scalar>,
         committer: &PedersenCommitter<C>,
@@ -72,8 +73,8 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             (max_degree + 1) * (num_rounds - round_number - 1)
         ]);
         let blinding_factor = C::Scalar::random(blinding_rng);
-        let commitment = committer.committed_vector(&round_coefficients, &blinding_factor);
-        commitment
+
+        committer.committed_vector(&round_coefficients, &blinding_factor)
     }
 
     /// Produce a [HyraxLayerProof] for a given layer, given the unaggregated claims on that layer.
@@ -116,9 +117,9 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         };
 
         let (proof_of_claim_agg, agg_claim) = ProofOfClaimAggregation::prove(
-            &claims,
+            claims,
             &interpolant_coeffs,
-            &committer,
+            committer,
             &mut blinding_rng,
             transcript,
         );
@@ -146,7 +147,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             .for_each(|(round_number, bit_idx)| {
                 let round_commit = HyraxLayerProof::commit_to_round(
                     layer,
-                    &committer,
+                    committer,
                     *bit_idx,
                     round_number,
                     degree,
@@ -167,7 +168,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
 
         // Commit to all the necessary values
         let post_sumcheck_layer_committed =
-            commit_to_post_sumcheck_layer(&post_sumcheck_layer, &committer, &mut blinding_rng);
+            commit_to_post_sumcheck_layer(&post_sumcheck_layer, committer, &mut blinding_rng);
 
         // Get the commitments (i.e. points on C)
         let commitments =
@@ -180,8 +181,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         let committed_claims: Vec<_> = post_sumcheck_layer_committed
             .0
             .iter()
-            .map(|product| get_claims_from_product(&product))
-            .flatten()
+            .flat_map(get_claims_from_product)
             .collect();
 
         // Proof of sumcheck
@@ -192,7 +192,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             degree,
             &post_sumcheck_layer_committed,
             &bindings,
-            &committer,
+            committer,
             blinding_rng,
             transcript,
         );
@@ -204,7 +204,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             .filter_map(|product| product.get_product_triples())
             .flatten()
             .map(|(x, y, z)| {
-                ProofOfProduct::prove(&x, &y, &z, &committer, &mut blinding_rng, transcript)
+                ProofOfProduct::prove(&x, &y, &z, committer, &mut blinding_rng, transcript)
             })
             .collect();
 
@@ -242,7 +242,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         } = proof;
 
         // Verify the proof of claim aggregation
-        let agg_claim = proof_of_claim_agg.verify(&claim_commitments, &committer, transcript);
+        let agg_claim = proof_of_claim_agg.verify(claim_commitments, committer, transcript);
 
         // The number of sumcheck rounds w.r.t. to the beta table rather than just the expression.
         // Because the beta table number of variables is exactly the number of points in the claim
@@ -310,7 +310,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             layer_desc.max_degree(),
             &post_sumcheck_layer,
             &bindings,
-            &committer,
+            committer,
             transcript,
         );
 
@@ -327,15 +327,14 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             .iter()
             .zip(proofs_of_product.iter())
             .for_each(|((x, y, z), proof)| {
-                proof.verify(&x, &y, &z, &committer, transcript);
+                proof.verify(*x, *y, *z, committer, transcript);
             });
 
         // Extract the claims that the prover implicitly made on other layers by sending `commitments`.
         let claims = post_sumcheck_layer
             .0
             .iter()
-            .map(|product| get_claims_from_product(&product))
-            .flatten()
+            .flat_map(|product| get_claims_from_product(&product))
             .collect_vec();
 
         claims
@@ -376,11 +375,11 @@ pub fn committed_scalar_psl_as_commitments<C: PrimeOrderCurve>(
                         } => Intermediate::Atom {
                             layer_id: *layer_id,
                             point: point.clone(),
-                            value: value.commitment.clone(),
+                            value: value.commitment,
                             mle_enum: None,
                         },
                         Intermediate::Composite { value } => Intermediate::Composite {
-                            value: value.commitment.clone(),
+                            value: value.commitment,
                         },
                     })
                     .collect();
@@ -434,7 +433,7 @@ impl<C: PrimeOrderCurve> HyraxClaim<C::Scalar, CommittedScalar<C>> {
     /// Convert to a raw [Claim] for claim aggregation
     pub fn to_claim(&self) -> ClaimMle<C::Scalar> {
         let mut claim = ClaimMle::new_raw(self.point.clone(), self.evaluation.value);
-        claim.to_layer_id = Some(self.to_layer_id.clone());
+        claim.to_layer_id = Some(self.to_layer_id);
         claim.mle_ref = self.mle_enum.clone();
         claim
     }

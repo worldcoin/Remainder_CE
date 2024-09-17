@@ -176,7 +176,9 @@ impl<F: Field> CircuitMleOutputLayer<F> {
             .map(|bit| MleIndex::Fixed(*bit))
             .collect();
 
-        let output_layer = if self.is_zero {
+        
+
+        if self.is_zero {
             ZeroMle::new(
                 output_mle.num_vars(),
                 Some(prefix_bits_mle_index),
@@ -185,9 +187,7 @@ impl<F: Field> CircuitMleOutputLayer<F> {
             .into()
         } else {
             DenseMle::new_with_prefix_bits(output_mle.clone(), self.layer_id(), prefix_bits).into()
-        };
-
-        output_layer
+        }
     }
 }
 
@@ -322,8 +322,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
             .filter(|index| match index {
                 MleIndex::Fixed(_) => true,
                 _ => false,
-            })
-            .map(|index| index.clone())
+            }).cloned()
             .collect();
 
         let claim_point: Vec<F> = self

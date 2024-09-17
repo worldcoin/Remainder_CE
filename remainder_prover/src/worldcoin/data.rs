@@ -298,15 +298,15 @@ pub fn load_worldcoin_data<
 > {
     dbg!(&constant_data_folder);
     println!("Current directory: {:?}", std::env::current_dir().unwrap());
-    let wirings: Array2<u16> = read_npy(&constant_data_folder.join("wirings.npy")).unwrap();
+    let wirings: Array2<u16> = read_npy(constant_data_folder.join("wirings.npy")).unwrap();
     assert_eq!(wirings.dim().1, 4);
 
     let data_folder = constant_data_folder.join(if is_mask { "mask" } else { "iris" });
     let image: Array2<u8> = read_npy(image_path).unwrap();
 
-    let kernel_values: Array3<i32> = read_npy(&data_folder.join("kernel_values.npy")).unwrap();
+    let kernel_values: Array3<i32> = read_npy(data_folder.join("kernel_values.npy")).unwrap();
 
-    let thresholds: Array2<i64> = read_npy(&data_folder.join("thresholds.npy")).unwrap();
+    let thresholds: Array2<i64> = read_npy(data_folder.join("thresholds.npy")).unwrap();
 
     CircuitData::build_worldcoin_circuit_data(image, kernel_values, thresholds, wirings)
 }

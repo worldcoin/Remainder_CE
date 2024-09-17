@@ -37,11 +37,11 @@ fn get_prefix_bits_from_capacity(
 
 fn index_input_mles(input_mle_num_vars: &[usize]) -> (Vec<Vec<bool>>, Vec<usize>, usize) {
     // Add input-output MLE length if needed
-    let mle_combine_indices = argsort(&input_mle_num_vars, true);
+    let mle_combine_indices = argsort(input_mle_num_vars, true);
 
     // Get the total needed capacity by rounding the raw capacity up to the nearest power of 2
     let raw_needed_capacity = input_mle_num_vars
-        .into_iter()
+        .iter()
         .fold(0, |prev, input_mle_num_vars| {
             prev + 2_usize.pow(*input_mle_num_vars as u32)
         });

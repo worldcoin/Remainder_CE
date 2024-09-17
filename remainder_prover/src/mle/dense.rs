@@ -253,11 +253,9 @@ impl<F: Field> DenseMle<F> {
     pub fn new_with_indices(data: &[F], layer_id: LayerId, mle_indices: &[MleIndex<F>]) -> Self {
         let mut mle = DenseMle::new_from_raw(data.to_vec(), layer_id);
 
-        let all_indices_iterated_or_fixed = mle_indices.iter().fold(true, |acc, index| {
-            acc && (index == &MleIndex::Iterated
+        let all_indices_iterated_or_fixed = mle_indices.iter().all(|index| (index == &MleIndex::Iterated
                 || index == &MleIndex::Fixed(true)
-                || index == &MleIndex::Fixed(false))
-        });
+                || index == &MleIndex::Fixed(false)));
         assert!(all_indices_iterated_or_fixed);
 
         mle.original_mle_indices = mle_indices.to_vec();
@@ -328,9 +326,7 @@ impl<F: Field> DenseMle<F> {
     /// batch merges the MLEs into a single MLE, in a big endian fashion.
     pub fn batch_mles(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
         let first_mle_num_vars = mles[0].num_iterated_vars();
-        let all_same_num_vars = mles.iter().fold(true, |acc, mle| {
-            acc && mle.num_iterated_vars() == first_mle_num_vars
-        });
+        let all_same_num_vars = mles.iter().all(|mle| mle.num_iterated_vars() == first_mle_num_vars);
         assert!(all_same_num_vars);
         let layer_id = mles[0].layer_id;
         let mle_flattened = mles.into_iter().flat_map(|mle| mle.into_iter());
@@ -341,9 +337,7 @@ impl<F: Field> DenseMle<F> {
     /// batch merges the MLEs into a single MLE, in a lil endian fashion.
     pub fn batch_mles_lil(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
         let first_mle_num_vars = mles[0].num_iterated_vars();
-        let all_same_num_vars = mles.iter().fold(true, |acc, mle| {
-            acc && mle.num_iterated_vars() == first_mle_num_vars
-        });
+        let all_same_num_vars = mles.iter().all(|mle| mle.num_iterated_vars() == first_mle_num_vars);
         assert!(all_same_num_vars);
 
         let super_big_endian_vector = mles

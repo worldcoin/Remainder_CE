@@ -145,7 +145,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
     fn compute_equality_chi_values(challenge_coordinates: &[C::Scalar]) -> Vec<C::Scalar> {
         // accounting for the case where we in fact don't want a matrix but just a row vector or a column vector. then
         // our challenge coordinates might be empty!
-        if challenge_coordinates.len() > 0 {
+        if !challenge_coordinates.is_empty() {
             // dynamic programming algorithm in Tha13 for computing these equality values and returning them as a vector
             let (one_minus_r, r) = (
                 C::Scalar::ONE - challenge_coordinates[0],
@@ -297,7 +297,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
             &t_prime_commit,
             &mle_eval_commit,
             &r_vector,
-            &committer,
+            committer,
             prover_random_generator,
             prover_transcript,
         );

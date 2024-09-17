@@ -55,7 +55,7 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
         // blinding factor to commit to the dot product of d and a
         let r_beta = C::Scalar::random(&mut rng);
 
-        let d_dot_a: C::Scalar = ProofOfDotProduct::<C>::compute_dot_product(&d_vec, &a);
+        let d_dot_a: C::Scalar = ProofOfDotProduct::<C>::compute_dot_product(&d_vec, a);
         // commitments to d, and <d, a> inner product. add these commitments to the transcript.
         let commit_d = committer.vector_commit(&d_vec, &r_delta);
         let commit_d_dot_a = committer.scalar_commit(&d_dot_a, &r_beta);
@@ -169,7 +169,7 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
         second_vector: &Vec<C::Scalar>,
     ) -> C::Scalar {
         if first_vector.len() == 1 && second_vector.is_empty() {
-            return first_vector[0];
+            first_vector[0]
         } else if second_vector.len() == 1 && first_vector.is_empty() {
             return second_vector[0];
         } else {

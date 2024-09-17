@@ -27,11 +27,11 @@ impl<C: PrimeOrderCurve> ProofOfEquality<C> {
         committer: &PedersenCommitter<C>,
         // TODO(vishady) riad audit comments: probably try to mark this as a "cryptographic rng" CryptoRng?,
         // try to allow different trait bound in testing
-        mut rng: &mut impl Rng,
+        rng: &mut impl Rng,
         transcript: &mut impl ECProverTranscript<C>,
     ) -> Self {
         // From its random tape, P samples $r$ from the scalar field.
-        let r = C::Scalar::random(&mut rng);
+        let r = C::Scalar::random(rng);
 
         // Compute $\alpha = h^r$
         let alpha = committer.blinding_generator * r;

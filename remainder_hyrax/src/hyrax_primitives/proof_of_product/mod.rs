@@ -81,9 +81,9 @@ impl<C: PrimeOrderCurve> ProofOfProduct<C> {
     /// required).
     pub fn verify(
         &self,
-        commit_x: &C,
-        commit_y: &C,
-        commit_z: &C,
+        commit_x: C,
+        commit_y: C,
+        commit_z: C,
         committer: &PedersenCommitter<C>,
         transcript: &mut impl ECVerifierTranscript<C>,
     ) {
@@ -116,11 +116,8 @@ impl<C: PrimeOrderCurve> ProofOfProduct<C> {
         // \delta \cdot Z^c \overset{?}{=} X^{z_3}\cdot h^{z_5}
         let g = committer.scalar_commit_generator();
         let h = committer.blinding_generator;
-        assert_eq!(self.alpha + *commit_x * c, g * self.z1 + h * self.z2);
-        assert_eq!(self.beta + *commit_y * c, g * self.z3 + h * self.z4);
-        assert_eq!(
-            self.delta + *commit_z * c,
-            *commit_x * self.z3 + h * self.z5
-        );
+        assert_eq!(self.alpha + commit_x * c, g * self.z1 + h * self.z2);
+        assert_eq!(self.beta + commit_y * c, g * self.z3 + h * self.z4);
+        assert_eq!(self.delta + commit_z * c, commit_x * self.z3 + h * self.z5);
     }
 }

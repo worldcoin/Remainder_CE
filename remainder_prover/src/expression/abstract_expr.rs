@@ -76,7 +76,7 @@ impl<F: Field> Expression<F, AbstractExpr> {
 
         let mut node_map = HashMap::<NodeId, (usize, &CircuitLocation)>::new();
 
-        nodes.into_iter().enumerate().for_each(|(_idx, node_id)| {
+        nodes.into_iter().for_each(|node_id| {
             let (location, num_vars) = circuit_description_map
                 .get_location_num_vars_from_node_id(&node_id)
                 .unwrap();
@@ -216,7 +216,7 @@ impl<F: Field> ExpressionNode<F, AbstractExpr> {
                 ) = node_map
                     .get(&node_id)
                     .ok_or(DAGError::DanglingNodeId(node_id))?;
-                let total_indices = get_total_mle_indices(&prefix_bits, *num_vars);
+                let total_indices = get_total_mle_indices(prefix_bits, *num_vars);
                 let circuit_mle = CircuitMle::new(*layer_id, &total_indices);
                 Ok(ExpressionNode::Mle(circuit_mle))
             }
@@ -242,7 +242,7 @@ impl<F: Field> ExpressionNode<F, AbstractExpr> {
                             .get(&node_id)
                             .ok_or(DAGError::DanglingNodeId(node_id))
                             .unwrap();
-                        let total_indices = get_total_mle_indices::<F>(&prefix_bits, *num_vars);
+                        let total_indices = get_total_mle_indices::<F>(prefix_bits, *num_vars);
                         CircuitMle::new(*layer_id, &total_indices)
                     })
                     .collect::<Vec<CircuitMle<F>>>();

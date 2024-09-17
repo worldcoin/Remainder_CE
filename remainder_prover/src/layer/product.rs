@@ -41,7 +41,7 @@ pub struct Product<F: Field, T> {
 impl<F: Field> Product<F, Option<F>> {
     /// Creates a new Product from a vector of [CircuitMles].
     pub fn new(mles: &[CircuitMle<F>], coefficient: F, bindings: &[F]) -> Self {
-        if mles.len() == 0 {
+        if mles.is_empty() {
             return Product {
                 intermediates: vec![Intermediate::Composite {
                     value: Some(F::ONE),
@@ -49,9 +49,9 @@ impl<F: Field> Product<F, Option<F>> {
                 coefficient,
             };
         }
-        let mut intermediates = vec![Self::build_atom(&mles[0], &bindings)];
+        let mut intermediates = vec![Self::build_atom(&mles[0], bindings)];
         mles.iter().skip(1).for_each(|mle_ref| {
-            intermediates.push(Self::build_atom(mle_ref, &bindings));
+            intermediates.push(Self::build_atom(mle_ref, bindings));
             intermediates.push(Intermediate::Composite { value: None });
         });
         Product {
@@ -79,7 +79,7 @@ impl<F: Field> Product<F, F> {
         assert!(mle_refs
             .iter()
             .all(|mle_ref| mle_ref.bookkeeping_table().len() == 1));
-        if mle_refs.len() == 0 {
+        if mle_refs.is_empty() {
             return Product {
                 intermediates: vec![Intermediate::Composite { value: F::ONE }],
                 coefficient,
@@ -113,7 +113,7 @@ impl<F: Field> Product<F, F> {
 
     /// Creates a new Product from a vector of fully bound Mles, which are represented as a [VerifierMle]
     pub fn new_from_verifier_mle(verifier_mles: &[VerifierMle<F>], coefficient: F) -> Self {
-        if verifier_mles.len() == 0 {
+        if verifier_mles.is_empty() {
             return Product {
                 intermediates: vec![Intermediate::Composite { value: F::ONE }],
                 coefficient,
@@ -174,17 +174,16 @@ impl<F: Field, T: Copy> PostSumcheckLayer<F, T> {
     pub fn get_values(&self) -> Vec<T> {
         self.0
             .iter()
-            .map(|product| {
+            .flat_map(|product| {
                 product
                     .intermediates
                     .iter()
                     .map(|pp| match pp {
-                        Intermediate::Atom { value, .. } => value.clone(),
-                        Intermediate::Composite { value } => value.clone(),
+                        Intermediate::Atom { value, .. } => *value,
+                        Intermediate::Composite { value } => *value,
                     })
                     .collect::<Vec<T>>()
             })
-            .flatten()
             .collect()
     }
 

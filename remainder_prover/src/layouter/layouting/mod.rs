@@ -44,7 +44,7 @@ impl<F: Field> CircuitMap<F> {
         &self,
         circuit_location: &CircuitLocation,
     ) -> Option<&MultilinearExtension<F>> {
-        self.0.get(&circuit_location)
+        self.0.get(circuit_location)
     }
 
     /// An alias to [get_data_from_location] above,

@@ -228,7 +228,7 @@ impl LayerId {
     /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number.
     /// Mutates self to store the next layer id.
     pub fn get_and_inc(&mut self) -> LayerId {
-        let ret = self.clone();
+        let ret = *self;
         self.increment_self();
         ret
     }

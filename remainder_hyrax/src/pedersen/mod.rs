@@ -111,7 +111,7 @@ impl<C: PrimeOrderCurve> PedersenCommitter<C> {
     pub fn u8_vector_commit(&self, message: &Vec<u8>, blinding: &C::Scalar) -> C {
         debug_assert!(self.int_abs_val_bitwidth >= 8);
         let message_is_negative_bits = vec![false; message.len()];
-        self.integer_vector_commit(&message, &message_is_negative_bits, blinding)
+        self.integer_vector_commit(message, &message_is_negative_bits, blinding)
     }
 
     /// Commits to the vector of i8s using the specified blinding factor.
@@ -121,8 +121,8 @@ impl<C: PrimeOrderCurve> PedersenCommitter<C> {
     /// Post: same result as vector_commit, assuming ints are smaller than scalar field order.
     pub fn i8_vector_commit(&self, message: &Vec<i8>, blinding: &C::Scalar) -> C {
         debug_assert!(self.int_abs_val_bitwidth >= 8);
-        let message_is_negative_bits = message.into_iter().map(|x| *x < 0i8).collect();
-        let message: Vec<u8> = message.iter().map(|x| (*x as i16).abs() as u8).collect(); // convert i8 to i16 first so that .abs() doesn't fail for i8::MIN
+        let message_is_negative_bits = message.iter().map(|x| *x < 0i8).collect();
+        let message: Vec<u8> = message.iter().map(|x| (*x as i16).unsigned_abs() as u8).collect(); // convert i8 to i16 first so that .abs() doesn't fail for i8::MIN
         self.integer_vector_commit(&message, &message_is_negative_bits, blinding)
     }
 

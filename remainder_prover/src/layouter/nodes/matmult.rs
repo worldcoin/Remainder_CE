@@ -64,8 +64,8 @@ impl MatMultNode {
 }
 
 impl<F: Field> CompilableNode<F> for MatMultNode {
-    fn generate_circuit_description<'a>(
-        &'a self,
+    fn generate_circuit_description(
+        &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError> {
@@ -74,7 +74,7 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
 
         let mle_a_indices =
             get_total_mle_indices(&matrix_a_location.prefix_bits, *matrix_a_num_vars);
-        let circuit_mle_a = CircuitMle::new(matrix_a_location.layer_id.clone(), &mle_a_indices);
+        let circuit_mle_a = CircuitMle::new(matrix_a_location.layer_id, &mle_a_indices);
 
         // Matrix A and matrix B are not padded because the data from the previous layer is only stored as the raw [MultilinearExtension].
         let matrix_a = CircuitMatrix::new(
@@ -86,7 +86,7 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
             circuit_description_map.get_location_num_vars_from_node_id(&self.matrix_b)?;
         let mle_b_indices =
             get_total_mle_indices(&matrix_b_location.prefix_bits, *matrix_b_num_vars);
-        let circuit_mle_b = CircuitMle::new(matrix_b_location.layer_id.clone(), &mle_b_indices);
+        let circuit_mle_b = CircuitMle::new(matrix_b_location.layer_id, &mle_b_indices);
 
         // should already been padded
         let matrix_b = CircuitMatrix::new(

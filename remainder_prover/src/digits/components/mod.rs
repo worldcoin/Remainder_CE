@@ -72,9 +72,9 @@ impl<F: Field> ComplementaryRecompChecker<F> {
         base: u64,
         num_digits: usize,
     ) -> Self {
-        let mut pow = F::from(1 as u64);
+        let mut pow = F::from(1_u64);
         for _ in 0..num_digits {
-            pow = pow * F::from(base);
+            pow *= F::from(base);
         }
 
         let sector = Sector::new(ctx, &[values, bits, unsigned_recomps], |input_nodes| {

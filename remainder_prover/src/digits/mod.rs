@@ -48,7 +48,7 @@ pub fn unsigned_decomposition<const BASE: u64, const N: usize>(value: u64) -> Op
 pub fn complementary_decomposition<const BASE: u64, const N: usize>(value: i64) -> Option<([u16; N], bool)> {
     debug_assert!(BASE <= (1 << 16));
     debug_assert!(BASE.ilog2() * (N as u32) <= 64, "BASE * N must be <= 64");
-    let pow = (BASE as u128).pow(N as u32) as u128;
+    let pow = (BASE as u128).pow(N as u32);
     if (value >= 0 && (value as u128) > pow) || (value < 0 && (-value as u128) > pow - 1) {
         return None;
     }

@@ -424,15 +424,11 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
         // Since the original mles are dataparallel, the challenges are the concat of the copy bits and the variable bound bits.
         let lhs_challenges = dataparallel_challenges
             .iter()
-            .chain(first_u_challenges.iter())
-            .enumerate()
-            .map(|(_idx, challenge)| *challenge)
+            .chain(first_u_challenges.iter()).copied()
             .collect_vec();
         let rhs_challenges = dataparallel_challenges
             .iter()
-            .chain(last_v_challenges.iter())
-            .enumerate()
-            .map(|(_idx, challenge)| *challenge)
+            .chain(last_v_challenges.iter()).copied()
             .collect_vec();
 
         let lhs_verifier_mle = self

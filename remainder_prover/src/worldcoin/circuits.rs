@@ -120,7 +120,7 @@ pub fn build_circuit<
 
         // Use a lookup to range check the digits to the range 0..BASE
         let (lookup_table_values, lookup_table_values_data) = get_input_shred_and_data_from_vec(
-            (0..BASE as u64).map(F::from).collect(),
+            (0..BASE).map(F::from).collect(),
             ctx,
             &input_layer,
         );
@@ -141,7 +141,7 @@ pub fn build_circuit<
         );
         println!("{:?} = Lookup constraint", lookup_constraint.id());
 
-        let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE as u64);
+        let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE);
 
         let (sign_bits, sign_bits_data) =
             get_input_shred_and_data_from_vec(sign_bits.clone(), ctx, &input_layer);
@@ -151,7 +151,7 @@ pub fn build_circuit<
             &&subtractor.sector,
             &sign_bits,
             &&unsigned_recomp.sector,
-            BASE as u64,
+            BASE,
             NUM_DIGITS,
         );
         output_nodes.push(OutputNode::new_zero(ctx, &complementary_checker.sector));
@@ -194,11 +194,11 @@ pub fn build_circuit<
         all_nodes.push(lookup_constraint.into());
 
         // Add nodes from components
-        all_nodes.extend(subtractor.yield_nodes().into_iter());
-        all_nodes.extend(digits_concatenator.yield_nodes().into_iter());
-        all_nodes.extend(bits_are_binary.yield_nodes().into_iter());
-        all_nodes.extend(unsigned_recomp.yield_nodes().into_iter());
-        all_nodes.extend(complementary_checker.yield_nodes().into_iter());
+        all_nodes.extend(subtractor.yield_nodes());
+        all_nodes.extend(digits_concatenator.yield_nodes());
+        all_nodes.extend(bits_are_binary.yield_nodes());
+        all_nodes.extend(unsigned_recomp.yield_nodes());
+        all_nodes.extend(complementary_checker.yield_nodes());
 
         // Add output nodes
         all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));

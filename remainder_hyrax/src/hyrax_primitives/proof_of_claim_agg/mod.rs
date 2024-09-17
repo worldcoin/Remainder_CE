@@ -79,7 +79,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
                     });
 
                 // Perform a proof of equality on commitments to f(j) and the value of the jth claim
-                ProofOfEquality::prove(&evaluation, &f_j, &committer, &mut rng, transcript)
+                ProofOfEquality::prove(&evaluation, &f_j, committer, &mut rng, transcript)
             })
             .collect();
 
@@ -157,7 +157,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
             .iter()
             .zip(self.interpolant_coeffs.iter())
             .for_each(|(proof, commit_h)| {
-                proof.verify(*commit_h, &committer, transcript);
+                proof.verify(*commit_h, committer, transcript);
             });
 
         // Verify the proofs of equality f(j) = jth mle evaluation
@@ -178,7 +178,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
                         power *= C::Scalar::from(j as u64);
                         next_acc
                     });
-                proof.verify(mle_eval, commit_f_j, &committer, transcript);
+                proof.verify(mle_eval, commit_f_j, committer, transcript);
             });
 
         // A random evaluation point $\tau \in \mathbb{F}$ is sampled from the transcript

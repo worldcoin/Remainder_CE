@@ -1,20 +1,6 @@
-use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge, TranscriptSponge},
-    Field,
-};
 
-use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
 
-use crate::{
-    claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
-    input_layer::CircuitInputLayer,
-    layer::{layer_enum::LayerEnum, CircuitLayer},
-    output_layer::{mle_output_layer::MleOutputLayer, CircuitOutputLayer, OutputLayer},
-};
-use crate::{input_layer::enum_input_layer::InputLayerEnum, layer::Layer};
 
-use crate::input_layer::InputLayer;
 
 ///This macro generates a layer enum that represents all the possible layers
 /// Every layer variant of the enum needs to implement Layer, and the enum will also implement Layer and pass methods to it's variants
@@ -52,8 +38,8 @@ macro_rules! layer_enum {
 
                 fn compute_data_outputs(
                     &self,
-                    mle_outputs_necessary: &std::collections::HashSet<&crate::expression::circuit_expr::CircuitMle<F>>,
-                    circuit_map: &mut crate::layouter::layouting::CircuitMap<F>,
+                    mle_outputs_necessary: &std::collections::HashSet<&$crate::expression::circuit_expr::CircuitMle<F>>,
+                    circuit_map: &mut $crate::layouter::layouting::CircuitMap<F>,
                 ) -> bool {
                     match self {
                         $(
@@ -401,8 +387,8 @@ macro_rules! input_layer_enum {
 
                 fn into_prover_input_layer(
                     &self,
-                    mle: crate::mle::evals::MultilinearExtension<F>,
-                    precommit: &Option<crate::input_layer::CommitmentEnum<F>>,
+                    mle: $crate::mle::evals::MultilinearExtension<F>,
+                    precommit: &Option<$crate::input_layer::CommitmentEnum<F>>,
                 ) -> InputLayerEnum<F> {
                     match self {
                         $(

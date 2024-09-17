@@ -97,8 +97,8 @@ pub trait CircuitNode {
 pub trait CompilableNode<F: Field>: CircuitNode {
     /// Generate the circuit description of a node, which represents the
     /// shape of a certain layer.
-    fn generate_circuit_description<'a>(
-        &'a self,
+    fn generate_circuit_description(
+        &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError>;

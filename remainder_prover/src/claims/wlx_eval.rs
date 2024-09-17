@@ -234,7 +234,7 @@ impl<F: Field> ClaimMle<F> {
 
     /// Returns the point vector in F^n.
     pub fn get_point(&self) -> &Vec<F> {
-        &self.claim.get_point()
+        self.claim.get_point()
     }
 
     /// Returns the expected result.

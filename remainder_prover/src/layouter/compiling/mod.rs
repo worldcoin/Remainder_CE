@@ -202,7 +202,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                             mle_claim_map
                                 .get_mut(&layer_id)
                                 .unwrap()
-                                .insert(&circuit_mle);
+                                .insert(circuit_mle);
                         }
                     })
             });
@@ -258,30 +258,28 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                     let commitment = prover_input_layer.commit().unwrap();
                     InputLayerEnum::append_commitment_to_transcript(&commitment, transcript_writer);
                     prover_input_layers.push(prover_input_layer);
+                } else if let CircuitInputLayerEnum::RandomInputLayer(
+                    verifier_challenge_input_layer_description,
+                ) = input_layer_description
+                {
+                    let verifier_challenge_mle =
+                        MultilinearExtension::new(transcript_writer.get_challenges(
+                            "Verifier challenges for fiat shamir",
+                            1 << verifier_challenge_input_layer_description.num_bits,
+                        ));
+                    circuit_map.add_node(
+                        CircuitLocation::new(
+                            verifier_challenge_input_layer_description.layer_id(),
+                            vec![],
+                        ),
+                        verifier_challenge_mle.clone(),
+                    );
+                    let verifier_challenge_layer = input_layer_description
+                        .into_prover_input_layer(verifier_challenge_mle, &None);
+                    prover_input_layers.push(verifier_challenge_layer);
                 } else {
-                    if let CircuitInputLayerEnum::RandomInputLayer(
-                        verifier_challenge_input_layer_description,
-                    ) = input_layer_description
-                    {
-                        let verifier_challenge_mle =
-                            MultilinearExtension::new(transcript_writer.get_challenges(
-                                "Verifier challenges for fiat shamir",
-                                1 << verifier_challenge_input_layer_description.num_bits,
-                            ));
-                        circuit_map.add_node(
-                            CircuitLocation::new(
-                                verifier_challenge_input_layer_description.layer_id(),
-                                vec![],
-                            ),
-                            verifier_challenge_mle.clone(),
-                        );
-                        let verifier_challenge_layer = input_layer_description
-                            .into_prover_input_layer(verifier_challenge_mle, &None);
-                        prover_input_layers.push(verifier_challenge_layer);
-                    } else {
-                        hint_input_layers.push(input_layer_description);
-                        assert!(input_layer_hint_map.0.contains_key(&input_layer_id));
-                    }
+                    hint_input_layers.push(input_layer_description);
+                    assert!(input_layer_hint_map.0.contains_key(&input_layer_id));
                 }
             });
 
@@ -302,7 +300,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 }
             });
 
-        while hint_input_layers.len() > 0 || uninstantiated_intermediate_layers.len() > 0 {
+        while !hint_input_layers.is_empty() || !uninstantiated_intermediate_layers.is_empty() {
             let mut data_updated = false;
             hint_input_layers = hint_input_layers
                 .iter()
@@ -487,7 +485,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             ));
 
             // Compute all sumcheck messages across this particular layer.
-            let _prover_sumcheck_messages = layer
+            layer
                 .prove_rounds(layer_claim, &mut transcript_writer)
                 .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
@@ -528,7 +526,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             let opening_proof_timer =
                 start_timer!(|| format!("opening proof for INPUT layer {:?}", layer_id));
 
-            let _opening_proof = input_layer
+            input_layer
                 .open(&mut transcript_writer, layer_claim)
                 .map_err(GKRError::InputLayerError)?;
 

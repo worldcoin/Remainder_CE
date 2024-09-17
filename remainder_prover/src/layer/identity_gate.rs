@@ -187,7 +187,7 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
     ) -> Result<Self::VerifierLayer, VerificationError> {
         let src_verifier_mle = self
             .source_mle
-            .into_verifier_mle(&sumcheck_challenges, transcript_reader)
+            .into_verifier_mle(sumcheck_challenges, transcript_reader)
             .unwrap();
 
         // --- Create the resulting verifier layer for claim tracking ---
@@ -219,12 +219,12 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
                 acc + gz * ux
             });
 
-        let res = PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
-            &vec![self.source_mle.clone()],
+        
+        PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
+            &[self.source_mle.clone()],
             f_1_uv,
             round_challenges,
-        )]);
-        res
+        )])
     }
 
     fn max_degree(&self) -> usize {
@@ -301,9 +301,9 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
             });
 
         // get the fully evaluated "expression"
-        let fully_evaluated = f_1_uv * self.source_mle.value();
+        
 
-        fully_evaluated
+        f_1_uv * self.source_mle.value()
     }
 }
 
@@ -485,7 +485,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 acc + gz * ux
             });
 
-        PostSumcheckLayer(vec![Product::<F, F>::new(&vec![mle_ref.clone()], f_1_uv)])
+        PostSumcheckLayer(vec![Product::<F, F>::new(&[mle_ref.clone()], f_1_uv)])
     }
 }
 
@@ -508,7 +508,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for IdentityGate<F> {
             let claim: ClaimMle<F> = ClaimMle::new(
                 fixed_mle_indices_u,
                 val,
-                Some(self.layer_id().clone()),
+                Some(self.layer_id()),
                 Some(mle_ref.get_layer_id()),
                 Some(MleEnum::Dense(mle_ref.clone())),
             );
@@ -698,7 +698,7 @@ impl<F: Field> IdentityGate<F> {
 
 /// For circuit serialization to hash the circuit description into the transcript.
 impl<F: std::fmt::Debug + Field> IdentityGate<F> {
-    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
+    pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
         struct IdentityGateCircuitDesc<'a, F: std::fmt::Debug + Field>(&'a IdentityGate<F>);

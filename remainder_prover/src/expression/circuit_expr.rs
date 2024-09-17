@@ -114,7 +114,7 @@ impl<F: Field> CircuitMle<F> {
     /// which holds information using the prefix bits and layer id
     /// on the data that should be stored in this MLE.
     pub fn into_dense_mle<'a>(&self, circuit_map: &CircuitMap<F>) -> DenseMle<F> {
-        let data = circuit_map.get_data_from_circuit_mle(&self).unwrap();
+        let data = circuit_map.get_data_from_circuit_mle(self).unwrap();
         DenseMle::new_with_prefix_bits((*data).clone(), self.layer_id(), self.prefix_bits())
     }
 
@@ -159,7 +159,7 @@ impl<F: Field> CircuitMle<F> {
 
         let eval = transcript_reader
             .consume_element("MLE evaluation")
-            .map_err(|err| ExpressionError::TranscriptError(err))?;
+            .map_err(ExpressionError::TranscriptError)?;
 
         Ok(VerifierMle::new(self.layer_id, verifier_indices, eval))
     }
@@ -226,7 +226,7 @@ impl<F: Field> Expression<F, CircuitExpr> {
         &self,
         circuit_map: &CircuitMap<F>,
     ) -> Expression<F, ProverExpr> {
-        self.expression_node.into_prover_expression(&circuit_map)
+        self.expression_node.into_prover_expression(circuit_map)
     }
 
     /// Get the [PostSumcheckLayer] for this expression, which represents the fully bound values of the expression.
@@ -311,7 +311,7 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
             ExpressionNode::Product(circuit_mles) => {
                 let verifier_mles: Vec<VerifierMle<F>> = circuit_mles
                     .iter()
-                    .map(|circuit_mle| Ok(circuit_mle.into_verifier_mle(point, transcript_reader)?))
+                    .map(|circuit_mle| circuit_mle.into_verifier_mle(point, transcript_reader))
                     .collect::<Result<Vec<VerifierMle<F>>, ExpressionError>>()?;
 
                 Ok(ExpressionNode::Product(verifier_mles))
@@ -359,8 +359,8 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
                 let b_bookkeeping_table = b.compute_bookkeeping_table(circuit_map)?;
                 Some(evaluate_bookkeeping_tables_given_operation(
                     &[
-                        &a_bookkeeping_table.get_evals_vector(),
-                        &b_bookkeeping_table.get_evals_vector(),
+                        (a_bookkeeping_table.get_evals_vector()),
+                        (b_bookkeeping_table.get_evals_vector()),
                     ],
                     BinaryOperation::Add,
                 ))
@@ -510,7 +510,7 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
                     let mut product_nonlinear_indices: HashSet<usize> = HashSet::new();
                     let mut product_indices_counts: HashMap<MleIndex<F>, usize> = HashMap::new();
 
-                    verifier_mles.into_iter().for_each(|verifier_mle| {
+                    verifier_mles.iter().for_each(|verifier_mle| {
                         verifier_mle.var_indices.iter().for_each(|mle_index| {
                             let curr_count = {
                                 if product_indices_counts.contains_key(mle_index) {
@@ -652,27 +652,27 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
     ) -> Expression<F, ProverExpr> {
         match self {
             ExpressionNode::Selector(_mle_index, a, b) => b
-                .into_prover_expression(&circuit_map)
-                .concat_expr(a.into_prover_expression(&circuit_map)),
+                .into_prover_expression(circuit_map)
+                .concat_expr(a.into_prover_expression(circuit_map)),
             ExpressionNode::Sum(a, b) => {
-                a.into_prover_expression(&circuit_map) + b.into_prover_expression(&circuit_map)
+                a.into_prover_expression(circuit_map) + b.into_prover_expression(circuit_map)
             }
             ExpressionNode::Mle(mle) => {
-                let prover_mle = mle.into_dense_mle(&circuit_map);
+                let prover_mle = mle.into_dense_mle(circuit_map);
                 prover_mle.expression()
             }
             ExpressionNode::Product(mles) => {
                 let dense_mles = mles
                     .iter()
-                    .map(|mle| mle.into_dense_mle(&circuit_map))
+                    .map(|mle| mle.into_dense_mle(circuit_map))
                     .collect_vec();
                 Expression::<F, ProverExpr>::products(dense_mles)
             }
             ExpressionNode::Scaled(a, scale_factor) => {
-                a.into_prover_expression(&circuit_map) * *scale_factor
+                a.into_prover_expression(circuit_map) * *scale_factor
             }
             ExpressionNode::Negated(a) => {
-                Expression::<F, ProverExpr>::negated(a.into_prover_expression(&circuit_map))
+                Expression::<F, ProverExpr>::negated(a.into_prover_expression(circuit_map))
             }
             ExpressionNode::Constant(constant) => Expression::<F, ProverExpr>::constant(*constant),
         }
@@ -713,7 +713,7 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
             }
             ExpressionNode::Mle(mle) => {
                 products.push(Product::<F, Option<F>>::new(
-                    &vec![mle.clone()],
+                    &[mle.clone()],
                     multiplier,
                     challenges,
                 ));

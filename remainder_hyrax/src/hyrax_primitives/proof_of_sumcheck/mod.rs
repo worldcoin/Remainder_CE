@@ -72,7 +72,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
         debug_assert_eq!(gammas.len(), n);
 
         // compute alpha, the commitment to the gamma combo of the alphas (private vector in PoDP)
-        let len_vector_commits = if messages.len() > 0 {
+        let len_vector_commits = if !messages.is_empty() {
             messages[0].value.len()
         } else {
             0
@@ -97,7 +97,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
             &alpha,
             &dot_product,
             &j_star,
-            &committer,
+            committer,
             &mut rng,
             transcript,
         );
@@ -174,7 +174,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
         let dot_product: C = self.sum * rhos[0] + oracle_eval * rhos[rhos.len() - 1].neg();
 
         self.podp
-            .verify(&alpha, &dot_product, &j_star, &committer, transcript);
+            .verify(&alpha, &dot_product, &j_star, committer, transcript);
     }
 
     /// Calculate the vector j_star, which is the public vector in the proof of dot product, formed
