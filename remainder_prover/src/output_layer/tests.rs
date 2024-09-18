@@ -2,7 +2,7 @@
 
 use pretty_assertions::assert_eq;
 
-use remainder_shared_types::ff_field;
+use remainder_shared_types::{ff_field, Field};
 use remainder_shared_types::{
     transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
     Fr,
@@ -16,6 +16,27 @@ use crate::{
 };
 
 use super::{mle_output_layer::MleOutputLayer, OutputLayer};
+
+impl<F: Field> ZeroMle<F> {
+    /// To be used internally for testing.
+    pub(crate) fn new_raw(
+        mle_indices: Vec<MleIndex<F>>,
+        original_mle_indices: Vec<MleIndex<F>>,
+        num_vars: usize,
+        layer_id: LayerId,
+        zero: [F; 1],
+        indexed: bool,
+    ) -> Self {
+        Self {
+            mle_indices,
+            original_mle_indices,
+            num_vars,
+            layer_id,
+            zero,
+            indexed,
+        }
+    }
+}
 
 #[test]
 fn test_fix_layer() {

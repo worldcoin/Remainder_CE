@@ -1,4 +1,8 @@
+#[cfg(test)]
 mod tests {
+    use ark_std::test_rng;
+    use rand::Rng;
+
     use super::super::*;
     use crate::halo2curves::bn256::G1 as Bn256;
 
@@ -63,5 +67,23 @@ mod tests {
     #[test]
     fn test_bn256_implementation() {
         test_curve_ops();
+    }
+
+    #[test]
+    /// Ensures that doing `from_bytes_le` and `to_bytes_le` gives the same value.
+    ///
+    /// TODO(ryancao): Do another manual test to ensure that the integer-interpretable
+    /// values of the translation between an [Fr] and an [Fq] element are equal
+    /// (and in particular, equal to the original `u64` value)!
+    fn test_byte_repr_identity() {
+        let mut rng = test_rng();
+
+        (0..100).for_each(|_| {
+            let orig_value_u64 = rng.gen::<u64>();
+            let orig_value = Fr::from(orig_value_u64);
+            let orig_value_bytes = orig_value.to_bytes_le();
+            let new_value = Fr::from_bytes_le(orig_value_bytes);
+            assert_eq!(orig_value, new_value);
+        })
     }
 }
