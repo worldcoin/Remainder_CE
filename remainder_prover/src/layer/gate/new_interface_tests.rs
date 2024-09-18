@@ -2,7 +2,7 @@ use remainder_shared_types::Field;
 
 use crate::layouter::{
     component::Component,
-    nodes::{circuit_outputs::OutputNode, sector::Sector, CircuitNode, Context},
+    nodes::{circuit_outputs::OutputNode, sector::Sector, CircuitNode},
 };
 // ------------------- COPIED FROM `remainder_prover/tests/utils/mod.rs` -------------------
 /// A builder which takes the difference of an MLE from itself to return a zero layer.
@@ -10,23 +10,6 @@ use crate::layouter::{
 pub struct DifferenceBuilderComponent<F: Field> {
     pub output_sector: Sector<F>,
     pub output_node: OutputNode,
-}
-
-impl<F: Field> DifferenceBuilderComponent<F> {
-    fn new(ctx: &Context, input: &dyn CircuitNode) -> Self {
-        let zero_output_sector = Sector::new(ctx, &[input], |input_vec| {
-            assert_eq!(input_vec.len(), 1);
-            let input_data = input_vec[0];
-            input_data.expr() - input_data.expr()
-        });
-
-        let output = OutputNode::new_zero(ctx, &zero_output_sector);
-
-        Self {
-            output_sector: zero_output_sector,
-            output_node: output,
-        }
-    }
 }
 
 impl<F: Field, N> Component<N> for DifferenceBuilderComponent<F>
@@ -45,7 +28,7 @@ mod tests {
     use super::DifferenceBuilderComponent;
     use ark_std::test_rng;
     use rand::Rng;
-    use remainder_shared_types::Fr;
+    use remainder_shared_types::{Field, Fr};
 
     use crate::{
         layer::LayerId,
@@ -56,15 +39,34 @@ mod tests {
                 circuit_inputs::{
                     InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
                 },
+                circuit_outputs::OutputNode,
                 gate::GateNode,
                 node_enum::NodeEnum,
-                CircuitNode,
+                sector::Sector,
+                CircuitNode, Context,
             },
         },
         mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
         prover::helpers::test_circuit,
         utils::get_input_shred_and_data_from_vec,
     };
+
+    impl<F: Field> DifferenceBuilderComponent<F> {
+        fn new(ctx: &Context, input: &dyn CircuitNode) -> Self {
+            let zero_output_sector = Sector::new(ctx, &[input], |input_vec| {
+                assert_eq!(input_vec.len(), 1);
+                let input_data = input_vec[0];
+                input_data.expr() - input_data.expr()
+            });
+
+            let output = OutputNode::new_zero(ctx, &zero_output_sector);
+
+            Self {
+                output_sector: zero_output_sector,
+                output_node: output,
+            }
+        }
+    }
 
     /// A circuit which takes in two MLEs of the same size and adds
     /// the contents, element-wise, to one another.

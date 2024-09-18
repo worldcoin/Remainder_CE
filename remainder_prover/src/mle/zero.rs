@@ -18,10 +18,10 @@ pub struct ZeroMle<F> {
     pub(crate) original_mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck).
-    num_vars: usize,
-    layer_id: LayerId,
-    zero: [F; 1],
-    indexed: bool,
+    pub(crate) num_vars: usize,
+    pub(crate) layer_id: LayerId,
+    pub(crate) zero: [F; 1],
+    pub(crate) indexed: bool,
 }
 
 impl<F: Field> ZeroMle<F> {
@@ -41,25 +41,6 @@ impl<F: Field> ZeroMle<F> {
             layer_id,
             zero: [F::ZERO],
             indexed: false,
-        }
-    }
-
-    /// To be used internally for testing.
-    pub(crate) fn new_raw(
-        mle_indices: Vec<MleIndex<F>>,
-        original_mle_indices: Vec<MleIndex<F>>,
-        num_vars: usize,
-        layer_id: LayerId,
-        zero: [F; 1],
-        indexed: bool,
-    ) -> Self {
-        Self {
-            mle_indices,
-            original_mle_indices,
-            num_vars,
-            layer_id,
-            zero,
-            indexed,
         }
     }
 }

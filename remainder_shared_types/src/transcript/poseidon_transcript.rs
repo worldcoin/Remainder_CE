@@ -49,15 +49,11 @@ impl<F: Field> TranscriptSponge<F> for PoseidonSponge<F> {
 mod tests {
 
     use halo2curves::bn256::Fq as Base;
-    use halo2curves::bn256::Fr as Scalar;
     use halo2curves::bn256::G1 as Bn256Point;
 
-    use crate::{
-        curves::PrimeOrderCurve,
-        transcript::{
-            ec_transcript::{ECProverTranscript, ECTranscriptWriter},
-            ProverTranscript,
-        },
+    use crate::transcript::{
+        ec_transcript::{ECProverTranscript, ECTranscriptWriter},
+        ProverTranscript,
     };
 
     use super::PoseidonSponge;

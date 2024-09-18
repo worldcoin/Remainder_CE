@@ -3,13 +3,9 @@ use crate::{
     halo2curves::{bn256::G1 as Bn256, CurveExt},
     Field, HasByteRepresentation,
 };
-use ark_std::{
-    rand::{self, RngCore},
-    test_rng,
-};
+use ark_std::rand::{self, RngCore};
 use halo2curves::bn256::{Fq, Fr};
 use itertools::Itertools;
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha3::{
     digest::{core_api::XofReaderCoreWrapper, XofReader},
@@ -127,23 +123,6 @@ impl HasByteRepresentation for Fq {
     }
 }
 
-/// Ensures that doing `from_bytes_le` and `to_bytes_le` gives the same value.
-///
-/// TODO(ryancao): Do another manual test to ensure that the integer-interpretable
-/// values of the translation between an [Fr] and an [Fq] element are equal
-/// (and in particular, equal to the original `u64` value)!
-fn test_byte_repr_identity<F: Field>() {
-    let mut rng = test_rng();
-
-    (0..100).for_each(|_| {
-        let orig_value_u64 = rng.gen::<u64>();
-        let orig_value = F::from(orig_value_u64);
-        let orig_value_bytes = orig_value.to_bytes_le();
-        let new_value = F::from_bytes_le(orig_value_bytes);
-        assert_eq!(orig_value, new_value);
-    })
-}
-
 impl PrimeOrderCurve for Bn256 {
     type Scalar = <Bn256 as CurveExt>::ScalarExt;
     type Base = <Bn256 as CurveExt>::Base;
@@ -206,7 +185,6 @@ impl PrimeOrderCurve for Bn256 {
         if let Some((x, y)) = affine_coords {
             let x_bytes = x.to_bytes();
             let y_bytes = y.to_bytes();
-            let mut fixed_size_all_bytes = [0_u8; 65];
             let all_bytes = std::iter::once(0_u8)
                 .chain(x_bytes.into_iter())
                 .chain(y_bytes.into_iter())
@@ -236,7 +214,6 @@ impl PrimeOrderCurve for Bn256 {
             // and if y > q/2 and y is a square root, this means y is odd. this is exactly
             // what we are computing using & 1.
             let y_sign = y.to_bytes()[0] & 1;
-            let mut fixed_size_all_bytes = [0_u8; 34];
             let all_bytes = std::iter::once(0_u8)
                 .chain(x_bytes.into_iter())
                 .chain(std::iter::once(y_sign))
