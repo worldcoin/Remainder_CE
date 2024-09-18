@@ -377,7 +377,6 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
             }
             ExpressionNode::Scaled(a, scale) => {
                 let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map)?;
-                dbg!(&a_bookkeeping_table);
                 Some(MultilinearExtension::new(
                     a_bookkeeping_table
                         .get_evals_vector()
