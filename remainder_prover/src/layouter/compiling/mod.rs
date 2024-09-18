@@ -44,7 +44,7 @@ pub struct LayouterCircuit<
     C: Component<NodeEnum<F>>,
     Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>),
 > {
-    witness_builder: Fn,
+    pub witness_builder: Fn,
     _marker: PhantomData<F>,
 }
 
@@ -64,7 +64,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
 impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>)>
     LayouterCircuit<F, C, Fn>
 {
-    fn generate_circuit_description(
+    pub fn generate_circuit_description(
         &mut self,
         component: C,
         ctx: Context,
@@ -174,8 +174,6 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             output_layers: output_layer_descriptions,
         } = gkr_circuit_description;
 
-        dbg!(&gkr_circuit_description);
-
         // Forward pass through input layer data to map input layer ID to the data that the circuit builder provides.
         let mut input_id_data_map = HashMap::<NodeId, &InputLayerData<F>>::new();
         data_input_layers.iter().for_each(|input_layer_data| {
@@ -241,8 +239,6 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                         .data
                         .iter()
                         .map(|input_shred_data| &input_shred_data.data);
-
-                    dbg!(&input_mles);
 
                     let combined_mle = combine_input_mles(&input_mles.collect_vec());
                     let mle_outputs_necessary = mle_claim_map.get(&input_layer_id).unwrap();
@@ -374,12 +370,11 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             layers: Layers::new_with_layers(prover_intermediate_layers),
             output_layers: prover_output_layers,
         };
-        dbg!(&gkr_circuit);
 
         gkr_circuit
     }
 
-    fn synthesize_and_commit(
+    pub fn synthesize_and_commit(
         &mut self,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> (InstantiatedCircuit<F>, GKRCircuitDescription<F>) {

@@ -290,11 +290,6 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
                 }
             });
 
-        if self.layer_id() == LayerId::Layer(4) {
-            dbg!(&self.expression);
-            dbg!(&expression_nodes_to_compile);
-        }
-
         expression_nodes_to_compile
             .iter()
             .for_each(|(expression_node, prefix_bit_vec)| {
@@ -507,9 +502,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
 
         assert_eq!(nonlinear_round_index_counter, nonlinear_round_indices.len());
 
-        
-        self
-            .expression
+        self.expression
             .get_post_sumcheck_layer(fully_bound_beta, &all_bound_challenges)
     }
 

@@ -8,7 +8,7 @@ use remainder::{
         Claim,
     },
     input_layer::{
-        public_input_layer::PublicInputLayer,
+        enum_input_layer::InputLayerEnum, public_input_layer::PublicInputLayer,
         verifier_challenge_input_layer::VerifierChallengeInputLayer, InputLayer,
     },
     layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
@@ -58,6 +58,19 @@ pub enum HyraxCircuitInputLayerEnum<C: PrimeOrderCurve> {
 }
 
 impl<C: PrimeOrderCurve> HyraxCircuitInputLayerEnum<C> {
+    pub fn from_input_layer_enum(input_layer_enum: InputLayerEnum<C::Scalar>) -> Self {
+        match input_layer_enum {
+            InputLayerEnum::LigeroInputLayer(_ligero_input_layer) => {
+                panic!("hyrax does not support ligero pcs");
+            }
+            InputLayerEnum::PublicInputLayer(public_input_layer) => {
+                HyraxCircuitInputLayerEnum::PublicInputLayer(*public_input_layer)
+            }
+            InputLayerEnum::RandomInputLayer(verifier_challenge_input_layer) => {
+                HyraxCircuitInputLayerEnum::RandomInputLayer(*verifier_challenge_input_layer)
+            }
+        }
+    }
     pub fn layer_id(&self) -> LayerId {
         match self {
             HyraxCircuitInputLayerEnum::HyraxInputLayer(hyrax_layer) => hyrax_layer.layer_id,
@@ -70,6 +83,7 @@ impl<C: PrimeOrderCurve> HyraxCircuitInputLayerEnum<C> {
 /// An Enum representing the types of commitments for each layer,
 /// to be used in [HyraxCircuit::new_from_gkr_circuit] to append
 /// input commitments to transcript.
+#[derive(Debug)]
 pub enum CommitmentEnum<C: PrimeOrderCurve> {
     HyraxCommitment(Vec<C>),
     PublicCommitment(Vec<C::Scalar>),

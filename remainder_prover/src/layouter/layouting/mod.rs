@@ -34,7 +34,7 @@ use super::nodes::{
 pub struct CircuitMap<F>(pub(crate) HashMap<CircuitLocation, MultilinearExtension<F>>);
 
 impl<F: Field> CircuitMap<F> {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self(HashMap::new())
     }
 
@@ -59,10 +59,6 @@ impl<F: Field> CircuitMap<F> {
             .get(&circuit_location)
             .ok_or(DAGError::NoCircuitLocation);
         if let Ok(actual_result) = result {
-            if actual_result.num_vars() != circuit_mle.num_iterated_vars() {
-                dbg!(&actual_result);
-                dbg!(&circuit_mle);
-            }
             assert_eq!(actual_result.num_vars(), circuit_mle.num_iterated_vars());
         }
         result
@@ -129,7 +125,7 @@ impl InputNodeMap {
 /// A HashMap that maps a circuit location to the function that should
 /// be used on a MLE in order to generate its data.
 pub struct InputLayerHintMap<F: Field>(
-    pub(crate)  HashMap<
+    pub  HashMap<
         LayerId,
         (
             CircuitLocation,
