@@ -86,8 +86,6 @@ impl<F: Field> MleOutputLayer<F> {
 }
 
 impl<F: Field> OutputLayer<F> for MleOutputLayer<F> {
-    type CircuitOutputLayer = CircuitMleOutputLayer<F>;
-
     fn layer_id(&self) -> LayerId {
         self.mle.get_layer_id()
     }
@@ -107,19 +105,6 @@ impl<F: Field> OutputLayer<F> for MleOutputLayer<F> {
         debug_assert_eq!(self.mle.num_iterated_vars(), 0);
 
         Ok(())
-    }
-
-    fn into_circuit_output_layer(&self) -> Self::CircuitOutputLayer {
-        let mut mle = self.mle.clone();
-        mle.index_mle_indices(0);
-
-        let layer_id = mle.get_layer_id();
-        let indices = mle.mle_indices();
-
-        match self.mle {
-            MleEnum::Dense(_) => unimplemented!(),
-            MleEnum::Zero(_) => Self::CircuitOutputLayer::new_zero(layer_id, indices),
-        }
     }
 
     fn append_mle_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
@@ -175,8 +160,6 @@ impl<F: Field> CircuitMleOutputLayer<F> {
             .iter()
             .map(|bit| MleIndex::Fixed(*bit))
             .collect();
-
-        
 
         if self.is_zero {
             ZeroMle::new(
@@ -319,10 +302,8 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
             .mle
             .mle_indices()
             .iter()
-            .filter(|index| match index {
-                MleIndex::Fixed(_) => true,
-                _ => false,
-            }).cloned()
+            .filter(|index| matches!(index, MleIndex::Fixed(_bit)))
+            .cloned()
             .collect();
 
         let claim_point: Vec<F> = self

@@ -241,7 +241,7 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
     pub fn get_all_nonlinear_rounds(
         &self,
         curr_nonlinear_indices: &mut Vec<usize>,
-        mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
+        _mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
         let nonlinear_indices_in_node = {
             match self {
@@ -281,8 +281,8 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
                 // for more leaves which are specifically product nodes.
                 ExpressionNode::Selector(_sel_index, a, b) => {
                     let mut sel_nonlinear_indices: HashSet<usize> = HashSet::new();
-                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
-                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
+                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
+                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
                     a_indices
                         .into_iter()
                         .zip(b_indices)
@@ -294,8 +294,8 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
                 }
                 ExpressionNode::Sum(a, b) => {
                     let mut sum_nonlinear_indices: HashSet<usize> = HashSet::new();
-                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
-                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
+                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
+                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
                     a_indices
                         .into_iter()
                         .zip(b_indices)
@@ -306,11 +306,11 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
                     sum_nonlinear_indices
                 }
                 ExpressionNode::Scaled(a, _) => a
-                    .get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec)
+                    .get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec)
                     .into_iter()
                     .collect(),
                 ExpressionNode::Negated(a) => a
-                    .get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec)
+                    .get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec)
                     .into_iter()
                     .collect(),
                 ExpressionNode::Constant(_) | ExpressionNode::Mle(_) => HashSet::new(),

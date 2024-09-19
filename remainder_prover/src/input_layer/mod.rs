@@ -127,7 +127,7 @@ pub trait CircuitInputLayer<F: Field> {
     ) -> Result<Self::Commitment, InputLayerError>;
 
     /// Convert a circuit input layer into a prover input layer.
-    fn into_prover_input_layer(
+    fn convert_into_prover_input_layer(
         &self,
         mle: MultilinearExtension<F>,
         precommit: &Option<CommitmentEnum<F>>,

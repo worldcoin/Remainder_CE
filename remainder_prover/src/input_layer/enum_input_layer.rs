@@ -85,20 +85,21 @@ impl<F: Field> CircuitInputLayer<F> for CircuitInputLayerEnum<F> {
         }
     }
 
-    fn into_prover_input_layer(
+    fn convert_into_prover_input_layer(
         &self,
         mle: MultilinearExtension<F>,
         precommit: &Option<CommitmentEnum<F>>,
     ) -> InputLayerEnum<F> {
         match self {
             CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
-                circuit_public_input_layer.into_prover_input_layer(mle, precommit)
+                circuit_public_input_layer.convert_into_prover_input_layer(mle, precommit)
             }
             CircuitInputLayerEnum::VerifierChallengeInputLayer(
                 circuit_verifier_challenge_input_layer,
-            ) => circuit_verifier_challenge_input_layer.into_prover_input_layer(mle, precommit),
+            ) => circuit_verifier_challenge_input_layer
+                .convert_into_prover_input_layer(mle, precommit),
             CircuitInputLayerEnum::LigeroInputLayer(circuit_ligero_input_layer) => {
-                circuit_ligero_input_layer.into_prover_input_layer(mle, precommit)
+                circuit_ligero_input_layer.convert_into_prover_input_layer(mle, precommit)
             }
             CircuitInputLayerEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
                 panic!("The circuit input layer trait is not implemented for hyrax input layers!")

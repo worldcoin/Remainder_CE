@@ -141,7 +141,7 @@ impl<F: Field> CircuitInputLayer<F> for CircuitPublicInputLayer<F> {
         }
     }
 
-    fn into_prover_input_layer(
+    fn convert_into_prover_input_layer(
         &self,
         combined_mle: MultilinearExtension<F>,
         precommit: &Option<CommitmentEnum<F>>,

@@ -105,7 +105,7 @@ impl HasByteRepresentation for Fr {
     }
 
     fn to_bytes_le(&self) -> Vec<u8> {
-        Fr::to_bytes(&self).to_vec()
+        Fr::to_bytes(self).to_vec()
     }
 }
 
@@ -119,7 +119,7 @@ impl HasByteRepresentation for Fq {
     }
 
     fn to_bytes_le(&self) -> Vec<u8> {
-        Fq::to_bytes(&self).to_vec()
+        Fq::to_bytes(self).to_vec()
     }
 }
 
@@ -144,7 +144,7 @@ impl PrimeOrderCurve for Bn256 {
     }
 
     fn double(&self) -> Self {
-        Group::double(&self)
+        Group::double(self)
     }
 
     fn projective_coordinates(&self) -> (Self::Base, Self::Base, Self::Base) {
@@ -185,14 +185,13 @@ impl PrimeOrderCurve for Bn256 {
         if let Some((x, y)) = affine_coords {
             let x_bytes = x.to_bytes();
             let y_bytes = y.to_bytes();
-            let all_bytes = std::iter::once(0_u8)
-                .chain(x_bytes.into_iter())
-                .chain(y_bytes.into_iter())
-                .collect_vec();
-            all_bytes
+            std::iter::once(0_u8)
+                .chain(x_bytes)
+                .chain(y_bytes)
+                .collect_vec()
         } else {
             // --- Point at infinity ---
-            return [1_u8; 65].to_vec();
+            [1_u8; 65].to_vec()
         }
     }
 
@@ -214,14 +213,13 @@ impl PrimeOrderCurve for Bn256 {
             // and if y > q/2 and y is a square root, this means y is odd. this is exactly
             // what we are computing using & 1.
             let y_sign = y.to_bytes()[0] & 1;
-            let all_bytes = std::iter::once(0_u8)
+            std::iter::once(0_u8)
                 .chain(x_bytes)
                 .chain(std::iter::once(y_sign))
-                .collect_vec();
-            all_bytes
+                .collect_vec()
         } else {
             // --- Point at infinity ---
-            return [1_u8; 34].to_vec();
+            [1_u8; 34].to_vec()
         }
     }
 

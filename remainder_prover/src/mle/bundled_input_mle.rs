@@ -88,8 +88,6 @@ impl<F: Field, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
                 (input_shred, input_shred_data)
             })
             .unzip()
-            .try_into()
-            .unwrap()
     }
 }
 

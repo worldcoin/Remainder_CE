@@ -65,7 +65,7 @@ impl<F: Field> Product<F, Option<F>> {
         Intermediate::Atom {
             layer_id: mle.layer_id(),
             point: mle.get_claim_point(bindings),
-            mle_enum: None,
+            mle_enum: Box::new(None),
             value: None,
         }
     }
@@ -106,7 +106,7 @@ impl<F: Field> Product<F, F> {
         Intermediate::Atom {
             layer_id: mle_ref.layer_id,
             point: mle_ref.get_bound_point(),
-            mle_enum: Some(MleEnum::Dense(mle_ref.clone())),
+            mle_enum: Box::new(Some(MleEnum::Dense(mle_ref.clone()))),
             value: mle_ref.bookkeeping_table()[0],
         }
     }
@@ -140,7 +140,7 @@ impl<F: Field> Product<F, F> {
         Intermediate::Atom {
             layer_id: verifier_mle.layer_id(),
             point: verifier_mle.get_bound_point(),
-            mle_enum: None,
+            mle_enum: Box::new(None),
             value: verifier_mle.value(),
         }
     }
@@ -160,7 +160,7 @@ pub enum Intermediate<F: Field, T> {
         value: T,
         /// the mle enum associated with the point and the value above,
         /// populated for the prover but None for the verifier.
-        mle_enum: Option<MleEnum<F>>,
+        mle_enum: Box<Option<MleEnum<F>>>,
     },
     /// A struct representing a commitment to the product of two MLE evaluations.
     Composite {
@@ -197,7 +197,7 @@ impl<F: Field, T: Copy> PostSumcheckLayer<F, T> {
 /// returning a new instance. Counterpart to [get_values].
 pub fn new_with_values<F: Field, S, T: Clone>(
     post_sumcheck_layer: &PostSumcheckLayer<F, S>,
-    values: &Vec<T>,
+    values: &[T],
 ) -> PostSumcheckLayer<F, T> {
     let total_len: usize = post_sumcheck_layer
         .0

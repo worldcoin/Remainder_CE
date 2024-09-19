@@ -41,13 +41,6 @@ pub enum VerifierOutputLayerError {
 /// separate [LayerId]. Instead they are associated with the ID of an existing
 /// intermediate/input layer on which they generate claims for.
 pub trait OutputLayer<F: Field> {
-    /// The associated type for the circuit-description analogue of this Ouput
-    /// Layer.
-    type CircuitOutputLayer: CircuitOutputLayer<F>
-        + Serialize
-        + for<'a> Deserialize<'a>
-        + core::fmt::Debug;
-
     /// Returns the [LayerId] of the intermediate/input layer that this output
     /// layer is associated with.
     fn layer_id(&self) -> LayerId;
@@ -61,11 +54,6 @@ pub trait OutputLayer<F: Field> {
         &mut self,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError>;
-
-    /// Return the Circuit description for this Output Layer to be used
-    /// by the verifier.
-    /// Should be called before any other method that mutates `self`!
-    fn into_circuit_output_layer(&self) -> Self::CircuitOutputLayer;
 }
 
 /// The interface for the circuit description counterpart of an Output Layer.

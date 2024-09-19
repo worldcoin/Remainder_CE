@@ -242,7 +242,7 @@ impl<
                                     hyrax_precommit.clone());
                                 (hyrax_precommit.clone(), hyrax_input_layer)
                             } else if corresponding_input_data.precommit.is_none() {
-                                let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(combined_mle, input_layer_id, &self.committer);
+                                let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(combined_mle, input_layer_id, self.committer);
                                 let hyrax_commit = hyrax_input_layer.commit();
                                 (hyrax_commit, hyrax_input_layer)
                             } else {
@@ -255,7 +255,7 @@ impl<
                         }
                         CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
                             assert!(corresponding_input_data.precommit.is_none(), "public input layers should not have precommits");
-                            let mut prover_public_input_layer = circuit_public_input_layer.into_prover_input_layer(combined_mle, &None);
+                            let mut prover_public_input_layer = circuit_public_input_layer.convert_into_prover_input_layer(combined_mle, &None);
                             let commitment = prover_public_input_layer.commit().unwrap();
                             if let InputLayerEnumVerifierCommitment::PublicInputLayer(public_input_coefficients) = commitment {
                                 transcript_writer.append_scalar_points(
@@ -291,7 +291,7 @@ impl<
                         verifier_challenge_mle.clone(),
                     );
                     let verifier_challenge_layer = input_layer_description
-                        .into_prover_input_layer(verifier_challenge_mle, &None);
+                        .convert_into_prover_input_layer(verifier_challenge_mle, &None);
                     prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(verifier_challenge_layer));
                 } else {
                     hint_input_layers.push(input_layer_description);
@@ -333,14 +333,14 @@ impl<
                         );
                         match hint_input_layer_description {
                             CircuitInputLayerEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
-                                let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(function_applied_to_data, hint_input_layer_description.layer_id(), &self.committer);
+                                let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(function_applied_to_data, hint_input_layer_description.layer_id(), self.committer);
                                 let hyrax_commit = hyrax_input_layer.commit();
                                 transcript_writer.append_ec_points("Hyrax commitment", &hyrax_commit);
                                 input_commitments.push(HyraxVerifierCommitmentEnum::HyraxCommitment(hyrax_commit));
                                 prover_input_layers.push(HyraxInputLayerEnum::HyraxInputLayer(hyrax_input_layer));
                             }
                             CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
-                                let mut prover_public_input_layer = circuit_public_input_layer.into_prover_input_layer(function_applied_to_data, &None);
+                                let mut prover_public_input_layer = circuit_public_input_layer.convert_into_prover_input_layer(function_applied_to_data, &None);
                                 let commitment = prover_public_input_layer.commit().unwrap();
                                 if let InputLayerEnumVerifierCommitment::PublicInputLayer(public_input_coefficients) = commitment {
                                     transcript_writer.append_scalar_points(
@@ -451,7 +451,7 @@ impl<
     ) -> HyraxProof<C> {
         let committer = self.committer;
         let mut blinding_rng = &mut self.blinding_rng;
-        let mut converter = &mut self.converter;
+        let converter = &mut self.converter;
         let HyraxInstantiatedCircuit {
             input_layers,
             layers,
@@ -463,14 +463,14 @@ impl<
             HashMap::new();
 
         let output_layer_proofs = output_layers
-            .into_iter()
+            .iter_mut()
             .map(|output_layer| {
                 // Create the HyraxOutputLayerProof
                 let (output_layer_proof, committed_output_claim) = HyraxOutputLayerProof::prove(
                     output_layer,
                     transcript,
                     &mut blinding_rng,
-                    &committer,
+                    committer,
                 );
                 // Add the output claim to the claims table
                 let output_layer_id = output_layer.underlying_mle.layer_id();
@@ -480,7 +480,7 @@ impl<
             .collect_vec();
 
         let layer_proofs = layers
-            .into_iter()
+            .iter_mut()
             .rev()
             .map(|layer| {
                 let claims = claim_tracker.get(&layer.layer_id()).unwrap().clone();
@@ -488,10 +488,10 @@ impl<
                 let (layer_proof, claims_from_layer) = HyraxLayerProof::prove(
                     layer,
                     &claims,
-                    &committer,
+                    committer,
                     &mut blinding_rng,
                     transcript,
-                    &mut converter,
+                    converter,
                 );
                 // add new claims to the claim tracking table, and add each new claim to the transcript
                 for claim in claims_from_layer.into_iter() {
@@ -508,7 +508,7 @@ impl<
 
         // Input layer proofs
         let input_layer_proofs = input_layers
-            .into_iter()
+            .iter_mut()
             .map(|input_layer| {
                 let layer_id = input_layer.layer_id();
                 let committed_claims = claim_tracker.get(&layer_id).unwrap();
@@ -516,13 +516,13 @@ impl<
                     HyraxInputLayerEnum::HyraxInputLayer(hyrax_input_layer) => {
                         let hyrax_commitment = hyrax_input_layer.comm.as_ref().unwrap();
                         let input_proof = HyraxInputLayerProof::prove(
-                            &hyrax_input_layer,
+                            hyrax_input_layer,
                             hyrax_commitment,
-                            &committed_claims,
-                            &committer,
+                            committed_claims,
+                            committer,
                             &mut blinding_rng,
                             transcript,
-                            &mut converter,
+                            converter,
                         );
                         InputProofEnum::HyraxInputLayerProof(input_proof)
                     }
@@ -587,7 +587,7 @@ impl<
         Self::verify(
             proof,
             circuit_description,
-            &self.committer,
+            self.committer,
             commitments,
             verifier_transcript,
         );
@@ -619,7 +619,7 @@ impl<
             .zip(circuit_description.output_layers.iter())
             .for_each(|(output_layer_proof, output_layer_desc)| {
                 let output_layer_claim = HyraxOutputLayerProof::verify(
-                    &output_layer_proof,
+                    output_layer_proof,
                     output_layer_desc,
                     transcript,
                 );
@@ -630,7 +630,7 @@ impl<
 
         // Intermediate layer verification
         (layer_proofs
-            .into_iter()
+            .iter()
             .zip(circuit_description.intermediate_layers.iter().rev()))
         .for_each(|(layer_proof, layer_desc)| {
             // Get the unaggregated claims for this layer
@@ -640,10 +640,10 @@ impl<
                 .unwrap()
                 .clone();
             let claim_commits_for_layer = HyraxLayerProof::verify(
-                &layer_proof,
+                layer_proof,
                 layer_desc,
                 &layer_claims_vec,
-                &committer,
+                committer,
                 transcript,
             );
 
@@ -658,8 +658,8 @@ impl<
 
         // Input layers verification
         input_layer_proofs
-            .into_iter()
-            .zip(commitments.into_iter())
+            .iter()
+            .zip(commitments)
             .for_each(
                 |(input_layer_proof, input_commit)| match input_layer_proof {
                     InputProofEnum::HyraxInputLayerProof(hyrax_input_proof) => {
@@ -672,7 +672,7 @@ impl<
                         }
                         let layer_id = hyrax_input_proof.layer_id;
                         let layer_claims_vec = claim_tracker.remove(&layer_id).unwrap().clone();
-                        hyrax_input_proof.verify(&layer_claims_vec, &committer, transcript);
+                        hyrax_input_proof.verify(&layer_claims_vec, committer, transcript);
                     }
                     InputProofEnum::PublicInputLayerProof(layer, committed_claims) => {
                         let public_commit_from_proof = layer.clone().commit().unwrap();
@@ -687,7 +687,7 @@ impl<
                             claim_tracker.remove(&layer.layer_id()).unwrap().clone();
                         let plaintext_claims = Self::match_claims(
                             &claims_as_commitments,
-                            &committed_claims,
+                            committed_claims,
                             committer,
                         );
                         plaintext_claims.into_iter().for_each(|claim| {
@@ -710,7 +710,7 @@ impl<
                             claim_tracker.remove(&layer.layer_id()).unwrap().clone();
                         let plaintext_claims = Self::match_claims(
                             &claims_as_commitments,
-                            &committed_claims,
+                            committed_claims,
                             committer,
                         );
                         plaintext_claims.into_iter().for_each(|claim| {

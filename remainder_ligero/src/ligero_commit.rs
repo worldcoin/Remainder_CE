@@ -40,7 +40,7 @@ pub fn remainder_ligero_commit<F: Field>(
 
     // --- Create commitment ---
     let comm =
-        commit::<PoseidonSpongeHasher<F>, LigeroAuxInfo<F>, F>(input_mle_bookkeeping_table, &aux)
+        commit::<PoseidonSpongeHasher<F>, LigeroAuxInfo<F>, F>(input_mle_bookkeeping_table, aux)
             .unwrap();
 
     // --- Only component of commitment which needs to be sent to the verifier is the commitment root ---
@@ -82,7 +82,7 @@ pub fn remainder_ligero_eval_prove<F: Field>(
         get_ml_inner_outer_tensors(challenge_coord, aux.num_rows, aux.orig_num_cols);
 
     // --- Compute evaluation proof and write to `transcript_writer`
-    prove(&comm, &outer_tensor[..], &aux, transcript_writer)
+    prove(&comm, &outer_tensor[..], aux, transcript_writer)
 }
 
 /// API for Remainder's Ligero eval proof verification.

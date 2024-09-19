@@ -155,7 +155,10 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                     });
 
                     let mut prover_input_layer = input_layer_description
-                        .into_prover_input_layer(combined_mle, &corresponding_input_data.precommit);
+                        .convert_into_prover_input_layer(
+                            combined_mle,
+                            &corresponding_input_data.precommit,
+                        );
                     let commitment = prover_input_layer.commit().unwrap();
                     InputLayerEnum::append_commitment_to_transcript(&commitment, transcript_writer);
                     prover_input_layers.push(prover_input_layer);
@@ -176,7 +179,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                         verifier_challenge_mle.clone(),
                     );
                     let verifier_challenge_layer = input_layer_description
-                        .into_prover_input_layer(verifier_challenge_mle, &None);
+                        .convert_into_prover_input_layer(verifier_challenge_mle, &None);
                     prover_input_layers.push(verifier_challenge_layer);
                 } else {
                     hint_input_layers.push(input_layer_description);
@@ -217,7 +220,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                             function_applied_to_data.clone(),
                         );
                         let mut prover_input_layer = hint_input_layer_description
-                            .into_prover_input_layer(function_applied_to_data, &None);
+                            .convert_into_prover_input_layer(function_applied_to_data, &None);
                         // LOL wait my brain can't think right now TODO (@ryan) do we really need to do this commitment part?
                         let prover_input_commit = prover_input_layer.commit().unwrap();
                         InputLayerEnum::append_commitment_to_transcript(
@@ -270,13 +273,11 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                     output_layer_description.into_prover_output_layer(&circuit_map);
                 prover_output_layers.push(prover_output_layer)
             });
-        let gkr_circuit = InstantiatedCircuit {
+        InstantiatedCircuit {
             input_layers: prover_input_layers,
             layers: Layers::new_with_layers(prover_intermediate_layers),
             output_layers: prover_output_layers,
-        };
-
-        gkr_circuit
+        }
     }
 
     fn synthesize_and_commit(

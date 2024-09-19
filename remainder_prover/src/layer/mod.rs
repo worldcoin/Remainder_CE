@@ -162,7 +162,7 @@ pub trait CircuitLayer<F: Field> {
     fn sumcheck_round_indices(&self) -> Vec<usize>;
 
     /// Turns this Circuit Layer into a Verifier Layer
-    fn into_verifier_layer(
+    fn convert_into_verifier_layer(
         &self,
         sumcheck_bindings: &[F],
         claim_point: &[F],
