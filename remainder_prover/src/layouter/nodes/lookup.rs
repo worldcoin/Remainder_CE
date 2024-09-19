@@ -100,7 +100,7 @@ impl LookupTable {
     /// does not hide the constrained values themselves - that is up to the caller).
     ///
     /// # Requires
-    /// - The length of the table must be a power of two.
+    /// The length of the table must be a power of two.
     pub fn new<F: Field>(
         ctx: &Context,
         table: &dyn CircuitNode,

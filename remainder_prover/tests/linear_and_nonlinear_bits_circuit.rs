@@ -20,7 +20,7 @@ use utils::{get_dummy_input_shred_and_data, DifferenceBuilderComponent};
 pub mod utils;
 
 /// A builder which returns the following expression:
-/// - sel(`mle_1`, `mle_1`) + `mle_2` * `mle_2`
+/// `sel(mle_1, mle_1) + mle_2 * mle_2`
 ///
 /// The idea is that the last bit in this expression is linear.
 ///
@@ -64,7 +64,7 @@ where
 }
 
 /// A builder which returns the following expression:
-/// - sel(`mle_1` * `mle_1`, `mle_1`)
+/// `sel(mle_1 * mle_1, mle_1)`
 ///
 /// The idea is that the first bit (selector bit) in this expression is linear.
 ///

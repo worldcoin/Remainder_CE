@@ -17,10 +17,11 @@ pub trait ExpressionType<F: Field>: Serialize + for<'de> Deserialize<'de> {
     /// for abstract expression, it's over [TBD]
     type MLENodeRepr: Clone + Serialize + for<'de> Deserialize<'de>; // either index or F
 
-    /// MleRefs is the optional data array of mle_refs
-    /// that can be indexed into by the MleRefIndex defind in the ProverExpr
-    /// -- this is either unit type for VerifierExpr or
-    /// -- Vec<DenseMle> for ProverExpr
+    /// This is the optional data array of mle_refs
+    /// that can be indexed into by the MleRefIndex defind in the ProverExpr.
+    /// This is either unit type for VerifierExpr or
+    /// Vec<DenseMle> for ProverExpr.
+    /// TODO(Makis): This comment is outdated.
     type MleVec: Serialize + for<'de> Deserialize<'de>;
 }
 
