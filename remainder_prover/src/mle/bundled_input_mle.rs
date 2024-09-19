@@ -20,8 +20,8 @@ use itertools::Itertools;
 /// of the enumeration by iterating first over the inner index, then the outer index.
 /// # Example:
 /// ```
-/// # use remainder::mle::circuit_mle::to_slice_of_vectors;
 /// use remainder_shared_types::Fr;
+/// use remainder::mle::bundled_input_mle::to_slice_of_vectors;
 /// let inputs = vec![
 ///     [Fr::from(1), Fr::from(2), Fr::from(3)],
 ///     [Fr::from(4), Fr::from(5), Fr::from(6)],

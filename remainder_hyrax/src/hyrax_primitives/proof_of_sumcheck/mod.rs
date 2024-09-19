@@ -184,7 +184,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
     /// bindings.len()).
     /// E.g. for a degree 2 sumcheck, with four rounds and verifier bindings r0, .. r3, the vector
     /// would be the sum down columns of:
-    /// ```
+    /// ```text
     ///             / gammas[0]     / gammas[1]     / gammas[2]      / gammas[3]
     /// rhos[0] * (2    1    1      0   0     0     0   0     0      0    0      0)
     /// rhos[1] * (-1   -r0  -r0^2  2   1     1     0   0     0      0    0      0)
