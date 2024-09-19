@@ -45,7 +45,9 @@ pub fn unsigned_decomposition<const BASE: u64, const N: usize>(value: u64) -> Op
 /// let decomp = complementary_decomposition::<2, 3>(3);
 /// assert_eq!(decomp, Some(([1, 0, 1], true)));
 /// ```
-pub fn complementary_decomposition<const BASE: u64, const N: usize>(value: i64) -> Option<([u16; N], bool)> {
+pub fn complementary_decomposition<const BASE: u64, const N: usize>(
+    value: i64,
+) -> Option<([u16; N], bool)> {
     debug_assert!(BASE <= (1 << 16));
     debug_assert!(BASE.ilog2() * (N as u32) <= 64, "BASE * N must be <= 64");
     let pow = (BASE as u128).pow(N as u32);
@@ -58,18 +60,26 @@ pub fn complementary_decomposition<const BASE: u64, const N: usize>(value: i64) 
         ((-value) as u128, false)
     };
     // unwrap() guaranteed given the checks on already made
-    Some((unsigned_decomposition::<BASE, N>(val_to_decomp as u64).unwrap(), bit))
+    Some((
+        unsigned_decomposition::<BASE, N>(val_to_decomp as u64).unwrap(),
+        bit,
+    ))
 }
 
 /// Convert a slice of digits to a slice of field elements.
 /// # Example:
 /// ```
-/// # use remainder::utils::digital_decomposition::digits_to_field;
 /// use remainder_shared_types::Fr;
+/// use remainder::digits::digits_to_field;
 /// assert_eq!(digits_to_field::<Fr, 3>(&[1, 2, 3]), [Fr::from(1), Fr::from(2), Fr::from(3)]);
 /// ```
 pub fn digits_to_field<F: Field, const N: usize>(digits: &[u16; N]) -> [F; N] {
-    digits.iter().map(|x| F::from(*x as u64)).collect::<Vec<_>>().try_into().unwrap()
+    digits
+        .iter()
+        .map(|x| F::from(*x as u64))
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap()
 }
 
 #[test]
@@ -84,18 +94,45 @@ fn test_unsigned_decomposition() {
 #[test]
 fn test_complementary_decomposition() {
     // base 2
-    assert_eq!(complementary_decomposition::<2, 3>(1), Some(([1, 1, 1], true)));
-    assert_eq!(complementary_decomposition::<2, 3>(3), Some(([1, 0, 1], true)));
-    assert_eq!(complementary_decomposition::<2, 3>(8), Some(([0, 0, 0], true)));
-    assert_eq!(complementary_decomposition::<2, 3>(0), Some(([0, 0, 0], false)));
-    assert_eq!(complementary_decomposition::<2, 3>(-1), Some(([0, 0, 1], false)));
-    assert_eq!(complementary_decomposition::<2, 3>(-3), Some(([0, 1, 1], false)));
+    assert_eq!(
+        complementary_decomposition::<2, 3>(1),
+        Some(([1, 1, 1], true))
+    );
+    assert_eq!(
+        complementary_decomposition::<2, 3>(3),
+        Some(([1, 0, 1], true))
+    );
+    assert_eq!(
+        complementary_decomposition::<2, 3>(8),
+        Some(([0, 0, 0], true))
+    );
+    assert_eq!(
+        complementary_decomposition::<2, 3>(0),
+        Some(([0, 0, 0], false))
+    );
+    assert_eq!(
+        complementary_decomposition::<2, 3>(-1),
+        Some(([0, 0, 1], false))
+    );
+    assert_eq!(
+        complementary_decomposition::<2, 3>(-3),
+        Some(([0, 1, 1], false))
+    );
     assert_eq!(complementary_decomposition::<2, 3>(-8), None);
     assert_eq!(complementary_decomposition::<2, 3>(9), None);
     // base 10
-    assert_eq!(complementary_decomposition::<10, 3>(-987), Some(([9, 8, 7], false)));
-    assert_eq!(complementary_decomposition::<10, 3>(987), Some(([0, 1, 3], true)));
-    assert_eq!(complementary_decomposition::<10, 3>(0), Some(([0, 0, 0], false)));
+    assert_eq!(
+        complementary_decomposition::<10, 3>(-987),
+        Some(([9, 8, 7], false))
+    );
+    assert_eq!(
+        complementary_decomposition::<10, 3>(987),
+        Some(([0, 1, 3], true))
+    );
+    assert_eq!(
+        complementary_decomposition::<10, 3>(0),
+        Some(([0, 0, 0], false))
+    );
     assert_eq!(complementary_decomposition::<10, 3>(-1000), None);
     assert_eq!(complementary_decomposition::<10, 3>(1001), None);
 }

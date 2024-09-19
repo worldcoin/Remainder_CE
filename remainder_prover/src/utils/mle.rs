@@ -17,7 +17,7 @@ use crate::{
 /// length is already a power of two.
 /// # Examples:
 /// ```
-/// use remainder::utils::pad_with;
+/// use remainder::utils::mle::pad_with;
 /// let data = vec![1, 2, 3];
 /// let padded_data = pad_with(0, &data);
 /// assert_eq!(padded_data, vec![1, 2, 3, 0]);

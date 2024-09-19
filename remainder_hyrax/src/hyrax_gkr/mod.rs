@@ -22,7 +22,6 @@ use remainder::input_layer::enum_input_layer::{
 use remainder::input_layer::{self, CircuitInputLayer, InputLayer};
 use remainder::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
 use remainder::layer::{CircuitLayer, Layer};
-use remainder::layouter::compiling::LayouterCircuit;
 use remainder::layouter::component::ComponentSet;
 use remainder::layouter::layouting::{
     CircuitLocation, CircuitMap, InputLayerHintMap, InputNodeMap,

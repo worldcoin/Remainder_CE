@@ -38,9 +38,6 @@ use super::{
 
 use super::{CircuitLayer, VerifierLayer};
 
-#[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-
 /// The most common implementation of [crate::layer::Layer].
 ///
 /// A layer is made up of a structured polynomial relationship between MLEs of
