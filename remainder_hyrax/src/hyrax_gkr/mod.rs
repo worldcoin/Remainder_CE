@@ -30,9 +30,7 @@ use remainder::layouter::nodes::{Context, NodeId};
 use remainder::mle::evals::MultilinearExtension;
 use remainder::mle::Mle;
 use remainder::prover::{generate_circuit_description, GKRCircuitDescription};
-use remainder::{
-    claims::wlx_eval::ClaimMle, layer::LayerId,
-};
+use remainder::{claims::wlx_eval::ClaimMle, layer::LayerId};
 
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
@@ -72,7 +70,8 @@ pub struct HyraxInstantiatedCircuit<C: PrimeOrderCurve> {
 }
 
 /// The struct that holds all the necessary information to describe a circuit.
-pub struct HyraxProver<'a,
+pub struct HyraxProver<
+    'a,
     C: PrimeOrderCurve,
     Fn: FnMut(
         &Context,
@@ -89,7 +88,7 @@ pub struct HyraxProver<'a,
 }
 
 impl<
-'a, 
+        'a,
         C: PrimeOrderCurve,
         Fn: FnMut(
             &Context,
@@ -103,27 +102,32 @@ impl<
     pub fn new(
         committer: &'a PedersenCommitter<C>,
         blinding_rng: R,
-        converter: &'a mut VandermondeInverse<C::Scalar>
+        converter: &'a mut VandermondeInverse<C::Scalar>,
     ) -> Self {
         Self {
             committer,
             blinding_rng,
             converter,
-            _marker: PhantomData
+            _marker: PhantomData,
         }
     }
 
     pub fn generate_circuit_description(
         mut witness_function: Fn,
     ) -> (
-        (GKRCircuitDescription<C::Scalar>,
-        InputNodeMap,
-        InputLayerHintMap<C::Scalar>,),
-        Vec<HyraxInputLayerData<C>>
+        (
+            GKRCircuitDescription<C::Scalar>,
+            InputNodeMap,
+            InputLayerHintMap<C::Scalar>,
+        ),
+        Vec<HyraxInputLayerData<C>>,
     ) {
         let ctx = Context::new();
         let (component, input_layer_data) = (witness_function)(&ctx);
-        (generate_circuit_description(component, ctx).unwrap(), input_layer_data)
+        (
+            generate_circuit_description(component, ctx).unwrap(),
+            input_layer_data,
+        )
     }
 
     pub fn populate_hyrax_circuit(
@@ -224,11 +228,11 @@ impl<
                         CircuitInputLayerEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
                             let (hyrax_commit, hyrax_prover_input_layer) = if let Some(HyraxProverCommitmentEnum::HyraxCommitment((hyrax_precommit, hyrax_blinding_factors))) = &corresponding_input_data.precommit {
                                let hyrax_input_layer = HyraxInputLayer::new_with_hyrax_commitment(
-                                    MleCoefficientsVector::ScalarFieldVector(combined_mle.get_evals_vector().to_vec()), 
-                                    input_layer_id, 
-                                    self.committer.clone(), 
-                                    hyrax_blinding_factors.clone(), 
-                                    circuit_hyrax_input_layer.log_num_cols, 
+                                    MleCoefficientsVector::ScalarFieldVector(combined_mle.get_evals_vector().to_vec()),
+                                    input_layer_id,
+                                    self.committer.clone(),
+                                    hyrax_blinding_factors.clone(),
+                                    circuit_hyrax_input_layer.log_num_cols,
                                     hyrax_precommit.clone());
                                 (hyrax_precommit.clone(), hyrax_input_layer)
                             } else if corresponding_input_data.precommit.is_none() {
@@ -410,14 +414,22 @@ impl<
         &mut self,
         witness_function: Fn,
         transcript_writer: &mut impl ECProverTranscript<C>,
-    ) -> (Vec<HyraxVerifierCommitmentEnum<C>>, GKRCircuitDescription<C::Scalar>, HyraxProof<C>) {
-        let ((circuit_description, input_layer_to_node_map, input_hint_map), input_data) = Self::generate_circuit_description(witness_function);
-        let (mut instantiated_circuit, commitments) = self.populate_hyrax_circuit(&circuit_description, input_layer_to_node_map, input_hint_map, input_data, transcript_writer);
-        let proof = self.prove(
-            &mut instantiated_circuit,
-            transcript_writer
+    ) -> (
+        Vec<HyraxVerifierCommitmentEnum<C>>,
+        GKRCircuitDescription<C::Scalar>,
+        HyraxProof<C>,
+    ) {
+        let ((circuit_description, input_layer_to_node_map, input_hint_map), input_data) =
+            Self::generate_circuit_description(witness_function);
+        let (mut instantiated_circuit, commitments) = self.populate_hyrax_circuit(
+            &circuit_description,
+            input_layer_to_node_map,
+            input_hint_map,
+            input_data,
+            transcript_writer,
         );
-       (commitments, circuit_description, proof)
+        let proof = self.prove(&mut instantiated_circuit, transcript_writer);
+        (commitments, circuit_description, proof)
     }
     /// TODO(vishady) riad audit comments: add in comments the ordering of the proofs every time they are in a vec
 
@@ -571,7 +583,7 @@ impl<
             circuit_description,
             &self.committer,
             commitments,
-            verifier_transcript
+            verifier_transcript,
         );
     }
     /// This is the verification of a GKR proof. It essentially calls the verify functions of the underlying proofs

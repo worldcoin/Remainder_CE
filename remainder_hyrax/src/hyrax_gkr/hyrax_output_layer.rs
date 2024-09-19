@@ -125,12 +125,9 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
             .iter()
             .map(|mle_index| match mle_index {
                 MleIndex::Fixed(val) => C::Scalar::from(*val as u64),
-                MleIndex::IndexedBit(_) => {
-                    
-                    transcript
-                        .get_scalar_field_challenge("output claim point")
-                        .unwrap()
-                }
+                MleIndex::IndexedBit(_) => transcript
+                    .get_scalar_field_challenge("output claim point")
+                    .unwrap(),
 
                 _ => {
                     panic!("should not have bound or iterated bits here!")
