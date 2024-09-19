@@ -108,10 +108,12 @@ impl InputShred {
 /// of InputLayer an InputLayerNode can be compiled into
 #[derive(Debug, Clone)]
 pub enum InputLayerType {
-    /// An InputLayer that will be compiled into a [LigeroInputLayer]
+    /// An InputLayer that will be compiled into a [LigeroInputLayer].
     LigeroInputLayer((u8, f64)),
-    /// An InputLayer that will be compiled into a [PublicInputLayer]
+    /// An InputLayer that will be compiled into a [PublicInputLayer].
     PublicInputLayer,
+    /// The input layer type that represents a [HyraxInputLayer].
+    HyraxInputLayer,
 }
 
 #[derive(Debug, Clone)]

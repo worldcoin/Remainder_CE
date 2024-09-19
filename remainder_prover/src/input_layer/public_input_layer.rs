@@ -55,8 +55,6 @@ impl<F: Field> InputLayer<F> for PublicInputLayer<F> {
     type ProverCommitment = Vec<F>;
     type VerifierCommitment = Vec<F>;
 
-    type CircuitInputLayer = CircuitPublicInputLayer<F>;
-
     fn commit(&mut self) -> Result<Self::VerifierCommitment, super::InputLayerError> {
         // Because this is a public input layer, we do not need to commit to the
         // MLE and the "commitment" is just the MLE evaluations themselves.
@@ -87,16 +85,6 @@ impl<F: Field> InputLayer<F> for PublicInputLayer<F> {
 
     fn get_padded_mle(&self) -> DenseMle<F> {
         DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
-    }
-
-    fn into_verifier_input_layer(&self) -> Self::CircuitInputLayer {
-        let num_bits = self.mle.num_vars();
-
-        Self::CircuitInputLayer {
-            layer_id: self.layer_id,
-            num_bits,
-            _marker: PhantomData,
-        }
     }
 }
 
@@ -200,25 +188,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_into_verifier_public_input_layer() {
-        let layer_id = LayerId::Input(0);
-
-        let num_vars = 2;
-        let evals = [1, 2, 3, 4].into_iter().map(|i| Fr::from(i)).collect();
-        let dense_mle = DenseMle::new_from_raw(evals, layer_id);
-
-        let public_input_layer = PublicInputLayer::new(dense_mle.original_mle, layer_id);
-        let verifier_public_input_layer = public_input_layer.into_verifier_input_layer();
-
-        let expected_verifier_public_input_layer = CircuitPublicInputLayer::new(layer_id, num_vars);
-
-        assert_eq!(
-            verifier_public_input_layer,
-            expected_verifier_public_input_layer
-        );
-    }
-
-    #[test]
     fn test_public_input_layer() {
         // Setup phase.
         let layer_id = LayerId::Input(0);
@@ -230,9 +199,9 @@ mod tests {
         let claim_point = vec![Fr::ONE, Fr::ZERO];
         let claim_result = Fr::from(2);
         let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
-
+        let verifier_public_input_layer =
+            CircuitPublicInputLayer::new(layer_id, dense_mle.num_iterated_vars());
         let mut public_input_layer = PublicInputLayer::new(dense_mle.original_mle, layer_id);
-        let verifier_public_input_layer = public_input_layer.into_verifier_input_layer();
 
         // Transcript writer with test sponge that always returns `1`.
         let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =

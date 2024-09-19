@@ -5,8 +5,8 @@ use remainder_shared_types::Field;
 
 use crate::{
     input_layer::{
-        enum_input_layer::CircuitInputLayerEnum, ligero_input_layer::CircuitLigeroInputLayer,
-        public_input_layer::CircuitPublicInputLayer,
+        enum_input_layer::CircuitInputLayerEnum, hyrax_input_layer::CircuitHyraxInputLayer,
+        ligero_input_layer::CircuitLigeroInputLayer, public_input_layer::CircuitPublicInputLayer,
     },
     layer::LayerId,
     layouter::{
@@ -190,6 +190,11 @@ impl InputLayerNode {
                 let public_input_layer_description =
                     CircuitPublicInputLayer::new(input_layer_id.to_owned(), num_vars_combined_mle);
                 CircuitInputLayerEnum::PublicInputLayer(public_input_layer_description)
+            }
+            InputLayerType::HyraxInputLayer => {
+                let hyrax_input_layer_description =
+                    CircuitHyraxInputLayer::new(input_layer_id.to_owned(), num_vars_combined_mle);
+                CircuitInputLayerEnum::HyraxInputLayer(hyrax_input_layer_description)
             }
         };
 

@@ -58,8 +58,6 @@ impl<F: Field> InputLayer<F> for VerifierChallengeInputLayer<F> {
     type ProverCommitment = Vec<F>;
     type VerifierCommitment = Vec<F>;
 
-    type CircuitInputLayer = CircuitVerifierChallengeInputLayer<F>;
-
     fn commit(&mut self) -> Result<Self::VerifierCommitment, super::InputLayerError> {
         // We do not need to commit to the randomness, so we simply send it in
         // the clear.
@@ -89,17 +87,6 @@ impl<F: Field> InputLayer<F> for VerifierChallengeInputLayer<F> {
 
     fn get_padded_mle(&self) -> DenseMle<F> {
         DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
-    }
-
-    fn into_verifier_input_layer(&self) -> Self::CircuitInputLayer {
-        let layer_id = self.layer_id();
-        let num_bits = self.get_mle().original_num_vars();
-
-        Self::CircuitInputLayer {
-            layer_id,
-            num_bits,
-            _marker: PhantomData,
-        }
     }
 }
 
@@ -221,8 +208,9 @@ mod tests {
         let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
         let mle = MultilinearExtension::new(mle_vec);
 
+        let verifier_random_input_layer =
+            CircuitVerifierChallengeInputLayer::<Fr>::new(layer_id, mle.num_vars());
         let random_input_layer = VerifierChallengeInputLayer::new(mle, layer_id);
-        let verifier_random_input_layer = random_input_layer.into_verifier_input_layer();
 
         let expected_verifier_random_input_layer =
             CircuitVerifierChallengeInputLayer::new(layer_id, num_vars);
@@ -253,8 +241,9 @@ mod tests {
         let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
         let mle = MultilinearExtension::new(mle_vec);
 
+        let verifier_random_input_layer =
+            CircuitVerifierChallengeInputLayer::<Fr>::new(layer_id, mle.num_vars());
         let mut random_input_layer = VerifierChallengeInputLayer::new(mle, layer_id);
-        let verifier_random_input_layer = random_input_layer.into_verifier_input_layer();
 
         // Prover phase.
         // 1. Commit to the input layer.

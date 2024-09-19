@@ -97,8 +97,6 @@ impl<F: Field> InputLayer<F> for LigeroInputLayer<F> {
     type ProverCommitment = LigeroCommitment<F>;
     type VerifierCommitment = LigeroRoot<F>;
 
-    type CircuitInputLayer = CircuitLigeroInputLayer<F>;
-
     fn commit(&mut self) -> Result<Self::VerifierCommitment, super::InputLayerError> {
         // If we've already generated a commitment (i.e. through `new_with_ligero_commitment()`),
         // there is no need to regenerate it.
@@ -152,18 +150,6 @@ impl<F: Field> InputLayer<F> for LigeroInputLayer<F> {
     fn get_padded_mle(&self) -> DenseMle<F> {
         DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
     }
-
-    fn into_verifier_input_layer(&self) -> Self::CircuitInputLayer {
-        let layer_id = self.layer_id();
-        let num_bits = self.mle.num_vars();
-
-        Self::CircuitInputLayer {
-            layer_id,
-            num_bits,
-            aux: self.aux.clone(),
-            _marker: PhantomData,
-        }
-    }
 }
 
 impl<F: Field> CircuitInputLayer<F> for CircuitLigeroInputLayer<F> {
@@ -205,28 +191,27 @@ impl<F: Field> CircuitInputLayer<F> for CircuitLigeroInputLayer<F> {
         combined_mle: MultilinearExtension<F>,
         precommit: &Option<CommitmentEnum<F>>,
     ) -> InputLayerEnum<F> {
-        let prover_ligero_layer =
-            if let Some(CommitmentEnum::LigeroCommitment(ligero_commit)) = &precommit {
-                LigeroInputLayer::new(
-                    combined_mle,
-                    self.layer_id,
-                    Some(ligero_commit.clone()),
-                    self.aux.rho_inv,
-                    (self.aux.orig_num_cols as f64) / (self.aux.num_rows as f64),
-                )
-            } else if precommit.is_none() {
-                LigeroInputLayer::new(
-                    combined_mle,
-                    self.layer_id,
-                    None,
-                    self.aux.rho_inv,
-                    (self.aux.orig_num_cols as f64) / (self.aux.num_rows as f64),
-                )
-            } else {
-                panic!(
-                "The commitment type needs to be a LigeroCommitment for a Ligero Input Layer!"
+        let prover_ligero_layer = if let Some(CommitmentEnum::LigeroCommitment(ligero_commit)) =
+            &precommit
+        {
+            LigeroInputLayer::new(
+                combined_mle,
+                self.layer_id,
+                Some(ligero_commit.clone()),
+                self.aux.rho_inv,
+                (self.aux.orig_num_cols as f64) / (self.aux.num_rows as f64),
             )
-            };
+        } else if precommit.is_none() {
+            LigeroInputLayer::new(
+                combined_mle,
+                self.layer_id,
+                None,
+                self.aux.rho_inv,
+                (self.aux.orig_num_cols as f64) / (self.aux.num_rows as f64),
+            )
+        } else {
+            panic!("The commitment type needs to be a LigeroCommitment for a Ligero Input Layer!")
+        };
 
         prover_ligero_layer.into()
     }
@@ -281,68 +266,10 @@ mod tests {
         Fr,
     };
 
-    use crate::claims::Claim;
+    use crate::{claims::Claim, mle::Mle};
     use remainder_shared_types::ff_field;
 
     use super::*;
-
-    #[test]
-    fn test_into_verifier_ligero_input_layer_with_precommit() {
-        let layer_id = LayerId::Input(0);
-        let rho_inv = 4;
-        let ratio = 1.;
-
-        let num_vars = 2;
-        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(|i| Fr::from(i)).collect();
-        let dense_mle = DenseMle::new_from_raw(evals.clone(), layer_id);
-
-        let aux = LigeroAuxInfo::new(evals.len().next_power_of_two(), rho_inv, ratio, None);
-
-        let (pre_commitment, _root) = remainder_ligero_commit(&evals, &aux);
-
-        let ligero_input_layer = LigeroInputLayer::new(
-            dense_mle.original_mle,
-            layer_id,
-            Some(pre_commitment),
-            rho_inv,
-            ratio,
-        );
-        let verifier_ligero_input_layer = ligero_input_layer.into_verifier_input_layer();
-
-        let expected_verifier_ligero_input_layer =
-            CircuitLigeroInputLayer::new(layer_id, num_vars, aux);
-
-        assert_eq!(
-            verifier_ligero_input_layer,
-            expected_verifier_ligero_input_layer
-        );
-    }
-
-    #[test]
-    fn test_into_verifier_ligero_input_layer_no_precommit() {
-        let layer_id = LayerId::Input(0);
-        let rho_inv = 4;
-        let ratio = 1.;
-
-        let num_vars = 2;
-        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(|i| Fr::from(i)).collect();
-        let dense_mle = DenseMle::new_from_raw(evals.clone(), layer_id);
-
-        let expected_aux =
-            LigeroAuxInfo::new(evals.len().next_power_of_two(), rho_inv, ratio, None);
-
-        let ligero_input_layer =
-            LigeroInputLayer::new(dense_mle.original_mle, layer_id, None, rho_inv, ratio);
-        let verifier_ligero_input_layer = ligero_input_layer.into_verifier_input_layer();
-
-        let expected_verifier_ligero_input_layer =
-            CircuitLigeroInputLayer::new(layer_id, num_vars, expected_aux);
-
-        assert_eq!(
-            verifier_ligero_input_layer,
-            expected_verifier_ligero_input_layer
-        );
-    }
 
     #[test]
     fn test_ligero_input_layer_with_precommit() {
@@ -362,6 +289,8 @@ mod tests {
         let aux = LigeroAuxInfo::new(evals.len().next_power_of_two(), rho_inv, ratio, None);
         let (pre_commitment, _root) = remainder_ligero_commit(&evals, &aux);
 
+        let verifier_ligero_input_layer =
+            CircuitLigeroInputLayer::new(layer_id, dense_mle.num_iterated_vars(), aux);
         let mut ligero_input_layer = LigeroInputLayer::new(
             dense_mle.original_mle,
             layer_id,
@@ -369,7 +298,6 @@ mod tests {
             rho_inv,
             ratio,
         );
-        let verifier_ligero_input_layer = ligero_input_layer.into_verifier_input_layer();
 
         // Transcript writer with test sponge that always returns `1`.
         let mut transcript_writer: TranscriptWriter<Fr, CountingSponge<Fr>> =
@@ -426,9 +354,13 @@ mod tests {
         let claim_result = Fr::from(2);
         let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
 
+        let verifier_ligero_input_layer = CircuitLigeroInputLayer::new(
+            layer_id,
+            dense_mle.num_iterated_vars(),
+            LigeroAuxInfo::new(evals.len(), rho_inv, ratio, None),
+        );
         let mut ligero_input_layer =
             LigeroInputLayer::new(dense_mle.original_mle, layer_id, None, rho_inv, ratio);
-        let verifier_ligero_input_layer = ligero_input_layer.into_verifier_input_layer();
 
         // Transcript writer with test sponge that always returns `1`.
         let mut transcript_writer: TranscriptWriter<Fr, CountingSponge<Fr>> =

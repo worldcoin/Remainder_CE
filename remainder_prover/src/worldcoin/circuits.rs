@@ -119,11 +119,8 @@ pub fn build_circuit<
         let digits_concatenator = DigitsConcatenator::new(ctx, &digits_refs);
 
         // Use a lookup to range check the digits to the range 0..BASE
-        let (lookup_table_values, lookup_table_values_data) = get_input_shred_and_data_from_vec(
-            (0..BASE).map(F::from).collect(),
-            ctx,
-            &input_layer,
-        );
+        let (lookup_table_values, lookup_table_values_data) =
+            get_input_shred_and_data_from_vec((0..BASE).map(F::from).collect(), ctx, &input_layer);
         println!("{:?} = Digit range check input", lookup_table_values.id());
 
         let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);

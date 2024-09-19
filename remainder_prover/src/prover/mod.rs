@@ -17,6 +17,10 @@ use crate::input_layer::enum_input_layer::{
 use crate::input_layer::CircuitInputLayer;
 use crate::layer::layer_enum::{CircuitLayerEnum, VerifierLayerEnum};
 use crate::layer::CircuitLayer;
+use crate::layouter::component::Component;
+use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputLayerHintMap, InputNodeMap};
+use crate::layouter::nodes::node_enum::NodeEnum;
+use crate::layouter::nodes::{CircuitNode, Context};
 use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
 use crate::output_layer::CircuitOutputLayer;
 use crate::{
@@ -25,6 +29,7 @@ use crate::{
     layer::{layer_enum::LayerEnum, LayerError, LayerId},
 };
 use ark_std::{end_timer, start_timer};
+use itertools::Itertools;
 use remainder_shared_types::transcript::TranscriptReaderError;
 use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::Field;
@@ -283,4 +288,94 @@ impl<F: Field> GKRCircuitDescription<F> {
 
         Ok(())
     }
+}
+
+pub fn generate_circuit_description<F: Field>(
+    component: impl Component<NodeEnum<F>>,
+    ctx: Context,
+) -> Result<(GKRCircuitDescription<F>, InputNodeMap, InputLayerHintMap<F>), GKRError> {
+    let nodes = component.yield_nodes();
+    let (input_nodes, verifier_challenge_nodes, intermediate_nodes, lookup_nodes, output_nodes) =
+        layout(ctx, nodes).unwrap();
+
+    let mut input_layer_id = LayerId::Input(0);
+    let mut intermediate_layer_id = LayerId::Layer(0);
+    let mut verifier_challenge_layer_id = LayerId::VerifierChallengeLayer(0);
+
+    let mut intermediate_layers = Vec::<CircuitLayerEnum<F>>::new();
+    let mut output_layers = Vec::<CircuitMleOutputLayer<F>>::new();
+    let mut circuit_description_map = CircuitDescriptionMap::new();
+    let mut input_node_to_layer_map = InputNodeMap::new();
+    let mut input_layer_hint_map = InputLayerHintMap::<F>::new();
+
+    let mut input_layers = input_nodes
+        .iter()
+        .map(|input_node| {
+            let input_circuit_description = input_node
+                .generate_input_circuit_description(
+                    &mut input_layer_id,
+                    &mut circuit_description_map,
+                )
+                .unwrap();
+            input_node_to_layer_map
+                .add_node_layer_id(&input_circuit_description.layer_id(), &input_node.id());
+            input_circuit_description
+        })
+        .collect_vec();
+
+    verifier_challenge_nodes
+        .iter()
+        .for_each(|verifier_challenge_node| {
+            let verifier_challenge_layer = verifier_challenge_node
+                .generate_circuit_description::<F>(
+                    &mut verifier_challenge_layer_id,
+                    &mut circuit_description_map,
+                );
+            input_layers.push(CircuitInputLayerEnum::VerifierChallengeInputLayer(
+                verifier_challenge_layer,
+            ))
+        });
+
+    for node in &intermediate_nodes {
+        let node_compiled_intermediate_layers = node
+            .generate_circuit_description(&mut intermediate_layer_id, &mut circuit_description_map)
+            .unwrap();
+        intermediate_layers.extend(node_compiled_intermediate_layers);
+    }
+
+    (input_layers, intermediate_layers, output_layers) = lookup_nodes.iter().fold(
+        (input_layers, intermediate_layers, output_layers),
+        |(mut lookup_input_acc, mut lookup_intermediate_acc, mut lookup_output_acc),
+         lookup_node| {
+            let (input_layers, intermediate_layers, output_layers) = lookup_node
+                .generate_lookup_circuit_description(
+                    &mut input_layer_id,
+                    &mut intermediate_layer_id,
+                    &mut circuit_description_map,
+                    &mut input_layer_hint_map,
+                )
+                .unwrap();
+            lookup_input_acc.extend(input_layers);
+            lookup_intermediate_acc.extend(intermediate_layers);
+            lookup_output_acc.extend(output_layers);
+            (lookup_input_acc, lookup_intermediate_acc, lookup_output_acc)
+        },
+    );
+
+    output_layers = output_nodes
+        .iter()
+        .fold(output_layers, |mut output_layer_acc, output_node| {
+            output_layer_acc
+                .extend(output_node.generate_circuit_description(&mut circuit_description_map));
+            output_layer_acc
+        });
+
+    let circuit_description =
+        GKRCircuitDescription::new(input_layers, intermediate_layers, output_layers);
+
+    Ok((
+        circuit_description,
+        input_node_to_layer_map,
+        input_layer_hint_map,
+    ))
 }

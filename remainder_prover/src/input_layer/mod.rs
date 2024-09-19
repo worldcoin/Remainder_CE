@@ -25,6 +25,8 @@ pub mod public_input_layer;
 /// An input layer in order to generate random challenges for Fiat-Shamir.
 pub mod verifier_challenge_input_layer;
 
+pub mod hyrax_input_layer;
+
 use crate::{
     claims::wlx_eval::get_num_wlx_evaluations, mle::mle_enum::MleEnum,
     sumcheck::evaluate_at_a_point,
@@ -34,7 +36,8 @@ use ark_std::{end_timer, start_timer};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(bound = "F: Field")]
 /// An enum for representing the different types of commitments for each type
 /// of input layer.
 pub enum CommitmentEnum<F: Field> {
@@ -42,6 +45,8 @@ pub enum CommitmentEnum<F: Field> {
     LigeroCommitment(LigeroCommit<PoseidonSpongeHasher<F>, F>),
     /// The commitment for a [PublicInputLayer]
     PublicCommitment(Vec<F>),
+    /// The challenges for a [VerifierChallengeInputLayer]
+    VerifierChallenges(Vec<F>),
 }
 
 #[derive(Error, Clone, Debug)]
@@ -78,15 +83,6 @@ pub trait InputLayer<F: Field> {
     /// The struct that contains the commitment to the contents of the input_layer in the verifier's view.
     /// This is what should be added to transcript, because
     type VerifierCommitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
-
-    /// The Verifier Key representation for this input layer.
-    type CircuitInputLayer: CircuitInputLayer<F, Commitment = Self::VerifierCommitment>
-        + Serialize
-        + for<'a> Deserialize<'a>
-        + core::fmt::Debug;
-
-    /// Returns the circuit description of this layer for the verifier.
-    fn into_verifier_input_layer(&self) -> Self::CircuitInputLayer;
 
     /// Generates and returns a commitment.
     /// May also store it internally.
