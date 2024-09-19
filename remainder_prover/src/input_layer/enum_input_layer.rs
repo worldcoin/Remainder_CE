@@ -139,7 +139,7 @@ impl<F: Field> CircuitInputLayer<F> for CircuitInputLayerEnum<F> {
                 }
                 _ => panic!("wrong commitment type for input layer description!"),
             },
-            CircuitInputLayerEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
+            CircuitInputLayerEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
                 panic!("Hyrax input layer is not supported by this trait!")
             }
         }

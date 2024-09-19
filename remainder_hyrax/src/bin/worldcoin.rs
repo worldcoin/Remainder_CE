@@ -1,9 +1,6 @@
 use std::path::Path;
 
-use remainder::worldcoin::{
-    circuits::build_circuit,
-    data::{load_worldcoin_data, CircuitData},
-};
+use remainder::worldcoin::data::{load_worldcoin_data, CircuitData};
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
     transcript::{
@@ -13,7 +10,8 @@ use remainder_shared_types::{
 };
 
 use remainder_hyrax::{
-    hyrax_gkr::HyraxCircuit, pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
+    hyrax_gkr::HyraxProver, hyrax_worldcoin::build_hyrax_circuit, pedersen::PedersenCommitter,
+    utils::vandermonde::VandermondeInverse,
 };
 type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
@@ -45,28 +43,20 @@ fn test_hyrax_worldcoin<
         "hi why is this not working, please help me",
         None,
     );
+    let mut hyrax_prover = HyraxProver::new(&committer, blinding_rng, converter);
 
-    let mut circuit = build_circuit(data);
+    let witness_function = build_hyrax_circuit(data);
 
-    let (hyrax_proof, input_commits, mut circuit_description) = HyraxCircuit::prove_gkr_circuit(
-        &mut circuit,
-        &committer,
-        None,
-        None,
-        None,
-        blinding_rng,
-        converter,
-        &mut prover_transcript,
-    );
+    let (input_commits, mut circuit_description, hyrax_proof) =
+        hyrax_prover.prove_gkr_circuit(witness_function, &mut prover_transcript);
 
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(prover_transcript.get_transcript());
 
-    HyraxCircuit::verify_gkr_circuit(
-        hyrax_proof,
-        input_commits,
+    hyrax_prover.verify_gkr_circuit(
+        &hyrax_proof,
         &mut circuit_description,
-        &committer,
+        &input_commits,
         &mut verifier_transcript,
     );
 }

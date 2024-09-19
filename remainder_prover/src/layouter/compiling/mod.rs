@@ -14,25 +14,24 @@ use crate::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
 use crate::input_layer::enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum};
 use crate::input_layer::{CircuitInputLayer, InputLayer};
 use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
+use crate::layer::LayerId;
 use crate::layer::{CircuitLayer, Layer};
 use crate::layouter::layouting::CircuitMap;
 use crate::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
-use crate::layouter::nodes::CircuitNode;
 use crate::mle::evals::MultilinearExtension;
-use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
+use crate::output_layer::mle_output_layer::MleOutputLayer;
 use crate::output_layer::OutputLayer;
 use crate::prover::layers::Layers;
 use crate::prover::{
     generate_circuit_description, GKRCircuitDescription, GKRError, InstantiatedCircuit,
 };
-use crate::{layer::LayerId, layouter::layouting::layout};
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use log::info;
 use remainder_shared_types::transcript::{ProverTranscript, Transcript, TranscriptWriter};
 use remainder_shared_types::Field;
 
-use super::layouting::{CircuitDescriptionMap, CircuitLocation, InputLayerHintMap, InputNodeMap};
+use super::layouting::{CircuitLocation, InputLayerHintMap, InputNodeMap};
 use super::nodes::circuit_inputs::InputLayerData;
 use super::nodes::NodeId;
 use super::{
@@ -46,7 +45,7 @@ pub struct LayouterCircuit<
     C: Component<NodeEnum<F>>,
     Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>),
 > {
-    pub witness_builder: Fn,
+    witness_builder: Fn,
     _marker: PhantomData<F>,
 }
 
@@ -280,7 +279,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         gkr_circuit
     }
 
-    pub fn synthesize_and_commit(
+    fn synthesize_and_commit(
         &mut self,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> (InstantiatedCircuit<F>, GKRCircuitDescription<F>) {

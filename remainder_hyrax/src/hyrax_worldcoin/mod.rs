@@ -20,7 +20,7 @@ use remainder::{
     utils::get_input_shred_and_data_from_vec,
     worldcoin::{components::Subtractor, data::CircuitData},
 };
-use remainder_shared_types::{curves::PrimeOrderCurve, Field};
+use remainder_shared_types::curves::PrimeOrderCurve;
 
 use crate::hyrax_gkr::hyrax_circuit_inputs::HyraxInputLayerData;
 

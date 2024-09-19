@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
-use crate::layer::{CircuitLayer, LayerId};
+use crate::layer::LayerId;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: Field")]
@@ -13,9 +13,10 @@ use crate::layer::{CircuitLayer, LayerId};
 pub struct CircuitHyraxInputLayer<F: Field> {
     /// The ID of this Ligero Input Layer.
     pub layer_id: LayerId,
-
     /// The number of variables this Ligero Input Layer is on.
     num_bits: usize,
+    /// The log number of columns in the matrix form of the data that
+    /// will be committed to in this input layer.
     pub log_num_cols: usize,
     _marker: PhantomData<F>,
 }

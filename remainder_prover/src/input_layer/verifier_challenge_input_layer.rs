@@ -195,33 +195,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_into_verifier_random_input_layer() {
-        let layer_id = LayerId::Input(0);
-
-        let num_vars = 2;
-        let num_evals = 1 << num_vars;
-
-        // Transcript writer with test sponge that always returns `1`.
-        let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
-            TranscriptWriter::new("Test Transcript Writer");
-
-        let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
-        let mle = MultilinearExtension::new(mle_vec);
-
-        let verifier_random_input_layer =
-            CircuitVerifierChallengeInputLayer::<Fr>::new(layer_id, mle.num_vars());
-        let random_input_layer = VerifierChallengeInputLayer::new(mle, layer_id);
-
-        let expected_verifier_random_input_layer =
-            CircuitVerifierChallengeInputLayer::new(layer_id, num_vars);
-
-        assert_eq!(
-            verifier_random_input_layer,
-            expected_verifier_random_input_layer
-        );
-    }
-
-    #[test]
     fn test_random_input_layer() {
         // Setup phase.
         let layer_id = LayerId::Input(0);

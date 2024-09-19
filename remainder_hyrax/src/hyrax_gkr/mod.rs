@@ -1,11 +1,9 @@
 use std::collections::HashSet;
-use std::convert;
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::hyrax_pcs::MleCoefficientsVector;
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
-use ark_std::{end_timer, start_timer};
 use hyrax_circuit_inputs::HyraxInputLayerData;
 use hyrax_input_layer::{
     verify_public_and_random_input_layer, HyraxInputLayer, HyraxInputLayerEnum,
@@ -19,7 +17,7 @@ use remainder::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
 use remainder::input_layer::enum_input_layer::{
     CircuitInputLayerEnum, InputLayerEnumVerifierCommitment,
 };
-use remainder::input_layer::{self, CircuitInputLayer, InputLayer};
+use remainder::input_layer::{CircuitInputLayer, InputLayer};
 use remainder::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
 use remainder::layer::{CircuitLayer, Layer};
 use remainder::layouter::component::ComponentSet;
@@ -27,14 +25,13 @@ use remainder::layouter::layouting::{
     CircuitLocation, CircuitMap, InputLayerHintMap, InputNodeMap,
 };
 use remainder::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
-use remainder::layouter::nodes::circuit_inputs::InputLayerData;
 use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::{Context, NodeId};
 use remainder::mle::evals::MultilinearExtension;
 use remainder::mle::Mle;
-use remainder::prover::{self, generate_circuit_description, GKRCircuitDescription};
+use remainder::prover::{generate_circuit_description, GKRCircuitDescription};
 use remainder::{
-    claims::wlx_eval::ClaimMle, input_layer::enum_input_layer::InputLayerEnum, layer::LayerId,
+    claims::wlx_eval::ClaimMle, layer::LayerId,
 };
 
 use remainder_shared_types::{
@@ -259,10 +256,10 @@ impl<
                             }
                             prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
                         },
-                        CircuitInputLayerEnum::VerifierChallengeInputLayer(circuit_verifier_challenge_input_layer) => {
+                        CircuitInputLayerEnum::VerifierChallengeInputLayer(_circuit_verifier_challenge_input_layer) => {
                             panic!("Verifier challenge input layers do not have corresponding input data, as the challenges are sent by the verifier")
                         },
-                        CircuitInputLayerEnum::LigeroInputLayer(circuit_ligero_input_layer) => {
+                        CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
                             panic!("Hyrax proof system does not support ligero input layers because the PCS implementation is not zero knowledge")
                         },
                     }
@@ -325,13 +322,12 @@ impl<
                             function_applied_to_data.clone(),
                         );
                         match hint_input_layer_description {
-                            CircuitInputLayerEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
-                                    let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(function_applied_to_data, hint_input_layer_description.layer_id(), &self.committer);
-                                    let hyrax_commit = hyrax_input_layer.commit();
+                            CircuitInputLayerEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
+                                let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(function_applied_to_data, hint_input_layer_description.layer_id(), &self.committer);
+                                let hyrax_commit = hyrax_input_layer.commit();
                                 transcript_writer.append_ec_points("Hyrax commitment", &hyrax_commit);
                                 input_commitments.push(HyraxVerifierCommitmentEnum::HyraxCommitment(hyrax_commit));
                                 prover_input_layers.push(HyraxInputLayerEnum::HyraxInputLayer(hyrax_input_layer));
-    
                             }
                             CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
                                 let mut prover_public_input_layer = circuit_public_input_layer.into_prover_input_layer(function_applied_to_data, &None);
@@ -345,10 +341,10 @@ impl<
                                 }
                                 prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
                             },
-                            CircuitInputLayerEnum::VerifierChallengeInputLayer(circuit_verifier_challenge_input_layer) => {
+                            CircuitInputLayerEnum::VerifierChallengeInputLayer(_circuit_verifier_challenge_input_layer) => {
                                 panic!("Verifier challenge input layers do not have corresponding input data, as the challenges are sent by the verifier")
                             },
-                            CircuitInputLayerEnum::LigeroInputLayer(circuit_ligero_input_layer) => {
+                            CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
                                 panic!("Hyrax proof system does not support ligero input layers because the PCS implementation is not zero knowledge")
                             },
                         }

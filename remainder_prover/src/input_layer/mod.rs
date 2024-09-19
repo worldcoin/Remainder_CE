@@ -18,14 +18,14 @@ use crate::{claims::Claim, layer::LayerId};
 
 /// An enum which represents which type of input layer we are working with.
 pub mod enum_input_layer;
+/// The circuit description struct for the input layer where the data is committed to using the Hyrax PCS.
+pub mod hyrax_input_layer;
 /// An input layer in which the input data is committed to using the Ligero PCS.
 pub mod ligero_input_layer;
 /// An input layer which requires no commitment and is openly evaluated at the random point.
 pub mod public_input_layer;
 /// An input layer in order to generate random challenges for Fiat-Shamir.
 pub mod verifier_challenge_input_layer;
-
-pub mod hyrax_input_layer;
 
 use crate::{
     claims::wlx_eval::get_num_wlx_evaluations, mle::mle_enum::MleEnum,

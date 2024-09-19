@@ -290,6 +290,8 @@ impl<F: Field> GKRCircuitDescription<F> {
     }
 }
 
+/// Generate the circuit description given a set of nodes along with the context,
+/// which determines the unique ID for each of the nodes.
 pub fn generate_circuit_description<F: Field>(
     component: impl Component<NodeEnum<F>>,
     ctx: Context,
