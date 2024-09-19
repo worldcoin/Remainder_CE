@@ -1,5 +1,3 @@
-use std::ops::Mul;
-
 use ark_std::{cfg_into_iter, log2};
 use itertools::Itertools;
 use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
