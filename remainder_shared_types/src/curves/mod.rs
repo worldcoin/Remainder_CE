@@ -215,7 +215,7 @@ impl PrimeOrderCurve for Bn256 {
             // what we are computing using & 1.
             let y_sign = y.to_bytes()[0] & 1;
             let all_bytes = std::iter::once(0_u8)
-                .chain(x_bytes.into_iter())
+                .chain(x_bytes)
                 .chain(std::iter::once(y_sign))
                 .collect_vec();
             all_bytes
@@ -234,11 +234,11 @@ impl PrimeOrderCurve for Bn256 {
         assert_eq!(bytes.len(), Self::UNCOMPRESSED_CURVE_POINT_BYTEWIDTH);
         // first check if it is a point at infinity
         if bytes[0] == 1_u8 {
-            return Self {
+            Self {
                 x: Self::Base::zero(),
                 y: Self::Base::one(),
                 z: Self::Base::zero(),
-            };
+            }
         } else {
             let mut x_bytes_alloc = [0_u8; 32];
             let x_bytes = &bytes[1..33];
@@ -268,11 +268,11 @@ impl PrimeOrderCurve for Bn256 {
     fn from_bytes_compressed(bytes: &[u8]) -> Self {
         // first check if it is a point at infinity
         if bytes[0] == 1_u8 {
-            return Self {
+            Self {
                 x: Self::Base::zero(),
                 y: Self::Base::one(),
                 z: Self::Base::zero(),
-            };
+            }
         } else {
             let mut x_alloc_bytes = [0_u8; 32];
             x_alloc_bytes.copy_from_slice(&bytes[1..33]);
@@ -309,12 +309,11 @@ impl PrimeOrderCurve for Bn256 {
             one_y_sqrt.neg()
         };
 
-        let point = Self {
+        Self {
             x,
             y: y_coord,
             z: Self::Base::one(),
-        };
-        point
+        }
     }
 }
 

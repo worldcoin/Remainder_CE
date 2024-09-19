@@ -305,10 +305,7 @@ where
         let points = self.consume_elements(label, num_elements)?;
         Ok(points
             .iter()
-            .map(|point| {
-                let scalar_point = C::Scalar::from_bytes_le(point.to_bytes_le());
-                scalar_point
-            })
+            .map(|point| C::Scalar::from_bytes_le(point.to_bytes_le()))
             .collect_vec())
     }
 
