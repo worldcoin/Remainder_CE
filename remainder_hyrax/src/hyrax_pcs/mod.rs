@@ -10,9 +10,10 @@ use rand::Rng;
 use rayon::iter::IntoParallelIterator;
 #[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
-use remainder_shared_types::curves::PrimeOrderCurve;
+use remainder::layouter::nodes::circuit_inputs::HyraxInputDType;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
+use remainder_shared_types::{curves::PrimeOrderCurve, HasByteRepresentation};
 use serde::{Deserialize, Serialize};
 
 pub mod tests;
@@ -56,8 +57,30 @@ pub enum MleCoefficientsVector<C: PrimeOrderCurve> {
 }
 
 impl<C: PrimeOrderCurve> MleCoefficientsVector<C> {
-    // converts the vector of coefficients into all scalar field elements. this is useful in the step of hyrax
-    // where the prover needs to do a vector matrix multiplicaation with a vector of scalar field elements.
+    /// From scalar field elements to the desired data type
+    pub fn convert_from_scalar_field(
+        scalar_field_vec: &Vec<C::Scalar>,
+        dtype: &HyraxInputDType,
+    ) -> Self {
+        match dtype {
+            HyraxInputDType::U8 => {
+                let coeffs_vec = scalar_field_vec
+                    .iter()
+                    .map(|elem| {
+                        let elem_bytes = elem.to_bytes_le();
+                        assert_eq!(elem_bytes.len(), 1);
+                        elem_bytes[0]
+                    })
+                    .collect_vec();
+                Self::U8Vector(coeffs_vec)
+            }
+            HyraxInputDType::I8 => {
+                todo!()
+            }
+        }
+    }
+    /// converts the vector of coefficients into all scalar field elements. this is useful in the step of hyrax
+    /// where the prover needs to do a vector matrix multiplicaation with a vector of scalar field elements.
     pub fn convert_to_scalar_field(&self) -> Vec<C::Scalar> {
         match &self {
             // for u8s and i8s, because the scalar field size is going to be much larger than 2^8 we can always

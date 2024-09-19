@@ -3,6 +3,7 @@
 use crate::expression::abstract_expr::AbstractExpr;
 use crate::expression::circuit_expr::{CircuitExpr, CircuitMle};
 use crate::input_layer::enum_input_layer::CircuitInputLayerEnum;
+use crate::input_layer::hyrax_input_layer::CircuitHyraxInputLayer;
 use crate::input_layer::public_input_layer::CircuitPublicInputLayer;
 use crate::layer::layer_enum::CircuitLayerEnum;
 use crate::layer::regular_layer::CircuitRegularLayer;
@@ -106,17 +107,12 @@ impl LookupTable {
         secret_constrained_values: bool,
         random_input_node: &VerifierChallengeNode,
     ) -> Self {
-        if secret_constrained_values {
-            unimplemented!(
-                "Secret constrained values not yet supported (requires HyraxInputLayer)"
-            );
-        }
         LookupTable {
             id: ctx.get_new_id(),
             constraints: vec![],
             table_node_id: table.id(),
             random_node_id: random_input_node.id(),
-            secret_constrained_values: false,
+            secret_constrained_values,
         }
     }
 
@@ -327,8 +323,9 @@ impl LookupTable {
             (lhs_denom_circuit_location, inverse_function),
         );
         let lhs_inverse_input_layer = if self.secret_constrained_values {
-            // TODO use HyraxInputLayer, once it's implemented
-            unimplemented!();
+            let hyrax_input_layer_description =
+                CircuitHyraxInputLayer::<F>::new(lhs_denom_inverse_layer_id.to_owned(), 0);
+            CircuitInputLayerEnum::HyraxInputLayer(hyrax_input_layer_description)
         } else {
             let public_input_layer_description =
                 CircuitPublicInputLayer::<F>::new(lhs_denom_inverse_layer_id.to_owned(), 0);

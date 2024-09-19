@@ -5,6 +5,7 @@
 pub mod compile_inputs;
 
 use remainder_shared_types::Field;
+use serde::{Deserialize, Serialize};
 
 use crate::{input_layer::CommitmentEnum, mle::evals::MultilinearExtension};
 
@@ -104,15 +105,28 @@ impl InputShred {
     }
 }
 
+/// An enum representing the data type that can go in
+/// a Hyrax input layer, if it is not scalar field.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum HyraxInputDType {
+    /// If the input MLE coefficients are u8s.
+    U8,
+    /// If the input MLE coefficients are i8s.
+    I8,
+}
+
 /// An enum representing the different types
 /// of InputLayer an InputLayerNode can be compiled into
 #[derive(Debug, Clone)]
 pub enum InputLayerType {
-    /// An InputLayer that will be compiled into a [LigeroInputLayer].
+    /// An InputLayer that will be compiled into a [LigeroInputLayer], along with
+    /// the rho_inv: u8, and ratio of the matrix (num cols to num rows): f64.
     LigeroInputLayer((u8, f64)),
     /// An InputLayer that will be compiled into a [PublicInputLayer].
     PublicInputLayer,
-    /// The input layer type that represents a [HyraxInputLayer].
+    /// The input layer type that represents a [HyraxInputLayer], along with
+    /// the data type of the input (for commitment optimizations), None
+    /// if it is just a scalar field element.
     HyraxInputLayer,
 }
 

@@ -10,8 +10,8 @@ use remainder_shared_types::{
 };
 
 use remainder_hyrax::{
-    hyrax_gkr::HyraxProver, hyrax_worldcoin::build_hyrax_circuit, pedersen::PedersenCommitter,
-    utils::vandermonde::VandermondeInverse,
+    hyrax_gkr::HyraxProver, hyrax_worldcoin::build_hyrax_circuit_public_input_layer,
+    pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
 };
 type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
@@ -45,7 +45,7 @@ fn test_hyrax_worldcoin<
     );
     let mut hyrax_prover = HyraxProver::new(&committer, blinding_rng, converter);
 
-    let witness_function = build_hyrax_circuit(data);
+    let witness_function = build_hyrax_circuit_public_input_layer(data);
 
     let (input_commits, mut circuit_description, hyrax_proof) =
         hyrax_prover.prove_gkr_circuit(witness_function, &mut prover_transcript);

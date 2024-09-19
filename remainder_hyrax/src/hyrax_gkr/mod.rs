@@ -227,8 +227,14 @@ impl<
                     match input_layer_description {
                         CircuitInputLayerEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
                             let (hyrax_commit, hyrax_prover_input_layer) = if let Some(HyraxProverCommitmentEnum::HyraxCommitment((hyrax_precommit, hyrax_blinding_factors))) = &corresponding_input_data.precommit {
-                               let hyrax_input_layer = HyraxInputLayer::new_with_hyrax_commitment(
-                                    MleCoefficientsVector::ScalarFieldVector(combined_mle.get_evals_vector().to_vec()),
+                                let dtype = &corresponding_input_data.input_data_type;
+                                let coeffs_vector = if let Some(dtype) = dtype {
+                                    MleCoefficientsVector::convert_from_scalar_field(combined_mle.get_evals_vector(), dtype)
+                                } else {
+                                    MleCoefficientsVector::ScalarFieldVector(combined_mle.get_evals_vector().to_vec())
+                                };
+                                let hyrax_input_layer = HyraxInputLayer::new_with_hyrax_commitment(
+                                    coeffs_vector,
                                     input_layer_id,
                                     self.committer.clone(),
                                     hyrax_blinding_factors.clone(),
