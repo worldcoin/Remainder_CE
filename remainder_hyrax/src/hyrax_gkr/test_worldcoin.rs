@@ -1,4 +1,3 @@
-#[cfg(test)]
 use std::path::Path;
 
 use remainder::worldcoin::{
@@ -10,9 +9,7 @@ use remainder_shared_types::{
     transcript::{
         ec_transcript::{ECTranscriptReader, ECTranscriptWriter},
         poseidon_transcript::PoseidonSponge,
-        test_transcript::TestSponge,
     },
-    Field, Poseidon,
 };
 
 use crate::{

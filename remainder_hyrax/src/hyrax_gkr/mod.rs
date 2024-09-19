@@ -1,12 +1,10 @@
-use std::convert;
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
-use ark_std::{end_timer, start_timer};
 use hyrax_input_layer::{
     verify_public_and_random_input_layer, CommitmentEnum, HyraxCircuitInputLayerEnum,
-    HyraxInputLayer, HyraxInputLayerProof, InputProofEnum,
+    HyraxInputLayerProof, InputProofEnum,
 };
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
@@ -15,16 +13,13 @@ use rand::Rng;
 use remainder::input_layer::InputLayer;
 use remainder::layer::layer_enum::LayerEnum;
 use remainder::layer::{CircuitLayer, Layer};
-use remainder::layouter::compiling::LayouterCircuit;
 use remainder::layouter::component::ComponentSet;
 use remainder::layouter::nodes::circuit_inputs::InputLayerData;
 use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::Context;
 use remainder::mle::Mle;
-use remainder::prover::{self, GKRCircuitDescription};
-use remainder::{
-    claims::wlx_eval::ClaimMle, input_layer::enum_input_layer::InputLayerEnum, layer::LayerId,
-};
+use remainder::prover::GKRCircuitDescription;
+use remainder::{claims::wlx_eval::ClaimMle, layer::LayerId};
 
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
@@ -43,6 +38,7 @@ pub mod hyrax_layer;
 /// output layer, [HyraxOutputLayer]
 pub mod hyrax_output_layer;
 /// The testing module for worldcoin circuit
+#[cfg(test)]
 pub mod test_worldcoin;
 /// The testing module for integration tests
 pub mod tests;

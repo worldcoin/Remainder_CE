@@ -8,9 +8,7 @@ use rand::Rng;
 use remainder::{
     expression::circuit_expr::{filter_bookkeeping_table, CircuitMle},
     input_layer::{
-        enum_input_layer::{
-            CircuitInputLayerEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
-        },
+        enum_input_layer::{CircuitInputLayerEnum, InputLayerEnumVerifierCommitment},
         CircuitInputLayer, InputLayer,
     },
     layer::{
@@ -28,8 +26,7 @@ use remainder::{
         },
     },
     mle::evals::MultilinearExtension,
-    output_layer::mle_output_layer::MleOutputLayer,
-    prover::{layers::Layers, GKRCircuitDescription, InstantiatedCircuit},
+    prover::GKRCircuitDescription,
 };
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
@@ -39,7 +36,7 @@ use remainder_shared_types::{
 use crate::{
     hyrax_gkr::{
         hyrax_input_layer::{CommitmentEnum, HyraxCircuitInputLayerEnum},
-        hyrax_output_layer::{self, HyraxOutputLayer},
+        hyrax_output_layer::HyraxOutputLayer,
         HyraxCircuit, HyraxProof,
     },
     pedersen::PedersenCommitter,
