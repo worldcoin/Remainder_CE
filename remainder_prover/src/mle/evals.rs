@@ -176,7 +176,7 @@ impl<F: Field> Evaluations<F> {
     /// `( f(x0, x_1, ..., x_i = 0, ..., x_{n-1}), f(x0, x1, ..., x_i = 1, ...,
     /// x_{n-1}) )`.
     /// The pairs are returned in little-endian order. For example:
-    /// ```ignore
+    /// ```text
     /// [
     ///     ( f(0, 0, ..., 0, ..., 0), f(0, 0, ..., 1, ..., 0) ),
     ///     ( f(1, 0, ..., 0, ..., 0), f(1, 0, ..., 1, ..., 0) ),
@@ -333,14 +333,14 @@ impl<'a, F: Field> Iterator for EvaluationsPairIterator<'a, F> {
 
 /// Stores a function `\tilde{f}: F^n -> F`, the unique Multilinear
 /// Extension (MLE) of a given function `f: {0, 1}^n -> F`:
-/// ```ignore
+/// ```text
 ///     \tilde{f}(x_0, ..., x_{n-1})
 ///         = \sum_{b_0, ..., b_{n-1} \in {0, 1}^n}
 ///             \tilde{beta}(x_0, ..., x_{n-1}, b_0, ..., b_{n-1})
 ///             * f(b_0, ..., b_{n-1}).
 /// ```
 /// where `\tilde{beta}` is the MLE of the equality function:
-/// ```ignore
+/// ```text
 ///     \tilde{beta}(x_0, ..., x_{n-1}, b_0, ..., b_{n-1})
 ///         = \prod_{i  = 0}^{n-1} ( x_i * b_i + (1 - x_i) * (1 - b_i) )
 /// ```
