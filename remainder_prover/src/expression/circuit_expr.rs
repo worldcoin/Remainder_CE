@@ -113,7 +113,7 @@ impl<F: Field> CircuitMle<F> {
     /// Convert this MLE into a [DenseMle] using the [CircuitMap],
     /// which holds information using the prefix bits and layer id
     /// on the data that should be stored in this MLE.
-    pub fn into_dense_mle<'a>(&self, circuit_map: &CircuitMap<F>) -> DenseMle<F> {
+    pub fn into_dense_mle(&self, circuit_map: &CircuitMap<F>) -> DenseMle<F> {
         let data = circuit_map.get_data_from_circuit_mle(self).unwrap();
         DenseMle::new_with_prefix_bits((*data).clone(), self.layer_id(), self.prefix_bits())
     }
@@ -222,10 +222,7 @@ impl<F: Field> Expression<F, CircuitExpr> {
 
     /// Get the [Expression<F, ProverExpr>] corresponding to this [Expression<F, CircuitExpr>] using the
     /// associated data in the [CircuitMap].
-    pub fn into_prover_expression<'a>(
-        &self,
-        circuit_map: &CircuitMap<F>,
-    ) -> Expression<F, ProverExpr> {
+    pub fn into_prover_expression(&self, circuit_map: &CircuitMap<F>) -> Expression<F, ProverExpr> {
         self.expression_node.into_prover_expression(circuit_map)
     }
 
@@ -333,10 +330,10 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
         let output_data: Option<MultilinearExtension<F>> = match self {
             ExpressionNode::Mle(circuit_mle) => {
                 let maybe_mle = circuit_map.get_data_from_circuit_mle(circuit_mle);
-                if maybe_mle.is_err() {
-                    return None;
+                if let Ok(mle) = maybe_mle {
+                    Some(mle.clone())
                 } else {
-                    Some(maybe_mle.unwrap().clone())
+                    return None;
                 }
             }
             ExpressionNode::Product(circuit_mles) => {
@@ -504,7 +501,7 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
     pub fn get_all_nonlinear_rounds(
         &self,
         curr_nonlinear_indices: &mut Vec<usize>,
-        mle_vec: &<CircuitExpr as ExpressionType<F>>::MleVec,
+        _mle_vec: &<CircuitExpr as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
         let nonlinear_indices_in_node = {
             match self {
@@ -546,8 +543,8 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
                 // for more leaves which are specifically product nodes.
                 ExpressionNode::Selector(_sel_index, a, b) => {
                     let mut sel_nonlinear_indices: HashSet<usize> = HashSet::new();
-                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
-                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
+                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
+                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
                     a_indices
                         .into_iter()
                         .zip(b_indices)
@@ -559,8 +556,8 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
                 }
                 ExpressionNode::Sum(a, b) => {
                     let mut sum_nonlinear_indices: HashSet<usize> = HashSet::new();
-                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
-                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
+                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
+                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
                     a_indices
                         .into_iter()
                         .zip(b_indices)
@@ -571,11 +568,11 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
                     sum_nonlinear_indices
                 }
                 ExpressionNode::Scaled(a, _) => a
-                    .get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec)
+                    .get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec)
                     .into_iter()
                     .collect(),
                 ExpressionNode::Negated(a) => a
-                    .get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec)
+                    .get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec)
                     .into_iter()
                     .collect(),
                 ExpressionNode::Constant(_) | ExpressionNode::Mle(_) => HashSet::new(),
@@ -651,10 +648,7 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
     }
 
     /// Get the [ExpressionNode<F, ProverExpr>] recursively, for this expression.
-    pub fn into_prover_expression<'a>(
-        &self,
-        circuit_map: &CircuitMap<F>,
-    ) -> Expression<F, ProverExpr> {
+    pub fn into_prover_expression(&self, circuit_map: &CircuitMap<F>) -> Expression<F, ProverExpr> {
         match self {
             ExpressionNode::Selector(_mle_index, a, b) => b
                 .into_prover_expression(circuit_map)
@@ -689,7 +683,7 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
         &self,
         multiplier: F,
         challenges: &[F],
-        mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
+        _mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
     ) -> PostSumcheckLayer<F, Option<F>> {
         let mut products: Vec<Product<F, Option<F>>> = vec![];
         match self {
@@ -704,17 +698,23 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
                 let left_side_acc = multiplier * (F::ONE - idx_val);
                 let right_side_acc = multiplier * (idx_val);
                 products.extend(
-                    a.get_post_sumcheck_layer(left_side_acc, challenges, mle_vec)
+                    a.get_post_sumcheck_layer(left_side_acc, challenges, _mle_vec)
                         .0,
                 );
                 products.extend(
-                    b.get_post_sumcheck_layer(right_side_acc, challenges, mle_vec)
+                    b.get_post_sumcheck_layer(right_side_acc, challenges, _mle_vec)
                         .0,
                 );
             }
             ExpressionNode::Sum(a, b) => {
-                products.extend(a.get_post_sumcheck_layer(multiplier, challenges, mle_vec).0);
-                products.extend(b.get_post_sumcheck_layer(multiplier, challenges, mle_vec).0);
+                products.extend(
+                    a.get_post_sumcheck_layer(multiplier, challenges, _mle_vec)
+                        .0,
+                );
+                products.extend(
+                    b.get_post_sumcheck_layer(multiplier, challenges, _mle_vec)
+                        .0,
+                );
             }
             ExpressionNode::Mle(mle) => {
                 products.push(Product::<F, Option<F>>::new(
@@ -729,11 +729,11 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
             }
             ExpressionNode::Scaled(a, scale_factor) => {
                 let acc = multiplier * scale_factor;
-                products.extend(a.get_post_sumcheck_layer(acc, challenges, mle_vec).0);
+                products.extend(a.get_post_sumcheck_layer(acc, challenges, _mle_vec).0);
             }
             ExpressionNode::Negated(a) => {
                 let acc = multiplier.neg();
-                products.extend(a.get_post_sumcheck_layer(acc, challenges, mle_vec).0);
+                products.extend(a.get_post_sumcheck_layer(acc, challenges, _mle_vec).0);
             }
             ExpressionNode::Constant(constant) => {
                 products.push(Product::<F, Option<F>>::new(
@@ -747,11 +747,11 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
     }
 
     /// Get the maximum degree of an ExpressionNode, recursively.
-    fn get_max_degree(&self, mle_vec: &<CircuitExpr as ExpressionType<F>>::MleVec) -> usize {
+    fn get_max_degree(&self, _mle_vec: &<CircuitExpr as ExpressionType<F>>::MleVec) -> usize {
         match self {
             ExpressionNode::Selector(_, a, b) | ExpressionNode::Sum(a, b) => {
-                let a_degree = a.get_max_degree(mle_vec);
-                let b_degree = b.get_max_degree(mle_vec);
+                let a_degree = a.get_max_degree(_mle_vec);
+                let b_degree = b.get_max_degree(_mle_vec);
                 max(a_degree, b_degree)
             }
             ExpressionNode::Mle(_) => {
@@ -762,7 +762,7 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
                 // max degree is the number of MLEs in a product
                 mle_refs.len()
             }
-            ExpressionNode::Scaled(a, _) | ExpressionNode::Negated(a) => a.get_max_degree(mle_vec),
+            ExpressionNode::Scaled(a, _) | ExpressionNode::Negated(a) => a.get_max_degree(_mle_vec),
             ExpressionNode::Constant(_) => 1,
         }
     }

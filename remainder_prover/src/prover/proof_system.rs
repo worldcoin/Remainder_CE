@@ -66,7 +66,7 @@ macro_rules! layer_enum {
                     }
                 }
 
-                fn into_verifier_layer(
+                fn convert_into_verifier_layer(
                     &self,
                     sumcheck_bindings: &[F],
                     claim_point: &[F],
@@ -74,7 +74,7 @@ macro_rules! layer_enum {
                 ) -> Result<Self::VerifierLayer, super::VerificationError> {
                     match self {
                         $(
-                            Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.into_verifier_layer(sumcheck_bindings, claim_point, transcript_reader)?)),
+                            Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.convert_into_verifier_layer(sumcheck_bindings, claim_point, transcript_reader)?)),
                         )*
                     }
                 }
@@ -101,7 +101,7 @@ macro_rules! layer_enum {
 
                 fn into_prover_layer(
                     &self,
-                    circuit_map: &crate::layouter::layouting::CircuitMap<F>
+                    circuit_map: &$crate::layouter::layouting::CircuitMap<F>
                 ) -> LayerEnum<F> {
                     match self {
                         $(

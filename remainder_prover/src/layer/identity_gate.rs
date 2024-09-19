@@ -147,7 +147,7 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
         challenges.push(final_chal);
 
         let verifier_id_gate_layer = self
-            .into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
+            .convert_into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
             .unwrap();
         let final_result = verifier_id_gate_layer.evaluate(&claim);
 
@@ -179,7 +179,7 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
         (0..num_sumcheck_rounds).collect_vec()
     }
 
-    fn into_verifier_layer(
+    fn convert_into_verifier_layer(
         &self,
         sumcheck_challenges: &[F],
         _claim_point: &[F],
@@ -219,7 +219,6 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
                 acc + gz * ux
             });
 
-        
         PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
             &[self.source_mle.clone()],
             f_1_uv,
@@ -301,7 +300,6 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
             });
 
         // get the fully evaluated "expression"
-        
 
         f_1_uv * self.source_mle.value()
     }

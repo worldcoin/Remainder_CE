@@ -343,20 +343,17 @@ pub fn compute_full_gate<F: Field>(
 pub fn compute_full_gate_identity<F: Field>(
     challenges: Vec<F>,
     mle_ref: &mut DenseMle<F>,
-    nonzero_gates: &Vec<(usize, usize)>,
+    nonzero_gates: &[(usize, usize)],
 ) -> F {
     // if the gate looks like f1(z, x)(f2(p2, x)) then this is the beta table for the challenges on z
     let beta_g = BetaValues::new_beta_equality_mle(challenges);
     let zero = F::ZERO;
 
-    nonzero_gates
-        .clone()
-        .into_iter()
-        .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-            let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-            let ux = mle_ref.bookkeeping_table().get(x_ind).unwrap_or(&zero);
-            acc + gz * (*ux)
-        })
+    nonzero_gates.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
+        let gz = *beta_g.bookkeeping_table().get(*z_ind).unwrap_or(&F::ZERO);
+        let ux = mle_ref.bookkeeping_table().get(*x_ind).unwrap_or(&zero);
+        acc + gz * (*ux)
+    })
 }
 
 /// Compute sumcheck message without a beta table.

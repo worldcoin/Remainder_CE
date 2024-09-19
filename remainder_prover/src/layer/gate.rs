@@ -358,7 +358,7 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
         // --- Create the resulting verifier layer for claim tracking ---
         // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
         let verifier_gate_layer = self
-            .into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
+            .convert_into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
             .unwrap();
         let final_result = verifier_gate_layer.evaluate(&claim);
 
@@ -390,7 +390,7 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
         (0..num_u + num_v + self.num_dataparallel_bits).collect_vec()
     }
 
-    fn into_verifier_layer(
+    fn convert_into_verifier_layer(
         &self,
         sumcheck_bindings: &[F],
         claim_point: &[F],
@@ -424,11 +424,13 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
         // Since the original mles are dataparallel, the challenges are the concat of the copy bits and the variable bound bits.
         let lhs_challenges = dataparallel_challenges
             .iter()
-            .chain(first_u_challenges.iter()).copied()
+            .chain(first_u_challenges.iter())
+            .copied()
             .collect_vec();
         let rhs_challenges = dataparallel_challenges
             .iter()
-            .chain(last_v_challenges.iter()).copied()
+            .chain(last_v_challenges.iter())
+            .copied()
             .collect_vec();
 
         let lhs_verifier_mle = self

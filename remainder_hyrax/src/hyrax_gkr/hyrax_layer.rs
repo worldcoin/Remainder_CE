@@ -376,7 +376,7 @@ pub fn committed_scalar_psl_as_commitments<C: PrimeOrderCurve>(
                             layer_id: *layer_id,
                             point: point.clone(),
                             value: value.commitment,
-                            mle_enum: None,
+                            mle_enum: Box::new(None),
                         },
                         Intermediate::Composite { value } => Intermediate::Composite {
                             value: value.commitment,
@@ -419,7 +419,7 @@ pub fn get_claims_from_product<F: Field, T: Clone>(
                 mle_enum,
             } => Some(HyraxClaim {
                 to_layer_id: *layer_id,
-                mle_enum: mle_enum.clone(),
+                mle_enum: *mle_enum.clone(),
                 point: point.clone(),
                 evaluation: value.clone(),
             }),

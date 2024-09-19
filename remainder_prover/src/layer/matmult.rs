@@ -377,7 +377,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
         let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge)?;
 
         let verifier_layer: VerifierMatMultLayer<F> = self
-            .into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
+            .convert_into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
             .unwrap();
 
         let matrix_product = verifier_layer.evaluate();
@@ -431,7 +431,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
         true
     }
 
-    fn into_verifier_layer(
+    fn convert_into_verifier_layer(
         &self,
         sumcheck_bindings: &[F],
         claim_point: &[F],
@@ -443,8 +443,8 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
 
         // Construct the full claim made on A using the claim made on the layer and the sumcheck bindings.
         let full_claim_chals_a = sumcheck_bindings
-            .to_vec()
-            .into_iter()
+            .iter()
+            .copied()
             .chain(claim_a)
             .collect_vec();
 
@@ -560,7 +560,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
             .collect_vec();
         pre_bound_matrix_b_mle.set_mle_indices(matrix_b_new_indices);
         let mle_refs = vec![pre_bound_matrix_a_mle, pre_bound_matrix_b_mle];
-        
+
         PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
             &mle_refs,
             F::ONE,

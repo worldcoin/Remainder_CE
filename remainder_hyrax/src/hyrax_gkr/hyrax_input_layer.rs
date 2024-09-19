@@ -71,8 +71,8 @@ impl<C: PrimeOrderCurve> HyraxInputLayerEnum<C> {
             }
             CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
                 assert!(precommit.is_none());
-                let input_layer_enum =
-                    circuit_public_input_layer.into_prover_input_layer(input_layer_mle, &None);
+                let input_layer_enum = circuit_public_input_layer
+                    .convert_into_prover_input_layer(input_layer_mle, &None);
                 Self::from_input_layer_enum(input_layer_enum)
             }
             CircuitInputLayerEnum::VerifierChallengeInputLayer(
@@ -80,7 +80,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerEnum<C> {
             ) => {
                 assert!(precommit.is_none());
                 let input_layer_enum = circuit_verifier_challenge_input_layer
-                    .into_prover_input_layer(input_layer_mle, &None);
+                    .convert_into_prover_input_layer(input_layer_mle, &None);
                 Self::from_input_layer_enum(input_layer_enum)
             }
             CircuitInputLayerEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {

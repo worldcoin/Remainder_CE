@@ -1,5 +1,6 @@
 //! Unit tests for [crate::output_layer::mle_output_layer].
 
+use itertools::{repeat_n, Itertools};
 use pretty_assertions::assert_eq;
 
 use remainder_shared_types::{ff_field, Field};
@@ -60,25 +61,6 @@ fn test_fix_layer() {
 }
 
 #[test]
-fn test_into_circuit_output_layer() {
-    let layer_id = LayerId::Layer(0);
-    let num_vars = 2;
-
-    let mle = ZeroMle::new(num_vars, None, layer_id);
-
-    let output_layer = MleOutputLayer::new_zero(mle);
-
-    let circuit_output_layer = output_layer.into_circuit_output_layer();
-
-    let expected_mle_indices: Vec<MleIndex<Fr>> =
-        (0..num_vars).map(|i| MleIndex::IndexedBit(i)).collect();
-    let expected_circuit_output_layer =
-        CircuitMleOutputLayer::new_zero(layer_id, &expected_mle_indices);
-
-    assert_eq!(circuit_output_layer, expected_circuit_output_layer);
-}
-
-#[test]
 fn test_output_layer_get_claims() {
     // ---- Part 1: Generate Output layer.
     let layer_id = LayerId::Layer(0);
@@ -87,7 +69,10 @@ fn test_output_layer_get_claims() {
     let mle = ZeroMle::new(num_vars, None, layer_id);
 
     let mut output_layer = MleOutputLayer::new_zero(mle.clone());
-    let circuit_output_layer = output_layer.into_circuit_output_layer();
+    let circuit_output_layer = CircuitMleOutputLayer::new_zero(
+        layer_id,
+        &repeat_n(MleIndex::Iterated, num_vars).collect_vec(),
+    );
 
     // ---- Part 2: Fix output layer and generate claims.
 
@@ -143,7 +128,10 @@ fn test_output_layer_get_claims_with_prefix_bits() {
     let mle = ZeroMle::new(num_iterated_vars, Some(prefix_bits), layer_id);
 
     let mut output_layer = MleOutputLayer::new_zero(mle.clone());
-    let circuit_output_layer = output_layer.into_circuit_output_layer();
+    let circuit_output_layer = CircuitMleOutputLayer::new_zero(
+        layer_id,
+        &repeat_n(MleIndex::Iterated, num_iterated_vars).collect_vec(),
+    );
 
     // ---- Part 2: Fix output layer and generate claims.
 

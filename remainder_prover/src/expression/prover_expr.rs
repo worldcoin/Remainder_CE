@@ -1032,11 +1032,11 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     }
 
     /// Get the maximum degree of an ExpressionNode, recursively.
-    fn get_max_degree(&self, mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> usize {
+    fn get_max_degree(&self, _mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> usize {
         match self {
             ExpressionNode::Selector(_, a, b) | ExpressionNode::Sum(a, b) => {
-                let a_degree = a.get_max_degree(mle_vec);
-                let b_degree = b.get_max_degree(mle_vec);
+                let a_degree = a.get_max_degree(_mle_vec);
+                let b_degree = b.get_max_degree(_mle_vec);
                 max(a_degree, b_degree)
             }
             ExpressionNode::Mle(_) => {
@@ -1047,7 +1047,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 // max degree is the number of MLEs in a product
                 mle_refs.len()
             }
-            ExpressionNode::Scaled(a, _) | ExpressionNode::Negated(a) => a.get_max_degree(mle_vec),
+            ExpressionNode::Scaled(a, _) | ExpressionNode::Negated(a) => a.get_max_degree(_mle_vec),
             ExpressionNode::Constant(_) => 1,
         }
     }

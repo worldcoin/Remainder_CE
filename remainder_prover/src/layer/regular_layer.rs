@@ -292,16 +292,12 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
             .for_each(|(expression_node, prefix_bit_vec)| {
                 let maybe_full_bookkeeping_table =
                     expression_node.compute_bookkeeping_table(circuit_map);
-                if maybe_full_bookkeeping_table.is_none() {
-                    all_populatable = false;
-                } else {
+                if let Some(full_bookkeeping_table) = &maybe_full_bookkeeping_table {
                     prefix_bit_vec
                         .iter()
                         .for_each(|(unfiltered_prefix_bits, prefix_bits)| {
-                            let bookkeeping_table_to_filter =
-                                maybe_full_bookkeeping_table.as_ref().unwrap();
                             let filtered_table = filter_bookkeeping_table(
-                                bookkeeping_table_to_filter,
+                                full_bookkeeping_table,
                                 unfiltered_prefix_bits,
                             );
                             circuit_map.add_node(
@@ -309,6 +305,8 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
                                 filtered_table,
                             );
                         });
+                } else {
+                    all_populatable = false;
                 }
             });
 
@@ -400,7 +398,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
             .collect();
 
         let verifier_layer = self
-            .into_verifier_layer(&point, claim.get_point(), transcript_reader)
+            .convert_into_verifier_layer(&point, claim.get_point(), transcript_reader)
             .unwrap();
 
         // Compute `P(r_1, ..., r_n)` over all challenge points (linear and
@@ -442,7 +440,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
         self.expression.get_all_nonlinear_rounds().clone()
     }
 
-    fn into_verifier_layer(
+    fn convert_into_verifier_layer(
         &self,
         sumcheck_challenges: &[F],
         _claim_point: &[F],
