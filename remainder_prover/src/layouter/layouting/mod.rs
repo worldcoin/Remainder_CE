@@ -34,6 +34,7 @@ use super::nodes::{
 pub struct CircuitMap<F>(pub(crate) HashMap<CircuitLocation, MultilinearExtension<F>>);
 
 impl<F: Field> CircuitMap<F> {
+    /// Create a new circuit map, which maps circuit location to the data stored at that location.
     pub fn new() -> Self {
         Self(HashMap::new())
     }
