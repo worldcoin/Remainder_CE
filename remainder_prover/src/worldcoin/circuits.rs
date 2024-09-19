@@ -12,7 +12,7 @@ use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::verifier_challenge::VerifierChallengeNode;
 use crate::layouter::nodes::{CircuitNode, Context};
 use crate::mle::bundled_input_mle::BundledInputMle;
-use crate::utils::get_input_shred_and_data_from_vec;
+use crate::utils::get_input_shred_and_data;
 use crate::worldcoin::components::Subtractor;
 
 use itertools::Itertools;
@@ -79,16 +79,16 @@ pub fn build_circuit<
         println!("{:?} = Input layer", input_layer.id());
         // TODO shouldn't have to clone here, but need to change library functions
         let (to_reroute, to_reroute_data) =
-            get_input_shred_and_data_from_vec(to_reroute.clone(), ctx, &input_layer);
+            get_input_shred_and_data(to_reroute.clone(), ctx, &input_layer);
         println!("{:?} = Image to_reroute input", to_reroute.id());
         let (to_sub_from_matmult, to_sub_from_matmult_data) =
-            get_input_shred_and_data_from_vec(to_sub_from_matmult.clone(), ctx, &input_layer);
+            get_input_shred_and_data(to_sub_from_matmult.clone(), ctx, &input_layer);
         println!("{:?} = input to sub from matmult", to_sub_from_matmult.id());
         let rerouted_image = IdentityGateNode::new(ctx, &to_reroute, reroutings.clone());
         println!("{:?} = Identity gate", rerouted_image.id());
 
         let (rh_matmult_multiplicand, rh_matmult_multiplicand_data) =
-            get_input_shred_and_data_from_vec(rh_matmult_multiplicand.clone(), ctx, &input_layer);
+            get_input_shred_and_data(rh_matmult_multiplicand.clone(), ctx, &input_layer);
         println!(
             "{:?} = Kernel values (RH multiplicand of matmult) input",
             rh_matmult_multiplicand.id()
@@ -120,7 +120,7 @@ pub fn build_circuit<
 
         // Use a lookup to range check the digits to the range 0..BASE
         let (lookup_table_values, lookup_table_values_data) =
-            get_input_shred_and_data_from_vec((0..BASE).map(F::from).collect(), ctx, &input_layer);
+            get_input_shred_and_data((0..BASE).map(F::from).collect(), ctx, &input_layer);
         println!("{:?} = Digit range check input", lookup_table_values.id());
 
         let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
@@ -128,7 +128,7 @@ pub fn build_circuit<
             LookupTable::new::<F>(ctx, &lookup_table_values, false, &verifier_challenge_node);
         println!("{:?} = Lookup table", lookup_table.id());
         let (digit_multiplicities, digit_multiplicities_data) =
-            get_input_shred_and_data_from_vec(digit_multiplicities.clone(), ctx, &input_layer);
+            get_input_shred_and_data(digit_multiplicities.clone(), ctx, &input_layer);
         println!("{:?} = Digit multiplicities", digit_multiplicities.id());
         let lookup_constraint = LookupConstraint::new::<F>(
             ctx,
@@ -141,7 +141,7 @@ pub fn build_circuit<
         let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE);
 
         let (sign_bits, sign_bits_data) =
-            get_input_shred_and_data_from_vec(sign_bits.clone(), ctx, &input_layer);
+            get_input_shred_and_data(sign_bits.clone(), ctx, &input_layer);
         println!("{:?} = Sign bits (iris code) input", sign_bits.id());
         let complementary_checker = ComplementaryRecompChecker::new(
             ctx,

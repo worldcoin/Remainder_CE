@@ -356,7 +356,7 @@ pub struct MultilinearExtension<F> {
 }
 
 impl<F: Field> MultilinearExtension<F> {
-    /// create a new MultilinearExtension from a [Vec<F>] of evaluations.
+    /// Create a new MultilinearExtension from a [Vec<F>] of evaluations.
     pub fn new(evals_vec: Vec<F>) -> Self {
         let num_vars = log2(evals_vec.len()) as usize;
         let evals = Evaluations::new(num_vars, evals_vec);

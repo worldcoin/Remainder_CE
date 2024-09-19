@@ -17,7 +17,7 @@ use remainder::{
         },
     },
     mle::bundled_input_mle::BundledInputMle,
-    utils::get_input_shred_and_data_from_vec,
+    utils::get_input_shred_and_data,
     worldcoin::{components::Subtractor, data::CircuitData},
 };
 use remainder_shared_types::curves::PrimeOrderCurve;
@@ -89,16 +89,16 @@ pub fn build_hyrax_circuit_public_input_layer<
         println!("{:?} = Input layer", input_layer.id());
         // TODO shouldn't have to clone here, but need to change library functions
         let (to_reroute, to_reroute_data) =
-            get_input_shred_and_data_from_vec(to_reroute.clone(), ctx, &input_layer);
+            get_input_shred_and_data(to_reroute.clone(), ctx, &input_layer);
         println!("{:?} = Image to_reroute input", to_reroute.id());
         let (to_sub_from_matmult, to_sub_from_matmult_data) =
-            get_input_shred_and_data_from_vec(to_sub_from_matmult.clone(), ctx, &input_layer);
+            get_input_shred_and_data(to_sub_from_matmult.clone(), ctx, &input_layer);
         println!("{:?} = input to sub from matmult", to_sub_from_matmult.id());
         let rerouted_image = IdentityGateNode::new(ctx, &to_reroute, reroutings.clone());
         println!("{:?} = Identity gate", rerouted_image.id());
 
         let (rh_matmult_multiplicand, rh_matmult_multiplicand_data) =
-            get_input_shred_and_data_from_vec(rh_matmult_multiplicand.clone(), ctx, &input_layer);
+            get_input_shred_and_data(rh_matmult_multiplicand.clone(), ctx, &input_layer);
         println!(
             "{:?} = Kernel values (RH multiplicand of matmult) input",
             rh_matmult_multiplicand.id()
@@ -129,7 +129,7 @@ pub fn build_hyrax_circuit_public_input_layer<
         let digits_concatenator = DigitsConcatenator::new(ctx, &digits_refs);
 
         // Use a lookup to range check the digits to the range 0..BASE
-        let (lookup_table_values, lookup_table_values_data) = get_input_shred_and_data_from_vec(
+        let (lookup_table_values, lookup_table_values_data) = get_input_shred_and_data(
             (0..BASE).map(C::Scalar::from).collect(),
             ctx,
             &input_layer,
@@ -145,7 +145,7 @@ pub fn build_hyrax_circuit_public_input_layer<
         );
         println!("{:?} = Lookup table", lookup_table.id());
         let (digit_multiplicities, digit_multiplicities_data) =
-            get_input_shred_and_data_from_vec(digit_multiplicities.clone(), ctx, &input_layer);
+            get_input_shred_and_data(digit_multiplicities.clone(), ctx, &input_layer);
         println!("{:?} = Digit multiplicities", digit_multiplicities.id());
         let lookup_constraint = LookupConstraint::new::<C::Scalar>(
             ctx,
@@ -158,7 +158,7 @@ pub fn build_hyrax_circuit_public_input_layer<
         let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE);
 
         let (sign_bits, sign_bits_data) =
-            get_input_shred_and_data_from_vec(sign_bits.clone(), ctx, &input_layer);
+            get_input_shred_and_data(sign_bits.clone(), ctx, &input_layer);
         println!("{:?} = Sign bits (iris code) input", sign_bits.id());
         let complementary_checker = ComplementaryRecompChecker::new(
             ctx,
@@ -300,13 +300,13 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
             hyrax_input_layer_for_digits_and_multiplicities.id()
         );
         // TODO shouldn't have to clone here, but need to change library functions
-        let (to_reroute, to_reroute_data) = get_input_shred_and_data_from_vec(
+        let (to_reroute, to_reroute_data) = get_input_shred_and_data(
             to_reroute.clone(),
             ctx,
             &hyrax_input_layer_for_reroute,
         );
         println!("{:?} = Image to_reroute input", to_reroute.id());
-        let (to_sub_from_matmult, to_sub_from_matmult_data) = get_input_shred_and_data_from_vec(
+        let (to_sub_from_matmult, to_sub_from_matmult_data) = get_input_shred_and_data(
             to_sub_from_matmult.clone(),
             ctx,
             &public_input_layer,
@@ -316,7 +316,7 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         println!("{:?} = Identity gate", rerouted_image.id());
 
         let (rh_matmult_multiplicand, rh_matmult_multiplicand_data) =
-            get_input_shred_and_data_from_vec(
+            get_input_shred_and_data(
                 rh_matmult_multiplicand.clone(),
                 ctx,
                 &public_input_layer,
@@ -351,7 +351,7 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         let digits_concatenator = DigitsConcatenator::new(ctx, &digits_refs);
 
         // Use a lookup to range check the digits to the range 0..BASE
-        let (lookup_table_values, lookup_table_values_data) = get_input_shred_and_data_from_vec(
+        let (lookup_table_values, lookup_table_values_data) = get_input_shred_and_data(
             (0..BASE).map(C::Scalar::from).collect(),
             ctx,
             &public_input_layer,
@@ -366,7 +366,7 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
             &verifier_challenge_node,
         );
         println!("{:?} = Lookup table", lookup_table.id());
-        let (digit_multiplicities, digit_multiplicities_data) = get_input_shred_and_data_from_vec(
+        let (digit_multiplicities, digit_multiplicities_data) = get_input_shred_and_data(
             digit_multiplicities.clone(),
             ctx,
             &hyrax_input_layer_for_digits_and_multiplicities,
@@ -383,7 +383,7 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE);
 
         let (sign_bits, sign_bits_data) =
-            get_input_shred_and_data_from_vec(sign_bits.clone(), ctx, &public_input_layer);
+            get_input_shred_and_data(sign_bits.clone(), ctx, &public_input_layer);
         println!("{:?} = Sign bits (iris code) input", sign_bits.id());
         let complementary_checker = ComplementaryRecompChecker::new(
             ctx,
