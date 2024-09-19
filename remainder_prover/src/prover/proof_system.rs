@@ -1,7 +1,3 @@
-
-
-
-
 ///This macro generates a layer enum that represents all the possible layers
 /// Every layer variant of the enum needs to implement Layer, and the enum will also implement Layer and pass methods to it's variants
 ///
@@ -280,31 +276,12 @@ macro_rules! input_layer_enum {
                     $var_name(<$variant as InputLayer<F>>::VerifierCommitment),
                 )*
             }
-
-            #[derive(serde::Serialize, serde::Deserialize, Debug)]
-            #[serde(bound = "F: Field")]
-            #[doc = r"Layer description enum"]
-            pub enum [<Circuit $type_name>]<F: Field> {
-                $(
-                    #[doc = "Layer description variant"]
-                    $var_name(<$variant as InputLayer<F>>::CircuitInputLayer),
-                )*
-            }
         }
 
         impl<F: Field> $crate::input_layer::InputLayer<F> for $type_name<F> {
             paste::paste! {
                 type ProverCommitment = [<$type_name ProverCommitment>]<F>;
                 type VerifierCommitment = [<$type_name VerifierCommitment>]<F>;
-                type CircuitInputLayer = [<Circuit $type_name>]<F>;
-            }
-
-            fn into_verifier_input_layer(&self) -> Self::CircuitInputLayer {
-                match self {
-                    $(
-                        Self::$var_name(layer) => Self::CircuitInputLayer::$var_name(layer.into_verifier_input_layer()),
-                    )*
-                }
             }
 
             fn commit(&mut self) -> Result<Self::VerifierCommitment, $crate::input_layer::InputLayerError> {
@@ -358,67 +335,6 @@ macro_rules! input_layer_enum {
         }
         // LigeroInputLayer::new()
         // InputLayerEnum::new()
-
-        paste::paste! {
-            impl<F: Field> $crate::input_layer::CircuitInputLayer<F> for [<Circuit $type_name>]<F> {
-                type Commitment = [<$type_name VerifierCommitment>]<F>;
-
-                fn layer_id(&self) -> $crate::layer::LayerId {
-                    match self {
-                        $(
-                            Self::$var_name(layer) => layer.layer_id(),
-                        )*
-                    }
-                }
-
-                fn get_commitment_from_transcript(
-                    &self,
-                    transcript_reader: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
-                )  -> Result<Self::Commitment, $crate::input_layer::InputLayerError> {
-                    match self {
-                        $(
-                            Self::$var_name(layer) => {
-                                let commitment = layer.get_commitment_from_transcript(transcript_reader)?;
-                                Ok(Self::Commitment::$var_name(commitment))
-                            }
-                        )*
-                    }
-                }
-
-                fn into_prover_input_layer(
-                    &self,
-                    mle: $crate::mle::evals::MultilinearExtension<F>,
-                    precommit: &Option<$crate::input_layer::CommitmentEnum<F>>,
-                ) -> InputLayerEnum<F> {
-                    match self {
-                        $(
-                            Self::$var_name(layer) => {
-                                layer.into_prover_input_layer(mle, precommit)
-                            }
-                        )*
-                    }
-                }
-
-                fn verify(
-                    &self,
-                    commitment: &Self::Commitment,
-                    claim: $crate::claims::Claim<F>,
-                    transcript_reader: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
-                ) -> Result<(), $crate::input_layer::InputLayerError> {
-                    match self {
-                        $(
-                            Self::$var_name(layer) => {
-                                if let Self::Commitment::$var_name(commitment) = commitment {
-                                    layer.verify(commitment, claim, transcript_reader)
-                                } else {
-                                    unreachable!()
-                                }
-                            }
-                        )*
-                    }
-                }
-            }
-        }
 
         $(
             impl<F: Field> From<$variant> for $type_name<F> {

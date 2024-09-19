@@ -1,3 +1,5 @@
+use std::ops::Mul;
+
 use ark_std::{cfg_into_iter, log2};
 use itertools::Itertools;
 use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
@@ -8,8 +10,10 @@ use remainder::{
         Claim,
     },
     input_layer::{
-        enum_input_layer::InputLayerEnum, public_input_layer::PublicInputLayer,
-        verifier_challenge_input_layer::VerifierChallengeInputLayer, InputLayer,
+        enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum},
+        public_input_layer::PublicInputLayer,
+        verifier_challenge_input_layer::VerifierChallengeInputLayer,
+        CircuitInputLayer, InputLayer,
     },
     layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
@@ -51,40 +55,78 @@ pub enum InputProofEnum<C: PrimeOrderCurve> {
 /// FIXME: temporary fix to work with hyrax input layers and the generic input layers for
 /// [InputLayerEnum] in `remainder_prover`. Need this for circuits that use multiple different
 /// types of input layers.
-pub enum HyraxCircuitInputLayerEnum<C: PrimeOrderCurve> {
+pub enum HyraxInputLayerEnum<C: PrimeOrderCurve> {
     HyraxInputLayer(HyraxInputLayer<C>),
     PublicInputLayer(PublicInputLayer<C::Scalar>),
     RandomInputLayer(VerifierChallengeInputLayer<C::Scalar>),
 }
 
-impl<C: PrimeOrderCurve> HyraxCircuitInputLayerEnum<C> {
+impl<C: PrimeOrderCurve> HyraxInputLayerEnum<C> {
+    pub fn from_circuit_input_layer_enum(
+        circuit_input_layer_enum: CircuitInputLayerEnum<C::Scalar>,
+        input_layer_mle: MultilinearExtension<C::Scalar>,
+        precommit: Option<HyraxProverCommitmentEnum<C>>,
+    ) -> Self {
+        match circuit_input_layer_enum {
+            CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
+                panic!("hyrax does not support ligero pcs")
+            }
+            CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
+                assert!(precommit.is_none());
+                let input_layer_enum =
+                    circuit_public_input_layer.into_prover_input_layer(input_layer_mle, &None);
+                Self::from_input_layer_enum(input_layer_enum)
+            }
+            CircuitInputLayerEnum::VerifierChallengeInputLayer(
+                circuit_verifier_challenge_input_layer,
+            ) => {
+                assert!(precommit.is_none());
+                let input_layer_enum = circuit_verifier_challenge_input_layer
+                    .into_prover_input_layer(input_layer_mle, &None);
+                Self::from_input_layer_enum(input_layer_enum)
+            }
+            CircuitInputLayerEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
+                unimplemented!("We handle the hyrax case separately")
+            }
+        }
+    }
     pub fn from_input_layer_enum(input_layer_enum: InputLayerEnum<C::Scalar>) -> Self {
         match input_layer_enum {
             InputLayerEnum::LigeroInputLayer(_ligero_input_layer) => {
                 panic!("hyrax does not support ligero pcs");
             }
             InputLayerEnum::PublicInputLayer(public_input_layer) => {
-                HyraxCircuitInputLayerEnum::PublicInputLayer(*public_input_layer)
+                HyraxInputLayerEnum::PublicInputLayer(*public_input_layer)
             }
             InputLayerEnum::RandomInputLayer(verifier_challenge_input_layer) => {
-                HyraxCircuitInputLayerEnum::RandomInputLayer(*verifier_challenge_input_layer)
+                HyraxInputLayerEnum::RandomInputLayer(*verifier_challenge_input_layer)
             }
         }
     }
     pub fn layer_id(&self) -> LayerId {
         match self {
-            HyraxCircuitInputLayerEnum::HyraxInputLayer(hyrax_layer) => hyrax_layer.layer_id,
-            HyraxCircuitInputLayerEnum::PublicInputLayer(public_layer) => public_layer.layer_id(),
-            HyraxCircuitInputLayerEnum::RandomInputLayer(random_layer) => random_layer.layer_id(),
+            HyraxInputLayerEnum::HyraxInputLayer(hyrax_layer) => hyrax_layer.layer_id,
+            HyraxInputLayerEnum::PublicInputLayer(public_layer) => public_layer.layer_id(),
+            HyraxInputLayerEnum::RandomInputLayer(random_layer) => random_layer.layer_id(),
         }
     }
 }
 
 /// An Enum representing the types of commitments for each layer,
-/// to be used in [HyraxCircuit::new_from_gkr_circuit] to append
-/// input commitments to transcript.
-#[derive(Debug)]
-pub enum CommitmentEnum<C: PrimeOrderCurve> {
+/// but from the prover's view. These are the precommit types
+/// included in [HyraxInputLayerData].
+#[derive(Debug, Clone)]
+pub enum HyraxProverCommitmentEnum<C: PrimeOrderCurve> {
+    HyraxCommitment((Vec<C>, Vec<C::Scalar>)),
+    PublicCommitment(Vec<C::Scalar>),
+    RandomCommitment(Vec<C::Scalar>),
+}
+
+/// An Enum representing the types of commitments for each layer,
+/// but from the verifier's view. These are the commitment types
+/// added to transcript.
+#[derive(Debug, Clone)]
+pub enum HyraxVerifierCommitmentEnum<C: PrimeOrderCurve> {
     HyraxCommitment(Vec<C>),
     PublicCommitment(Vec<C::Scalar>),
     RandomCommitment(Vec<C::Scalar>),
@@ -221,6 +263,10 @@ pub struct HyraxInputLayer<C: PrimeOrderCurve> {
 impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
     /// Just a wrapper around the corresponding [HyraxPCSProof] function.
     pub fn commit(&mut self) -> Vec<C> {
+        assert!(
+            self.comm.is_none(),
+            "should not be committing if there is already a precommit!"
+        );
         let comm = HyraxPCSProof::compute_matrix_commitments(
             self.log_num_cols,
             &self.mle,
