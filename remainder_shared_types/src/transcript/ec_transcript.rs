@@ -81,8 +81,6 @@ where
     }
 
     fn append_scalar_points(&mut self, label: &str, elements: &[C::Scalar]) {
-        dbg!("appending!");
-        dbg!(&label);
         elements.iter().for_each(|elem| {
             let base_elem = C::Base::from_bytes_le(elem.to_bytes_le());
             self.append(label, base_elem);
@@ -300,8 +298,6 @@ where
         label: &'static str,
         num_elements: usize,
     ) -> Result<Vec<C::Scalar>, TranscriptReaderError> {
-        dbg!("consuming");
-        dbg!(label);
         let points = self.consume_elements(label, num_elements)?;
         Ok(points
             .iter()
