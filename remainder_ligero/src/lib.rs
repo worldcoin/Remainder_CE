@@ -358,8 +358,8 @@ where
 }
 
 /// Compute number of degree tests required for `lambda`-bit security
-/// for a code with `len`-length codewords over `flog2`-bit field
-/// -- This is used in Verify and Prove
+/// for a code with `len`-length codewords over `flog2`-bit field.
+/// This is used in Verify and Prove.
 pub fn n_degree_tests(lambda: usize, len: usize, flog2: usize) -> usize {
     // -- den = log2(|F|) - log2(|codeword|) = how many bits of security are left in the field?
     // -- |codeword| = encoded_num_cols
