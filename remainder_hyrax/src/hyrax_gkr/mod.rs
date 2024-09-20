@@ -2,7 +2,6 @@ use std::collections::hash_map::Entry;
 use std::collections::HashSet;
 use std::{collections::HashMap, marker::PhantomData};
 
-use crate::hyrax_pcs::MleCoefficientsVector;
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
 use hyrax_circuit_inputs::HyraxInputLayerData;
@@ -26,7 +25,6 @@ use remainder::layouter::layouting::{
     CircuitLocation, CircuitMap, InputLayerHintMap, InputNodeMap,
 };
 use remainder::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
-use remainder::layouter::nodes::circuit_inputs::HyraxInputDType;
 use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::{Context, NodeId};
 use remainder::mle::evals::MultilinearExtension;
@@ -224,26 +222,21 @@ impl<
                             .add_node(CircuitLocation::new(input_layer_id, prefix_bits), output);
                     });
 
-                    dbg!("Starting match input layer desc");
-
                     match input_layer_description {
                         CircuitInputLayerEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
-                            dbg!("It's a Hyrax one!");
-                            dbg!(circuit_hyrax_input_layer);
                             let (hyrax_commit, hyrax_prover_input_layer) = if let Some(HyraxProverCommitmentEnum::HyraxCommitment((hyrax_precommit, hyrax_blinding_factors))) = &corresponding_input_data.precommit {
                                 let dtype = &corresponding_input_data.input_data_type;
                                 let hyrax_input_layer = HyraxInputLayer::new_with_hyrax_commitment(
                                     combined_mle,
                                     dtype,
                                     input_layer_id,
-                                    self.committer.clone(),
+                                    self.committer,
                                     hyrax_blinding_factors.clone(),
                                     circuit_hyrax_input_layer.log_num_cols,
                                     hyrax_precommit.clone());
                                 (hyrax_precommit.clone(), hyrax_input_layer)
                             } else if corresponding_input_data.precommit.is_none() {
                                 let dtype = &corresponding_input_data.input_data_type;
-                                dbg!(dtype);
                                 let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(combined_mle, input_layer_id, self.committer, dtype);
                                 let hyrax_commit = hyrax_input_layer.commit();
                                 (hyrax_commit, hyrax_input_layer)
