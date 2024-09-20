@@ -576,7 +576,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
         vec![&self.matrix_a.mle, &self.matrix_b.mle]
     }
 
-    fn into_prover_layer<'a>(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
+    fn convert_into_prover_layer<'a>(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
         let prover_matrix_a = self.matrix_a.into_matrix(circuit_map);
         let prover_matrix_b = self.matrix_b.into_matrix(circuit_map);
         let matmult_layer = MatMult::new(self.layer_id, prover_matrix_a, prover_matrix_b);

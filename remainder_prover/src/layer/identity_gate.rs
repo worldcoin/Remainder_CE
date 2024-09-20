@@ -234,7 +234,7 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
         vec![&self.source_mle]
     }
 
-    fn into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
+    fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
         let source_mle = self.source_mle.into_dense_mle(circuit_map);
         let id_gate_layer = IdentityGate::new(self.layer_id(), self.wiring.clone(), source_mle);
         id_gate_layer.into()

@@ -221,9 +221,9 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
     ) -> Vec<C::Scalar> {
         let weights = barycentric_weights(tau, claim_points.len());
         let mut claim_point = vec![C::Scalar::ZERO; claim_points[0].len()];
-        for i in 0..claim_points[0].len() {
+        for (i, claim_point_at_i) in claim_point.iter_mut().enumerate() {
             for j in 0..claim_points.len() {
-                claim_point[i] += claim_points[j][i] * weights[j];
+                *claim_point_at_i += claim_points[j][i] * weights[j];
             }
         }
         claim_point

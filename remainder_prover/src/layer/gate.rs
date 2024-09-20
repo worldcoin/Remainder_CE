@@ -476,7 +476,7 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
         vec![&self.lhs_mle, &self.rhs_mle]
     }
 
-    fn into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
+    fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
         let lhs_mle = self.lhs_mle.into_dense_mle(circuit_map);
         let rhs_mle = self.rhs_mle.into_dense_mle(circuit_map);
         let num_dataparallel_bits = if self.num_dataparallel_bits == 0 {

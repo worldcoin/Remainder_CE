@@ -4,6 +4,7 @@
 mod tests;
 
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use tracing::{instrument, span, Level};
@@ -99,8 +100,8 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                     .into_iter()
                     .for_each(|circuit_mle| {
                         let layer_id = circuit_mle.layer_id();
-                        if mle_claim_map.get(&layer_id).is_none() {
-                            mle_claim_map.insert(layer_id, HashSet::from([circuit_mle]));
+                        if let Entry::Vacant(e) = mle_claim_map.entry(layer_id) {
+                            e.insert(HashSet::from([circuit_mle]));
                         } else {
                             mle_claim_map
                                 .get_mut(&layer_id)
@@ -113,8 +114,8 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         output_layer_descriptions.iter().for_each(|output_layer| {
             let layer_source_mle = &output_layer.mle;
             let layer_id = layer_source_mle.layer_id();
-            if mle_claim_map.get(&layer_id).is_none() {
-                mle_claim_map.insert(layer_id, HashSet::from([&output_layer.mle]));
+            if let Entry::Vacant(e) = mle_claim_map.entry(layer_id) {
+                e.insert(HashSet::from([&output_layer.mle]));
             } else {
                 mle_claim_map
                     .get_mut(&layer_id)
@@ -261,7 +262,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             .iter()
             .for_each(|intermediate_layer_description| {
                 let prover_intermediate_layer =
-                    intermediate_layer_description.into_prover_layer(&circuit_map);
+                    intermediate_layer_description.convert_into_prover_layer(&circuit_map);
                 prover_intermediate_layers.push(prover_intermediate_layer)
             });
 

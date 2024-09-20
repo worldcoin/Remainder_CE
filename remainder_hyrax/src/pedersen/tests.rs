@@ -153,7 +153,7 @@ mod tests {
         // test that permuting the message changes the commitment
         let committer = PedersenCommitter::new_with_generators(vec![g0, g1], h, None);
         let message = vec![Fr::from(5u64), Fr::from(7u64)];
-        let permuted_message = message.iter().rev().cloned().collect();
+        let permuted_message = message.iter().rev().cloned().collect_vec();
         let commit = committer.vector_commit(&message, &blinding_factor);
         let permuted_message_commit = committer.vector_commit(&permuted_message, &blinding_factor);
         assert!(commit != permuted_message_commit);

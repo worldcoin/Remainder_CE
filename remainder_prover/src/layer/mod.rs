@@ -195,7 +195,7 @@ pub trait CircuitLayer<F: Field> {
     fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>>;
 
     /// Given a [CircuitMap], turn this [CircuitLayer] into a ProverLayer.
-    fn into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F>;
+    fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F>;
 }
 
 /// A verifier counterpart of a GKR [Layer] trait.

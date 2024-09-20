@@ -59,7 +59,7 @@ pub enum MleCoefficientsVector<C: PrimeOrderCurve> {
 impl<C: PrimeOrderCurve> MleCoefficientsVector<C> {
     /// From scalar field elements to the desired data type
     pub fn convert_from_scalar_field(
-        scalar_field_vec: &Vec<C::Scalar>,
+        scalar_field_vec: &[C::Scalar],
         dtype: &HyraxInputDType,
     ) -> Self {
         match dtype {
@@ -103,6 +103,14 @@ impl<C: PrimeOrderCurve> MleCoefficientsVector<C> {
             MleCoefficientsVector::ScalarFieldVector(vec) => vec.len(),
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        match &self {
+            MleCoefficientsVector::U8Vector(vec) => vec.is_empty(),
+            MleCoefficientsVector::I8Vector(vec) => vec.is_empty(),
+            MleCoefficientsVector::ScalarFieldVector(vec) => vec.is_empty(),
+        }
+    }
 }
 
 impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
@@ -114,7 +122,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         log_n_cols: usize,
         data: &MleCoefficientsVector<C>,
         committer: &PedersenCommitter<C>,
-        blinding_factors: &Vec<C::Scalar>,
+        blinding_factors: &[C::Scalar],
     ) -> Vec<C> {
         // checking that the matrix row size and the matrix column size are both powers of two! otherwise hyrax does not work
         assert!(data.len().is_power_of_two());
@@ -133,7 +141,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
                 coeff_vector_u8
                     .chunks(1 << log_n_cols)
                     .zip(blinding_factors.iter())
-                    .map(|(chunk, blind)| u8committer.u8_vector_commit(&chunk.to_vec(), blind))
+                    .map(|(chunk, blind)| u8committer.u8_vector_commit(chunk, blind))
                     .collect_vec()
             }
             MleCoefficientsVector::I8Vector(coeff_vector_i8) => {
@@ -146,7 +154,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
                 coeff_vector_i8
                     .chunks(1 << log_n_cols)
                     .zip(blinding_factors.iter())
-                    .map(|(chunk, blind)| i8committer.i8_vector_commit(&chunk.to_vec(), blind))
+                    .map(|(chunk, blind)| i8committer.i8_vector_commit(chunk, blind))
                     .collect_vec()
             }
             MleCoefficientsVector::ScalarFieldVector(coeff_vector_scalar_field) => {
@@ -154,7 +162,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
                 coeff_vector_scalar_field
                     .chunks(1 << log_n_cols)
                     .zip(blinding_factors.iter())
-                    .map(|(chunk, blind)| committer.vector_commit(&chunk.to_vec(), blind))
+                    .map(|(chunk, blind)| committer.vector_commit(chunk, blind))
                     .collect_vec()
             }
         };
@@ -199,7 +207,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         // the log size of the rows
         log_n_cols: usize,
         // the challenge coordinates we are evaluating the MLE at!
-        challenge_coordinates: &Vec<C::Scalar>,
+        challenge_coordinates: &[C::Scalar],
     ) -> (Vec<C::Scalar>, Vec<C::Scalar>) {
         // because of endian-ness, we need to actually reverse the order of the two. the r_challenge_coords are the most significant bits
         // and the l_challenge_coords are the least significant bits.
@@ -216,7 +224,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
     /// as a vector, we have a log_n_cols which determines the log size of the rows of the matrix.
     fn vector_matrix_product(
         // the left vector in this matrix product
-        vector: &Vec<C::Scalar>,
+        vector: &[C::Scalar],
         // the right matrix in this matrix product
         matrix: &MleCoefficientsVector<C>,
         // log dimension of the row size
@@ -254,13 +262,14 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
 
     /// the function where we construct the hyrax evaluation proof that the verifier then uses to determine whether the
     /// prover truly knows the correct evaluation of an MLE at a certain random challenge.
+    #[allow(clippy::too_many_arguments)]
     pub fn prove(
         // the log size of the rows of the matrix
         log_n_cols: usize,
         // a vector representing the coefficients of the MLE. can be u8, i8, or scalar field elements
         data: &MleCoefficientsVector<C>,
         // the challenge coordinates we are evaluating the MLE at
-        challenge_coordinates: &Vec<C::Scalar>,
+        challenge_coordinates: &[C::Scalar],
         // what the prover claims the MLE evaluates to at the challenge point
         mle_evaluation_at_challenge: &C::Scalar,
         // the pedersen vector and scalar commitment generators needed in order to commit to the rows of the matrix
@@ -273,7 +282,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         // transcript that the prover needs for proof of dot product
         prover_transcript: &mut impl ECProverTranscript<C>,
         // the blinding factors to commit to each of the rows of the MLE coefficient matrix
-        blinding_factors_matrix: &Vec<C::Scalar>,
+        blinding_factors_matrix: &[C::Scalar],
     ) -> Self {
         let (l_vector, r_vector) =
             HyraxPCSProof::<C>::compute_l_r_from_log_n_cols(log_n_cols, challenge_coordinates);
@@ -344,8 +353,8 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         &self,
         log_n_cols: usize,
         committer: &PedersenCommitter<C>,
-        commitment_to_coeff_matrix: &Vec<C>,
-        challenge_coordinates: &Vec<C::Scalar>,
+        commitment_to_coeff_matrix: &[C],
+        challenge_coordinates: &[C::Scalar],
         verifier_transcript: &mut impl ECVerifierTranscript<C>,
     ) {
         let Self {

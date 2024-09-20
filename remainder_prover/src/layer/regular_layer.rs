@@ -509,7 +509,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
         self.expression.get_circuit_mles()
     }
 
-    fn into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
+    fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
         let prover_expr = self.expression.into_prover_expression(circuit_map);
         let regular_layer = RegularLayer::new_raw(self.layer_id(), prover_expr);
         regular_layer.into()

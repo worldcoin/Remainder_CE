@@ -34,7 +34,7 @@ use super::nodes::{
 pub struct CircuitMap<F>(pub(crate) HashMap<CircuitLocation, MultilinearExtension<F>>);
 
 impl<F: Field> CircuitMap<F> {
-    /// Create a new circuit map, which maps circuit location to the data stored at that location.
+    /// Create a new circuit map, which maps circuit location to the data stored at that location.removing
     pub fn new() -> Self {
         Self(HashMap::new())
     }
@@ -68,6 +68,12 @@ impl<F: Field> CircuitMap<F> {
     /// Adds a new node to the CircuitMap
     pub fn add_node(&mut self, circuit_location: CircuitLocation, value: MultilinearExtension<F>) {
         self.0.insert(circuit_location, value);
+    }
+}
+
+impl<F: Field> Default for CircuitMap<F> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -123,17 +129,14 @@ impl InputNodeMap {
     }
 }
 
+type HintFunctionMapping<F> = (
+    CircuitLocation,
+    fn(&MultilinearExtension<F>) -> MultilinearExtension<F>,
+);
+
 /// A HashMap that maps a circuit location to the function that should
 /// be used on a MLE in order to generate its data.
-pub struct InputLayerHintMap<F: Field>(
-    pub  HashMap<
-        LayerId,
-        (
-            CircuitLocation,
-            fn(&MultilinearExtension<F>) -> MultilinearExtension<F>,
-        ),
-    >,
-);
+pub struct InputLayerHintMap<F: Field>(pub HashMap<LayerId, HintFunctionMapping<F>>);
 
 impl<F: Field> InputLayerHintMap<F> {
     pub(crate) fn new() -> Self {
@@ -142,26 +145,13 @@ impl<F: Field> InputLayerHintMap<F> {
 
     /// Given a layer ID, get the hint function that generates
     /// the data for this layer.
-    pub fn get_hint_function(
-        &self,
-        layer_id: &LayerId,
-    ) -> &(
-        CircuitLocation,
-        fn(&MultilinearExtension<F>) -> MultilinearExtension<F>,
-    ) {
+    pub fn get_hint_function(&self, layer_id: &LayerId) -> &HintFunctionMapping<F> {
         self.0.get(layer_id).unwrap()
     }
 
     /// Add a corresponding hint function to a layer in the circuit,
     /// given its layer ID.
-    pub fn add_hint_function(
-        &mut self,
-        layer_id: &LayerId,
-        hint_function: (
-            CircuitLocation,
-            fn(&MultilinearExtension<F>) -> MultilinearExtension<F>,
-        ),
-    ) {
+    pub fn add_hint_function(&mut self, layer_id: &LayerId, hint_function: HintFunctionMapping<F>) {
         self.0.insert(*layer_id, hint_function);
     }
 }
@@ -334,6 +324,14 @@ impl<F: Field> CircuitNode for IntermediateNode<F> {
     }
 }
 
+type LayouterNodes<F> = (
+    Vec<InputLayerNode>,
+    Vec<VerifierChallengeNode>,
+    Vec<Box<dyn CompilableNode<F>>>,
+    Vec<LookupTable>,
+    Vec<OutputNode>,
+);
+
 /// Current Core Layouter
 /// Assigns circuit nodes in the circuit to different layers based on their dependencies
 /// this algorithm is greedy and assigns nodes to the first available layer that it can,
@@ -346,16 +344,7 @@ impl<F: Field> CircuitNode for IntermediateNode<F> {
 pub fn layout<F: Field>(
     ctx: Context,
     nodes: Vec<NodeEnum<F>>,
-) -> Result<
-    (
-        Vec<InputLayerNode>,
-        Vec<VerifierChallengeNode>,
-        Vec<Box<dyn CompilableNode<F>>>,
-        Vec<LookupTable>,
-        Vec<OutputNode>,
-    ),
-    DAGError,
-> {
+) -> Result<LayouterNodes<F>, DAGError> {
     let mut dag = NodeEnumGroup::new(nodes);
 
     // Handle input layers

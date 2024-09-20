@@ -99,13 +99,13 @@ macro_rules! layer_enum {
                     }
                 }
 
-                fn into_prover_layer(
+                fn convert_into_prover_layer(
                     &self,
                     circuit_map: &$crate::layouter::layouting::CircuitMap<F>
                 ) -> LayerEnum<F> {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.into_prover_layer(circuit_map),
+                            Self::$var_name(layer) => layer.convert_into_prover_layer(circuit_map),
                         )*
                     }
                 }
@@ -207,7 +207,7 @@ macro_rules! layer_enum {
                 &self,
                 round_challenges: &[F],
                 claim_challenges: &[F],
-            ) -> crate::layer::PostSumcheckLayer<F, F> {
+            ) -> $crate::layer::PostSumcheckLayer<F, F> {
                 match self {
                     $(
                         Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges),

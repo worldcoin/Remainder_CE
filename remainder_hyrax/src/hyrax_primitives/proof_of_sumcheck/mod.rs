@@ -27,11 +27,12 @@ pub struct ProofOfSumcheck<C: PrimeOrderCurve> {
 }
 
 impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
+    #[allow(clippy::too_many_arguments)]
     /// Assumes that the commitments to the products have already been added to the transcript.
     pub fn prove(
         sum: &CommittedScalar<C>,
         // the alpha_j's, where alpha_j = Com(padded_message_j; r_alpha_j)
-        messages: &Vec<CommittedVector<C>>,
+        messages: &[CommittedVector<C>],
         // the degree of all sumcheck messages (assumed uniform)
         degree: usize,
         // The fully bound MLEs as a committed PostSumcheckLayer
@@ -84,8 +85,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
             .fold(zero, |acc, (gamma, message)| acc + message.clone() * *gamma);
 
         // calculate the vector j_star (the public vector in the PoDP)
-        let j_star: Vec<C::Scalar> =
-            Self::calculate_j_star(&bindings.to_vec(), &rhos, &gammas, degree);
+        let j_star: Vec<C::Scalar> = Self::calculate_j_star(bindings, &rhos, &gammas, degree);
 
         // need a CommittedScalar for the result of the dot product
         let oracle_eval = evaluate_committed_scalar(post_sumcheck_layer);
@@ -166,8 +166,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
             .fold(C::zero(), |acc, (gamma, message)| acc + *message * *gamma);
 
         // calculate the vector j_star (the public vector in the PoDP)
-        let j_star: Vec<C::Scalar> =
-            Self::calculate_j_star(&bindings.to_vec(), &rhos, &gammas, degree);
+        let j_star: Vec<C::Scalar> = Self::calculate_j_star(bindings, &rhos, &gammas, degree);
 
         // calculate a commitment to the expected dot product
         let oracle_eval = evaluate_committed_psl(post_sumcheck_layer);
@@ -194,11 +193,11 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
     /// ```
     pub fn calculate_j_star(
         // the verifier bindings during sumcheck
-        bindings: &Vec<C::Scalar>,
+        bindings: &[C::Scalar],
         // the coefficients of the random linear combination of the rows of the matrix
-        rhos: &Vec<C::Scalar>,
+        rhos: &[C::Scalar],
         // the coefficients of the random linear combination of the padded sumcheck messages
-        gammas: &Vec<C::Scalar>,
+        gammas: &[C::Scalar],
         // the degree of the sumcheck messages
         degree: usize,
     ) -> Vec<C::Scalar> {

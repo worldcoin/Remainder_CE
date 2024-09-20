@@ -37,7 +37,7 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
         // the dot product value of x (hidden) and a (public) that only the prover knows
         y: &CommittedScalar<C>,
         // public vector that is responsible for the dot product
-        a: &Vec<C::Scalar>,
+        a: &[C::Scalar],
         // pedersen generators necessary for the prover to make commitments
         committer: &PedersenCommitter<C>,
         // random generator that the prover uses to sample the d vector and consisting of blinding factors
@@ -105,7 +105,7 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
         // commitment to <x, a> (blinded)
         com_y: &C,
         // public vector
-        a: &Vec<C::Scalar>,
+        a: &[C::Scalar],
         // generators needed in order to produce commitments
         committer: &PedersenCommitter<C>,
         // transcript in order to generate the challenge c that would normally be produced interactively.
@@ -164,10 +164,7 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
 
     /// given two vectors of elements in the scalar field, compute their dot product and return a single scalar
     /// field element.
-    fn compute_dot_product(
-        first_vector: &Vec<C::Scalar>,
-        second_vector: &Vec<C::Scalar>,
-    ) -> C::Scalar {
+    fn compute_dot_product(first_vector: &[C::Scalar], second_vector: &[C::Scalar]) -> C::Scalar {
         if first_vector.len() == 1 && second_vector.is_empty() {
             first_vector[0]
         } else if second_vector.len() == 1 && first_vector.is_empty() {

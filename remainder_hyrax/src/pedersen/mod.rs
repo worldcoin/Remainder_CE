@@ -2,6 +2,7 @@
 
 use std::ops::{Add, Mul};
 
+use itertools::Itertools;
 use num::PrimInt;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::curves::Sha3XofReaderWrapper;
@@ -108,7 +109,7 @@ impl<C: PrimeOrderCurve> PedersenCommitter<C> {
     /// Convient wrapper of integer_vector_commit.
     /// Pre: self.int_abs_val_bitwidth >= 8.
     /// Post: same result as vector_commit, assuming uints are smaller than scalar field order.
-    pub fn u8_vector_commit(&self, message: &Vec<u8>, blinding: &C::Scalar) -> C {
+    pub fn u8_vector_commit(&self, message: &[u8], blinding: &C::Scalar) -> C {
         debug_assert!(self.int_abs_val_bitwidth >= 8);
         let message_is_negative_bits = vec![false; message.len()];
         self.integer_vector_commit(message, &message_is_negative_bits, blinding)
@@ -119,9 +120,9 @@ impl<C: PrimeOrderCurve> PedersenCommitter<C> {
     /// Convient wrapper of integer_vector_commit.
     /// Pre: self.int_abs_val_bitwidth >= 8.
     /// Post: same result as vector_commit, assuming ints are smaller than scalar field order.
-    pub fn i8_vector_commit(&self, message: &Vec<i8>, blinding: &C::Scalar) -> C {
+    pub fn i8_vector_commit(&self, message: &[i8], blinding: &C::Scalar) -> C {
         debug_assert!(self.int_abs_val_bitwidth >= 8);
-        let message_is_negative_bits = message.iter().map(|x| *x < 0i8).collect();
+        let message_is_negative_bits = message.iter().map(|x| *x < 0i8).collect_vec();
         let message: Vec<u8> = message
             .iter()
             .map(|x| (*x as i16).unsigned_abs() as u8)
@@ -136,8 +137,8 @@ impl<C: PrimeOrderCurve> PedersenCommitter<C> {
     /// Pre: message.len() <= self.message_generators.len()
     pub fn integer_vector_commit<T: PrimInt>(
         &self,
-        message: &Vec<T>,
-        message_is_negative_bits: &Vec<bool>,
+        message: &[T],
+        message_is_negative_bits: &[bool],
         blinding: &C::Scalar,
     ) -> C {
         assert!(message.len() <= self.generators.len());
@@ -175,7 +176,7 @@ impl<C: PrimeOrderCurve> PedersenCommitter<C> {
     /// The first message.len() generators are used to commit to the message.
     /// Note that self.int_abs_val_bitwidth is not relevant here.
     /// Pre: message.len() <= self.message_generators.len()
-    pub fn vector_commit(&self, message: &Vec<C::Scalar>, blinding: &C::Scalar) -> C {
+    pub fn vector_commit(&self, message: &[C::Scalar], blinding: &C::Scalar) -> C {
         dbg!(&message.len());
         assert!(message.len() <= self.generators.len());
         let unblinded_commit = self
@@ -190,11 +191,11 @@ impl<C: PrimeOrderCurve> PedersenCommitter<C> {
     /// CommittedVector.
     pub fn committed_vector(
         &self,
-        message: &Vec<C::Scalar>,
+        message: &[C::Scalar],
         blinding: &C::Scalar,
     ) -> CommittedVector<C> {
         CommittedVector {
-            value: message.clone(),
+            value: message.to_vec(),
             blinding: *blinding,
             commitment: self.vector_commit(message, blinding),
         }

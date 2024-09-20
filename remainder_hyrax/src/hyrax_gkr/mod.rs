@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::HashSet;
 use std::{collections::HashMap, marker::PhantomData};
 
@@ -69,6 +70,8 @@ pub struct HyraxInstantiatedCircuit<C: PrimeOrderCurve> {
     pub output_layers: Vec<HyraxOutputLayer<C>>,
 }
 
+type CircuitDescriptionAndAux<F> = (GKRCircuitDescription<F>, InputNodeMap, InputLayerHintMap<F>);
+
 /// The struct that holds all the necessary information to describe a circuit.
 pub struct HyraxProver<
     'a,
@@ -115,11 +118,7 @@ impl<
     pub fn generate_circuit_description(
         mut witness_function: Fn,
     ) -> (
-        (
-            GKRCircuitDescription<C::Scalar>,
-            InputNodeMap,
-            InputLayerHintMap<C::Scalar>,
-        ),
+        CircuitDescriptionAndAux<C::Scalar>,
         Vec<HyraxInputLayerData<C>>,
     ) {
         let ctx = Context::new();
@@ -167,8 +166,8 @@ impl<
                     .into_iter()
                     .for_each(|circuit_mle| {
                         let layer_id = circuit_mle.layer_id();
-                        if mle_claim_map.get(&layer_id).is_none() {
-                            mle_claim_map.insert(layer_id, HashSet::from([circuit_mle]));
+                        if let Entry::Vacant(e) = mle_claim_map.entry(layer_id) {
+                            e.insert(HashSet::from([circuit_mle]));
                         } else {
                             mle_claim_map
                                 .get_mut(&layer_id)
@@ -181,8 +180,8 @@ impl<
         output_layer_descriptions.iter().for_each(|output_layer| {
             let layer_source_mle = &output_layer.mle;
             let layer_id = layer_source_mle.layer_id();
-            if mle_claim_map.get(&layer_id).is_none() {
-                mle_claim_map.insert(layer_id, HashSet::from([&output_layer.mle]));
+            if let Entry::Vacant(e) = mle_claim_map.entry(layer_id) {
+                e.insert(HashSet::from([&output_layer.mle]));
             } else {
                 mle_claim_map
                     .get_mut(&layer_id)
@@ -391,7 +390,7 @@ impl<
             .iter()
             .for_each(|intermediate_layer_description| {
                 let prover_intermediate_layer =
-                    intermediate_layer_description.into_prover_layer(&circuit_map);
+                    intermediate_layer_description.convert_into_prover_layer(&circuit_map);
                 prover_intermediate_layers.push(prover_intermediate_layer)
             });
 
@@ -437,6 +436,8 @@ impl<
         let proof = self.prove(&mut instantiated_circuit, transcript_writer);
         (commitments, circuit_description, proof)
     }
+
+    #[allow(clippy::type_complexity)]
     /// TODO(vishady) riad audit comments: add in comments the ordering of the proofs every time they are in a vec
 
     /// The Hyrax GKR prover for a full circuit, including output layers, intermediate layers,
@@ -685,11 +686,8 @@ impl<
                         }
                         let claims_as_commitments =
                             claim_tracker.remove(&layer.layer_id()).unwrap().clone();
-                        let plaintext_claims = Self::match_claims(
-                            &claims_as_commitments,
-                            committed_claims,
-                            committer,
-                        );
+                        let plaintext_claims =
+                            Self::match_claims(&claims_as_commitments, committed_claims, committer);
                         plaintext_claims.into_iter().for_each(|claim| {
                             verify_public_and_random_input_layer::<C>(
                                 &public_commit_from_proof,
@@ -708,11 +706,8 @@ impl<
                         }
                         let claims_as_commitments =
                             claim_tracker.remove(&layer.layer_id()).unwrap().clone();
-                        let plaintext_claims = Self::match_claims(
-                            &claims_as_commitments,
-                            committed_claims,
-                            committer,
-                        );
+                        let plaintext_claims =
+                            Self::match_claims(&claims_as_commitments, committed_claims, committer);
                         plaintext_claims.into_iter().for_each(|claim| {
                             verify_public_and_random_input_layer::<C>(
                                 &random_commit_from_proof,
@@ -734,8 +729,8 @@ impl<
     /// CommittedScalars. Panics if a verifier claim can not be matched to a prover claim (and
     /// doesn't worry about prover claims that don't have a verifier counterpart).
     fn match_claims(
-        verifier_claims: &Vec<HyraxClaim<C::Scalar, C>>,
-        prover_claims: &Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
+        verifier_claims: &[HyraxClaim<C::Scalar, C>],
+        prover_claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],
         committer: &PedersenCommitter<C>,
     ) -> Vec<ClaimMle<C::Scalar>> {
         verifier_claims

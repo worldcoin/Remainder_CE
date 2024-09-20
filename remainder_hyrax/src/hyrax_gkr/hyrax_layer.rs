@@ -6,7 +6,6 @@ use crate::{
     pedersen::{CommittedScalar, CommittedVector, PedersenCommitter},
     utils::vandermonde::VandermondeInverse,
 };
-use ark_std::iterable::Iterable;
 use itertools::Itertools;
 use rand::Rng;
 use remainder::claims::wlx_eval::claim_group::ClaimGroup;
@@ -77,6 +76,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         committer.committed_vector(&round_coefficients, &blinding_factor)
     }
 
+    #[allow(clippy::type_complexity)]
     /// Produce a [HyraxLayerProof] for a given layer, given the unaggregated claims on that layer.
     /// Return also a [HyraxClaim] representing the aggregated claim.
     pub fn prove(
@@ -230,7 +230,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // a description of the layer being proven
         layer_desc: &impl CircuitLayer<C::Scalar>,
         // commitments to the unaggregated claims
-        claim_commitments: &Vec<HyraxClaim<C::Scalar, C>>,
+        claim_commitments: &[HyraxClaim<C::Scalar, C>],
         committer: &PedersenCommitter<C>,
         transcript: &mut impl ECVerifierTranscript<C>,
     ) -> Vec<HyraxClaim<C::Scalar, C>> {
@@ -331,13 +331,11 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             });
 
         // Extract the claims that the prover implicitly made on other layers by sending `commitments`.
-        let claims = post_sumcheck_layer
+        post_sumcheck_layer
             .0
             .iter()
-            .flat_map(|product| get_claims_from_product(&product))
-            .collect_vec();
-
-        claims
+            .flat_map(|product| get_claims_from_product(product))
+            .collect_vec()
     }
 }
 
@@ -434,7 +432,7 @@ impl<C: PrimeOrderCurve> HyraxClaim<C::Scalar, CommittedScalar<C>> {
     pub fn to_claim(&self) -> ClaimMle<C::Scalar> {
         let mut claim = ClaimMle::new_raw(self.point.clone(), self.evaluation.value);
         claim.to_layer_id = Some(self.to_layer_id);
-        claim.mle_ref = self.mle_enum.clone();
+        claim.mle_ref.clone_from(&self.mle_enum);
         claim
     }
 
@@ -477,7 +475,7 @@ pub fn commit_to_post_sumcheck_layer<C: PrimeOrderCurve>(
         post_sumcheck_layer
             .0
             .iter()
-            .map(|product| commit_to_product(&product, committer, &mut blinding_rng))
+            .map(|product| commit_to_product(product, committer, &mut blinding_rng))
             .collect(),
     )
 }

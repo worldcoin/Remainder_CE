@@ -76,6 +76,11 @@ impl CircuitNode for LookupConstraint {
     }
 }
 
+type LookupCircuitDescription<F> = (
+    Vec<CircuitInputLayerEnum<F>>,
+    Vec<CircuitLayerEnum<F>>,
+    Vec<CircuitMleOutputLayer<F>>,
+);
 /// Represents a table of data that can be looked up into, e.g. for a range check.
 #[derive(Clone, Debug)]
 pub struct LookupTable {
@@ -132,14 +137,7 @@ impl LookupTable {
         intermediate_layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
         input_hint_map: &mut InputLayerHintMap<F>,
-    ) -> Result<
-        (
-            Vec<CircuitInputLayerEnum<F>>,
-            Vec<CircuitLayerEnum<F>>,
-            Vec<CircuitMleOutputLayer<F>>,
-        ),
-        crate::layouter::layouting::DAGError,
-    > {
+    ) -> Result<LookupCircuitDescription<F>, crate::layouter::layouting::DAGError> {
         type AE<F> = Expression<F, AbstractExpr>;
         type CE<F> = Expression<F, CircuitExpr>;
 
