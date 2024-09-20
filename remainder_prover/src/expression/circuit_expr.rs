@@ -233,6 +233,7 @@ impl<F: Field> Expression<F, CircuitExpr> {
     }
 
     /// Get the [PostSumcheckLayer] for this expression, which represents the fully bound values of the expression.
+    /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     pub fn get_post_sumcheck_layer(
         &self,
         multiplier: F,
@@ -679,6 +680,7 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
 
     /// Recursively get the [PostSumcheckLayer] for an Expression node, which is the fully bound
     /// representation of an expression.
+    /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     pub fn get_post_sumcheck_layer(
         &self,
         multiplier: F,

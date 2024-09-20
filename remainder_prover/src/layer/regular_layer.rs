@@ -208,6 +208,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
     }
 
     /// Get the [PostSumcheckLayer] for a regular layer, which represents the fully bound expression.
+    /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
@@ -456,6 +457,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
     }
 
     /// Get the [PostSumcheckLayer] for a [CircuitRegularLayer], which represents the description of a fully bound expression.
+    /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],

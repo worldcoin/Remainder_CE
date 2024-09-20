@@ -248,6 +248,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
     }
 
     /// Return the [PostSumcheckLayer], panicking if either of the MLE refs is not fully bound.
+    /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     fn get_post_sumcheck_layer(
         &self,
         _round_challenges: &[F],
