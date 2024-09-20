@@ -12,7 +12,7 @@ use crate::layouter::layouting::{CircuitDescriptionMap, CircuitLocation, InputLa
 use crate::mle::evals::MultilinearExtension;
 use crate::mle::MleIndex;
 use crate::output_layer::mle_output_layer::CircuitMleOutputLayer;
-use crate::utils::get_total_mle_indices;
+use crate::utils::mle::get_total_mle_indices;
 
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::Field;
