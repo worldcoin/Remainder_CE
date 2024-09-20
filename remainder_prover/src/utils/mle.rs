@@ -1,6 +1,6 @@
 //! Module for generating and manipulating mles.
 
-use std::{fs, iter::repeat_with};
+use std::iter::repeat_with;
 
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
@@ -48,7 +48,15 @@ pub fn pad_to_nearest_power_of_two<F: Field>(coeffs: &[F]) -> Vec<F> {
 
 /// Returns the argsort (i.e. indices) of the given vector slice.
 ///
-/// Thanks ChatGPT!!!
+/// ## Example:
+/// ```
+/// use remainder::utils::argsort;
+/// let data = vec![3, 1, 4, 1, 5, 9, 2];
+///
+/// // Ascending order
+/// let indices = argsort(&data, false);
+/// assert_eq!(indices, vec![1, 3, 6, 0, 2, 4, 5]);
+/// ```
 pub fn argsort<T: Ord>(slice: &[T], invert: bool) -> Vec<usize> {
     let mut indices: Vec<usize> = (0..slice.len()).collect();
 
@@ -64,8 +72,6 @@ pub fn argsort<T: Ord>(slice: &[T], invert: bool) -> Vec<usize> {
 }
 
 /// Helper function to create random MLE with specific number of vars
-// pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) ->
-// DenseMle<F,> {
 pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F> {
     let capacity = 2_u32.pow(num_vars as u32);
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
@@ -157,12 +163,16 @@ pub fn get_mle_idx_decomp_for_idx<F: Field>(idx: usize, num_bits: usize) -> Vec<
         .collect_vec()
 }
 
-/// Returns whether a particular file exists in the filesystem
-///
-/// TODO!(ryancao): Shucks does this check a relative path...?
-pub fn file_exists(file_path: &String) -> bool {
-    match fs::metadata(file_path) {
-        Ok(file_metadata) => file_metadata.is_file(),
-        Err(_) => false,
-    }
+/// Returns the total MLE indices given a Vec<bool>
+/// for the prefix bits and then the number of iterated
+/// bits after.
+pub fn get_total_mle_indices<F: Field>(
+    prefix_bits: &[bool],
+    num_iterated_bits: usize,
+) -> Vec<MleIndex<F>> {
+    prefix_bits
+        .iter()
+        .map(|bit| MleIndex::Fixed(*bit))
+        .chain(repeat_n(MleIndex::Iterated, num_iterated_bits))
+        .collect()
 }
