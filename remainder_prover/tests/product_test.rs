@@ -8,7 +8,7 @@ use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::sector::Sector;
 use remainder::layouter::nodes::{CircuitNode, Context};
 use remainder::prover::helpers::test_circuit;
-use remainder::utils::get_input_shred_and_data_from_vec;
+use remainder::utils::get_input_shred_and_data;
 use remainder_shared_types::{Field, Fr};
 
 pub struct ProductCheckerComponent<F: Field> {
@@ -66,11 +66,11 @@ fn test_product_checker() {
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
         let (factor1_shred, factor1_shred_data) =
-            get_input_shred_and_data_from_vec(factor1.clone(), ctx, &input_layer);
+            get_input_shred_and_data(factor1.clone(), ctx, &input_layer);
         let (factor2_shred, factor2_shred_data) =
-            get_input_shred_and_data_from_vec(factor2.clone(), ctx, &input_layer);
+            get_input_shred_and_data(factor2.clone(), ctx, &input_layer);
         let (product_shred, product_shred_data) =
-            get_input_shred_and_data_from_vec(product.clone(), ctx, &input_layer);
+            get_input_shred_and_data(product.clone(), ctx, &input_layer);
         let input_data = InputLayerData::new(
             input_layer.id(),
             vec![factor1_shred_data, factor2_shred_data, product_shred_data],

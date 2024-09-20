@@ -13,7 +13,7 @@ use crate::layouter::nodes::CircuitNode;
 use crate::mle::bundled_input_mle::{to_slice_of_vectors, BundledInputMle, FlatMles};
 use crate::prover::helpers::test_circuit;
 use crate::utils::arithmetic::i64_to_field;
-use crate::utils::get_input_shred_and_data_from_vec;
+use crate::utils::get_input_shred_and_data;
 use ark_std::iterable::Iterable;
 use itertools::Itertools;
 use remainder_shared_types::ff_field;
@@ -42,14 +42,14 @@ fn test_complementary_recomposition_vertical() {
             .iter()
             .map(|shred| shred as &dyn CircuitNode)
             .collect_vec();
-        let (bits_input_shred, bits_input_shred_data) = get_input_shred_and_data_from_vec(
+        let (bits_input_shred, bits_input_shred_data) = get_input_shred_and_data(
             bits.iter()
                 .map(|b| if *b { Fr::ONE } else { Fr::ZERO })
                 .collect(),
             ctx,
             &input_layer,
         );
-        let (values_input_shred, values_input_shred_data) = get_input_shred_and_data_from_vec(
+        let (values_input_shred, values_input_shred_data) = get_input_shred_and_data(
             values.iter().map(|value| i64_to_field(value)).collect(),
             ctx,
             &input_layer,
@@ -120,11 +120,11 @@ fn test_unsigned_recomposition() {
         ) = digits
             .iter()
             .map(|digits_at_place| {
-                get_input_shred_and_data_from_vec(digits_at_place.clone(), ctx, &input_layer)
+                get_input_shred_and_data(digits_at_place.clone(), ctx, &input_layer)
             })
             .unzip();
         let (expected_input_shred, expected_input_shred_data) =
-            get_input_shred_and_data_from_vec(expected.clone(), ctx, &input_layer);
+            get_input_shred_and_data(expected.clone(), ctx, &input_layer);
 
         let digits_input_refs = digits_input_shreds
             .iter()
@@ -202,13 +202,13 @@ fn test_complementary_recomposition() {
         ) = digits
             .iter()
             .map(|digits_at_place| {
-                get_input_shred_and_data_from_vec(digits_at_place.clone(), ctx, &input_layer)
+                get_input_shred_and_data(digits_at_place.clone(), ctx, &input_layer)
             })
             .unzip();
         let (bits_input_shred, bits_input_shred_data) =
-            get_input_shred_and_data_from_vec(bits.clone(), ctx, &input_layer);
+            get_input_shred_and_data(bits.clone(), ctx, &input_layer);
         let (expected_input_shred, expected_input_shred_data) =
-            get_input_shred_and_data_from_vec(expected.clone(), ctx, &input_layer);
+            get_input_shred_and_data(expected.clone(), ctx, &input_layer);
 
         let digits_input_refs = digits_input_shreds
             .iter()
@@ -258,7 +258,7 @@ fn test_bits_are_binary_soundness() {
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
         let (shred, shred_data) =
-            get_input_shred_and_data_from_vec(bits.clone(), ctx, &input_layer);
+            get_input_shred_and_data(bits.clone(), ctx, &input_layer);
         let component = BitsAreBinary::new(ctx, &shred);
         let output = OutputNode::new_zero(ctx, &component.sector);
         let input_shred_data = vec![shred_data];
@@ -288,7 +288,7 @@ fn test_bits_are_binary() {
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
         let (shred, shred_data) =
-            get_input_shred_and_data_from_vec(bits.clone(), ctx, &input_layer);
+            get_input_shred_and_data(bits.clone(), ctx, &input_layer);
         let component = BitsAreBinary::new(ctx, &shred);
         let output = OutputNode::new_zero(ctx, &component.sector);
         let input_shred_data = vec![shred_data];
