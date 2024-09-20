@@ -396,7 +396,7 @@ pub fn prove_round_dataparallel_phase<F: Field>(
     // Need to separately update these because the phase_lhs and phase_rhs has no version of them.
     lhs.fix_variable(round_index - 1, challenge);
     rhs.fix_variable(round_index - 1, challenge);
-    libra_giraffe(
+    compute_sumcheck_messages_data_parallel_gate(
         lhs,
         rhs,
         beta_g2,
@@ -407,10 +407,10 @@ pub fn prove_round_dataparallel_phase<F: Field>(
     )
 }
 
-/// Get the evals for a batched mul gate. Note that this specifically refers to
-/// computing the prover message while binding the dataparallel bits of a `Gate`
+/// Get the evals for a binary gate specified by the BinaryOperation. Note that this specifically
+/// refers to computing the prover message while binding the dataparallel bits of a `Gate`
 /// expression.
-pub fn libra_giraffe<F: Field>(
+pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
     f2_p2_x: &DenseMle<F>,
     f3_p2_y: &DenseMle<F>,
     beta_g2: &DenseMle<F>,
