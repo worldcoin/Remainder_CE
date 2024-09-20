@@ -129,11 +129,8 @@ pub fn build_hyrax_circuit_public_input_layer<
         let digits_concatenator = DigitsConcatenator::new(ctx, &digits_refs);
 
         // Use a lookup to range check the digits to the range 0..BASE
-        let (lookup_table_values, lookup_table_values_data) = get_input_shred_and_data(
-            (0..BASE).map(C::Scalar::from).collect(),
-            ctx,
-            &input_layer,
-        );
+        let (lookup_table_values, lookup_table_values_data) =
+            get_input_shred_and_data((0..BASE).map(C::Scalar::from).collect(), ctx, &input_layer);
         println!("{:?} = Digit range check input", lookup_table_values.id());
 
         let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
@@ -300,27 +297,17 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
             hyrax_input_layer_for_digits_and_multiplicities.id()
         );
         // TODO shouldn't have to clone here, but need to change library functions
-        let (to_reroute, to_reroute_data) = get_input_shred_and_data(
-            to_reroute.clone(),
-            ctx,
-            &hyrax_input_layer_for_reroute,
-        );
+        let (to_reroute, to_reroute_data) =
+            get_input_shred_and_data(to_reroute.clone(), ctx, &hyrax_input_layer_for_reroute);
         println!("{:?} = Image to_reroute input", to_reroute.id());
-        let (to_sub_from_matmult, to_sub_from_matmult_data) = get_input_shred_and_data(
-            to_sub_from_matmult.clone(),
-            ctx,
-            &public_input_layer,
-        );
+        let (to_sub_from_matmult, to_sub_from_matmult_data) =
+            get_input_shred_and_data(to_sub_from_matmult.clone(), ctx, &public_input_layer);
         println!("{:?} = input to sub from matmult", to_sub_from_matmult.id());
         let rerouted_image = IdentityGateNode::new(ctx, &to_reroute, reroutings.clone());
         println!("{:?} = Identity gate", rerouted_image.id());
 
         let (rh_matmult_multiplicand, rh_matmult_multiplicand_data) =
-            get_input_shred_and_data(
-                rh_matmult_multiplicand.clone(),
-                ctx,
-                &public_input_layer,
-            );
+            get_input_shred_and_data(rh_matmult_multiplicand.clone(), ctx, &public_input_layer);
         println!(
             "{:?} = Kernel values (RH multiplicand of matmult) input",
             rh_matmult_multiplicand.id()
@@ -362,7 +349,7 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         let lookup_table = LookupTable::new::<C::Scalar>(
             ctx,
             &lookup_table_values,
-            false,
+            true,
             &verifier_challenge_node,
         );
         println!("{:?} = Lookup table", lookup_table.id());

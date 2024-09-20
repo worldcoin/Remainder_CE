@@ -228,7 +228,6 @@ impl PrimeOrderCurve for Bn256 {
     /// so the z coordinate is always 1.
     fn from_bytes_uncompressed(bytes: &[u8]) -> Self {
         // assert that this is a 65 byte representation since it's uncompressed
-        dbg!(bytes.len());
         assert_eq!(bytes.len(), Self::UNCOMPRESSED_CURVE_POINT_BYTEWIDTH);
         // first check if it is a point at infinity
         if bytes[0] == 1_u8 {

@@ -305,22 +305,11 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         let t_prime_commit = committer.committed_vector(&t_prime, &blinding_factor_t_prime);
         prover_transcript
             .append_ec_point("commitment to x VISHRUTI STYLE", t_prime_commit.commitment);
-        // Self::append_x_y_to_transcript_single(
-        //     &t_prime_commit.commitment,
-        //     prover_transcript,
-        //     "commitment to x, x-coord",
-        //     "commitment to x, y-coord",
-        // );
+
         // commit to the dot product, add this to the transcript
         let mle_eval_commit =
             committer.committed_scalar(mle_evaluation_at_challenge, &blinding_factor_evaluation);
         prover_transcript.append_ec_point("commitment to y", mle_eval_commit.commitment);
-        // Self::append_x_y_to_transcript_single(
-        //     &mle_eval_commit.commitment,
-        //     prover_transcript,
-        //     "commitment to y, x-coord",
-        //     "commitment to y, y-coord",
-        // );
 
         // now that we have a commitment to T', we can do a proof of dot product which claims that the dot product of
         // T' and R is indeed the MLE evaluation point. this evaluation proof is what the hyrax verifier uses to verify

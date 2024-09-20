@@ -177,7 +177,6 @@ impl<C: PrimeOrderCurve> PedersenCommitter<C> {
     /// Note that self.int_abs_val_bitwidth is not relevant here.
     /// Pre: message.len() <= self.message_generators.len()
     pub fn vector_commit(&self, message: &[C::Scalar], blinding: &C::Scalar) -> C {
-        dbg!(&message.len());
         assert!(message.len() <= self.generators.len());
         let unblinded_commit = self
             .generators

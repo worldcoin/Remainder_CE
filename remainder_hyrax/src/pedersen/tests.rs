@@ -275,9 +275,6 @@ mod tests {
         let committer: PedersenCommitter<Bn256> =
             PedersenCommitter::new(1 << LOG_NUM_COLS, PUBLIC_STRING, None);
 
-        dbg!(committer.generators.len());
-        dbg!(deserialized_generators_from_file.len());
-
         // --- Check the deserialized generators against the ones we live-generated ---
         deserialized_generators_from_file
             .iter()

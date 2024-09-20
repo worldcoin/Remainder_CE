@@ -229,7 +229,6 @@ impl LookupTable {
                 |acc, constraint| {
                     let (multiplicities_location, multiplicities_num_vars) =
                         &circuit_description_map.0[&constraint.multiplicities_node_id];
-                    dbg!(&multiplicities_location, multiplicities_num_vars);
                     let mult_constraint_mle_desc = CircuitMle::new(
                         multiplicities_location.layer_id,
                         &get_total_mle_indices(
@@ -242,7 +241,6 @@ impl LookupTable {
             );
             let layer_id = intermediate_layer_id.get_and_inc();
             let layer = CircuitRegularLayer::new_raw(layer_id, expr);
-            dbg!(&layer);
             intermediate_layers.push(CircuitLayerEnum::Regular(layer));
             println!(
                 "Layer that aggs the multiplicities has layer id: {:?}",
@@ -514,7 +512,6 @@ fn build_fractional_sum<F: Field>(
     for i in 0..denominator_desc.num_iterated_vars() {
         let denominators = split_circuit_mle(&denominator_desc);
         let next_numerator_expr = if let Some(numerator_desc) = maybe_numerator_desc {
-            dbg!(&numerator_desc);
             let numerators = split_circuit_mle(&numerator_desc);
 
             // Calculate the new numerator
@@ -543,7 +540,6 @@ fn build_fractional_sum<F: Field>(
             next_numerator_expr.concat_expr(next_denominator_expr),
         );
 
-        dbg!(&layer);
         layers.push(CircuitLayerEnum::Regular(layer));
 
         println!(
