@@ -96,9 +96,9 @@ pub fn get_total_mle_indices<F: Field>(
 }
 
 /// A builder which returns an expression with three nested selectors:
-/// - innermost_selector: sel(`inner_inner_sel_mle`, `inner_inner_sel_mle * inner_inner_sel_mle`)
-/// - inner_selector: sel(`innermost_selector`, `inner_sel_mle`)
-/// - overall_expression: sel(`inner_selector`, `outer_sel_mle`).
+/// * innermost_selector: sel(`inner_inner_sel_mle`, `inner_inner_sel_mle * inner_inner_sel_mle`)
+/// * inner_selector: sel(`innermost_selector`, `inner_sel_mle`)
+/// * overall_expression: sel(`inner_selector`, `outer_sel_mle`).
 ///
 /// ## Arguments
 /// * `inner_inner_sel_mle` - An MLE with arbitrary bookkeeping table values.
@@ -189,7 +189,7 @@ where
 }
 
 /// A builder which returns the following expression:
-/// - `mle_1` * `mle_2` + (10 * `mle_1`)
+/// `mle_1 * mle_2 + (10 * mle_1)`
 ///
 /// ## Arguments
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
@@ -229,7 +229,7 @@ where
 }
 
 /// A builder which returns the following expression:
-/// - `mle_1` * `mle_2` + (`mle_1` + `mle_2`)
+/// `mle_1 * mle_2 + (mle_1 + mle_2)`.
 ///
 /// ## Arguments
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
@@ -269,7 +269,7 @@ where
 }
 
 /// A builder which returns the following expression:
-/// - `mle_1` + 10 + (`mle_2` * 10)
+/// `mle_1 + 10 + (mle_2 * 10)`.
 ///
 /// ## Arguments
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
