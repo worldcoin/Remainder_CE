@@ -93,19 +93,19 @@ pub struct LookupTable {
     /// The ID of the random input node for the FS challenge.
     random_node_id: NodeId,
     /// Whether any of the values to be constrained by this LookupTable should be considered secret
-    /// (Determines which InputLayer type is used for the denominator inverses.)
+    /// (Determines which InputLayer type is used for the denominator inverse for the LHS.)
     secret_constrained_values: bool,
 }
 
 impl LookupTable {
-    /// Create a new LookupTable to use for subsequent lookups.
-    /// (To perform a lookup using this table, create a [LookupConstraint].)
-    /// `secret_constrained_values` controls whether a public or a hiding input layer is used for
-    /// the denominator inverse, which is derived from the constrained values (note that LookupTable
-    /// does not hide the constrained values themselves - that is up to the caller).
+    /// Create a new LookupTable to use for subsequent lookups. (To perform a lookup using this
+    /// table, create a [LookupConstraint].) `secret_constrained_values` controls whether a public
+    /// or a hiding input layer is used for the denominator inverse on the LHS, which is derived
+    /// from the constrained values (note that LookupTable does not hide the constrained values
+    /// themselves - that is up to the caller).
     ///
     /// # Requires
-    /// The length of the table must be a power of two.
+    /// * The length of the table must be a power of two.
     pub fn new<F: Field>(
         ctx: &Context,
         table: &dyn CircuitNode,
@@ -141,7 +141,7 @@ impl LookupTable {
         type AE<F> = Expression<F, AbstractExpr>;
         type CE<F> = Expression<F, CircuitExpr>;
 
-        // --- LogUp adds a few circuit "inputs" in the flavor of the denominator inverses ---
+        // LogUp adds a few circuit "inputs" in the flavor of the denominator inverses
         let mut logup_additional_input_layers: Vec<CircuitInputLayerEnum<F>> = vec![];
 
         // Ensure that number of LookupConstraints is a power of two (otherwise when we concat the
@@ -193,7 +193,8 @@ impl LookupTable {
         let lhs_denominator_vars = repeat_n(MleIndex::Iterated, expr_num_vars).collect_vec();
         let lhs_denominator_desc = CircuitMle::new(layer_id, &lhs_denominator_vars);
 
-        // --- Super special case: need to create a 0-variable MLE for the numerator which is JUST derived from an expression producing the constant 1 ---
+        // Super special case: need to create a 0-variable MLE for the numerator which is JUST
+        // derived from an expression producing the constant 1
         let maybe_lhs_numerator_desc = if lhs_denominator_vars.is_empty() {
             Some(CircuitMle::new(layer_id, &[]))
         } else {
@@ -261,7 +262,7 @@ impl LookupTable {
 
         // Build the denominator r - table
 
-        // --- First grab `r` as a `CircuitMle` from the `circuit_description_map` ---
+        // First grab `r` as a `CircuitMle` from the `circuit_description_map`
         let (verifier_challenge_loc, verifier_challenge_num_vars) =
             circuit_description_map.0[&self.random_node_id].clone();
         let verifier_challenge_circuit_mle = CircuitMle::new(
@@ -272,7 +273,7 @@ impl LookupTable {
             ),
         );
 
-        // --- Next grab `table` as a `CircuitMle` from the `circuit_description_map` ---
+        // Next grab `table` as a `CircuitMle` from the `circuit_description_map`
         let (table_loc, table_num_vars) = circuit_description_map.0[&self.table_node_id].clone();
         let table_circuit_mle = CircuitMle::new(
             table_loc.layer_id,
@@ -305,7 +306,7 @@ impl LookupTable {
         // Add an input layer for the inverse of the denominators of the LHS. This value holds
         // reveals some information about the constrained values, so we optionally use a
         // HyraxInputLayer.
-        // --- Grab the layer ID for the new "input layer" to be added ---
+        // Grab the layer ID for the new "input layer" to be added.
         let lhs_denom_inverse_layer_id = input_layer_id.get_and_inc();
         let lhs_denom_circuit_location =
             CircuitLocation::new(lhs_denominator.layer_id(), lhs_denominator.prefix_bits());
@@ -337,10 +338,7 @@ impl LookupTable {
 
         // Add an input layer for the inverse of the denominators of the RHS. This doesn't reveal
         // any information about the constrained values, so it's OK to use PublicInputLayer.
-        // let mle =
-        //     MultilinearExtension::new(vec![rhs_denominator.current_mle.value().invert().unwrap()]);
-
-        // --- Grab the layer ID for the new "input layer" to be added ---
+        // Grab the layer ID for the new input layer to be added.
         let rhs_denom_inverse_layer_id = input_layer_id.get_and_inc();
         let rhs_denom_circuit_location =
             CircuitLocation::new(rhs_denominator.layer_id(), rhs_denominator.prefix_bits());
@@ -489,6 +487,9 @@ fn split_circuit_mle<F: Field>(mle_desc: &CircuitMle<F>) -> (CircuitMle<F>, Circ
 /// Given two Mles of the same length representing the numerators and denominators of a sequence of
 /// fractions, add layers that perform a sum of the fractions, return a new pair of length-1 Mles
 /// representing the numerator and denominator of the sum.
+///
+/// Setting `maybe_numerator_desc` to None indicates that the numerator has the same length as
+/// `denominator_desc` and takes the constant value 1.
 fn build_fractional_sum<F: Field>(
     maybe_numerator_desc: Option<CircuitMle<F>>,
     denominator_desc: CircuitMle<F>,
@@ -497,8 +498,8 @@ fn build_fractional_sum<F: Field>(
 ) -> (Option<CircuitMle<F>>, CircuitMle<F>) {
     type CE<F> = Expression<F, CircuitExpr>;
 
-    // --- Sanitycheck number of vars in numerator == number of vars in denominator ---
-    // --- EXCEPT when we're working with the fraction with constant 1 in the numerator ---
+    // Sanitycheck number of vars in numerator == number of vars in denominator
+    // EXCEPT when we're working with the fraction with constant 1 in the numerator
     if let Some(numerator_desc) = maybe_numerator_desc.as_ref() {
         assert_eq!(
             numerator_desc.num_iterated_vars(),
