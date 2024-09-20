@@ -246,17 +246,23 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         // we do a simple dot product by transposing the matrix and treating each row as a vector and taking the dot product
         // of that and the vector provided in the function. this results in the matrix vector product as a vector of
         // scalar field elements.
-        let vec_matrix_prod = matrix_as_array2
-            .reversed_axes()
-            .outer_iter()
-            .map(|row| {
-                row.iter()
-                    .zip(vector.iter())
-                    .fold(C::Scalar::ZERO, |acc, (row_elem, vec_elem)| {
-                        acc + (*row_elem * vec_elem)
-                    })
-            })
-            .collect_vec();
+        let vec_matrix_prod = if !vector.is_empty() {
+            matrix_as_array2
+                .reversed_axes()
+                .outer_iter()
+                .map(|row| {
+                    row.iter()
+                        .zip(vector.iter())
+                        .fold(C::Scalar::ZERO, |acc, (row_elem, vec_elem)| {
+                            acc + (*row_elem * vec_elem)
+                        })
+                })
+                .collect_vec()
+        } else {
+            assert_eq!(matrix.len(), 1, "we can only have a valid matrix-vector product when the vector is len 0 if the matrix is len 1");
+            vec![matrix_as_field_elem[0]]
+        };
+
         vec_matrix_prod
     }
 
@@ -294,17 +300,25 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         // FIXME we could make this nicer by using the CommittedVector for each row
         // the blinding factor for the commitment to the T' vector is a combination of the blinding factors of the commitments
         // to the rows of the T matrix. it is a dot product of the L vector and the blinding factors of the matrix rows commits.
-        let blinding_factor_t_prime = blinding_factors_matrix.iter().zip(l_vector.iter()).fold(
-            C::Scalar::ZERO,
-            |acc: <C as PrimeOrderCurve>::Scalar, (row_blind, l_vec_exponent)| {
-                acc + (*row_blind * l_vec_exponent)
-            },
-        );
+        let blinding_factor_t_prime = if !l_vector.is_empty() {
+            blinding_factors_matrix.iter().zip(l_vector.iter()).fold(
+                C::Scalar::ZERO,
+                |acc: <C as PrimeOrderCurve>::Scalar, (row_blind, l_vec_exponent)| {
+                    acc + (*row_blind * l_vec_exponent)
+                },
+            )
+        } else {
+            assert_eq!(
+                blinding_factors_matrix.len(),
+                1,
+                "can only have one blinding factor if the vector is empty"
+            );
+            blinding_factors_matrix[0]
+        };
 
         // commit to t_prime_vector and add to the transcript
         let t_prime_commit = committer.committed_vector(&t_prime, &blinding_factor_t_prime);
-        prover_transcript
-            .append_ec_point("commitment to x VISHRUTI STYLE", t_prime_commit.commitment);
+        prover_transcript.append_ec_point("commitment to x", t_prime_commit.commitment);
 
         // commit to the dot product, add this to the transcript
         let mle_eval_commit =
@@ -357,16 +371,21 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
 
         // the verifier uses the L vector and does a scalar multiplication to each of the matrix row commits with the
         // appropriate index of the L vector. it then adds them all together to get the commitment to T' = L \times T.
-        let t_prime_commit_from_t_commit = commitment_to_coeff_matrix
-            .iter()
-            .zip(l_vector.iter())
-            .fold(C::zero(), |acc, (row_commit, l_vec_elem)| {
-                acc + (*row_commit * *l_vec_elem)
-            });
+        let t_prime_commit_from_t_commit = if !l_vector.is_empty() {
+            commitment_to_coeff_matrix
+                .iter()
+                .zip(l_vector.iter())
+                .fold(C::zero(), |acc, (row_commit, l_vec_elem)| {
+                    acc + (*row_commit * *l_vec_elem)
+                })
+        } else {
+            assert_eq!(commitment_to_coeff_matrix.len(), 1);
+            commitment_to_coeff_matrix[0]
+        };
 
         // add PoDP commitments to the transcript
         let transcript_t_prime_commit = verifier_transcript
-            .consume_ec_point("commitment to x RYAN STYLE")
+            .consume_ec_point("commitment to x")
             .unwrap();
         assert_eq!(t_prime_commit_from_t_commit, transcript_t_prime_commit);
 

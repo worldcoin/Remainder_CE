@@ -324,8 +324,6 @@ impl<
                         .get_hint_function(&hint_input_layer_description.layer_id());
                     if let Some(data) = circuit_map.get_data_from_location(hint_circuit_location) {
                         let function_applied_to_data = hint_function(data);
-                        // also here @ryan do we actually need to add to circuit map? also there are several places (see: logup) where we never add to circuit
-                        // map, even before this refactor, actually... this means we won't make claims on these so that's actually fine? idk
                         circuit_map.add_node(
                             CircuitLocation::new(hint_input_layer_description.layer_id(), vec![]),
                             function_applied_to_data.clone(),
