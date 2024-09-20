@@ -34,8 +34,8 @@ use crate::{
 
 pub use self::gate_helpers::{
     check_fully_bound, compute_full_gate, compute_sumcheck_message_gate,
-    compute_sumcheck_message_no_beta_table, index_mle_indices_gate, libra_giraffe,
-    prove_round_dataparallel_phase, GateError,
+    compute_sumcheck_message_no_beta_table, compute_sumcheck_messages_data_parallel_gate,
+    index_mle_indices_gate, prove_round_dataparallel_phase, GateError,
 };
 
 use super::{
@@ -115,12 +115,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         // representing which copy we are in.
         if self.num_dataparallel_bits > 0 {
             let (dataparallel_rounds, beta_g2_bound) = self
-                .perform_dataparallel_phase(
-                    claim.get_point().clone(),
-                    &mut beta_g1,
-                    &mut beta_g2,
-                    transcript_writer,
-                )
+                .perform_dataparallel_phase(&mut beta_g1, &mut beta_g2, transcript_writer)
                 .unwrap();
             beta_g2_fully_bound = beta_g2_bound;
             sumcheck_rounds.extend(dataparallel_rounds.0);
@@ -424,11 +419,13 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
         // Since the original mles are dataparallel, the challenges are the concat of the copy bits and the variable bound bits.
         let lhs_challenges = dataparallel_challenges
             .iter()
-            .chain(first_u_challenges.iter()).copied()
+            .chain(first_u_challenges.iter())
+            .copied()
             .collect_vec();
         let rhs_challenges = dataparallel_challenges
             .iter()
-            .chain(last_v_challenges.iter()).copied()
+            .chain(last_v_challenges.iter())
+            .copied()
             .collect_vec();
 
         let lhs_verifier_mle = self
@@ -877,35 +874,18 @@ impl<F: Field> GateLayer<F> {
     /// Initialize the dataparallel phase: construct the necessary mles and return the first sumcheck message.
     /// This will then set the necessary fields of the [Gate] struct so that the dataparallel bits can be
     /// correctly bound during the first `num_dataparallel_bits` rounds of sumcheck.
-    fn init_dataparallel_phase(&mut self, challenges: Vec<F>) -> Result<Vec<F>, GateError> {
-        let mut g2_challenges: Vec<F> = vec![];
-        let mut g1_challenges: Vec<F> = vec![];
-
-        // We split the claim challenges into two -- the first copy_bits number of challenges are referred
-        // to as g2, and the rest are referred to as g1. This distinguishes batching from non-batching internally.
-        challenges
-            .iter()
-            .enumerate()
-            .for_each(|(bit_idx, challenge)| {
-                if bit_idx < self.num_dataparallel_bits {
-                    g2_challenges.push(*challenge);
-                } else {
-                    g1_challenges.push(*challenge);
-                }
-            });
-
-        // Create two separate beta tables for each, as they are handled differently.
-        let mut beta_g2 = BetaValues::new_beta_equality_mle(g2_challenges);
-        beta_g2.index_mle_indices(0);
-        let beta_g1 = BetaValues::new_beta_equality_mle(g1_challenges);
-
-        // Index original bookkeeping tables to send over to the non-batched mul gate after the copy phase.
+    fn init_dataparallel_phase(
+        &mut self,
+        beta_g1: &mut DenseMle<F>,
+        beta_g2: &mut DenseMle<F>,
+    ) -> Result<Vec<F>, GateError> {
+        // Index original bookkeeping tables.
         self.lhs.index_mle_indices(0);
         self.rhs.index_mle_indices(0);
 
         // Result of initializing is the first sumcheck message.
 
-        libra_giraffe(
+        compute_sumcheck_messages_data_parallel_gate(
             &self.lhs,
             &self.rhs,
             &beta_g2,
@@ -1092,7 +1072,6 @@ impl<F: Field> GateLayer<F> {
     // This means that we are binding all bits that represent which copy of the circuit we are in.
     fn perform_dataparallel_phase(
         &mut self,
-        claim: Vec<F>,
         beta_g1: &mut DenseMle<F>,
         beta_g2: &mut DenseMle<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
@@ -1100,7 +1079,7 @@ impl<F: Field> GateLayer<F> {
         // Initialization, first message comes from here.
         let mut challenges: Vec<F> = vec![];
 
-        let first_message = self.init_dataparallel_phase(claim).expect(
+        let first_message = self.init_dataparallel_phase(beta_g1, beta_g2).expect(
             "could not evaluate original lhs and rhs in order to get first sumcheck message",
         );
 

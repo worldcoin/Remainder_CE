@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+use quickcheck::{Arbitrary, TestResult};
 use remainder_shared_types::Fr;
 
 use crate::{
@@ -462,4 +463,101 @@ fn test_topo_sort_without_cycle_include_children() {
             assert!(id_to_index_map[node_source_parent] < id_to_index_map[&node.id()]);
         }
     }
+}
+
+/// Dependency graph wrapper for Quickcheck.
+#[derive(Clone, Debug)]
+struct QDepGraph {
+    pub repr: Vec<NodeEnum<Fr>>,
+}
+
+impl Arbitrary for QDepGraph {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        // Instance size.
+        let n = 3; // g.size();
+
+        // Number of input nodes (all are sources).
+        let num_input_shreds = n;
+        // Number of intermediate nodes.
+        let num_sectors = 3 * n;
+        // Number of output nodes (all are sinks).
+        let num_outputs = n;
+
+        let ctx = Context::new();
+        let dummy_data = MultilinearExtension::<Fr>::new_zero();
+
+        // Start with the input nodes.
+        let mut graph: Vec<NodeEnum<Fr>> = (0..num_input_shreds)
+            .map(|_| {
+                let input_node = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+                let input_shred = InputShred::new(&ctx, dummy_data.num_vars(), &input_node);
+                NodeEnum::InputShred(input_shred)
+            })
+            .collect();
+
+        for _ in 0..num_sectors {
+            let available_edges = graph.iter().map(|node| match node {
+                NodeEnum::Sector(sector) => sector as &dyn CircuitNode,
+                NodeEnum::InputShred(input_shred) => input_shred as &dyn CircuitNode,
+                _ => panic!("Unexpected node type"),
+            });
+
+            let inputs: Vec<&dyn CircuitNode> = available_edges
+                .filter(|_| *g.choose(&[true, false]).unwrap())
+                .collect();
+
+            let sector = Sector::new(&ctx, &inputs, |ids| {
+                Expression::<Fr, AbstractExpr>::products(ids)
+            });
+
+            graph.extend([NodeEnum::Sector(sector)]);
+        }
+
+        let available_edges: Vec<&Sector<Fr>> = graph
+            .iter()
+            .skip(num_input_shreds)
+            .map(|node| match node {
+                NodeEnum::Sector(sector) => sector,
+                _ => panic!("Unexpected node type"),
+            })
+            .collect();
+
+        let mut output_nodes = vec![];
+
+        for _ in 0..num_outputs {
+            let input = *g.choose(&available_edges).unwrap();
+            let output = OutputNode::new(&ctx, input);
+            output_nodes.extend([NodeEnum::Output(output)]);
+        }
+
+        graph.extend(output_nodes);
+
+        for i in 0..graph.len() {
+            let choices: Vec<usize> = (0..=i).collect();
+            let j = *g.choose(&choices).unwrap();
+
+            graph.swap(i, j);
+        }
+
+        QDepGraph { repr: graph }
+    }
+}
+
+#[quickcheck]
+fn toposorted_property(graph: QDepGraph) -> TestResult {
+    let sorted_graph = topo_sort(graph.repr).unwrap();
+
+    let mut ids_seen = HashSet::new();
+
+    TestResult::from_bool(sorted_graph.into_iter().all(|u_enum| {
+        let (vs, u_id) = match u_enum {
+            NodeEnum::Sector(u) => (u.sources(), u.id()),
+            NodeEnum::InputShred(u) => (u.sources(), u.id()),
+            NodeEnum::Output(u) => (u.sources(), u.id()),
+            _ => panic!("Unexpected node type"),
+        };
+        ids_seen.insert(u_id);
+
+        vs.into_iter().all(|v_id| !ids_seen.get(&v_id).is_none())
+    }))
 }

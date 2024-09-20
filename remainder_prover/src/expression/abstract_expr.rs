@@ -36,7 +36,7 @@ use crate::{
         nodes::NodeId,
     },
     mle::MleIndex,
-    utils::get_total_mle_indices,
+    utils::mle::get_total_mle_indices,
 };
 
 use super::{

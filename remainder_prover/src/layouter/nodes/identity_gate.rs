@@ -7,7 +7,7 @@ use crate::{
     expression::circuit_expr::CircuitMle,
     layer::{identity_gate::CircuitIdentityGateLayer, layer_enum::CircuitLayerEnum, LayerId},
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
-    utils::get_total_mle_indices,
+    utils::mle::get_total_mle_indices,
 };
 
 use super::{CircuitNode, CompilableNode, Context, NodeId};
