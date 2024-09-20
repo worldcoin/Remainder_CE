@@ -10,14 +10,15 @@ use remainder_shared_types::{
 };
 
 use remainder_hyrax::{
-    hyrax_gkr::HyraxProver, hyrax_worldcoin::build_hyrax_circuit_public_input_layer,
+    hyrax_gkr::HyraxProver, hyrax_worldcoin::build_hyrax_circuit_hyrax_input_layer,
     pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
 };
 type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
 
-/// Helper function that runs the Hyrax Worldcoin test against a given data set.
-fn test_hyrax_worldcoin<
+/// Helper function that runs the Hyrax Worldcoin test against a given data set
+/// with hyrax input layers when data needs to be blinded.
+fn test_hyrax_worldcoin_hyrax_input_layer<
     const MATMULT_ROWS_NUM_VARS: usize,
     const MATMULT_COLS_NUM_VARS: usize,
     const MATMULT_INTERNAL_DIM_NUM_VARS: usize,
@@ -45,7 +46,7 @@ fn test_hyrax_worldcoin<
     );
     let mut hyrax_prover = HyraxProver::new(&committer, blinding_rng, converter);
 
-    let witness_function = build_hyrax_circuit_public_input_layer(data);
+    let witness_function = build_hyrax_circuit_hyrax_input_layer(data);
 
     let (input_commits, mut circuit_description, hyrax_proof) =
         hyrax_prover.prove_gkr_circuit(witness_function, &mut prover_transcript);
@@ -76,5 +77,5 @@ fn main() {
         BASE,
         NUM_DIGITS,
     >(path.clone(), image_path, false);
-    test_hyrax_worldcoin(data, 100);
+    test_hyrax_worldcoin_hyrax_input_layer(data, 512);
 }
