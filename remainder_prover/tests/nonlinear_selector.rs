@@ -20,8 +20,7 @@ use crate::utils::{get_dummy_input_shred_and_data, DifferenceBuilderComponent};
 pub mod utils;
 
 /// A builder which returns the following expression:
-/// - sel(`left_sel_mle`, `right_sel_mle`)
-///   + `right_sum_mle_1` * `right_sum_mle_2`
+/// `sel(left_sel_mle, right_sel_mle) + right_sum_mle_1 * right_sum_mle_2`
 ///
 /// The idea is that this builder has one selector bit which is nonlinear.
 ///

@@ -1,3 +1,23 @@
+//! The "circuit-builder's" view of an expression. In particular, it represents
+//! a template of polynomial relationships between an output computational
+//! graph node and outputs from source computational graph nodes (see
+//! documentation within [crate::expression] for more details).
+//!
+//! WARNING: because [AbstractExpr] does *not* contain any semblance of MLE
+//! sizes nor indices, it can thus represent an entire class of polynomial
+//! relationships, depending on its circuit-time instantiation. For example,
+//! the simple relationship of
+//!
+//! ```ignore
+//!     node_id_1.expr() + node_id_2.expr()
+//! ```
+//!
+//! can refer to \widetilde{V}_{i}(x_1, ..., x_m) + \widetilde{V}_{j}(x_1, ..., x_n)
+//! where:
+//! * m > n, i.e. the second MLE's "data" is "wrapped around" via repetition
+//! * m = n, i.e. the resulting bookkeeping table is the element-wise sum of the two
+//! * m < n, i.e. the first MLE's "data" is "wrapped around" via repetition
+
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -16,7 +36,7 @@ use crate::{
         nodes::NodeId,
     },
     mle::MleIndex,
-    utils::get_total_mle_indices,
+    utils::mle::get_total_mle_indices,
 };
 
 use super::{

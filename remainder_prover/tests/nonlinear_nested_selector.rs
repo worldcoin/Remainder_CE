@@ -25,8 +25,10 @@ pub struct NonlinearNestedSelectorBuilderComponent<F: Field> {
 
 impl<F: Field> NonlinearNestedSelectorBuilderComponent<F> {
     /// A builder which returns the following expression:
-    /// - sel(sel(`left_inner_sel_mle`, `right_inner_sel_mle`), `right_outer_sel_mle`)
-    ///   + `right_sum_mle_1` * `right_sum_mle_2`
+    /// ```text
+    /// sel(sel(left_inner_sel_mle, right_inner_sel_mle), right_outer_sel_mle)
+    ///     + right_sum_mle_1 * right_sum_mle_2
+    /// ```
     ///
     /// The idea is that this builder has two selector bits which are nonlinear.
     ///

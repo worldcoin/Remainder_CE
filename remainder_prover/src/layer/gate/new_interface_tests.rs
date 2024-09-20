@@ -48,7 +48,7 @@ mod tests {
         },
         mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
         prover::helpers::test_circuit,
-        utils::get_input_shred_and_data_from_vec,
+        utils::get_input_shred_and_data,
     };
 
     impl<F: Field> DifferenceBuilderComponent<F> {
@@ -189,14 +189,14 @@ mod tests {
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let (dataparallel_mle_input_shred, dataparallel_mle_input_shred_data) =
-                get_input_shred_and_data_from_vec(
+                get_input_shred_and_data(
                     mle_dataparallel.current_mle.get_evals_vector().to_vec(),
                     ctx,
                     &input_layer,
                 );
 
             let (dataparallel_neg_mle_input_shred, dataparallel_neg_mle_input_shred_data) =
-                get_input_shred_and_data_from_vec(
+                get_input_shred_and_data(
                     neg_mle_dataparallel.current_mle.get_evals_vector().to_vec(),
                     ctx,
                     &input_layer,
@@ -270,12 +270,12 @@ mod tests {
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let (mle_input_shred, mle_input_shred_data) = get_input_shred_and_data_from_vec(
+            let (mle_input_shred, mle_input_shred_data) = get_input_shred_and_data(
                 mle.current_mle.get_evals_vector().to_vec(),
                 ctx,
                 &input_layer,
             );
-            let (neg_mle_input_shred, neg_mle_input_shred_data) = get_input_shred_and_data_from_vec(
+            let (neg_mle_input_shred, neg_mle_input_shred_data) = get_input_shred_and_data(
                 neg_mle.current_mle.get_evals_vector().to_vec(),
                 ctx,
                 &input_layer,
@@ -338,19 +338,19 @@ mod tests {
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let (mle_1_input_shred, mle_1_input_shred_data) = get_input_shred_and_data_from_vec(
+            let (mle_1_input_shred, mle_1_input_shred_data) = get_input_shred_and_data(
                 mle_1.current_mle.get_evals_vector().to_vec(),
                 ctx,
                 &input_layer,
             );
 
-            let (mle_2_input_shred, mle_2_input_shred_data) = get_input_shred_and_data_from_vec(
+            let (mle_2_input_shred, mle_2_input_shred_data) = get_input_shred_and_data(
                 mle_2.current_mle.get_evals_vector().to_vec(),
                 ctx,
                 &input_layer,
             );
             let (neg_mle_2_input_shred, neg_mle_2_input_shred_data) =
-                get_input_shred_and_data_from_vec(
+                get_input_shred_and_data(
                     neg_mle_2.current_mle.get_evals_vector().to_vec(),
                     ctx,
                     &input_layer,
@@ -457,13 +457,13 @@ mod tests {
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let (dataparallel_mle_input_shred, dataparallel_mle_input_shred_data) =
-                get_input_shred_and_data_from_vec(
+                get_input_shred_and_data(
                     mle_dataparallel.current_mle.get_evals_vector().to_vec(),
                     ctx,
                     &input_layer,
                 );
             let (dataparallel_neg_mle_input_shred, dataparallel_neg_mle_input_shred_data) =
-                get_input_shred_and_data_from_vec(
+                get_input_shred_and_data(
                     neg_mle_dataparallel.current_mle.get_evals_vector().to_vec(),
                     ctx,
                     &input_layer,
@@ -535,20 +535,20 @@ mod tests {
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let (dataparallel_mle_1_input_shred, dataparallel_mle_1_input_shred_data) =
-                get_input_shred_and_data_from_vec(
+                get_input_shred_and_data(
                     mle_1_dataparallel.current_mle.get_evals_vector().to_vec(),
                     ctx,
                     &input_layer,
                 );
             let (dataparallel_mle_2_input_shred, dataparallel_mle_2_input_shred_data) =
-                get_input_shred_and_data_from_vec(
+                get_input_shred_and_data(
                     mle_2_dataparallel.current_mle.get_evals_vector().to_vec(),
                     ctx,
                     &input_layer,
                 );
 
             let (dataparallel_neg_mle_2_input_shred, dataparallel_neg_mle_2_input_shred_data) =
-                get_input_shred_and_data_from_vec(
+                get_input_shred_and_data(
                     neg_mle_2_dataparallel
                         .current_mle
                         .get_evals_vector()

@@ -46,8 +46,6 @@ fn initialize_tensor<F: Field>(challenge_coord: &[F]) -> Vec<F> {
 /// * `num_rows` - Total number of rows in the matrix M
 /// * `orig_num_cols` - Total number of columns in the matrix M
 ///
-/// ---
-///
 /// ## Example
 ///
 /// `challenge_coord`: x_0, x_1, x_2
@@ -97,10 +95,7 @@ pub fn get_ml_inner_outer_tensors<F: Field>(
 /// ## Arguments
 /// * `mle_coeffs` - MLE evaluations over the boolean hypercube.
 /// * `challenge_coord` - Challenge point at which to evaluate the MLE.
-pub fn naive_eval_mle_at_challenge_point<F: Field>(
-    mle_coeffs: &[F],
-    challenge_coord: &[F],
-) -> F {
+pub fn naive_eval_mle_at_challenge_point<F: Field>(mle_coeffs: &[F], challenge_coord: &[F]) -> F {
     assert!(mle_coeffs.len().is_power_of_two());
     assert_eq!(log2(mle_coeffs.len()), challenge_coord.len() as u32);
 
