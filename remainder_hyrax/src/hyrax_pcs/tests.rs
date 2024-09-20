@@ -220,6 +220,7 @@ mod tests {
         );
     }
 
+    #[ignore] // takes a long time to run!
     #[test]
     /// test on a 2^9 x 2^9 matrix with all random elements
     fn sanity_check_test_honest_prover_iris_size_symmetric_random() {

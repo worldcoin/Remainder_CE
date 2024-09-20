@@ -50,7 +50,7 @@ pub fn pad_to_nearest_power_of_two<F: Field>(coeffs: &[F]) -> Vec<F> {
 ///
 /// ## Example:
 /// ```
-/// use remainder::utils::argsort;
+/// use remainder::utils::mle::argsort;
 /// let data = vec![3, 1, 4, 1, 5, 9, 2];
 ///
 /// // Ascending order
