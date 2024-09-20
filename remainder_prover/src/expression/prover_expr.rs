@@ -1,3 +1,12 @@
+//! The prover's view of an [Expression] -- see file-level documentation within
+//! [crate::expression] for more details.
+//!
+//! Conceptually, [ProverExpr] contains the "circuit structure" between the
+//! layer whose values are the output of the given expression and those whose
+//! values are the inputs to the given expression, i.e. the polynomial
+//! relationship between them, as well as (in an ownership sense) the actual
+//! data, stored in [DenseMle]s.
+
 use super::{
     expr_errors::ExpressionError,
     generic_expr::{Expression, ExpressionNode, ExpressionType},
@@ -21,6 +30,9 @@ use std::{
 /// mid-term solution for deduplication of DenseMleRefs
 /// basically a wrapper around usize, which denotes the index
 /// of the MleRef in an expression's MleRef list/// Generic Expressions
+///
+/// TODO(ryancao): We should deprecate this and instead just have
+/// references to the `DenseMLE<F>`s which are stored in the circuit_map.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MleVecIndex(usize);
 
@@ -66,8 +78,6 @@ impl<F: Field> ExpressionType<F> for ProverExpr {
 /// this is what the prover manipulates to prove the correctness of the computation.
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
 impl<F: Field> Expression<F, ProverExpr> {
-    /// Concatenates two expressions together
-    ///
     /// See documentation in [super::circuit_expr::CircuitExpr]'s `concat_expr`
     /// function for more details!
     pub fn concat_expr(mut self, lhs: Expression<F, ProverExpr>) -> Self {

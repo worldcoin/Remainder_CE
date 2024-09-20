@@ -1,3 +1,7 @@
+//! The "pure" polynomial relationship description between the MLE representing
+//! a single layer of a "structured" circuit and those representing data from
+//! other layers. See documentation in [crate::expression] for more details.
+
 use crate::{
     layer::{
         gate::BinaryOperation,
@@ -32,7 +36,7 @@ use super::{
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[serde(bound = "F: Field")]
 pub struct CircuitMle<F: Field> {
-    /// Layer whose data this MLE is a subset of.
+    /// Layer whose data this MLE's is a subset of.
     layer_id: LayerId,
 
     /// A list of indices where the free variables have been assigned an index.
@@ -118,7 +122,9 @@ impl<F: Field> CircuitMle<F> {
         DenseMle::new_with_prefix_bits((*data).clone(), self.layer_id(), self.prefix_bits())
     }
 
-    /// Bind the variable with index `var_index` to `value`.
+    /// Bind the variable with index `var_index` to `value`. Note that since
+    /// [CircuitMle] is the representation of a multilinear extension function
+    /// sans data, it need not alter its internal MLE evaluations in any way.
     pub fn fix_variable(&mut self, var_index: usize, value: F) {
         for mle_index in self.var_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(var_index) {
@@ -127,8 +133,8 @@ impl<F: Field> CircuitMle<F> {
         }
     }
 
-    /// Gets the values of the bound and fixed MLE indices of this MLE, panicking if the MLE is not
-    /// fully bound.
+    /// Gets the values of the bound and fixed MLE indices of this MLE,
+    /// panicking if the MLE is not fully bound.
     pub fn get_claim_point(&self, challenges: &[F]) -> Vec<F> {
         self.var_indices
             .iter()
@@ -165,7 +171,7 @@ impl<F: Field> CircuitMle<F> {
     }
 }
 
-/// Placeholder type for defining `Expression<F, CircuitExpr>`, the type used
+/// Type for defining [Expression<F, CircuitExpr>], the type used
 /// for representing expressions in the circuit description.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CircuitExpr;
