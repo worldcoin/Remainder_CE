@@ -120,7 +120,7 @@ pub fn remainder_ligero_verify<F: Field>(
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use crate::ligero_ml_helper::naive_eval_mle_at_challenge_point;
     use crate::ligero_structs::LigeroAuxInfo;
     use crate::utils::get_random_coeffs_for_multilinear_poly;
@@ -194,69 +194,4 @@ pub mod tests {
             claimed_value,
         );
     }
-
-    // /// This tests the "raw" [poseidon_ml_commit_prove()] and [verify()] functions.
-    // ///
-    // /// In particular, we
-    // /// * Generate a random MLE and random challenge point to evaluate the MLE at.
-    // /// * Code a fixed set of hyperparameters to test the commitment + eval
-    // ///     proof and verify functions with.
-    // /// * Call the corresponding [poseidon_ml_commit_prove()] and [verify()]
-    // ///     functions, and ensure that the proof verifies.
-    // #[test]
-    // fn test_commit_eval_proof() {
-    //     // --- Ligero hyperparams ---
-    //     let ml_num_vars = 8;
-    //     let log_num_rows = 4;
-    //     let log_orig_num_cols = 4;
-    //     let rho_inv = 4;
-    //     let _ratio = 1_f64;
-
-    //     let num_rows = 1 << log_num_rows;
-    //     let orig_num_cols = 1 << log_orig_num_cols;
-
-    //     // --- Generate random coeffs and random challenge point to evaluate at ---
-    //     let mut rng = test_rng();
-    //     let ml_coeffs = get_random_coeffs_for_multilinear_poly(ml_num_vars, &mut rng);
-    //     let challenge_coord: Vec<Fr> = repeat_with(|| Fr::from(rng.gen::<u64>()))
-    //         .take(ml_num_vars)
-    //         .collect_vec();
-    //     let correct_eval = naive_eval_mle_at_challenge_point(&ml_coeffs, &challenge_coord);
-
-    //     // --- Commit phase ---
-    //     let (enc, comm, root, aux) =
-    //         poseidon_ml_commit_prove::<Fr>(&ml_coeffs, log_num_rows, log_orig_num_cols, rho_inv);
-
-    //     // --- Eval phase ---
-    //     let mut poseidon_writer =
-    //         TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("Test transcript");
-    //     poseidon_ml_eval_prove(
-    //         &ml_coeffs,
-    //         rho_inv,
-    //         log_num_rows,
-    //         log_orig_num_cols,
-    //         &challenge_coord,
-    //         &mut poseidon_writer,
-    //         comm,
-    //         root.clone(),
-    //     );
-
-    //     // --- Verify phase ---
-    //     let transcript = poseidon_writer.get_transcript();
-    //     let mut poseidon_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript);
-    //     let prover_root = poseidon_reader.consume_element("root").unwrap();
-    //     assert_eq!(prover_root, root.root);
-    //     let (inner_tensor, outer_tensor) =
-    //         get_ml_inner_outer_tensors(&challenge_coord, num_rows, orig_num_cols);
-    //     let result = verify(
-    //         &root.root,
-    //         &outer_tensor,
-    //         &inner_tensor,
-    //         &enc,
-    //         &mut poseidon_reader,
-    //     )
-    //     .unwrap();
-
-    //     assert_eq!(result, correct_eval);
-    // }
 }
