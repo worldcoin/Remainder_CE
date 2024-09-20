@@ -68,7 +68,8 @@ impl<C: PrimeOrderCurve> MleCoefficientsVector<C> {
                     .iter()
                     .map(|elem| {
                         let elem_bytes = elem.to_bytes_le();
-                        assert_eq!(elem_bytes.len(), 1);
+                        // Ryan's note: This doesn't work because even if we don't have that many nonzero bytes we will always return 32
+                        // assert_eq!(elem_bytes.len(), 1);
                         elem_bytes[0]
                     })
                     .collect_vec();

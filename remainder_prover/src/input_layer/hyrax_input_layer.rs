@@ -11,9 +11,9 @@ use crate::layer::LayerId;
 /// All of the functionality of Hyrax input layers are taken care of in `remainder_hyrax/`, so
 /// this is meant just to generate a circuit description.
 pub struct CircuitHyraxInputLayer<F: Field> {
-    /// The ID of this Ligero Input Layer.
+    /// The input layer ID.
     pub layer_id: LayerId,
-    /// The number of variables this Ligero Input Layer is on.
+    /// The number of variables this Hyrax Input Layer is on.
     num_bits: usize,
     /// The log number of columns in the matrix form of the data that
     /// will be committed to in this input layer.

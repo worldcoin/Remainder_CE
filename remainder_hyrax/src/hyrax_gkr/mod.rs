@@ -26,6 +26,7 @@ use remainder::layouter::layouting::{
     CircuitLocation, CircuitMap, InputLayerHintMap, InputNodeMap,
 };
 use remainder::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
+use remainder::layouter::nodes::circuit_inputs::HyraxInputDType;
 use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::{Context, NodeId};
 use remainder::mle::evals::MultilinearExtension;
@@ -223,17 +224,17 @@ impl<
                             .add_node(CircuitLocation::new(input_layer_id, prefix_bits), output);
                     });
 
+                    dbg!("Starting match input layer desc");
+
                     match input_layer_description {
                         CircuitInputLayerEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
+                            dbg!("It's a Hyrax one!");
+                            dbg!(circuit_hyrax_input_layer);
                             let (hyrax_commit, hyrax_prover_input_layer) = if let Some(HyraxProverCommitmentEnum::HyraxCommitment((hyrax_precommit, hyrax_blinding_factors))) = &corresponding_input_data.precommit {
                                 let dtype = &corresponding_input_data.input_data_type;
-                                let coeffs_vector = if let Some(dtype) = dtype {
-                                    MleCoefficientsVector::convert_from_scalar_field(combined_mle.get_evals_vector(), dtype)
-                                } else {
-                                    MleCoefficientsVector::ScalarFieldVector(combined_mle.get_evals_vector().to_vec())
-                                };
                                 let hyrax_input_layer = HyraxInputLayer::new_with_hyrax_commitment(
-                                    coeffs_vector,
+                                    combined_mle,
+                                    dtype,
                                     input_layer_id,
                                     self.committer.clone(),
                                     hyrax_blinding_factors.clone(),
@@ -241,7 +242,9 @@ impl<
                                     hyrax_precommit.clone());
                                 (hyrax_precommit.clone(), hyrax_input_layer)
                             } else if corresponding_input_data.precommit.is_none() {
-                                let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(combined_mle, input_layer_id, self.committer);
+                                let dtype = &corresponding_input_data.input_data_type;
+                                dbg!(dtype);
+                                let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(combined_mle, input_layer_id, self.committer, dtype);
                                 let hyrax_commit = hyrax_input_layer.commit();
                                 (hyrax_commit, hyrax_input_layer)
                             } else {
@@ -330,7 +333,7 @@ impl<
                         );
                         match hint_input_layer_description {
                             CircuitInputLayerEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
-                                let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(function_applied_to_data, hint_input_layer_description.layer_id(), self.committer);
+                                let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(function_applied_to_data, hint_input_layer_description.layer_id(), self.committer, &None);
                                 let hyrax_commit = hyrax_input_layer.commit();
                                 transcript_writer.append_ec_points("Hyrax commitment", &hyrax_commit);
                                 input_commitments.push(HyraxVerifierCommitmentEnum::HyraxCommitment(hyrax_commit));

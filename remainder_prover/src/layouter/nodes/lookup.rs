@@ -519,9 +519,7 @@ fn build_fractional_sum<F: Field>(
             CE::products(vec![numerators.0.clone(), denominators.1.clone()])
                 + CE::products(vec![numerators.1.clone(), denominators.0.clone()])
         } else {
-            // TODO(ryancao): Technically it should be this
-            // CE::scaled(denominators.1.expression(), F::ONE)
-            //     + CE::scaled(denominators.0.expression(), F::ONE)
+            // If there is no numerator CircuitMLE,
             denominators.1.clone().expression() + denominators.0.clone().expression()
         };
 
