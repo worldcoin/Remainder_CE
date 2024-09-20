@@ -439,7 +439,9 @@ impl<
             input_data,
             transcript_writer,
         );
+        let prove_timer = start_timer!(|| "prove hyrax circuit");
         let proof = self.prove(&mut instantiated_circuit, transcript_writer);
+        end_timer!(prove_timer);
         (commitments, circuit_description, proof)
     }
 
@@ -591,6 +593,7 @@ impl<
 
         circuit_description.index_mle_indices(0);
 
+        let verify_timer = start_timer!(|| "verify hyrax circuit");
         Self::verify(
             proof,
             circuit_description,
@@ -598,6 +601,7 @@ impl<
             commitments,
             verifier_transcript,
         );
+        end_timer!(verify_timer);
     }
     /// This is the verification of a GKR proof. It essentially calls the verify functions of the underlying proofs
     /// The calling context is responsible for appending to the transcript both the circuit
