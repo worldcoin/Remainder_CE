@@ -78,7 +78,7 @@ pub struct CircuitRegularLayer<F: Field> {
 impl<F: Field> CircuitRegularLayer<F> {
     /// To be used internally only!
     /// Generates a new [CircuitRegularLayer] given raw data.
-    pub(crate) fn new_raw(id: LayerId, expression: Expression<F, CircuitExpr>) -> Self {
+    pub fn new_raw(id: LayerId, expression: Expression<F, CircuitExpr>) -> Self {
         Self { id, expression }
     }
 }

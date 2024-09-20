@@ -33,7 +33,7 @@ use crate::{
     utils::vandermonde::VandermondeInverse,
 };
 
-use super::{hyrax_circuit_inputs::HyraxInputLayerData, hyrax_layer::HyraxClaim};
+use super::hyrax_layer::HyraxClaim;
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -276,17 +276,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         comm
     }
 
-    // pub fn new_from_placeholder_with_committer(
-    //     hyrax_placeholder_il: HyraxPlaceholderInputLayer<C::Scalar>,
-    //     committer: &PedersenCommitter<C>,
-    // ) -> Self {
-    //     HyraxInputLayer::new_with_committer(
-    //         hyrax_placeholder_il.mle.clone(),
-    //         hyrax_placeholder_il.layer_id().clone(),
-    //         committer,
-    //     )
-    // }
-
     fn to_mle_coeffs_vec(
         mle: MultilinearExtension<C::Scalar>,
         maybe_hyrax_input_dtype: &Option<HyraxInputDType>,
@@ -294,7 +283,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         if let Some(hyrax_input_dtype) = maybe_hyrax_input_dtype {
             MleCoefficientsVector::convert_from_scalar_field(
                 mle.get_evals_vector(),
-                &hyrax_input_dtype,
+                hyrax_input_dtype,
             )
         } else {
             MleCoefficientsVector::ScalarFieldVector(mle.f.to_vec())
@@ -342,7 +331,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         mle: MultilinearExtension<C::Scalar>,
         maybe_hyrax_input_dtype: &Option<HyraxInputDType>,
         layer_id: LayerId,
-        committer: PedersenCommitter<C>,
+        committer: &PedersenCommitter<C>,
         blinding_factors_matrix: Vec<C::Scalar>,
         log_num_cols: usize,
         commitment: Vec<C>,
@@ -357,7 +346,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
             mle: Self::to_mle_coeffs_vec(mle, maybe_hyrax_input_dtype),
             layer_id,
             log_num_cols,
-            committer,
+            committer: committer.clone(),
             blinding_factors_matrix,
             blinding_factor_eval,
             comm: Some(commitment),
