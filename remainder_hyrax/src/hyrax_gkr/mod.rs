@@ -4,6 +4,7 @@ use std::{collections::HashMap, marker::PhantomData};
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
+use ark_std::{end_timer, start_timer};
 use hyrax_circuit_inputs::HyraxInputLayerData;
 use hyrax_input_layer::{
     verify_public_and_random_input_layer, HyraxInputLayer, HyraxInputLayerEnum,
@@ -122,10 +123,13 @@ impl<
     ) {
         let ctx = Context::new();
         let (component, input_layer_data) = (witness_function)(&ctx);
-        (
+        let circuit_description_timer = start_timer!(|| "generating circuit description");
+        let result = (
             generate_circuit_description(component, ctx).unwrap(),
             input_layer_data,
-        )
+        );
+        end_timer!(circuit_description_timer);
+        result
     }
 
     pub fn populate_hyrax_circuit(
@@ -144,6 +148,9 @@ impl<
             intermediate_layers: intermediate_layer_descriptions,
             output_layers: output_layer_descriptions,
         } = gkr_circuit_description;
+
+        let hyrax_populate_circuit_timer =
+            start_timer!(|| "generating hyrax circuit from gkr circuit description");
 
         // Forward pass through input layer data to map input layer ID to the data that the circuit builder provides.
         let mut input_id_data_map = HashMap::<NodeId, &HyraxInputLayerData<C>>::new();
@@ -238,7 +245,9 @@ impl<
                             } else if corresponding_input_data.precommit.is_none() {
                                 let dtype = &corresponding_input_data.input_data_type;
                                 let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(combined_mle, input_layer_id, self.committer, dtype);
+                                let hyrax_commit_timer = start_timer!(|| format!("committing to hyrax input layer, {:?}", hyrax_input_layer.layer_id));
                                 let hyrax_commit = hyrax_input_layer.commit();
+                                end_timer!(hyrax_commit_timer);
                                 (hyrax_commit, hyrax_input_layer)
                             } else {
                                 panic!("We should only have no precommit or a hyrax precommit for hyrax input layers!")
@@ -251,7 +260,9 @@ impl<
                         CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
                             assert!(corresponding_input_data.precommit.is_none(), "public input layers should not have precommits");
                             let mut prover_public_input_layer = circuit_public_input_layer.convert_into_prover_input_layer(combined_mle, &None);
+                            let public_commit_timer = start_timer!(|| format!("committing to public input layer, {:?}", prover_public_input_layer.layer_id()));
                             let commitment = prover_public_input_layer.commit().unwrap();
+                            end_timer!(public_commit_timer);
                             if let InputLayerEnumVerifierCommitment::PublicInputLayer(public_input_coefficients) = commitment {
                                 transcript_writer.append_scalar_points(
                                     "Input Coefficients for Public Input",
@@ -405,6 +416,7 @@ impl<
             layers: prover_intermediate_layers,
             output_layers: prover_output_layers,
         };
+        end_timer!(hyrax_populate_circuit_timer);
 
         (hyrax_circuit, input_commitments)
     }

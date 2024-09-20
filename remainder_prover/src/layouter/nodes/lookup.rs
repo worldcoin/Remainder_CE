@@ -8,7 +8,9 @@ use crate::input_layer::public_input_layer::CircuitPublicInputLayer;
 use crate::layer::layer_enum::CircuitLayerEnum;
 use crate::layer::regular_layer::CircuitRegularLayer;
 use crate::layer::LayerId;
-use crate::layouter::layouting::{CircuitDescriptionMap, CircuitLocation, InputLayerHintMap};
+use crate::layouter::layouting::{
+    CircuitDescriptionMap, CircuitLocation, DAGError, InputLayerHintMap,
+};
 use crate::mle::evals::MultilinearExtension;
 use crate::mle::MleIndex;
 use crate::output_layer::mle_output_layer::CircuitMleOutputLayer;
@@ -137,7 +139,7 @@ impl LookupTable {
         intermediate_layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
         input_hint_map: &mut InputLayerHintMap<F>,
-    ) -> Result<LookupCircuitDescription<F>, crate::layouter::layouting::DAGError> {
+    ) -> Result<LookupCircuitDescription<F>, DAGError> {
         type AE<F> = Expression<F, AbstractExpr>;
         type CE<F> = Expression<F, CircuitExpr>;
 
