@@ -24,7 +24,8 @@ use remainder_shared_types::curves::PrimeOrderCurve;
 
 use crate::hyrax_gkr::hyrax_circuit_inputs::HyraxInputLayerData;
 
-/// The testing module for worldcoin circuit
+#[cfg(test)]
+/// The testing module for worldcoin circuit.
 pub mod test_worldcoin;
 
 /// Builds the iriscode circuit.

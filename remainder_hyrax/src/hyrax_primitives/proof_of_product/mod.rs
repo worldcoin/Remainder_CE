@@ -5,7 +5,9 @@ use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVe
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
-pub mod tests;
+#[cfg(test)]
+/// Tests for proof of product.
+mod tests;
 
 /// "Proof of product" i.e. a proof that if X, Y and Z are commitments, committing to x, y and z,
 /// then x*y = z.  See Appendix A of the Hyrax paper.

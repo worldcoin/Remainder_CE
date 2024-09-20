@@ -7,7 +7,9 @@ use remainder_shared_types::{
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
-pub mod tests;
+#[cfg(test)]
+/// Tests for proof of equality.
+mod tests;
 
 /// TODO(vishady) riad audit comments: maybe instantiate proof structs with a transcript
 /// maybe with a type system that is proof + transcript (and differentiate between weak and strong FS)

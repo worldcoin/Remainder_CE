@@ -16,6 +16,7 @@ use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVe
 use remainder_shared_types::{curves::PrimeOrderCurve, HasByteRepresentation};
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
 pub mod tests;
 
 #[derive(Serialize, Deserialize)]

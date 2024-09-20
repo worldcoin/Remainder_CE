@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
 
-pub mod tests;
+#[cfg(test)]
+/// Tests for the hyrax primitives.
+mod tests;
 
 /// Struct that holds all the information necessary for the evaluation proof of a proof of dot product.
 /// The verifier can then use the information in this struct in order to determine whether the prover

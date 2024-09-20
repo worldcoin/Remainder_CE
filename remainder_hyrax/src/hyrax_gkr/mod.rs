@@ -50,6 +50,7 @@ pub mod hyrax_layer;
 /// The module that contains all functions necessary to do operations on an
 /// output layer, [HyraxOutputLayer]
 pub mod hyrax_output_layer;
+#[cfg(test)]
 /// The testing module for integration tests
 pub mod tests;
 

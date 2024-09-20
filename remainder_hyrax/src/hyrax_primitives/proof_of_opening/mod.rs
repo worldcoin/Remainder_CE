@@ -7,7 +7,9 @@ use remainder_shared_types::{
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
-pub mod tests;
+#[cfg(test)]
+/// Tests for proof of opening.
+mod tests;
 
 /// TODO(vishady) riad audit comments: probably try to look thru the prover functions and see that they are actually
 /// constant-time (i.e. curve operations, scalar multiplications) and no timing information given from random values

@@ -10,6 +10,8 @@ use remainder_shared_types::Field;
 use super::proof_of_equality::ProofOfEquality;
 use super::proof_of_opening::ProofOfOpening;
 
+#[cfg(test)]
+/// Tests for the Pedersen commitment scheme using the BN254 (aka BN256) curve and its scalar field (Fr).
 pub mod tests;
 
 pub struct ProofOfClaimAggregation<C: PrimeOrderCurve> {

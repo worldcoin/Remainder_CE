@@ -23,7 +23,9 @@ use std::{
 // Implementation note: do not confuse the following with the very similarly named remainder_shared_types::halo2curves::Group
 use crate::halo2curves::group::Group;
 
-pub mod tests;
+#[cfg(test)]
+/// Tests for prime order curve.
+mod tests;
 
 /// Minimal interface for an elliptic curve of prime order.
 pub trait PrimeOrderCurve:

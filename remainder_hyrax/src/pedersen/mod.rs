@@ -12,6 +12,8 @@ use sha3::digest::ExtendableOutput;
 use sha3::digest::Update;
 use sha3::Shake256;
 
+#[cfg(test)]
+/// The tests for pedersen commitments.
 pub mod tests;
 
 /// For committing to vectors of integers and scalars using the Pedersen commitment scheme.

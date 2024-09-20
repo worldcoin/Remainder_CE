@@ -14,7 +14,9 @@ use crate::{
 
 use super::proof_of_dot_prod::ProofOfDotProduct;
 
-pub mod tests;
+#[cfg(test)]
+/// Tests for proof of sumcheck.
+mod tests;
 
 /// See Figure 1 of the Hyrax paper.
 pub struct ProofOfSumcheck<C: PrimeOrderCurve> {
