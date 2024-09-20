@@ -1,21 +1,25 @@
-.PHONY: all bench prod mobile test clean
+.PHONY: all bench prod prod-seq mobile test clean
 
-all: bench prod mobile
+all: prod
 
 # Example: make bench name=hyrax.opt
 bench:
-	RUSTFLAGS=-Awarnings cargo build --profile=opt-with-debug --bin worldcoin &&\
-		valgrind --tool=massif --massif-out-file=massif/massif.$(name).out ./target/opt-with-debug/worldcoin &&\
+	cargo build --profile=opt-with-debug --bin worldcoin &&\
+		valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin &&\
 		ms_print massif/massif.$(name).out | less
 
 prod:
-	RUSTFLAGS=-Awarnings cargo build --release --features "parallel" --bin worldcoin
+	cargo build --release --features "parallel" --bin worldcoin
 
+prod-seq:
+	cargo build --release --bin worldcoin
+
+# Currently using release for faster running.
 test:
-	RUSTFLAGS=-Awarnings cargo test --release --features parallel -- --test-threads=1
+	cargo test --release --features parallel -- --test-threads=1
 
 mobile:
-	RUSTFLAGS=-Awarnings cargo build --profile mobile --bin worldcoin
+	cargo build --profile mobile --bin worldcoin
 
 clean:
 	cargo clean
