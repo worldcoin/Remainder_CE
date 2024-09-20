@@ -348,9 +348,7 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
                     .map(|circuit_mle| {
                         circuit_map
                             .get_data_from_circuit_mle(circuit_mle) // Returns Result
-                            .map(|data| {
-                                data.get_evals_vector().as_slice()
-                            }) // Map Ok value to slice
+                            .map(|data| data.get_evals_vector().as_slice()) // Map Ok value to slice
                     })
                     .collect::<Result<Vec<&[F]>, _>>() // Collect all into a Result
                     .ok()?;

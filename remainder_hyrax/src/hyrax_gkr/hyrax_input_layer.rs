@@ -14,6 +14,7 @@ use remainder::{
         CircuitInputLayer, InputLayer,
     },
     layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
+    layouter::nodes::circuit_inputs::HyraxInputDType,
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     sumcheck::evaluate_at_a_point,
 };
@@ -32,7 +33,7 @@ use crate::{
     utils::vandermonde::VandermondeInverse,
 };
 
-use super::hyrax_layer::HyraxClaim;
+use super::{hyrax_circuit_inputs::HyraxInputLayerData, hyrax_layer::HyraxClaim};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -286,15 +287,29 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
     //     )
     // }
 
+    fn to_mle_coeffs_vec(
+        mle: MultilinearExtension<C::Scalar>,
+        maybe_hyrax_input_dtype: &Option<HyraxInputDType>,
+    ) -> MleCoefficientsVector<C> {
+        if let Some(hyrax_input_dtype) = maybe_hyrax_input_dtype {
+            MleCoefficientsVector::convert_from_scalar_field(
+                mle.get_evals_vector(),
+                &hyrax_input_dtype,
+            )
+        } else {
+            MleCoefficientsVector::ScalarFieldVector(mle.f.to_vec())
+        }
+    }
+
     pub fn new_with_committer(
         mle: MultilinearExtension<C::Scalar>,
         layer_id: LayerId,
         committer: &PedersenCommitter<C>,
+        maybe_hyrax_input_dtype: &Option<HyraxInputDType>,
     ) -> Self {
         let mle_len = mle.f.len();
         assert!(mle_len.is_power_of_two());
 
-        let mle_coefficients_vector = MleCoefficientsVector::ScalarFieldVector(mle.f.to_vec());
         let log_num_cols = (log2(mle_len) / 2) as usize;
         let num_rows = mle_len / (1 << log_num_cols);
 
@@ -312,7 +327,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         let blinding_factor_eval = C::Scalar::random(&mut prng);
 
         Self {
-            mle: mle_coefficients_vector,
+            mle: Self::to_mle_coeffs_vec(mle, maybe_hyrax_input_dtype),
             layer_id,
             log_num_cols,
             committer: committer.clone(),
@@ -324,7 +339,8 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
 
     /// Creates new Hyrax input layer WITH a precomputed Hyrax commitment
     pub fn new_with_hyrax_commitment(
-        mle: MleCoefficientsVector<C>,
+        mle: MultilinearExtension<C::Scalar>,
+        maybe_hyrax_input_dtype: &Option<HyraxInputDType>,
         layer_id: LayerId,
         committer: PedersenCommitter<C>,
         blinding_factors_matrix: Vec<C::Scalar>,
@@ -338,7 +354,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         let blinding_factor_eval = C::Scalar::random(&mut prng);
 
         Self {
-            mle,
+            mle: Self::to_mle_coeffs_vec(mle, maybe_hyrax_input_dtype),
             layer_id,
             log_num_cols,
             committer,
