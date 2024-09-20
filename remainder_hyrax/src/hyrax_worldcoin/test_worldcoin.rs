@@ -188,6 +188,7 @@ mod tests {
         test_hyrax_worldcoin_public_input_layer(data, 100);
     }
 
+    #[ignore] // takes a long time to run!
     #[test]
     fn test_hyrax_worldcoin_v2_iris_hyrax_input_layer() {
         use remainder::worldcoin::parameters_v2::{

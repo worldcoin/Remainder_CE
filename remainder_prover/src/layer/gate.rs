@@ -888,8 +888,8 @@ impl<F: Field> GateLayer<F> {
         compute_sumcheck_messages_data_parallel_gate(
             &self.lhs,
             &self.rhs,
-            &beta_g2,
-            &beta_g1,
+            beta_g2,
+            beta_g1,
             self.gate_operation,
             &self.nonzero_gates,
             self.num_dataparallel_bits,
