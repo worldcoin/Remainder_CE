@@ -132,6 +132,7 @@ pub trait Layer<F: Field> {
 
     /// Get the [PostSumcheckLayer] for a certain layer, which is a struct which represents
     /// the fully bound layer.
+    /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
@@ -170,6 +171,7 @@ pub trait CircuitLayer<F: Field> {
     ) -> Result<Self::VerifierLayer, VerificationError>;
 
     /// Gets the [PostSumcheckLayer] for this layer.
+    /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
