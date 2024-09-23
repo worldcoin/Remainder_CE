@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use remainder_shared_types::{
-    transcript::{ProverTranscript, VerifierTranscript},
+    transcript::VerifierTranscript,
     Field,
 };
 use serde::{Deserialize, Serialize};
@@ -14,36 +14,47 @@ use crate::{
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
-use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CircuitInputLayer,
-    CommitmentEnum, InputLayer, InputLayerError,
-};
+use super::get_wlx_evaluations_helper;
 use crate::mle::Mle;
+use thiserror::Error;
 
-/// Represents a random input layer, where we generate random constants in the
-/// form of coefficients of an MLE that we can use for packing constants.
+#[derive(Error, Clone, Debug)]
+/// The errors which can be encountered when constructing an input layer.
+pub enum VerifierChallengeError {
+    /// This is when the random input layer evaluated at a random point does not
+    /// equal the claimed value.
+    #[error("The evaluation point of the claim is too short")]
+    InsufficientBinding,
+    #[error("Evaluation of MLE does not match the claimed value")]
+    EvaluationMismatch,
+}
 
+/// Represents a verifier challenge, where we generate random constants in the
+/// form of coefficients of an MLE that can be used e.g. for packing constants, or in logup, or
+/// permutation checks and so on.
 #[derive(Debug, Clone)]
-pub struct VerifierChallengeInputLayer<F: Field> {
+pub struct VerifierChallenge<F: Field> {
+    /// The data.
     mle: MultilinearExtension<F>,
+    /// The layer ID.
     pub(crate) layer_id: LayerId,
 }
 
-/// Verifier's description of a [VerifierChallengeInputLayer].
+/// Verifier's description of a [VerifierChallenge].
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: Field")]
-pub struct CircuitVerifierChallengeInputLayer<F: Field> {
-    /// The ID of this Random Input Layer.
+pub struct CircuitVerifierChallenge<F: Field> {
+    /// The layer ID.
     layer_id: LayerId,
 
-    /// The number of variables this Random Input Layer is on.
+    /// The number of variables needed to index the data of this verifier challenge.
     pub num_bits: usize,
 
     _marker: PhantomData<F>,
 }
 
-impl<F: Field> CircuitVerifierChallengeInputLayer<F> {
-    /// Constructor for the [CircuitVerifierChallengeInputLayer] using the
+impl<F: Field> CircuitVerifierChallenge<F> {
+    /// Constructor for the [CircuitVerifierChallenge] using the
     /// number of bits that are in the MLE of the layer.
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         Self {
@@ -54,104 +65,8 @@ impl<F: Field> CircuitVerifierChallengeInputLayer<F> {
     }
 }
 
-impl<F: Field> InputLayer<F> for VerifierChallengeInputLayer<F> {
-    type ProverCommitment = Vec<F>;
-    type VerifierCommitment = Vec<F>;
-
-    fn commit(&mut self) -> Result<Self::VerifierCommitment, super::InputLayerError> {
-        // We do not need to commit to the randomness, so we simply send it in
-        // the clear.
-        Ok(self.mle.get_evals_vector().clone())
-    }
-
-    fn append_commitment_to_transcript(
-        commitment: &Self::VerifierCommitment,
-        transcript_writer: &mut impl ProverTranscript<F>,
-    ) {
-        transcript_writer.append_elements("Random Layer Evaluations", commitment);
-    }
-
-    fn open(
-        &self,
-        _transcript: &mut impl ProverTranscript<F>,
-        _claim: Claim<F>,
-    ) -> Result<(), super::InputLayerError> {
-        // We do not have an opening proof because we did not commit to
-        // anything. The MLE exists in the clear.
-        Ok(())
-    }
-
-    fn layer_id(&self) -> LayerId {
-        self.layer_id
-    }
-
-    fn get_padded_mle(&self) -> DenseMle<F> {
-        DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
-    }
-}
-
-impl<F: Field> CircuitInputLayer<F> for CircuitVerifierChallengeInputLayer<F> {
-    type Commitment = Vec<F>;
-
-    fn layer_id(&self) -> LayerId {
-        self.layer_id
-    }
-
-    fn get_commitment_from_transcript(
-        &self,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::Commitment, InputLayerError> {
-        let num_evals = 1 << self.num_bits;
-        Ok(transcript_reader.get_challenges("Random Layer Evaluations", num_evals)?)
-    }
-
-    fn verify(
-        &self,
-        commitment: &Self::Commitment,
-        claim: Claim<F>,
-        _transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), InputLayerError> {
-        // In order to verify, simply fix variable on each of the variables for
-        // the point in `claim`. Check whether the single element left in the
-        // bookkeeping table is equal to the claimed value in `claim`.
-        let mle_evals = commitment.clone();
-        let mut mle_ref = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
-        mle_ref.index_mle_indices(0);
-
-        let eval = if mle_ref.num_iterated_vars() != 0 {
-            let mut eval = None;
-            for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
-                eval = mle_ref.fix_variable(curr_bit, chal);
-            }
-            eval.ok_or(InputLayerError::RandomInputVerificationFailed)?
-        } else {
-            Claim::new(vec![], mle_ref.current_mle[0])
-        };
-
-        if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {
-            Ok(())
-        } else {
-            Err(InputLayerError::RandomInputVerificationFailed)
-        }
-    }
-
-    fn convert_into_prover_input_layer(
-        &self,
-        combined_mle: MultilinearExtension<F>,
-        precommit: &Option<CommitmentEnum<F>>,
-    ) -> InputLayerEnum<F> {
-        assert!(
-            precommit.is_none(),
-            "Verifier challenge input layer does not support precommit!"
-        );
-        let verifier_challenge_input_layer =
-            VerifierChallengeInputLayer::new(combined_mle, self.layer_id);
-        verifier_challenge_input_layer.into()
-    }
-}
-
-impl<F: Field> VerifierChallengeInputLayer<F> {
-    /// Constructor for the [VerifierChallengeInputLayer] using the layer_id
+impl<F: Field> VerifierChallenge<F> {
+    /// Constructor for the [VerifierChallenge] using the layer_id
     /// and the MLE that is stored in this input layer.
     pub fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
         Self { mle, layer_id }
@@ -161,9 +76,69 @@ impl<F: Field> VerifierChallengeInputLayer<F> {
     pub fn get_mle(&self) -> DenseMle<F> {
         DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
     }
+
+    /// Return the layer id.
+    pub fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
 }
 
-impl<F: Field> YieldWLXEvals<F> for VerifierChallengeInputLayer<F> {
+impl<F: Field> CircuitVerifierChallenge<F> {
+    /// Return the layer id.
+    pub fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+
+    /// Read the data from the transcript (in the interactive setting, this is just asking the
+    /// verifier for the appropriate number of challenges).
+    fn get_from_transcript(
+        &self,
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Vec<F> {
+        let num_evals = 1 << self.num_bits;
+        transcript_reader.get_challenges("Verifier challenges", num_evals).unwrap()
+    }
+
+    /// Fix variables for each of the coordinates of the the point in `claim`, and check whether the
+    /// single element left in the bookkeeping table is equal to the claimed value in `claim`.
+    fn verify(
+        &self,
+        commitment: &Vec<F>,
+        claim: Claim<F>,
+    ) -> Result<(), VerifierChallengeError> {
+        let mle_evals = commitment.clone();
+        let mut mle_ref = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
+        mle_ref.index_mle_indices(0);
+
+        let eval = if mle_ref.num_iterated_vars() != 0 {
+            let mut eval = None;
+            for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
+                eval = mle_ref.fix_variable(curr_bit, chal);
+            }
+            eval.ok_or(VerifierChallengeError::InsufficientBinding)?
+        } else {
+            Claim::new(vec![], mle_ref.current_mle[0])
+        };
+
+        // This would be an internal error and should never happen.
+        assert_eq!(eval.get_point(), claim.get_point());
+        if eval.get_result() == claim.get_result() {
+            Ok(())
+        } else {
+            Err(VerifierChallengeError::EvaluationMismatch)
+        }
+    }
+
+    // FIXME come back to this - might want to combine with get_from_transcript
+    fn convert_into_prover_version(
+        &self,
+        combined_mle: MultilinearExtension<F>,
+    ) -> VerifierChallenge<F> {
+        VerifierChallenge::new(combined_mle, self.layer_id)
+    }
+}
+
+impl<F: Field> YieldWLXEvals<F> for VerifierChallenge<F> {
     /// Computes the V_d(l(x)) evaluations for the input layer V_d.
     fn get_wlx_evaluations(
         &self,
@@ -188,14 +163,14 @@ impl<F: Field> YieldWLXEvals<F> for VerifierChallengeInputLayer<F> {
 mod tests {
     use remainder_shared_types::ff_field;
     use remainder_shared_types::{
-        transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
+        transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter, ProverTranscript},
         Fr,
     };
 
     use super::*;
 
     #[test]
-    fn test_random_input_layer() {
+    fn test_circuit_verifier_challenge() {
         // Setup phase.
         let layer_id = LayerId::Input(0);
 
@@ -214,26 +189,10 @@ mod tests {
         let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
         let mle = MultilinearExtension::new(mle_vec);
 
-        let verifier_random_input_layer =
-            CircuitVerifierChallengeInputLayer::<Fr>::new(layer_id, mle.num_vars());
-        let mut random_input_layer = VerifierChallengeInputLayer::new(mle, layer_id);
-
-        // Prover phase.
-        // 1. Commit to the input layer.
-        let commitment = random_input_layer.commit().unwrap();
-
-        // 2. Add commitment to transcript.
-        VerifierChallengeInputLayer::<Fr>::append_commitment_to_transcript(
-            &commitment,
-            &mut transcript_writer,
-        );
-
-        // 3. ... [skip] proving other layers ...
-
-        // 4. Open commitment (no-op for Public Layers).
-        random_input_layer
-            .open(&mut transcript_writer, claim.clone())
-            .unwrap();
+        let verifier_challenge_description =
+            CircuitVerifierChallenge::<Fr>::new(layer_id, mle.num_vars());
+        // Nothing really to test for VerifierChallenge
+        let _verifier_challenge = VerifierChallenge::new(mle, layer_id);
 
         // Verifier phase.
         // 1. Retrieve proof/transcript.
@@ -242,15 +201,13 @@ mod tests {
             TranscriptReader::new(transcript);
 
         // 2. Get commitment from transcript.
-        let commitment = verifier_random_input_layer
-            .get_commitment_from_transcript(&mut transcript_reader)
-            .unwrap();
+        let values = verifier_challenge_description.get_from_transcript(&mut transcript_reader);
 
         // 3. ... [skip] verify other layers.
 
         // 4. Verify this layer's commitment.
-        verifier_random_input_layer
-            .verify(&commitment, claim, &mut transcript_reader)
+        verifier_challenge_description
+            .verify(&values, claim)
             .unwrap();
     }
 }

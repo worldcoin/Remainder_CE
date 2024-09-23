@@ -5,7 +5,7 @@ use ark_std::log2;
 use remainder_shared_types::Field;
 
 use crate::{
-    input_layer::verifier_challenge_input_layer::CircuitVerifierChallengeInputLayer,
+    input_layer::verifier_challenge_input_layer::CircuitVerifierChallenge,
     layer::LayerId,
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation},
 };
@@ -46,16 +46,16 @@ impl VerifierChallengeNode {
         }
     }
 
-    /// Generate a [CircuitVerifierChallengeInputLayer], which is the
+    /// Generate a [CircuitVerifierChallenge], which is the
     /// circuit description for a [VerifierChallengeNode].
     pub fn generate_circuit_description<F: Field>(
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-    ) -> CircuitVerifierChallengeInputLayer<F> {
+    ) -> CircuitVerifierChallenge<F> {
         let verifier_challenge_layer_id = layer_id.get_and_inc();
 
-        let verifier_challenge_layer = CircuitVerifierChallengeInputLayer::new(
+        let verifier_challenge_layer = CircuitVerifierChallenge::new(
             verifier_challenge_layer_id,
             self.get_num_vars(),
         );

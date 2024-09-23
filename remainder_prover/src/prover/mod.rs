@@ -14,6 +14,7 @@ use crate::claims::wlx_eval::WLXAggregator;
 use crate::input_layer::enum_input_layer::{
     CircuitInputLayerEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
 };
+use crate::input_layer::verifier_challenge_input_layer::{CircuitVerifierChallenge, VerifierChallenge};
 use crate::input_layer::CircuitInputLayer;
 use crate::layer::layer_enum::{CircuitLayerEnum, VerifierLayerEnum};
 use crate::layer::CircuitLayer;
@@ -90,12 +91,14 @@ impl<F: Field> From<Vec<Vec<F>>> for SumcheckProof<F> {
 /// The witness of a GKR circuit, used to actually prove the circuit
 #[derive(Debug)]
 pub struct InstantiatedCircuit<F: Field> {
-    /// The intermediate layers of the circuit, as defined by the ProofSystem
+    /// The intermediate layers of the circuit
     pub layers: Layers<F, LayerEnum<F>>,
-    /// The output layers of the circuit, as defined by the ProofSystem
+    /// The output layers of the circuit
     pub output_layers: Vec<MleOutputLayer<F>>,
-    /// The input layers of the circuit, as defined by the ProofSystem
+    /// The input layers of the circuit
     pub input_layers: Vec<InputLayerEnum<F>>,
+    /// The verifier challenges
+    pub verifier_challenges: Vec<VerifierChallenge<F>>,
 }
 
 /// Controls claim aggregation behavior.
@@ -107,6 +110,8 @@ pub const ENABLE_OPTIMIZATION: bool = true;
 pub struct GKRCircuitDescription<F: Field> {
     /// The circuit descriptions of the input layers.
     pub input_layers: Vec<CircuitInputLayerEnum<F>>,
+    /// The circuit descriptions of the verifier challengs
+    pub verifier_challenges: Vec<CircuitVerifierChallenge<F>>,
     /// The circuit descriptions of the intermediate layers.
     pub intermediate_layers: Vec<CircuitLayerEnum<F>>,
     /// The circuit desriptions of the output layers.
@@ -114,24 +119,13 @@ pub struct GKRCircuitDescription<F: Field> {
 }
 
 impl<F: Field> GKRCircuitDescription<F> {
-    /// Constructs a new `GKRCircuitDescription` via circuit description layers
-    pub fn new(
-        input_layers: Vec<CircuitInputLayerEnum<F>>,
-        intermediate_layers: Vec<CircuitLayerEnum<F>>,
-        output_layers: Vec<CircuitMleOutputLayer<F>>,
-    ) -> Self {
-        Self {
-            input_layers,
-            intermediate_layers,
-            output_layers,
-        }
-    }
 
     /// Label the MLE indices contained within a circuit description, starting
     /// each layer with the start_index.
     pub fn index_mle_indices(&mut self, start_index: usize) {
         let GKRCircuitDescription {
             input_layers: _,
+            verifier_challenges: _,
             intermediate_layers,
             output_layers,
         } = self;
@@ -177,6 +171,8 @@ impl<F: Field> GKRCircuitDescription<F> {
             .collect();
 
         end_timer!(input_layer_commitments_timer);
+
+        // FIXME get the verifier challenges from the transcript
 
         // Claim aggregator to keep track of GKR-style claims across all layers.
         let mut aggregator = WLXAggregator::<F, LayerEnum<F>, InputLayerEnum<F>>::new();
@@ -286,6 +282,12 @@ impl<F: Field> GKRCircuitDescription<F> {
 
         end_timer!(input_layers_timer);
 
+        // --------- STAGE 4: Verify Verifier Challenges ---------
+        let verifier_challenges_timer = start_timer!(|| "Verifier challenges proof generation");
+        for verifier_challenge in self.verifier_challenges {
+        }
+
+
         Ok(())
     }
 }
@@ -333,7 +335,7 @@ pub fn generate_circuit_description<F: Field>(
                     &mut verifier_challenge_layer_id,
                     &mut circuit_description_map,
                 );
-            input_layers.push(CircuitInputLayerEnum::VerifierChallengeInputLayer(
+            input_layers.push(CircuitInputLayerEnum::VerifierChallenge(
                 verifier_challenge_layer,
             ))
         });
@@ -373,7 +375,11 @@ pub fn generate_circuit_description<F: Field>(
         });
 
     let circuit_description =
-        GKRCircuitDescription::new(input_layers, intermediate_layers, output_layers);
+        GKRCircuitDescription{
+            input_layers,
+            intermediate_layers,
+            output_layers
+        };
 
     Ok((
         circuit_description,

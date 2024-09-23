@@ -10,7 +10,7 @@ use remainder::{
     input_layer::{
         enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum},
         public_input_layer::PublicInputLayer,
-        verifier_challenge_input_layer::VerifierChallengeInputLayer,
+        verifier_challenge_input_layer::VerifierChallenge,
         CircuitInputLayer, InputLayer,
     },
     layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
@@ -46,7 +46,7 @@ pub enum InputProofEnum<C: PrimeOrderCurve> {
         Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
     ),
     RandomInputLayerProof(
-        VerifierChallengeInputLayer<C::Scalar>,
+        VerifierChallenge<C::Scalar>,
         Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
     ),
 }
@@ -57,7 +57,7 @@ pub enum InputProofEnum<C: PrimeOrderCurve> {
 pub enum HyraxInputLayerEnum<C: PrimeOrderCurve> {
     HyraxInputLayer(HyraxInputLayer<C>),
     PublicInputLayer(PublicInputLayer<C::Scalar>),
-    RandomInputLayer(VerifierChallengeInputLayer<C::Scalar>),
+    RandomInputLayer(VerifierChallenge<C::Scalar>),
 }
 
 impl<C: PrimeOrderCurve> HyraxInputLayerEnum<C> {
@@ -76,7 +76,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerEnum<C> {
                     .convert_into_prover_input_layer(input_layer_mle, &None);
                 Self::from_input_layer_enum(input_layer_enum)
             }
-            CircuitInputLayerEnum::VerifierChallengeInputLayer(
+            CircuitInputLayerEnum::VerifierChallenge(
                 circuit_verifier_challenge_input_layer,
             ) => {
                 assert!(precommit.is_none());

@@ -273,14 +273,14 @@ impl<
                             }
                             prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
                         },
-                        CircuitInputLayerEnum::VerifierChallengeInputLayer(_circuit_verifier_challenge_input_layer) => {
+                        CircuitInputLayerEnum::VerifierChallenge(_circuit_verifier_challenge_input_layer) => {
                             panic!("Verifier challenge input layers do not have corresponding input data, as the challenges are sent by the verifier")
                         },
                         CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
                             panic!("Hyrax proof system does not support ligero input layers because the PCS implementation is not zero knowledge")
                         },
                     }
-                } else if let CircuitInputLayerEnum::VerifierChallengeInputLayer(
+                } else if let CircuitInputLayerEnum::VerifierChallenge(
                     verifier_challenge_input_layer_description,
                 ) = input_layer_description
                 {
@@ -356,7 +356,7 @@ impl<
                                 }
                                 prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
                             },
-                            CircuitInputLayerEnum::VerifierChallengeInputLayer(_circuit_verifier_challenge_input_layer) => {
+                            CircuitInputLayerEnum::VerifierChallenge(_circuit_verifier_challenge_input_layer) => {
                                 panic!("Verifier challenge input layers do not have corresponding input data, as the challenges are sent by the verifier")
                             },
                             CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {

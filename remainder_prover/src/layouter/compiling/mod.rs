@@ -9,10 +9,12 @@ use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use tracing::{instrument, span, Level};
 
+use crate::claims::wlx_eval::claim_group::ClaimGroup;
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::claims::ClaimAggregator;
 use crate::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
 use crate::input_layer::enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum};
+use crate::input_layer::verifier_challenge_input_layer::VerifierChallenge;
 use crate::input_layer::{CircuitInputLayer, InputLayer};
 use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
 use crate::layer::LayerId;
@@ -34,7 +36,7 @@ use remainder_shared_types::Field;
 
 use super::layouting::{CircuitLocation, InputLayerHintMap, InputNodeMap};
 use super::nodes::circuit_inputs::InputLayerData;
-use super::nodes::NodeId;
+use super::nodes::{verifier_challenge, NodeId};
 use super::{
     component::Component,
     nodes::{node_enum::NodeEnum, Context},
@@ -76,6 +78,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
     ) -> InstantiatedCircuit<F> {
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
+            verifier_challenges: verifier_challenge_descriptions,
             intermediate_layers: intermediate_layer_descriptions,
             output_layers: output_layer_descriptions,
         } = gkr_circuit_description;
@@ -132,6 +135,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         // we convert the circuit input layer into a prover input layer using this big bookkeeping table
         // we add the data in the input data corresopnding with the circuit location for each input data struct into the circuit map
         let mut prover_input_layers: Vec<InputLayerEnum<F>> = Vec::new();
+        let mut verifier_challenges = Vec::new();
         let mut hint_input_layers: Vec<&CircuitInputLayerEnum<F>> = Vec::new();
         input_layer_descriptions
             .iter()
@@ -163,29 +167,27 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                     let commitment = prover_input_layer.commit().unwrap();
                     InputLayerEnum::append_commitment_to_transcript(&commitment, transcript_writer);
                     prover_input_layers.push(prover_input_layer);
-                } else if let CircuitInputLayerEnum::VerifierChallengeInputLayer(
-                    verifier_challenge_input_layer_description,
-                ) = input_layer_description
-                {
-                    let verifier_challenge_mle =
-                        MultilinearExtension::new(transcript_writer.get_challenges(
-                            "Verifier challenges for fiat shamir",
-                            1 << verifier_challenge_input_layer_description.num_bits,
-                        ));
-                    circuit_map.add_node(
-                        CircuitLocation::new(
-                            verifier_challenge_input_layer_description.layer_id(),
-                            vec![],
-                        ),
-                        verifier_challenge_mle.clone(),
-                    );
-                    let verifier_challenge_layer = input_layer_description
-                        .convert_into_prover_input_layer(verifier_challenge_mle, &None);
-                    prover_input_layers.push(verifier_challenge_layer);
                 } else {
                     hint_input_layers.push(input_layer_description);
                     assert!(input_layer_hint_map.0.contains_key(&input_layer_id));
                 }
+            });
+
+        verifier_challenge_descriptions
+            .iter()
+            .for_each(|verifier_challenge_description| {
+                let verifier_challenge_mle = MultilinearExtension::new(transcript_writer.get_challenges(
+                    "Verifier challenges",
+                    1 << verifier_challenge_description.num_bits,
+                ));
+                circuit_map.add_node(
+                    CircuitLocation::new(verifier_challenge_description.layer_id(), vec![]),
+                    verifier_challenge_mle.clone(),
+                );
+                verifier_challenges.push(VerifierChallenge::new(
+                    verifier_challenge_mle,
+                    verifier_challenge_description.layer_id(),
+                ));
             });
 
         // forward pass of the layers
@@ -275,6 +277,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 prover_output_layers.push(prover_output_layer)
             });
         InstantiatedCircuit {
+            verifier_challenges: verifier_challenges,
             input_layers: prover_input_layers,
             layers: Layers::new_with_layers(prover_intermediate_layers),
             output_layers: prover_output_layers,
@@ -316,6 +319,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 input_layers,
                 mut output_layers,
                 layers,
+                verifier_challenges,
             },
             circuit_description,
         ) = self.synthesize_and_commit(&mut transcript_writer);
@@ -425,14 +429,14 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
 
             end_timer!(claim_aggr_timer);
 
-            let opening_proof_timer =
-                start_timer!(|| format!("opening proof for INPUT layer {:?}", layer_id));
+            let eval_proof_timer =
+                start_timer!(|| format!("evaluation proof for INPUT layer {:?}", layer_id));
 
             input_layer
                 .open(&mut transcript_writer, layer_claim)
                 .map_err(GKRError::InputLayerError)?;
 
-            end_timer!(opening_proof_timer);
+            end_timer!(eval_proof_timer);
 
             end_timer!(layer_timer);
         }
@@ -442,6 +446,19 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
 
         end_timer!(input_layers_timer);
         input_layer_proving_span.exit();
+
+        // --------- STAGE 4: Verifier Challenges ---------
+        // All that needs to be done is claim aggregation.  The verifier will check the aggregated
+        // claims itself. We also don't check the aggregate claims.  The only reason for performing the claim
+        // agg here at all is to keep the prover and verifier transcripts in sync.
+        let verifier_challenges_timer = start_timer!(|| "Verifier challenges proof generation");
+        for verifier_challenge in verifier_challenges {
+            let claims = aggregator.get_claims(verifier_challenge.layer_id()).unwrap();
+            let claim_group = ClaimGroup::new(claims.to_vec()).unwrap();
+            use crate::claims::wlx_eval::helpers::prover_aggregate_claims_helper;
+            prover_aggregate_claims_helper(&claim_group, &verifier_challenge, &mut transcript_writer).unwrap();
+        }
+        end_timer!(verifier_challenges_timer);
 
         Ok((transcript_writer.get_transcript(), circuit_description))
     }
