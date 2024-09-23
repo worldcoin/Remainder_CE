@@ -177,7 +177,7 @@ impl PrimeOrderCurve for Bn256 {
     /// The bytestring representation of the BN256 curve is a `[u8; 65]` with
     /// the following semantic representation:
     /// * The first `u8` byte represents whether the point is a point at
-    /// infinity (in affine coordinates). 0 if it is at infinity, 1 otherwise.
+    ///   infinity (in affine coordinates). 0 if it is at infinity, 1 otherwise.
     /// * The next 32 `u8` bytes represent the x-coordinate of the point in little endian.
     /// * The next 32 `u8` bytes represent the y-coordinate of the point in little endian.
     fn to_bytes_uncompressed(&self) -> Vec<u8> {
@@ -200,10 +200,10 @@ impl PrimeOrderCurve for Bn256 {
     /// The bytestring representation of the BN256 curve is a `[u8; 34]` with
     /// the following semantic representation:
     /// * The first `u8` byte represents whether the point is a point at
-    /// infinity (in affine coordinates).
+    ///   infinity (in affine coordinates).
     /// * The next 32 `u8` bytes represent the x-coordinate of the point in little endian.
     /// * The final `u8` byte represents the sign of the y-coordinate of the
-    /// point.
+    ///   point.
     fn to_bytes_compressed(&self) -> Vec<u8> {
         // --- First get the affine coordinates. If `None`, we have a point at infinity. ---
         let affine_coords = self.affine_coordinates();
