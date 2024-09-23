@@ -8,7 +8,7 @@ use ark_std::{end_timer, start_timer};
 use hyrax_circuit_inputs::HyraxInputLayerData;
 use hyrax_input_layer::{
     verify_public_and_random_input_layer, HyraxInputLayer, HyraxInputLayerEnum,
-    HyraxInputLayerProof, HyraxProverCommitmentEnum, HyraxVerifierCommitmentEnum, InputProofEnum,
+    HyraxInputLayerProof, HyraxProverCommitmentEnum, HyraxVerifierCommitmentEnum, InputProofEnum
 };
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
@@ -18,6 +18,7 @@ use remainder::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
 use remainder::input_layer::enum_input_layer::{
     CircuitInputLayerEnum, InputLayerEnumVerifierCommitment,
 };
+use remainder::input_layer::verifier_challenge_input_layer::VerifierChallenge;
 use remainder::input_layer::{CircuitInputLayer, InputLayer};
 use remainder::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
 use remainder::layer::{CircuitLayer, Layer};
@@ -61,12 +62,20 @@ pub struct HyraxProof<C: PrimeOrderCurve> {
     layer_proofs: Vec<HyraxLayerProof<C>>,
     /// The [HyraxInputLayerProof] for each of the input polynomial commitments using the Hyrax PCS.
     input_layer_proofs: Vec<InputProofEnum<C>>,
+    verifier_challenge_proofs: Vec<VerifierChallengeProof<C>>,
     /// A commitment to the output of the circuit, i.e. what the final value of the output layer is.
     output_layer_proofs: Vec<HyraxOutputLayerProof<C>>,
 }
 
+pub struct VerifierChallengeProof<C: PrimeOrderCurve> {
+    pub layer: VerifierChallenge<C::Scalar>,
+    pub claims: Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
+}
+
 pub struct HyraxInstantiatedCircuit<C: PrimeOrderCurve> {
     pub input_layers: Vec<HyraxInputLayerEnum<C>>,
+    /// The verifier challenges
+    pub verifier_challenges: Vec<VerifierChallenge<C::Scalar>>,
     pub layers: Vec<LayerEnum<C::Scalar>>,
     pub output_layers: Vec<HyraxOutputLayer<C>>,
 }
@@ -146,6 +155,7 @@ impl<
     ) {
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
+            verifier_challenges: verifier_challenge_descriptions,
             intermediate_layers: intermediate_layer_descriptions,
             output_layers: output_layer_descriptions,
         } = gkr_circuit_description;
@@ -205,6 +215,7 @@ impl<
         // we convert the circuit input layer into a prover input layer using this big bookkeeping table
         // we add the data in the input data corresopnding with the circuit location for each input data struct into the circuit map
         let mut prover_input_layers: Vec<HyraxInputLayerEnum<C>> = Vec::new();
+        let mut verifier_challenges = Vec::new();
         let mut input_commitments: Vec<HyraxVerifierCommitmentEnum<C>> = Vec::new();
         let mut hint_input_layers: Vec<&CircuitInputLayerEnum<C::Scalar>> = Vec::new();
         input_layer_descriptions
@@ -273,37 +284,31 @@ impl<
                             }
                             prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
                         },
-                        CircuitInputLayerEnum::VerifierChallenge(_circuit_verifier_challenge_input_layer) => {
-                            panic!("Verifier challenge input layers do not have corresponding input data, as the challenges are sent by the verifier")
-                        },
                         CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
                             panic!("Hyrax proof system does not support ligero input layers because the PCS implementation is not zero knowledge")
                         },
                     }
-                } else if let CircuitInputLayerEnum::VerifierChallenge(
-                    verifier_challenge_input_layer_description,
-                ) = input_layer_description
-                {
-                    let verifier_challenge_mle =
-                        MultilinearExtension::new(transcript_writer.get_scalar_field_challenges(
-                            "Verifier challenges for fiat shamir",
-                            1 << verifier_challenge_input_layer_description.num_bits,
-                        ));
-                    input_commitments.push(HyraxVerifierCommitmentEnum::RandomCommitment(verifier_challenge_mle.get_evals_vector().clone()));
-                    circuit_map.add_node(
-                        CircuitLocation::new(
-                            verifier_challenge_input_layer_description.layer_id(),
-                            vec![],
-                        ),
-                        verifier_challenge_mle.clone(),
-                    );
-                    let verifier_challenge_layer = input_layer_description
-                        .convert_into_prover_input_layer(verifier_challenge_mle, &None);
-                    prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(verifier_challenge_layer));
                 } else {
                     hint_input_layers.push(input_layer_description);
                     assert!(input_layer_hint_map.0.contains_key(&input_layer_id));
                 }
+            });
+
+        verifier_challenge_descriptions
+            .iter()
+            .for_each(|verifier_challenge_description| {
+                let verifier_challenge_mle = MultilinearExtension::new(transcript_writer.get_scalar_field_challenges(
+                    "Verifier challenges",
+                    1 << verifier_challenge_description.num_bits,
+                ));
+                circuit_map.add_node(
+                    CircuitLocation::new(verifier_challenge_description.layer_id(), vec![]),
+                    verifier_challenge_mle.clone(),
+                );
+                verifier_challenges.push(VerifierChallenge::new(
+                    verifier_challenge_mle,
+                    verifier_challenge_description.layer_id(),
+                ));
             });
 
         // forward pass of the layers
@@ -355,9 +360,6 @@ impl<
                                     input_commitments.push(HyraxVerifierCommitmentEnum::PublicCommitment(public_input_coefficients));
                                 }
                                 prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
-                            },
-                            CircuitInputLayerEnum::VerifierChallenge(_circuit_verifier_challenge_input_layer) => {
-                                panic!("Verifier challenge input layers do not have corresponding input data, as the challenges are sent by the verifier")
                             },
                             CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
                                 panic!("Hyrax proof system does not support ligero input layers because the PCS implementation is not zero knowledge")
@@ -414,6 +416,7 @@ impl<
             });
         let hyrax_circuit = HyraxInstantiatedCircuit {
             input_layers: prover_input_layers,
+            verifier_challenges: verifier_challenges,
             layers: prover_intermediate_layers,
             output_layers: prover_output_layers,
         };
@@ -464,6 +467,7 @@ impl<
         let converter = &mut self.converter;
         let HyraxInstantiatedCircuit {
             input_layers,
+            verifier_challenges: _verifier_challenges,
             layers,
             output_layers,
         } = instantiated_circuit;
@@ -544,15 +548,13 @@ impl<
                             committed_claims.clone(),
                         )
                     }
-                    HyraxInputLayerEnum::RandomInputLayer(layer) => {
-                        InputProofEnum::RandomInputLayerProof(
-                            layer.clone(),
-                            committed_claims.clone(),
-                        )
-                    }
                 }
             })
             .collect_vec();
+
+        // --------- Verifier Challenges ---------
+        // There is nothing to be done here, since the claims on verifier challenges are checked
+        // directly by the verifier, without aggregation.
 
         HyraxProof {
             layer_proofs,
@@ -619,6 +621,7 @@ impl<
         let HyraxProof {
             layer_proofs,
             input_layer_proofs,
+            verifier_challenge_proofs,
             output_layer_proofs,
         } = proof;
 
@@ -706,28 +709,24 @@ impl<
                             );
                         });
                     }
-                    InputProofEnum::RandomInputLayerProof(layer, committed_claims) => {
-                        let random_commit_from_proof = layer.clone().commit().unwrap();
-                        // Check that the commitment given also matches with the commitment in the proof
-                        match input_commit {
-                            HyraxVerifierCommitmentEnum::RandomCommitment(random_commit) => {
-                                assert_eq!(&random_commit_from_proof, random_commit);
-                            }
-                            _ => panic!("should have a public commitment here!"),
-                        }
-                        let claims_as_commitments =
-                            claim_tracker.remove(&layer.layer_id()).unwrap().clone();
-                        let plaintext_claims =
-                            Self::match_claims(&claims_as_commitments, committed_claims, committer);
-                        plaintext_claims.into_iter().for_each(|claim| {
-                            verify_public_and_random_input_layer::<C>(
-                                &random_commit_from_proof,
-                                claim.get_claim(),
-                            );
-                        });
-                    }
                 },
             );
+
+        // TODO Check the claims on the verifier challenges
+        // the following is incorrect, we need to look up OUR versions of the layer?
+        // verifier_challenge_proofs
+        //     .iter()
+        //     .for_each(|vcp| {
+        //         let claims_as_commitments = claim_tracker.remove(&vcp.layer.layer_id()).unwrap().clone();
+        //         let plaintext_claims =
+        //             Self::match_claims(&claims_as_commitments, vcp.claims, committer);
+        //         plaintext_claims.into_iter().for_each(|claim| {
+        //             verify_public_and_random_input_layer::<C>(
+        //                 &random_commit_from_proof,
+        //                 claim.get_claim(),
+        //             );
+        //         });
+        //     }
 
         // @vishady this is new, so that we can be sure that the prover didn't e.g. leave out an input layer proof!  (I changed all the claims.get() to claims.remove() above)
         // Check that there aren't any claims left in our claim tracking table!
