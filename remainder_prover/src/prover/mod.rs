@@ -341,18 +341,16 @@ pub fn generate_circuit_description<F: Field>(
         })
         .collect_vec();
 
-    verifier_challenge_nodes
+    let verifier_challenges = verifier_challenge_nodes
         .iter()
-        .for_each(|verifier_challenge_node| {
-            let verifier_challenge_layer = verifier_challenge_node
+        .map(|verifier_challenge_node| {
+            verifier_challenge_node
                 .generate_circuit_description::<F>(
                     &mut verifier_challenge_layer_id,
                     &mut circuit_description_map,
-                );
-            input_layers.push(CircuitInputLayerEnum::VerifierChallenge(
-                verifier_challenge_layer,
-            ))
-        });
+                )
+        })
+        .collect_vec();
 
     for node in &intermediate_nodes {
         let node_compiled_intermediate_layers = node
@@ -361,6 +359,7 @@ pub fn generate_circuit_description<F: Field>(
         intermediate_layers.extend(node_compiled_intermediate_layers);
     }
 
+    // Get the contributions of each LookupTable to the circuit description.
     (input_layers, intermediate_layers, output_layers) = lookup_nodes.iter().fold(
         (input_layers, intermediate_layers, output_layers),
         |(mut lookup_input_acc, mut lookup_intermediate_acc, mut lookup_output_acc),
@@ -391,6 +390,7 @@ pub fn generate_circuit_description<F: Field>(
     let circuit_description =
         GKRCircuitDescription{
             input_layers,
+            verifier_challenges,
             intermediate_layers,
             output_layers
         };

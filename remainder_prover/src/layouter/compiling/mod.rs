@@ -277,8 +277,8 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 prover_output_layers.push(prover_output_layer)
             });
         InstantiatedCircuit {
-            verifier_challenges: verifier_challenges,
             input_layers: prover_input_layers,
+            verifier_challenges: verifier_challenges,
             layers: Layers::new_with_layers(prover_intermediate_layers),
             output_layers: prover_output_layers,
         }
@@ -319,7 +319,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 input_layers,
                 mut output_layers,
                 layers,
-                verifier_challenges,
+                verifier_challenges: _verifier_challenges,
             },
             circuit_description,
         ) = self.synthesize_and_commit(&mut transcript_writer);
