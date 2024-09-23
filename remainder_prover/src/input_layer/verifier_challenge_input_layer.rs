@@ -81,32 +81,15 @@ impl<F: Field> VerifierChallenge<F> {
     pub fn layer_id(&self) -> LayerId {
         self.layer_id
     }
-}
 
-impl<F: Field> CircuitVerifierChallenge<F> {
-    /// Return the layer id.
-    pub fn layer_id(&self) -> LayerId {
-        self.layer_id
-    }
-
-    /// Read the data from the transcript (in the interactive setting, this is just asking the
-    /// verifier for the appropriate number of challenges).
-    fn get_from_transcript(
+    /// On a copy of the underlying data, fix variables for each of the coordinates of the the point
+    /// in `claim`, and check whether the single element left in the bookkeeping table is equal to
+    /// the claimed value in `claim`.
+    pub fn verify(
         &self,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Vec<F> {
-        let num_evals = 1 << self.num_bits;
-        transcript_reader.get_challenges("Verifier challenges", num_evals).unwrap()
-    }
-
-    /// Fix variables for each of the coordinates of the the point in `claim`, and check whether the
-    /// single element left in the bookkeeping table is equal to the claimed value in `claim`.
-    fn verify(
-        &self,
-        commitment: &Vec<F>,
         claim: Claim<F>,
     ) -> Result<(), VerifierChallengeError> {
-        let mle_evals = commitment.clone();
+        let mle_evals = self.mle.get_evals_vector().clone();
         let mut mle_ref = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
         mle_ref.index_mle_indices(0);
 
@@ -122,11 +105,35 @@ impl<F: Field> CircuitVerifierChallenge<F> {
 
         // This would be an internal error and should never happen.
         assert_eq!(eval.get_point(), claim.get_point());
+
+        // Check if the evaluation of the MLE matches the claimed value.
         if eval.get_result() == claim.get_result() {
             Ok(())
         } else {
             Err(VerifierChallengeError::EvaluationMismatch)
         }
+    }
+
+}
+
+impl<F: Field> CircuitVerifierChallenge<F> {
+    /// Return the layer id.
+    pub fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+
+    /// Read the data from the transcript (in the interactive setting, this is just asking the
+    /// verifier for the appropriate number of challenges).
+    pub fn get_from_transcript(
+        &self,
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> VerifierChallenge<F> {
+        let num_evals = 1 << self.num_bits;
+        let values = transcript_reader.get_challenges("Verifier challenges", num_evals).unwrap();
+        VerifierChallenge::new(
+            MultilinearExtension::new(values),
+            self.layer_id,
+        )
     }
 
     // FIXME come back to this - might want to combine with get_from_transcript
@@ -135,27 +142,6 @@ impl<F: Field> CircuitVerifierChallenge<F> {
         combined_mle: MultilinearExtension<F>,
     ) -> VerifierChallenge<F> {
         VerifierChallenge::new(combined_mle, self.layer_id)
-    }
-}
-
-impl<F: Field> YieldWLXEvals<F> for VerifierChallenge<F> {
-    /// Computes the V_d(l(x)) evaluations for the input layer V_d.
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &[Vec<F>],
-        claimed_vals: &[F],
-        claimed_mles: Vec<MleEnum<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, crate::claims::ClaimError> {
-        get_wlx_evaluations_helper(
-            self.mle.clone(),
-            claim_vecs,
-            claimed_vals,
-            claimed_mles,
-            num_claims,
-            num_idx,
-        )
     }
 }
 
@@ -201,13 +187,13 @@ mod tests {
             TranscriptReader::new(transcript);
 
         // 2. Get commitment from transcript.
-        let values = verifier_challenge_description.get_from_transcript(&mut transcript_reader);
+        let verifier_challenge = verifier_challenge_description.get_from_transcript(&mut transcript_reader);
 
         // 3. ... [skip] verify other layers.
 
         // 4. Verify this layer's commitment.
-        verifier_challenge_description
-            .verify(&values, claim)
+        verifier_challenge
+            .verify(claim)
             .unwrap();
     }
 }

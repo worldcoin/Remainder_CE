@@ -172,7 +172,13 @@ impl<F: Field> GKRCircuitDescription<F> {
 
         end_timer!(input_layer_commitments_timer);
 
-        // FIXME get the verifier challenges from the transcript
+        // Get the verifier challenges from the transcript.
+        let verifier_challenges: Vec<VerifierChallenge<F>> = self.verifier_challenges
+            .iter()
+            .map(|verifier_challenge_description| {
+                verifier_challenge_description.get_from_transcript(transcript_reader)
+            })
+            .collect();
 
         // Claim aggregator to keep track of GKR-style claims across all layers.
         let mut aggregator = WLXAggregator::<F, LayerEnum<F>, InputLayerEnum<F>>::new();
@@ -282,11 +288,19 @@ impl<F: Field> GKRCircuitDescription<F> {
 
         end_timer!(input_layers_timer);
 
-        // --------- STAGE 4: Verify Verifier Challenges ---------
+        // --------- STAGE 4: Verify claims on the verifier challenges ---------
         let verifier_challenges_timer = start_timer!(|| "Verifier challenges proof generation");
-        for verifier_challenge in self.verifier_challenges {
+        for verifier_challenge in verifier_challenges {
+            if let Some(claims) = aggregator.get_claims(verifier_challenge.layer_id()) {
+                claims.into_iter().for_each(|claim_mle| {
+                    verifier_challenge.verify(claim_mle.get_claim().clone()).unwrap();
+                });
+            } else {
+                //FIXME use an error
+                panic!("No claims found for verifier challenge layer");
+            }
         }
-
+        end_timer!(verifier_challenges_timer);
 
         Ok(())
     }

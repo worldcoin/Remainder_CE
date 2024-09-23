@@ -448,17 +448,8 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         input_layer_proving_span.exit();
 
         // --------- STAGE 4: Verifier Challenges ---------
-        // All that needs to be done is claim aggregation.  The verifier will check the aggregated
-        // claims itself. We also don't check the aggregate claims.  The only reason for performing the claim
-        // agg here at all is to keep the prover and verifier transcripts in sync.
-        let verifier_challenges_timer = start_timer!(|| "Verifier challenges proof generation");
-        for verifier_challenge in verifier_challenges {
-            let claims = aggregator.get_claims(verifier_challenge.layer_id()).unwrap();
-            let claim_group = ClaimGroup::new(claims.to_vec()).unwrap();
-            use crate::claims::wlx_eval::helpers::prover_aggregate_claims_helper;
-            prover_aggregate_claims_helper(&claim_group, &verifier_challenge, &mut transcript_writer).unwrap();
-        }
-        end_timer!(verifier_challenges_timer);
+        // There is nothing to be done here, since the claims on verifier challenges are checked
+        // directly by the verifier, without aggregation.
 
         Ok((transcript_writer.get_transcript(), circuit_description))
     }
