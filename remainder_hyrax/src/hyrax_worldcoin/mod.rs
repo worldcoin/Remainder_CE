@@ -22,7 +22,9 @@ use remainder::{
 };
 use remainder_shared_types::curves::PrimeOrderCurve;
 
-use crate::hyrax_gkr::hyrax_circuit_inputs::HyraxInputLayerData;
+use crate::hyrax_gkr::{
+    hyrax_circuit_inputs::HyraxInputLayerData, hyrax_input_layer::HyraxProverCommitmentEnum,
+};
 
 #[cfg(test)]
 /// The testing module for worldcoin circuit.
@@ -265,12 +267,17 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         BASE,
         NUM_DIGITS,
     >,
+    maybe_input_to_be_rerouted_raw_precommit: Option<(Vec<C>, Vec<C::Scalar>)>,
 ) -> impl FnMut(
     &Context,
 ) -> (
     ComponentSet<NodeEnum<C::Scalar>>,
     Vec<HyraxInputLayerData<C>>,
 ) {
+    let maybe_input_to_be_rerouted_precommit = match maybe_input_to_be_rerouted_raw_precommit {
+        Some(raw_precommit) => Some(HyraxProverCommitmentEnum::HyraxCommitment(raw_precommit)),
+        None => None,
+    };
     move |ctx| {
         let CircuitData {
             to_reroute,
@@ -406,7 +413,7 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         let hyrax_input_layer_data_for_rerouting = HyraxInputLayerData::new(
             hyrax_input_layer_for_reroute.id(),
             hyrax_input_data_shreds_to_reroute,
-            None,
+            maybe_input_to_be_rerouted_precommit.clone(), // TODO(ryancao): Get rid of this clone
             Some(HyraxInputDType::U8),
         );
         let hyrax_input_layer_data_for_digits_and_multiplicities = HyraxInputLayerData::new(

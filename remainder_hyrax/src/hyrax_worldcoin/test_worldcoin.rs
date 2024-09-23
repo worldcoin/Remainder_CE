@@ -94,7 +94,7 @@ fn test_hyrax_worldcoin_hyrax_input_layer<
     );
     let mut hyrax_prover = HyraxProver::new(&committer, blinding_rng, converter);
 
-    let witness_function = build_hyrax_circuit_hyrax_input_layer(data);
+    let witness_function = build_hyrax_circuit_hyrax_input_layer(data, None);
 
     let (input_commits, mut circuit_description, hyrax_proof) =
         hyrax_prover.prove_gkr_circuit(witness_function, &mut prover_transcript);
