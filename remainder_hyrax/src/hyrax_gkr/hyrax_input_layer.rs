@@ -45,19 +45,13 @@ pub enum InputProofEnum<C: PrimeOrderCurve> {
         PublicInputLayer<C::Scalar>,
         Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
     ),
-    RandomInputLayerProof(
-        VerifierChallenge<C::Scalar>,
-        Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
-    ),
 }
-
 /// FIXME: temporary fix to work with hyrax input layers and the generic input layers for
 /// [InputLayerEnum] in `remainder_prover`. Need this for circuits that use multiple different
 /// types of input layers.
 pub enum HyraxInputLayerEnum<C: PrimeOrderCurve> {
     HyraxInputLayer(HyraxInputLayer<C>),
     PublicInputLayer(PublicInputLayer<C::Scalar>),
-    RandomInputLayer(VerifierChallenge<C::Scalar>),
 }
 
 impl<C: PrimeOrderCurve> HyraxInputLayerEnum<C> {
@@ -76,14 +70,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayerEnum<C> {
                     .convert_into_prover_input_layer(input_layer_mle, &None);
                 Self::from_input_layer_enum(input_layer_enum)
             }
-            CircuitInputLayerEnum::VerifierChallenge(
-                circuit_verifier_challenge_input_layer,
-            ) => {
-                assert!(precommit.is_none());
-                let input_layer_enum = circuit_verifier_challenge_input_layer
-                    .convert_into_prover_input_layer(input_layer_mle, &None);
-                Self::from_input_layer_enum(input_layer_enum)
-            }
             CircuitInputLayerEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
                 unimplemented!("We handle the hyrax case separately")
             }
@@ -97,16 +83,12 @@ impl<C: PrimeOrderCurve> HyraxInputLayerEnum<C> {
             InputLayerEnum::PublicInputLayer(public_input_layer) => {
                 HyraxInputLayerEnum::PublicInputLayer(*public_input_layer)
             }
-            InputLayerEnum::RandomInputLayer(verifier_challenge_input_layer) => {
-                HyraxInputLayerEnum::RandomInputLayer(*verifier_challenge_input_layer)
-            }
         }
     }
     pub fn layer_id(&self) -> LayerId {
         match self {
             HyraxInputLayerEnum::HyraxInputLayer(hyrax_layer) => hyrax_layer.layer_id,
             HyraxInputLayerEnum::PublicInputLayer(public_layer) => public_layer.layer_id(),
-            HyraxInputLayerEnum::RandomInputLayer(random_layer) => random_layer.layer_id(),
         }
     }
 }
