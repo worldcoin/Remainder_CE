@@ -29,7 +29,8 @@ fn main() {
     let image_path = Path::new(&args.image_filepath).to_path_buf();
     if args.version == 2 {
         use remainder::worldcoin::parameters_v2::{
-            BASE, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_COLS_NUM_VARS, MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
+            BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
+            NUM_DIGITS,
         };
         let path = Path::new("worldcoin/v2/").to_path_buf();
         let data = load_worldcoin_data::<
@@ -44,7 +45,8 @@ fn main() {
         test_circuit(circuit, None);
     } else if args.version == 3 {
         use remainder::worldcoin::parameters_v3::{
-            BASE, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_COLS_NUM_VARS, MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
+            BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
+            NUM_DIGITS,
         };
         let path = Path::new("worldcoin/v3/").to_path_buf();
         let data = load_worldcoin_data::<

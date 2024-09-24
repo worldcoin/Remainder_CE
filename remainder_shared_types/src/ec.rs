@@ -6,15 +6,11 @@ where
 {
 }
 
-impl<
-        C: pasta_curves::arithmetic::CurveExt<Scalar: Field, Base: Field, Affine: CurveAffine>,
-    > CurveExt for C
+impl<C: pasta_curves::arithmetic::CurveExt<Scalar: Field, Base: Field, Affine: CurveAffine>>
+    CurveExt for C
 {
 }
 
-pub trait CurveAffine:
-    pasta_curves::arithmetic::CurveAffine<Scalar: Field, Base: Field>
-{
-}
+pub trait CurveAffine: pasta_curves::arithmetic::CurveAffine<Scalar: Field, Base: Field> {}
 
 impl<C: pasta_curves::arithmetic::CurveAffine<Scalar: Field, Base: Field>> CurveAffine for C {}

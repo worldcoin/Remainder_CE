@@ -1,4 +1,3 @@
-
 use super::*;
 use remainder_shared_types::halo2curves::bn256::Fr;
 use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
