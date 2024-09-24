@@ -383,7 +383,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
     }
 }
 
-pub fn verify_public_and_random_input_layer<C: PrimeOrderCurve>(
+pub fn verify_public_input_layer<C: PrimeOrderCurve>(
     mle_vec: &[C::Scalar],
     claim: &Claim<C::Scalar>,
 ) {
