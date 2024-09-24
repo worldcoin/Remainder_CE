@@ -451,7 +451,7 @@ impl<
     /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
     ///   is invalid. This is an internal error which should never appear under
     ///   normal circumstances.
-    /// TODO(Makis): Consider turning the internal error into a panic.
+    ///   TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
     /// by the `TranscriptWriter` for the corresponding operation. If the labels
@@ -493,7 +493,7 @@ impl<
     /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
     ///   is invalid. This is an internal error which should never appear under
     ///   normal circumstances.
-    /// TODO(Makis): Consider turning the internal error into a panic.
+    ///   TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
     /// by the `TranscriptWriter` for the corresponding operations. In
@@ -522,7 +522,7 @@ impl<
     /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
     ///   is invalid. This is an internal error which should never appear under
     ///   normal circumstances.
-    /// TODO(Makis): Consider turning the internal error into a panic.
+    ///   TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
     /// by the `TranscriptWriter` for the corresponding operation. If the labels
@@ -557,7 +557,7 @@ impl<
     /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
     ///   is invalid. This is an internal error which should never appear under
     ///   normal circumstances.
-    /// TODO(Makis): Consider turning the internal error into a panic.
+    ///   TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
     /// by the `TranscriptWriter` for the corresponding operations. In
