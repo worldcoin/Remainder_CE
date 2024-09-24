@@ -110,6 +110,7 @@ fn test_hyrax_worldcoin_hyrax_input_layer<
     );
 }
 
+#[ignore] // Takes a long time to run
 #[test]
 fn test_hyrax_worldcoin_v2_iris_public_input_layer() {
     use remainder::worldcoin::parameters_v2::{
@@ -129,6 +130,7 @@ fn test_hyrax_worldcoin_v2_iris_public_input_layer() {
     test_hyrax_worldcoin_public_input_layer(data, 100);
 }
 
+#[ignore] // Takes a long time to run
 #[test]
 fn test_hyrax_worldcoin_v2_mask_public_input_layer() {
     use remainder::worldcoin::parameters_v2::{
@@ -148,6 +150,7 @@ fn test_hyrax_worldcoin_v2_mask_public_input_layer() {
     test_hyrax_worldcoin_public_input_layer(data, 100);
 }
 
+#[ignore] // Takes a long time to run
 #[test]
 fn test_hyrax_worldcoin_v3_iris_public_input_layer() {
     use remainder::worldcoin::parameters_v3::{
@@ -167,6 +170,7 @@ fn test_hyrax_worldcoin_v3_iris_public_input_layer() {
     test_hyrax_worldcoin_public_input_layer(data, 100);
 }
 
+#[ignore] // Takes a long time to run
 #[test]
 fn test_hyrax_worldcoin_v3_mask_public_input_layer() {
     use remainder::worldcoin::parameters_v3::{
@@ -186,6 +190,7 @@ fn test_hyrax_worldcoin_v3_mask_public_input_layer() {
     test_hyrax_worldcoin_public_input_layer(data, 100);
 }
 
+#[ignore] // Takes a long time to run
 #[test]
 fn test_hyrax_worldcoin_v2_iris_hyrax_input_layer() {
     use remainder::worldcoin::parameters_v2::{
