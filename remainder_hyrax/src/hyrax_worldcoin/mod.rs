@@ -274,10 +274,8 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
     ComponentSet<NodeEnum<C::Scalar>>,
     Vec<HyraxInputLayerData<C>>,
 ) {
-    let maybe_input_to_be_rerouted_precommit = match maybe_input_to_be_rerouted_raw_precommit {
-        Some(raw_precommit) => Some(HyraxProverCommitmentEnum::HyraxCommitment(raw_precommit)),
-        None => None,
-    };
+    let maybe_input_to_be_rerouted_precommit = maybe_input_to_be_rerouted_raw_precommit
+        .map(|raw_precommit| HyraxProverCommitmentEnum::HyraxCommitment(raw_precommit));
     move |ctx| {
         let CircuitData {
             to_reroute,
