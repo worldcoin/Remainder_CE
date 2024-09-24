@@ -1,11 +1,12 @@
 use std::path::Path;
 
 use ark_std::{end_timer, start_timer};
+use remainder::worldcoin::parameters_v2::{WC_BASE, WC_NUM_DIGITS};
 use remainder::worldcoin::{
     circuits::build_circuit,
     data::{load_data, medium_worldcoin_data, tiny_worldcoin_data, WorldcoinCircuitData},
+    parameters_v2::CONSTANT_DATA_FOLDER,
 };
-use remainder::worldcoin::{WC_BASE, WC_NUM_DIGITS};
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
     transcript::{
@@ -23,7 +24,7 @@ type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
 
 /// Helper function that runs the Hyrax Worldcoin test against a given data set.
-fn test_hyrax_worldcoin<const BASE: u16, const NUM_DIGITS: usize>(
+fn test_hyrax_worldcoin<const BASE: u64, const NUM_DIGITS: usize>(
     data: WorldcoinCircuitData<Scalar, BASE, NUM_DIGITS>,
     num_generators: usize,
 ) {
@@ -63,7 +64,9 @@ fn test_hyrax_worldcoin<const BASE: u16, const NUM_DIGITS: usize>(
 }
 
 fn main() {
+    let path = Path::new("./").join(CONSTANT_DATA_FOLDER).to_path_buf();
+    let image_path = path.clone().join("iris/test_image.npy");
     let data: WorldcoinCircuitData<Scalar, WC_BASE, WC_NUM_DIGITS> =
-        load_data(Path::new("worldcoin_witness_data").to_path_buf(), false);
+        load_data(path.clone(), image_path, false);
     test_hyrax_worldcoin(data, 100);
 }
