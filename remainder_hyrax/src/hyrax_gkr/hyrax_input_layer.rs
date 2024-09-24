@@ -10,7 +10,6 @@ use remainder::{
     input_layer::{
         enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum},
         public_input_layer::PublicInputLayer,
-        verifier_challenge_input_layer::VerifierChallenge,
         CircuitInputLayer, InputLayer,
     },
     layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
@@ -100,7 +99,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayerEnum<C> {
 pub enum HyraxProverCommitmentEnum<C: PrimeOrderCurve> {
     HyraxCommitment((Vec<C>, Vec<C::Scalar>)),
     PublicCommitment(Vec<C::Scalar>),
-    RandomCommitment(Vec<C::Scalar>),
 }
 
 /// An Enum representing the types of commitments for each layer,
@@ -110,7 +108,6 @@ pub enum HyraxProverCommitmentEnum<C: PrimeOrderCurve> {
 pub enum HyraxVerifierCommitmentEnum<C: PrimeOrderCurve> {
     HyraxCommitment(Vec<C>),
     PublicCommitment(Vec<C::Scalar>),
-    RandomCommitment(Vec<C::Scalar>),
 }
 
 /// The appropriate proof structure for a [HyraxInputLayer], which includes
