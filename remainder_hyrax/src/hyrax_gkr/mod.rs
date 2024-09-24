@@ -62,7 +62,9 @@ pub struct HyraxProof<C: PrimeOrderCurve> {
     layer_proofs: Vec<HyraxLayerProof<C>>,
     /// The [HyraxInputLayerProof] for each of the input polynomial commitments using the Hyrax PCS.
     input_layer_proofs: Vec<InputProofEnum<C>>,
-    verifier_challenge_proofs: Vec<VerifierChallengeProof<C>>,
+    // FIXME move the input layer proofs for PublicInputLayers here
+    /// The prover's claims on public input layers and verifier challenges, in CommittedScalar form, i.e. including the blinding factors.
+    claims_on_public_values: Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
     /// A commitment to the output of the circuit, i.e. what the final value of the output layer is.
     output_layer_proofs: Vec<HyraxOutputLayerProof<C>>,
 }
@@ -467,7 +469,7 @@ impl<
         let converter = &mut self.converter;
         let HyraxInstantiatedCircuit {
             input_layers,
-            verifier_challenges: _verifier_challenges,
+            verifier_challenges,
             layers,
             output_layers,
         } = instantiated_circuit;
@@ -552,13 +554,25 @@ impl<
             })
             .collect_vec();
 
+        // FIXME include the claims on public input layers also, remove them from the above and get rid of HyraxInputLayerEnum
         // --------- Verifier Challenges ---------
-        // There is nothing to be done here, since the claims on verifier challenges are checked
-        // directly by the verifier, without aggregation.
+        // The the claims on verifier challenges are checked directly by the verifier, without
+        // aggregation, so there is almost nothing to do here.  However, the verifier receives the
+        // prover's claims in committed form (this is just how we implemented it) and so we need to
+        // provide the blinding factors in order for V to be able to check them.
+        let claims_on_public_values = verifier_challenges
+            .iter()
+            .map(|verifier_challenge| {
+                let layer_id = verifier_challenge.layer_id();
+                claim_tracker.get(&layer_id).unwrap().clone()
+            })
+            .flatten()
+            .collect_vec();
 
         HyraxProof {
             layer_proofs,
             input_layer_proofs,
+            claims_on_public_values,
             output_layer_proofs,
         }
     }
@@ -586,13 +600,17 @@ impl<
                     .unwrap();
                 assert_eq!(&transcript_public_commit, public_commit);
             }
-            HyraxVerifierCommitmentEnum::RandomCommitment(random_commit) => {
-                let transcript_random_commit = verifier_transcript
-                    .get_scalar_field_challenges("random commitment", random_commit.len())
-                    .unwrap();
-                assert_eq!(&transcript_random_commit, random_commit);
-            }
         });
+
+        // Get the verifier challenges from the transcript.
+        let verifier_challenges: Vec<VerifierChallenge<C::Scalar>> = circuit_description.verifier_challenges
+            .iter()
+            .map(|vc_desc| {
+                let num_evals = 1 << vc_desc.num_bits;
+                let values = verifier_transcript.get_scalar_field_challenges("Verifier challenges", num_evals).unwrap();
+                vc_desc.instantiate(values)
+            })
+            .collect();
 
         circuit_description.index_mle_indices(0);
 
@@ -602,6 +620,7 @@ impl<
             circuit_description,
             self.committer,
             commitments,
+            verifier_challenges,
             verifier_transcript,
         );
         end_timer!(verify_timer);
@@ -615,13 +634,14 @@ impl<
         circuit_description: &GKRCircuitDescription<C::Scalar>,
         committer: &PedersenCommitter<C>,
         commitments: &[HyraxVerifierCommitmentEnum<C>],
+        verifier_challenges: Vec<VerifierChallenge<C::Scalar>>,
         transcript: &mut impl ECVerifierTranscript<C>,
     ) {
         // Unpack the Hyrax proof.
         let HyraxProof {
             layer_proofs,
             input_layer_proofs,
-            verifier_challenge_proofs,
+            claims_on_public_values,
             output_layer_proofs,
         } = proof;
 
@@ -712,32 +732,30 @@ impl<
                 },
             );
 
-        // TODO Check the claims on the verifier challenges
-        // the following is incorrect, we need to look up OUR versions of the layer?
-        // verifier_challenge_proofs
-        //     .iter()
-        //     .for_each(|vcp| {
-        //         let claims_as_commitments = claim_tracker.remove(&vcp.layer.layer_id()).unwrap().clone();
-        //         let plaintext_claims =
-        //             Self::match_claims(&claims_as_commitments, vcp.claims, committer);
-        //         plaintext_claims.into_iter().for_each(|claim| {
-        //             verify_public_and_random_input_layer::<C>(
-        //                 &random_commit_from_proof,
-        //                 claim.get_claim(),
-        //             );
-        //         });
-        //     }
+        // Check the claims on the verifier challenges
+        verifier_challenges
+            .iter()
+            .for_each(|verifier_challenge| {
+                let claims_as_commitments = claim_tracker.remove(&verifier_challenge.layer_id()).unwrap();
+                Self::match_claims(&claims_as_commitments, claims_on_public_values, committer)
+                    .iter()
+                    .for_each(|plaintext_claim| {
+                        verifier_challenge.verify(plaintext_claim.get_claim());
+                    });
+            });
 
         // @vishady this is new, so that we can be sure that the prover didn't e.g. leave out an input layer proof!  (I changed all the claims.get() to claims.remove() above)
         // Check that there aren't any claims left in our claim tracking table!
         assert_eq!(claim_tracker.len(), 0);
     }
 
-    /// Match up the claims from the verifier with the claims from the prover. Used for input layer
-    /// proofs, where the proof (in the case of public and random layers) consists of the prover
-    /// simply opening the commitments in the claims, or equivalently just handing over the
-    /// CommittedScalars. Panics if a verifier claim can not be matched to a prover claim (and
-    /// doesn't worry about prover claims that don't have a verifier counterpart).
+    /// Match up the claims from the verifier with the claims from the prover. Used for proofs of
+    /// evaluation on public values where the proof (in the case of [PublicInputLayer] and
+    /// [VerifierChallenge] ) consists of the prover simply opening the commitments in the claims,
+    /// or equivalently just handing over the CommittedScalars. Panics if a verifier claim can not
+    /// be matched to a prover claim (but doesn't worry about prover claims that don't have a
+    /// verifier counterpart).
+    /// Also checks that any matched claims are consistent with the committer (panics if not).
     fn match_claims(
         verifier_claims: &[HyraxClaim<C::Scalar, C>],
         prover_claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],

@@ -9,7 +9,6 @@ use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use tracing::{instrument, span, Level};
 
-use crate::claims::wlx_eval::claim_group::ClaimGroup;
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::claims::ClaimAggregator;
 use crate::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
@@ -36,7 +35,7 @@ use remainder_shared_types::Field;
 
 use super::layouting::{CircuitLocation, InputLayerHintMap, InputNodeMap};
 use super::nodes::circuit_inputs::InputLayerData;
-use super::nodes::{verifier_challenge, NodeId};
+use super::nodes::NodeId;
 use super::{
     component::Component,
     nodes::{node_enum::NodeEnum, Context},

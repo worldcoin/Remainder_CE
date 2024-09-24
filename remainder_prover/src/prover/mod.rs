@@ -293,7 +293,7 @@ impl<F: Field> GKRCircuitDescription<F> {
         for verifier_challenge in verifier_challenges {
             if let Some(claims) = aggregator.get_claims(verifier_challenge.layer_id()) {
                 claims.into_iter().for_each(|claim_mle| {
-                    verifier_challenge.verify(claim_mle.get_claim().clone()).unwrap();
+                    verifier_challenge.verify(claim_mle.get_claim()).unwrap();
                 });
             } else {
                 //FIXME use an error
