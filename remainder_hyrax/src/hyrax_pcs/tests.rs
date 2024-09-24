@@ -1,4 +1,3 @@
-
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use rand::RngCore;
