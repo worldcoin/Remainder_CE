@@ -60,10 +60,6 @@ pub enum InputLayerError {
     /// does not equal the claimed value.
     #[error("failed to verify public input layer")]
     PublicInputVerificationFailed,
-    /// This is when the random input layer evaluated at a random point does not
-    /// equal the claimed value.
-    #[error("failed to verify random input layer")]
-    RandomInputVerificationFailed,
     /// This is when there is an error when trying to squeeze or add elements to the transcript.
     #[error("Error during interaction with the transcript.")]
     TranscriptError(#[from] TranscriptReaderError),

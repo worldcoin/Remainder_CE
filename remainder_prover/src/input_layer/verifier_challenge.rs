@@ -78,29 +78,6 @@ impl<F: Field> VerifierChallenge<F> {
         self.layer_id
     }
 
-    /// Evaluate the MLE at the claim point.
-    /// Panics if the claim point is not the correct length.
-    pub fn evaluate(
-        &self,
-        point: &[F]
-    ) -> Result<F, VerifierChallengeError> {
-        let mle_evals = self.mle.get_evals_vector().clone();
-        let mut mle_ref = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
-        mle_ref.index_mle_indices(0);
-
-        let eval = if mle_ref.num_iterated_vars() != 0 {
-            let mut eval = None;
-            for (curr_bit, &chal) in point.iter().enumerate() {
-                eval = mle_ref.fix_variable(curr_bit, chal);
-            }
-            eval.ok_or(VerifierChallengeError::InsufficientBinding)?
-        } else {
-            Claim::new(vec![], mle_ref.current_mle[0])
-        };
-        Ok(eval.get_result())
-    }
-
-    // FIXME(Ben) - rewrite this to use evaluate
     /// On a copy of the underlying data, fix variables for each of the coordinates of the the point
     /// in `claim`, and check whether the single element left in the bookkeeping table is equal to
     /// the claimed value in `claim`.
