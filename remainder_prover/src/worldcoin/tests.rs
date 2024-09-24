@@ -23,7 +23,7 @@ fn test_trivial_wiring_2x2_odd_kernel_dims_circuit_data() {
     test_circuit(circuit, None);
 }
 
-// #[ignore] // takes 90 seconds!
+#[ignore] // takes 90 seconds!
 #[test]
 fn test_worldcoin_circuit_iris_v2() {
     use super::parameters_v2::{
@@ -44,7 +44,7 @@ fn test_worldcoin_circuit_iris_v2() {
     test_circuit(circuit, None);
 }
 
-// #[ignore] // takes 90 seconds!
+#[ignore] // takes 90 seconds!
 #[test]
 fn test_worldcoin_circuit_mask_v2() {
     use super::parameters_v2::{
@@ -65,7 +65,7 @@ fn test_worldcoin_circuit_mask_v2() {
     test_circuit(circuit, None);
 }
 
-// #[ignore] // takes 90 seconds!
+#[ignore] // takes 90 seconds!
 #[test]
 fn test_worldcoin_circuit_iris_v3() {
     use super::parameters_v3::{
@@ -86,7 +86,7 @@ fn test_worldcoin_circuit_iris_v3() {
     test_circuit(circuit, None);
 }
 
-// #[ignore] // takes 90 seconds!
+#[ignore] // takes 90 seconds!
 #[test]
 fn test_worldcoin_circuit_mask_v3() {
     use super::parameters_v3::{
