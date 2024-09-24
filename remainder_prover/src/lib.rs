@@ -13,6 +13,13 @@ extern crate quickcheck_macros;
 // and generating proofs of aggregation
 pub mod claims;
 
+// Module for defining the re-usable components for circuit building
+pub mod components;
+
+// Module containing functions for deriving digital decompositions and building associated circuit
+// components.
+pub mod digits;
+
 // module for defining the expressions (and relavant helper
 // functions) for which the prover and the verifier interact with
 pub mod expression;
@@ -20,6 +27,9 @@ pub mod expression;
 // module with the Layer trait, which is the main trait for
 // which we prove/verify over
 pub mod layer;
+
+// For the various output layers to the GKR circuit
+pub mod output_layer;
 
 // For the various input layers to the GKR circuit
 pub mod input_layer;
@@ -40,11 +50,15 @@ pub mod prover;
 // for the verifier to check
 pub mod sumcheck;
 
-// module for generating and manipulating mles, also includes a function to
-// generate the description of circuits
+// module for useful functions
 pub mod utils;
 
 // module for tools to help circuit designers build circuits
 pub mod builders;
 
+pub mod layouter;
+
 pub use remainder_shared_types;
+
+// module for worldcoin circuits
+pub mod worldcoin;

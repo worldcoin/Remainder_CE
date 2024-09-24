@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use tracing::{debug, info};
 
 use crate::{claims::ClaimError, mle::mle_enum::MleEnum};
@@ -14,20 +14,23 @@ use super::ClaimMle;
 /// Invariant: All claims have to agree on `to_layer_id` and on the number of
 /// variables.
 #[derive(Clone, Debug)]
-pub struct ClaimGroup<F: FieldExt> {
+pub struct ClaimGroup<F: Field> {
     /// A vector of claims in F^n.
     pub claims: Vec<ClaimMle<F>>,
+
     /// A 2D matrix with the claim's points as its rows.
     claim_points_matrix: Vec<Vec<F>>,
+
     /// The points in `claims` is effectively a matrix of elements in F. We also
     /// store the transpose of this matrix for convenient access.
     claim_points_transpose: Vec<Vec<F>>,
+
     /// A vector of `self.get_num_claims()` elements. For each claim i,
     /// `result_vector[i]` stores the expected result of the i-th claim.
     result_vector: Vec<F>,
 }
 
-impl<F: FieldExt> ClaimGroup<F> {
+impl<F: Field> ClaimGroup<F> {
     /// Builds a ClaimGroup<F> struct from a vector of claims. Also populates
     /// all the redundant fields for easy access to rows/columns.
     /// If the claims do not all agree on the number of variables, a
@@ -151,7 +154,7 @@ impl<F: FieldExt> ClaimGroup<F> {
 
 /// Sorts claims by `from_layer_id` to prepare them for grouping. Also performs
 /// claim de-duplication if the `ENABLE_CLAIM_DEDUPLICATION` flag it set.
-fn preprocess_claims<F: FieldExt>(mut claims: Vec<ClaimMle<F>>) -> Vec<ClaimMle<F>> {
+fn preprocess_claims<F: Field>(mut claims: Vec<ClaimMle<F>>) -> Vec<ClaimMle<F>> {
     // Sort claims on the `from_layer_id` field.
     // A trivial total order is imposed which includes `None` values.
     claims.sort_by(|claim1, claim2| {
@@ -190,7 +193,7 @@ fn preprocess_claims<F: FieldExt>(mut claims: Vec<ClaimMle<F>>) -> Vec<ClaimMle<
 /// # Requires
 /// All claims with the same `from_layer_id` should appear consecutively in the
 /// `claims` vector. For example, `claims` can be sorted by `from_layer_id`.
-pub fn form_claim_groups<F: FieldExt>(claims: Vec<ClaimMle<F>>) -> Vec<ClaimGroup<F>> {
+pub fn form_claim_groups<F: Field>(claims: Vec<ClaimMle<F>>) -> Vec<ClaimGroup<F>> {
     info!("Forming claim group...");
 
     let claims = preprocess_claims(claims);

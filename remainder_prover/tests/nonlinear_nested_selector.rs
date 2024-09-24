@@ -1,227 +1,166 @@
 use ark_std::test_rng;
 
 use remainder::{
-    builders::{
-        combine_input_layers::InputLayerBuilder,
-        layer_builder::{simple_builders::ZeroBuilder, LayerBuilder},
+    expression::abstract_expr::ExprBuilder,
+    layouter::{
+        compiling::LayouterCircuit,
+        component::{Component, ComponentSet},
+        nodes::{
+            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
+            node_enum::NodeEnum,
+            sector::Sector,
+            CircuitNode, Context,
+        },
     },
-    expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    input_layer::public_input_layer::PublicInputLayer,
-    layer::LayerId,
-    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
-    prover::{
-        helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
-        Witness,
-    },
+    prover::helpers::test_circuit,
 };
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
 
-use crate::utils::get_dummy_random_mle;
+use crate::utils::{get_dummy_input_shred_and_data, DifferenceBuilderComponent};
 pub mod utils;
 
-/// A builder which returns the following expression:
-/// - sel(sel(`left_inner_sel_mle`, `right_inner_sel_mle`), `right_outer_sel_mle`)
-///   + `right_sum_mle_1` * `right_sum_mle_2`
-///
-/// The idea is that this builder has two selector bits which are nonlinear.
-///
-/// ## Arguments
-/// * `left_inner_sel_mle` - An MLE with arbitrary bookkeeping table values.
-/// * `right_inner_sel_mle` - An MLE with arbitrary bookkeeping table values, same size as `left_inner_sel_mle`.
-/// * `right_outer_sel_mle` - An MLE with arbitrary bookkeeping table values, one more variable
-/// than `right_inner_sel_mle`.
-/// * `right_sum_mle_1`, `right_sum_mle_2` - MLEs with arbitrary bookkeeping table values, same size,
-/// one more variable than `right_outer_sel_mle`.
-struct NonlinearNestedSelectorBuilder<F: FieldExt> {
-    left_inner_sel_mle: DenseMle<F, F>,
-    right_inner_sel_mle: DenseMle<F, F>,
-    right_outer_sel_mle: DenseMle<F, F>,
-    right_sum_mle_1: DenseMle<F, F>,
-    right_sum_mle_2: DenseMle<F, F>,
+pub struct NonlinearNestedSelectorBuilderComponent<F: Field> {
+    pub first_layer_sector: Sector<F>,
 }
-impl<F: FieldExt> LayerBuilder<F> for NonlinearNestedSelectorBuilder<F> {
-    type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpr> {
-        let left_inner_sel_side = Expression::mle(self.left_inner_sel_mle.mle_ref());
-        let right_inner_sel_side = Expression::mle(self.right_inner_sel_mle.mle_ref());
-        let left_outer_sel_side = right_inner_sel_side.concat_expr(left_inner_sel_side);
-        let left_sum_side =
-            Expression::mle(self.right_outer_sel_mle.mle_ref()).concat_expr(left_outer_sel_side);
-        let right_sum_side = Expression::products(vec![
-            self.right_sum_mle_1.mle_ref(),
-            self.right_sum_mle_2.mle_ref(),
-        ]);
-        left_sum_side + right_sum_side
+impl<F: Field> NonlinearNestedSelectorBuilderComponent<F> {
+    /// A builder which returns the following expression:
+    /// ```text
+    /// sel(sel(left_inner_sel_mle, right_inner_sel_mle), right_outer_sel_mle)
+    ///     + right_sum_mle_1 * right_sum_mle_2
+    /// ```
+    ///
+    /// The idea is that this builder has two selector bits which are nonlinear.
+    ///
+    /// ## Arguments
+    /// * `left_inner_sel_mle` - An MLE with arbitrary bookkeeping table values.
+    /// * `right_inner_sel_mle` - An MLE with arbitrary bookkeeping table values, same size as `left_inner_sel_mle`.
+    /// * `right_outer_sel_mle` - An MLE with arbitrary bookkeeping table values, one more variable
+    /// than `right_inner_sel_mle`.
+    /// * `right_sum_mle_1`, `right_sum_mle_2` - MLEs with arbitrary bookkeeping table values, same size,
+    /// one more variable than `right_outer_sel_mle`.
+    pub fn new(
+        ctx: &Context,
+        left_inner_sel_mle: &dyn CircuitNode,
+        right_inner_sel_mle: &dyn CircuitNode,
+        right_outer_sel_mle: &dyn CircuitNode,
+        right_sum_mle_1: &dyn CircuitNode,
+        right_sum_mle_2: &dyn CircuitNode,
+    ) -> Self {
+        let nonlinear_nested_selector_sector = Sector::new(
+            ctx,
+            &[
+                left_inner_sel_mle,
+                right_inner_sel_mle,
+                right_outer_sel_mle,
+                right_sum_mle_1,
+                right_sum_mle_2,
+            ],
+            |nonlinear_nested_selector_nodes| {
+                assert_eq!(nonlinear_nested_selector_nodes.len(), 5);
+
+                let left_inner_sel_mle_id = nonlinear_nested_selector_nodes[0];
+                let right_inner_sel_mle_id = nonlinear_nested_selector_nodes[1];
+                let right_outer_sel_mle_id = nonlinear_nested_selector_nodes[2];
+                let right_sum_mle_1_id = nonlinear_nested_selector_nodes[3];
+                let right_sum_mle_2_id = nonlinear_nested_selector_nodes[4];
+
+                let left_inner_sel_side = ExprBuilder::<F>::mle(left_inner_sel_mle_id);
+                let right_inner_sel_side = ExprBuilder::<F>::mle(right_inner_sel_mle_id);
+                let left_outer_sel_side = right_inner_sel_side.concat_expr(left_inner_sel_side);
+                let left_sum_side =
+                    ExprBuilder::<F>::mle(right_outer_sel_mle_id).concat_expr(left_outer_sel_side);
+                let right_sum_side =
+                    ExprBuilder::<F>::products(vec![right_sum_mle_1_id, right_sum_mle_2_id]);
+                left_sum_side + right_sum_side
+            },
+        );
+
+        Self {
+            first_layer_sector: nonlinear_nested_selector_sector,
+        }
     }
-    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let right_side_product_bt: Vec<F> = self
-            .right_sum_mle_1
-            .mle
-            .iter()
-            .zip(self.right_sum_mle_2.mle.iter())
-            .map(|(elem_1, elem_2)| *elem_1 * elem_2)
-            .collect();
-        let left_side_inner_concat_bt: Vec<F> = self
-            .left_inner_sel_mle
-            .mle
-            .iter()
-            .zip(self.right_inner_sel_mle.mle.iter())
-            .flat_map(|(elem_1, elem_2)| vec![*elem_1, *elem_2])
-            .collect();
-        let left_side_bt: Vec<F> = left_side_inner_concat_bt
-            .iter()
-            .zip(self.right_outer_sel_mle.mle.iter())
-            .flat_map(|(elem_1, elem_2)| vec![*elem_1, *elem_2])
-            .collect();
-        let sum_bt: Vec<F> = left_side_bt
-            .iter()
-            .zip(right_side_product_bt)
-            .map(|(left_sum, right_sum)| *left_sum + right_sum)
-            .collect();
-        DenseMle::new_from_raw(sum_bt, id, prefix_bits)
+
+    pub fn get_output_sector(&self) -> &Sector<F> {
+        &self.first_layer_sector
     }
 }
-impl<F: FieldExt> NonlinearNestedSelectorBuilder<F> {
-    fn new(
-        left_inner_sel_mle: DenseMle<F, F>,
-        right_inner_sel_mle: DenseMle<F, F>,
-        right_outer_sel_mle: DenseMle<F, F>,
-        right_sum_mle_1: DenseMle<F, F>,
-        right_sum_mle_2: DenseMle<F, F>,
-    ) -> Self {
-        assert_eq!(
-            right_sum_mle_1.mle_ref().num_vars(),
-            right_sum_mle_2.mle_ref().num_vars()
-        );
-        assert_eq!(
-            left_inner_sel_mle.mle_ref().num_vars(),
-            right_inner_sel_mle.mle_ref().num_vars()
-        );
-        assert_eq!(
-            left_inner_sel_mle.mle_ref().num_vars(),
-            right_outer_sel_mle.mle_ref().num_vars() - 1
-        );
-        assert_eq!(
-            right_outer_sel_mle.mle_ref().num_vars(),
-            right_sum_mle_1.mle_ref().num_vars() - 1
-        );
-        Self {
-            left_inner_sel_mle,
-            right_inner_sel_mle,
-            right_outer_sel_mle,
-            right_sum_mle_1,
-            right_sum_mle_2,
-        }
+
+impl<F: Field, N> Component<N> for NonlinearNestedSelectorBuilderComponent<F>
+where
+    N: CircuitNode + From<Sector<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.first_layer_sector.into()]
     }
 }
 
 /// A circuit which does the following:
-/// * Layer 0: [NonlinearNestedSelectorBuilder] with all inputs.
-/// * Layer 1: [ZeroBuilder] with output of Layer 0 and itself.
+/// * Layer 0: [NonlinearNestedSelectorBuilderComponent] with all inputs.
+/// * Layer 1: [DifferenceBuilderComponent] with output of Layer 0 and itself.
 ///
 /// The expected output of this circuit is the zero MLE.
 ///
 /// ## Arguments
-/// See [NonlinearNestedSelectorBuilder].
-struct NonlinearNestedSelectorCircuit<F: FieldExt> {
-    left_inner_sel_mle: DenseMle<F, F>,
-    right_inner_sel_mle: DenseMle<F, F>,
-    right_outer_sel_mle: DenseMle<F, F>,
-    right_sum_mle_1: DenseMle<F, F>,
-    right_sum_mle_2: DenseMle<F, F>,
-}
-impl<F: FieldExt> GKRCircuit<F> for NonlinearNestedSelectorCircuit<F> {
-    type ProofSystem = DefaultProofSystem;
-
-    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let input_mles: Vec<&mut dyn Mle<F>> = vec![
-            &mut self.left_inner_sel_mle,
-            &mut self.right_inner_sel_mle,
-            &mut self.right_outer_sel_mle,
-            &mut self.right_sum_mle_1,
-            &mut self.right_sum_mle_2,
-        ];
-        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F>>()
-            .into();
-
-        let mut layers = Layers::new();
-
-        let first_builder = NonlinearNestedSelectorBuilder::new(
-            self.left_inner_sel_mle.clone(),
-            self.right_inner_sel_mle.clone(),
-            self.right_outer_sel_mle.clone(),
-            self.right_sum_mle_1.clone(),
-            self.right_sum_mle_2.clone(),
-        );
-        let first_layer_output = layers.add_gkr(first_builder);
-
-        let zero_builder = ZeroBuilder::new(first_layer_output);
-        let output = layers.add_gkr(zero_builder);
-
-        Witness {
-            layers,
-            output_layers: vec![output.get_enum()],
-            input_layers: vec![input_layer],
-        }
-    }
-}
-
-impl<F: FieldExt> NonlinearNestedSelectorCircuit<F> {
-    fn new(
-        left_inner_sel_mle: DenseMle<F, F>,
-        right_inner_sel_mle: DenseMle<F, F>,
-        right_outer_sel_mle: DenseMle<F, F>,
-        right_sum_mle_1: DenseMle<F, F>,
-        right_sum_mle_2: DenseMle<F, F>,
-    ) -> Self {
-        assert_eq!(
-            left_inner_sel_mle.num_iterated_vars(),
-            right_inner_sel_mle.num_iterated_vars()
-        );
-        assert_eq!(
-            right_inner_sel_mle.num_iterated_vars() + 1,
-            right_outer_sel_mle.num_iterated_vars(),
-        );
-        assert_eq!(
-            right_outer_sel_mle.num_iterated_vars() + 1,
-            right_sum_mle_1.num_iterated_vars(),
-        );
-        assert_eq!(
-            right_sum_mle_1.num_iterated_vars(),
-            right_sum_mle_2.num_iterated_vars()
-        );
-        Self {
-            left_inner_sel_mle,
-            right_inner_sel_mle,
-            right_outer_sel_mle,
-            right_sum_mle_1,
-            right_sum_mle_2,
-        }
-    }
-}
-
+/// See [NonlinearNestedSelectorBuilderComponent].
 #[test]
-fn test_nonlinear_nested_sel_circuit() {
+fn test_nonlinear_nested_sel_circuit_newmainder() {
     const VARS_PRODUCT_SIDE: usize = 5;
     const VARS_OUTER_SEL_SIDE: usize = VARS_PRODUCT_SIDE - 1;
     const VARS_INNER_SEL_SIDE: usize = VARS_OUTER_SEL_SIDE - 1;
     let mut rng = test_rng();
 
-    let left_inner_sel_mle = get_dummy_random_mle(VARS_INNER_SEL_SIDE, &mut rng);
-    let right_inner_sel_mle = get_dummy_random_mle(VARS_INNER_SEL_SIDE, &mut rng);
-    let right_outer_sel_mle = get_dummy_random_mle(VARS_OUTER_SEL_SIDE, &mut rng);
-    let right_sum_mle_1 = get_dummy_random_mle(VARS_PRODUCT_SIDE, &mut rng);
-    let right_sum_mle_2 = get_dummy_random_mle(VARS_PRODUCT_SIDE, &mut rng);
+    let circuit = LayouterCircuit::new(|ctx| {
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
-    let non_linear_sel_circuit: NonlinearNestedSelectorCircuit<Fr> =
-        NonlinearNestedSelectorCircuit::new(
-            left_inner_sel_mle,
-            right_inner_sel_mle,
-            right_outer_sel_mle,
-            right_sum_mle_1,
-            right_sum_mle_2,
+        let (left_inner_sel_mle, left_inner_sel_mle_data) =
+            get_dummy_input_shred_and_data(VARS_INNER_SEL_SIDE, &mut rng, ctx, &input_layer);
+        let (right_inner_sel_mle, right_inner_sel_mle_data) =
+            get_dummy_input_shred_and_data(VARS_INNER_SEL_SIDE, &mut rng, ctx, &input_layer);
+        let (right_outer_sel_mle, right_outer_sel_mle_data) =
+            get_dummy_input_shred_and_data(VARS_OUTER_SEL_SIDE, &mut rng, ctx, &input_layer);
+        let (right_sum_mle_1, right_sum_mle_1_data) =
+            get_dummy_input_shred_and_data(VARS_PRODUCT_SIDE, &mut rng, ctx, &input_layer);
+        let (right_sum_mle_2, right_sum_mle_2_data) =
+            get_dummy_input_shred_and_data(VARS_PRODUCT_SIDE, &mut rng, ctx, &input_layer);
+
+        let component_1 = NonlinearNestedSelectorBuilderComponent::new(
+            ctx,
+            &left_inner_sel_mle,
+            &right_inner_sel_mle,
+            &right_outer_sel_mle,
+            &right_sum_mle_1,
+            &right_sum_mle_2,
         );
-    test_circuit(non_linear_sel_circuit, None)
+        let component_2 = DifferenceBuilderComponent::new(ctx, &component_1.get_output_sector());
+        let input_data = InputLayerData::new(
+            input_layer.id(),
+            vec![
+                left_inner_sel_mle_data,
+                right_inner_sel_mle_data,
+                right_outer_sel_mle_data,
+                right_sum_mle_1_data,
+                right_sum_mle_2_data,
+            ],
+            None,
+        );
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            left_inner_sel_mle.into(),
+            right_inner_sel_mle.into(),
+            right_outer_sel_mle.into(),
+            right_sum_mle_1.into(),
+            right_sum_mle_2.into(),
+        ];
+
+        all_nodes.extend(component_1.yield_nodes());
+        all_nodes.extend(component_2.yield_nodes());
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_data],
+        )
+    });
+
+    test_circuit(circuit, None)
 }

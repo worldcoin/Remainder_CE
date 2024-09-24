@@ -12,7 +12,7 @@
 /// Use this to conveniently define the LABEL_xx values for domain separation,
 /// e.g.:
 ///
-/// ```ignore
+/// ```text
 /// impl LcEncoding for ... {
 ///     ...
 ///

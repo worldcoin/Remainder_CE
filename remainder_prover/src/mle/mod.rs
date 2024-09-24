@@ -5,9 +5,8 @@ use core::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::claims::Claim;
-use crate::layer::LayerId;
-use remainder_shared_types::FieldExt;
+use crate::{claims::Claim, layer::LayerId};
+use remainder_shared_types::Field;
 
 use self::mle_enum::MleEnum;
 use dyn_clonable::*;
@@ -29,6 +28,9 @@ pub mod betavalues;
 /// MLEs.
 pub mod evals;
 
+/// Defines trait/struct relevant for Mles (as input) in circuit.
+pub mod bundled_input_mle;
+
 // TODO!(Maybe this type needs PartialEq, could be easily implemented with a
 // random id...).
 /// The trait that defines how a semantic Type (T) and a MultiLinearEvaluation
@@ -40,7 +42,7 @@ pub mod evals;
 /// IntoIterator and FromIterator, this is to ensure that the semantic ordering
 /// within T is always consistent.
 #[clonable]
-pub trait Mle<F: FieldExt>: Clone {
+pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     /// Returns the number of iterated variables this Mle is defined on.
     /// Equivalently, this is the log_2 of the size of the *whole* bookkeeping
     /// table.
@@ -52,41 +54,26 @@ pub trait Mle<F: FieldExt>: Clone {
 
     /// Mutates the MLE in order to set the prefix bits. This is needed when we
     /// are working with dataparallel circuits and new bits need to be added.
-    fn set_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>);
-
-    /// Gets the prefix bits currently stored in the MLE. This is needed when
-    /// prefix bits are generated after combining MLEs.
-    fn get_prefix_bits(&self) -> Option<Vec<MleIndex<F>>>;
+    fn add_prefix_bits(&mut self, new_bits: Vec<MleIndex<F>>);
 
     /// Get the layer ID of the associated MLE.
     fn layer_id(&self) -> LayerId;
-}
 
-/// `MleRef` keeps track of an [Mle] and the fixed indices of the `Mle` to be
-/// used in an expression.
-pub trait MleRef: Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
-    /// The Field Element this MleRef refers to.
-    type F: FieldExt;
+    /// below are methods that belonged to MleRef originally
 
     /// Gets reference to the current bookkeeping tables.
-    fn bookkeeping_table(&self) -> &[Self::F];
+    fn bookkeeping_table(&self) -> &[F];
 
     /// Get the indicies of the `Mle` that this `MleRef` represents.
-    fn mle_indices(&self) -> &[MleIndex<Self::F>];
+    fn mle_indices(&self) -> &[MleIndex<F>];
 
     /// Gets the original, unmutated MLE indices associated with an MLE
     /// when it was first created (before any variable binding occured).
-    fn original_mle_indices(&self) -> &Vec<MleIndex<Self::F>>;
+    fn original_mle_indices(&self) -> &Vec<MleIndex<F>>;
 
     /// Gets the original, unmutated MLE bookkeeping table associated with an MLE
     /// when it was first created (before any variable binding occured).
-    fn original_bookkeeping_table(&self) -> &[Self::F];
-
-    /// Add new indices at the end of an MLE.
-    fn push_mle_indices(&mut self, new_indices: &[MleIndex<Self::F>]);
-
-    /// Number of variables the [Mle] this is a reference to is over.
-    fn num_vars(&self) -> usize;
+    fn original_bookkeeping_table(&self) -> &[F];
 
     /// Number of original variables, not mutated.
     fn original_num_vars(&self) -> usize;
@@ -96,7 +83,7 @@ pub trait MleRef: Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize
     ///
     /// If the new MLE becomes fully bound, returns the evaluation of the fully
     /// bound Mle.
-    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<Claim<Self::F>>;
+    fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<Claim<F>>;
 
     /// Fix the iterated variable at `indexed_bit_index` with a given challenge
     /// `point`. Mutates `self`` to be the bookeeping table for the new MLE.  If
@@ -106,11 +93,7 @@ pub trait MleRef: Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize
     /// # Panics
     /// If `indexed_bit_index` does not correspond to a
     /// `MleIndex::Iterated(indexed_bit_index)` in `mle_indices`.
-    fn fix_variable_at_index(
-        &mut self,
-        indexed_bit_index: usize,
-        point: Self::F,
-    ) -> Option<Claim<Self::F>>;
+    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<Claim<F>>;
 
     /// Mutates the `MleIndices` that are `Iterated` and turns them into
     /// `IndexedBit` with the bit index being determined from `curr_index`.
@@ -121,39 +104,8 @@ pub trait MleRef: Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize
     /// The layer_id of the layer that this MLE belongs to.
     fn get_layer_id(&self) -> LayerId;
 
-    /// Whether the MLE has been indexed.
-    fn indexed(&self) -> bool;
-
     /// Get the associated enum that this MLE is a part of ([MleEnum::Dense] or [MleEnum::Zero]).
-    fn get_enum(self) -> MleEnum<Self::F>;
-}
-
-/// Trait that allows a type to be serialized into an [Mle], and yield [MleRef]s
-/// TODO!(add a derive `MleAble`` macro that generates code for `FromIterator`,
-/// `IntoIterator` and creates associated functions for yielding appropriate
-/// `MleRefs`)
-pub trait MleAble<F> {
-    /// The particular representation that is convienent for an `MleAble`; most
-    /// of the time it will be a `[Vec<F>; Size]` array
-    type Repr: Send + Sync + Clone + Debug;
-
-    /// The iterator that is used in order to iterate through the contents or data
-    /// of the [MleAble].
-    type IntoIter<'a>: Iterator<Item = Self>
-    where
-        Self: 'a;
-
-    /// Get the evaluations of each of the points on the boolean hypercube.
-    fn get_padded_evaluations(items: &Self::Repr) -> Vec<F>;
-
-    /// Convert into the [MleAble] repr from an iterator.
-    fn from_iter(iter: impl IntoIterator<Item = Self>) -> Self::Repr;
-
-    /// Iterate through the contents of the bookkeeping table.
-    fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_>;
-
-    /// The number of variables associated with the MLE.
-    fn num_vars(items: &Self::Repr) -> usize;
+    fn get_enum(self) -> MleEnum<F>;
 }
 
 /// Represents all the possible types of indices for an [Mle].
@@ -174,7 +126,7 @@ pub enum MleIndex<F> {
     Bound(F, usize),
 }
 
-impl<F: FieldExt> MleIndex<F> {
+impl<F: Field> MleIndex<F> {
     /// If `self` is an `Iterated` bit, turns it into an `IndexedBit(bit)`.
     /// Otherwise, `self` is not modified.
     ///

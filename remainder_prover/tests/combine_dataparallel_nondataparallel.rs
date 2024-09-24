@@ -1,151 +1,186 @@
+use ark_std::test_rng;
 use itertools::Itertools;
 
 use remainder::{
-    builders::{
-        combine_input_layers::InputLayerBuilder,
-        combine_layers::combine_layers,
-        layer_builder::{
-            batched::{combine_zero_mle_ref, BatchedLayer},
-            simple_builders::ZeroBuilder,
+    layouter::{
+        compiling::LayouterCircuit,
+        component::{Component, ComponentSet},
+        nodes::{
+            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
+            circuit_outputs::OutputNode,
+            node_enum::NodeEnum,
+            sector::Sector,
+            CircuitNode, Context,
         },
     },
-    input_layer::public_input_layer::PublicInputLayer,
-    layer::LayerId,
-    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
-    prover::{layers::Layers, proof_system::DefaultProofSystem, GKRCircuit, Witness},
+    mle::{dense::DenseMle, Mle},
+    prover::helpers::test_circuit,
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{Field, Fr};
 
 pub mod utils;
 
-use utils::{ProductScaledBuilder, TripleNestedSelectorBuilder};
+use utils::{
+    get_dummy_input_shred_and_data, get_input_shred_and_data_from_vec, DifferenceBuilderComponent,
+    ProductScaledBuilderComponent, TripleNestedBuilderComponent,
+};
 
-/// A circuit which takes in two vectors of MLEs of the same size:
-/// * Layer 0: [ProductScaledBuilder] with the two inputs
-/// * Layer 1: [ProductScaledBuilder] with the output of Layer 0 and output of Layer 0.
-///
-/// The expected output of this circuit is the zero MLE.
-///
-/// ## Arguments
-/// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
-/// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
-struct DataParallelCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F, F>>,
-    mle_2_vec: Vec<DenseMle<F, F>>,
+use crate::utils::get_dummy_random_mle;
+
+struct DataParallelComponent<F: Field> {
+    first_layer_component: ProductScaledBuilderComponent<F>,
+    second_layer_component: ProductScaledBuilderComponent<F>,
+    output_component: DifferenceBuilderComponent<F>,
 }
 
-impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuit<F> {
-    type ProofSystem = DefaultProofSystem;
+impl<F: Field> DataParallelComponent<F> {
+    /// A circuit which takes in two vectors of MLEs of the same size:
+    /// * Layer 0: [ProductScaledBuilderComponent] with the two inputs
+    /// * Layer 1: [ProductScaledBuilderComponent] with the output of Layer 0 and output of Layer 0.
+    ///
+    /// The expected output of this circuit is the zero MLE.
+    ///
+    /// ## Arguments
+    /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
+    /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
+    pub fn new(
+        ctx: &Context,
+        mle_1_input: &dyn CircuitNode,
+        mle_2_input: &dyn CircuitNode,
+    ) -> Self {
+        let product_scaled_component =
+            ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);
 
-    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let mut layers = Layers::new();
-
-        let first_layer_builders = (self
-            .mle_1_vec
-            .clone()
-            .into_iter()
-            .zip(self.mle_2_vec.clone().into_iter()))
-        .map(|(mle_1, mle_2)| ProductScaledBuilder::new(mle_1, mle_2))
-        .collect_vec();
-        let batched_first_layer_builder = BatchedLayer::new(first_layer_builders);
-        let first_layer_output = layers.add_gkr(batched_first_layer_builder);
-
-        let second_layer_builders = (first_layer_output.iter().zip(first_layer_output.clone()))
-            .map(|(mle_1, mle_2)| ProductScaledBuilder::new(mle_1.clone(), mle_2))
-            .collect_vec();
-
-        let batched_second_layer_builder = BatchedLayer::new(second_layer_builders);
-        let second_layer_output = layers.add_gkr(batched_second_layer_builder);
-
-        let zero_builders = second_layer_output
-            .iter()
-            .map(|mle| ZeroBuilder::new(mle.clone()))
-            .collect_vec();
-        let batched_output_builder = BatchedLayer::new(zero_builders);
-        let output_mles = layers.add_gkr(batched_output_builder);
-        let output = combine_zero_mle_ref(output_mles);
-
-        Witness {
-            layers,
-            output_layers: vec![output.get_enum()],
-            input_layers: vec![],
-        }
-    }
-}
-
-/// A circuit in which:
-/// * Layer 0: [TripleNestedSelectorBuilder] with the three inputs
-/// * Layer 1: [ZeroBuilder] with output of Layer 0 and itself.
-///
-/// The expected output of this circuit is the zero MLE.
-///
-/// ## Arguments
-/// * `inner_inner_sel_mle` - An MLE with arbitrary bookkeeping table values.
-/// * `inner_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
-/// the size of `inner_inner_sel_mle`
-/// * `outer_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
-/// the size of `inner_sel_mle`
-struct TripleNestedSelectorCircuit<F: FieldExt> {
-    inner_inner_sel_mle: DenseMle<F, F>,
-    inner_sel_mle: DenseMle<F, F>,
-    outer_sel_mle: DenseMle<F, F>,
-}
-
-impl<F: FieldExt> GKRCircuit<F> for TripleNestedSelectorCircuit<F> {
-    type ProofSystem = DefaultProofSystem;
-
-    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let mut layers = Layers::new();
-
-        let first_layer_builder = TripleNestedSelectorBuilder::new(
-            self.inner_inner_sel_mle.clone(),
-            self.inner_sel_mle.clone(),
-            self.outer_sel_mle.clone(),
+        let product_scaled_meta_component = ProductScaledBuilderComponent::new(
+            ctx,
+            &product_scaled_component.get_output_sector(),
+            &product_scaled_component.get_output_sector(),
         );
-        let first_layer_output = layers.add_gkr(first_layer_builder);
+        let output_component = DifferenceBuilderComponent::new(
+            ctx,
+            &product_scaled_meta_component.get_output_sector(),
+        );
 
-        let zero_builder = ZeroBuilder::new(first_layer_output);
-        let output = layers.add_gkr(zero_builder);
-
-        Witness {
-            layers,
-            output_layers: vec![output.get_enum()],
-            input_layers: vec![],
+        Self {
+            first_layer_component: product_scaled_component,
+            second_layer_component: product_scaled_meta_component,
+            output_component,
         }
     }
 }
 
-/// A circuit in which:
-/// * Layer 0: [ProductScaledBuilder] with the two inputs
-/// * Layer 1: [ZeroBuilder] with output of Layer 0 and itself.
-///
-/// The expected output of this circuit is the zero MLE.
-///
-/// ## Arguments
-/// * `mle_1` - An MLE with arbitrary bookkeeping table values.
-/// * `mle_2` - An MLE with arbitrary bookkeeping table values, same size as `mle_1`.
-struct ScaledProductCircuit<F: FieldExt> {
-    mle_1: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
+impl<F: Field, N> Component<N> for DataParallelComponent<F>
+where
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        self.first_layer_component
+            .yield_nodes()
+            .into_iter()
+            .chain(
+                self.second_layer_component
+                    .yield_nodes()
+                    .into_iter()
+                    .chain(self.output_component.yield_nodes()),
+            )
+            .collect_vec()
+    }
 }
 
-impl<F: FieldExt> GKRCircuit<F> for ScaledProductCircuit<F> {
-    type ProofSystem = DefaultProofSystem;
+struct TripleNestedSelectorComponent<F: Field> {
+    first_layer_component: TripleNestedBuilderComponent<F>,
+    output_component: DifferenceBuilderComponent<F>,
+}
 
-    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let mut layers = Layers::new();
+impl<F: Field> TripleNestedSelectorComponent<F> {
+    /// A circuit in which:
+    /// * Layer 0: [TripleNestedSelectorBuilder] with the three inputs
+    /// * Layer 1: [ZeroBuilder] with output of Layer 0 and itself.
+    ///
+    /// The expected output of this circuit is the zero MLE.
+    ///
+    /// ## Arguments
+    /// * `inner_inner_sel_mle` - An MLE with arbitrary bookkeeping table values.
+    /// * `inner_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
+    /// the size of `inner_inner_sel_mle`
+    /// * `outer_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
+    /// the size of `inner_sel_mle`
+    pub fn new(
+        ctx: &Context,
+        inner_inner_sel: &dyn CircuitNode,
+        inner_sel: &dyn CircuitNode,
+        outer_sel: &dyn CircuitNode,
+    ) -> Self {
+        let triple_nested_selector_component =
+            TripleNestedBuilderComponent::new(ctx, inner_inner_sel, inner_sel, outer_sel);
+        let output_component = DifferenceBuilderComponent::new(
+            ctx,
+            &triple_nested_selector_component.get_output_sector(),
+        );
 
-        let first_layer_builder = ProductScaledBuilder::new(self.mle_1.clone(), self.mle_2.clone());
-        let first_layer_output = layers.add_gkr(first_layer_builder);
-
-        let zero_builder = ZeroBuilder::new(first_layer_output);
-        let output = layers.add_gkr(zero_builder);
-
-        Witness {
-            layers,
-            output_layers: vec![output.get_enum()],
-            input_layers: vec![],
+        Self {
+            first_layer_component: triple_nested_selector_component,
+            output_component,
         }
+    }
+}
+
+impl<F: Field, N> Component<N> for TripleNestedSelectorComponent<F>
+where
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        self.first_layer_component
+            .yield_nodes()
+            .into_iter()
+            .chain(self.output_component.yield_nodes())
+            .collect_vec()
+    }
+}
+
+struct ScaledProductComponent<F: Field> {
+    first_layer_component: ProductScaledBuilderComponent<F>,
+    output_component: DifferenceBuilderComponent<F>,
+}
+
+impl<F: Field> ScaledProductComponent<F> {
+    /// A circuit in which:
+    /// * Layer 0: [ProductScaledBuilder] with the two inputs
+    /// * Layer 1: [ZeroBuilder] with output of Layer 0 and itself.
+    ///
+    /// The expected output of this circuit is the zero MLE.
+    ///
+    /// ## Arguments
+    /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
+    /// * `mle_2` - An MLE with arbitrary bookkeeping table values, same size as `mle_1`.
+    pub fn new(
+        ctx: &Context,
+        mle_1_input: &dyn CircuitNode,
+        mle_2_input: &dyn CircuitNode,
+    ) -> Self {
+        let product_scaled_component =
+            ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);
+
+        let output_component =
+            DifferenceBuilderComponent::new(ctx, &product_scaled_component.get_output_sector());
+
+        Self {
+            first_layer_component: product_scaled_component,
+            output_component,
+        }
+    }
+}
+
+impl<F: Field, N> Component<N> for ScaledProductComponent<F>
+where
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        self.first_layer_component
+            .yield_nodes()
+            .into_iter()
+            .chain(self.output_component.yield_nodes())
+            .collect_vec()
     }
 }
 
@@ -163,195 +198,77 @@ impl<F: FieldExt> GKRCircuit<F> for ScaledProductCircuit<F> {
 /// * `mle_3`, `mle_4` - inputs to [ScaledProductCircuit], both arbitrary bookkeeping table values,
 /// same size.
 /// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
-struct CombinedCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F, F>>,
-    mle_2_vec: Vec<DenseMle<F, F>>,
-    mle_3: DenseMle<F, F>,
-    mle_4: DenseMle<F, F>,
-    mle_5: DenseMle<F, F>,
-    mle_6: DenseMle<F, F>,
-    num_data_parallel_bits: usize,
-}
 
-impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
-    type ProofSystem = DefaultProofSystem;
+#[test]
+fn test_combined_dataparallel_nondataparallel_circuit_newmainder() {
+    const VARS_MLE_1_2: usize = 1;
+    const VARS_MLE_3: usize = VARS_MLE_1_2 + 1;
+    const VARS_MLE_4: usize = VARS_MLE_3 + 1;
+    const NUM_DATAPARALLEL_BITS: usize = 1;
+    let mut rng = test_rng();
 
-    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let mut mle_1_combined = DenseMle::<F, F>::combine_mle_batch(self.mle_1_vec.clone());
-        let mut mle_2_combined = DenseMle::<F, F>::combine_mle_batch(self.mle_2_vec.clone());
-        mle_1_combined.layer_id = LayerId::Input(0);
-        mle_2_combined.layer_id = LayerId::Input(0);
-        self.mle_1_vec
-            .iter_mut()
-            .zip(self.mle_2_vec.iter_mut())
-            .for_each(|(mle_1, mle_2)| {
-                mle_1.layer_id = LayerId::Input(0);
-                mle_2.layer_id = LayerId::Input(0);
-            });
-        self.mle_3.layer_id = LayerId::Input(0);
-        self.mle_4.layer_id = LayerId::Input(0);
-        self.mle_5.layer_id = LayerId::Input(0);
-        self.mle_6.layer_id = LayerId::Input(0);
+    let mle_1_vec = (0..1 << NUM_DATAPARALLEL_BITS)
+        .map(|_| get_dummy_random_mle(VARS_MLE_1_2, &mut rng))
+        .collect_vec();
+    let mle_2_vec = (0..1 << NUM_DATAPARALLEL_BITS)
+        .map(|_| get_dummy_random_mle(VARS_MLE_1_2, &mut rng))
+        .collect_vec();
 
-        let input_commit: Vec<&mut dyn Mle<F>> = vec![
-            &mut mle_1_combined,
-            &mut mle_2_combined,
-            &mut self.mle_3,
-            &mut self.mle_4,
-            &mut self.mle_5,
-            &mut self.mle_6,
+    let mle_1_vec_batched = DenseMle::batch_mles(mle_1_vec);
+    let mle_2_vec_batched = DenseMle::batch_mles(mle_2_vec);
+    let mle_1_vec_raw = mle_1_vec_batched.bookkeeping_table();
+    let mle_2_vec_raw = mle_2_vec_batched.bookkeeping_table();
+
+    let circuit = LayouterCircuit::new(|ctx| {
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let (input_shred_1, input_shred_1_data) =
+            get_input_shred_and_data_from_vec(mle_1_vec_raw.to_vec(), ctx, &input_layer);
+        let (input_shred_2, input_shred_2_data) =
+            get_input_shred_and_data_from_vec(mle_2_vec_raw.to_vec(), ctx, &input_layer);
+        let (input_shred_3, input_shred_3_data) =
+            get_dummy_input_shred_and_data(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
+        let (input_shred_4, input_shred_4_data) =
+            get_dummy_input_shred_and_data(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
+        let (input_shred_5, input_shred_5_data) =
+            get_dummy_input_shred_and_data(VARS_MLE_3, &mut rng, ctx, &input_layer);
+        let (input_shred_6, input_shred_6_data) =
+            get_dummy_input_shred_and_data(VARS_MLE_4, &mut rng, ctx, &input_layer);
+        let input_data = InputLayerData::new(
+            input_layer.id(),
+            vec![
+                input_shred_1_data,
+                input_shred_2_data,
+                input_shred_3_data,
+                input_shred_4_data,
+                input_shred_5_data,
+                input_shred_6_data,
+            ],
+            None,
+        );
+
+        let component_1 = DataParallelComponent::new(ctx, &input_shred_1, &input_shred_2);
+        let component_2 =
+            TripleNestedSelectorComponent::new(ctx, &input_shred_4, &input_shred_5, &input_shred_6);
+        let component_3 = ScaledProductComponent::new(ctx, &input_shred_3, &input_shred_4);
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            input_shred_1.into(),
+            input_shred_2.into(),
+            input_shred_3.into(),
+            input_shred_4.into(),
+            input_shred_5.into(),
+            input_shred_6.into(),
         ];
 
-        let input_commit_builder =
-            InputLayerBuilder::<F>::new(input_commit, None, LayerId::Input(0));
-
-        let input_layer: PublicInputLayer<F> =
-            input_commit_builder.to_input_layer::<PublicInputLayer<F>>();
-
-        let input_layer_enum = input_layer.into();
-
-        self.mle_1_vec
-            .iter_mut()
-            .zip(self.mle_2_vec.iter_mut())
-            .for_each(|(mle_1, mle_2)| {
-                mle_1.set_prefix_bits(Some(
-                    mle_1_combined
-                        .get_prefix_bits()
-                        .unwrap()
-                        .into_iter()
-                        .chain(vec![MleIndex::Iterated; self.num_data_parallel_bits])
-                        .collect_vec(),
-                ));
-                mle_2.set_prefix_bits(Some(
-                    mle_2_combined
-                        .get_prefix_bits()
-                        .unwrap()
-                        .into_iter()
-                        .chain(vec![MleIndex::Iterated; self.num_data_parallel_bits])
-                        .collect_vec(),
-                ));
-            });
-
-        let mut batched_circuit = DataParallelCircuit {
-            mle_1_vec: self.mle_1_vec.clone(),
-            mle_2_vec: self.mle_2_vec.clone(),
-        };
-        let mut triple_nested_sel_circuit = TripleNestedSelectorCircuit {
-            inner_inner_sel_mle: self.mle_4.clone(),
-            inner_sel_mle: self.mle_5.clone(),
-            outer_sel_mle: self.mle_6.clone(),
-        };
-        let mut product_scaled_circuit = ScaledProductCircuit {
-            mle_1: self.mle_3.clone(),
-            mle_2: self.mle_4.clone(),
-        };
-
-        let batched_circuit_witness = batched_circuit.synthesize();
-        let triple_nested_sel_witness = triple_nested_sel_circuit.synthesize();
-        let product_scaled_witness = product_scaled_circuit.synthesize();
-
-        let Witness {
-            layers: batched_layers,
-            output_layers: batched_output_layers,
-            input_layers: _,
-        } = batched_circuit_witness;
-
-        let Witness {
-            layers: triple_nested_layers,
-            output_layers: triple_output_layers,
-            input_layers: _,
-        } = triple_nested_sel_witness;
-
-        let Witness {
-            layers: product_scaled_layers,
-            output_layers: product_scaled_output_layers,
-            input_layers: _,
-        } = product_scaled_witness;
-
-        let (layers, output_layers) = combine_layers(
-            vec![batched_layers, triple_nested_layers, product_scaled_layers],
-            vec![
-                batched_output_layers,
-                triple_output_layers,
-                product_scaled_output_layers,
-            ],
+        all_nodes.extend(component_1.yield_nodes());
+        all_nodes.extend(component_2.yield_nodes());
+        all_nodes.extend(component_3.yield_nodes());
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_data],
         )
-        .unwrap();
+    });
 
-        Witness {
-            layers,
-            output_layers,
-            input_layers: vec![input_layer_enum],
-        }
-    }
+    test_circuit(circuit, None)
 }
-
-impl<F: FieldExt> CombinedCircuit<F> {
-    fn _new(
-        mle_1_vec: Vec<DenseMle<F, F>>,
-        mle_2_vec: Vec<DenseMle<F, F>>,
-        mle_3: DenseMle<F, F>,
-        mle_4: DenseMle<F, F>,
-        mle_5: DenseMle<F, F>,
-        mle_6: DenseMle<F, F>,
-        num_data_parallel_bits: usize,
-    ) -> Self {
-        assert_eq!(mle_3.num_iterated_vars(), mle_4.num_iterated_vars());
-        assert_eq!(mle_5.num_iterated_vars(), mle_4.num_iterated_vars() + 1);
-        assert_eq!(mle_6.num_iterated_vars(), mle_5.num_iterated_vars() + 1);
-        let all_num_vars: Vec<usize> = mle_1_vec
-            .iter()
-            .chain(mle_2_vec.iter())
-            .map(|mle| mle.num_iterated_vars())
-            .collect();
-        let all_vars_same = all_num_vars
-            .iter()
-            .fold(true, |acc, elem| (*elem == mle_3.num_iterated_vars()) & acc);
-        assert!(all_vars_same);
-        assert_eq!(mle_1_vec.len(), mle_2_vec.len());
-        assert_eq!(mle_1_vec.len(), 1 << num_data_parallel_bits);
-        Self {
-            mle_1_vec,
-            mle_2_vec,
-            mle_3,
-            mle_4,
-            mle_5,
-            mle_6,
-            num_data_parallel_bits,
-        }
-    }
-}
-
-// TODO(vishady): this test fails based off of our current implementation of remainder!! The current problem is the way
-// selector bits are treated when combining expressions.
-
-// #[test]
-// fn test_combined_dataparallel_nondataparallel_circuit() {
-//     const VARS_MLE_1_2: usize = 2;
-//     const VARS_MLE_3: usize = VARS_MLE_1_2 + 1;
-//     const VARS_MLE_4: usize = VARS_MLE_3 + 1;
-//     const NUM_DATA_PARALLEL_BITS: usize = 1;
-//     let mut rng = test_rng();
-
-//     let mle_1_vec = (0..1 << NUM_DATA_PARALLEL_BITS)
-//         .map(|_| get_dummy_random_mle(VARS_MLE_1_2, &mut rng))
-//         .collect_vec();
-//     let mle_2_vec = (0..1 << NUM_DATA_PARALLEL_BITS)
-//         .map(|_| get_dummy_random_mle(VARS_MLE_1_2, &mut rng))
-//         .collect_vec();
-//     let mle_3 = get_dummy_random_mle(VARS_MLE_1_2, &mut rng);
-//     let mle_4 = get_dummy_random_mle(VARS_MLE_1_2, &mut rng);
-//     let mle_5 = get_dummy_random_mle(VARS_MLE_3, &mut rng);
-//     let mle_6 = get_dummy_random_mle(VARS_MLE_4, &mut rng);
-
-//     let combined_circuit: CombinedCircuit<Fr> = CombinedCircuit::new(
-//         mle_1_vec,
-//         mle_2_vec,
-//         mle_3,
-//         mle_4,
-//         mle_5,
-//         mle_6,
-//         NUM_DATA_PARALLEL_BITS,
-//     );
-//     test_circuit(combined_circuit, None)
-// }

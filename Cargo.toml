@@ -1,5 +1,20 @@
 [workspace]
 
-members = ["remainder_prover", "remainder_shared_types", "remainder_ligero"]
+members = [
+    "remainder_prover",
+    "remainder_shared_types",
+    "remainder_ligero",
+    "remainder_hyrax",
+]
 
 resolver = "2"
+
+[profile.opt-with-debug]
+inherits = "release"
+debug = true
+
+[profile.mobile]
+inherits = "release"
+opt-level = "s"   # Optimize for size.
+lto = true
+codegen-units = 1

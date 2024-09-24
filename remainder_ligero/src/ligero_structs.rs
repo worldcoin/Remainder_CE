@@ -4,35 +4,37 @@ use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 use crate::utils::{get_ligero_matrix_dims, halo2_fft};
-use crate::FieldExt;
+use crate::Field;
 use crate::{def_labels, LcCommit, LcEncoding, LcEvalProof, LcRoot};
-// use fffft::FFTError;
 
 /// Auxiliary struct which simply keeps track of Ligero hyperparameters, e.g.
 /// the matrix width and code rate.
-///
-/// TODO!(ryancao): Deprecate this and/or merge it with Ligero aux information!
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LigeroEncoding<F: FieldExt> {
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct LigeroAuxInfo<F: Field> {
     /// Width of the M matrix representing the original polynomial's coeffs
     pub orig_num_cols: usize,
     /// Width of the M' matrix representing the encoded version of M's rows
     pub encoded_num_cols: usize,
     /// Code rate, i.e. the ratio `encoded_num_cols` / `orig_num_cols`
     pub rho_inv: u8,
+    /// Number of rows of the matrix
+    pub num_rows: usize,
+    /// Number of columns to open
+    pub num_col_opens: usize,
     /// Required for generic
     pub phantom: PhantomData<F>,
 }
 
 /// Total number of columns to be sent over
-pub const N_COL_OPENS: usize = 128usize;
+/// TODO(ryancao): Make this more visible/change-able somehow!
+pub const N_COL_OPENS: usize = 200usize;
 
-impl<F> LigeroEncoding<F>
+impl<F> LigeroAuxInfo<F>
 where
-    F: FieldExt,
+    F: Field,
 {
     /// Grabs the matrix dimensions for M and M'
-    pub fn get_dims(len: usize, rho_inv: u8, ratio: f64) -> Option<(usize, usize, usize)> {
+    pub fn get_dims(len: usize, rho_inv: u8, ratio: f64) -> (usize, usize, usize) {
         get_ligero_matrix_dims(len, rho_inv, ratio)
     }
 
@@ -44,35 +46,34 @@ where
 
     /// Allows creation from total number of coefficients, code rate, and
     /// matrix width-to-height ratio.
-    pub fn new(num_coeffs: usize, rho_inv: u8, ratio: f64) -> Self {
+    pub fn new(
+        num_coeffs: usize, // 2.pow(claim.challenge.len())
+        rho_inv: u8,
+        ratio: f64,
+        maybe_num_col_opens: Option<usize>,
+    ) -> Self {
         // --- Computes the matrix size for the commitment ---
-        let (_, orig_num_cols, encoded_num_cols) =
-            Self::get_dims(num_coeffs, rho_inv, ratio).unwrap();
+        let (num_rows, orig_num_cols, encoded_num_cols) =
+            Self::get_dims(num_coeffs, rho_inv, ratio);
         assert!(Self::_dims_ok(orig_num_cols, encoded_num_cols));
         Self {
             orig_num_cols,
             encoded_num_cols,
             rho_inv,
-            phantom: PhantomData,
-        }
-    }
-
-    /// Allows creation from unencoded matrix width + encoded matrix width
-    pub fn new_from_dims(orig_num_cols: usize, encoded_num_cols: usize) -> Self {
-        let rho_inv = (encoded_num_cols / orig_num_cols) as u8;
-        assert!(Self::_dims_ok(orig_num_cols, encoded_num_cols));
-        Self {
-            orig_num_cols,
-            encoded_num_cols,
-            rho_inv,
+            num_rows,
+            num_col_opens: if let Some(num_col_opens) = maybe_num_col_opens {
+                num_col_opens
+            } else {
+                N_COL_OPENS
+            },
             phantom: PhantomData,
         }
     }
 }
 
-impl<F> LcEncoding<F> for LigeroEncoding<F>
+impl<F> LcEncoding<F> for LigeroAuxInfo<F>
 where
-    F: FieldExt,
+    F: Field,
 {
     type Err = &'static str;
 
@@ -104,7 +105,7 @@ where
     ///
     /// ## Arguments
     /// * `num_coeffs` - Total number of coefficients in the polynomial.
-    fn get_dims(&self, num_coeffs: usize) -> (usize, usize, usize) {
+    fn get_dims_for_input_len(&self, num_coeffs: usize) -> (usize, usize, usize) {
         let n_rows = (num_coeffs + self.orig_num_cols - 1) / self.orig_num_cols;
         (n_rows, self.orig_num_cols, self.encoded_num_cols)
     }
@@ -130,13 +131,17 @@ where
     fn get_n_degree_tests(&self) -> usize {
         1
     }
+
+    fn get_dims(&self) -> (usize, usize, usize) {
+        (self.num_rows, self.orig_num_cols, self.encoded_num_cols)
+    }
 }
 
 /// Ligero commitment over generic `LcCommit`
-pub type LigeroCommit<D, F> = LcCommit<D, LigeroEncoding<F>, F>;
+pub type LigeroCommit<D, F> = LcCommit<D, LigeroAuxInfo<F>, F>;
 
 /// Ligero evaluation proof over generic `LcEvalProof`
 pub type LigeroEvalProof<D, E, F> = LcEvalProof<D, E, F>;
 
 /// Ligero root over generic `LcRoot`
-pub type LigeroRoot<F> = LcRoot<LigeroEncoding<F>, F>;
+pub type LigeroRoot<F> = LcRoot<LigeroAuxInfo<F>, F>;

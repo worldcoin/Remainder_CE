@@ -1,61 +1,80 @@
+//! Functionality which is common to all "expression"s (see documentation within
+//! [crate::expression]). See documentation in [Expression] for high-level
+//! summary.
+
 use crate::mle::MleIndex;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
-/// Different Expression Types corresponds to different stages in the
-/// lift cycle of an expression
-pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
-    /// What the expression is over
-    /// for prover expression, it's over DenseMleRef
+/// An [ExpressionType] defines two fields -- the type of MLE representation
+/// at the leaf of the expression node tree, and the "global" unique copies
+/// of each of the MLEs (this is so that if an expression references the
+/// same MLE multiple times, the data stored therein is not duplicated)
+pub trait ExpressionType<F: Field>: Serialize + for<'de> Deserialize<'de> {
+    /// The type of MLE
+    /// for prover expression, it's over DenseMle
     /// for verifier expression, it's over Vec<F>
     /// for abstract expression, it's over [TBD]
-    type MLENodeRepr: Clone + Serialize + for<'de> Deserialize<'de>; // either index or F
+    type MLENodeRepr: Clone + Serialize + for<'de> Deserialize<'de>;
 
-    /// MleRefs is the optional data array of mle_refs
-    /// that can be indexed into by the MleRefIndex defind in the ProverExpr
-    /// -- this is either unit type for VerifierExpr or
-    /// -- Vec<DenseMleRef> for ProverExpr
+    /// This is the optional data array of mle_refs
+    /// that can be indexed into by the MleRefIndex defind in the ProverExpr.
+    /// This is either unit type for VerifierExpr or
+    /// Vec<DenseMle> for ProverExpr.
+    /// TODO(Makis): This comment is outdated.
     type MleVec: Serialize + for<'de> Deserialize<'de>;
 }
 
-/// Generic Expressions
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(bound = "F: FieldExt")]
-pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
-    /// This is a constant polynomial
+/// [ExpressionNode] can be made up of the following:
+/// * [ExpressionNode::Constant], i.e. + c for c \in \mathbb{F}
+/// * [ExpressionNode::Mle], i.e. \widetilde{V}_{j > i}(b_1, ..., b_{m \leq n})
+/// * [ExpressionNode::Product], i.e. \prod_j \widetilde{V}_{j > i}(b_1, ..., b_{m \leq n})
+/// * [ExpressionNode::Selector], i.e. (1 - b_0) * Expr(b_1, ..., b_{m \leq n}) + b_0 * Expr(b_1, ..., b_{m \leq n})
+/// * [ExpressionNode::Sum], i.e. \widetilde{V}_{j_1 > i}(b_1, ..., b_{m_1 \leq n}) + \widetilde{V}_{j_2 > i}(b_1, ..., b_{m_2 \leq n})
+/// * [ExpressionNode::Negated], i.e. -1 * Expr(b_1, ..., b_{m \leq n})
+/// * [ExpressionNode::Scaled], i.e. c * Expr(b_1, ..., b_{m \leq n}) for c \in mathbb{F}
+#[derive(Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
+#[serde(bound = "F: Field")]
+pub enum ExpressionNode<F: Field, E: ExpressionType<F>> {
+    /// See documentation for [ExpressionNode]. Note that
+    /// [ExpressionNode::Constant] can be an expression tree's leaf.
     Constant(F),
-    /// This is a virtual selector
+    /// See documentation for [ExpressionNode].
     Selector(
         MleIndex<F>,
         Box<ExpressionNode<F, E>>,
         Box<ExpressionNode<F, E>>,
     ),
-    /// This is an MLE node, its repr could be
-    /// for prover: MleVecIndex (which index into a vec of DenseMleRef), or
-    /// for verifier: a constant field element
+    /// An [ExpressionNode] representing the leaf of an expression tree which
+    /// is actually mathematically defined as a multilinear extension.
     Mle(E::MLENodeRepr),
-    /// This is a negated expression node
+    /// See documentation for [ExpressionNode].
     Negated(Box<ExpressionNode<F, E>>),
-    /// This is the sum of two expression nodes
+    /// See documentation for [ExpressionNode].
     Sum(Box<ExpressionNode<F, E>>, Box<ExpressionNode<F, E>>),
-    /// This is the product of some MLE nodes, their repr could be
-    /// for prover: a vec of MleVecIndex's (which index into a Vec of DenseMleRef), or
-    /// for verifier: a vec of constant field element
+    /// The product of several multilinear extension functions. This is also
+    /// an expression tree's leaf.
     Product(Vec<E::MLENodeRepr>),
-    /// This is a scaled expression node
+    /// See documentation for [ExpressionNode].
     Scaled(Box<ExpressionNode<F, E>>, F),
 }
 
-/// Generic Expressions
+/// The high-level idea is that an [Expression] is generic over [ExpressionType]
+/// , and contains within it a single parent [ExpressionNode] as well as an
+/// [ExpressionType::MleVec] containing the unique leaf representations for the
+/// leaves of the [ExpressionNode] tree.
 #[derive(Serialize, Deserialize, Clone)]
-#[serde(bound = "F: FieldExt")]
-pub struct Expression<F: FieldExt, E: ExpressionType<F>> {
-    pub(super) expression_node: ExpressionNode<F, E>,
-    pub(super) mle_vec: E::MleVec,
+#[serde(bound = "F: Field")]
+pub struct Expression<F: Field, E: ExpressionType<F>> {
+    /// The root of the expression "tree".
+    pub expression_node: ExpressionNode<F, E>,
+    /// The unique owned copies of all MLEs which are "leaves" within the
+    /// expression "tree".
+    pub mle_vec: E::MleVec,
 }
 
 /// generic methods shared across all types of expressions
-impl<F: FieldExt, E: ExpressionType<F>> Expression<F, E> {
+impl<F: Field, E: ExpressionType<F>> Expression<F, E> {
     /// Create a new expression
     pub fn new(expression_node: ExpressionNode<F, E>, mle_vec: E::MleVec) -> Self {
         Self {
@@ -64,12 +83,14 @@ impl<F: FieldExt, E: ExpressionType<F>> Expression<F, E> {
         }
     }
 
-    /// get the expression node and mle_vec, mutable
+    /// Returns a mutable reference to the `expression_node` and `mle_vec`
+    /// present within the given [Expression].
     pub fn deconstruct_mut(&mut self) -> (&mut ExpressionNode<F, E>, &mut E::MleVec) {
         (&mut self.expression_node, &mut self.mle_vec)
     }
 
-    /// get the expression node and mle_vec, deconstruct the expression node
+    /// Takes ownership of the [Expression] and returns the owned values to its
+    /// internal `expression_node` and `mle_vec`.
     pub fn deconstruct(self) -> (ExpressionNode<F, E>, E::MleVec) {
         (self.expression_node, self.mle_vec)
     }
@@ -95,8 +116,8 @@ impl<F: FieldExt, E: ExpressionType<F>> Expression<F, E> {
     }
 }
 
-/// generic methods shared across all types of expressions
-impl<F: FieldExt, E: ExpressionType<F>> ExpressionNode<F, E> {
+/// Generic helper methods shared across all types of [ExpressionNode]s.
+impl<F: Field, E: ExpressionType<F>> ExpressionNode<F, E> {
     /// traverse the expression tree, and applies the observer_fn to all child node / the mle_vec reference
     pub fn traverse_node<D>(
         &self,

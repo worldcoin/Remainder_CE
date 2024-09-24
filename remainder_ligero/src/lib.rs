@@ -18,13 +18,14 @@ to the codebase.
 */
 
 use crate::utils::get_least_significant_bits_to_usize_little_endian;
-use ark_std::{end_timer, start_timer};
+use ark_std::{cfg_into_iter, end_timer, start_timer};
+use itertools::Itertools;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
 use rayon::prelude::*;
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
-    FieldExt, Poseidon,
+    transcript::{ProverTranscript, TranscriptSponge, VerifierTranscript},
+    Field, Poseidon,
 };
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
@@ -48,9 +49,9 @@ pub mod tests;
 /// Helper functions
 pub mod utils;
 
-/// Trait wrapper over `FieldExt` which gives a field element the ability to be
+/// Trait wrapper over `Field` which gives a field element the ability to be
 /// absorbed into a [FieldHashFnDigest], as well as a [TranscriptSponge].
-pub trait PoseidonFieldHash: FieldExt {
+pub trait PoseidonFieldHash: Field {
     /// Update the digest `d` with the `self` (since `self` should already be a field element)
     fn digest_update<D: FieldHashFnDigest<Self>>(&self, d: &mut D) {
         d.update(&[*self])
@@ -62,7 +63,7 @@ pub trait PoseidonFieldHash: FieldExt {
     }
 }
 
-impl<F: FieldExt> PoseidonFieldHash for F {
+impl<F: Field> PoseidonFieldHash for F {
     fn digest_update<D: FieldHashFnDigest<F>>(&self, d: &mut D) {
         d.update(&[*self])
     }
@@ -76,7 +77,9 @@ impl<F: FieldExt> PoseidonFieldHash for F {
 /// encoding provides the metadata around e.g. the dimensions of the unencoded
 /// and encoded matrices, as well as other information e.g. the number of
 /// degree tests required (in the multilinear GKR + Ligero PCS case, none!)
-pub trait LcEncoding<F: FieldExt>: Clone + std::fmt::Debug + Sync {
+///
+/// Additionally, provides metadata around
+pub trait LcEncoding<F: Field>: Clone + std::fmt::Debug + Sync {
     /// Domain separation label - degree test (see def_labels!())
     const LABEL_DT: &'static [u8];
     /// Domain separation label - random lin combs (see def_labels!())
@@ -93,7 +96,10 @@ pub trait LcEncoding<F: FieldExt>: Clone + std::fmt::Debug + Sync {
     fn encode(&self, inp: &mut [F]) -> Result<(), Self::Err>;
 
     /// Get dimensions for this encoding instance on an input vector of length `len`
-    fn get_dims(&self, len: usize) -> (usize, usize, usize);
+    fn get_dims_for_input_len(&self, len: usize) -> (usize, usize, usize);
+
+    /// Gets encoding dimensions given the state stored within the encoding.
+    fn get_dims(&self) -> (usize, usize, usize);
 
     /// Get the number of column openings required for this encoding
     fn get_n_col_opens(&self) -> usize;
@@ -166,20 +172,6 @@ where
     Encode(#[from] ErrT),
 }
 
-/// For encoding the matrix size and other information necessary to compute
-/// a Ligero commitment / verify a Ligero PCS proof
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct LcProofAuxiliaryInfo {
-    /// Inverse of the encoding rate rho
-    pub rho_inv: u8,
-    /// Number of columns of the encoded matrix
-    pub encoded_num_cols: usize,
-    /// Number of columns of the original matrix
-    pub orig_num_cols: usize,
-    /// Number of rows of the matrix
-    pub num_rows: usize,
-}
-
 /// result of a verifier operation
 pub type VerifierResult<T, ErrT> = Result<T, VerifierError<ErrT>>;
 
@@ -206,7 +198,7 @@ pub struct LcCommit<D, E, F> {
 impl<D, E, F> LcCommit<D, E, F>
 where
     D: FieldHashFnDigest<F> + Send + Sync,
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     /// Returns the Merkle root of this polynomial commitment (which is the commitment itself)
@@ -250,22 +242,22 @@ where
     /// ## Returns
     /// * `proof` - Ligero evaluation proof for committed polynomial at the
     ///     challenge point represented by `outer_tensor`
-    pub fn prove<T: TranscriptSponge<F>>(
+    pub fn prove(
         &self,
         outer_tensor: &[F],
         enc: &E,
-        tr: &mut TranscriptWriter<F, T>,
-    ) -> ProverResult<LcEvalProof<D, E, F>, ErrT<E, F>> {
+        tr: &mut impl ProverTranscript<F>,
+    ) -> ProverResult<(), ErrT<E, F>> {
         prove(self, outer_tensor, enc, tr)
     }
 }
 
 /// A Merkle root corresponding to a committed polynomial.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
+#[serde(bound = "F: Field")]
 pub struct LcRoot<E, F>
 where
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     /// The root of the Merkle tree is a single field element
@@ -275,18 +267,26 @@ where
 
 impl<E, F> LcRoot<E, F>
 where
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     /// Convert this value into a raw F
     pub fn into_raw(self) -> F {
         self.root
     }
+
+    /// Generate a new [LcRoot] with the give root.
+    pub fn new(root: F) -> Self {
+        Self {
+            root,
+            _p: Default::default(),
+        }
+    }
 }
 
 impl<E, F> AsRef<F> for LcRoot<E, F>
 where
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     fn as_ref(&self) -> &F {
@@ -298,7 +298,7 @@ where
 #[derive(Debug, Clone)]
 pub struct LcColumn<E, F>
 where
-    F: FieldExt,
+    F: Field,
     E: Send + Sync,
 {
     /// The column index within M'
@@ -315,7 +315,7 @@ where
 pub struct LcEvalProof<D, E, F>
 where
     D: FieldHashFnDigest<F> + Send + Sync,
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     /// Width of M'
@@ -331,7 +331,7 @@ where
 impl<D, E, F> LcEvalProof<D, E, F>
 where
     D: FieldHashFnDigest<F> + Send + Sync,
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     /// Get the number of elements in an encoded vector
@@ -344,22 +344,22 @@ where
         self.p_eval.len()
     }
 
-    /// Verify an evaluation proof and return the resulting evaluation
-    pub fn verify<T: TranscriptSponge<F>>(
-        &self,
-        root: &F,
-        outer_tensor: &[F],
-        inner_tensor: &[F],
-        enc: &E,
-        tr: &mut TranscriptReader<F, T>,
-    ) -> VerifierResult<F, ErrT<E, F>> {
-        verify::<D, E, F, T>(root, outer_tensor, inner_tensor, self, enc, tr)
-    }
+    // Verify an evaluation proof and return the resulting evaluation
+    // pub fn verify<T: TranscriptSponge<F>>(
+    //     &self,
+    //     root: &F,
+    //     outer_tensor: &[F],
+    //     inner_tensor: &[F],
+    //     enc: &E,
+    //     tr: &mut TranscriptReader<F, T>,
+    // ) -> VerifierResult<F, ErrT<E, F>> {
+    //     verify::<D, E, F, T>(root, outer_tensor, inner_tensor, self, enc, tr)
+    // }
 }
 
 /// Compute number of degree tests required for `lambda`-bit security
-/// for a code with `len`-length codewords over `flog2`-bit field
-/// -- This is used in Verify and Prove
+/// for a code with `len`-length codewords over `flog2`-bit field.
+/// This is used in Verify and Prove.
 pub fn n_degree_tests(lambda: usize, len: usize, flog2: usize) -> usize {
     // -- den = log2(|F|) - log2(|codeword|) = how many bits of security are left in the field?
     // -- |codeword| = encoded_num_cols
@@ -383,12 +383,12 @@ const LOG_MIN_NCOLS: usize = 5;
 /// * `commitment` - Ligero commitment to be used by the prover
 fn commit<D, E, F>(coeffs_in: &[F], enc: &E) -> ProverResult<LcCommit<D, E, F>, ErrT<E, F>>
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
     // --- Matrix size params ---
-    let (n_rows, orig_num_cols, encoded_num_cols) = enc.get_dims(coeffs_in.len());
+    let (n_rows, orig_num_cols, encoded_num_cols) = enc.get_dims_for_input_len(coeffs_in.len());
 
     // check that parameters are ok
     assert!(n_rows * orig_num_cols >= coeffs_in.len());
@@ -455,7 +455,7 @@ where
 fn check_comm<D, E, F>(comm: &LcCommit<D, E, F>, enc: &E) -> ProverResult<(), ErrT<E, F>>
 where
     D: FieldHashFnDigest<F> + Send + Sync,
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     // --- M' total flattened length must be M' rows * M' cols ---
@@ -487,7 +487,7 @@ where
 /// * `comm` - Ligero commitment struct whose `hashes` field is to be populated.
 fn merkleize<D, E, F>(comm: &mut LcCommit<D, E, F>)
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -539,7 +539,7 @@ fn hash_columns<D, E, F>(
     offset: usize,
     master_default_poseidon_column_hasher: &Poseidon<F, 3, 2>,
 ) where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -612,7 +612,7 @@ fn merkle_tree<D, F>(
     outs: &mut [F],
     master_default_poseidon_merkle_hasher: &Poseidon<F, 3, 2>,
 ) where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
 {
     // --- The outs (i.e. rest of the tree) should be 2^{h - 1} - 1 while the ins should be 2^{h - 1} ---
@@ -640,7 +640,7 @@ fn merkle_layer<D, F>(
     outs: &mut [F],
     master_default_poseidon_merkle_hasher: &Poseidon<F, 3, 2>,
 ) where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
 {
     assert_eq!(ins.len(), 2 * outs.len());
@@ -670,6 +670,10 @@ fn merkle_layer<D, F>(
 /// * Sending the Merkle path to the Merkle root from that column's corresponding
 ///     leaf node hash
 ///
+/// Additionally, appends each of the column values *and* each of the Merkle
+/// paths to the transcript writer, to match the transcript reader of the
+/// verifier.
+///
 /// ## Arguments
 /// * `comm` - actual Ligero commitment
 /// * `column` - the index of the column to open
@@ -677,11 +681,12 @@ fn merkle_layer<D, F>(
 /// ## Returns
 /// * `column_pf` - the column opening proof to be sent to the verifier
 fn open_column<D, E, F>(
+    transcript_writer: &mut impl ProverTranscript<F>,
     comm: &LcCommit<D, E, F>,
     mut column: usize,
 ) -> ProverResult<LcColumn<E, F>, ErrT<E, F>>
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -699,7 +704,11 @@ where
         // --- Skip num_cols (i.e. row length) number of elements to grab each column value ---
         .step_by(comm.encoded_num_cols)
         .cloned()
-        .collect();
+        .collect_vec();
+
+    // --- Append column values to transcript ---
+    // let label = format!("Column elements: idx {}", column);
+    transcript_writer.append_elements("Column elements", &col);
 
     // Merkle path
     let mut hashes = &comm.hashes[..];
@@ -715,6 +724,10 @@ where
         column >>= 1;
     }
     assert_eq!(column, 0);
+
+    // --- Append Merkle path to transcript ---
+    // let label = format!("Merkle path: idx {}", column);
+    transcript_writer.append_elements("Merkle path", &path);
 
     Ok(LcColumn {
         col,
@@ -742,18 +755,15 @@ const fn log2(v: usize) -> usize {
 /// * `proof` - Ligero evaluation proof, i.e. columns + Merkle paths
 /// * `enc` - Encoding for computing M --> M'
 /// * `tr` - Fiat-Shamir transcript
-fn verify<D, E, F, T>(
+fn verify<E, F>(
     root: &F,
     outer_tensor: &[F],
     inner_tensor: &[F],
-    proof: &LcEvalProof<D, E, F>,
-    enc: &E,
-    tr: &mut TranscriptReader<F, T>,
+    aux: &E,
+    transcript_reader: &mut impl VerifierTranscript<F>,
 ) -> VerifierResult<F, ErrT<E, F>>
 where
-    F: FieldExt,
-    T: TranscriptSponge<F>,
-    D: FieldHashFnDigest<F> + Send + Sync,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     // --- Grab ONE global copy of Merkle + column hashing Poseidon ---
@@ -761,32 +771,30 @@ where
     let master_default_poseidon_column_hasher = Poseidon::<F, 3, 2>::new(8, 57);
 
     // make sure arguments are well formed
-    let n_col_opens = enc.get_n_col_opens();
-    if n_col_opens != proof.columns.len() || n_col_opens == 0 {
+    let (num_rows, orig_num_cols, encoded_num_cols) = aux.get_dims();
+    if aux.get_n_col_opens() == 0 {
         return Err(VerifierError::NumColOpens);
     }
-    let n_rows = proof.columns[0].col.len();
-    let encoded_num_cols = proof.get_encoded_num_cols();
-    let orig_num_cols = proof.get_orig_num_cols();
     if inner_tensor.len() != orig_num_cols {
         return Err(VerifierError::InnerTensor);
     }
-    if outer_tensor.len() != n_rows {
+    if outer_tensor.len() != num_rows {
         return Err(VerifierError::OuterTensor);
     }
-    if !enc.dims_ok(orig_num_cols, encoded_num_cols) {
+    if !aux.dims_ok(orig_num_cols, encoded_num_cols) {
         return Err(VerifierError::EncodingDims);
     }
 
-    // Retrieve length of `p_eval` vector and request that number of elements
-    // from the trascript reader.
-    let num_p_evals = proof.p_eval.len();
-    let p_eval = tr.consume_elements("LABEL_PE", num_p_evals).unwrap();
+    // The prover first sends over the claimed value of b^T M, i.e. `p_eval`
+    let p_eval = transcript_reader
+        .consume_elements("LABEL_PE", orig_num_cols)
+        .unwrap();
 
     // step 1d: extract columns to open
     // --- The verifier does this independently as well ---
     let cols_to_open: Vec<usize> = {
-        tr.get_challenges("Column openings", n_col_opens)
+        transcript_reader
+            .get_challenges("Column openings", aux.get_n_col_opens())
             .unwrap()
             .into_iter()
             .map(|challenge| compute_col_idx_from_transcript_challenge(challenge, encoded_num_cols))
@@ -799,41 +807,56 @@ where
         let mut tmp = Vec::with_capacity(encoded_num_cols);
         tmp.extend_from_slice(&p_eval[..]);
         tmp.resize(encoded_num_cols, F::from(0));
-        enc.encode(&mut tmp)?;
+        aux.encode(&mut tmp).unwrap(); // TOOD(ryancao): Change this back to error propagation
         tmp
     };
 
     // step 3: check p_random, p_eval, and col paths
-    cols_to_open
-        .par_iter()
-        .zip(&proof.columns[..])
-        .try_for_each(|(&col_num, column)| {
-            // --- Does the RLC evaluation check for b^T as well ---
-            let eval = verify_column_value::<E, F>(column, outer_tensor, &p_eval_fft[col_num]);
+    cols_to_open.iter().try_for_each(|col_idx| {
+        // --- Read all column values + Merkle path values from transcript for given column index ---
+        // let column_label = format!("Column elements: idx {}", col_idx);
+        let column_vals = transcript_reader
+            .consume_elements("Column elements", num_rows)
+            .unwrap();
+        // let merkle_label = format!("Merkle path: idx {}", col_idx)
+        let merkle_path_vals = transcript_reader
+            .consume_elements("Merkle path", log2(encoded_num_cols))
+            .unwrap();
 
-            // --- Merkle path verification: Does hashing for each column, then Merkle tree hashes ---
-            let path = verify_column_path::<E, F>(
-                column,
-                col_num,
-                root,
-                &master_default_poseidon_merkle_hasher,
-                &master_default_poseidon_column_hasher,
-            );
+        // --- Construct `LcColumn` struct for column value + path verification ---
+        let column = LcColumn {
+            col_idx: *col_idx,
+            col: column_vals,
+            path: merkle_path_vals,
+            phantom_data: PhantomData,
+        };
 
-            match (eval, path) {
-                (false, _) => Err(VerifierError::ColumnEval),
-                (_, false) => Err(VerifierError::ColumnPath),
-                _ => Ok(()),
-            }
-        })?;
+        // --- Does the RLC evaluation check for b^T as well ---
+        let eval = verify_column_value::<E, F>(&column, outer_tensor, &p_eval_fft[*col_idx]);
+
+        // --- Merkle path verification: Does hashing for each column, then Merkle tree hashes ---
+        let path = verify_column_path::<E, F>(
+            &column,
+            *col_idx,
+            root,
+            &master_default_poseidon_merkle_hasher,
+            &master_default_poseidon_column_hasher,
+        );
+
+        match (eval, path) {
+            (false, _) => Err(VerifierError::ColumnEval),
+            (_, false) => Err(VerifierError::ColumnPath),
+            _ => Ok(()),
+        }
+    })?;
 
     // step 4: evaluate and return
     // --- Computes dot product between inner_tensor (i.e. a) and proof.p_eval (i.e. b^T M) ---
-    Ok(inner_tensor
-        .par_iter()
+    Ok(cfg_into_iter!(inner_tensor)
         .zip(&p_eval[..])
-        .fold(|| F::ZERO, |a, (t, e)| a + *t * e)
-        .reduce(|| F::ZERO, |a, v| a + v))
+        .map(|(t, e)| *t * e)
+        .reduce(|a, v| a + v)
+        .unwrap_or(F::ZERO))
 }
 
 /// Check a column opening by
@@ -856,7 +879,7 @@ fn verify_column_path<E, F>(
     master_default_poseidon_column_hasher: &Poseidon<F, 3, 2>,
 ) -> bool
 where
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     // --- New Poseidon params + Poseidon hasher ---
@@ -897,7 +920,7 @@ where
 /// * `poly_eval` - The RLC'd, evaluated version b^T M'[j]
 fn verify_column_value<E, F>(column: &LcColumn<E, F>, tensor: &[F], poly_eval: &F) -> bool
 where
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     let tensor_eval = tensor
@@ -921,7 +944,7 @@ where
 ///
 /// ## Returns
 /// * `col_idx` - a value 0 \leq col_idx < encoded_num_cols
-fn compute_col_idx_from_transcript_challenge<F: FieldExt>(
+fn compute_col_idx_from_transcript_challenge<F: Field>(
     challenge: F,
     encoded_num_cols: usize,
 ) -> usize {
@@ -946,15 +969,14 @@ fn compute_col_idx_from_transcript_challenge<F: FieldExt>(
 /// * `outer_tensor` - b^T
 /// * `enc` - Encoding auxiliary struct containing metadata from FFT
 /// * `tr` - Fiat-Shamir transcript
-fn prove<D, E, F, T>(
+fn prove<D, E, F>(
     comm: &LcCommit<D, E, F>,
     outer_tensor: &[F],
     enc: &E,
-    tr: &mut TranscriptWriter<F, T>,
-) -> ProverResult<LcEvalProof<D, E, F>, ErrT<E, F>>
+    tr: &mut impl ProverTranscript<F>,
+) -> ProverResult<(), ErrT<E, F>>
 where
-    F: FieldExt,
-    T: TranscriptSponge<F>,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -971,6 +993,7 @@ where
         collapse_columns::<E, F>(&comm.coeffs, outer_tensor, &mut tmp, comm.orig_num_cols, 0);
         tmp
     };
+
     // add p_eval to the transcript
     p_eval
         .iter()
@@ -978,29 +1001,22 @@ where
 
     // --- Sample the appropriate number of columns to open from the transcript ---
     let n_col_opens = enc.get_n_col_opens();
-    let columns: Vec<LcColumn<E, F>> = {
+    let _columns: Vec<LcColumn<E, F>> = {
         let cols_to_open: Vec<usize> = tr
             .get_challenges("Columns", n_col_opens)
             .into_iter()
-            .enumerate()
-            .map(|(_i, challenge)| {
+            .map(|challenge| {
                 compute_col_idx_from_transcript_challenge(challenge, comm.encoded_num_cols)
             })
             .collect();
 
         // --- Send columns + Merkle paths to verifier ---
-        cols_to_open
-            .par_iter()
-            .map(|&col| open_column(comm, col))
+        cfg_into_iter!(&cols_to_open)
+            .map(|&col| open_column(tr, comm, col))
             .collect::<ProverResult<Vec<LcColumn<E, F>>, ErrT<E, F>>>()?
     };
 
-    Ok(LcEvalProof {
-        encoded_num_cols: comm.encoded_num_cols, // Number of columns
-        p_eval,                                  // Actual b^T M value
-        columns,                                 // Columns plus necessary opening proof content
-        phantom_data: PhantomData,
-    })
+    Ok(())
 }
 
 /// This takes the product b^T M, and stores the result in `poly`.
@@ -1012,14 +1028,14 @@ where
 /// * `n_rows` - Height of M
 /// * `orig_num_cols` - Width of M
 /// * `offset` - Not used; this is always set to zero.
-fn collapse_columns<E, F>(
+pub fn collapse_columns<E, F>(
     coeffs: &[F],
     tensor: &[F],
     poly: &mut [F],
     orig_num_cols: usize,
     offset: usize,
 ) where
-    F: FieldExt,
+    F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
     if poly.len() <= (1 << LOG_MIN_NCOLS) {
@@ -1052,7 +1068,7 @@ fn merkleize_ser<D, E, F>(
     master_default_poseidon_merkle_hasher: &Poseidon<F, 3, 2>,
     master_default_poseidon_column_hasher: &Poseidon<F, 3, 2>,
 ) where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -1091,7 +1107,7 @@ fn merkleize_ser<D, E, F>(
 #[cfg(test)]
 fn eval_outer<D, E, F>(comm: &LcCommit<D, E, F>, tensor: &[F]) -> ProverResult<Vec<F>, ErrT<E, F>>
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -1113,7 +1129,7 @@ fn eval_outer_ser<D, E, F>(
     tensor: &[F],
 ) -> ProverResult<Vec<F>, ErrT<E, F>>
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -1143,7 +1159,7 @@ fn eval_outer_fft<D, E, F>(
     tensor: &[F],
 ) -> ProverResult<Vec<F>, ErrT<E, F>>
 where
-    F: FieldExt,
+    F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {

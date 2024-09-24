@@ -4,20 +4,20 @@ use std::cmp::min;
 
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use thiserror::Error;
 
+use crate::layer::{Layer, LayerId};
+use crate::prover::layers::Layers;
 use crate::{
     expression::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    layer::{layer_enum::LayerEnum, regular_layer::RegularLayer, Layer, LayerId},
-    mle::{mle_enum::MleEnum, MleIndex},
-    utils::{argsort, bits_iter},
+    layer::{layer_enum::LayerEnum, regular_layer::RegularLayer},
+    mle::{mle_enum::MleEnum, Mle, MleIndex},
+    utils::mle::{argsort, bits_iter},
 };
-
-use crate::prover::layers::Layers;
 
 #[derive(Error, Debug)]
 #[error("Layers can't be combined!")]
@@ -28,7 +28,7 @@ type IntermediateAndOutputLayers<F> = (Layers<F, LayerEnum<F>>, Vec<MleEnum<F>>)
 
 /// Utility for combining sub-circuits into a single circuit
 /// DOES NOT WORK FOR GATE MLE
-pub fn combine_layers<F: FieldExt>(
+pub fn combine_layers<F: Field>(
     mut layers: Vec<Layers<F, LayerEnum<F>>>,
     mut output_layers: Vec<Vec<MleEnum<F>>>,
 ) -> Result<IntermediateAndOutputLayers<F>, CombineError> {
@@ -61,7 +61,7 @@ pub fn combine_layers<F: FieldExt>(
     let bit_counts: Vec<Vec<Vec<MleIndex<F>>>> = interpolated_layers
         .map(|layers_at_combined_index| {
             // --- Global layer ID for this column ---
-            let _layer_id = layers_at_combined_index[0].1.id();
+            let _layer_id = layers_at_combined_index[0].1.layer_id();
             let layer_sizes = layers_at_combined_index
                 .iter()
                 .map(|layer| layer.1.layer_size());
@@ -119,26 +119,23 @@ pub fn combine_layers<F: FieldExt>(
         .collect_vec();
 
     // --- First zip combines the subcircuit layers with all of its output layers AND all of its subcircuit-major "layer bits" ---
-    layers
+    for ((layers, output_layers), new_bits) in layers
         .iter_mut()
         .zip(output_layers.iter_mut())
         .zip(layer_bits)
-        // --- For each subcircuit... ---
-        .map(|((layers, output_layers), new_bits)| {
-            for (layer_idx, new_bits) in new_bits.into_iter().enumerate() {
-                if let Some(&effected_layer) = layers.layers.get(layer_idx).map(|layer| layer.id())
-                {
-                    add_bits_to_layer_refs(
-                        &mut layers.layers[layer_idx..],
-                        output_layers,
-                        new_bits,
-                        effected_layer,
-                    )?;
-                }
+    {
+        for (layer_idx, new_bits) in new_bits.into_iter().enumerate() {
+            if let Some(effected_layer) = layers.layers.get(layer_idx).map(|layer| layer.layer_id())
+            {
+                add_bits_to_layer_refs(
+                    &mut layers.layers[layer_idx..],
+                    output_layers,
+                    new_bits,
+                    effected_layer,
+                )?;
             }
-            Ok(())
-        })
-        .try_collect()?;
+        }
+    }
 
     //Combine all the sub-circuits expressions in such a way that it matches the
     //extra bits we calculated
@@ -151,12 +148,12 @@ pub fn combine_layers<F: FieldExt>(
         })
         .map(|layers| {
             // let new_bits = log2(layers.len()) as usize;
-            let layer_id = *layers[0].id();
+            let layer_id = layers[0].layer_id();
 
             let expressions = layers
                 .into_iter()
                 .map(|layer| match layer {
-                    LayerEnum::Gkr(layer) => Ok(layer.expression),
+                    LayerEnum::Regular(layer) => Ok(layer.expression),
                     _ => Err(CombineError),
                 })
                 .try_collect()?;
@@ -175,7 +172,7 @@ pub fn combine_layers<F: FieldExt>(
 
 ///Add all the extra bits that represent selectors between the sub-circuits to
 ///the future DenseMleRefs that refer to the modified layer
-fn add_bits_to_layer_refs<F: FieldExt>(
+fn add_bits_to_layer_refs<F: Field>(
     layers: &mut [LayerEnum<F>],
     output_layers: &mut Vec<MleEnum<F>>,
     new_bits: Vec<MleIndex<F>>,
@@ -183,7 +180,7 @@ fn add_bits_to_layer_refs<F: FieldExt>(
 ) -> Result<(), CombineError> {
     for layer in layers {
         let expression = match layer {
-            LayerEnum::Gkr(layer) => Ok(&mut layer.expression),
+            LayerEnum::Regular(layer) => Ok(&mut layer.expression),
             _ => Err(CombineError),
         }?;
 
@@ -254,7 +251,7 @@ fn add_bits_to_layer_refs<F: FieldExt>(
                 }
             }
             MleEnum::Zero(mle) => {
-                if mle.layer_id == effected_layer {
+                if mle.get_layer_id() == effected_layer {
                     mle.mle_indices = new_bits
                         .iter()
                         .chain(mle.mle_indices.iter())
@@ -273,7 +270,7 @@ fn add_bits_to_layer_refs<F: FieldExt>(
 }
 
 ///Combine expression w/ padding using selectors
-fn combine_expressions<F: FieldExt>(
+fn combine_expressions<F: Field>(
     mut exprs: Vec<Expression<F, ProverExpr>>,
 ) -> Expression<F, ProverExpr> {
     let _floor_size = exprs
@@ -322,12 +319,12 @@ fn combine_expressions<F: FieldExt>(
 ///Function that adds padding to a layer with a selector, left aligned, pads with zero
 ///
 /// Basically turns V(b_1) = \[1, 2\] to V(b_1, b_2) = \[1, 2, 0, 0\] but with expressions
-fn add_padding<F: FieldExt>(
+fn add_padding<F: Field>(
     mut expr: Expression<F, ProverExpr>,
     num_padding: usize,
 ) -> Expression<F, ProverExpr> {
     for _ in 0..num_padding {
-        expr = Expression::constant(F::ZERO).concat_expr(expr);
+        expr = Expression::<F, ProverExpr>::constant(F::ZERO).concat_expr(expr);
     }
     expr
 }

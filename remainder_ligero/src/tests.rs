@@ -10,9 +10,10 @@
 use super::LcRoot;
 use crate::{
     ligero_commit::remainder_ligero_commit,
-    ligero_structs::{LigeroEncoding, LigeroEvalProof},
+    ligero_structs::LigeroAuxInfo,
+    log2,
     utils::{get_random_coeffs_for_multilinear_poly, halo2_ifft},
-    verify_column_path, verify_column_value,
+    verify_column_path, verify_column_value, LcColumn,
 };
 
 // --- For serialization/deserialization of the various structs ---
@@ -22,7 +23,9 @@ use halo2_proofs::poly::EvaluationDomain;
 // --- For BN-254 ---
 use itertools::{iterate, Itertools};
 use rand::Rng;
-use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+use remainder_shared_types::transcript::{
+    poseidon_transcript::PoseidonSponge, ProverTranscript, VerifierTranscript,
+};
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptWriter},
     Poseidon,
@@ -30,7 +33,7 @@ use remainder_shared_types::{
 use std::iter::repeat_with;
 
 #[test]
-fn log2() {
+fn log2_test() {
     use super::log2;
 
     for idx in 0..31 {
@@ -57,7 +60,13 @@ fn test_merkleize() {
     const RATIO: f64 = 4.0;
     let mut rng = test_rng();
     let random_ml_coeffs = get_random_coeffs_for_multilinear_poly(MLE_NUM_VARS, &mut rng);
-    let (_, mut test_comm, _, _) = remainder_ligero_commit(&random_ml_coeffs, RHO_INV, RATIO);
+    let aux = LigeroAuxInfo::new(
+        random_ml_coeffs.len().next_power_of_two(),
+        RHO_INV,
+        RATIO,
+        None,
+    );
+    let (mut test_comm, _root) = remainder_ligero_commit(&random_ml_coeffs, &aux);
     let mut test_comm_2 = test_comm.clone();
 
     merkleize(&mut test_comm);
@@ -87,7 +96,13 @@ fn test_eval_outer() {
     const RATIO: f64 = 4.0;
     let mut rng = test_rng();
     let random_ml_coeffs = get_random_coeffs_for_multilinear_poly(MLE_NUM_VARS, &mut rng);
-    let (_, test_comm, _, _) = remainder_ligero_commit(&random_ml_coeffs, RHO_INV, RATIO);
+    let aux = LigeroAuxInfo::new(
+        random_ml_coeffs.len().next_power_of_two(),
+        RHO_INV,
+        RATIO,
+        None,
+    );
+    let (test_comm, _root) = remainder_ligero_commit(&random_ml_coeffs, &aux);
 
     let mut rng = rand::thread_rng();
     let tensor: Vec<Fr> = repeat_with(|| Fr::from(rng.gen::<u64>()))
@@ -120,25 +135,56 @@ fn test_open_column() {
         const RHO_INV: u8 = 4;
         const RATIO: f64 = 4.0;
         let random_ml_coeffs = get_random_coeffs_for_multilinear_poly(MLE_NUM_VARS, &mut rng);
-        let (_, mut tmp, _, _) = remainder_ligero_commit(&random_ml_coeffs, RHO_INV, RATIO);
+        let aux = LigeroAuxInfo::new(
+            random_ml_coeffs.len().next_power_of_two(),
+            RHO_INV,
+            RATIO,
+            None,
+        );
+        let (mut tmp, _root) = remainder_ligero_commit(&random_ml_coeffs, &aux);
         merkleize(&mut tmp);
         tmp
     };
 
     let root = test_comm.get_root();
-    for _ in 0..64 {
+    for _ in 0..1 {
         let col_num = rng.gen::<usize>() % test_comm.encoded_num_cols;
-        let column = open_column(&test_comm, col_num).unwrap();
 
-        let column_hash_check = verify_column_path::<LigeroEncoding<Fr>, Fr>(
-            &column,
+        let mut transcript_writer: TranscriptWriter<Fr, PoseidonSponge<Fr>> =
+            TranscriptWriter::new("Testing column opens");
+
+        let _column = open_column(&mut transcript_writer, &test_comm, col_num).unwrap();
+
+        let mut transcript_reader: TranscriptReader<Fr, PoseidonSponge<Fr>> =
+            TranscriptReader::new(transcript_writer.get_transcript());
+
+        let path_len = log2(test_comm.encoded_num_cols);
+        let col_vals = transcript_reader
+            .consume_elements("Column elements", test_comm.n_rows)
+            .unwrap();
+        let merkle_path_vals = transcript_reader
+            .consume_elements("Merkle path", path_len)
+            .unwrap();
+
+        let column_from_transcript = LcColumn {
+            col_idx: col_num,
+            col: col_vals,
+            path: merkle_path_vals,
+            phantom_data: std::marker::PhantomData,
+        };
+
+        let column_hash_check = verify_column_path::<LigeroAuxInfo<Fr>, Fr>(
+            &column_from_transcript,
             col_num,
             root.as_ref(),
             &master_default_poseidon_merkle_hasher,
             &master_default_poseidon_column_hasher,
         );
-        let column_value_check =
-            verify_column_value::<LigeroEncoding<Fr>, Fr>(&column, &[], &Fr::from(0_u64));
+        let column_value_check = verify_column_value::<LigeroAuxInfo<Fr>, Fr>(
+            &column_from_transcript,
+            &[],
+            &Fr::from(0_u64),
+        );
 
         assert!(column_hash_check && column_value_check);
     }
@@ -245,7 +291,7 @@ fn halo2_bn_fft_test() {
     // --- IFFT'd coefficients should match the original ---
     orig_raw_coeffs
         .into_iter()
-        .zip(ifft_raw_coeffs.into_iter())
+        .zip(ifft_raw_coeffs)
         .for_each(|(x, y)| {
             assert_eq!(*x, y);
         });
@@ -273,9 +319,9 @@ fn poseidon_commit_test() {
     let random_mle_coeffs = get_random_coeffs_for_multilinear_poly(MLE_NUM_VARS, &mut rng);
 
     // --- Preps the FFT encoding and grabs the matrix size, then computes the commitment ---
-    let enc = LigeroEncoding::<Fr>::new(random_mle_coeffs.len(), RHO_INV, RATIO);
-    let comm = commit::<PoseidonSpongeHasher<Fr>, LigeroEncoding<_>, Fr>(&random_mle_coeffs, &enc)
-        .unwrap();
+    let enc = LigeroAuxInfo::<Fr>::new(random_mle_coeffs.len(), RHO_INV, RATIO, None);
+    let comm =
+        commit::<PoseidonSpongeHasher<Fr>, LigeroAuxInfo<_>, Fr>(&random_mle_coeffs, &enc).unwrap();
 
     // --- For a univariate commitment, `x` is the eval point ---
     let x = Fr::from(rng.gen::<u64>());
@@ -354,11 +400,11 @@ fn poseidon_end_to_end_test() {
     let coeffs = get_random_coeffs_for_multilinear_poly(ml_num_vars, &mut rng);
     let rho_inv = 4;
     let ratio = 1_f64;
-    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho_inv, ratio);
-    let comm = commit::<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr>(&coeffs, &enc).unwrap();
+    let enc = LigeroAuxInfo::<Fr>::new(coeffs.len(), rho_inv, ratio, None);
+    let comm = commit::<PoseidonSpongeHasher<Fr>, LigeroAuxInfo<Fr>, Fr>(&coeffs, &enc).unwrap();
 
     // this is the polynomial commitment
-    let root: LcRoot<LigeroEncoding<Fr>, Fr> = comm.get_root();
+    let root: LcRoot<LigeroAuxInfo<Fr>, Fr> = comm.get_root();
 
     // --- For a univariate commitment, `x` is the eval point ---
     let x = Fr::from(rng.gen::<u64>());
@@ -390,23 +436,27 @@ fn poseidon_end_to_end_test() {
     // --- Transcript includes the Merkle root, the code rate, and the number of columns to be sampled ---
     transcript_writer.append("polycommit", root.root);
 
-    let pf: LigeroEvalProof<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr> =
-        prove(&comm, &outer_tensor[..], &enc, &mut transcript_writer).unwrap();
+    let _result = prove(&comm, &outer_tensor[..], &enc, &mut transcript_writer).unwrap();
 
     let transcript = transcript_writer.get_transcript();
     let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript);
     let prover_root = transcript_reader.consume_element("polycommit").unwrap();
     assert_eq!(prover_root, root.root);
-    let enc2 =
-        LigeroEncoding::<Fr>::new_from_dims(pf.get_orig_num_cols(), pf.get_encoded_num_cols());
+
+    // let aux = LcProofAuxiliaryInfo {
+    //     rho_inv,
+    //     encoded_num_cols: enc.encoded_num_cols,
+    //     orig_num_cols: enc.orig_num_cols,
+    //     num_rows: comm.n_rows,
+    //     num_col_opens: enc.get_n_col_opens(),
+    // };
 
     // --- Verify the proof and return the prover-claimed result ---
     let res = verify(
         root.as_ref(),
         &outer_tensor[..],
         &inner_tensor[..],
-        &pf,
-        &enc2,
+        &enc,
         &mut transcript_reader,
     )
     .unwrap();

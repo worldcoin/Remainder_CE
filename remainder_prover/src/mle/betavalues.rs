@@ -4,15 +4,13 @@ use std::{collections::HashMap, fmt::Debug};
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
 use crate::layer::LayerId;
 
-use super::{
-    dense::{DenseMle, DenseMleRef},
-    MleIndex,
-};
+use super::{dense::DenseMle, MleIndex};
+#[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// A struct that holds the claim and the relevant bound values for the beta
@@ -28,9 +26,11 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 /// Instead, we choose to store just the individual values in a hash map as we
 /// don't need the entire representation in order to perform the computations
 /// with beta tables.
+///
+// TODO(Makis): Remove `HashMaps`! We can use plain `Vec`s here.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub struct BetaValues<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct BetaValues<F: Field> {
     /// The challenges in the claim that have not yet been "bound" in the
     /// sumcheck protocol. Keys are the "round" of sumcheck and values are
     /// which challenge in the claim that corresponds to. Every key in
@@ -46,7 +46,7 @@ pub struct BetaValues<F: FieldExt> {
     pub updated_values: HashMap<usize, F>,
 }
 
-impl<F: FieldExt> BetaValues<F> {
+impl<F: Field> BetaValues<F> {
     /// Constructs a new beta table using a vector of the challenge points in a
     /// claim along with it's corresponding round index as a tuple.
     pub fn new(layer_claim_vars_and_index: Vec<(usize, F)>) -> Self {
@@ -60,11 +60,12 @@ impl<F: FieldExt> BetaValues<F> {
         }
     }
 
-    /// Updates the given value of beta using a new challenge point. Simply `(1
-    /// - r_i)*(1 - g_i) + (r_i * g_i)` for an index `i`, previous claim
-    /// challenge point `g_i` and current challenge `r_i`. We remove it from the
-    /// unbound hashmap and add it to the bound hashmap.
-    pub(crate) fn beta_update(&mut self, round_index: usize, challenge: F) {
+    /// Updates the given value of beta using a new challenge point. Simply
+    /// `(1 - r_i)*(1 - g_i) + (r_i * g_i)` for an index `i`, previous claim
+    /// challenge point `g_i` and current challenge `r_i`.
+    ///
+    /// We remove it from the unbound hashmap and add it to the bound hashmap.
+    pub fn beta_update(&mut self, round_index: usize, challenge: F) {
         let val_to_update = self.unbound_values.remove(&round_index).unwrap();
         let updated_val =
             ((F::ONE - val_to_update) * (F::ONE - challenge)) + (val_to_update * challenge);
@@ -116,7 +117,7 @@ impl<F: FieldExt> BetaValues<F> {
     /// Returns the full beta equality table as defined in \[Thaler13\], so over
     /// `n` challenge points it returns a table of size `2^n`. This is when we
     /// do still need the entire beta table.
-    pub fn new_beta_equality_mle(layer_claim_vars: Vec<F>) -> DenseMleRef<F> {
+    pub fn new_beta_equality_mle(layer_claim_vars: Vec<F>) -> DenseMle<F> {
         if !layer_claim_vars.is_empty() {
             // dynamic programming algorithm where we start from the most significant bit,
             // which is alternating in (1 - r) or (r) as the base case
@@ -137,11 +138,11 @@ impl<F: FieldExt> BetaValues<F> {
                 cur_table = firsthalf;
             }
 
-            let cur_table_mle_ref: DenseMleRef<F> =
-                DenseMle::new_from_raw(cur_table, LayerId::Input(0), None).mle_ref();
+            let cur_table_mle_ref: DenseMle<F> =
+                DenseMle::new_from_raw(cur_table, LayerId::Input(0));
             cur_table_mle_ref
         } else {
-            DenseMle::new_from_raw(vec![F::ONE], LayerId::Input(0), None).mle_ref()
+            DenseMle::new_from_raw(vec![F::ONE], LayerId::Input(0))
         }
     }
 }

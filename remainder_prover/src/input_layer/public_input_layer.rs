@@ -1,81 +1,129 @@
 //! An input layer that is sent to the verifier in the clear
 
+use std::marker::PhantomData;
+
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
-    FieldExt,
+    transcript::{ProverTranscript, VerifierTranscript},
+    Field,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
     layer::LayerId,
-    mle::{dense::DenseMle, mle_enum::MleEnum, MleRef},
+    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
-use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer};
+use super::{
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CircuitInputLayer,
+    CommitmentEnum, InputLayer, InputLayerError,
+};
+use crate::mle::Mle;
 
 /// An Input Layer in which the data is sent to the verifier
 /// "in the clear" (i.e. without a commitment).
-pub struct PublicInputLayer<F: FieldExt> {
-    mle: DenseMle<F, F>,
+#[derive(Debug, Clone)]
+pub struct PublicInputLayer<F: Field> {
+    mle: MultilinearExtension<F>,
     pub(crate) layer_id: LayerId,
 }
 
-impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
-    type Commitment = Vec<F>;
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(bound = "F: Field")]
+/// The circuit description of a [PublicInputLayer] which stores
+/// the shape information of this input layer.
+pub struct CircuitPublicInputLayer<F: Field> {
+    layer_id: LayerId,
+    num_bits: usize,
+    _marker: PhantomData<F>,
+}
 
-    type OpeningProof = ();
+impl<F: Field> CircuitPublicInputLayer<F> {
+    /// Constructor for the [CircuitPublicInputLayer] using the layer_id
+    /// and the number of variables in the MLE we are storing in the
+    /// input layer.
+    pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
+        Self {
+            layer_id,
+            num_bits,
+            _marker: PhantomData,
+        }
+    }
+}
 
-    /// Because this is a public input layer, we do not need to commit to the MLE and the
-    /// "commitment" is just the MLE itself.
-    fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
-        Ok(self.mle.mle.clone())
+impl<F: Field> InputLayer<F> for PublicInputLayer<F> {
+    type ProverCommitment = Vec<F>;
+    type VerifierCommitment = Vec<F>;
+
+    fn commit(&mut self) -> Result<Self::VerifierCommitment, super::InputLayerError> {
+        // Because this is a public input layer, we do not need to commit to the
+        // MLE and the "commitment" is just the MLE evaluations themselves.
+        Ok(self.mle.get_evals_vector().clone())
     }
 
     /// Append the commitment to the Fiat-Shamir transcript.
-    fn prover_append_commitment_to_transcript(
-        commitment: &Self::Commitment,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    fn append_commitment_to_transcript(
+        commitment: &Self::VerifierCommitment,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) {
         transcript_writer.append_elements("Public Input Commitment", commitment);
     }
 
-    /// Append the commitment to the Fiat-Shamir transcript.
-    fn verifier_append_commitment_to_transcript(
-        commitment: &Self::Commitment,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), InputLayerError> {
-        let num_elements = commitment.len();
-        let transcript_commitment = transcript_reader
-            .consume_elements("Public Input Commitment", num_elements)
-            .map_err(InputLayerError::TranscriptError)?;
-        debug_assert_eq!(transcript_commitment, *commitment);
+    /// We do not have an opening proof because we did not commit to anything.
+    /// The MLE exists in the clear.
+    fn open(
+        &self,
+        _: &mut impl ProverTranscript<F>,
+        _: crate::claims::Claim<F>,
+    ) -> Result<(), super::InputLayerError> {
         Ok(())
     }
 
-    /// We do not have an opening proof because we did not commit to anything. The MLE
-    /// exists in the clear.
-    fn open(
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+
+    fn get_padded_mle(&self) -> DenseMle<F> {
+        DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
+    }
+}
+
+impl<F: Field> PublicInputLayer<F> {
+    /// Constructor for the [PublicInputLayer] using the MLE in the input
+    /// and the layer_id.
+    pub fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
+        Self { mle, layer_id }
+    }
+}
+
+impl<F: Field> CircuitInputLayer<F> for CircuitPublicInputLayer<F> {
+    type Commitment = Vec<F>;
+
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+
+    fn get_commitment_from_transcript(
         &self,
-        _: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-        _: crate::claims::Claim<F>,
-    ) -> Result<Self::OpeningProof, super::InputLayerError> {
-        Ok(())
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<Self::Commitment, InputLayerError> {
+        let num_evals = 1 << self.num_bits;
+        Ok(transcript_reader.consume_elements("Public Input Commitment", num_evals)?)
     }
 
     /// In order to verify, simply fix variable on each of the variables for the point
     /// in `claim`. Check whether the single element left in the bookkeeping table is
     /// equal to the claimed value in `claim`.
     fn verify(
+        &self,
         commitment: &Self::Commitment,
-        _opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        _: &mut impl VerifierTranscript<F>,
     ) -> Result<(), super::InputLayerError> {
-        let mut mle_ref =
-            DenseMle::<F, F>::new_from_raw(commitment.clone(), LayerId::Input(0), None).mle_ref();
+        let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), self.layer_id());
         mle_ref.index_mle_indices(0);
 
-        let eval = if mle_ref.num_vars() != 0 {
+        let eval = if mle_ref.num_iterated_vars() != 0 {
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
@@ -93,22 +141,22 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         }
     }
 
-    fn layer_id(&self) -> &LayerId {
-        &self.layer_id
-    }
+    fn convert_into_prover_input_layer(
+        &self,
+        combined_mle: MultilinearExtension<F>,
+        precommit: &Option<CommitmentEnum<F>>,
+    ) -> InputLayerEnum<F> {
+        assert!(
+            precommit.is_none(),
+            "Public input layer does not support precommit!"
+        );
 
-    fn get_padded_mle(&self) -> DenseMle<F, F> {
-        self.mle.clone()
+        let prover_public_input_layer = PublicInputLayer::new(combined_mle, self.layer_id());
+        prover_public_input_layer.into()
     }
 }
 
-impl<F: FieldExt> MleInputLayer<F> for PublicInputLayer<F> {
-    fn new(mle: DenseMle<F, F>, layer_id: LayerId) -> Self {
-        Self { mle, layer_id }
-    }
-}
-
-impl<F: FieldExt> YieldWLXEvals<F> for PublicInputLayer<F> {
+impl<F: Field> YieldWLXEvals<F> for PublicInputLayer<F> {
     /// Computes the V_d(l(x)) evaluations for the input layer V_d.
     fn get_wlx_evaluations(
         &self,
@@ -119,12 +167,79 @@ impl<F: FieldExt> YieldWLXEvals<F> for PublicInputLayer<F> {
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
         get_wlx_evaluations_helper(
-            self,
+            self.mle.clone(),
             claim_vecs,
             claimed_vals,
             claimed_mles,
             num_claims,
             num_idx,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use remainder_shared_types::ff_field;
+    use remainder_shared_types::{
+        transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
+        Fr,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_public_input_layer() {
+        // Setup phase.
+        let layer_id = LayerId::Input(0);
+
+        // MLE on 2 variables.
+        let evals = [1, 2, 3, 4].into_iter().map(|i| Fr::from(i)).collect();
+        let dense_mle = DenseMle::new_from_raw(evals, layer_id);
+
+        let claim_point = vec![Fr::ONE, Fr::ZERO];
+        let claim_result = Fr::from(2);
+        let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
+        let verifier_public_input_layer =
+            CircuitPublicInputLayer::new(layer_id, dense_mle.num_iterated_vars());
+        let mut public_input_layer = PublicInputLayer::new(dense_mle.original_mle, layer_id);
+
+        // Transcript writer with test sponge that always returns `1`.
+        let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
+            TranscriptWriter::new("Test Transcript Writer");
+
+        // Prover phase.
+        // 1. Commit to the input layer.
+        let commitment = public_input_layer.commit().unwrap();
+
+        // 2. Add commitment to transcript.
+        PublicInputLayer::<Fr>::append_commitment_to_transcript(
+            &commitment,
+            &mut transcript_writer,
+        );
+
+        // 3. ... [skip] proving other layers ...
+
+        // 4. Open commitment (no-op for Public Layers).
+        public_input_layer
+            .open(&mut transcript_writer, claim.clone())
+            .unwrap();
+
+        // Verifier phase.
+        // 1. Retrieve proof/transcript.
+        let transcript = transcript_writer.get_transcript();
+        let mut transcript_reader: TranscriptReader<Fr, TestSponge<Fr>> =
+            TranscriptReader::new(transcript);
+
+        // 2. Get commitment from transcript.
+        let commitment = verifier_public_input_layer
+            .get_commitment_from_transcript(&mut transcript_reader)
+            .unwrap();
+
+        // 3. ... [skip] verify other layers.
+
+        // 4. Verify this layer's commitment.
+        verifier_public_input_layer
+            .verify(&commitment, claim, &mut transcript_reader)
+            .unwrap();
     }
 }

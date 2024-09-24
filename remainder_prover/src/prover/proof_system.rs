@@ -1,32 +1,255 @@
-use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge, TranscriptSponge},
-    FieldExt,
-};
-
-use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
-
-use crate::{
-    claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
-    layer::{layer_enum::LayerEnum, Layer},
-    mle::{mle_enum::MleEnum, MleRef},
-};
-
-use crate::input_layer::{enum_input_layer::InputLayerEnum, InputLayer};
-
-#[macro_export]
 ///This macro generates a layer enum that represents all the possible layers
 /// Every layer variant of the enum needs to implement Layer, and the enum will also implement Layer and pass methods to it's variants
 ///
 /// Usage:
 ///
 /// layer_enum(EnumName, (FirstVariant: LayerType), (SecondVariant: SecondLayerType), ..)
+#[macro_export]
 macro_rules! layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
         #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-        #[serde(bound = "F: FieldExt")]
+        #[serde(bound = "F: Field")]
         #[doc = r"Remainder generated trait enum"]
-        pub enum $type_name<F: FieldExt> {
+        pub enum $type_name<F: Field> {
+            $(
+                #[doc = "Remainder generated layer variant"]
+                $var_name(Box<$variant>),
+            )*
+        }
+
+        paste::paste! {
+
+
+
+            impl<F: Field> $crate::layer::CircuitLayer<F> for [<Circuit$type_name>]<F> {
+                type VerifierLayer = [<Verifier $type_name>]<F>;
+
+                fn layer_id(&self) -> super::LayerId {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.layer_id(),
+                        )*
+                    }
+                }
+
+                fn compute_data_outputs(
+                    &self,
+                    mle_outputs_necessary: &std::collections::HashSet<&$crate::expression::circuit_expr::CircuitMle<F>>,
+                    circuit_map: &mut $crate::layouter::layouting::CircuitMap<F>,
+                ) -> bool {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.compute_data_outputs(mle_outputs_necessary, circuit_map),
+                        )*
+                    }
+                }
+
+                fn verify_rounds(
+                    &self,
+                    claim: $crate::claims::Claim<F>,
+                    transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
+                ) -> Result<VerifierLayerEnum<F>, super::VerificationError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => Ok(layer.verify_rounds(claim, transcript)?),
+                        )*
+                    }
+                }
+
+                fn sumcheck_round_indices(
+                    &self
+                ) -> Vec<usize> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.sumcheck_round_indices(),
+                        )*
+                    }
+                }
+
+                fn convert_into_verifier_layer(
+                    &self,
+                    sumcheck_bindings: &[F],
+                    claim_point: &[F],
+                    transcript_reader: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
+                ) -> Result<Self::VerifierLayer, super::VerificationError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.convert_into_verifier_layer(sumcheck_bindings, claim_point, transcript_reader)?)),
+                        )*
+                    }
+                }
+
+                fn get_circuit_mles(
+                    &self,
+                ) -> Vec<& $crate::expression::circuit_expr::CircuitMle<F>> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.get_circuit_mles(),
+                        )*
+                    }
+                }
+
+                fn index_mle_indices(
+                    &mut self, start_index: usize,
+                ) {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.index_mle_indices(start_index),
+                        )*
+                    }
+                }
+
+                fn convert_into_prover_layer(
+                    &self,
+                    circuit_map: &$crate::layouter::layouting::CircuitMap<F>
+                ) -> LayerEnum<F> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.convert_into_prover_layer(circuit_map),
+                        )*
+                    }
+                }
+
+                fn get_post_sumcheck_layer(
+                    &self,
+                    round_challenges: &[F],
+                    claim_challenges: &[F],
+                ) -> $crate::layer::PostSumcheckLayer<F, Option<F>> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges),
+                        )*
+                    }
+                }
+
+                fn max_degree(&self) -> usize {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.max_degree(),
+                        )*
+                    }
+                }
+            }
+
+            impl<F: Field> $crate::layer::VerifierLayer<F> for [<Verifier$type_name>]<F> {
+                fn layer_id(&self) -> super::LayerId {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.layer_id(),
+                        )*
+                    }
+                }
+            }
+        }
+
+        impl<F: Field> $crate::layer::Layer<F> for $type_name<F> {
+            fn layer_id(&self) -> super::LayerId {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.layer_id(),
+                    )*
+                }
+            }
+
+            fn prove_rounds(
+                &mut self,
+                claim: $crate::claims::Claim<F>,
+                transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
+            ) -> Result<(), super::LayerError> {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.prove_rounds(claim, transcript),
+                    )*
+                }
+            }
+
+            fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), super::LayerError> {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.initialize_sumcheck(claim_point),
+                    )*
+                }
+            }
+
+            fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, super::LayerError> {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.compute_round_sumcheck_message(round_index),
+                    )*
+                }
+            }
+
+            fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), super::LayerError> {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.bind_round_variable(round_index, challenge),
+                    )*
+                }
+            }
+
+            fn sumcheck_round_indices(&self) -> Vec<usize> {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.sumcheck_round_indices(),
+                    )*
+                }
+            }
+
+            fn max_degree(&self) -> usize {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.max_degree(),
+                    )*
+                }
+            }
+
+            fn get_post_sumcheck_layer(
+                &self,
+                round_challenges: &[F],
+                claim_challenges: &[F],
+            ) -> $crate::layer::PostSumcheckLayer<F, F> {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges),
+                    )*
+                }
+            }
+        }
+
+        $(
+            impl<F: Field> From<$variant> for $type_name<F> {
+                fn from(var: $variant) -> $type_name<F> {
+                    Self::$var_name(Box::new(var))
+                }
+            }
+        )*
+
+        paste::paste! {
+            impl<F: Field> YieldClaim<ClaimMle<F>> for [<Verifier $type_name>]<F> {
+                fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.get_claims(),
+                        )*
+                    }
+                }
+            }
+        }
+    }
+}
+
+///This macro generates an inputlayer enum that represents all the possible layers
+/// Every layer variant of the enum needs to implement InputLayer, and the enum will also implement InputLayer and pass methods to it's variants
+///
+/// Usage:
+///
+/// input_layer_enum(EnumName, (FirstVariant: InputLayerType), (SecondVariant: SecondInputLayerType), ..)
+#[macro_export]
+macro_rules! input_layer_enum {
+    ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
+        #[derive(Debug)]
+        #[doc = r"Remainder generated trait enum"]
+        pub enum $type_name<F: Field> {
             $(
                 #[doc = "Remainder generated layer variant"]
                 $var_name(Box<$variant>),
@@ -35,175 +258,66 @@ macro_rules! layer_enum {
 
         paste::paste! {
             #[derive(serde::Serialize, serde::Deserialize, Debug)]
-            #[serde(bound = "F: FieldExt")]
-            #[doc = r"Remainder generated Proof enum"]
-            pub enum [<$type_name Proof>]<F: FieldExt> {
+            #[serde(bound = "F: Field")]
+            #[doc = r"Remainder generated commitment enum"]
+            pub enum [<$type_name ProverCommitment>]<F: Field> {
                 $(
-                    #[doc = "Remainder generated Proof variant"]
-                    $var_name(<$variant as Layer<F>>::Proof),
+                    #[doc = "Remainder generated Commitment variant"]
+                    $var_name(<$variant as InputLayer<F>>::ProverCommitment),
+                )*
+            }
+
+            #[derive(serde::Serialize, serde::Deserialize, Debug)]
+            #[serde(bound = "F: Field")]
+            #[doc = r"Remainder generated commitment enum"]
+            pub enum [<$type_name VerifierCommitment>]<F: Field> {
+                $(
+                    #[doc = "Remainder generated Commitment variant"]
+                    $var_name(<$variant as InputLayer<F>>::VerifierCommitment),
                 )*
             }
         }
 
-        impl<F: FieldExt> $crate::layer::Layer<F> for $type_name<F> {
-            paste::paste! { type Proof = [<$type_name Proof>]<F>;}
-            fn prove_rounds(
-                &mut self,
-                claim: $crate::claims::Claim<F>,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
-            ) -> Result<Self::Proof, super::LayerError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => Ok(Self::Proof::$var_name(layer.prove_rounds(claim, transcript)?)),
-                    )*
-                }
+        impl<F: Field> $crate::input_layer::InputLayer<F> for $type_name<F> {
+            paste::paste! {
+                type ProverCommitment = [<$type_name ProverCommitment>]<F>;
+                type VerifierCommitment = [<$type_name VerifierCommitment>]<F>;
             }
 
-            fn verify_rounds(
-                &mut self,
-                claim: $crate::claims::Claim<F>,
-                proof: Self::Proof,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
-            ) -> Result<(), super::LayerError> {
+            fn commit(&mut self) -> Result<Self::VerifierCommitment, $crate::input_layer::InputLayerError> {
                 match self {
                     $(
                         Self::$var_name(layer) => {
-                            let proof = match proof {
-                                Self::Proof::$var_name(proof) => proof,
-                                _ => unreachable!()
-                            };
-                            layer.verify_rounds(claim, proof, transcript)
-                        },
+                            Ok(Self::VerifierCommitment::$var_name(layer.commit()?))
+                        }
                     )*
                 }
             }
 
-            fn id(&self) -> &super::LayerId {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.id(),
-                    )*
-                }
-            }
-        }
-
-        $(
-            impl<F: FieldExt> From<$variant> for $type_name<F> {
-                fn from(var: $variant) -> $type_name<F> {
-                    Self::$var_name(Box::new(var))
-                }
-            }
-        )*
-    }
-}
-
-#[macro_export]
-///This macro generates an inputlayer enum that represents all the possible layers
-/// Every layer variant of the enum needs to implement InputLayer, and the enum will also implement InputLayer and pass methods to it's variants
-///
-/// Usage:
-///
-/// input_layer_enum(EnumName, (FirstVariant: InputLayerType), (SecondVariant: SecondInputLayerType), ..)
-macro_rules! input_layer_enum {
-    ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
-        #[doc = r"Remainder generated trait enum"]
-        pub enum $type_name<F: FieldExt> {
-            $(
-                #[doc = "Remainder generated layer variant"]
-                $var_name(Box<$variant>),
-            )*
-        }
-
-        paste::paste! {
-            #[derive(serde::Serialize, serde::Deserialize)]
-            #[serde(bound = "F: FieldExt")]
-            #[doc = r"Remainder generated commitment enum"]
-            pub enum [<$type_name Commitment>]<F: FieldExt> {
-                $(
-                    #[doc = "Remainder generated Commitment variant"]
-                    $var_name(<$variant as InputLayer<F>>::Commitment),
-                )*
-            }
-
-            #[derive(serde::Serialize, serde::Deserialize)]
-            #[serde(bound = "F: FieldExt")]
-            #[doc = r"Remainder generated opening proof enum"]
-            pub enum [<$type_name OpeningProof>]<F: FieldExt> {
-                $(
-                    #[doc = "Remainder generated Commitment variant"]
-                    $var_name(<$variant as InputLayer<F>>::OpeningProof),
-                )*
-            }
-        }
-
-        impl<F: FieldExt> $crate::input_layer::InputLayer<F> for $type_name<F> {
-            paste::paste! {
-                type Commitment = [<$type_name Commitment>]<F>;
-                type OpeningProof = [<$type_name OpeningProof>]<F>;
-            }
-
-            fn commit(&mut self) -> Result<Self::Commitment, $crate::input_layer::InputLayerError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => Ok(Self::Commitment::$var_name(layer.commit()?)),
-                    )*
-                }
-            }
-
-            fn prover_append_commitment_to_transcript(
-                commitment: &Self::Commitment,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
+            fn append_commitment_to_transcript(
+                commitment: &Self::VerifierCommitment,
+                transcript_writer: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
             ) {
                 match commitment {
                     $(
-                        Self::Commitment::$var_name(commitment) => <$variant as InputLayer<F>>::prover_append_commitment_to_transcript(commitment, transcript),
-                    )*
-                }
-            }
-
-            fn verifier_append_commitment_to_transcript(
-                commitment: &Self::Commitment,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>
-            ) -> Result<(), $crate::input_layer::InputLayerError> {
-                match commitment {
-                    $(
-                        Self::Commitment::$var_name(commitment) => <$variant as InputLayer<F>>::verifier_append_commitment_to_transcript(commitment, transcript),
+                        Self::VerifierCommitment::$var_name(commitment) => <$variant as InputLayer<F>>::append_commitment_to_transcript(commitment, transcript_writer),
                     )*
                 }
             }
 
             fn open(
                 &self,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
+                transcript_writer: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
                 claim: $crate::claims::Claim<F>,
-            ) -> Result<Self::OpeningProof, $crate::input_layer::InputLayerError> {
+            ) -> Result<(), $crate::input_layer::InputLayerError> {
                 match self {
                     $(
-                        Self::$var_name(layer) => Ok(Self::OpeningProof::$var_name(layer.open(transcript, claim)?)),
+                        Self::$var_name(layer) => layer.open(transcript_writer, claim),
                     )*
                 }
             }
 
-            fn verify(
-                commitment: &Self::Commitment,
-                opening_proof: &Self::OpeningProof,
-                claim: $crate::claims::Claim<F>,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
-            ) -> Result<(), $crate::input_layer::InputLayerError> {
-                match commitment {
-                    $(
-                        Self::Commitment::$var_name(commitment) => {
-                            if let Self::OpeningProof::$var_name(opening_proof) = opening_proof {
-                                <$variant as InputLayer<F>>::verify(commitment, opening_proof, claim, transcript)
-                            } else {
-                                unreachable!()
-                            }
-                        },
-                    )*
-                }
-            }
-
-            fn layer_id(&self) -> &$crate::layer::LayerId {
+            fn layer_id(&self) -> $crate::layer::LayerId {
                 match self {
                     $(
                         Self::$var_name(layer) => layer.layer_id(),
@@ -211,62 +325,23 @@ macro_rules! input_layer_enum {
                 }
             }
 
-            fn get_padded_mle(&self) -> $crate::mle::dense::DenseMle<F, F>{
+            fn get_padded_mle(&self) -> $crate::mle::dense::DenseMle<F,>{
                 match self {
                     $(
                         Self::$var_name(layer) => layer.get_padded_mle(),
                     )*
                 }
             }
-
         }
+        // LigeroInputLayer::new()
+        // InputLayerEnum::new()
 
         $(
-            impl<F: FieldExt> From<$variant> for $type_name<F> {
+            impl<F: Field> From<$variant> for $type_name<F> {
                 fn from(var: $variant) -> $type_name<F> {
                     Self::$var_name(Box::new(var))
                 }
             }
         )*
     }
-}
-
-///A trait for bundling a group of types that define the interfaces that go into a GKR Prover
-pub trait ProofSystem<F: FieldExt> {
-    ///A trait that defines the allowed Layer for this ProofSystem
-    type Layer: Layer<F>
-        + Serialize
-        + for<'a> Deserialize<'a>
-        + Debug
-        + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
-
-    ///A trait that defines the allowed InputLayer for this ProofSystem
-    type InputLayer: InputLayer<F>;
-
-    ///The Transcript this proofsystem uses for F-S
-    type Transcript: TranscriptSponge<F>;
-
-    ///The MleRef type that serves as the output layer representation
-    type OutputLayer: MleRef<F = F>
-        + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
-
-    ///The logic that handles how to aggregate claims
-    /// As this trait defines the 'bridge' between layers, some helper traits may be neccessary to implement
-    /// on the other layer types
-    type ClaimAggregator: ClaimAggregator<F, Layer = Self::Layer, InputLayer = Self::InputLayer>;
-}
-
-/// The default proof system for the remainder prover
-pub struct DefaultProofSystem;
-
-impl<F: FieldExt> ProofSystem<F> for DefaultProofSystem {
-    type Layer = LayerEnum<F>;
-
-    type InputLayer = InputLayerEnum<F>;
-
-    type Transcript = PoseidonSponge<F>;
-
-    type OutputLayer = MleEnum<F>;
-
-    type ClaimAggregator = WLXAggregator<F, Self::Layer, Self::InputLayer>;
 }

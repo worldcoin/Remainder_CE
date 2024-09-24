@@ -1,6 +1,6 @@
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 /// Initializes with every iterated combination of the bits in `challenge_coord`.
 ///
@@ -18,7 +18,7 @@ use remainder_shared_types::FieldExt;
 ///
 /// ## Arguments
 /// * `challenge_coord` - Challenge point to be expanded in little-endian
-fn initialize_tensor<F: FieldExt>(challenge_coord: &[F]) -> Vec<F> {
+fn initialize_tensor<F: Field>(challenge_coord: &[F]) -> Vec<F> {
     // --- For each of the challenge coordinates ---
     challenge_coord
         .iter()
@@ -46,8 +46,6 @@ fn initialize_tensor<F: FieldExt>(challenge_coord: &[F]) -> Vec<F> {
 /// * `num_rows` - Total number of rows in the matrix M
 /// * `orig_num_cols` - Total number of columns in the matrix M
 ///
-/// ---
-///
 /// ## Example
 ///
 /// `challenge_coord`: x_0, x_1, x_2
@@ -61,7 +59,7 @@ fn initialize_tensor<F: FieldExt>(challenge_coord: &[F]) -> Vec<F> {
 ///
 /// a:
 /// [(1 - x_0)(1 - x_1), x_0(1 - x_1), (1 - x_0)x_1, x_0x_1]
-pub fn get_ml_inner_outer_tensors<F: FieldExt>(
+pub fn get_ml_inner_outer_tensors<F: Field>(
     challenge_coord: &[F],
     num_rows: usize,
     orig_num_cols: usize,
@@ -97,10 +95,7 @@ pub fn get_ml_inner_outer_tensors<F: FieldExt>(
 /// ## Arguments
 /// * `mle_coeffs` - MLE evaluations over the boolean hypercube.
 /// * `challenge_coord` - Challenge point at which to evaluate the MLE.
-pub fn naive_eval_mle_at_challenge_point<F: FieldExt>(
-    mle_coeffs: &[F],
-    challenge_coord: &[F],
-) -> F {
+pub fn naive_eval_mle_at_challenge_point<F: Field>(mle_coeffs: &[F], challenge_coord: &[F]) -> F {
     assert!(mle_coeffs.len().is_power_of_two());
     assert_eq!(log2(mle_coeffs.len()), challenge_coord.len() as u32);
 

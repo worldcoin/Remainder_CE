@@ -1,28 +1,28 @@
 use std::marker::PhantomData;
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use crate::{
     builders::layer_builder::LayerBuilder,
     layer::{
-        gate::{BinaryOperation, Gate},
+        gate::{BinaryOperation, GateLayer},
         regular_layer::RegularLayer,
         Layer, LayerId,
     },
-    mle::{
-        dense::{DenseMle, DenseMleRef},
-        MleRef,
-    },
+    mle::dense::DenseMle,
 };
 
+use crate::mle::Mle;
+
+#[derive(Clone, Debug)]
 /// The list of Layers that make up the GKR circuit
-pub struct Layers<F: FieldExt, T: Layer<F>> {
+pub struct Layers<F: Field, T: Layer<F>> {
     /// A Vec of pointers to various layer types
     pub layers: Vec<T>,
     marker: PhantomData<F>,
 }
 
-impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
+impl<F: Field, T: Layer<F>> Layers<F, T> {
     /// Add a GKRLayer to a list of layers
     pub fn add_gkr<B: LayerBuilder<F>>(&mut self, new_layer: B) -> B::Successor
     where
@@ -44,6 +44,7 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
     ///
     /// # Arguments
     /// * `nonzero_gates`: the gate wiring between single-copy circuit (as the wiring for each circuit remains the same)
+    ///
     /// x is the label on the batched mle `lhs`, y is the label on the batched mle `rhs`, and z is the label on the next layer, batched
     /// * `lhs`: the flattened mle representing the left side of the summation
     /// * `rhs`: the flattened mle representing the right side of the summation
@@ -55,17 +56,17 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
     pub fn add_gate(
         &mut self,
         nonzero_gates: Vec<(usize, usize, usize)>,
-        lhs: DenseMleRef<F>,
-        rhs: DenseMleRef<F>,
+        lhs: DenseMle<F>,
+        rhs: DenseMle<F>,
         num_dataparallel_bits: Option<usize>,
         gate_operation: BinaryOperation,
-    ) -> DenseMle<F, F>
+    ) -> DenseMle<F>
     where
-        T: From<Gate<F>>,
+        T: From<GateLayer<F>>,
     {
         let id = LayerId::Layer(self.layers.len());
         // constructor for batched mul gate struct
-        let gate: Gate<F> = Gate::new(
+        let gate: GateLayer<F> = GateLayer::new(
             num_dataparallel_bits,
             nonzero_gates.clone(),
             lhs.clone(),
@@ -104,7 +105,7 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
                 });
         });
 
-        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(res_table, id, None);
+        let res_mle: DenseMle<F> = DenseMle::new_from_raw(res_table, id);
 
         res_mle
     }
@@ -117,13 +118,21 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
         }
     }
 
+    /// Creates a new [Layers] struct with populated layers values.
+    pub fn new_with_layers(layers: Vec<T>) -> Self {
+        Self {
+            layers,
+            marker: PhantomData,
+        }
+    }
+
     /// Returns the number of layers in the GKR circuit
     pub fn num_layers(&self) -> usize {
         self.layers.len()
     }
 }
 
-impl<F: FieldExt, T: Layer<F>> Default for Layers<F, T> {
+impl<F: Field, T: Layer<F>> Default for Layers<F, T> {
     fn default() -> Self {
         Self::new()
     }

@@ -18,7 +18,7 @@ rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 num = "0.4.1"
-ndarray = "0.15.6"
+ndarray = { version = "0.15.6", features = ["serde"] }
 ndarray-npy = "0.8.1"
 tracing-subscriber = "0.3.17"
 remainder-ligero = { path = "../remainder_ligero" }
@@ -41,9 +41,16 @@ paste = "1.0.14"
 quickcheck = "1.0.3"
 quickcheck_macros = "1.0.0"
 derive_more = "0.99.17"
+enum_dispatch = "0.3.13"
+base64 = "0.22.0"
+ark-serialize = { version = "0.4", features = ["derive"] } # For serialization
 
 [dev-dependencies]
+pretty_assertions = "1.4.0"
 
 [features]
-default = ["parallel"]
 parallel = []
+
+[[bin]]
+name = "run_iriscode_circuit"
+path = "src/bin/run_iriscode_circuit.rs"

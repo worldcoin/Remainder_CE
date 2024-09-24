@@ -3,22 +3,23 @@
 //! `Layer`
 
 use crate::mle::{
-    dense::{DenseMle, DenseMleRef},
+    dense::DenseMle,
     evals::{Evaluations, MultilinearExtension},
     mle_enum::MleEnum,
-    MleIndex, MleRef,
+    Mle, MleIndex,
 };
 use ark_std::log2;
 use ark_std::{cfg_into_iter, cfg_iter_mut};
 use itertools::{repeat_n, Itertools};
-use rayon::{
-    iter::{IntoParallelIterator, IntoParallelRefMutIterator},
-    prelude::{IndexedParallelIterator, ParallelIterator},
-};
-use remainder_shared_types::FieldExt;
+
+use remainder_shared_types::Field;
 use thiserror::Error;
 
 use super::LayerId;
+#[cfg(feature = "parallel")]
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
+};
 
 /// Error handling for gate mle construction
 #[derive(Error, Debug, Clone)]
@@ -32,7 +33,7 @@ pub enum CombineMleRefError {
 }
 
 /// this fixes mle refs with shared points in the claims so that we don't have to keep doing them
-pub fn pre_fix_mle_refs<F: FieldExt>(
+pub fn pre_fix_mle_refs<F: Field>(
     mle_refs: &mut [MleEnum<F>],
     chal_point: &[F],
     common_idx: Vec<usize>,
@@ -49,7 +50,7 @@ pub fn pre_fix_mle_refs<F: FieldExt>(
 /// function that prepares all the mle refs to be fixed, then combined. this involves filtering out for
 /// unique original mle indices, then splitting the mles with iterated bits within prefix bits, then
 /// indexing them so that their mutable bookkeeping table is the original bookkeeping table.
-pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>> {
+pub fn get_og_mle_refs<F: Field>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>> {
     // first we want to filter out for mle_refs that are duplicates. we look at their original indices
     // instead of their bookkeeping tables because sometimes two mle_refs can have the same original_bookkeeping_table
     // but have different prefix bits. if they have the same prefix bits, they must be duplicates.
@@ -67,13 +68,12 @@ pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>
     // go through and create mle refs that have original bookkeeping tables, and index them so that they can be fixed later
     let mle_ref_fix = cfg_into_iter!(mle_refs_split).map(|mle_ref| match mle_ref {
         MleEnum::Dense(dense_mle_ref) => {
-            let mut mle_ref_og = DenseMleRef {
+            let mut mle_ref_og = DenseMle {
                 current_mle: dense_mle_ref.original_mle.clone(),
                 original_mle: dense_mle_ref.original_mle.clone(),
                 mle_indices: dense_mle_ref.original_mle_indices.clone(),
                 original_mle_indices: dense_mle_ref.original_mle_indices.clone(),
                 layer_id: dense_mle_ref.get_layer_id(),
-                indexed: false,
             };
             mle_ref_og.index_mle_indices(0);
             MleEnum::Dense(mle_ref_og)
@@ -81,9 +81,15 @@ pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>
         zero => zero,
     });
 
-    let mut ret_mles: Vec<MleEnum<F>> = vec![];
-    mle_ref_fix.collect_into_vec(&mut ret_mles);
-    ret_mles
+    #[cfg(feature = "parallel")]
+    {
+        let mut ret_mles: Vec<MleEnum<F>> = vec![];
+        mle_ref_fix.collect_into_vec(&mut ret_mles);
+        ret_mles
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    mle_ref_fix.collect()
 }
 
 /// this function takes in a list of mle refs, a challenge point we want to combine them under, and returns
@@ -91,7 +97,7 @@ pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>
 /// this is equivalent to combining all of these mle refs according to their prefix bits, and then fixing
 /// variable on this combined mle ref using the challenge point
 /// instead, we fix variable as we combine as this keeps the bookkeeping table sizes at one and is faster to compute
-pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
+pub fn combine_mle_refs_with_aggregate<F: Field>(
     mle_refs: &[MleEnum<F>],
     chal_point: &[F],
 ) -> Result<F, CombineMleRefError> {
@@ -153,7 +159,7 @@ pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
 /// Takes the individual bookkeeping tables from the MleRefs within an MLE
 /// and merges them with padding, using a little-endian representation
 /// merge strategy. Assumes that ALL MleRefs are the same size.
-pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, F> {
+pub fn combine_mle_refs<F: Field>(items: Vec<DenseMle<F>>) -> DenseMle<F> {
     let num_fields = items.len();
 
     // --- All the items within should be the same size ---
@@ -181,7 +187,7 @@ pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, 
         .chain(repeat_n(F::ZERO, total_padding))
         .collect_vec();
 
-    DenseMle::new_from_raw(result, LayerId::Input(0), None)
+    DenseMle::new_from_raw(result, LayerId::Input(0))
 }
 
 /// this function takes an mle ref that has an iterated bit in between a bunch of fixed bits
@@ -191,7 +197,7 @@ pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, 
 /// NOTE we assume that this function is called on an mle ref that has an iterated bit within
 /// a bunch of fixed bits (note how it is used in the `collapse_mles_with_iterated_in_prefix`
 /// function)
-fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
+fn split_mle_ref<F: Field>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
     // get the index of the first iterated bit in the mle ref
     let first_iterated_idx: usize = mle_ref.original_mle_indices().iter().enumerate().fold(
         mle_ref.original_mle_indices().len(),
@@ -229,9 +235,9 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
     // depending on whether this is a zero mle ref or dense mle ref, construct the first mle_ref in the pair
     let first_mle_ref = {
         match mle_ref.clone() {
-            MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMleRef {
+            MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMle {
                 current_mle: dense_mle_ref.current_mle.clone(),
-                original_mle: MultilinearExtension::new(Evaluations::<F>::new(
+                original_mle: MultilinearExtension::new_from_evals(Evaluations::<F>::new(
                     dense_mle_ref.original_num_vars() - 1,
                     dense_mle_ref
                         .original_mle
@@ -244,7 +250,6 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
                 mle_indices: dense_mle_ref.mle_indices.clone(),
                 original_mle_indices: first_og_indices,
                 layer_id: dense_mle_ref.layer_id,
-                indexed: false,
             }),
             MleEnum::Zero(mut zero_mle_ref) => {
                 zero_mle_ref.original_mle_indices = first_og_indices;
@@ -256,9 +261,9 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
     // second mle ref in the pair
     let second_mle_ref = {
         match mle_ref {
-            MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMleRef {
+            MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMle {
                 current_mle: dense_mle_ref.current_mle.clone(),
-                original_mle: MultilinearExtension::new(Evaluations::<F>::new(
+                original_mle: MultilinearExtension::new_from_evals(Evaluations::<F>::new(
                     dense_mle_ref.original_num_vars() - 1,
                     dense_mle_ref
                         .original_mle
@@ -269,10 +274,9 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
                         .step_by(2)
                         .collect_vec(),
                 )),
-                mle_indices: dense_mle_ref.mle_indices,
+                mle_indices: dense_mle_ref.mle_indices.clone(),
                 original_mle_indices: second_og_indices,
                 layer_id: dense_mle_ref.layer_id,
-                indexed: false,
             }),
             MleEnum::Zero(mut zero_mle_ref) => {
                 zero_mle_ref.original_mle_indices = second_og_indices;
@@ -285,7 +289,7 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
 }
 
 /// this function will take a list of mle refs and update the list to contain mle_refs where all fixed bits are contiguous
-fn collapse_mles_with_iterated_in_prefix<F: FieldExt>(mle_refs: &[MleEnum<F>]) -> Vec<MleEnum<F>> {
+fn collapse_mles_with_iterated_in_prefix<F: Field>(mle_refs: &[MleEnum<F>]) -> Vec<MleEnum<F>> {
     mle_refs
         .iter()
         .flat_map(|mle_ref| {
@@ -314,7 +318,7 @@ fn collapse_mles_with_iterated_in_prefix<F: FieldExt>(mle_refs: &[MleEnum<F>]) -
 /// returns a tuple of an option of the index of the least significant bit and an option of the mle
 /// ref that contributes to this lsb
 /// if there are no fixed bits in any of the mle refs, it returns a `(None, None)` tuple
-fn get_lsb_fixed_var<F: FieldExt>(mle_refs: &[MleEnum<F>]) -> (Option<usize>, Option<MleEnum<F>>) {
+fn get_lsb_fixed_var<F: Field>(mle_refs: &[MleEnum<F>]) -> (Option<usize>, Option<MleEnum<F>>) {
     mle_refs
         .iter()
         .fold((None, None), |(acc_idx, acc_mle), mle_ref| {
@@ -361,12 +365,12 @@ fn get_lsb_fixed_var<F: FieldExt>(mle_refs: &[MleEnum<F>]) -> (Option<usize>, Op
 /// to the correct index in the challenge point.
 ///
 /// if there is no pair, then this is assumed to be an mle_ref with all 0s.
-fn combine_pair<F: FieldExt>(
+fn combine_pair<F: Field>(
     mle_ref_first: MleEnum<F>,
     mle_ref_second: Option<MleEnum<F>>,
     lsb_idx: usize,
     chal_point: &[F],
-) -> DenseMleRef<F> {
+) -> DenseMle<F> {
     let mle_ref_first_bt = mle_ref_first.bookkeeping_table().to_vec();
 
     // if the second mle ref is None, we assume its bookkeeping table is all zeros. we are dealing with
@@ -412,11 +416,12 @@ fn combine_pair<F: FieldExt>(
     let new_bt =
         vec![bound_coord * mle_ref_first_bt[0] + (F::ONE - bound_coord) * mle_ref_second_bt[0]];
 
-    let current_mle = MultilinearExtension::new(Evaluations::<F>::new(
-        mle_ref_first.num_vars(),
+    let current_mle = MultilinearExtension::new_from_evals(Evaluations::<F>::new(
+        mle_ref_first.num_iterated_vars(),
         new_bt.clone(),
     ));
-    let original_mle = MultilinearExtension::new(Evaluations::<F>::new(0, new_bt));
+    let original_mle =
+        MultilinearExtension::new_from_evals(Evaluations::<F>::new(0, new_bt.clone()));
 
     // construct the dense mle ref that we return. note that even if we are pairing zero mle refs, we just return a dense mle ref here
     //
@@ -424,20 +429,19 @@ fn combine_pair<F: FieldExt>(
     // it is kind of dumb to recompute it because we don't use it anymore. ideally these would be stored somewhere else so we don't
     // have to keep catering to the fields we don't need ?
 
-    DenseMleRef {
-        current_mle,
+    DenseMle {
+        current_mle: current_mle.clone(),
         original_mle,
         mle_indices: interleaved_mle_indices,
         original_mle_indices: interleaved_mle_indices_og,
         layer_id: mle_ref_first.get_layer_id(),
-        indexed: false,
     }
 }
 
 /// given a list of mle refs, the lsb fixed var index, and the mle ref that contributes to it, this will go through all of them
 /// and find its pair (if none exists, that's fine) and combine the two
 /// it will then update the original list of mle refs to contain the combined mle ref and remove the original ones that were paired
-fn find_pair_and_combine<F: FieldExt>(
+fn find_pair_and_combine<F: Field>(
     all_refs: &[MleEnum<F>],
     lsb_idx: usize,
     mle_ref_of_lsb: MleEnum<F>,

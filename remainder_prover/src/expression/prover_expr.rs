@@ -1,11 +1,24 @@
+//! The prover's view of an [Expression] -- see file-level documentation within
+//! [crate::expression] for more details.
+//!
+//! Conceptually, [ProverExpr] contains the "circuit structure" between the
+//! layer whose values are the output of the given expression and those whose
+//! values are the inputs to the given expression, i.e. the polynomial
+//! relationship between them, as well as (in an ownership sense) the actual
+//! data, stored in [DenseMle]s.
+
 use super::{
     expr_errors::ExpressionError,
     generic_expr::{Expression, ExpressionNode, ExpressionType},
-    verifier_expr::VerifierExpr,
+    verifier_expr::{VerifierExpr, VerifierMle},
 };
-use crate::mle::{betavalues::BetaValues, dense::DenseMleRef, MleIndex, MleRef};
+use crate::{layer::product::PostSumcheckLayer, mle::Mle};
+use crate::{
+    layer::product::Product,
+    mle::{betavalues::BetaValues, dense::DenseMle, MleIndex},
+};
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::max,
@@ -17,6 +30,9 @@ use std::{
 /// mid-term solution for deduplication of DenseMleRefs
 /// basically a wrapper around usize, which denotes the index
 /// of the MleRef in an expression's MleRef list/// Generic Expressions
+///
+/// TODO(ryancao): We should deprecate this and instead just have
+/// references to the `DenseMLE<F>`s which are stored in the circuit_map.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MleVecIndex(usize);
 
@@ -37,18 +53,15 @@ impl MleVecIndex {
     }
 
     /// return the actual mle_ref in the vec within the prover expression
-    pub fn get_mle<'a, F: FieldExt>(
-        &self,
-        mle_ref_vec: &'a [DenseMleRef<F>],
-    ) -> &'a DenseMleRef<F> {
+    pub fn get_mle<'a, F: Field>(&self, mle_ref_vec: &'a [DenseMle<F>]) -> &'a DenseMle<F> {
         &mle_ref_vec[self.0]
     }
 
     /// return the actual mle_ref in the vec within the prover expression
-    pub fn get_mle_mut<'a, F: FieldExt>(
+    pub fn get_mle_mut<'a, F: Field>(
         &self,
-        mle_ref_vec: &'a mut [DenseMleRef<F>],
-    ) -> &'a mut DenseMleRef<F> {
+        mle_ref_vec: &'a mut [DenseMle<F>],
+    ) -> &'a mut DenseMle<F> {
         &mut mle_ref_vec[self.0]
     }
 }
@@ -57,31 +70,32 @@ impl MleVecIndex {
 /// the leaf nodes of the expression tree are DenseMleRefs
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProverExpr;
-impl<F: FieldExt> ExpressionType<F> for ProverExpr {
+impl<F: Field> ExpressionType<F> for ProverExpr {
     type MLENodeRepr = MleVecIndex;
-    type MleVec = Vec<DenseMleRef<F>>;
+    type MleVec = Vec<DenseMle<F>>;
 }
 
 /// this is what the prover manipulates to prove the correctness of the computation.
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
-impl<F: FieldExt> Expression<F, ProverExpr> {
-    /// Concatenates two expressions together
+impl<F: Field> Expression<F, ProverExpr> {
+    /// See documentation in [super::circuit_expr::CircuitExpr]'s `concat_expr`
+    /// function for more details!
     pub fn concat_expr(mut self, lhs: Expression<F, ProverExpr>) -> Self {
         let offset = lhs.num_mle_ref();
         self.increment_mle_vec_indices(offset);
-
         let (lhs_node, lhs_mle_vec) = lhs.deconstruct();
         let (rhs_node, rhs_mle_vec) = self.deconstruct();
 
         let concat_node =
             ExpressionNode::Selector(MleIndex::Iterated, Box::new(lhs_node), Box::new(rhs_node));
+
         let concat_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect_vec();
 
         Expression::new(concat_node, concat_mle_vec)
     }
 
     /// Create a product Expression that raises one MLE to a given power
-    pub fn pow(pow: usize, mle: DenseMleRef<F>) -> Self {
+    pub fn pow(pow: usize, mle: DenseMle<F>) -> Self {
         let mle_vec_indices = (0..pow).map(|_index| MleVecIndex::new(0)).collect_vec();
 
         let product_node = ExpressionNode::Product(mle_vec_indices);
@@ -99,7 +113,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     }
 
     /// Create a mle Expression that contains one MLE
-    pub fn mle(mle: DenseMleRef<F>) -> Self {
+    pub fn mle(mle: DenseMle<F>) -> Self {
         let mle_node = ExpressionNode::Mle(MleVecIndex::new(0));
 
         Expression::new(mle_node, [mle].to_vec())
@@ -152,7 +166,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         // define a closure that increments the MleVecIndex by the given amount
         // use traverse_mut
         let mut increment_closure = |expr: &mut ExpressionNode<F, ProverExpr>,
-                                     _mle_vec: &mut Vec<DenseMleRef<F>>|
+                                     _mle_vec: &mut Vec<DenseMle<F>>|
          -> Result<(), ()> {
             match expr {
                 ExpressionNode::Mle(mle_vec_index) => {
@@ -176,14 +190,14 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         self.traverse_mut(&mut increment_closure).unwrap();
     }
 
-    /// transforms the expression to a verifier expression
+    /// Transforms the prover expression to a verifier expression.
     ///
-    /// should only be called when the entire expression is fully bound
+    /// Should only be called when the entire expression is fully bound.
     ///
-    /// traverses the expression and changes the DenseMleRef to F,
-    /// by grabbing their bookkeeping table's 1st and only element,
+    /// Traverses the expression and changes the DenseMle to VerifierMle,
+    /// by grabbing their bookkeeping table's 1st and only element.
     ///
-    /// if the bookkeeping table has more than 1 element, it
+    /// If the bookkeeping table has more than 1 element, it
     /// throws an ExpressionError::EvaluateNotFullyBoundError
     pub fn transform_to_verifier_expression(
         self,
@@ -290,7 +304,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         self.clone()
             .transform_to_verifier_expression()
             .unwrap()
-            .gather_combine_all_evals()
+            .evaluate()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -300,10 +314,10 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         &self,
         constant: &impl Fn(F, &BetaValues<F>) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T, &BetaValues<F>) -> T,
-        mle_eval: &impl Fn(&DenseMleRef<F>, &[F], &[F]) -> T,
+        mle_eval: &impl Fn(&DenseMle<F>, &[F], &[F]) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[&DenseMleRef<F>], &[F], &[F]) -> T, // changed signature here, note to modify caller's calling code
+        product: &impl Fn(&[&DenseMle<F>], &[F], &[F]) -> T, // changed signature here, note to modify caller's calling code
         scaled: &impl Fn(T, F) -> T,
         beta: &BetaValues<F>,
     ) -> T {
@@ -353,15 +367,24 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         self.expression_node
             .get_expression_size_node(curr_size, &self.mle_vec)
     }
+
+    /// Get the [PostSumcheckLayer] for this expression, which represents the fully bound values of the expression.
+    /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
+    pub fn get_post_sumcheck_layer(&self, multiplier: F) -> PostSumcheckLayer<F, F> {
+        self.expression_node
+            .get_post_sumcheck_layer(multiplier, &self.mle_vec)
+    }
+
+    /// Get the maximum degree of any variable in htis expression
+    pub fn get_max_degree(&self) -> usize {
+        self.expression_node.get_max_degree(&self.mle_vec)
+    }
 }
 
-impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
-    /// transforms the expression to a verifier expression
-    /// should only be called when the entire expression is fully bound
-    /// traverses the expression and changes the DenseMleRef to F,
-    /// by grabbing their bookkeeping table's 1st and only element,
-    /// if the bookkeeping table has more than 1 element, it
-    /// throws an ExpressionError::EvaluateNotFullyBoundError
+impl<F: Field> ExpressionNode<F, ProverExpr> {
+    /// Transforms the expression to a verifier expression
+    /// should only be called when no variables are bound in the expression.
+    /// Traverses the expression and changes the DenseMle to CircuitMle.
     pub fn transform_to_verifier_expression_node(
         &mut self,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
@@ -379,7 +402,16 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 if mle_ref.bookkeeping_table().len() != 1 {
                     return Err(ExpressionError::EvaluateNotFullyBoundError);
                 }
-                Ok(ExpressionNode::Mle(mle_ref.bookkeeping_table()[0]))
+
+                let layer_id = mle_ref.get_layer_id();
+                let mle_indices = mle_ref.mle_indices().to_vec();
+                let eval = mle_ref.bookkeeping_table()[0];
+
+                Ok(ExpressionNode::Mle(VerifierMle::new(
+                    layer_id,
+                    mle_indices,
+                    eval,
+                )))
             }
             ExpressionNode::Negated(a) => Ok(ExpressionNode::Negated(Box::new(
                 a.transform_to_verifier_expression_node(mle_vec)?,
@@ -389,20 +421,26 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 Box::new(b.transform_to_verifier_expression_node(mle_vec)?),
             )),
             ExpressionNode::Product(mle_vec_indices) => {
-                let mle_refs = mle_vec_indices
+                let mles = mle_vec_indices
                     .iter_mut()
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                     .collect_vec();
 
-                for mle_ref in mle_refs.iter() {
-                    if mle_ref.bookkeeping_table().len() != 1 {
+                for mle in mles.iter() {
+                    if mle.bookkeeping_table().len() != 1 {
                         return Err(ExpressionError::EvaluateNotFullyBoundError);
                     }
                 }
+
                 Ok(ExpressionNode::Product(
-                    mle_refs
-                        .into_iter()
-                        .map(|mle_ref| mle_ref.bookkeeping_table()[0])
+                    mles.into_iter()
+                        .map(|mle| {
+                            VerifierMle::new(
+                                mle.get_layer_id(),
+                                mle.mle_indices().to_vec(),
+                                mle.bookkeeping_table()[0],
+                            )
+                        })
                         .collect_vec(),
                 ))
             }
@@ -527,10 +565,10 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
         &self,
         constant: &impl Fn(F, &BetaValues<F>) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T, &BetaValues<F>) -> T,
-        mle_eval: &impl Fn(&DenseMleRef<F>, &[F], &[F]) -> T,
+        mle_eval: &impl Fn(&DenseMle<F>, &[F], &[F]) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[&DenseMleRef<F>], &[F], &[F]) -> T,
+        product: &impl Fn(&[&DenseMle<F>], &[F], &[F]) -> T,
         scaled: &impl Fn(T, F) -> T,
         beta: &BetaValues<F>,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
@@ -653,18 +691,18 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
     ) -> usize {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
-                *mle_index = MleIndex::IndexedBit(curr_index);
-                let a_bits = a.index_mle_indices_node(curr_index + 1, mle_vec);
-                let b_bits = b.index_mle_indices_node(curr_index + 1, mle_vec);
+                let mut new_index = curr_index;
+                if *mle_index == MleIndex::Iterated {
+                    *mle_index = MleIndex::IndexedBit(curr_index);
+                    new_index += 1;
+                }
+                let a_bits = a.index_mle_indices_node(new_index, mle_vec);
+                let b_bits = b.index_mle_indices_node(new_index, mle_vec);
                 max(a_bits, b_bits)
             }
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
-                if !mle_ref.indexed() {
-                    mle_ref.index_mle_indices(curr_index)
-                } else {
-                    0
-                } // if it's already indexed, then return 0 (the max number of indexed bit will get propogated up)
+                mle_ref.index_mle_indices(curr_index)
             }
             ExpressionNode::Sum(a, b) => {
                 let a_bits = a.index_mle_indices_node(curr_index, mle_vec);
@@ -675,11 +713,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 .iter_mut()
                 .map(|mle_vec_index| {
                     let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
-                    if !mle_ref.indexed() {
-                        mle_ref.index_mle_indices(curr_index)
-                    } else {
-                        0
-                    }
+                    mle_ref.index_mle_indices(curr_index)
                 })
                 .reduce(max)
                 .unwrap_or(curr_index),
@@ -960,39 +994,108 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
             ExpressionNode::Constant(_) => curr_size,
         }
     }
+
+    /// Recursively get the [PostSumcheckLayer] for an Expression node, which is the fully bound
+    /// representation of an expression.
+    /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
+    pub fn get_post_sumcheck_layer(
+        &self,
+        multiplier: F,
+        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+    ) -> PostSumcheckLayer<F, F> {
+        let mut products: Vec<Product<F, F>> = vec![];
+        match self {
+            ExpressionNode::Selector(mle_index, a, b) => {
+                let left_side_acc = multiplier * (F::ONE - mle_index.val().unwrap());
+                let right_side_acc = multiplier * (mle_index.val().unwrap());
+                products.extend(a.get_post_sumcheck_layer(left_side_acc, mle_vec).0);
+                products.extend(b.get_post_sumcheck_layer(right_side_acc, mle_vec).0);
+            }
+            ExpressionNode::Sum(a, b) => {
+                products.extend(a.get_post_sumcheck_layer(multiplier, mle_vec).0);
+                products.extend(b.get_post_sumcheck_layer(multiplier, mle_vec).0);
+            }
+            ExpressionNode::Mle(mle_vec_idx) => {
+                let mle_ref = mle_vec_idx.get_mle(mle_vec);
+                assert_eq!(mle_ref.bookkeeping_table().len(), 1);
+                products.push(Product::<F, F>::new(&[mle_ref.clone()], multiplier));
+            }
+            ExpressionNode::Product(mle_vec_indices) => {
+                let mle_refs = mle_vec_indices
+                    .iter()
+                    .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec).clone())
+                    .collect_vec();
+                let product = Product::<F, F>::new(&mle_refs, multiplier);
+                products.push(product);
+            }
+            ExpressionNode::Scaled(a, scale_factor) => {
+                let acc = multiplier * scale_factor;
+                products.extend(a.get_post_sumcheck_layer(acc, mle_vec).0);
+            }
+            ExpressionNode::Negated(a) => {
+                let acc = multiplier.neg();
+                products.extend(a.get_post_sumcheck_layer(acc, mle_vec).0);
+            }
+            ExpressionNode::Constant(constant) => {
+                products.push(Product::<F, F>::new(&[], *constant * multiplier));
+            }
+        }
+        PostSumcheckLayer(products)
+    }
+
+    /// Get the maximum degree of an ExpressionNode, recursively.
+    fn get_max_degree(&self, _mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> usize {
+        match self {
+            ExpressionNode::Selector(_, a, b) | ExpressionNode::Sum(a, b) => {
+                let a_degree = a.get_max_degree(_mle_vec);
+                let b_degree = b.get_max_degree(_mle_vec);
+                max(a_degree, b_degree)
+            }
+            ExpressionNode::Mle(_) => {
+                // 1 for the current MLE
+                1
+            }
+            ExpressionNode::Product(mle_refs) => {
+                // max degree is the number of MLEs in a product
+                mle_refs.len()
+            }
+            ExpressionNode::Scaled(a, _) | ExpressionNode::Negated(a) => a.get_max_degree(_mle_vec),
+            ExpressionNode::Constant(_) => 1,
+        }
+    }
 }
 
-impl<F: FieldExt> Neg for Expression<F, ProverExpr> {
+impl<F: Field> Neg for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn neg(self) -> Self::Output {
-        Expression::negated(self)
+        Expression::<F, ProverExpr>::negated(self)
     }
 }
 
 /// implement the Add, Sub, and Mul traits for the Expression
-impl<F: FieldExt> Add for Expression<F, ProverExpr> {
+impl<F: Field> Add for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn add(self, rhs: Expression<F, ProverExpr>) -> Expression<F, ProverExpr> {
-        Expression::sum(self, rhs)
+        Expression::<F, ProverExpr>::sum(self, rhs)
     }
 }
 
-impl<F: FieldExt> Sub for Expression<F, ProverExpr> {
+impl<F: Field> Sub for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn sub(self, rhs: Expression<F, ProverExpr>) -> Expression<F, ProverExpr> {
         self.add(rhs.neg())
     }
 }
 
-impl<F: FieldExt> Mul<F> for Expression<F, ProverExpr> {
+impl<F: Field> Mul<F> for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn mul(self, rhs: F) -> Self::Output {
-        Expression::scaled(self, rhs)
+        Expression::<F, ProverExpr>::scaled(self, rhs)
     }
 }
 
 // defines how the Expressions are printed and displayed
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, ProverExpr> {
+impl<F: std::fmt::Debug + Field> std::fmt::Debug for Expression<F, ProverExpr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Expression")
             .field("Expression_Node", &self.expression_node)
@@ -1002,7 +1105,7 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, ProverExpr
 }
 
 // defines how the ExpressionNodes are printed and displayed
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, ProverExpr> {
+impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, ProverExpr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExpressionNode::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
@@ -1027,14 +1130,14 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, Prover
 }
 
 /// describes the circuit given the expression (includes all the info of the data that the expression is instantiated with)
-impl<F: std::fmt::Debug + FieldExt> Expression<F, ProverExpr> {
+impl<F: std::fmt::Debug + Field> Expression<F, ProverExpr> {
     pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
-        struct CircuitDesc<'a, F: FieldExt>(
+        struct CircuitDesc<'a, F: Field>(
             &'a ExpressionNode<F, ProverExpr>,
             &'a <ProverExpr as ExpressionType<F>>::MleVec,
         );
 
-        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for CircuitDesc<'a, F> {
+        impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for CircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self.0 {
                     ExpressionNode::Constant(scalar) => {

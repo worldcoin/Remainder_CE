@@ -1,171 +1,155 @@
 use ark_std::test_rng;
-use itertools::Itertools;
 
 use remainder::{
-    builders::{
-        combine_input_layers::InputLayerBuilder,
-        layer_builder::{simple_builders::ZeroBuilder, LayerBuilder},
+    expression::abstract_expr::ExprBuilder,
+    layouter::{
+        compiling::LayouterCircuit,
+        component::{Component, ComponentSet},
+        nodes::{
+            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
+            node_enum::NodeEnum,
+            sector::Sector,
+            CircuitNode, Context,
+        },
     },
-    expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    input_layer::public_input_layer::PublicInputLayer,
-    layer::LayerId,
-    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
-    prover::{
-        helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
-        Witness,
-    },
+    prover::helpers::test_circuit,
 };
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{Field, Fr};
+use utils::{get_dummy_input_shred_and_data, DifferenceBuilderComponent};
 
-use crate::utils::get_dummy_random_mle;
 pub mod utils;
 
 /// A builder which returns the following expression:
-/// - sel(`mle_1`, `mle_1`) + `mle_2` * `mle_2`
+/// `sel(mle_1, mle_1) + mle_2 * mle_2`
 ///
 /// The idea is that the last bit in this expression is linear.
 ///
 /// ## Arguments
 /// * `sel_mle` - An MLE with arbitrary bookkeeping table values.
 /// * `prod_mle` - An MLE with arbitrary bookkeeping table values; same size as `sel_mle`.
-struct LastBitLinearBuilder<F: FieldExt> {
-    sel_mle: DenseMle<F, F>,
-    prod_mle: DenseMle<F, F>,
+
+pub struct LastBitLinearBuilderComponent<F: Field> {
+    pub first_layer_sector: Sector<F>,
 }
-impl<F: FieldExt> LayerBuilder<F> for LastBitLinearBuilder<F> {
-    type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpr> {
-        Expression::mle(self.sel_mle.mle_ref()).concat_expr(Expression::mle(self.sel_mle.mle_ref()))
-            + Expression::products(vec![self.prod_mle.mle_ref(), self.prod_mle.mle_ref()])
+impl<F: Field> LastBitLinearBuilderComponent<F> {
+    pub fn new(ctx: &Context, sel_node: &dyn CircuitNode, prod_node: &dyn CircuitNode) -> Self {
+        let last_bit_linear_sector = Sector::new(ctx, &[sel_node, prod_node], |input_nodes| {
+            assert_eq!(input_nodes.len(), 2);
+            let sel_mle = input_nodes[0];
+            let prod_mle = input_nodes[1];
+
+            let lhs_sum_expr = sel_mle.expr().concat_expr(sel_mle.expr());
+            let rhs_sum_expr = ExprBuilder::<F>::products(vec![prod_mle, prod_mle]);
+            lhs_sum_expr + rhs_sum_expr
+        });
+
+        Self {
+            first_layer_sector: last_bit_linear_sector,
+        }
     }
-    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let sel_bt = self
-            .sel_mle
-            .mle
-            .iter()
-            .zip(self.sel_mle.mle.iter())
-            .flat_map(|(elem_1, elem_2)| vec![elem_1, elem_2]);
 
-        let mut prod_bt = self
-            .prod_mle
-            .mle
-            .iter()
-            .map(|elem| *elem * elem)
-            .collect_vec();
-        prod_bt.extend(prod_bt.clone());
-
-        let final_bt = sel_bt
-            .zip(prod_bt)
-            .map(|(elem_1, elem_2)| *elem_1 + elem_2)
-            .collect_vec();
-
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
+    pub fn get_output_sector(&self) -> &Sector<F> {
+        &self.first_layer_sector
     }
 }
-impl<F: FieldExt> LastBitLinearBuilder<F> {
-    fn new(sel_mle: DenseMle<F, F>, prod_mle: DenseMle<F, F>) -> Self {
-        Self { sel_mle, prod_mle }
+
+impl<F: Field, N> Component<N> for LastBitLinearBuilderComponent<F>
+where
+    N: CircuitNode + From<Sector<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.first_layer_sector.into()]
     }
 }
 
 /// A builder which returns the following expression:
-/// - sel(`mle_1` * `mle_1`, `mle_1`)
+/// `sel(mle_1 * mle_1, mle_1)`
 ///
 /// The idea is that the first bit (selector bit) in this expression is linear.
 ///
 /// ## Arguments
 /// * `sel_mle` - An MLE with arbitrary bookkeeping table values.
-struct FirstBitLinearBuilder<F: FieldExt> {
-    sel_mle: DenseMle<F, F>,
+pub struct FirstBitLinearBuilderComponent<F: Field> {
+    pub first_layer_sector: Sector<F>,
 }
-impl<F: FieldExt> LayerBuilder<F> for FirstBitLinearBuilder<F> {
-    type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpr> {
-        Expression::mle(self.sel_mle.mle_ref()).concat_expr(Expression::products(vec![
-            self.sel_mle.mle_ref(),
-            self.sel_mle.mle_ref(),
-        ]))
+impl<F: Field> FirstBitLinearBuilderComponent<F> {
+    pub fn new(ctx: &Context, sel_node: &dyn CircuitNode) -> Self {
+        let last_bit_linear_sector = Sector::new(ctx, &[sel_node], |input_nodes| {
+            assert_eq!(input_nodes.len(), 1);
+            let sel_mle = input_nodes[0];
+
+            sel_mle
+                .expr()
+                .concat_expr(ExprBuilder::<F>::products(vec![sel_mle, sel_mle]))
+        });
+
+        Self {
+            first_layer_sector: last_bit_linear_sector,
+        }
     }
-    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let final_bt = self
-            .sel_mle
-            .mle
-            .iter()
-            .zip(self.sel_mle.mle.iter())
-            .flat_map(|(elem_1, elem_2)| vec![*elem_1 * elem_1, *elem_2])
-            .collect_vec();
 
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
+    pub fn get_output_sector(&self) -> &Sector<F> {
+        &self.first_layer_sector
     }
 }
-impl<F: FieldExt> FirstBitLinearBuilder<F> {
-    fn new(sel_mle: DenseMle<F, F>) -> Self {
-        Self { sel_mle }
+
+impl<F: Field, N> Component<N> for FirstBitLinearBuilderComponent<F>
+where
+    N: CircuitNode + From<Sector<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.first_layer_sector.into()]
     }
 }
 
 /// A circuit which does the following:
-/// * Layer 0: [LastBitLinearBuilder] with `sel_mle`, `prod_mle`
-/// * Layer 1: [FirstBitLinearBuilder] with `sel_mle`
-/// * Layer 2: [ZeroBuilder] with the output of Layer 0 and itself.
+/// * Layer 0: [LastBitLinearBuilderComponent] with `sel_mle`, `prod_mle`
+/// * Layer 1: [FirstBitLinearBuilderComponent] with `sel_mle`
+/// * Layer 2: [DifferenceBuilderComponent] with the output of Layer 0 and itself.
 ///
 /// The expected output of this circuit is the zero MLE.
 ///
 /// ## Arguments
 /// * `sel_mle`, `prod_mle` both MLEs with arbitrary bookkeeping table values, same size.
 
-struct LinearNonLinearCircuit<F: FieldExt> {
-    sel_mle: DenseMle<F, F>,
-    prod_mle: DenseMle<F, F>,
-}
-impl<F: FieldExt> GKRCircuit<F> for LinearNonLinearCircuit<F> {
-    type ProofSystem = DefaultProofSystem;
-
-    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let input_mles: Vec<&mut dyn Mle<F>> = vec![&mut self.sel_mle, &mut self.prod_mle];
-        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F>>()
-            .into();
-
-        let mut layers = Layers::new();
-
-        let first_layer_builder =
-            LastBitLinearBuilder::new(self.sel_mle.clone(), self.prod_mle.clone());
-        let first_layer_output = layers.add_gkr(first_layer_builder);
-
-        let second_layer_builder = FirstBitLinearBuilder::new(first_layer_output);
-        let second_layer_output = layers.add_gkr(second_layer_builder);
-
-        let zero_builder = ZeroBuilder::new(second_layer_output);
-        let output = layers.add_gkr(zero_builder);
-
-        Witness {
-            layers,
-            output_layers: vec![output.get_enum()],
-            input_layers: vec![input_layer],
-        }
-    }
-}
-
-impl<F: FieldExt> LinearNonLinearCircuit<F> {
-    fn new(sel_mle: DenseMle<F, F>, prod_mle: DenseMle<F, F>) -> Self {
-        assert_eq!(sel_mle.num_iterated_vars(), prod_mle.num_iterated_vars());
-        Self { sel_mle, prod_mle }
-    }
-}
-
 #[test]
-fn test_linear_and_nonlinear_bits_circuit() {
+fn test_linear_and_nonlinear_bits_circuit_newmainder() {
     const VARS_SEL_SIDE: usize = 2;
     const VARS_PROD_SIDE: usize = VARS_SEL_SIDE;
     let mut rng = test_rng();
 
-    let sel_mle = get_dummy_random_mle(VARS_SEL_SIDE, &mut rng);
-    let prod_mle = get_dummy_random_mle(VARS_PROD_SIDE, &mut rng);
+    let circuit = LayouterCircuit::new(|ctx| {
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let (sel_input, sel_input_data) =
+            get_dummy_input_shred_and_data(VARS_SEL_SIDE, &mut rng, ctx, &input_layer);
+        let (prod_input, prod_input_data) =
+            get_dummy_input_shred_and_data(VARS_PROD_SIDE, &mut rng, ctx, &input_layer);
+        let input_data = InputLayerData::new(
+            input_layer.id(),
+            vec![sel_input_data, prod_input_data],
+            None,
+        );
 
-    let linear_non_linear_circuit: LinearNonLinearCircuit<Fr> =
-        LinearNonLinearCircuit::new(sel_mle, prod_mle);
-    test_circuit(linear_non_linear_circuit, None)
+        let component_1 = LastBitLinearBuilderComponent::new(ctx, &sel_input, &prod_input);
+        let component_2 =
+            FirstBitLinearBuilderComponent::new(ctx, &component_1.get_output_sector());
+        let output_component =
+            DifferenceBuilderComponent::new(ctx, &component_2.get_output_sector());
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> =
+            vec![input_layer.into(), sel_input.into(), prod_input.into()];
+
+        all_nodes.extend(component_1.yield_nodes());
+        all_nodes.extend(component_2.yield_nodes());
+        all_nodes.extend(output_component.yield_nodes());
+
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+            vec![input_data],
+        )
+    });
+
+    test_circuit(circuit, None)
 }

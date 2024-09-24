@@ -1,25 +1,67 @@
-use itertools::Itertools;
+use itertools::{repeat_n, Itertools};
 use rand::Rng;
-use remainder::{
-    builders::layer_builder::LayerBuilder,
-    expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::LayerId,
-    mle::{dense::DenseMle, MleIndex},
-};
-use remainder_shared_types::{FieldExt, Fr};
+use remainder::expression::abstract_expr::ExprBuilder;
+use remainder::layer::LayerId;
+use remainder::layouter::component::Component;
+use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputShred, InputShredData};
+use remainder::layouter::nodes::circuit_outputs::OutputNode;
+use remainder::layouter::nodes::sector::Sector;
+use remainder::layouter::nodes::{CircuitNode, Context};
+use remainder::mle::evals::{Evaluations, MultilinearExtension};
+
+use remainder::mle::dense::DenseMle;
+use remainder::mle::MleIndex;
+use remainder_shared_types::{Field, Fr};
 
 /// Returns an MLE with all Fr::one() for testing according to the number of variables.
-pub fn get_dummy_one_mle(num_vars: usize) -> DenseMle<Fr, Fr> {
+pub fn get_dummy_one_mle(num_vars: usize) -> DenseMle<Fr> {
     let mle_vec = (0..(1 << num_vars)).map(|_| Fr::one()).collect_vec();
-    DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None)
+    DenseMle::new_from_raw(mle_vec, LayerId::Input(0))
 }
 
 /// Returns an MLE with random elements generated from u64 for testing according to the number of variables.
-pub fn get_dummy_random_mle(num_vars: usize, rng: &mut impl Rng) -> DenseMle<Fr, Fr> {
+pub fn get_dummy_random_mle(num_vars: usize, rng: &mut impl Rng) -> DenseMle<Fr> {
     let mle_vec = (0..(1 << num_vars))
         .map(|_| Fr::from(rng.gen::<u64>()))
         .collect_vec();
-    DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None)
+    DenseMle::new_from_raw(mle_vec, LayerId::Input(0))
+}
+
+/// Returns a vector with random elements generated from u64 for testing according to the number of variables.
+pub fn get_dummy_random_vec(num_vars: usize, rng: &mut impl Rng) -> Vec<Fr> {
+    (0..(1 << num_vars))
+        .map(|_| Fr::from(rng.gen::<u64>()))
+        .collect_vec()
+}
+
+/// Returns an [InputShred] with the appropriate [MultilinearExtension] as the data generated from random u64
+pub fn get_dummy_input_shred_and_data(
+    num_vars: usize,
+    rng: &mut impl Rng,
+    ctx: &Context,
+    input_node: &InputLayerNode,
+) -> (InputShred, InputShredData<Fr>) {
+    // let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+    let mle_vec = (0..(1 << num_vars))
+        .map(|_| Fr::from(rng.gen::<u64>()))
+        .collect_vec();
+    let data = MultilinearExtension::new_from_evals(Evaluations::new(num_vars, mle_vec));
+    let input_shred = InputShred::new(ctx, data.num_vars(), input_node);
+    let input_shred_data = InputShredData::new(input_shred.id(), data);
+    (input_shred, input_shred_data)
+}
+
+/// Returns an [InputShred] with the appropriate [MultilinearExtension], but given as input an mle_vec
+pub fn get_input_shred_and_data_from_vec(
+    mle_vec: Vec<Fr>,
+    ctx: &Context,
+    input_node: &InputLayerNode,
+) -> (InputShred, InputShredData<Fr>) {
+    assert!(mle_vec.len().is_power_of_two());
+    let data = MultilinearExtension::new(mle_vec);
+    let input_shred = InputShred::new(ctx, data.num_vars(), input_node);
+    let input_shred_data = InputShredData::new(input_shred.id(), data);
+    (input_shred, input_shred_data)
 }
 
 /// Returns a vector of MLEs for dataparallel testing according to the number of variables and
@@ -28,21 +70,35 @@ pub fn get_dummy_random_mle_vec(
     num_vars: usize,
     num_dataparallel_bits: usize,
     rng: &mut impl Rng,
-) -> Vec<DenseMle<Fr, Fr>> {
+) -> Vec<DenseMle<Fr>> {
     (0..(1 << num_dataparallel_bits))
         .map(|_| {
             let mle_vec = (0..(1 << num_vars))
                 .map(|_| Fr::from(rng.gen::<u64>()))
                 .collect_vec();
-            DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None)
+            DenseMle::new_from_raw(mle_vec, LayerId::Input(0))
         })
         .collect_vec()
 }
 
+/// Returns the total MLE indices given a Vec<bool>
+/// for the prefix bits and then the number of iterated
+/// bits after.
+pub fn get_total_mle_indices<F: Field>(
+    prefix_bits: &[bool],
+    num_iterated_bits: usize,
+) -> Vec<MleIndex<F>> {
+    prefix_bits
+        .iter()
+        .map(|bit| MleIndex::Fixed(*bit))
+        .chain(repeat_n(MleIndex::Iterated, num_iterated_bits))
+        .collect()
+}
+
 /// A builder which returns an expression with three nested selectors:
-/// - innermost_selector: sel(`inner_inner_sel_mle`, `inner_inner_sel_mle * inner_inner_sel_mle`)
-/// - inner_selector: sel(`innermost_selector`, `inner_sel_mle`)
-/// - overall_expression: sel(`inner_selector`, `outer_sel_mle`).
+/// * innermost_selector: sel(`inner_inner_sel_mle`, `inner_inner_sel_mle * inner_inner_sel_mle`)
+/// * inner_selector: sel(`innermost_selector`, `inner_sel_mle`)
+/// * overall_expression: sel(`inner_selector`, `outer_sel_mle`).
 ///
 /// ## Arguments
 /// * `inner_inner_sel_mle` - An MLE with arbitrary bookkeeping table values.
@@ -50,184 +106,205 @@ pub fn get_dummy_random_mle_vec(
 /// the size of `inner_inner_sel_mle`
 /// * `outer_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
 /// the size of `inner_sel_mle`
-pub struct TripleNestedSelectorBuilder<F: FieldExt> {
-    inner_inner_sel_mle: DenseMle<F, F>,
-    inner_sel_mle: DenseMle<F, F>,
-    outer_sel_mle: DenseMle<F, F>,
+
+pub struct TripleNestedBuilderComponent<F: Field> {
+    pub first_layer_sector: Sector<F>,
 }
-impl<F: FieldExt> LayerBuilder<F> for TripleNestedSelectorBuilder<F> {
-    type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpr> {
-        let inner_inner_sel = Expression::products(vec![
-            self.inner_inner_sel_mle.mle_ref(),
-            self.inner_inner_sel_mle.mle_ref(),
-        ])
-        .concat_expr(Expression::mle(self.inner_inner_sel_mle.mle_ref()));
-        let inner_sel = Expression::mle(self.inner_sel_mle.mle_ref()).concat_expr(inner_inner_sel);
-        let outer_sel = Expression::mle(self.outer_sel_mle.mle_ref()).concat_expr(inner_sel);
-        outer_sel
-    }
-
-    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let inner_inner_sel_bt = self
-            .inner_inner_sel_mle
-            .mle
-            .iter()
-            .flat_map(|elem| vec![*elem, *elem * elem]);
-
-        let inner_sel_bt = inner_inner_sel_bt
-            .zip(self.inner_sel_mle.mle.iter())
-            .flat_map(|(elem_1, elem_2)| vec![elem_1, *elem_2]);
-
-        let final_bt = inner_sel_bt
-            .zip(self.outer_sel_mle.mle.iter())
-            .flat_map(|(elem_1, elem_2)| vec![elem_1, *elem_2])
-            .collect_vec();
-
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
-    }
-}
-impl<F: FieldExt> TripleNestedSelectorBuilder<F> {
+impl<F: Field> TripleNestedBuilderComponent<F> {
     pub fn new(
-        inner_inner_sel_mle: DenseMle<F, F>,
-        inner_sel_mle: DenseMle<F, F>,
-        outer_sel_mle: DenseMle<F, F>,
+        ctx: &Context,
+        inner_inner_sel: &dyn CircuitNode,
+        inner_sel: &dyn CircuitNode,
+        outer_sel: &dyn CircuitNode,
     ) -> Self {
+        let triple_nested_selector_sector = Sector::new(
+            ctx,
+            &[inner_inner_sel, inner_sel, outer_sel],
+            |triple_sel_nodes| {
+                assert_eq!(triple_sel_nodes.len(), 3);
+                let inner_inner_sel_mle = triple_sel_nodes[0];
+                let inner_sel_mle = triple_sel_nodes[1];
+                let outer_sel_mle = triple_sel_nodes[2];
+
+                let inner_inner_sel =
+                    ExprBuilder::<F>::products(vec![inner_inner_sel_mle, inner_inner_sel_mle])
+                        .concat_expr(inner_inner_sel_mle.expr());
+                let inner_sel = inner_sel_mle.expr().concat_expr(inner_inner_sel);
+
+                outer_sel_mle.expr().concat_expr(inner_sel)
+            },
+        );
+
         Self {
-            inner_inner_sel_mle,
-            inner_sel_mle,
-            outer_sel_mle,
+            first_layer_sector: triple_nested_selector_sector,
+        }
+    }
+
+    pub fn get_output_sector(&self) -> &Sector<F> {
+        &self.first_layer_sector
+    }
+}
+
+impl<F: Field, N> Component<N> for TripleNestedBuilderComponent<F>
+where
+    N: CircuitNode + From<Sector<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.first_layer_sector.into()]
+    }
+}
+
+/// A builder which takes the difference of an MLE from itself to return a zero layer.
+
+pub struct DifferenceBuilderComponent<F: Field> {
+    pub output_sector: Sector<F>,
+    pub output_node: OutputNode,
+}
+
+impl<F: Field> DifferenceBuilderComponent<F> {
+    pub fn new(ctx: &Context, input: &dyn CircuitNode) -> Self {
+        let zero_output_sector = Sector::new(ctx, &[input], |input_vec| {
+            assert_eq!(input_vec.len(), 1);
+            let input_data = input_vec[0];
+            input_data.expr() - input_data.expr()
+        });
+
+        let output = OutputNode::new_zero(ctx, &zero_output_sector);
+
+        Self {
+            output_sector: zero_output_sector,
+            output_node: output,
         }
     }
 }
 
-/// A builder which returns the following expression:
-/// - `mle_1` * `mle_2` + (10 * `mle_1`)
-///
-/// ## Arguments
-/// * `mle_1` - An MLE with arbitrary bookkeeping table values.
-/// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
-pub struct ProductScaledBuilder<F: FieldExt> {
-    mle_1: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
-}
-impl<F: FieldExt> LayerBuilder<F> for ProductScaledBuilder<F> {
-    type Successor = DenseMle<F, F>;
-
-    fn build_expression(&self) -> Expression<F, ProverExpr> {
-        let prod_expr = Expression::products(vec![self.mle_1.mle_ref(), self.mle_2.mle_ref()]);
-        let scaled_expr = self.mle_1.mle_ref().expression() * F::from(10_u64);
-        prod_expr + scaled_expr
-    }
-
-    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let prod_bt = self
-            .mle_1
-            .mle
-            .iter()
-            .zip(self.mle_2.mle.iter())
-            .map(|(elem_1, elem_2)| *elem_1 * elem_2);
-
-        let scaled_bt = self.mle_1.mle.iter().map(|elem| F::from(10_u64) * elem);
-
-        let final_bt = prod_bt
-            .zip(scaled_bt)
-            .map(|(elem_1, elem_2)| elem_1 + elem_2)
-            .collect_vec();
-
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
-    }
-}
-impl<F: FieldExt> ProductScaledBuilder<F> {
-    pub fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
-        Self { mle_1, mle_2 }
+impl<F: Field, N> Component<N> for DifferenceBuilderComponent<F>
+where
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.output_sector.into(), self.output_node.into()]
     }
 }
 
 /// A builder which returns the following expression:
-/// - `mle_1` * `mle_2` + (`mle_1` + `mle_2`)
+/// `mle_1 * mle_2 + (10 * mle_1)`
 ///
 /// ## Arguments
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
-pub struct ProductSumBuilder<F: FieldExt> {
-    mle_1: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
+pub struct ProductScaledBuilderComponent<F: Field> {
+    pub first_layer_sector: Sector<F>,
 }
-impl<F: FieldExt> LayerBuilder<F> for ProductSumBuilder<F> {
-    type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpr> {
-        let prod_expr = Expression::products(vec![self.mle_1.mle_ref(), self.mle_2.mle_ref()]);
-        let sum_expr = self.mle_1.mle_ref().expression() + self.mle_2.mle_ref().expression();
-        prod_expr + sum_expr
+impl<F: Field> ProductScaledBuilderComponent<F> {
+    pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
+        let product_scaled_sector = Sector::new(ctx, &[mle_1, mle_2], |product_scaled_nodes| {
+            assert_eq!(product_scaled_nodes.len(), 2);
+            let mle_1 = product_scaled_nodes[0];
+            let mle_2 = product_scaled_nodes[1];
+
+            ExprBuilder::<F>::products(vec![mle_1, mle_2])
+                + ExprBuilder::<F>::scaled(mle_1.expr(), F::from(10_u64))
+        });
+
+        Self {
+            first_layer_sector: product_scaled_sector,
+        }
     }
 
-    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let prod_bt = self
-            .mle_1
-            .mle
-            .iter()
-            .zip(self.mle_2.mle.iter())
-            .map(|(elem_1, elem_2)| *elem_1 * elem_2);
-
-        let sum_bt = self
-            .mle_1
-            .mle
-            .iter()
-            .zip(self.mle_2.mle.iter())
-            .map(|(elem_1, elem_2)| *elem_1 + elem_2);
-
-        let final_bt = prod_bt
-            .zip(sum_bt)
-            .map(|(elem_1, elem_2)| elem_1 + elem_2)
-            .collect_vec();
-
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
+    pub fn get_output_sector(&self) -> &Sector<F> {
+        &self.first_layer_sector
     }
 }
-impl<F: FieldExt> ProductSumBuilder<F> {
-    pub fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
-        Self { mle_1, mle_2 }
+
+impl<F: Field, N> Component<N> for ProductScaledBuilderComponent<F>
+where
+    N: CircuitNode + From<Sector<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.first_layer_sector.into()]
     }
 }
 
 /// A builder which returns the following expression:
-/// - `mle_1` + 10 + (`mle_2` * 10)
+/// `mle_1 * mle_2 + (mle_1 + mle_2)`.
 ///
 /// ## Arguments
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
-pub struct ConstantScaledSumBuilder<F: FieldExt> {
-    mle_1: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
-}
-impl<F: FieldExt> LayerBuilder<F> for ConstantScaledSumBuilder<F> {
-    type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpr> {
-        let constant_expr =
-            Expression::mle(self.mle_1.mle_ref()) + Expression::constant(F::from(10_u64));
-        let scaled_expr = self.mle_2.mle_ref().expression() * F::from(10_u64);
-        constant_expr + scaled_expr
+pub struct ProductSumBuilderComponent<F: Field> {
+    pub first_layer_sector: Sector<F>,
+}
+
+impl<F: Field> ProductSumBuilderComponent<F> {
+    pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
+        let product_sum_sector = Sector::new(ctx, &[mle_1, mle_2], |product_sum_nodes| {
+            assert_eq!(product_sum_nodes.len(), 2);
+            let mle_1 = product_sum_nodes[0];
+            let mle_2 = product_sum_nodes[1];
+
+            ExprBuilder::<F>::products(vec![mle_1, mle_2]) + (mle_1.expr() + mle_2.expr())
+        });
+
+        Self {
+            first_layer_sector: product_sum_sector,
+        }
     }
 
-    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let constant_bt = self.mle_1.mle.iter().map(|elem| *elem + F::from(10_u64));
-
-        let scaled_bt = self.mle_2.mle.iter().map(|elem| F::from(10_u64) * elem);
-
-        let final_bt = constant_bt
-            .zip(scaled_bt)
-            .map(|(elem_1, elem_2)| elem_1 + elem_2)
-            .collect_vec();
-
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
+    pub fn get_output_sector(&self) -> &Sector<F> {
+        &self.first_layer_sector
     }
 }
-impl<F: FieldExt> ConstantScaledSumBuilder<F> {
-    pub fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
-        Self { mle_1, mle_2 }
+
+impl<F: Field, N> Component<N> for ProductSumBuilderComponent<F>
+where
+    N: CircuitNode + From<Sector<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.first_layer_sector.into()]
+    }
+}
+
+/// A builder which returns the following expression:
+/// `mle_1 + 10 + (mle_2 * 10)`.
+///
+/// ## Arguments
+/// * `mle_1` - An MLE with arbitrary bookkeeping table values.
+/// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
+
+pub struct ConstantScaledSumBuilderComponent<F: Field> {
+    pub first_layer_sector: Sector<F>,
+}
+
+impl<F: Field> ConstantScaledSumBuilderComponent<F> {
+    pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
+        let constant_scaled_sector = Sector::new(ctx, &[mle_1, mle_2], |constant_scaled_nodes| {
+            assert_eq!(constant_scaled_nodes.len(), 2);
+            let mle_1 = constant_scaled_nodes[0];
+            let mle_2 = constant_scaled_nodes[1];
+
+            ExprBuilder::<F>::scaled(mle_2.expr(), F::from(10_u64))
+                + (mle_1.expr() + ExprBuilder::constant(F::from(10_u64)))
+        });
+
+        Self {
+            first_layer_sector: constant_scaled_sector,
+        }
+    }
+
+    pub fn get_output_sector(&self) -> &Sector<F> {
+        &self.first_layer_sector
+    }
+}
+
+impl<F: Field, N> Component<N> for ConstantScaledSumBuilderComponent<F>
+where
+    N: CircuitNode + From<Sector<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.first_layer_sector.into()]
     }
 }

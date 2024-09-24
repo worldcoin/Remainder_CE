@@ -1,16 +1,63 @@
 #[cfg(test)]
 mod tests;
 
-use std::ops::Index;
+use std::{error::Error, ops::Index};
 
-use ark_std::cfg_into_iter;
+use ark_std::{cfg_into_iter, log2};
 use itertools::{EitherOrBoth::*, Itertools};
-use rayon::{
-    prelude::{IntoParallelIterator, ParallelIterator},
-    slice::ParallelSlice,
-};
-use remainder_shared_types::FieldExt;
+use ndarray::{Array, ArrayView, Dimension, IxDyn};
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
+#[cfg(feature = "parallel")]
+use rayon::prelude::ParallelSlice;
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+#[derive(Error, Debug, Clone)]
+/// the errors associated with the dimension of the MLE.
+pub enum DimensionError {
+    #[error("Dimensions: {0} do not match with number of axes: {1} as indicated by their names.")]
+    /// The dimensions of the MLE do not match the number of axes.
+    DimensionMismatchError(usize, usize),
+    #[error("Dimensions: {0} do not match with the numvar: {1} of the mle.")]
+    /// The dimensions of the MLE do not match the number of variables.
+    DimensionNumVarError(usize, usize),
+    #[error("Trying to get the underlying mle as an ndarray, but there is no dimension info.")]
+    /// No dimension info of the MLE.
+    NoDimensionInfoError(),
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+/// the dimension information of the MLE.
+/// contains the dim: [IxDyn], see ndarray for more detailed documentation
+/// and the names of the axes.
+pub struct DimInfo {
+    dims: IxDyn,
+    axes_names: Vec<String>,
+}
+
+impl DimInfo {
+    /// Creates a new DimInfo from the dimensions and the axes names.
+    pub fn new(dims: IxDyn, axes_names: Vec<String>) -> Result<Self, DimensionError> {
+        if dims.ndim() != axes_names.len() {
+            return Err(DimensionError::DimensionMismatchError(
+                dims.ndim(),
+                axes_names.len(),
+            ));
+        }
+        Ok(Self { dims, axes_names })
+    }
+}
+
+impl std::fmt::Debug for DimInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DimensionInfo")
+            .field("dim sizes", &self.dims.slice())
+            .field("axes names", &self.axes_names)
+            .finish()
+    }
+}
 
 // -------------- Various Helper Functions -----------------
 
@@ -42,8 +89,7 @@ fn mirror_bits(num_bits: usize, mut value: usize) -> usize {
 /// The `n` variables are indexed from `0` to `n-1` throughout the lifetime of
 /// the object.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub struct Evaluations<F: FieldExt> {
+pub struct Evaluations<F> {
     /// To understand how evaluations are stored, let's index `f`'s input bits
     /// as follows: `f(b_0, b_1, ..., b_{n-1})`. Evaluations are ordered using
     /// the bit-string `b_{n-1}b_{n-2}...b_1b_0` as key, hence the bit `b_{n-1}`
@@ -73,7 +119,7 @@ pub struct Evaluations<F: FieldExt> {
     zero: F,
 }
 
-impl<F: FieldExt> Evaluations<F> {
+impl<F: Field> Evaluations<F> {
     /// Returns a representation of the constant function on zero variables
     /// equal to `F::ZERO`.
     pub fn new_zero() -> Self {
@@ -118,7 +164,8 @@ impl<F: FieldExt> Evaluations<F> {
         }
     }
 
-    fn num_vars(&self) -> usize {
+    /// returns the number of variables of the current Evalations.
+    pub fn num_vars(&self) -> usize {
         self.num_vars
     }
 
@@ -129,7 +176,7 @@ impl<F: FieldExt> Evaluations<F> {
     /// `( f(x0, x_1, ..., x_i = 0, ..., x_{n-1}), f(x0, x1, ..., x_i = 1, ...,
     /// x_{n-1}) )`.
     /// The pairs are returned in little-endian order. For example:
-    /// ```ignore
+    /// ```text
     /// [
     ///     ( f(0, 0, ..., 0, ..., 0), f(0, 0, ..., 1, ..., 0) ),
     ///     ( f(1, 0, ..., 0, ..., 0), f(1, 0, ..., 1, ..., 0) ),
@@ -221,7 +268,7 @@ impl<F: FieldExt> Evaluations<F> {
 
 /// Provides a vector-like interface to evaluations; useful during refactoring
 /// but also for implementing `EvaluationsIterator`.
-impl<F: FieldExt> Index<usize> for Evaluations<F> {
+impl<F: Field> Index<usize> for Evaluations<F> {
     type Output = F;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -232,7 +279,7 @@ impl<F: FieldExt> Index<usize> for Evaluations<F> {
 /// An iterator over evaluations indexed by vertices of a projection of the
 /// boolean hypercube on `num_vars - 1` dimensions. See documentation for
 /// `Evaluations::iter` for more information.
-pub struct EvaluationsPairIterator<'a, F: FieldExt> {
+pub struct EvaluationsPairIterator<'a, F: Field> {
     /// Reference to original bookkeeping table.
     evals: &'a Evaluations<F>,
 
@@ -247,7 +294,7 @@ pub struct EvaluationsPairIterator<'a, F: FieldExt> {
     current_pair_index: usize,
 }
 
-impl<'a, F: FieldExt> Iterator for EvaluationsPairIterator<'a, F> {
+impl<'a, F: Field> Iterator for EvaluationsPairIterator<'a, F> {
     type Item = (F, F);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -286,14 +333,14 @@ impl<'a, F: FieldExt> Iterator for EvaluationsPairIterator<'a, F> {
 
 /// Stores a function `\tilde{f}: F^n -> F`, the unique Multilinear
 /// Extension (MLE) of a given function `f: {0, 1}^n -> F`:
-/// ```ignore
+/// ```text
 ///     \tilde{f}(x_0, ..., x_{n-1})
 ///         = \sum_{b_0, ..., b_{n-1} \in {0, 1}^n}
 ///             \tilde{beta}(x_0, ..., x_{n-1}, b_0, ..., b_{n-1})
 ///             * f(b_0, ..., b_{n-1}).
 /// ```
 /// where `\tilde{beta}` is the MLE of the equality function:
-/// ```ignore
+/// ```text
 ///     \tilde{beta}(x_0, ..., x_{n-1}, b_0, ..., b_{n-1})
 ///         = \prod_{i  = 0}^{n-1} ( x_i * b_i + (1 - x_i) * (1 - b_i) )
 /// ```
@@ -302,25 +349,103 @@ impl<'a, F: FieldExt> Iterator for EvaluationsPairIterator<'a, F> {
 /// The `n` variables are indexed from `0` to `n-1` throughout the lifetime of
 /// the object even if `n` is modified by fixing a variable to a constant value.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub struct MultilinearExtension<F: FieldExt> {
+pub struct MultilinearExtension<F> {
     /// The bookkeeping table with the evaluations of `f` on the hypercube.
     pub f: Evaluations<F>,
+    dim_info: Option<DimInfo>,
 }
 
-impl<F: FieldExt> MultilinearExtension<F> {
+impl<F: Field> MultilinearExtension<F> {
+    /// Create a new MultilinearExtension from a [Vec<F>] of evaluations.
+    pub fn new(evals_vec: Vec<F>) -> Self {
+        let num_vars = log2(evals_vec.len()) as usize;
+        let evals = Evaluations::new(num_vars, evals_vec);
+        MultilinearExtension::new_from_evals(evals)
+    }
+
     /// Generate a new MultilinearExtension from a representation `evals` of a
     /// function `f`.
-    pub fn new(evals: Evaluations<F>) -> Self {
-        Self { f: evals }
+    pub fn new_from_evals(evals: Evaluations<F>) -> Self {
+        Self {
+            f: evals,
+            dim_info: None,
+        }
+    }
+
+    /// Creates a new mle which is all zeroes of a specific num_vars.
+    /// In this case the size of the evals and the num_vars will not match up
+    pub fn new_sized_zero(num_vars: usize) -> Self {
+        Self {
+            f: Evaluations {
+                evals: vec![],
+                num_vars,
+                zero: F::ZERO,
+            },
+            dim_info: None,
+        }
+    }
+
+    /// Generate a new MultilinearExtension from `evals` and `dim_info`.
+    pub fn new_with_dim_info(evals: Evaluations<F>, dim_info: DimInfo) -> Self {
+        let mut mle = Self::new_from_evals(evals);
+        mle.set_dim_info(dim_info).unwrap();
+        mle
+    }
+
+    /// Generate a new MultilinearExtension from a representation of `ndarray`
+    pub fn new_from_ndarray(
+        ndarray: Array<F, IxDyn>,
+        axes_names: Vec<String>,
+    ) -> Result<Self, Box<dyn Error>> {
+        let dim_info = DimInfo::new(ndarray.raw_dim(), axes_names)?;
+        let evals_vec = ndarray.into_raw_vec();
+        let evals = Evaluations::new(log2(evals_vec.len()) as usize, evals_vec);
+        let mle = Self::new_with_dim_info(evals, dim_info);
+        Ok(mle)
+    }
+
+    /// Set the dimension information for the MLE.
+    pub fn set_dim_info(&mut self, dim_info: DimInfo) -> Result<(), DimensionError> {
+        let num_var_from_dim: u32 = dim_info.dims.slice().iter().map(|dim| log2(*dim)).sum();
+        if num_var_from_dim as usize != self.num_vars() {
+            return Err(DimensionError::DimensionNumVarError(
+                num_var_from_dim as usize,
+                self.num_vars(),
+            ));
+        }
+
+        self.dim_info = Some(dim_info);
+        Ok(())
+    }
+
+    /// Get the dimension information for the MLE.
+    pub fn dim_info(&self) -> &Option<DimInfo> {
+        &self.dim_info
+    }
+
+    /// Set the MLE as an ndarray.
+    pub fn get_mle_as_ndarray(&mut self) -> Result<ArrayView<F, IxDyn>, Box<dyn Error>> {
+        if let Some(dim_info) = self.dim_info() {
+            let ndarray: ArrayView<F, IxDyn> =
+                ArrayView::from_shape(dim_info.dims.clone(), self.get_evals_vector())?;
+            Ok(ndarray)
+        } else {
+            Err(DimensionError::NoDimensionInfoError().into())
+        }
+    }
+
+    /// Get the names of the axes of the MLE (multi-dimensional).
+    pub fn get_axes_names(&mut self) -> Option<Vec<String>> {
+        self.dim_info()
+            .as_ref()
+            .map(|dim_info| dim_info.axes_names.clone())
     }
 
     /// Generates a representation for the MLE of the zero function on zero
     /// variables.
     pub fn new_zero() -> Self {
-        Self {
-            f: Evaluations::new_zero(),
-        }
+        let zero_evals = Evaluations::new_zero();
+        Self::new_from_evals(zero_evals)
     }
 
     /// Returns `n`, the number of arguments `\tilde{f}` takes.
@@ -393,8 +518,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
         let num_vars = self.num_vars();
         let num_pairs = 1_usize << (num_vars - 1);
 
-        let new_evals: Vec<F> = (0..num_pairs)
-            .into_par_iter()
+        let new_evals: Vec<F> = cfg_into_iter!(0..num_pairs)
             .map(|idx| {
                 // Compute the two indices by inserting a `0` and a `1` respectively
                 // in the appropriate position of `current_pair_index`.
@@ -543,11 +667,29 @@ impl<F: FieldExt> MultilinearExtension<F> {
         // table here ---
         self.f = Evaluations::<F>::new(self.num_vars() - 1, new.collect());
     }
+
+    /// interlaces the MLEs into a single MLE, in a little endian fashion.
+    pub fn interlace_mles(mles: Vec<MultilinearExtension<F>>) -> MultilinearExtension<F> {
+        let first_len = mles[0].get_evals_vector().len();
+
+        if !mles.iter().all(|v| v.get_evals_vector().len() == first_len) {
+            panic!("All mles's underlying bookkeeping table must have the same length");
+        }
+
+        let out = (0..first_len)
+            .flat_map(|i| {
+                mles.iter()
+                    .map(move |v| v.get_evals_vector().get(i).copied().unwrap())
+            })
+            .collect();
+
+        Self::new(out)
+    }
 }
 
 /// Provides a vector-like interface to MultilinearExtensions;
 /// useful during refactoring.
-impl<F: FieldExt> Index<usize> for MultilinearExtension<F> {
+impl<F: Field> Index<usize> for MultilinearExtension<F> {
     type Output = F;
 
     fn index(&self, index: usize) -> &Self::Output {

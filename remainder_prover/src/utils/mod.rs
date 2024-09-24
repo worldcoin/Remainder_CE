@@ -1,138 +1,56 @@
-//! Module for generating and manipulating mles, also includes a function to
-//! generate the description of circuits.
+//! Module for useful functions
+/// Helpful arithmetic functions.
+pub mod arithmetic;
+/// Helpful functions for manipulating ndarray Array objects (e.g. padding)
+pub mod array;
+/// Helpful functions for debugging.
+pub mod debug;
+/// Helpful functions for manipulating MLEs (e.g. padding).
+pub mod mle;
 
-use std::{fs, iter::repeat_with};
+#[cfg(test)]
+/// Utilities that are only useful for tests
+pub(crate) mod test_utils;
 
-use ark_std::test_rng;
-use itertools::{repeat_n, Itertools};
-use rand::Rng;
-use remainder_shared_types::{FieldExt, Poseidon};
+use std::fs;
+
+/// FIXME the functions below are uncategorized and probably should be moved to a more appropriate
+/// module or submodule.
+use remainder_shared_types::{Field, Poseidon};
 
 use crate::{
-    layer::{layer_enum::LayerEnum, LayerId},
-    mle::{dense::DenseMle, MleIndex},
+    layer::layer_enum::LayerEnum,
+    layouter::nodes::{
+        circuit_inputs::{InputLayerNode, InputShred, InputShredData},
+        CircuitNode, Context,
+    },
+    mle::evals::MultilinearExtension,
     prover::layers::Layers,
 };
 
-#[cfg(test)]
-pub(crate) mod test_utils;
-
-/// Returns a zero-padded version of `coeffs` with length padded
-/// to the nearest power of two.
-///
-/// ## Arguments
-///
-/// * `coeffs` - The coefficients to be padded
-///
-/// ## Returns
-///
-/// * `padded_coeffs` - The coeffients, zero-padded to the nearest power of two
-///   (in length)
-pub fn pad_to_nearest_power_of_two<F: FieldExt>(coeffs: Vec<F>) -> Vec<F> {
-    // --- No need to duplicate things if we're already a power of two! ---
-    if coeffs.len().is_power_of_two() {
-        return coeffs;
-    }
-
-    let num_padding = coeffs.len().checked_next_power_of_two().unwrap() - coeffs.len();
-    coeffs
-        .into_iter()
-        .chain(repeat_with(|| F::ZERO).take(num_padding))
-        .collect_vec()
+/// Using the number of variables, get an input shred that represents
+/// this information.
+pub fn get_input_shred_from_num_vars(
+    num_vars: usize,
+    ctx: &Context,
+    input_node: &InputLayerNode,
+) -> InputShred {
+    InputShred::new(ctx, num_vars, input_node)
 }
 
-/// Returns the argsort (i.e. indices) of the given vector slice.
-///
-/// Thanks ChatGPT!!!
-pub fn argsort<T: Ord>(slice: &[T], invert: bool) -> Vec<usize> {
-    let mut indices: Vec<usize> = (0..slice.len()).collect();
-
-    indices.sort_by(|&i, &j| {
-        if invert {
-            slice[j].cmp(&slice[i])
-        } else {
-            slice[i].cmp(&slice[j])
-        }
-    });
-
-    indices
-}
-
-/// Helper function to create random MLE with specific number of vars
-// pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) ->
-// DenseMle<F, F> {
-pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F, F> {
-    let capacity = 2_u32.pow(num_vars as u32);
-    let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
-        .take(capacity as usize)
-        .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
-}
-
-/// Helper function to create random MLE with specific number of vars
-pub fn get_range_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F, F> {
-    // let mut rng = test_rng();
-    let capacity = 2_u32.pow(num_vars as u32);
-    let bookkeeping_table = (0..capacity)
-        .map(|idx| F::from(idx as u64 + 1))
-        .take(capacity as usize)
-        .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
-}
-
-/// Helper function to create random MLE with specific length
-pub fn get_random_mle_with_capacity<F: FieldExt>(capacity: usize) -> DenseMle<F, F> {
-    let mut rng = test_rng();
-    let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
-        .take(capacity)
-        .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
-}
-
-///returns an iterator that wil give permutations of binary bits of size
-/// num_bits
-///
-/// 0,0,0 -> 0,0,1 -> 0,1,0 -> 0,1,1 -> 1,0,0 -> 1,0,1 -> 1,1,0 -> 1,1,1
-pub(crate) fn bits_iter<F: FieldExt>(num_bits: usize) -> impl Iterator<Item = Vec<MleIndex<F>>> {
-    std::iter::successors(
-        Some(vec![MleIndex::<F>::Fixed(false); num_bits]),
-        move |prev| {
-            let mut prev = prev.clone();
-            let mut removed_bits = 0;
-            for index in (0..num_bits).rev() {
-                let curr = prev.remove(index);
-                if curr == MleIndex::Fixed(false) {
-                    prev.push(MleIndex::Fixed(true));
-                    break;
-                } else {
-                    removed_bits += 1;
-                }
-            }
-            if removed_bits == num_bits {
-                None
-            } else {
-                Some(
-                    prev.into_iter()
-                        .chain(repeat_n(MleIndex::Fixed(false), removed_bits))
-                        .collect_vec(),
-                )
-            }
-        },
-    )
-}
-
-/// Returns the specific bit decomp for a given index,
-/// using `num_bits` bits. Note that this returns the
-/// decomposition in BIG ENDIAN!
-pub fn get_mle_idx_decomp_for_idx<F: FieldExt>(idx: usize, num_bits: usize) -> Vec<MleIndex<F>> {
-    (0..(num_bits))
-        .rev()
-        .map(|cur_num_bits| {
-            let is_one =
-                (idx % 2_usize.pow(cur_num_bits as u32 + 1)) >= 2_usize.pow(cur_num_bits as u32);
-            MleIndex::Fixed(is_one)
-        })
-        .collect_vec()
+/// Using a data vector, get an [InputShred] which represents its
+/// shape, along with [InputShredData] which represents the
+/// corresponding data.
+pub fn get_input_shred_and_data<F: Field>(
+    mle_vec: Vec<F>,
+    ctx: &Context,
+    input_node: &InputLayerNode,
+) -> (InputShred, InputShredData<F>) {
+    assert!(mle_vec.len().is_power_of_two());
+    let data = MultilinearExtension::new(mle_vec);
+    let input_shred = InputShred::new(ctx, data.num_vars(), input_node);
+    let input_shred_data = InputShredData::new(input_shred.id(), data);
+    (input_shred, input_shred_data)
 }
 
 /// Returns whether a particular file exists in the filesystem
@@ -147,7 +65,7 @@ pub fn file_exists(file_path: &String) -> bool {
 
 /// Hashes the layers of a GKR circuit by calling their circuit descriptions
 /// Returns one single Field element
-pub fn hash_layers<F: FieldExt>(layers: &Layers<F, LayerEnum<F>>) -> F {
+pub fn hash_layers<F: Field>(layers: &Layers<F, LayerEnum<F>>) -> F {
     let mut sponge: Poseidon<F, 3, 2> = Poseidon::new(8, 57);
 
     layers.layers.iter().for_each(|layer| {
@@ -168,7 +86,7 @@ pub fn hash_layers<F: FieldExt>(layers: &Layers<F, LayerEnum<F>>) -> F {
                     })
                     .0
             })
-            .collect_vec();
+            .collect::<Vec<_>>();
 
         sponge.update(&elements);
     });
