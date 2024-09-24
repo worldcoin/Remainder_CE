@@ -1,4 +1,4 @@
-.PHONY: all bench prod prod-seq mobile test clean
+.PHONY: all bench prod prod-seq mobile test test-dev clean
 
 all: prod
 
@@ -14,8 +14,11 @@ prod:
 prod-seq:
 	cargo build --release --bin worldcoin
 
-# Currently using release for faster running.
-test:
+test: test-dev
+	cargo test --release --features parallel --package remainder-hyrax --lib -- --ignored hyrax_worldcoin::test_worldcoin
+	cargo test --release --features parallel --package remainder --lib -- --ignored worldcoin::tests
+
+test-dev:
 	cargo test --release --features parallel -- --test-threads=1
 
 mobile:
