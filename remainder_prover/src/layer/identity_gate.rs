@@ -15,10 +15,7 @@ use crate::{
     expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
     layer::{gate::gate_helpers::bind_round_identity, LayerError, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{
-        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum,
-        Mle, MleIndex,
-    },
+    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
     sumcheck::*,
 };
 use remainder_shared_types::{
@@ -508,7 +505,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for IdentityGate<F> {
                 val,
                 Some(self.layer_id()),
                 Some(mle_ref.get_layer_id()),
-                Some(MleEnum::Dense(mle_ref.clone())),
             );
             claims.push(claim);
         } else {
@@ -524,7 +520,7 @@ impl<F: Field> YieldWLXEvals<F> for IdentityGate<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        _claimed_mles: Vec<MleEnum<F>>,
+        _claimed_mles: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
@@ -584,15 +580,11 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierIdentityGateLayer<F> {
             .collect_vec();
         let source_val = self.source_mle.value();
 
-        // WARNING: DO NOT TRUST THIS MLE! IT IS INCORRECT
-        let dummy_source_mle = DenseMle::new_from_raw(vec![source_val], self.layer_id());
-
         let source_claim: ClaimMle<F> = ClaimMle::new(
             source_point,
             source_val,
             Some(self.layer_id()),
             Some(self.source_mle.layer_id()),
-            Some(MleEnum::Dense(dummy_source_mle)),
         );
 
         Ok(vec![source_claim])

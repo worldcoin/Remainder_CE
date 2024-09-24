@@ -28,7 +28,7 @@ pub enum DimensionError {
     NoDimensionInfoError(),
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Eq, Hash)]
 /// the dimension information of the MLE.
 /// contains the dim: [IxDyn], see ndarray for more detailed documentation
 /// and the names of the axes.
@@ -88,7 +88,7 @@ fn mirror_bits(num_bits: usize, mut value: usize) -> usize {
 /// `2^n` evaluations of `f` on the boolean hypercube.
 /// The `n` variables are indexed from `0` to `n-1` throughout the lifetime of
 /// the object.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq, Hash)]
 pub struct Evaluations<F> {
     /// To understand how evaluations are stored, let's index `f`'s input bits
     /// as follows: `f(b_0, b_1, ..., b_{n-1})`. Evaluations are ordered using
@@ -348,7 +348,7 @@ impl<'a, F: Field> Iterator for EvaluationsPairIterator<'a, F> {
 /// boolean hypercube.
 /// The `n` variables are indexed from `0` to `n-1` throughout the lifetime of
 /// the object even if `n` is modified by fixing a variable to a constant value.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq, Hash)]
 pub struct MultilinearExtension<F> {
     /// The bookkeeping table with the evaluations of `f` on the hypercube.
     pub f: Evaluations<F>,

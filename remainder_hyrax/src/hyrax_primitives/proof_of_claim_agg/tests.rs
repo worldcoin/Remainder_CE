@@ -1,4 +1,3 @@
-
 use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
 use crate::hyrax_primitives::proof_of_claim_agg::barycentric_weights;
 use crate::hyrax_primitives::proof_of_claim_agg::ProofOfClaimAggregation;
@@ -34,13 +33,11 @@ pub fn test_completeness() {
         HyraxClaim {
             to_layer_id: LayerId::Layer(0),
             point: vec![Fr::from(23), Fr::from(6)],
-            mle_enum: None,
             evaluation: committer.committed_scalar(&Fr::from(6), &Fr::from(2)),
         },
         HyraxClaim {
             to_layer_id: LayerId::Layer(0),
             point: vec![Fr::from(3), Fr::from(7)],
-            mle_enum: None,
             evaluation: committer.committed_scalar(&Fr::from(5), &Fr::from(3)),
         },
     ];
@@ -85,7 +82,6 @@ pub fn test_agg_one_claim() {
     let claims = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
         point: vec![Fr::from(23), Fr::from(6)],
-        mle_enum: None,
         evaluation: committer.committed_scalar(&Fr::from(6), &Fr::from(2)),
     }];
     let coeffs = vec![claims[0].evaluation.value];
@@ -124,13 +120,11 @@ pub fn test_soundness() {
         HyraxClaim {
             to_layer_id: LayerId::Layer(0),
             point: vec![Fr::from(23), Fr::from(6)],
-            mle_enum: None,
             evaluation: committer.committed_scalar(&Fr::from(6), &Fr::from(2)),
         },
         HyraxClaim {
             to_layer_id: LayerId::Layer(0),
             point: vec![Fr::from(3), Fr::from(7)],
-            mle_enum: None,
             evaluation: committer.committed_scalar(&Fr::from(5), &Fr::from(3)),
         },
     ];

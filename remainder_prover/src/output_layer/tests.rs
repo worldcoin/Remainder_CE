@@ -3,7 +3,7 @@
 use itertools::{repeat_n, Itertools};
 use pretty_assertions::assert_eq;
 
-use remainder_shared_types::{ff_field, Field};
+use remainder_shared_types::ff_field;
 use remainder_shared_types::{
     transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
     Fr,
@@ -12,32 +12,11 @@ use remainder_shared_types::{
 use crate::{
     claims::{wlx_eval::ClaimMle, YieldClaim},
     layer::LayerId,
-    mle::{mle_enum::MleEnum, zero::ZeroMle, Mle, MleIndex},
+    mle::{zero::ZeroMle, MleIndex},
     output_layer::{mle_output_layer::CircuitMleOutputLayer, CircuitOutputLayer},
 };
 
 use super::{mle_output_layer::MleOutputLayer, OutputLayer};
-
-impl<F: Field> ZeroMle<F> {
-    /// To be used internally for testing.
-    pub(crate) fn new_raw(
-        mle_indices: Vec<MleIndex<F>>,
-        original_mle_indices: Vec<MleIndex<F>>,
-        num_vars: usize,
-        layer_id: LayerId,
-        zero: [F; 1],
-        indexed: bool,
-    ) -> Self {
-        Self {
-            mle_indices,
-            original_mle_indices,
-            num_vars,
-            layer_id,
-            zero,
-            indexed,
-        }
-    }
-}
 
 #[test]
 fn test_fix_layer() {
@@ -87,21 +66,11 @@ fn test_output_layer_get_claims() {
 
     let expected_point = vec![Fr::ONE, Fr::ONE];
     let expected_result = Fr::from(0);
-    let expected_indices = vec![MleIndex::Bound(Fr::ONE, 0), MleIndex::Bound(Fr::ONE, 1)];
-    let expected_zero_mle = ZeroMle::new_raw(
-        expected_indices,
-        mle.mle_indices().to_vec(),
-        0,
-        layer_id,
-        [Fr::ZERO],
-        false,
-    );
     let expected_claims = vec![ClaimMle::new(
         expected_point.clone(),
         expected_result,
         None,
         Some(layer_id),
-        Some(MleEnum::Zero(expected_zero_mle)),
     )];
 
     assert_eq!(claims, expected_claims);
@@ -150,26 +119,12 @@ fn test_output_layer_get_claims_with_prefix_bits() {
 
     let expected_point = vec![Fr::ONE, Fr::ZERO, Fr::ONE, Fr::ONE];
     let expected_result = Fr::from(0);
-    let expected_indices = vec![
-        MleIndex::Fixed(true),
-        MleIndex::Fixed(false),
-        MleIndex::Bound(Fr::ONE, 0),
-        MleIndex::Bound(Fr::ONE, 1),
-    ];
-    let expected_zero_mle = ZeroMle::new_raw(
-        expected_indices,
-        mle.mle_indices().to_vec(),
-        0,
-        layer_id,
-        [Fr::ZERO],
-        false,
-    );
+
     let expected_claims = vec![ClaimMle::new(
         expected_point.clone(),
         expected_result,
         None,
         Some(layer_id),
-        Some(MleEnum::Zero(expected_zero_mle)),
     )];
 
     assert_eq!(claims, expected_claims);
