@@ -286,7 +286,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for MleOutputLayer<F> {
             claim_value,
             None,
             Some(self.mle.layer_id()),
-            Some(self.mle.clone()),
         )])
     }
 }
@@ -340,7 +339,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
             claim_value,
             None,
             Some(self.mle.layer_id()),
-            Some(claim_mle),
         )])
     }
 }

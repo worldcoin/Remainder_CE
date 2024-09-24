@@ -12,6 +12,7 @@ use thiserror::Error;
 use crate::{
     input_layer::enum_input_layer::InputLayerEnum,
     layer::{combine_mle_refs::CombineMleRefError, layer_enum::LayerEnum, LayerError},
+    mle::dense::DenseMle,
     prover::GKRError,
 };
 use serde::{Deserialize, Serialize};
@@ -138,6 +139,7 @@ pub trait ClaimAggregator<F: Field> {
     fn prover_aggregate_claims(
         &self,
         layer: &LayerEnum<F>,
+        output_mles_from_layer: Vec<DenseMle<F>>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError>;
 
@@ -153,6 +155,7 @@ pub trait ClaimAggregator<F: Field> {
     fn prover_aggregate_claims_input(
         &self,
         layer: &InputLayerEnum<F>,
+        output_mles_from_layer: Vec<DenseMle<F>>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError>;
 

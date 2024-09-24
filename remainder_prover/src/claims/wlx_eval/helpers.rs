@@ -17,7 +17,7 @@ use crate::{
         combine_mle_refs::get_og_mle_refs,
         regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
     },
-    mle::mle_enum::MleEnum,
+    mle::dense::DenseMle,
     prover::GKRError,
 };
 
@@ -43,6 +43,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 pub fn prover_aggregate_claims_helper<F: Field>(
     claims: &ClaimGroup<F>,
     layer: &impl YieldWLXEvals<F>,
+    output_mles_from_layer: Vec<DenseMle<F>>,
     transcript_writer: &mut impl ProverTranscript<F>,
 ) -> Result<Claim<F>, GKRError> {
     let num_claims = claims.get_num_claims();
@@ -51,7 +52,7 @@ pub fn prover_aggregate_claims_helper<F: Field>(
 
     let claim_preproc_timer = start_timer!(|| "Claim preprocessing".to_string());
 
-    let layer_mle_refs = get_og_mle_refs(claims.get_claim_mle_refs());
+    let fixed_output_mles = get_og_mle_refs(output_mles_from_layer);
 
     let claim_groups = form_claim_groups(claims.get_claims().to_vec());
 
@@ -69,7 +70,7 @@ pub fn prover_aggregate_claims_helper<F: Field>(
         .map(|claim_group| {
             prover_aggregate_claims_in_one_round(
                 &claim_group,
-                &layer_mle_refs,
+                &fixed_output_mles,
                 layer,
                 transcript_writer,
             )
@@ -90,7 +91,7 @@ pub fn prover_aggregate_claims_helper<F: Field>(
     // Finally, aggregate all intermediate claims.
     let claim = prover_aggregate_claims_in_one_round(
         &ClaimGroup::new(intermediate_claims).unwrap(),
-        &layer_mle_refs,
+        &fixed_output_mles,
         layer,
         transcript_writer,
     )?;
@@ -218,7 +219,7 @@ pub fn compute_aggregated_challenges<F: Field>(
 /// If successful, returns a single aggregated claim.
 fn prover_aggregate_claims_in_one_round<F: Field>(
     claims: &ClaimGroup<F>,
-    layer_mle_refs: &[MleEnum<F>],
+    layer_mle_refs: &[DenseMle<F>],
     layer: &impl YieldWLXEvals<F>,
     transcript_writer: &mut impl ProverTranscript<F>,
 ) -> Result<Claim<F>, GKRError> {
@@ -248,6 +249,7 @@ fn prover_aggregate_claims_in_one_round<F: Field>(
             claims.get_num_vars(),
         )
         .unwrap();
+    dbg!(&wlx_evaluations);
     let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 
     // Append evaluations to the transcript before sampling a challenge.

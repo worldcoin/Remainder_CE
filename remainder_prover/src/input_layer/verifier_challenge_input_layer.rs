@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
     layer::LayerId,
-    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
+    mle::{dense::DenseMle, evals::MultilinearExtension},
 };
 
 use super::{
@@ -125,7 +125,7 @@ impl<F: Field> CircuitInputLayer<F> for CircuitVerifierChallengeInputLayer<F> {
             }
             eval.ok_or(InputLayerError::RandomInputVerificationFailed)?
         } else {
-            Claim::new(vec![], mle_ref.current_mle[0])
+            Claim::new(vec![], mle_ref.mle[0])
         };
 
         if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {
@@ -169,7 +169,7 @@ impl<F: Field> YieldWLXEvals<F> for VerifierChallengeInputLayer<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        claimed_mles: Vec<MleEnum<F>>,
+        claimed_mles: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {

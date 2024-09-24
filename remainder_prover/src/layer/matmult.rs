@@ -26,7 +26,7 @@ use crate::{
     expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
     layer::VerificationError,
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum, Mle, MleIndex},
+    mle::{dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
     sumcheck::evaluate_at_a_point,
 };
 
@@ -642,22 +642,13 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
                     })
                     .collect_vec();
 
-                let mle_layer_id = matrix.mle.layer_id();
                 let matrix_claimed_val = matrix.mle.value();
-
-                // Dummy MLE ref.
-                // TODO(ryancao): Fix things so that we don't need to pass this around... This is not right
-                let mle_ref = MleEnum::Dense(DenseMle::new_from_raw(
-                    vec![matrix_claimed_val],
-                    mle_layer_id,
-                ));
 
                 let claim: ClaimMle<F> = ClaimMle::new(
                     matrix_fixed_indices,
                     matrix_claimed_val,
                     Some(self.layer_id),
                     Some(matrix.mle.layer_id()),
-                    Some(mle_ref),
                 );
                 claim
             })
@@ -690,7 +681,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for MatMult<F> {
                     matrix_val,
                     Some(self.layer_id),
                     Some(matrix_mle.layer_id),
-                    Some(MleEnum::Dense(matrix_mle.clone())),
                 );
                 claim
             })
@@ -705,7 +695,7 @@ impl<F: Field> YieldWLXEvals<F> for MatMult<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        claim_mles: Vec<MleEnum<F>>,
+        claim_mles: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
@@ -781,7 +771,7 @@ pub fn gen_transpose_matrix<F: Field>(matrix: &Matrix<F>) -> Matrix<F> {
     matrix.mle.bookkeeping_table();
     for i in 0..num_cols {
         for j in 0..num_rows {
-            matrix_transp_vec.push(matrix.mle.current_mle[j * num_cols + i]);
+            matrix_transp_vec.push(matrix.mle.mle[j * num_cols + i]);
         }
     }
 

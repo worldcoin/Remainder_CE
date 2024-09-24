@@ -23,7 +23,7 @@ use remainder::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
 use remainder::layer::{CircuitLayer, Layer};
 use remainder::layouter::component::ComponentSet;
 use remainder::layouter::layouting::{
-    CircuitLocation, CircuitMap, InputLayerHintMap, InputNodeMap,
+    CircuitLocation, CircuitMap, InputLayerHintMap, InputNodeMap, LayerMap,
 };
 use remainder::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
 use remainder::layouter::nodes::node_enum::NodeEnum;
@@ -143,6 +143,7 @@ impl<
     ) -> (
         HyraxInstantiatedCircuit<C>,
         Vec<HyraxVerifierCommitmentEnum<C>>,
+        LayerMap<C::Scalar>,
     ) {
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
@@ -417,9 +418,10 @@ impl<
             layers: prover_intermediate_layers,
             output_layers: prover_output_layers,
         };
+        let layer_map = circuit_map.convert_to_layer_map();
         end_timer!(hyrax_populate_circuit_timer);
 
-        (hyrax_circuit, input_commitments)
+        (hyrax_circuit, input_commitments, layer_map)
     }
 
     pub fn prove_gkr_circuit(
@@ -433,7 +435,7 @@ impl<
     ) {
         let ((circuit_description, input_layer_to_node_map, input_hint_map), input_data) =
             Self::generate_circuit_description(witness_function);
-        let (mut instantiated_circuit, commitments) = self.populate_hyrax_circuit(
+        let (mut instantiated_circuit, commitments, mut layer_map) = self.populate_hyrax_circuit(
             &circuit_description,
             input_layer_to_node_map,
             input_hint_map,
@@ -441,7 +443,7 @@ impl<
             transcript_writer,
         );
         let prove_timer = start_timer!(|| "prove hyrax circuit");
-        let proof = self.prove(&mut instantiated_circuit, transcript_writer);
+        let proof = self.prove(&mut instantiated_circuit, &mut layer_map, transcript_writer);
         end_timer!(prove_timer);
         (commitments, circuit_description, proof)
     }
@@ -457,6 +459,7 @@ impl<
     pub fn prove(
         &mut self,
         instantiated_circuit: &mut HyraxInstantiatedCircuit<C>,
+        layer_map: &mut LayerMap<C::Scalar>,
         transcript: &mut impl ECProverTranscript<C>,
     ) -> HyraxProof<C> {
         let committer = self.committer;
@@ -494,10 +497,16 @@ impl<
             .rev()
             .map(|layer| {
                 let claims = claim_tracker.get(&layer.layer_id()).unwrap().clone();
-
+                let output_mles_from_layer = layer_map
+                    .get(&layer.layer_id())
+                    .unwrap()
+                    .iter()
+                    .cloned()
+                    .collect_vec();
                 let (layer_proof, claims_from_layer) = HyraxLayerProof::prove(
                     layer,
                     &claims,
+                    &output_mles_from_layer,
                     committer,
                     &mut blinding_rng,
                     transcript,

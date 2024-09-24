@@ -32,7 +32,7 @@ use log::info;
 use remainder_shared_types::transcript::{ProverTranscript, Transcript, TranscriptWriter};
 use remainder_shared_types::Field;
 
-use super::layouting::{CircuitLocation, InputLayerHintMap, InputNodeMap};
+use super::layouting::{CircuitLocation, InputLayerHintMap, InputNodeMap, LayerMap};
 use super::nodes::circuit_inputs::InputLayerData;
 use super::nodes::NodeId;
 use super::{
@@ -73,7 +73,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         input_layer_hint_map: InputLayerHintMap<F>,
         data_input_layers: Vec<InputLayerData<F>>,
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> InstantiatedCircuit<F> {
+    ) -> (InstantiatedCircuit<F>, LayerMap<F>) {
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
             intermediate_layers: intermediate_layer_descriptions,
@@ -214,15 +214,12 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                         .get_hint_function(&hint_input_layer_description.layer_id());
                     if let Some(data) = circuit_map.get_data_from_location(hint_circuit_location) {
                         let function_applied_to_data = hint_function(data);
-                        // also here @ryan do we actually need to add to circuit map? also there are several places (see: logup) where we never add to circuit
-                        // map, even before this refactor, actually... this means we won't make claims on these so that's actually fine? idk
                         circuit_map.add_node(
                             CircuitLocation::new(hint_input_layer_description.layer_id(), vec![]),
                             function_applied_to_data.clone(),
                         );
                         let mut prover_input_layer = hint_input_layer_description
                             .convert_into_prover_input_layer(function_applied_to_data, &None);
-                        // LOL wait my brain can't think right now TODO (@ryan) do we really need to do this commitment part?
                         let prover_input_commit = prover_input_layer.commit().unwrap();
                         InputLayerEnum::append_commitment_to_transcript(
                             &prover_input_commit,
@@ -274,24 +271,32 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                     output_layer_description.into_prover_output_layer(&circuit_map);
                 prover_output_layers.push(prover_output_layer)
             });
-        InstantiatedCircuit {
+        let instantiated_circuit = InstantiatedCircuit {
             input_layers: prover_input_layers,
             layers: Layers::new_with_layers(prover_intermediate_layers),
             output_layers: prover_output_layers,
-        }
+        };
+
+        let layer_map = circuit_map.convert_to_layer_map();
+
+        (instantiated_circuit, layer_map)
     }
 
     fn synthesize_and_commit(
         &mut self,
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> (InstantiatedCircuit<F>, GKRCircuitDescription<F>) {
+    ) -> (
+        InstantiatedCircuit<F>,
+        LayerMap<F>,
+        GKRCircuitDescription<F>,
+    ) {
         let ctx = Context::new();
         let (component, input_layer_data) = (self.witness_builder)(&ctx);
         // TODO(vishady): ADD CIRCUIT DESCRIPTION TO TRANSCRIPT (maybe not here...)
         let (circuit_description, input_node_map, input_hint_map) =
             generate_circuit_description(component, ctx).unwrap();
 
-        let instantiated_circuit = self.populate_circuit(
+        let (instantiated_circuit, layer_map) = self.populate_circuit(
             &circuit_description,
             input_node_map,
             input_hint_map,
@@ -299,7 +304,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             transcript_writer,
         );
 
-        (instantiated_circuit, circuit_description)
+        (instantiated_circuit, layer_map, circuit_description)
     }
 
     /// The backwards pass, creating the GKRProof.
@@ -317,6 +322,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 mut output_layers,
                 layers,
             },
+            layer_map,
             circuit_description,
         ) = self.synthesize_and_commit(&mut transcript_writer);
 
@@ -376,7 +382,13 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             let claim_aggr_timer =
                 start_timer!(|| format!("Claim aggregation for layer {:?}", layer_id));
 
-            let layer_claim = aggregator.prover_aggregate_claims(&layer, &mut transcript_writer)?;
+            let output_mles_from_layer =
+                layer_map.get(&layer_id).unwrap().iter().cloned().collect();
+            let layer_claim = aggregator.prover_aggregate_claims(
+                &layer,
+                output_mles_from_layer,
+                &mut transcript_writer,
+            )?;
 
             end_timer!(claim_aggr_timer);
 
@@ -420,8 +432,13 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 input_layer.layer_id()
             ));
 
-            let layer_claim =
-                aggregator.prover_aggregate_claims_input(&input_layer, &mut transcript_writer)?;
+            let output_mles_from_layer =
+                layer_map.get(&layer_id).unwrap().iter().cloned().collect();
+            let layer_claim = aggregator.prover_aggregate_claims_input(
+                &input_layer,
+                output_mles_from_layer,
+                &mut transcript_writer,
+            )?;
 
             end_timer!(claim_aggr_timer);
 

@@ -254,7 +254,7 @@ impl<
         );
         self.digits.get_mle_refs().iter().for_each(|mle| {
             assert_eq!(
-                mle.original_num_vars(),
+                mle.num_iterated_vars(),
                 MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS
             );
         });

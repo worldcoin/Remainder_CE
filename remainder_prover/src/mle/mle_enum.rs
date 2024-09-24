@@ -29,14 +29,6 @@ impl<F: Field> Mle<F> for MleEnum<F> {
             MleEnum::Zero(item) => item.bookkeeping_table(),
         }
     }
-
-    fn original_bookkeeping_table(&self) -> &[F] {
-        match self {
-            MleEnum::Dense(item) => item.original_bookkeeping_table(),
-            MleEnum::Zero(item) => item.original_bookkeeping_table(),
-        }
-    }
-
     fn mle_indices(&self) -> &[super::MleIndex<F>] {
         match self {
             MleEnum::Dense(item) => item.mle_indices(),
@@ -44,24 +36,10 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         }
     }
 
-    fn original_mle_indices(&self) -> &Vec<super::MleIndex<F>> {
-        match self {
-            MleEnum::Dense(item) => item.original_mle_indices(),
-            MleEnum::Zero(item) => item.original_mle_indices(),
-        }
-    }
-
     fn num_iterated_vars(&self) -> usize {
         match self {
             MleEnum::Dense(item) => item.num_iterated_vars(),
             MleEnum::Zero(item) => item.num_iterated_vars(),
-        }
-    }
-
-    fn original_num_vars(&self) -> usize {
-        match self {
-            MleEnum::Dense(item) => item.original_num_vars(),
-            MleEnum::Zero(item) => item.original_num_vars(),
         }
     }
 

@@ -4,8 +4,10 @@ use remainder_shared_types::{transcript::VerifierTranscript, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::wlx_eval::YieldWLXEvals, input_layer_enum, layer::LayerId,
-    mle::evals::MultilinearExtension,
+    claims::wlx_eval::YieldWLXEvals,
+    input_layer_enum,
+    layer::LayerId,
+    mle::{dense::DenseMle, evals::MultilinearExtension},
 };
 
 use super::{
@@ -172,7 +174,7 @@ impl<F: Field> YieldWLXEvals<F> for InputLayerEnum<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        claimed_mles: Vec<crate::mle::mle_enum::MleEnum<F>>,
+        claimed_mles: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {

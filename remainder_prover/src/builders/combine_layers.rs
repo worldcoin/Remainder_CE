@@ -197,11 +197,6 @@ fn add_bits_to_layer_refs<F: Field>(
                             .chain(mle_ref.mle_indices.iter())
                             .cloned()
                             .collect();
-                        mle_ref.original_mle_indices = new_bits
-                            .iter()
-                            .chain(mle_ref.original_mle_indices.iter())
-                            .cloned()
-                            .collect();
                     }
                     Ok(())
                 }
@@ -213,11 +208,6 @@ fn add_bits_to_layer_refs<F: Field>(
                             mle_ref.mle_indices = new_bits
                                 .iter()
                                 .chain(mle_ref.mle_indices.iter())
-                                .cloned()
-                                .collect();
-                            mle_ref.original_mle_indices = new_bits
-                                .iter()
-                                .chain(mle_ref.original_mle_indices.iter())
                                 .cloned()
                                 .collect();
                         }
@@ -243,11 +233,6 @@ fn add_bits_to_layer_refs<F: Field>(
                         .chain(mle.mle_indices.iter())
                         .cloned()
                         .collect();
-                    mle.original_mle_indices = new_bits
-                        .iter()
-                        .chain(mle.original_mle_indices.iter())
-                        .cloned()
-                        .collect();
                 }
             }
             MleEnum::Zero(mle) => {
@@ -255,11 +240,6 @@ fn add_bits_to_layer_refs<F: Field>(
                     mle.mle_indices = new_bits
                         .iter()
                         .chain(mle.mle_indices.iter())
-                        .cloned()
-                        .collect();
-                    mle.original_mle_indices = new_bits
-                        .iter()
-                        .chain(mle.original_mle_indices.iter())
                         .cloned()
                         .collect();
                 }

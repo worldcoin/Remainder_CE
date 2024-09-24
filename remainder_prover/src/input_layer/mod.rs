@@ -27,10 +27,7 @@ pub mod public_input_layer;
 /// An input layer in order to generate random challenges for Fiat-Shamir.
 pub mod verifier_challenge_input_layer;
 
-use crate::{
-    claims::wlx_eval::get_num_wlx_evaluations, mle::mle_enum::MleEnum,
-    sumcheck::evaluate_at_a_point,
-};
+use crate::{claims::wlx_eval::get_num_wlx_evaluations, sumcheck::evaluate_at_a_point};
 
 use ark_std::{end_timer, start_timer};
 #[cfg(feature = "parallel")]
@@ -148,7 +145,7 @@ fn get_wlx_evaluations_helper<F: Field>(
     mut mle_ref: MultilinearExtension<F>,
     claim_vecs: &[Vec<F>],
     claimed_vals: &[F],
-    _claimed_mles: Vec<MleEnum<F>>,
+    _claimed_mles: Vec<DenseMle<F>>,
     num_claims: usize,
     num_idx: usize,
 ) -> Result<Vec<F>, crate::claims::ClaimError> {
