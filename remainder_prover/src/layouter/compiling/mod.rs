@@ -13,7 +13,7 @@ use crate::claims::wlx_eval::WLXAggregator;
 use crate::claims::ClaimAggregator;
 use crate::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
 use crate::input_layer::enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum};
-use crate::input_layer::verifier_challenge_input_layer::VerifierChallenge;
+use crate::input_layer::verifier_challenge::VerifierChallenge;
 use crate::input_layer::{CircuitInputLayer, InputLayer};
 use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
 use crate::layer::LayerId;

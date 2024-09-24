@@ -18,7 +18,7 @@ use remainder::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
 use remainder::input_layer::enum_input_layer::{
     CircuitInputLayerEnum, InputLayerEnumVerifierCommitment,
 };
-use remainder::input_layer::verifier_challenge_input_layer::VerifierChallenge;
+use remainder::input_layer::verifier_challenge::VerifierChallenge;
 use remainder::input_layer::{CircuitInputLayer, InputLayer};
 use remainder::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
 use remainder::layer::{CircuitLayer, Layer};

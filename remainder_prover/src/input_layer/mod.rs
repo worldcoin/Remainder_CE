@@ -25,7 +25,7 @@ pub mod ligero_input_layer;
 /// An input layer which requires no commitment and is openly evaluated at the random point.
 pub mod public_input_layer;
 /// An input layer in order to generate random challenges for Fiat-Shamir.
-pub mod verifier_challenge_input_layer;
+pub mod verifier_challenge;
 
 use crate::{
     claims::wlx_eval::get_num_wlx_evaluations, mle::mle_enum::MleEnum,

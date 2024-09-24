@@ -2,10 +2,7 @@
 
 use std::marker::PhantomData;
 
-use remainder_shared_types::{
-    transcript::VerifierTranscript,
-    Field,
-};
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -20,10 +17,10 @@ use thiserror::Error;
 #[derive(Error, Clone, Debug)]
 /// The errors which can be encountered when constructing an input layer.
 pub enum VerifierChallengeError {
-    /// This is when the random input layer evaluated at a random point does not
-    /// equal the claimed value.
+    /// The point of the claim is too short.
     #[error("The evaluation point of the claim is too short")]
     InsufficientBinding,
+    /// The [VerifierChallenge] evaluation does not equal the claimed value.
     #[error("Evaluation of MLE does not match the claimed value")]
     EvaluationMismatch,
 }
@@ -144,34 +141,14 @@ impl<F: Field> CircuitVerifierChallenge<F> {
         self.layer_id
     }
 
-    /// Read the data from the transcript (in the interactive setting, this is just asking the
-    /// verifier for the appropriate number of challenges).
-    pub fn get_from_transcript(
-        &self,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> VerifierChallenge<F> {
-        let num_evals = 1 << self.num_bits;
-        let values = transcript_reader.get_challenges("Verifier challenges", num_evals).unwrap();
-        VerifierChallenge::new(
-            MultilinearExtension::new(values),
-            self.layer_id,
-        )
-    }
-
-    // FIXME come back to this - might want to combine with get_from_transcript
+    /// Create a [VerifierChallenge] from this [CircuitVerifierChallenge] and the given values.
+    /// Panics if the length of `values` is not equal to the number of evaluations in the MLE.
     pub fn instantiate(&self, values: Vec<F>) -> VerifierChallenge<F> {
+        assert_eq!(values.len(), 1 << self.num_bits);
         VerifierChallenge::new(
             MultilinearExtension::new(values),
             self.layer_id,
         )
-    }
-
-    // FIXME come back to this - might want to combine with get_from_transcript
-    fn convert_into_prover_version(
-        &self,
-        combined_mle: MultilinearExtension<F>,
-    ) -> VerifierChallenge<F> {
-        VerifierChallenge::new(combined_mle, self.layer_id)
     }
 }
 
@@ -179,10 +156,9 @@ impl<F: Field> CircuitVerifierChallenge<F> {
 mod tests {
     use remainder_shared_types::ff_field;
     use remainder_shared_types::{
-        transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter, ProverTranscript},
+        transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter, ProverTranscript, VerifierTranscript},
         Fr,
     };
-
     use super::*;
 
     #[test]
@@ -205,8 +181,7 @@ mod tests {
         let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
         let mle = MultilinearExtension::new(mle_vec);
 
-        let verifier_challenge_description =
-            CircuitVerifierChallenge::<Fr>::new(layer_id, mle.num_vars());
+        let vc_desc = CircuitVerifierChallenge::<Fr>::new(layer_id, mle.num_vars());
         // Nothing really to test for VerifierChallenge
         let _verifier_challenge = VerifierChallenge::new(mle, layer_id);
 
@@ -217,7 +192,8 @@ mod tests {
             TranscriptReader::new(transcript);
 
         // 2. Get commitment from transcript.
-        let verifier_challenge = verifier_challenge_description.get_from_transcript(&mut transcript_reader);
+        let values = transcript_reader.get_challenges("Verifier challenges", 1 << vc_desc.num_bits).unwrap();
+        let verifier_challenge = vc_desc.instantiate(values);
 
         // 3. ... [skip] verify other layers.
 

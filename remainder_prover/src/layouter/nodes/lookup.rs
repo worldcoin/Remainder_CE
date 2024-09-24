@@ -92,8 +92,8 @@ pub struct LookupTable {
     constraints: Vec<LookupConstraint>,
     /// The id of the node providing the table entries.
     table_node_id: NodeId,
-    /// The ID of the random input node for the FS challenge.
-    random_node_id: NodeId,
+    /// The ID of the [VerifierChallengeNode] for the FS challenge.
+    verifier_challenge_node_id: NodeId,
     /// Whether any of the values to be constrained by this LookupTable should be considered secret
     /// (Determines which InputLayer type is used for the denominator inverse for the LHS.)
     secret_constrained_values: bool,
@@ -112,13 +112,13 @@ impl LookupTable {
         ctx: &Context,
         table: &dyn CircuitNode,
         secret_constrained_values: bool,
-        random_input_node: &VerifierChallengeNode,
+        verifier_challenge_node: &VerifierChallengeNode,
     ) -> Self {
         LookupTable {
             id: ctx.get_new_id(),
             constraints: vec![],
             table_node_id: table.id(),
-            random_node_id: random_input_node.id(),
+            verifier_challenge_node_id: verifier_challenge_node.id(),
             secret_constrained_values,
         }
     }
@@ -159,7 +159,7 @@ impl LookupTable {
         println!("Build the LHS of the equation (defined by the constrained values)");
 
         let (verifier_challenge_location, verifier_challenge_node_vars) =
-            circuit_description_map.get_location_num_vars_from_node_id(&self.random_node_id)?;
+            circuit_description_map.get_location_num_vars_from_node_id(&self.verifier_challenge_node_id)?;
 
         let verifier_challenge_mle_indices = get_total_mle_indices(
             &verifier_challenge_location.prefix_bits,
@@ -266,7 +266,7 @@ impl LookupTable {
 
         // First grab `r` as a `CircuitMle` from the `circuit_description_map`
         let (verifier_challenge_loc, verifier_challenge_num_vars) =
-            circuit_description_map.0[&self.random_node_id].clone();
+            circuit_description_map.0[&self.verifier_challenge_node_id].clone();
         let verifier_challenge_circuit_mle = CircuitMle::new(
             verifier_challenge_loc.layer_id,
             &get_total_mle_indices(

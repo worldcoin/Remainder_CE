@@ -14,7 +14,7 @@ use crate::claims::wlx_eval::WLXAggregator;
 use crate::input_layer::enum_input_layer::{
     CircuitInputLayerEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
 };
-use crate::input_layer::verifier_challenge_input_layer::{CircuitVerifierChallenge, VerifierChallenge};
+use crate::input_layer::verifier_challenge::{CircuitVerifierChallenge, VerifierChallenge};
 use crate::input_layer::CircuitInputLayer;
 use crate::layer::layer_enum::{CircuitLayerEnum, VerifierLayerEnum};
 use crate::layer::CircuitLayer;
@@ -175,8 +175,9 @@ impl<F: Field> GKRCircuitDescription<F> {
         // Get the verifier challenges from the transcript.
         let verifier_challenges: Vec<VerifierChallenge<F>> = self.verifier_challenges
             .iter()
-            .map(|verifier_challenge_description| {
-                verifier_challenge_description.get_from_transcript(transcript_reader)
+            .map(|vc_desc| {
+                let values = transcript_reader.get_challenges("Verifier challenges", 1 << vc_desc.num_bits).unwrap();
+                vc_desc.instantiate(values)
             })
             .collect();
 

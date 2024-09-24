@@ -5,7 +5,7 @@ use ark_std::log2;
 use remainder_shared_types::Field;
 
 use crate::{
-    input_layer::verifier_challenge_input_layer::CircuitVerifierChallenge,
+    input_layer::verifier_challenge::CircuitVerifierChallenge,
     layer::LayerId,
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation},
 };
