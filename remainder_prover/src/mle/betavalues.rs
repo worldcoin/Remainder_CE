@@ -114,6 +114,21 @@ impl<F: Field> BetaValues<F> {
             })
     }
 
+    /// Computes the value of `\beta(challenge; b)`, where `b` is the binary
+    /// representation of `idx`.
+    pub fn compute_beta_over_challenge_and_index(challenge: &[F], idx: usize) -> F {
+        challenge.iter().enumerate().fold(F::ONE, |acc, (i, x_i)| {
+            let mask = 1_usize << i;
+            if idx & mask != 0 {
+                // i-th bit is on, multiply by `x_i`
+                acc * x_i
+            } else {
+                // i-th bit is off, multiply by `(1 - x_i)`
+                acc * (F::ONE - x_i)
+            }
+        })
+    }
+
     /// Returns the full beta equality table as defined in \[Thaler13\], so over
     /// `n` challenge points it returns a table of size `2^n`. This is when we
     /// do still need the entire beta table.
