@@ -22,8 +22,12 @@ pub fn trivial_wiring_2x2_circuit_data<F: Field>() -> CircuitData<F, 1, 1, 1, 16
         Array3::from_shape_vec((2, 2, 1), vec![1, 0, 6, -1]).unwrap(),
         Array2::from_shape_vec((2, 2), vec![1, 0, 1, 0]).unwrap(),
         // rewirings for the 2x2 identity matrix
-        Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1])
-            .unwrap(),
+        vec![
+            (0, 0, 0, 0),
+            (0, 1, 0, 1),
+            (1, 0, 1, 0),
+            (1, 1, 1, 1),
+        ],
     )
 }
 
@@ -36,8 +40,12 @@ pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: Field>() -> CircuitDat
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
         Array3::from_shape_vec((2, 3, 1), vec![1, 0, -4, 6, -1, 3]).unwrap(),
         Array2::from_shape_vec((2, 2), vec![1, 0, 1, 0]).unwrap(),
-        Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1])
-            .unwrap(),
+        vec![
+            (0, 0, 0, 0),
+            (0, 1, 0, 1),
+            (1, 0, 1, 0),
+            (1, 1, 1, 1),
+        ],
     )
 }
 
@@ -107,7 +115,7 @@ impl<
     /// + `thresholds_matrix` is the 2d array specifying the threshold to use for each kernel and
     ///   kernel placement; these will be all zeroes for the iris code, but non-zero values for the
     ///   mask.  Unpadded.
-    /// + `wirings` is a 2d array of u16s with 4 columns; each row maps a coordinate of image to a
+    /// + `wirings` is a Vec of 4 tuples of u16s; each tuple maps a coordinate of image to a
     ///   coordinate of the LH multiplicand of the matmult.
     ///
     /// # Requires:
@@ -117,7 +125,7 @@ impl<
         image: Array2<u8>,
         kernel_values: Array3<i32>,
         thresholds_matrix: Array2<i64>,
-        wirings: Array2<u16>,
+        wirings: Vec<(u16, u16, u16, u16)>,
     ) -> Self {
         assert!(BASE.is_power_of_two());
         assert!(NUM_DIGITS.is_power_of_two());
@@ -127,7 +135,6 @@ impl<
         assert!(kernel_num_rows * kernel_num_cols <= (1 << MATMULT_INTERNAL_DIM_NUM_VARS));
         assert!(thresholds_matrix.dim().0 <= (1 << MATMULT_ROWS_NUM_VARS));
         assert_eq!(thresholds_matrix.dim().1, (1 << MATMULT_COLS_NUM_VARS));
-        assert_eq!(wirings.dim().1, 4);
 
         // Derive the re-routings from the wirings (this is what is needed for identity gate)
         // And calculate the left-hand side of the matrix multiplication
@@ -136,12 +143,12 @@ impl<
             (1 << MATMULT_ROWS_NUM_VARS),
             (1 << MATMULT_INTERNAL_DIM_NUM_VARS),
         ));
-        wirings.outer_iter().for_each(|row| {
+        wirings.iter().for_each(|row| {
             let (im_row, im_col, a_row, a_col) = (
-                row[0] as usize,
-                row[1] as usize,
-                row[2] as usize,
-                row[3] as usize,
+                row.0 as usize,
+                row.1 as usize,
+                row.2 as usize,
+                row.3 as usize,
             );
             let a_gate_label = a_row * (1 << MATMULT_INTERNAL_DIM_NUM_VARS) + a_col;
             let im_gate_label = im_row * im_num_cols + im_col;
@@ -298,9 +305,10 @@ pub fn load_worldcoin_data<
 > {
     dbg!(&constant_data_folder);
     println!("Current directory: {:?}", std::env::current_dir().unwrap());
-    let wirings: Array2<u16> = read_npy(constant_data_folder.join("wirings.npy")).unwrap();
-    assert_eq!(wirings.dim().1, 4);
-
+    // FIXME(Ben)
+    use super::parameters_v3::WIRINGS_BYTES;
+    use super::io::decode_wirings;
+    let wirings = decode_wirings(WIRINGS_BYTES);
     let data_folder = constant_data_folder.join(if is_mask { "mask" } else { "iris" });
     let image: Array2<u8> = read_npy(image_path).unwrap();
 

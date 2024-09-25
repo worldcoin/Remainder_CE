@@ -1,6 +1,7 @@
 use ark_serialize::Read;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use itertools::Itertools;
+use ndarray::Array2;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::HasByteRepresentation;
 use serde_json::Value;

@@ -22,3 +22,5 @@ pub const BASE: u64 = 256;
 /// + `kernel_values.npy` - (i64) the 3d array of kernel values with dimensions (num_kernels,
 ///   num_kernel_rows, num_kernel_cols).
 pub const CONSTANT_DATA_FOLDER: &str = "worldcoin/v3/";
+
+pub static WIRINGS_BYTES: &'static [u8] = include_bytes!("constants/v3/wirings.bin");

@@ -12,6 +12,9 @@ pub mod data;
 /// IO helpers
 pub mod io;
 
+/// Parameters defining the circuits
+pub mod parameters;
+
 /// Parameters for the v2 circuit
 pub mod parameters_v2;
 
