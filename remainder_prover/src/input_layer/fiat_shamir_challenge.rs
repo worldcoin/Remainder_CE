@@ -16,11 +16,11 @@ use thiserror::Error;
 
 #[derive(Error, Clone, Debug)]
 /// The errors which can be encountered when constructing an input layer.
-pub enum VerifierChallengeError {
+pub enum FiatShamirChallengeError {
     /// The point of the claim is too short.
     #[error("The evaluation point of the claim is too short")]
     InsufficientBinding,
-    /// The [VerifierChallenge] evaluation does not equal the claimed value.
+    /// The [FiatShamirChallenge] evaluation does not equal the claimed value.
     #[error("Evaluation of MLE does not match the claimed value")]
     EvaluationMismatch,
 }
@@ -29,17 +29,17 @@ pub enum VerifierChallengeError {
 /// form of coefficients of an MLE that can be used e.g. for packing constants, or in logup, or
 /// permutation checks and so on.
 #[derive(Debug, Clone)]
-pub struct VerifierChallenge<F: Field> {
+pub struct FiatShamirChallenge<F: Field> {
     /// The data.
     mle: MultilinearExtension<F>,
     /// The layer ID.
     pub(crate) layer_id: LayerId,
 }
 
-/// Verifier's description of a [VerifierChallenge].
+/// Verifier's description of a [FiatShamirChallenge].
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: Field")]
-pub struct CircuitVerifierChallenge<F: Field> {
+pub struct CircuitFiatShamirChallenge<F: Field> {
     /// The layer ID.
     layer_id: LayerId,
 
@@ -49,8 +49,8 @@ pub struct CircuitVerifierChallenge<F: Field> {
     _marker: PhantomData<F>,
 }
 
-impl<F: Field> CircuitVerifierChallenge<F> {
-    /// Constructor for the [CircuitVerifierChallenge] using the
+impl<F: Field> CircuitFiatShamirChallenge<F> {
+    /// Constructor for the [CircuitFiatShamirChallenge] using the
     /// number of bits that are in the MLE of the layer.
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         Self {
@@ -61,8 +61,8 @@ impl<F: Field> CircuitVerifierChallenge<F> {
     }
 }
 
-impl<F: Field> VerifierChallenge<F> {
-    /// Constructor for the [VerifierChallenge] using the layer_id
+impl<F: Field> FiatShamirChallenge<F> {
+    /// Constructor for the [FiatShamirChallenge] using the layer_id
     /// and the MLE that is stored in this input layer.
     pub fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
         Self { mle, layer_id }
@@ -84,7 +84,7 @@ impl<F: Field> VerifierChallenge<F> {
     pub fn verify(
         &self,
         claim: &Claim<F>,
-    ) -> Result<(), VerifierChallengeError> {
+    ) -> Result<(), FiatShamirChallengeError> {
         let mle_evals = self.mle.get_evals_vector().clone();
         let mut mle_ref = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
         mle_ref.index_mle_indices(0);
@@ -94,7 +94,7 @@ impl<F: Field> VerifierChallenge<F> {
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
             }
-            eval.ok_or(VerifierChallengeError::InsufficientBinding)?
+            eval.ok_or(FiatShamirChallengeError::InsufficientBinding)?
         } else {
             Claim::new(vec![], mle_ref.current_mle[0])
         };
@@ -106,23 +106,23 @@ impl<F: Field> VerifierChallenge<F> {
         if eval.get_result() == claim.get_result() {
             Ok(())
         } else {
-            Err(VerifierChallengeError::EvaluationMismatch)
+            Err(FiatShamirChallengeError::EvaluationMismatch)
         }
     }
 
 }
 
-impl<F: Field> CircuitVerifierChallenge<F> {
+impl<F: Field> CircuitFiatShamirChallenge<F> {
     /// Return the layer id.
     pub fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 
-    /// Create a [VerifierChallenge] from this [CircuitVerifierChallenge] and the given values.
+    /// Create a [FiatShamirChallenge] from this [CircuitFiatShamirChallenge] and the given values.
     /// Panics if the length of `values` is not equal to the number of evaluations in the MLE.
-    pub fn instantiate(&self, values: Vec<F>) -> VerifierChallenge<F> {
+    pub fn instantiate(&self, values: Vec<F>) -> FiatShamirChallenge<F> {
         assert_eq!(values.len(), 1 << self.num_bits);
-        VerifierChallenge::new(
+        FiatShamirChallenge::new(
             MultilinearExtension::new(values),
             self.layer_id,
         )
@@ -139,7 +139,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_circuit_verifier_challenge() {
+    fn test_circuit_fiat_shamir_challenge() {
         // Setup phase.
         let layer_id = LayerId::Input(0);
 
@@ -158,9 +158,9 @@ mod tests {
         let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
         let mle = MultilinearExtension::new(mle_vec);
 
-        let vc_desc = CircuitVerifierChallenge::<Fr>::new(layer_id, mle.num_vars());
-        // Nothing really to test for VerifierChallenge
-        let _verifier_challenge = VerifierChallenge::new(mle, layer_id);
+        let fs_desc = CircuitFiatShamirChallenge::<Fr>::new(layer_id, mle.num_vars());
+        // Nothing really to test for FiatShamirChallenge
+        let _fiat_shamir_challenge = FiatShamirChallenge::new(mle, layer_id);
 
         // Verifier phase.
         // 1. Retrieve proof/transcript.
@@ -169,13 +169,13 @@ mod tests {
             TranscriptReader::new(transcript);
 
         // 2. Get commitment from transcript.
-        let values = transcript_reader.get_challenges("Verifier challenges", 1 << vc_desc.num_bits).unwrap();
-        let verifier_challenge = vc_desc.instantiate(values);
+        let values = transcript_reader.get_challenges("Verifier challenges", 1 << fs_desc.num_bits).unwrap();
+        let fiat_shamir_challenge = fs_desc.instantiate(values);
 
         // 3. ... [skip] verify other layers.
 
         // 4. Verify this layer's commitment.
-        verifier_challenge
+        fiat_shamir_challenge
             .verify(&claim)
             .unwrap();
     }

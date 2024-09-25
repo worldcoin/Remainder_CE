@@ -13,7 +13,7 @@ use crate::claims::wlx_eval::WLXAggregator;
 use crate::claims::ClaimAggregator;
 use crate::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
 use crate::input_layer::enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum};
-use crate::input_layer::verifier_challenge::VerifierChallenge;
+use crate::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
 use crate::input_layer::{CircuitInputLayer, InputLayer};
 use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
 use crate::layer::LayerId;
@@ -77,7 +77,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
     ) -> InstantiatedCircuit<F> {
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
-            verifier_challenges: verifier_challenge_descriptions,
+            fiat_shamir_challenges: fiat_shamir_challenge_descriptions,
             intermediate_layers: intermediate_layer_descriptions,
             output_layers: output_layer_descriptions,
         } = gkr_circuit_description;
@@ -134,7 +134,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         // we convert the circuit input layer into a prover input layer using this big bookkeeping table
         // we add the data in the input data corresopnding with the circuit location for each input data struct into the circuit map
         let mut prover_input_layers: Vec<InputLayerEnum<F>> = Vec::new();
-        let mut verifier_challenges = Vec::new();
+        let mut fiat_shamir_challenges = Vec::new();
         let mut hint_input_layers: Vec<&CircuitInputLayerEnum<F>> = Vec::new();
         input_layer_descriptions
             .iter()
@@ -172,20 +172,20 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 }
             });
 
-        verifier_challenge_descriptions
+        fiat_shamir_challenge_descriptions
             .iter()
-            .for_each(|verifier_challenge_description| {
-                let verifier_challenge_mle = MultilinearExtension::new(transcript_writer.get_challenges(
+            .for_each(|fiat_shamir_challenge_description| {
+                let fiat_shamir_challenge_mle = MultilinearExtension::new(transcript_writer.get_challenges(
                     "Verifier challenges",
-                    1 << verifier_challenge_description.num_bits,
+                    1 << fiat_shamir_challenge_description.num_bits,
                 ));
                 circuit_map.add_node(
-                    CircuitLocation::new(verifier_challenge_description.layer_id(), vec![]),
-                    verifier_challenge_mle.clone(),
+                    CircuitLocation::new(fiat_shamir_challenge_description.layer_id(), vec![]),
+                    fiat_shamir_challenge_mle.clone(),
                 );
-                verifier_challenges.push(VerifierChallenge::new(
-                    verifier_challenge_mle,
-                    verifier_challenge_description.layer_id(),
+                fiat_shamir_challenges.push(FiatShamirChallenge::new(
+                    fiat_shamir_challenge_mle,
+                    fiat_shamir_challenge_description.layer_id(),
                 ));
             });
 
@@ -277,7 +277,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             });
         InstantiatedCircuit {
             input_layers: prover_input_layers,
-            verifier_challenges: verifier_challenges,
+            fiat_shamir_challenges: fiat_shamir_challenges,
             layers: Layers::new_with_layers(prover_intermediate_layers),
             output_layers: prover_output_layers,
         }
@@ -318,7 +318,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 input_layers,
                 mut output_layers,
                 layers,
-                verifier_challenges: _verifier_challenges,
+                fiat_shamir_challenges: _fiat_shamir_challenges,
             },
             circuit_description,
         ) = self.synthesize_and_commit(&mut transcript_writer);

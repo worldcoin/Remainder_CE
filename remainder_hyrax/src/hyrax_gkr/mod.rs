@@ -18,7 +18,7 @@ use remainder::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
 use remainder::input_layer::enum_input_layer::{
     CircuitInputLayerEnum, InputLayerEnumVerifierCommitment,
 };
-use remainder::input_layer::verifier_challenge::VerifierChallenge;
+use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
 use remainder::input_layer::{CircuitInputLayer, InputLayer};
 use remainder::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
 use remainder::layer::{CircuitLayer, Layer};
@@ -69,15 +69,15 @@ pub struct HyraxProof<C: PrimeOrderCurve> {
     output_layer_proofs: Vec<HyraxOutputLayerProof<C>>,
 }
 
-pub struct VerifierChallengeProof<C: PrimeOrderCurve> {
-    pub layer: VerifierChallenge<C::Scalar>,
+pub struct FiatShamirChallengeProof<C: PrimeOrderCurve> {
+    pub layer: FiatShamirChallenge<C::Scalar>,
     pub claims: Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
 }
 
 pub struct HyraxInstantiatedCircuit<C: PrimeOrderCurve> {
     pub input_layers: Vec<HyraxInputLayerEnum<C>>,
     /// The verifier challenges
-    pub verifier_challenges: Vec<VerifierChallenge<C::Scalar>>,
+    pub fiat_shamir_challenges: Vec<FiatShamirChallenge<C::Scalar>>,
     pub layers: Vec<LayerEnum<C::Scalar>>,
     pub output_layers: Vec<HyraxOutputLayer<C>>,
 }
@@ -157,7 +157,7 @@ impl<
     ) {
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
-            verifier_challenges: verifier_challenge_descriptions,
+            fiat_shamir_challenges: fiat_shamir_challenge_descriptions,
             intermediate_layers: intermediate_layer_descriptions,
             output_layers: output_layer_descriptions,
         } = gkr_circuit_description;
@@ -217,7 +217,7 @@ impl<
         // we convert the circuit input layer into a prover input layer using this big bookkeeping table
         // we add the data in the input data corresopnding with the circuit location for each input data struct into the circuit map
         let mut prover_input_layers: Vec<HyraxInputLayerEnum<C>> = Vec::new();
-        let mut verifier_challenges = Vec::new();
+        let mut fiat_shamir_challenges = Vec::new();
         let mut input_commitments: Vec<HyraxVerifierCommitmentEnum<C>> = Vec::new();
         let mut hint_input_layers: Vec<&CircuitInputLayerEnum<C::Scalar>> = Vec::new();
         input_layer_descriptions
@@ -296,20 +296,20 @@ impl<
                 }
             });
 
-        verifier_challenge_descriptions
+        fiat_shamir_challenge_descriptions
             .iter()
-            .for_each(|verifier_challenge_description| {
-                let verifier_challenge_mle = MultilinearExtension::new(transcript_writer.get_scalar_field_challenges(
+            .for_each(|fiat_shamir_challenge_description| {
+                let fiat_shamir_challenge_mle = MultilinearExtension::new(transcript_writer.get_scalar_field_challenges(
                     "Verifier challenges",
-                    1 << verifier_challenge_description.num_bits,
+                    1 << fiat_shamir_challenge_description.num_bits,
                 ));
                 circuit_map.add_node(
-                    CircuitLocation::new(verifier_challenge_description.layer_id(), vec![]),
-                    verifier_challenge_mle.clone(),
+                    CircuitLocation::new(fiat_shamir_challenge_description.layer_id(), vec![]),
+                    fiat_shamir_challenge_mle.clone(),
                 );
-                verifier_challenges.push(VerifierChallenge::new(
-                    verifier_challenge_mle,
-                    verifier_challenge_description.layer_id(),
+                fiat_shamir_challenges.push(FiatShamirChallenge::new(
+                    fiat_shamir_challenge_mle,
+                    fiat_shamir_challenge_description.layer_id(),
                 ));
             });
 
@@ -418,7 +418,7 @@ impl<
             });
         let hyrax_circuit = HyraxInstantiatedCircuit {
             input_layers: prover_input_layers,
-            verifier_challenges: verifier_challenges,
+            fiat_shamir_challenges: fiat_shamir_challenges,
             layers: prover_intermediate_layers,
             output_layers: prover_output_layers,
         };
@@ -469,7 +469,7 @@ impl<
         let converter = &mut self.converter;
         let HyraxInstantiatedCircuit {
             input_layers,
-            verifier_challenges,
+            fiat_shamir_challenges,
             layers,
             output_layers,
         } = instantiated_circuit;
@@ -560,10 +560,10 @@ impl<
         // aggregation, so there is almost nothing to do here.  However, the verifier receives the
         // prover's claims in committed form (this is just how we implemented it) and so we need to
         // provide the blinding factors in order for V to be able to check them.
-        let claims_on_public_values = verifier_challenges
+        let claims_on_public_values = fiat_shamir_challenges
             .iter()
-            .map(|verifier_challenge| {
-                let layer_id = verifier_challenge.layer_id();
+            .map(|fiat_shamir_challenge| {
+                let layer_id = fiat_shamir_challenge.layer_id();
                 claim_tracker.get(&layer_id).unwrap().clone()
             })
             .flatten()
@@ -603,12 +603,12 @@ impl<
         });
 
         // Get the verifier challenges from the transcript.
-        let verifier_challenges: Vec<VerifierChallenge<C::Scalar>> = circuit_description.verifier_challenges
+        let fiat_shamir_challenges: Vec<FiatShamirChallenge<C::Scalar>> = circuit_description.fiat_shamir_challenges
             .iter()
-            .map(|vc_desc| {
-                let num_evals = 1 << vc_desc.num_bits;
+            .map(|fs_desc| {
+                let num_evals = 1 << fs_desc.num_bits;
                 let values = verifier_transcript.get_scalar_field_challenges("Verifier challenges", num_evals).unwrap();
-                vc_desc.instantiate(values)
+                fs_desc.instantiate(values)
             })
             .collect();
 
@@ -620,7 +620,7 @@ impl<
             circuit_description,
             self.committer,
             commitments,
-            verifier_challenges,
+            fiat_shamir_challenges,
             verifier_transcript,
         );
         end_timer!(verify_timer);
@@ -634,7 +634,7 @@ impl<
         circuit_description: &GKRCircuitDescription<C::Scalar>,
         committer: &PedersenCommitter<C>,
         commitments: &[HyraxVerifierCommitmentEnum<C>],
-        verifier_challenges: Vec<VerifierChallenge<C::Scalar>>,
+        fiat_shamir_challenges: Vec<FiatShamirChallenge<C::Scalar>>,
         transcript: &mut impl ECVerifierTranscript<C>,
     ) {
         // Unpack the Hyrax proof.
@@ -733,14 +733,14 @@ impl<
             );
 
         // Check the claims on the verifier challenges
-        verifier_challenges
+        fiat_shamir_challenges
             .iter()
-            .for_each(|verifier_challenge| {
-                let claims_as_commitments = claim_tracker.remove(&verifier_challenge.layer_id()).unwrap();
+            .for_each(|fiat_shamir_challenge| {
+                let claims_as_commitments = claim_tracker.remove(&fiat_shamir_challenge.layer_id()).unwrap();
                 Self::match_claims(&claims_as_commitments, claims_on_public_values, committer)
                     .iter()
                     .for_each(|plaintext_claim| {
-                        verifier_challenge.verify(plaintext_claim.get_claim());
+                        fiat_shamir_challenge.verify(plaintext_claim.get_claim());
                     });
             });
 
@@ -751,7 +751,7 @@ impl<
 
     /// Match up the claims from the verifier with the claims from the prover. Used for proofs of
     /// evaluation on public values where the proof (in the case of [PublicInputLayer] and
-    /// [VerifierChallenge] ) consists of the prover simply opening the commitments in the claims,
+    /// [FiatShamirChallenge] ) consists of the prover simply opening the commitments in the claims,
     /// or equivalently just handing over the CommittedScalars. Panics if a verifier claim can not
     /// be matched to a prover claim (but doesn't worry about prover claims that don't have a
     /// verifier counterpart).

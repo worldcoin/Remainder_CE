@@ -25,7 +25,7 @@ use super::nodes::{
     matmult::MatMultNode,
     node_enum::{NodeEnum, NodeEnumGroup},
     split_node::SplitNode,
-    verifier_challenge::VerifierChallengeNode,
+    fiat_shamir::FiatShamirChallengeNode,
     CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode,
 };
 
@@ -326,7 +326,7 @@ impl<F: Field> CircuitNode for IntermediateNode<F> {
 
 type LayouterNodes<F> = (
     Vec<InputLayerNode>,
-    Vec<VerifierChallengeNode>,
+    Vec<FiatShamirChallengeNode>,
     Vec<Box<dyn CompilableNode<F>>>,
     Vec<LookupTable>,
     Vec<OutputNode>,
@@ -350,7 +350,7 @@ pub fn layout<F: Field>(
     // Handle input layers
     let input_shreds: Vec<InputShred> = dag.get_nodes();
     let mut input_layer_nodes: Vec<InputLayerNode> = dag.get_nodes();
-    let verifier_challenge_nodes: Vec<VerifierChallengeNode> = dag.get_nodes();
+    let fiat_shamir_challenge_nodes: Vec<FiatShamirChallengeNode> = dag.get_nodes();
 
     let mut input_layer_map: HashMap<NodeId, &mut InputLayerNode> = HashMap::new();
 
@@ -448,7 +448,7 @@ pub fn layout<F: Field>(
 
     Ok((
         input_layer_nodes,
-        verifier_challenge_nodes,
+        fiat_shamir_challenge_nodes,
         intermediate_nodes,
         lookup_tables,
         output_layers,

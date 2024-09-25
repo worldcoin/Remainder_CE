@@ -21,7 +21,7 @@ use remainder_shared_types::Field;
 
 use crate::expression::generic_expr::Expression;
 
-use super::verifier_challenge::VerifierChallengeNode;
+use super::fiat_shamir::FiatShamirChallengeNode;
 use super::{CircuitNode, Context, NodeId};
 
 /// Represents the use of a lookup into a particular table (represented by a LookupTable).
@@ -92,8 +92,8 @@ pub struct LookupTable {
     constraints: Vec<LookupConstraint>,
     /// The id of the node providing the table entries.
     table_node_id: NodeId,
-    /// The ID of the [VerifierChallengeNode] for the FS challenge.
-    verifier_challenge_node_id: NodeId,
+    /// The ID of the [FiatShamirChallengeNode] for the FS challenge.
+    fiat_shamir_challenge_node_id: NodeId,
     /// Whether any of the values to be constrained by this LookupTable should be considered secret
     /// (Determines which InputLayer type is used for the denominator inverse for the LHS.)
     secret_constrained_values: bool,
@@ -112,13 +112,13 @@ impl LookupTable {
         ctx: &Context,
         table: &dyn CircuitNode,
         secret_constrained_values: bool,
-        verifier_challenge_node: &VerifierChallengeNode,
+        fiat_shamir_challenge_node: &FiatShamirChallengeNode,
     ) -> Self {
         LookupTable {
             id: ctx.get_new_id(),
             constraints: vec![],
             table_node_id: table.id(),
-            verifier_challenge_node_id: verifier_challenge_node.id(),
+            fiat_shamir_challenge_node_id: fiat_shamir_challenge_node.id(),
             secret_constrained_values,
         }
     }
@@ -158,16 +158,16 @@ impl LookupTable {
         // Build the LHS of the equation (defined by the constrained values)
         println!("Build the LHS of the equation (defined by the constrained values)");
 
-        let (verifier_challenge_location, verifier_challenge_node_vars) =
-            circuit_description_map.get_location_num_vars_from_node_id(&self.verifier_challenge_node_id)?;
+        let (fiat_shamir_challenge_location, fiat_shamir_challenge_node_vars) =
+            circuit_description_map.get_location_num_vars_from_node_id(&self.fiat_shamir_challenge_node_id)?;
 
-        let verifier_challenge_mle_indices = get_total_mle_indices(
-            &verifier_challenge_location.prefix_bits,
-            *verifier_challenge_node_vars,
+        let fiat_shamir_challenge_mle_indices = get_total_mle_indices(
+            &fiat_shamir_challenge_location.prefix_bits,
+            *fiat_shamir_challenge_node_vars,
         );
-        let verifier_challenge_mle = CircuitMle::new(
-            verifier_challenge_location.layer_id,
-            &verifier_challenge_mle_indices,
+        let fiat_shamir_challenge_mle = CircuitMle::new(
+            fiat_shamir_challenge_location.layer_id,
+            &fiat_shamir_challenge_mle_indices,
         );
 
         // Build the denominator r - constrained
@@ -179,7 +179,7 @@ impl LookupTable {
                 .collect(),
         );
         let expr = CE::sum(
-            verifier_challenge_mle.expression(),
+            fiat_shamir_challenge_mle.expression(),
             CE::negated(constrained_expr.build_circuit_expr(circuit_description_map)?),
         );
         let expr_num_vars = expr.num_vars();
@@ -265,13 +265,13 @@ impl LookupTable {
         // Build the denominator r - table
 
         // First grab `r` as a `CircuitMle` from the `circuit_description_map`
-        let (verifier_challenge_loc, verifier_challenge_num_vars) =
-            circuit_description_map.0[&self.verifier_challenge_node_id].clone();
-        let verifier_challenge_circuit_mle = CircuitMle::new(
-            verifier_challenge_loc.layer_id,
+        let (fiat_shamir_challenge_loc, fiat_shamir_challenge_num_vars) =
+            circuit_description_map.0[&self.fiat_shamir_challenge_node_id].clone();
+        let fiat_shamir_challenge_circuit_mle = CircuitMle::new(
+            fiat_shamir_challenge_loc.layer_id,
             &get_total_mle_indices(
-                &verifier_challenge_loc.prefix_bits,
-                verifier_challenge_num_vars,
+                &fiat_shamir_challenge_loc.prefix_bits,
+                fiat_shamir_challenge_num_vars,
             ),
         );
 
@@ -282,7 +282,7 @@ impl LookupTable {
             &get_total_mle_indices(&table_loc.prefix_bits, table_num_vars),
         );
 
-        let expr = verifier_challenge_circuit_mle.expression() - table_circuit_mle.expression();
+        let expr = fiat_shamir_challenge_circuit_mle.expression() - table_circuit_mle.expression();
         let r_minus_table_num_vars = expr.num_vars();
         let layer_id = intermediate_layer_id.get_and_inc();
         let layer = CircuitRegularLayer::new_raw(layer_id, expr);
