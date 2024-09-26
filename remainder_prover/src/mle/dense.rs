@@ -147,17 +147,17 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         }
     }
 
-    /// Ryan's note -- I assume this function updates the bookkeeping tables as
-    /// described by [Tha13].
-    fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<Claim<F>> {
-        // --- Bind the current indexed bit to the challenge value ---
+    /// Bind the bit `index` to the value `binding`.
+    /// If this was the last unbound variable, then return a Claim object giving the fully specified
+    /// evaluation point and the (single) value of the bookkeeping table.  Otherwise, return None.
+    fn fix_variable(&mut self, index: usize, binding: F) -> Option<Claim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
-            if *mle_index == MleIndex::IndexedBit(round_index) {
-                mle_index.bind_index(challenge);
+            if *mle_index == MleIndex::IndexedBit(index) {
+                mle_index.bind_index(binding);
             }
         }
-
-        self.current_mle.fix_variable(challenge);
+        // Update the bookkeeping table.
+        self.current_mle.fix_variable(binding);
 
         if self.num_iterated_vars() == 0 {
             let fixed_claim_return = Claim::new(

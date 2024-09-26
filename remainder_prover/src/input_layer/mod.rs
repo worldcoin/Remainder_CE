@@ -25,7 +25,7 @@ pub mod ligero_input_layer;
 /// An input layer which requires no commitment and is openly evaluated at the random point.
 pub mod public_input_layer;
 /// An input layer in order to generate random challenges for Fiat-Shamir.
-pub mod verifier_challenge_input_layer;
+pub mod fiat_shamir_challenge;
 
 use crate::{
     claims::wlx_eval::get_num_wlx_evaluations, mle::mle_enum::MleEnum,
@@ -45,8 +45,6 @@ pub enum CommitmentEnum<F: Field> {
     LigeroCommitment(LigeroCommit<PoseidonSpongeHasher<F>, F>),
     /// The commitment for a [PublicInputLayer]
     PublicCommitment(Vec<F>),
-    /// The challenges for a [VerifierChallengeInputLayer]
-    VerifierChallenges(Vec<F>),
 }
 
 #[derive(Error, Clone, Debug)]
@@ -60,10 +58,6 @@ pub enum InputLayerError {
     /// does not equal the claimed value.
     #[error("failed to verify public input layer")]
     PublicInputVerificationFailed,
-    /// This is when the random input layer evaluated at a random point does not
-    /// equal the claimed value.
-    #[error("failed to verify random input layer")]
-    RandomInputVerificationFailed,
     /// This is when there is an error when trying to squeeze or add elements to the transcript.
     #[error("Error during interaction with the transcript.")]
     TranscriptError(#[from] TranscriptReaderError),

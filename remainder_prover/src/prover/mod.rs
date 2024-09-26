@@ -14,11 +14,12 @@ use crate::claims::wlx_eval::WLXAggregator;
 use crate::input_layer::enum_input_layer::{
     CircuitInputLayerEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
 };
+use crate::input_layer::fiat_shamir_challenge::{CircuitFiatShamirChallenge, FiatShamirChallenge};
 use crate::input_layer::CircuitInputLayer;
 use crate::layer::layer_enum::{CircuitLayerEnum, VerifierLayerEnum};
 use crate::layer::CircuitLayer;
 use crate::layouter::component::Component;
-use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputLayerHintMap, InputNodeMap};
+use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputNodeMap};
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, Context};
 use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
@@ -90,12 +91,14 @@ impl<F: Field> From<Vec<Vec<F>>> for SumcheckProof<F> {
 /// The witness of a GKR circuit, used to actually prove the circuit
 #[derive(Debug)]
 pub struct InstantiatedCircuit<F: Field> {
-    /// The intermediate layers of the circuit, as defined by the ProofSystem
+    /// The intermediate layers of the circuit
     pub layers: Layers<F, LayerEnum<F>>,
-    /// The output layers of the circuit, as defined by the ProofSystem
+    /// The output layers of the circuit
     pub output_layers: Vec<MleOutputLayer<F>>,
-    /// The input layers of the circuit, as defined by the ProofSystem
+    /// The input layers of the circuit
     pub input_layers: Vec<InputLayerEnum<F>>,
+    /// The verifier challenges
+    pub fiat_shamir_challenges: Vec<FiatShamirChallenge<F>>,
 }
 
 /// Controls claim aggregation behavior.
@@ -107,6 +110,8 @@ pub const ENABLE_OPTIMIZATION: bool = true;
 pub struct GKRCircuitDescription<F: Field> {
     /// The circuit descriptions of the input layers.
     pub input_layers: Vec<CircuitInputLayerEnum<F>>,
+    /// The circuit descriptions of the verifier challengs
+    pub fiat_shamir_challenges: Vec<CircuitFiatShamirChallenge<F>>,
     /// The circuit descriptions of the intermediate layers.
     pub intermediate_layers: Vec<CircuitLayerEnum<F>>,
     /// The circuit desriptions of the output layers.
@@ -114,24 +119,13 @@ pub struct GKRCircuitDescription<F: Field> {
 }
 
 impl<F: Field> GKRCircuitDescription<F> {
-    /// Constructs a new `GKRCircuitDescription` via circuit description layers
-    pub fn new(
-        input_layers: Vec<CircuitInputLayerEnum<F>>,
-        intermediate_layers: Vec<CircuitLayerEnum<F>>,
-        output_layers: Vec<CircuitMleOutputLayer<F>>,
-    ) -> Self {
-        Self {
-            input_layers,
-            intermediate_layers,
-            output_layers,
-        }
-    }
 
     /// Label the MLE indices contained within a circuit description, starting
     /// each layer with the start_index.
     pub fn index_mle_indices(&mut self, start_index: usize) {
         let GKRCircuitDescription {
             input_layers: _,
+            fiat_shamir_challenges: _,
             intermediate_layers,
             output_layers,
         } = self;
@@ -177,6 +171,15 @@ impl<F: Field> GKRCircuitDescription<F> {
             .collect();
 
         end_timer!(input_layer_commitments_timer);
+
+        // Get the verifier challenges from the transcript.
+        let fiat_shamir_challenges: Vec<FiatShamirChallenge<F>> = self.fiat_shamir_challenges
+            .iter()
+            .map(|fs_desc| {
+                let values = transcript_reader.get_challenges("Verifier challenges", 1 << fs_desc.num_bits).unwrap();
+                fs_desc.instantiate(values)
+            })
+            .collect();
 
         // Claim aggregator to keep track of GKR-style claims across all layers.
         let mut aggregator = WLXAggregator::<F, LayerEnum<F>, InputLayerEnum<F>>::new();
@@ -286,6 +289,19 @@ impl<F: Field> GKRCircuitDescription<F> {
 
         end_timer!(input_layers_timer);
 
+        // --------- STAGE 4: Verify claims on the verifier challenges ---------
+        let fiat_shamir_challenges_timer = start_timer!(|| "Verifier challenges proof generation");
+        for fiat_shamir_challenge in fiat_shamir_challenges {
+            if let Some(claims) = aggregator.get_claims(fiat_shamir_challenge.layer_id()) {
+                claims.iter().for_each(|claim_mle| {
+                    fiat_shamir_challenge.verify(claim_mle.get_claim()).unwrap();
+                });
+            } else {
+                return Err(GKRError::NoClaimsForLayer(fiat_shamir_challenge.layer_id()));
+            }
+        }
+        end_timer!(fiat_shamir_challenges_timer);
+
         Ok(())
     }
 }
@@ -295,22 +311,21 @@ impl<F: Field> GKRCircuitDescription<F> {
 pub fn generate_circuit_description<F: Field>(
     component: impl Component<NodeEnum<F>>,
     ctx: Context,
-) -> Result<(GKRCircuitDescription<F>, InputNodeMap, InputLayerHintMap<F>), GKRError> {
+) -> Result<(GKRCircuitDescription<F>, InputNodeMap), GKRError> {
     let nodes = component.yield_nodes();
-    let (input_nodes, verifier_challenge_nodes, intermediate_nodes, lookup_nodes, output_nodes) =
+    let (input_nodes, fiat_shamir_challenge_nodes, intermediate_nodes, lookup_nodes, output_nodes) =
         layout(ctx, nodes).unwrap();
 
     let mut input_layer_id = LayerId::Input(0);
     let mut intermediate_layer_id = LayerId::Layer(0);
-    let mut verifier_challenge_layer_id = LayerId::VerifierChallengeLayer(0);
+    let mut fiat_shamir_challenge_layer_id = LayerId::FiatShamirChallengeLayer(0);
 
     let mut intermediate_layers = Vec::<CircuitLayerEnum<F>>::new();
     let mut output_layers = Vec::<CircuitMleOutputLayer<F>>::new();
     let mut circuit_description_map = CircuitDescriptionMap::new();
     let mut input_node_to_layer_map = InputNodeMap::new();
-    let mut input_layer_hint_map = InputLayerHintMap::<F>::new();
 
-    let mut input_layers = input_nodes
+    let input_layers = input_nodes
         .iter()
         .map(|input_node| {
             let input_circuit_description = input_node
@@ -325,18 +340,16 @@ pub fn generate_circuit_description<F: Field>(
         })
         .collect_vec();
 
-    verifier_challenge_nodes
+    let fiat_shamir_challenges = fiat_shamir_challenge_nodes
         .iter()
-        .for_each(|verifier_challenge_node| {
-            let verifier_challenge_layer = verifier_challenge_node
+        .map(|fiat_shamir_challenge_node| {
+            fiat_shamir_challenge_node
                 .generate_circuit_description::<F>(
-                    &mut verifier_challenge_layer_id,
+                    &mut fiat_shamir_challenge_layer_id,
                     &mut circuit_description_map,
-                );
-            input_layers.push(CircuitInputLayerEnum::VerifierChallengeInputLayer(
-                verifier_challenge_layer,
-            ))
-        });
+                )
+        })
+        .collect_vec();
 
     for node in &intermediate_nodes {
         let node_compiled_intermediate_layers = node
@@ -345,22 +358,20 @@ pub fn generate_circuit_description<F: Field>(
         intermediate_layers.extend(node_compiled_intermediate_layers);
     }
 
-    (input_layers, intermediate_layers, output_layers) = lookup_nodes.iter().fold(
-        (input_layers, intermediate_layers, output_layers),
-        |(mut lookup_input_acc, mut lookup_intermediate_acc, mut lookup_output_acc),
+    // Get the contributions of each LookupTable to the circuit description.
+    (intermediate_layers, output_layers) = lookup_nodes.iter().fold(
+        (intermediate_layers, output_layers),
+        |(mut lookup_intermediate_acc, mut lookup_output_acc),
          lookup_node| {
-            let (input_layers, intermediate_layers, output_layers) = lookup_node
+            let (intermediate_layers, output_layer) = lookup_node
                 .generate_lookup_circuit_description(
-                    &mut input_layer_id,
                     &mut intermediate_layer_id,
                     &mut circuit_description_map,
-                    &mut input_layer_hint_map,
                 )
                 .unwrap();
-            lookup_input_acc.extend(input_layers);
             lookup_intermediate_acc.extend(intermediate_layers);
-            lookup_output_acc.extend(output_layers);
-            (lookup_input_acc, lookup_intermediate_acc, lookup_output_acc)
+            lookup_output_acc.push(output_layer);
+            (lookup_intermediate_acc, lookup_output_acc)
         },
     );
 
@@ -373,11 +384,15 @@ pub fn generate_circuit_description<F: Field>(
         });
 
     let circuit_description =
-        GKRCircuitDescription::new(input_layers, intermediate_layers, output_layers);
+        GKRCircuitDescription{
+            input_layers,
+            fiat_shamir_challenges,
+            intermediate_layers,
+            output_layers
+        };
 
     Ok((
         circuit_description,
         input_node_to_layer_map,
-        input_layer_hint_map,
     ))
 }

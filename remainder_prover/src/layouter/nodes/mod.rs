@@ -23,7 +23,7 @@ pub mod matmult;
 pub mod node_enum;
 pub mod sector;
 pub mod split_node;
-pub mod verifier_challenge;
+pub mod fiat_shamir;
 
 /// Container of global context for node creation
 ///

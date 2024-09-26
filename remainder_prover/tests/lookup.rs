@@ -6,7 +6,7 @@ use remainder::{
             circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
             lookup::{LookupConstraint, LookupTable},
             node_enum::NodeEnum,
-            verifier_challenge::VerifierChallengeNode,
+            fiat_shamir::FiatShamirChallengeNode,
             CircuitNode,
         },
     },
@@ -28,8 +28,8 @@ pub fn single_shred_test() {
             ctx,
             &input_layer,
         );
-        let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, &verifier_challenge_node);
+        let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(ctx, 1);
+        let lookup_table = LookupTable::new::<Fr>(ctx, &table, &fiat_shamir_challenge_node);
         let (constrained, constrained_data) = get_input_shred_and_data_from_vec(
             vec![
                 Fr::from(0u64),
@@ -55,7 +55,7 @@ pub fn single_shred_test() {
 
         let nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
-            verifier_challenge_node.into(),
+            fiat_shamir_challenge_node.into(),
             table.into(),
             lookup_table.into(),
             constrained.into(),
@@ -80,8 +80,8 @@ pub fn multi_shred_test() {
             ctx,
             &input_layer,
         );
-        let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, &verifier_challenge_node);
+        let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(ctx, 1);
+        let lookup_table = LookupTable::new::<Fr>(ctx, &table, &fiat_shamir_challenge_node);
 
         let (constrained_0, constrained_0_data) = get_input_shred_and_data_from_vec(
             vec![
@@ -173,7 +173,7 @@ pub fn multi_shred_test() {
 
         let nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
-            verifier_challenge_node.into(),
+            fiat_shamir_challenge_node.into(),
             table.into(),
             lookup_table.into(),
             constrained_0.into(),
@@ -208,8 +208,8 @@ pub fn test_not_satisfied() {
             ctx,
             &input_layer,
         );
-        let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, &verifier_challenge_node);
+        let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(ctx, 1);
+        let lookup_table = LookupTable::new::<Fr>(ctx, &table, &fiat_shamir_challenge_node);
         let (constrained, constrained_data) = get_input_shred_and_data_from_vec(
             vec![
                 Fr::from(3u64),
@@ -235,7 +235,7 @@ pub fn test_not_satisfied() {
 
         let nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
-            verifier_challenge_node.into(),
+            fiat_shamir_challenge_node.into(),
             table.into(),
             lookup_table.into(),
             constrained.into(),

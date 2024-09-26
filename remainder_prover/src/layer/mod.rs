@@ -191,7 +191,7 @@ pub trait CircuitLayer<F: Field> {
         &self,
         mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
         circuit_map: &mut CircuitMap<F>,
-    ) -> bool;
+    );
 
     /// The Circuit MLEs that make up the leaves of the expression in this layer.
     fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>>;
@@ -214,7 +214,7 @@ pub enum LayerId {
     /// A layer between the output layer and input layers
     Layer(usize),
     /// A layer representing values sampled from the verifier via Fiat-Shamir
-    VerifierChallengeLayer(usize),
+    FiatShamirChallengeLayer(usize),
 }
 
 impl LayerId {
@@ -223,7 +223,7 @@ impl LayerId {
         match self {
             LayerId::Input(id) => LayerId::Input(id + 1),
             LayerId::Layer(id) => LayerId::Layer(id + 1),
-            LayerId::VerifierChallengeLayer(id) => LayerId::VerifierChallengeLayer(id + 1),
+            LayerId::FiatShamirChallengeLayer(id) => LayerId::FiatShamirChallengeLayer(id + 1),
         }
     }
 
@@ -244,7 +244,7 @@ impl LayerId {
             LayerId::Layer(ref mut id) => {
                 *id += 1;
             }
-            LayerId::VerifierChallengeLayer(ref mut id) => {
+            LayerId::FiatShamirChallengeLayer(ref mut id) => {
                 *id += 1;
             }
         };
