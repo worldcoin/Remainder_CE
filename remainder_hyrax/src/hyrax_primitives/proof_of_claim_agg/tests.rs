@@ -1,4 +1,3 @@
-
 use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
 use crate::hyrax_primitives::proof_of_claim_agg::barycentric_weights;
 use crate::hyrax_primitives::proof_of_claim_agg::ProofOfClaimAggregation;
