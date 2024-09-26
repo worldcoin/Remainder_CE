@@ -129,33 +129,6 @@ impl InputNodeMap {
     }
 }
 
-type HintFunctionMapping<F> = (
-    CircuitLocation,
-    fn(&MultilinearExtension<F>) -> MultilinearExtension<F>,
-);
-
-/// A HashMap that maps a circuit location to the function that should
-/// be used on a MLE in order to generate its data.
-pub struct InputLayerHintMap<F: Field>(pub HashMap<LayerId, HintFunctionMapping<F>>);
-
-impl<F: Field> InputLayerHintMap<F> {
-    pub(crate) fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    /// Given a layer ID, get the hint function that generates
-    /// the data for this layer.
-    pub fn get_hint_function(&self, layer_id: &LayerId) -> &HintFunctionMapping<F> {
-        self.0.get(layer_id).unwrap()
-    }
-
-    /// Add a corresponding hint function to a layer in the circuit,
-    /// given its layer ID.
-    pub fn add_hint_function(&mut self, layer_id: &LayerId, hint_function: HintFunctionMapping<F>) {
-        self.0.insert(*layer_id, hint_function);
-    }
-}
-
 /// The location of a Node in the circuit
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct CircuitLocation {

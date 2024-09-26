@@ -248,14 +248,10 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
         &self,
         mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
         circuit_map: &mut CircuitMap<F>,
-    ) -> bool {
+    ) {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
-        let maybe_source_mle_data = circuit_map.get_data_from_circuit_mle(&self.source_mle);
-        if maybe_source_mle_data.is_err() {
-            return false;
-        }
-        let source_mle_data = maybe_source_mle_data.unwrap();
+        let source_mle_data = circuit_map.get_data_from_circuit_mle(&self.source_mle).unwrap();
 
         let max_gate_val = self
             .wiring
@@ -277,7 +273,6 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
-        true
     }
 }
 

@@ -20,11 +20,11 @@ use remainder::input_layer::enum_input_layer::{
 };
 use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
 use remainder::input_layer::{CircuitInputLayer, InputLayer};
-use remainder::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
+use remainder::layer::layer_enum::LayerEnum;
 use remainder::layer::{CircuitLayer, Layer};
 use remainder::layouter::component::ComponentSet;
 use remainder::layouter::layouting::{
-    CircuitLocation, CircuitMap, InputLayerHintMap, InputNodeMap,
+    CircuitLocation, CircuitMap, InputNodeMap,
 };
 use remainder::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
 use remainder::layouter::nodes::node_enum::NodeEnum;
@@ -82,7 +82,7 @@ pub struct HyraxInstantiatedCircuit<C: PrimeOrderCurve> {
     pub output_layers: Vec<HyraxOutputLayer<C>>,
 }
 
-type CircuitDescriptionAndAux<F> = (GKRCircuitDescription<F>, InputNodeMap, InputLayerHintMap<F>);
+type CircuitDescriptionAndAux<F> = (GKRCircuitDescription<F>, InputNodeMap);
 
 /// The struct that holds all the necessary information to describe a circuit.
 pub struct HyraxProver<
@@ -148,7 +148,6 @@ impl<
         &self,
         gkr_circuit_description: &GKRCircuitDescription<C::Scalar>,
         input_layer_to_node_map: InputNodeMap,
-        input_layer_hint_map: InputLayerHintMap<C::Scalar>,
         data_input_layers: Vec<HyraxInputLayerData<C>>,
         transcript_writer: &mut impl ECProverTranscript<C>,
     ) -> (
@@ -219,80 +218,73 @@ impl<
         let mut prover_input_layers: Vec<HyraxInputLayerEnum<C>> = Vec::new();
         let mut fiat_shamir_challenges = Vec::new();
         let mut input_commitments: Vec<HyraxVerifierCommitmentEnum<C>> = Vec::new();
-        let mut hint_input_layers: Vec<&CircuitInputLayerEnum<C::Scalar>> = Vec::new();
         input_layer_descriptions
             .iter()
             .for_each(|input_layer_description| {
                 let input_layer_id = input_layer_description.layer_id();
-                let maybe_input_node_id = input_layer_to_node_map.get_node_id(&input_layer_id);
-                if let Some(input_node_id) = maybe_input_node_id {
-                    assert!(input_id_data_map.contains_key(input_node_id));
-                    let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
-                    let input_mles = corresponding_input_data
-                        .data
-                        .iter()
-                        .map(|input_shred_data| &input_shred_data.data);
+                let input_node_id = input_layer_to_node_map.get_node_id(&input_layer_id).unwrap();
+                let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
+                let input_mles = corresponding_input_data
+                    .data
+                    .iter()
+                    .map(|input_shred_data| &input_shred_data.data);
 
 
-                    let combined_mle = combine_input_mles(&input_mles.collect_vec());
-                    let mle_outputs_necessary = mle_claim_map.get(&input_layer_id).unwrap();
-                    mle_outputs_necessary.iter().for_each(|mle_output| {
-                        let prefix_bits = mle_output.prefix_bits();
-                        let output = filter_bookkeeping_table(&combined_mle, &prefix_bits);
-                        circuit_map
-                            .add_node(CircuitLocation::new(input_layer_id, prefix_bits), output);
-                    });
+                let combined_mle = combine_input_mles(&input_mles.collect_vec());
+                let mle_outputs_necessary = mle_claim_map.get(&input_layer_id).unwrap();
+                mle_outputs_necessary.iter().for_each(|mle_output| {
+                    let prefix_bits = mle_output.prefix_bits();
+                    let output = filter_bookkeeping_table(&combined_mle, &prefix_bits);
+                    circuit_map
+                        .add_node(CircuitLocation::new(input_layer_id, prefix_bits), output);
+                });
 
-                    match input_layer_description {
-                        CircuitInputLayerEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
-                            let (hyrax_commit, hyrax_prover_input_layer) = if let Some(HyraxProverCommitmentEnum::HyraxCommitment((hyrax_precommit, hyrax_blinding_factors))) = &corresponding_input_data.precommit {
-                                let dtype = &corresponding_input_data.input_data_type;
-                                let hyrax_input_layer = HyraxInputLayer::new_with_hyrax_commitment(
-                                    combined_mle,
-                                    dtype,
-                                    input_layer_id,
-                                    self.committer,
-                                    hyrax_blinding_factors.clone(),
-                                    circuit_hyrax_input_layer.log_num_cols,
-                                    hyrax_precommit.clone());
-                                (hyrax_precommit.clone(), hyrax_input_layer)
-                            } else if corresponding_input_data.precommit.is_none() {
-                                let dtype = &corresponding_input_data.input_data_type;
-                                let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(combined_mle, input_layer_id, self.committer, dtype);
-                                let hyrax_commit_timer = start_timer!(|| format!("committing to hyrax input layer, {:?}", hyrax_input_layer.layer_id));
-                                let hyrax_commit = hyrax_input_layer.commit();
-                                end_timer!(hyrax_commit_timer);
-                                (hyrax_commit, hyrax_input_layer)
-                            } else {
-                                panic!("We should only have no precommit or a hyrax precommit for hyrax input layers!")
-                            };
-                            transcript_writer.append_ec_points("Hyrax commitment", &hyrax_commit);
-                            input_commitments.push(HyraxVerifierCommitmentEnum::HyraxCommitment(hyrax_commit.clone()));
-                            prover_input_layers.push(HyraxInputLayerEnum::HyraxInputLayer(hyrax_prover_input_layer));
+                match input_layer_description {
+                    CircuitInputLayerEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
+                        let (hyrax_commit, hyrax_prover_input_layer) = if let Some(HyraxProverCommitmentEnum::HyraxCommitment((hyrax_precommit, hyrax_blinding_factors))) = &corresponding_input_data.precommit {
+                            let dtype = &corresponding_input_data.input_data_type;
+                            let hyrax_input_layer = HyraxInputLayer::new_with_hyrax_commitment(
+                                combined_mle,
+                                dtype,
+                                input_layer_id,
+                                self.committer,
+                                hyrax_blinding_factors.clone(),
+                                circuit_hyrax_input_layer.log_num_cols,
+                                hyrax_precommit.clone());
+                            (hyrax_precommit.clone(), hyrax_input_layer)
+                        } else if corresponding_input_data.precommit.is_none() {
+                            let dtype = &corresponding_input_data.input_data_type;
+                            let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(combined_mle, input_layer_id, self.committer, dtype);
+                            let hyrax_commit_timer = start_timer!(|| format!("committing to hyrax input layer, {:?}", hyrax_input_layer.layer_id));
+                            let hyrax_commit = hyrax_input_layer.commit();
+                            end_timer!(hyrax_commit_timer);
+                            (hyrax_commit, hyrax_input_layer)
+                        } else {
+                            panic!("We should only have no precommit or a hyrax precommit for hyrax input layers!")
+                        };
+                        transcript_writer.append_ec_points("Hyrax commitment", &hyrax_commit);
+                        input_commitments.push(HyraxVerifierCommitmentEnum::HyraxCommitment(hyrax_commit.clone()));
+                        prover_input_layers.push(HyraxInputLayerEnum::HyraxInputLayer(hyrax_prover_input_layer));
 
-                        }
-                        CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
-                            assert!(corresponding_input_data.precommit.is_none(), "public input layers should not have precommits");
-                            let mut prover_public_input_layer = circuit_public_input_layer.convert_into_prover_input_layer(combined_mle, &None);
-                            let public_commit_timer = start_timer!(|| format!("committing to public input layer, {:?}", prover_public_input_layer.layer_id()));
-                            let commitment = prover_public_input_layer.commit().unwrap();
-                            end_timer!(public_commit_timer);
-                            if let InputLayerEnumVerifierCommitment::PublicInputLayer(public_input_coefficients) = commitment {
-                                transcript_writer.append_scalar_points(
-                                    "Input Coefficients for Public Input",
-                                    &public_input_coefficients,
-                                );
-                                input_commitments.push(HyraxVerifierCommitmentEnum::PublicCommitment(public_input_coefficients));
-                            }
-                            prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
-                        },
-                        CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
-                            panic!("Hyrax proof system does not support ligero input layers because the PCS implementation is not zero knowledge")
-                        },
                     }
-                } else {
-                    hint_input_layers.push(input_layer_description);
-                    assert!(input_layer_hint_map.0.contains_key(&input_layer_id));
+                    CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
+                        assert!(corresponding_input_data.precommit.is_none(), "public input layers should not have precommits");
+                        let mut prover_public_input_layer = circuit_public_input_layer.convert_into_prover_input_layer(combined_mle, &None);
+                        let public_commit_timer = start_timer!(|| format!("committing to public input layer, {:?}", prover_public_input_layer.layer_id()));
+                        let commitment = prover_public_input_layer.commit().unwrap();
+                        end_timer!(public_commit_timer);
+                        if let InputLayerEnumVerifierCommitment::PublicInputLayer(public_input_coefficients) = commitment {
+                            transcript_writer.append_scalar_points(
+                                "Input Coefficients for Public Input",
+                                &public_input_coefficients,
+                            );
+                            input_commitments.push(HyraxVerifierCommitmentEnum::PublicCommitment(public_input_coefficients));
+                        }
+                        prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
+                    },
+                    CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
+                        panic!("Hyrax proof system does not support ligero input layers because the PCS implementation is not zero knowledge")
+                    },
                 }
             });
 
@@ -316,83 +308,14 @@ impl<
         // forward pass of the layers
         // convert the circuit layer into a prover layer using circuit map -> populate a GKRCircuit as you do this
         // prover layer ( mle_claim_map ) -> populates circuit map
-        let mut uninstantiated_intermediate_layers: Vec<&CircuitLayerEnum<C::Scalar>> = Vec::new();
         intermediate_layer_descriptions
             .iter()
             .for_each(|intermediate_layer_description| {
                 let mle_outputs_necessary = mle_claim_map
                     .get(&intermediate_layer_description.layer_id())
                     .unwrap();
-                let populatable = intermediate_layer_description
-                    .compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
-                if !populatable {
-                    uninstantiated_intermediate_layers.push(intermediate_layer_description);
-                }
+                intermediate_layer_description.compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
             });
-
-        while !hint_input_layers.is_empty() || !uninstantiated_intermediate_layers.is_empty() {
-            let mut data_updated = false;
-            hint_input_layers = hint_input_layers
-                .iter()
-                .filter_map(|hint_input_layer_description| {
-                    let (hint_circuit_location, hint_function) = input_layer_hint_map
-                        .get_hint_function(&hint_input_layer_description.layer_id());
-                    if let Some(data) = circuit_map.get_data_from_location(hint_circuit_location) {
-                        let function_applied_to_data = hint_function(data);
-                        circuit_map.add_node(
-                            CircuitLocation::new(hint_input_layer_description.layer_id(), vec![]),
-                            function_applied_to_data.clone(),
-                        );
-                        match hint_input_layer_description {
-                            CircuitInputLayerEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
-                                let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(function_applied_to_data, hint_input_layer_description.layer_id(), self.committer, &None);
-                                let hyrax_commit = hyrax_input_layer.commit();
-                                transcript_writer.append_ec_points("Hyrax commitment", &hyrax_commit);
-                                input_commitments.push(HyraxVerifierCommitmentEnum::HyraxCommitment(hyrax_commit));
-                                prover_input_layers.push(HyraxInputLayerEnum::HyraxInputLayer(hyrax_input_layer));
-                            }
-                            CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
-                                let mut prover_public_input_layer = circuit_public_input_layer.convert_into_prover_input_layer(function_applied_to_data, &None);
-                                let commitment = prover_public_input_layer.commit().unwrap();
-                                if let InputLayerEnumVerifierCommitment::PublicInputLayer(public_input_coefficients) = commitment {
-                                    transcript_writer.append_scalar_points(
-                                        "Input Coefficients for Public Input",
-                                        &public_input_coefficients,
-                                    );
-                                    input_commitments.push(HyraxVerifierCommitmentEnum::PublicCommitment(public_input_coefficients));
-                                }
-                                prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
-                            },
-                            CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
-                                panic!("Hyrax proof system does not support ligero input layers because the PCS implementation is not zero knowledge")
-                            },
-                        }
-                        data_updated = true;
-                        None
-                    } else {
-                        Some(*hint_input_layer_description)
-                    }
-                })
-                .collect_vec();
-            uninstantiated_intermediate_layers = uninstantiated_intermediate_layers
-                .iter()
-                .filter_map(|uninstantiated_intermediate_layer| {
-                    let mle_outputs_necessary = mle_claim_map
-                        .get(&uninstantiated_intermediate_layer.layer_id())
-                        .unwrap();
-                    let populatable = uninstantiated_intermediate_layer
-                        .compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
-                    if populatable {
-                        data_updated = true;
-                        None
-                    } else {
-                        Some(*uninstantiated_intermediate_layer)
-                    }
-                })
-                .collect();
-            assert!(data_updated);
-        }
-        // assert_eq!(circuit_description_map.0.len(), circuit_map.0.len());
 
         let mut prover_intermediate_layers: Vec<LayerEnum<C::Scalar>> =
             Vec::with_capacity(intermediate_layer_descriptions.len());
@@ -436,12 +359,11 @@ impl<
         GKRCircuitDescription<C::Scalar>,
         HyraxProof<C>,
     ) {
-        let ((circuit_description, input_layer_to_node_map, input_hint_map), input_data) =
+        let ((circuit_description, input_layer_to_node_map), input_data) =
             Self::generate_circuit_description(witness_function);
         let (mut instantiated_circuit, commitments) = self.populate_hyrax_circuit(
             &circuit_description,
             input_layer_to_node_map,
-            input_hint_map,
             input_data,
             transcript_writer,
         );
@@ -740,7 +662,7 @@ impl<
                 Self::match_claims(&claims_as_commitments, claims_on_public_values, committer)
                     .iter()
                     .for_each(|plaintext_claim| {
-                        fiat_shamir_challenge.verify(plaintext_claim.get_claim());
+                        fiat_shamir_challenge.verify(plaintext_claim.get_claim()).unwrap();
                     });
             });
 

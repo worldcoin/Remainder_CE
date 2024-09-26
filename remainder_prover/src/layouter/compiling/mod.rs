@@ -12,10 +12,10 @@ use tracing::{instrument, span, Level};
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::claims::ClaimAggregator;
 use crate::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
-use crate::input_layer::enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum};
+use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
 use crate::input_layer::{CircuitInputLayer, InputLayer};
-use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
+use crate::layer::layer_enum::LayerEnum;
 use crate::layer::LayerId;
 use crate::layer::{CircuitLayer, Layer};
 use crate::layouter::layouting::CircuitMap;
@@ -33,7 +33,7 @@ use log::info;
 use remainder_shared_types::transcript::{ProverTranscript, Transcript, TranscriptWriter};
 use remainder_shared_types::Field;
 
-use super::layouting::{CircuitLocation, InputLayerHintMap, InputNodeMap};
+use super::layouting::{CircuitLocation, InputNodeMap};
 use super::nodes::circuit_inputs::InputLayerData;
 use super::nodes::NodeId;
 use super::{
@@ -71,7 +71,6 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         &mut self,
         gkr_circuit_description: &GKRCircuitDescription<F>,
         input_layer_to_node_map: InputNodeMap,
-        input_layer_hint_map: InputLayerHintMap<F>,
         data_input_layers: Vec<InputLayerData<F>>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> InstantiatedCircuit<F> {
@@ -135,41 +134,34 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         // we add the data in the input data corresopnding with the circuit location for each input data struct into the circuit map
         let mut prover_input_layers: Vec<InputLayerEnum<F>> = Vec::new();
         let mut fiat_shamir_challenges = Vec::new();
-        let mut hint_input_layers: Vec<&CircuitInputLayerEnum<F>> = Vec::new();
         input_layer_descriptions
             .iter()
             .for_each(|input_layer_description| {
                 let input_layer_id = input_layer_description.layer_id();
-                let maybe_input_node_id = input_layer_to_node_map.get_node_id(&input_layer_id);
-                if let Some(input_node_id) = maybe_input_node_id {
-                    assert!(input_id_data_map.contains_key(input_node_id));
-                    let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
-                    let input_mles = corresponding_input_data
-                        .data
-                        .iter()
-                        .map(|input_shred_data| &input_shred_data.data);
+                let input_node_id = input_layer_to_node_map.get_node_id(&input_layer_id).unwrap();
+                let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
+                let input_mles = corresponding_input_data
+                    .data
+                    .iter()
+                    .map(|input_shred_data| &input_shred_data.data);
 
-                    let combined_mle = combine_input_mles(&input_mles.collect_vec());
-                    let mle_outputs_necessary = mle_claim_map.get(&input_layer_id).unwrap();
-                    mle_outputs_necessary.iter().for_each(|mle_output| {
-                        let prefix_bits = mle_output.prefix_bits();
-                        let output = filter_bookkeeping_table(&combined_mle, &prefix_bits);
-                        circuit_map
-                            .add_node(CircuitLocation::new(input_layer_id, prefix_bits), output);
-                    });
+                let combined_mle = combine_input_mles(&input_mles.collect_vec());
+                let mle_outputs_necessary = mle_claim_map.get(&input_layer_id).unwrap();
+                mle_outputs_necessary.iter().for_each(|mle_output| {
+                    let prefix_bits = mle_output.prefix_bits();
+                    let output = filter_bookkeeping_table(&combined_mle, &prefix_bits);
+                    circuit_map
+                        .add_node(CircuitLocation::new(input_layer_id, prefix_bits), output);
+                });
 
-                    let mut prover_input_layer = input_layer_description
-                        .convert_into_prover_input_layer(
-                            combined_mle,
-                            &corresponding_input_data.precommit,
-                        );
-                    let commitment = prover_input_layer.commit().unwrap();
-                    InputLayerEnum::append_commitment_to_transcript(&commitment, transcript_writer);
-                    prover_input_layers.push(prover_input_layer);
-                } else {
-                    hint_input_layers.push(input_layer_description);
-                    assert!(input_layer_hint_map.0.contains_key(&input_layer_id));
-                }
+                let mut prover_input_layer = input_layer_description
+                    .convert_into_prover_input_layer(
+                        combined_mle,
+                        &corresponding_input_data.precommit,
+                    );
+                let commitment = prover_input_layer.commit().unwrap();
+                InputLayerEnum::append_commitment_to_transcript(&commitment, transcript_writer);
+                prover_input_layers.push(prover_input_layer);
             });
 
         fiat_shamir_challenge_descriptions
@@ -192,70 +184,14 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         // forward pass of the layers
         // convert the circuit layer into a prover layer using circuit map -> populate a GKRCircuit as you do this
         // prover layer ( mle_claim_map ) -> populates circuit map
-        let mut uninstantiated_intermediate_layers: Vec<&CircuitLayerEnum<F>> = Vec::new();
         intermediate_layer_descriptions
             .iter()
             .for_each(|intermediate_layer_description| {
                 let mle_outputs_necessary = mle_claim_map
                     .get(&intermediate_layer_description.layer_id())
                     .unwrap();
-                let populatable = intermediate_layer_description
-                    .compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
-                if !populatable {
-                    uninstantiated_intermediate_layers.push(intermediate_layer_description);
-                }
+                intermediate_layer_description.compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
             });
-
-        while !hint_input_layers.is_empty() || !uninstantiated_intermediate_layers.is_empty() {
-            let mut data_updated = false;
-            hint_input_layers = hint_input_layers
-                .iter()
-                .filter_map(|hint_input_layer_description| {
-                    let (hint_circuit_location, hint_function) = input_layer_hint_map
-                        .get_hint_function(&hint_input_layer_description.layer_id());
-                    if let Some(data) = circuit_map.get_data_from_location(hint_circuit_location) {
-                        let function_applied_to_data = hint_function(data);
-                        // also here @ryan do we actually need to add to circuit map? also there are several places (see: logup) where we never add to circuit
-                        // map, even before this refactor, actually... this means we won't make claims on these so that's actually fine? idk
-                        circuit_map.add_node(
-                            CircuitLocation::new(hint_input_layer_description.layer_id(), vec![]),
-                            function_applied_to_data.clone(),
-                        );
-                        let mut prover_input_layer = hint_input_layer_description
-                            .convert_into_prover_input_layer(function_applied_to_data, &None);
-                        // LOL wait my brain can't think right now TODO (@ryan) do we really need to do this commitment part?
-                        let prover_input_commit = prover_input_layer.commit().unwrap();
-                        InputLayerEnum::append_commitment_to_transcript(
-                            &prover_input_commit,
-                            transcript_writer,
-                        );
-                        prover_input_layers.push(prover_input_layer);
-                        data_updated = true;
-                        None
-                    } else {
-                        Some(*hint_input_layer_description)
-                    }
-                })
-                .collect_vec();
-            uninstantiated_intermediate_layers = uninstantiated_intermediate_layers
-                .iter()
-                .filter_map(|uninstantiated_intermediate_layer| {
-                    let mle_outputs_necessary = mle_claim_map
-                        .get(&uninstantiated_intermediate_layer.layer_id())
-                        .unwrap();
-                    let populatable = uninstantiated_intermediate_layer
-                        .compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
-                    if populatable {
-                        data_updated = true;
-                        None
-                    } else {
-                        Some(*uninstantiated_intermediate_layer)
-                    }
-                })
-                .collect();
-            assert!(data_updated);
-        }
-        // assert_eq!(circuit_description_map.0.len(), circuit_map.0.len());
 
         let mut prover_intermediate_layers: Vec<LayerEnum<F>> =
             Vec::with_capacity(intermediate_layer_descriptions.len());
@@ -290,13 +226,12 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         let ctx = Context::new();
         let (component, input_layer_data) = (self.witness_builder)(&ctx);
         // TODO(vishady): ADD CIRCUIT DESCRIPTION TO TRANSCRIPT (maybe not here...)
-        let (circuit_description, input_node_map, input_hint_map) =
+        let (circuit_description, input_node_map) =
             generate_circuit_description(component, ctx).unwrap();
 
         let instantiated_circuit = self.populate_circuit(
             &circuit_description,
             input_node_map,
-            input_hint_map,
             input_layer_data,
             transcript_writer,
         );

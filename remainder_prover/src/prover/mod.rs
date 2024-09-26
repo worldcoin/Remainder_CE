@@ -19,7 +19,7 @@ use crate::input_layer::CircuitInputLayer;
 use crate::layer::layer_enum::{CircuitLayerEnum, VerifierLayerEnum};
 use crate::layer::CircuitLayer;
 use crate::layouter::component::Component;
-use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputLayerHintMap, InputNodeMap};
+use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputNodeMap};
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, Context};
 use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
@@ -312,7 +312,7 @@ impl<F: Field> GKRCircuitDescription<F> {
 pub fn generate_circuit_description<F: Field>(
     component: impl Component<NodeEnum<F>>,
     ctx: Context,
-) -> Result<(GKRCircuitDescription<F>, InputNodeMap, InputLayerHintMap<F>), GKRError> {
+) -> Result<(GKRCircuitDescription<F>, InputNodeMap), GKRError> {
     let nodes = component.yield_nodes();
     let (input_nodes, fiat_shamir_challenge_nodes, intermediate_nodes, lookup_nodes, output_nodes) =
         layout(ctx, nodes).unwrap();
@@ -325,9 +325,8 @@ pub fn generate_circuit_description<F: Field>(
     let mut output_layers = Vec::<CircuitMleOutputLayer<F>>::new();
     let mut circuit_description_map = CircuitDescriptionMap::new();
     let mut input_node_to_layer_map = InputNodeMap::new();
-    let mut input_layer_hint_map = InputLayerHintMap::<F>::new();
 
-    let mut input_layers = input_nodes
+    let input_layers = input_nodes
         .iter()
         .map(|input_node| {
             let input_circuit_description = input_node
@@ -396,6 +395,5 @@ pub fn generate_circuit_description<F: Field>(
     Ok((
         circuit_description,
         input_node_to_layer_map,
-        input_layer_hint_map,
     ))
 }

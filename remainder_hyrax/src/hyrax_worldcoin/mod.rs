@@ -138,7 +138,6 @@ pub fn build_hyrax_circuit_public_input_layer<
         let lookup_table = LookupTable::new::<C::Scalar>(
             ctx,
             &lookup_table_values,
-            false,
             &fiat_shamir_challenge_node,
         );
         println!("{:?} = Lookup table", lookup_table.id());
@@ -350,7 +349,6 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         let lookup_table = LookupTable::new::<C::Scalar>(
             ctx,
             &lookup_table_values,
-            true,
             &fiat_shamir_challenge_node,
         );
         println!("{:?} = Lookup table", lookup_table.id());

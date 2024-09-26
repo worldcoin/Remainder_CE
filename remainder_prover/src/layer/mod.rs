@@ -191,7 +191,7 @@ pub trait CircuitLayer<F: Field> {
         &self,
         mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
         circuit_map: &mut CircuitMap<F>,
-    ) -> bool;
+    );
 
     /// The Circuit MLEs that make up the leaves of the expression in this layer.
     fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>>;
