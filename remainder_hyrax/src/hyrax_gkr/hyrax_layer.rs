@@ -106,7 +106,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
                 .get_wlx_evaluations(
                     claim_group.get_claim_points_matrix(),
                     claim_group.get_results(),
-                    get_og_mle_refs(output_mles_from_layer.to_vec()),
+                    get_og_mle_refs(output_mles_from_layer),
                     claim_group.get_num_claims(),
                     claim_group.get_num_vars(),
                 )
