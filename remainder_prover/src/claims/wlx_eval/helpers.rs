@@ -43,7 +43,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 pub fn prover_aggregate_claims_helper<F: Field>(
     claims: &ClaimGroup<F>,
     layer: &impl YieldWLXEvals<F>,
-    output_mles_from_layer: Vec<DenseMle<F>>,
+    output_mles_from_layer: &[DenseMle<F>],
     transcript_writer: &mut impl ProverTranscript<F>,
 ) -> Result<Claim<F>, GKRError> {
     let num_claims = claims.get_num_claims();

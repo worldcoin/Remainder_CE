@@ -47,17 +47,9 @@ pub fn pre_fix_mle_refs<F: Field>(
 /// function that prepares all the mle refs to be fixed, then combined. this involves filtering out for
 /// unique original mle indices, then splitting the mles with iterated bits within prefix bits, then
 /// indexing them so that their mutable bookkeeping table is the original bookkeeping table.
-pub fn get_og_mle_refs<F: Field>(mle_refs: Vec<DenseMle<F>>) -> Vec<DenseMle<F>> {
-    // first we want to filter out for mle_refs that are duplicates. we look at their original indices
-    // instead of their bookkeeping tables because sometimes two mle_refs can have the same original_bookkeeping_table
-    // but have different prefix bits. if they have the same prefix bits, they must be duplicates.
-    let mle_refs = mle_refs
-        .into_iter()
-        .unique_by(|mle| mle.mle_indices.clone())
-        .collect_vec();
-
+pub fn get_og_mle_refs<F: Field>(mle_refs: &[DenseMle<F>]) -> Vec<DenseMle<F>> {
     // then, we split all the mle_refs with an iterated bit within the prefix bits
-    let mut mle_refs_split = collapse_mles_with_iterated_in_prefix(&mle_refs);
+    let mut mle_refs_split = collapse_mles_with_iterated_in_prefix(mle_refs);
 
     // go through and create mle refs that have original bookkeeping tables, and index them so that they can be fixed later
     cfg_iter_mut!(mle_refs_split).for_each(|mle| {

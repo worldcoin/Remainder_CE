@@ -161,7 +161,7 @@ impl<
         prover_aggregate_claims_helper(
             &claim_group,
             layer,
-            output_mles_from_layer.to_owned(),
+            output_mles_from_layer,
             transcript_writer,
         )
     }

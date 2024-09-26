@@ -166,7 +166,6 @@ impl<F: Field> YieldWLXEvals<F> for RegularLayer<F> {
                         evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                     })
                     .collect();
-                dbg!(&new_chal);
 
                 let wlx_eval_on_mle_ref =
                     combine_mle_refs_with_aggregate(&claim_mle_refs, &new_chal);
