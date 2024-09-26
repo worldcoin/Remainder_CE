@@ -12,22 +12,55 @@ use crate::mle::Mle;
 use crate::utils::arithmetic::i64_to_field;
 use crate::utils::array::pad_with_rows;
 use crate::utils::mle::pad_with;
+use crate::worldcoin::parameters::{decode_rh_multiplicand, decode_thresholds, decode_wirings};
+
+use super::parameters::Parameters;
+
+// FIXME(Ben) check this function is inverse of decode!
+fn encode_wirings(wirings: &[(u16, u16, u16, u16)]) -> Vec<u8> {
+    wirings
+        .iter()
+        .flat_map(|(a, b, c, d)| vec![*a as u8, *b as u8, *c as u8, *d as u8])
+        .collect()
+}
+
+// FIXME(Ben) check this function is inverse of decode!
+fn encode_i64_vec(vec: &[i64]) -> Vec<u8> {
+    // Convert the Vec<i32> into a Vec<u8> using unsafe pointer casting
+    unsafe {
+        std::slice::from_raw_parts(
+            vec.as_ptr() as *const u8, 
+            vec.len() * std::mem::size_of::<i64>()
+        ).to_vec()
+    }
+}
 
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two 2x1 kernels (1, 0).T and (6, -1).T
 /// The rewirings are trivial: the image _is_ the LH multiplicand of matmult.
 pub fn trivial_wiring_2x2_circuit_data<F: Field>() -> CircuitData<F, 1, 1, 1, 16, 1> {
+    let image = Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap();
+    let wirings: Vec<(u16, u16, u16, u16)> = vec![
+        (0, 0, 0, 0),
+        (0, 1, 0, 1),
+        (1, 0, 1, 0),
+        (1, 1, 1, 1),
+    ];
+    let parameters = Parameters {
+        matmult_rows_num_vars: 1,
+        matmult_cols_num_vars: 1,
+        matmult_internal_dim_num_vars: 1,
+        num_digits: 1,
+        base: 16,
+        wirings_bytes: encode_wirings(&wirings),
+        thresholds_bytes: encode_i64_vec(&[0, 0, 0, 0]),
+        rh_multiplicand_bytes: encode_i64_vec(&[1, 0, 6, -1]),
+        im_num_rows: 2,
+        im_num_cols: 2,
+    };
     CircuitData::build_worldcoin_circuit_data(
-        Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
-        Array3::from_shape_vec((2, 2, 1), vec![1, 0, 6, -1]).unwrap(),
-        Array2::from_shape_vec((2, 2), vec![1, 0, 1, 0]).unwrap(),
-        // rewirings for the 2x2 identity matrix
-        vec![
-            (0, 0, 0, 0),
-            (0, 1, 0, 1),
-            (1, 0, 1, 0),
-            (1, 1, 1, 1),
-        ],
+        image,
+        parameters
     )
 }
 
@@ -123,18 +156,12 @@ impl<
     /// + Generics should be constrained as per [CircuitData].
     pub fn build_worldcoin_circuit_data(
         image: Array2<u8>,
-        kernel_values: Array3<i32>,
-        thresholds_matrix: Array2<i64>,
-        wirings: Vec<(u16, u16, u16, u16)>,
+        parameters: Parameters,
     ) -> Self {
         assert!(BASE.is_power_of_two());
         assert!(NUM_DIGITS.is_power_of_two());
-        let (_, im_num_cols) = image.dim();
-        let (num_kernels, kernel_num_rows, kernel_num_cols) = kernel_values.dim();
-        assert_eq!(num_kernels, (1 << MATMULT_COLS_NUM_VARS));
-        assert!(kernel_num_rows * kernel_num_cols <= (1 << MATMULT_INTERNAL_DIM_NUM_VARS));
-        assert!(thresholds_matrix.dim().0 <= (1 << MATMULT_ROWS_NUM_VARS));
-        assert_eq!(thresholds_matrix.dim().1, (1 << MATMULT_COLS_NUM_VARS));
+        let thresholds_matrix = decode_thresholds(&parameters);
+        let rh_multiplicand = decode_rh_multiplicand(&parameters);
 
         // Derive the re-routings from the wirings (this is what is needed for identity gate)
         // And calculate the left-hand side of the matrix multiplication
@@ -143,7 +170,7 @@ impl<
             (1 << MATMULT_ROWS_NUM_VARS),
             (1 << MATMULT_INTERNAL_DIM_NUM_VARS),
         ));
-        wirings.iter().for_each(|row| {
+        decode_wirings(&parameters).iter().for_each(|row| {
             let (im_row, im_col, a_row, a_col) = (
                 row.0 as usize,
                 row.1 as usize,
@@ -151,28 +178,22 @@ impl<
                 row.3 as usize,
             );
             let a_gate_label = a_row * (1 << MATMULT_INTERNAL_DIM_NUM_VARS) + a_col;
-            let im_gate_label = im_row * im_num_cols + im_col;
+            let im_gate_label = im_row * parameters.im_num_cols + im_col;
             reroutings.push((a_gate_label, im_gate_label));
             rerouted_matrix[[a_row, a_col]] = image[[im_row, im_col]] as i64;
         });
 
-        // Reshape and pad kernel values to have dimensions (MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_COLS_NUM_VARS).
+        // Pad kernel values to have dimensions (MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_COLS_NUM_VARS).
         // This is the RH multiplicand of the matrix multiplication.
+        assert_eq!(rh_multiplicand.dim().1, 1 << MATMULT_COLS_NUM_VARS);
         let rh_multiplicand: Array2<i64> = pad_with_rows(
-            kernel_values
-                .into_shape((
-                    (1 << MATMULT_COLS_NUM_VARS),
-                    kernel_num_rows * kernel_num_cols,
-                ))
-                .unwrap()
-                .t()
-                .to_owned()
-                .mapv(|elem| elem as i64),
+            rh_multiplicand,
             1 << MATMULT_INTERNAL_DIM_NUM_VARS,
         );
 
         // Pad the thresholds matrix with extra rows of zeros so that it has dimensions
         // (MATMULT_ROWS_NUM_VARS, MATMULT_COLS_NUM_VARS).
+        assert_eq!(thresholds_matrix.dim().1, 1 << MATMULT_COLS_NUM_VARS);
         let thresholds_matrix = pad_with_rows(thresholds_matrix, 1 << MATMULT_ROWS_NUM_VARS);
 
         // Calculate the matrix product. Has dimensions (1 << MATMULT_ROWS_NUM_VARS, 1 << MATMULT_COLS_NUM_VARS).
@@ -216,7 +237,7 @@ impl<
             .collect_vec();
 
         // Flatten the kernel values, convert to field.  (Already padded)
-        let kernel_values: Vec<F> = rh_multiplicand.into_iter().map(i64_to_field).collect_vec();
+        let rh_matmult_multiplicand: Vec<F> = rh_multiplicand.into_iter().map(i64_to_field).collect_vec();
 
         // Flatten the thresholds matrix, convert to field and pad.
         let thresholds_matrix: Vec<F> = pad_with(
@@ -242,7 +263,7 @@ impl<
         CircuitData {
             to_reroute: image_matrix_mle,
             reroutings,
-            rh_matmult_multiplicand: kernel_values,
+            rh_matmult_multiplicand,
             digits,
             sign_bits: code,
             digit_multiplicities,
