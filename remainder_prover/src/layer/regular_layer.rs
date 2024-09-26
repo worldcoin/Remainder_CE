@@ -248,9 +248,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
         &self,
         mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
         circuit_map: &mut CircuitMap<F>,
-    ) -> bool {
-        let mut all_populatable = true;
-
+    ) {
         let mut expression_nodes_to_compile =
             HashMap::<&ExpressionNode<F, CircuitExpr>, Vec<(Vec<bool>, Vec<bool>)>>::new();
 
@@ -291,27 +289,20 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
         expression_nodes_to_compile
             .iter()
             .for_each(|(expression_node, prefix_bit_vec)| {
-                let maybe_full_bookkeeping_table =
-                    expression_node.compute_bookkeeping_table(circuit_map);
-                if let Some(full_bookkeeping_table) = &maybe_full_bookkeeping_table {
-                    prefix_bit_vec
-                        .iter()
-                        .for_each(|(unfiltered_prefix_bits, prefix_bits)| {
-                            let filtered_table = filter_bookkeeping_table(
-                                full_bookkeeping_table,
-                                unfiltered_prefix_bits,
-                            );
-                            circuit_map.add_node(
-                                CircuitLocation::new(self.layer_id(), prefix_bits.clone()),
-                                filtered_table,
-                            );
-                        });
-                } else {
-                    all_populatable = false;
-                }
+                let full_bookkeeping_table = expression_node.compute_bookkeeping_table(circuit_map).unwrap();
+                prefix_bit_vec
+                    .iter()
+                    .for_each(|(unfiltered_prefix_bits, prefix_bits)| {
+                        let filtered_table = filter_bookkeeping_table(
+                            &full_bookkeeping_table,
+                            unfiltered_prefix_bits,
+                        );
+                        circuit_map.add_node(
+                            CircuitLocation::new(self.layer_id(), prefix_bits.clone()),
+                            filtered_table,
+                        );
+                    });
             });
-
-        all_populatable
     }
 
     fn verify_rounds(
