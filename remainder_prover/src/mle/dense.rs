@@ -290,7 +290,7 @@ impl<F: Field> DenseMle<F> {
         Self {
             layer_id,
             mle: current_mle,
-            mle_indices: mle_indices,
+            mle_indices,
         }
     }
 
