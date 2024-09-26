@@ -289,8 +289,8 @@ impl<F: Field> DenseMle<F> {
 
         Self {
             layer_id,
-            mle: current_mle.clone(),
-            mle_indices: mle_indices.clone(),
+            mle: current_mle,
+            mle_indices: mle_indices,
         }
     }
 
