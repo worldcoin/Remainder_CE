@@ -2,16 +2,12 @@
 
 use crate::expression::abstract_expr::AbstractExpr;
 use crate::expression::circuit_expr::{CircuitExpr, CircuitMle};
-use crate::input_layer::enum_input_layer::CircuitInputLayerEnum;
-use crate::input_layer::hyrax_input_layer::CircuitHyraxInputLayer;
-use crate::input_layer::public_input_layer::CircuitPublicInputLayer;
 use crate::layer::layer_enum::CircuitLayerEnum;
 use crate::layer::regular_layer::CircuitRegularLayer;
 use crate::layer::LayerId;
 use crate::layouter::layouting::{
-    CircuitDescriptionMap, CircuitLocation, DAGError, InputLayerHintMap,
+    CircuitDescriptionMap, DAGError,
 };
-use crate::mle::evals::MultilinearExtension;
 use crate::mle::MleIndex;
 use crate::output_layer::mle_output_layer::CircuitMleOutputLayer;
 use crate::utils::mle::get_total_mle_indices;
@@ -79,11 +75,15 @@ impl CircuitNode for LookupConstraint {
 }
 
 type LookupCircuitDescription<F> = (
-    Vec<CircuitInputLayerEnum<F>>,
     Vec<CircuitLayerEnum<F>>,
-    Vec<CircuitMleOutputLayer<F>>,
+    CircuitMleOutputLayer<F>,
 );
 /// Represents a table of data that can be looked up into, e.g. for a range check.
+/// Implements "Improving logarithmic derivative lookups using GKR" (2023) by Papini & Haböck. Note
+/// that (as is usual e.g. in permutation checks) we do not check that the product of the
+/// denominators is nonzero. This means the soundness of logUp is bounded by
+///     `|F| / max{num_constrained_values, num_table_values}`.
+/// To adapt this to a small field setting, consider using Fermat's Little Theorem.
 #[derive(Clone, Debug)]
 pub struct LookupTable {
     id: NodeId,
@@ -94,24 +94,17 @@ pub struct LookupTable {
     table_node_id: NodeId,
     /// The ID of the [FiatShamirChallengeNode] for the FS challenge.
     fiat_shamir_challenge_node_id: NodeId,
-    /// Whether any of the values to be constrained by this LookupTable should be considered secret
-    /// (Determines which InputLayer type is used for the denominator inverse for the LHS.)
-    secret_constrained_values: bool,
 }
 
 impl LookupTable {
     /// Create a new LookupTable to use for subsequent lookups. (To perform a lookup using this
-    /// table, create a [LookupConstraint].) `secret_constrained_values` controls whether a public
-    /// or a hiding input layer is used for the denominator inverse on the LHS, which is derived
-    /// from the constrained values (note that LookupTable does not hide the constrained values
-    /// themselves - that is up to the caller).
+    /// table, create a [LookupConstraint].)
     ///
     /// # Requires
     /// * The length of the table must be a power of two.
     pub fn new<F: Field>(
         ctx: &Context,
         table: &dyn CircuitNode,
-        secret_constrained_values: bool,
         fiat_shamir_challenge_node: &FiatShamirChallengeNode,
     ) -> Self {
         LookupTable {
@@ -119,7 +112,6 @@ impl LookupTable {
             constraints: vec![],
             table_node_id: table.id(),
             fiat_shamir_challenge_node_id: fiat_shamir_challenge_node.id(),
-            secret_constrained_values,
         }
     }
 
@@ -129,22 +121,15 @@ impl LookupTable {
         self.constraints.push(constraint);
     }
 
-    /// Create the circuit description of a lookup node by returning
-    /// the corresponding input circuit descriptions, intermediate
-    /// circuit descriptions, and output circuit descriptions needed
-    /// in order to verify the lookup.
+    /// Create the circuit description of a lookup node by returning the corresponding circuit
+    /// descriptions, and output circuit description needed in order to verify the lookup.
     pub fn generate_lookup_circuit_description<F: Field>(
         &self,
-        input_layer_id: &mut LayerId,
         intermediate_layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-        input_hint_map: &mut InputLayerHintMap<F>,
     ) -> Result<LookupCircuitDescription<F>, DAGError> {
         type AE<F> = Expression<F, AbstractExpr>;
         type CE<F> = Expression<F, CircuitExpr>;
-
-        // LogUp adds a few circuit "inputs" in the flavor of the denominator inverses
-        let mut logup_additional_input_layers: Vec<CircuitInputLayerEnum<F>> = vec![];
 
         // Ensure that number of LookupConstraints is a power of two (otherwise when we concat the
         // constrained nodes, there will be padding, and the padding value is potentially not in the
@@ -305,78 +290,6 @@ impl LookupTable {
             intermediate_layer_id,
         );
 
-        // Add an input layer for the inverse of the denominators of the LHS. This value holds
-        // reveals some information about the constrained values, so we optionally use a
-        // HyraxInputLayer.
-        // Grab the layer ID for the new "input layer" to be added.
-        let lhs_denom_inverse_layer_id = input_layer_id.get_and_inc();
-        let lhs_denom_circuit_location =
-            CircuitLocation::new(lhs_denominator.layer_id(), lhs_denominator.prefix_bits());
-
-        let inverse_function = |mle: &MultilinearExtension<F>| {
-            assert_eq!(mle.get_evals_vector().len(), 1);
-            MultilinearExtension::new(vec![mle.get_evals_vector()[0].invert().unwrap()])
-        };
-        input_hint_map.add_hint_function(
-            &lhs_denom_inverse_layer_id,
-            (lhs_denom_circuit_location, inverse_function),
-        );
-        let lhs_inverse_input_layer = if self.secret_constrained_values {
-            let hyrax_input_layer_description =
-                CircuitHyraxInputLayer::<F>::new(lhs_denom_inverse_layer_id.to_owned(), 0);
-            CircuitInputLayerEnum::HyraxInputLayer(hyrax_input_layer_description)
-        } else {
-            let public_input_layer_description =
-                CircuitPublicInputLayer::<F>::new(lhs_denom_inverse_layer_id.to_owned(), 0);
-            CircuitInputLayerEnum::PublicInputLayer(public_input_layer_description)
-        };
-        logup_additional_input_layers.push(lhs_inverse_input_layer);
-
-        let lhs_inverse_mle_desc = CircuitMle::new(lhs_denom_inverse_layer_id, &[]);
-        println!(
-            "Input layer that for LHS denom prod inverse has layer id: {:?}",
-            lhs_denom_inverse_layer_id
-        );
-
-        // Add an input layer for the inverse of the denominators of the RHS. This doesn't reveal
-        // any information about the constrained values, so it's OK to use PublicInputLayer.
-        // Grab the layer ID for the new input layer to be added.
-        let rhs_denom_inverse_layer_id = input_layer_id.get_and_inc();
-        let rhs_denom_circuit_location =
-            CircuitLocation::new(rhs_denominator.layer_id(), rhs_denominator.prefix_bits());
-        input_hint_map.add_hint_function(
-            &rhs_denom_inverse_layer_id,
-            (rhs_denom_circuit_location, inverse_function),
-        );
-        let rhs_inverse_mle =
-            CircuitPublicInputLayer::<F>::new(rhs_denom_inverse_layer_id.to_owned(), 0);
-        let rhs_inverse_input_layer = CircuitInputLayerEnum::PublicInputLayer(rhs_inverse_mle);
-        logup_additional_input_layers.push(rhs_inverse_input_layer);
-
-        let rhs_inverse_mle_desc = CircuitMle::new(rhs_denom_inverse_layer_id, &[]);
-        println!(
-            "Input layer that for RHS denom prod inverse has layer id: {:?}",
-            rhs_denom_inverse_layer_id
-        );
-
-        // Add a layer that calculates the product of the denominator and the inverse and subtracts
-        // 1 (for both LHS and RHS)
-        let lhs_expr =
-            CE::<F>::products(vec![lhs_denominator.clone(), lhs_inverse_mle_desc.clone()]);
-        let rhs_expr =
-            CE::<F>::products(vec![rhs_denominator.clone(), rhs_inverse_mle_desc.clone()]);
-        let expr = lhs_expr.concat_expr(rhs_expr) - CE::<F>::constant(F::from(1u64));
-        let layer_id = intermediate_layer_id.get_and_inc();
-        let layer = CircuitRegularLayer::new_raw(layer_id, expr);
-        intermediate_layers.push(CircuitLayerEnum::Regular(layer));
-        println!(
-            "Layer calcs product of (product of denoms) and their inverses has layer id: {:?}",
-            layer_id
-        );
-        // Add an output layer that checks that the result is zero
-        let output_layer = CircuitMleOutputLayer::new_zero(layer_id, &[MleIndex::Iterated]);
-        let mut output_layers = vec![output_layer];
-
         // Add a layer that calculates the difference between the fractions on the LHS and RHS
         assert!(rhs_numerator.is_some());
         let rhs_numerator = rhs_numerator.unwrap();
@@ -399,12 +312,10 @@ impl LookupTable {
 
         // Add an output layer that checks that the result is zero
         let output_layer = CircuitMleOutputLayer::new_zero(layer_id, &[]);
-        output_layers.push(output_layer);
 
         Ok((
-            logup_additional_input_layers,
             intermediate_layers,
-            output_layers,
+            output_layer,
         ))
     }
 }

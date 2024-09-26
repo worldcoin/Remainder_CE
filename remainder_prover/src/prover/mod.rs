@@ -361,22 +361,19 @@ pub fn generate_circuit_description<F: Field>(
     }
 
     // Get the contributions of each LookupTable to the circuit description.
-    (input_layers, intermediate_layers, output_layers) = lookup_nodes.iter().fold(
-        (input_layers, intermediate_layers, output_layers),
-        |(mut lookup_input_acc, mut lookup_intermediate_acc, mut lookup_output_acc),
+    (intermediate_layers, output_layers) = lookup_nodes.iter().fold(
+        (intermediate_layers, output_layers),
+        |(mut lookup_intermediate_acc, mut lookup_output_acc),
          lookup_node| {
-            let (input_layers, intermediate_layers, output_layers) = lookup_node
+            let (intermediate_layers, output_layer) = lookup_node
                 .generate_lookup_circuit_description(
-                    &mut input_layer_id,
                     &mut intermediate_layer_id,
                     &mut circuit_description_map,
-                    &mut input_layer_hint_map,
                 )
                 .unwrap();
-            lookup_input_acc.extend(input_layers);
             lookup_intermediate_acc.extend(intermediate_layers);
-            lookup_output_acc.extend(output_layers);
-            (lookup_input_acc, lookup_intermediate_acc, lookup_output_acc)
+            lookup_output_acc.push(output_layer);
+            (lookup_intermediate_acc, lookup_output_acc)
         },
     );
 

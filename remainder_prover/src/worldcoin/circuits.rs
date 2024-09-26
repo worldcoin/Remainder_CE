@@ -125,7 +125,7 @@ pub fn build_circuit<
 
         let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(ctx, 1);
         let lookup_table =
-            LookupTable::new::<F>(ctx, &lookup_table_values, false, &fiat_shamir_challenge_node);
+            LookupTable::new::<F>(ctx, &lookup_table_values, &fiat_shamir_challenge_node);
         println!("{:?} = Lookup table", lookup_table.id());
         let (digit_multiplicities, digit_multiplicities_data) =
             get_input_shred_and_data(digit_multiplicities.clone(), ctx, &input_layer);

@@ -29,7 +29,7 @@ pub fn single_shred_test() {
             &input_layer,
         );
         let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, &fiat_shamir_challenge_node);
+        let lookup_table = LookupTable::new::<Fr>(ctx, &table, &fiat_shamir_challenge_node);
         let (constrained, constrained_data) = get_input_shred_and_data_from_vec(
             vec![
                 Fr::from(0u64),
@@ -81,7 +81,7 @@ pub fn multi_shred_test() {
             &input_layer,
         );
         let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, &fiat_shamir_challenge_node);
+        let lookup_table = LookupTable::new::<Fr>(ctx, &table, &fiat_shamir_challenge_node);
 
         let (constrained_0, constrained_0_data) = get_input_shred_and_data_from_vec(
             vec![
@@ -209,7 +209,7 @@ pub fn test_not_satisfied() {
             &input_layer,
         );
         let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, &fiat_shamir_challenge_node);
+        let lookup_table = LookupTable::new::<Fr>(ctx, &table, &fiat_shamir_challenge_node);
         let (constrained, constrained_data) = get_input_shred_and_data_from_vec(
             vec![
                 Fr::from(3u64),
