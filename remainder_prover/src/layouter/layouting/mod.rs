@@ -34,7 +34,7 @@ use super::nodes::{
 pub struct CircuitMap<F>(pub(crate) HashMap<CircuitLocation, MultilinearExtension<F>>);
 /// A map that maps layer ID to all the MLEs that are output from that layer. Together these MLEs are combined
 /// along with the information from their prefix bits to form the layerwise bookkeeping table.
-pub type LayerMap<F> = HashMap<LayerId, HashSet<DenseMle<F>>>;
+pub type LayerMap<F> = HashMap<LayerId, Vec<DenseMle<F>>>;
 
 impl<F: Field> CircuitMap<F> {
     /// Create a new circuit map, which maps circuit location to the data stored at that location.removing
@@ -78,7 +78,7 @@ impl<F: Field> CircuitMap<F> {
     /// so we know the parts of the layerwise bookkeeping table in order to aggregate claims
     /// on this layer.
     pub fn convert_to_layer_map(mut self) -> LayerMap<F> {
-        let mut layer_map = HashMap::<LayerId, HashSet<DenseMle<F>>>::new();
+        let mut layer_map = HashMap::<LayerId, Vec<DenseMle<F>>>::new();
         self.0.drain().for_each(|(circuit_location, data)| {
             let corresponding_mle = DenseMle::new_with_prefix_bits(
                 data,
@@ -86,12 +86,12 @@ impl<F: Field> CircuitMap<F> {
                 circuit_location.prefix_bits,
             );
             if let Entry::Vacant(e) = layer_map.entry(circuit_location.layer_id) {
-                e.insert(HashSet::from([corresponding_mle]));
+                e.insert(vec![corresponding_mle]);
             } else {
                 layer_map
                     .get_mut(&circuit_location.layer_id)
                     .unwrap()
-                    .insert(corresponding_mle);
+                    .push(corresponding_mle);
             }
         });
         layer_map

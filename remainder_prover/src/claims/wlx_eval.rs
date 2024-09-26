@@ -91,7 +91,7 @@ impl<
     fn prover_aggregate_claims(
         &self,
         layer: &LayerEnum<F>,
-        output_mles_from_layer: Vec<DenseMle<F>>,
+        output_mles_from_layer: &[DenseMle<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError> {
         let layer_id = layer.layer_id();
@@ -101,7 +101,7 @@ impl<
     fn prover_aggregate_claims_input(
         &self,
         layer: &InputLayerEnum<F>,
-        output_mles_from_layer: Vec<DenseMle<F>>,
+        output_mles_from_layer: &[DenseMle<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError> {
         let layer_id = layer.layer_id();
@@ -145,7 +145,7 @@ impl<
     fn prover_aggregate_claims(
         &self,
         layer: &impl YieldWLXEvals<F>,
-        output_mles_from_layer: Vec<DenseMle<F>>,
+        output_mles_from_layer: &[DenseMle<F>],
         layer_id: LayerId,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError> {
@@ -161,7 +161,7 @@ impl<
         prover_aggregate_claims_helper(
             &claim_group,
             layer,
-            output_mles_from_layer,
+            output_mles_from_layer.to_owned(),
             transcript_writer,
         )
     }

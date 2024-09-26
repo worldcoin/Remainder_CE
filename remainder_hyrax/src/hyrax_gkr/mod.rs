@@ -497,16 +497,11 @@ impl<
             .rev()
             .map(|layer| {
                 let claims = claim_tracker.get(&layer.layer_id()).unwrap().clone();
-                let output_mles_from_layer = layer_map
-                    .get(&layer.layer_id())
-                    .unwrap()
-                    .iter()
-                    .cloned()
-                    .collect_vec();
+                let output_mles_from_layer = layer_map.get(&layer.layer_id()).unwrap();
                 let (layer_proof, claims_from_layer) = HyraxLayerProof::prove(
                     layer,
                     &claims,
-                    &output_mles_from_layer,
+                    output_mles_from_layer,
                     committer,
                     &mut blinding_rng,
                     transcript,

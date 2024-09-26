@@ -382,8 +382,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             let claim_aggr_timer =
                 start_timer!(|| format!("Claim aggregation for layer {:?}", layer_id));
 
-            let output_mles_from_layer =
-                layer_map.get(&layer_id).unwrap().iter().cloned().collect();
+            let output_mles_from_layer = layer_map.get(&layer_id).unwrap();
             let layer_claim = aggregator.prover_aggregate_claims(
                 &layer,
                 output_mles_from_layer,
@@ -432,8 +431,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 input_layer.layer_id()
             ));
 
-            let output_mles_from_layer =
-                layer_map.get(&layer_id).unwrap().iter().cloned().collect();
+            let output_mles_from_layer = layer_map.get(&layer_id).unwrap();
             let layer_claim = aggregator.prover_aggregate_claims_input(
                 &input_layer,
                 output_mles_from_layer,

@@ -139,7 +139,7 @@ pub trait ClaimAggregator<F: Field> {
     fn prover_aggregate_claims(
         &self,
         layer: &LayerEnum<F>,
-        output_mles_from_layer: Vec<DenseMle<F>>,
+        output_mles_from_layer: &[DenseMle<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError>;
 
@@ -155,7 +155,7 @@ pub trait ClaimAggregator<F: Field> {
     fn prover_aggregate_claims_input(
         &self,
         layer: &InputLayerEnum<F>,
-        output_mles_from_layer: Vec<DenseMle<F>>,
+        output_mles_from_layer: &[DenseMle<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError>;
 
