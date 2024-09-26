@@ -34,7 +34,7 @@ impl<F: Field> ZeroMle<F> {
             .collect_vec();
 
         Self {
-            mle_indices: mle_indices.clone(),
+            mle_indices,
             num_vars,
             layer_id,
             zero: [F::ZERO],

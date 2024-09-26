@@ -21,7 +21,7 @@ use crate::{
 use remainder_shared_types::Field;
 
 /// An implementation of an [Mle] using a dense representation.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DenseMle<F> {
     /// The ID of the layer this data belongs to.
     pub layer_id: LayerId,
@@ -213,8 +213,8 @@ impl<F: Field> DenseMle<F> {
             .collect();
         Self {
             layer_id,
-            mle: data.clone(),
-            mle_indices: mle_indices.clone(),
+            mle: data,
+            mle_indices,
         }
     }
 
@@ -256,14 +256,12 @@ impl<F: Field> DenseMle<F> {
         let mle_indices: Vec<MleIndex<F>> =
             ((0..num_iterated_vars).map(|_| MleIndex::Iterated)).collect();
 
-        let current_mle = MultilinearExtension::new_from_evals(Evaluations::<F>::new(
-            num_iterated_vars,
-            items.clone(),
-        ));
+        let current_mle =
+            MultilinearExtension::new_from_evals(Evaluations::<F>::new(num_iterated_vars, items));
         Self {
             layer_id,
-            mle: current_mle.clone(),
-            mle_indices: mle_indices.clone(),
+            mle: current_mle,
+            mle_indices,
         }
     }
 
