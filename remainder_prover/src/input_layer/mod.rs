@@ -45,8 +45,6 @@ pub enum CommitmentEnum<F: Field> {
     LigeroCommitment(LigeroCommit<PoseidonSpongeHasher<F>, F>),
     /// The commitment for a [PublicInputLayer]
     PublicCommitment(Vec<F>),
-    /// The challenges for a [FiatShamirChallenge]
-    FiatShamirChallenges(Vec<F>),
 }
 
 #[derive(Error, Clone, Debug)]
