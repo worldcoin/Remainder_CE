@@ -349,12 +349,11 @@ mod tests {
                 ctx,
                 &input_layer,
             );
-            let (neg_mle_2_input_shred, neg_mle_2_input_shred_data) =
-                get_input_shred_and_data(
-                    neg_mle_2.current_mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+            let (neg_mle_2_input_shred, neg_mle_2_input_shred_data) = get_input_shred_and_data(
+                neg_mle_2.current_mle.get_evals_vector().to_vec(),
+                ctx,
+                &input_layer,
+            );
 
             let input_layer_data = InputLayerData::new(
                 input_layer.id(),

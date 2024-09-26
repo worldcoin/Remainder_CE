@@ -213,7 +213,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             });
         InstantiatedCircuit {
             input_layers: prover_input_layers,
-            fiat_shamir_challenges: fiat_shamir_challenges,
+            fiat_shamir_challenges,
             layers: Layers::new_with_layers(prover_intermediate_layers),
             output_layers: prover_output_layers,
         }

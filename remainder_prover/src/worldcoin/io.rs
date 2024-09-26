@@ -1,10 +1,10 @@
-use base64::{engine::general_purpose::STANDARD, Engine};
-use std::{ fs, io::BufWriter };
-use serde_json::Value;
-use remainder_shared_types::HasByteRepresentation;
-use remainder_shared_types::curves::PrimeOrderCurve;
 use ark_serialize::Read;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use itertools::Itertools;
+use remainder_shared_types::curves::PrimeOrderCurve;
+use remainder_shared_types::HasByteRepresentation;
+use serde_json::Value;
+use std::{fs, io::BufWriter};
 
 /// Helper function for buffered writing to file.
 pub fn write_bytes_to_file(filename: &str, bytes: &[u8]) {

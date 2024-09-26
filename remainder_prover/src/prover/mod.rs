@@ -293,7 +293,7 @@ impl<F: Field> GKRCircuitDescription<F> {
         let fiat_shamir_challenges_timer = start_timer!(|| "Verifier challenges proof generation");
         for fiat_shamir_challenge in fiat_shamir_challenges {
             if let Some(claims) = aggregator.get_claims(fiat_shamir_challenge.layer_id()) {
-                claims.into_iter().for_each(|claim_mle| {
+                claims.iter().for_each(|claim_mle| {
                     fiat_shamir_challenge.verify(claim_mle.get_claim()).unwrap();
                 });
             } else {

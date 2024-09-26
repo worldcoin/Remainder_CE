@@ -30,7 +30,7 @@ fn test_worldcoin_circuit_iris_v2() {
         BASE, CONSTANT_DATA_FOLDER, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
         MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
     };
-    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
+    let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
     let image_path = path.join("iris/test_image.npy");
     let data = load_worldcoin_data::<
         Fr,
@@ -51,7 +51,7 @@ fn test_worldcoin_circuit_mask_v2() {
         BASE, CONSTANT_DATA_FOLDER, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
         MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
     };
-    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
+    let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
     let image_path = path.join("mask/test_image.npy");
     let data = load_worldcoin_data::<
         Fr,
@@ -72,7 +72,7 @@ fn test_worldcoin_circuit_iris_v3() {
         BASE, CONSTANT_DATA_FOLDER, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
         MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
     };
-    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
+    let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
     let image_path = path.join("iris/test_image.npy");
     let data = load_worldcoin_data::<
         Fr,
@@ -93,7 +93,7 @@ fn test_worldcoin_circuit_mask_v3() {
         BASE, CONSTANT_DATA_FOLDER, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
         MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
     };
-    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
+    let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
     let image_path = path.join("mask/test_image.npy");
     let data = load_worldcoin_data::<
         Fr,

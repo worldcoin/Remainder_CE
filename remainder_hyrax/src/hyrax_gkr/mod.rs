@@ -341,7 +341,7 @@ impl<
             });
         let hyrax_circuit = HyraxInstantiatedCircuit {
             input_layers: prover_input_layers,
-            fiat_shamir_challenges: fiat_shamir_challenges,
+            fiat_shamir_challenges,
             layers: prover_intermediate_layers,
             output_layers: prover_output_layers,
         };
@@ -476,7 +476,6 @@ impl<
             })
             .collect_vec();
 
-        // FIXME include the claims on public input layers also, remove them from the above and get rid of HyraxInputLayerEnum
         // --------- Verifier Challenges ---------
         // The the claims on verifier challenges are checked directly by the verifier, without
         // aggregation, so there is almost nothing to do here.  However, the verifier receives the
@@ -484,11 +483,10 @@ impl<
         // provide the blinding factors in order for V to be able to check them.
         let claims_on_public_values = fiat_shamir_challenges
             .iter()
-            .map(|fiat_shamir_challenge| {
+            .flat_map(|fiat_shamir_challenge| {
                 let layer_id = fiat_shamir_challenge.layer_id();
                 claim_tracker.get(&layer_id).unwrap().clone()
             })
-            .flatten()
             .collect_vec();
 
         HyraxProof {

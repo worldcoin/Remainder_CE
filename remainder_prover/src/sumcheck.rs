@@ -168,16 +168,16 @@ impl<F: Field> Mul<&F> for SumcheckEvals<F> {
 /// # Arguments
 ///
 /// * `expr`: the Expression `P` defining a GKR layer. The caller is expected to
-/// have already fixed the variables of previous rounds.
+///   have already fixed the variables of previous rounds.
 /// * `round_index`: the MLE index corresponding to the variable that is going
-/// to be the independent variable for this round. The caller is expected to
-/// have already fixed variables `1 .. (round_index - 1)` in expression `P` to
-/// the verifier's challanges.
+///   to be the independent variable for this round. The caller is expected to
+///   have already fixed variables `1 .. (round_index - 1)` in expression `P` to
+///   the verifier's challanges.
 /// * `max_degree`: the degree of the polynomial to be exchanged in this round's
-/// sumcheck message.
+///   sumcheck message.
 /// * `beta_value`: the `beta` function associated with expression `exp`.  It is
-/// the caller's responsibility to keep this consistent with `expr` before/after
-/// each call.
+///   the caller's responsibility to keep this consistent with `expr` before/after
+///   each call.
 ///
 /// In particular, if `round_index == k`, and the current GKR layer expression
 /// was originally on `n` variables, `expr` is expected to represent a polynomial
@@ -205,12 +205,13 @@ impl<F: Field> Mul<&F> for SumcheckEvals<F> {
 ///
 /// # TODOs (Makis)
 /// 1. This function should be responsible for mutating `expr` and `beta_values`
-/// by fixing variables (if any) *after* the sumcheck round. It should maintain
-/// the invariant that `expr` and `beta_values` are consistent with each other!
+///    by fixing variables (if any) *after* the sumcheck round. It should
+///    maintain the invariant that `expr` and `beta_values` are consistent with
+///    each other!
 /// 2. `max_degree` should NOT be the caller's responsibility to compute. The
-/// degree should be determined through `expr` and `round_index`.  It is
-/// error-prone to allow for sumcheck message to go through with an arbitrary
-/// degree.
+///    degree should be determined through `expr` and `round_index`.  It is
+///    error-prone to allow for sumcheck message to go through with an arbitrary
+///    degree.
 ///
 /// # Beta cascade
 ///

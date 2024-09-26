@@ -257,8 +257,7 @@ fn test_bits_are_binary_soundness() {
     let bits = vec![Fr::from(3u64)];
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let (shred, shred_data) =
-            get_input_shred_and_data(bits.clone(), ctx, &input_layer);
+        let (shred, shred_data) = get_input_shred_and_data(bits.clone(), ctx, &input_layer);
         let component = BitsAreBinary::new(ctx, &shred);
         let output = OutputNode::new_zero(ctx, &component.sector);
         let input_shred_data = vec![shred_data];
@@ -287,8 +286,7 @@ fn test_bits_are_binary() {
     ];
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let (shred, shred_data) =
-            get_input_shred_and_data(bits.clone(), ctx, &input_layer);
+        let (shred, shred_data) = get_input_shred_and_data(bits.clone(), ctx, &input_layer);
         let component = BitsAreBinary::new(ctx, &shred);
         let output = OutputNode::new_zero(ctx, &component.sector);
         let input_shred_data = vec![shred_data];

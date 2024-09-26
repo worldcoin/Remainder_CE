@@ -274,9 +274,9 @@ impl<
 /// Works for both v2 and v3 of the iriscode circuit.
 ///
 /// # Arguments:
-///   `constant_data_path` is the path to the root folder (containing the wirings, and subfolders).
-///   `image_path` is the path to an image file (could be the iris or the mask).
-///   `is_mask` indicates whether to load the files for the mask or the iris.
+/// * `constant_data_path` is the path to the root folder (containing the wirings, and subfolders).
+/// * `image_path` is the path to an image file (could be the iris or the mask).
+/// * `is_mask` indicates whether to load the files for the mask or the iris.
 pub fn load_worldcoin_data<
     F: Field,
     const MATMULT_ROWS_NUM_VARS: usize,

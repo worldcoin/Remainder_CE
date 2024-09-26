@@ -1,2 +1,0 @@
-[alias]
-build-bench = "build --profile opt-with-debug --features parallel"

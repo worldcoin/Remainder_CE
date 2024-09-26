@@ -23,25 +23,25 @@
 //! Note that there are four "phases" to the "life cycle" of an expression, i.e.
 //! the changes it goes through during the circuit-building process (see documentation
 //! for this under under TODO(vishady): write documentation for the compilation process):
-//! - [circuit_expr::CircuitExpr]: The "circuit description" view of an
-//! expression. In particular, it describes the polynomial relationship between
-//! the MLE representing the data output of a particular layer against MLEs
-//! representing data "slices" within other layers, and contains information about
-//! the expression "structure" (in the form of the expansion of the CFG description
-//! from above), with the leaves of the expression tree always being
-//! [generic_expr::ExpressionNode::Constant]s or [generic_expr::ExpressionNode::Mle]s
-//! or [generic_expr::ExpressionNode::Product]s.
-//! - [abstract_expr::AbstractExpr]: The circuit-builder's view of an expression
-//! (again, see documentation under TODO(vishady)). It describes the structural
-//! relationship between the current graph node and the nodes which that node
-//! depends on, without specifying the sizes of any MLEs which are represented
-//! by those nodes.
-//! - [prover_expr::ProverExpr]: The prover's view of an expression. It contains
-//! all the information within [circuit_expr::CircuitExpr], but contains
-//! [crate::mle::dense::DenseMle]s rather than [circuit_expr::CircuitMle]s.
-//! - [verifier_expr::VerifierExpr]: The verifier's view of an expression. It
-//! contains all the information within [circuit_expr::CircuitExpr], but contains
-//! [verifier_expr::VerifierMle]s rather than [circuit_expr::CircuitMle]s.
+//! * [circuit_expr::CircuitExpr]: The "circuit description" view of an
+//!   expression. In particular, it describes the polynomial relationship between
+//!   the MLE representing the data output of a particular layer against MLEs
+//!   representing data "slices" within other layers, and contains information about
+//!   the expression "structure" (in the form of the expansion of the CFG description
+//!   from above), with the leaves of the expression tree always being
+//!   [generic_expr::ExpressionNode::Constant]s or [generic_expr::ExpressionNode::Mle]s
+//!   or [generic_expr::ExpressionNode::Product]s.
+//! * [abstract_expr::AbstractExpr]: The circuit-builder's view of an expression
+//!   (again, see documentation under TODO(vishady)). It describes the structural
+//!   relationship between the current graph node and the nodes which that node
+//!   depends on, without specifying the sizes of any MLEs which are represented
+//!   by those nodes.
+//! * [prover_expr::ProverExpr]: The prover's view of an expression. It contains
+//!   all the information within [circuit_expr::CircuitExpr], but contains
+//!   [crate::mle::dense::DenseMle]s rather than [circuit_expr::CircuitMle]s.
+//! * [verifier_expr::VerifierExpr]: The verifier's view of an expression. It
+//!   contains all the information within [circuit_expr::CircuitExpr], but contains
+//!   [verifier_expr::VerifierMle]s rather than [circuit_expr::CircuitMle]s.
 
 #![allow(missing_docs)]
 pub mod abstract_expr;
