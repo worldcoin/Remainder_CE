@@ -297,8 +297,7 @@ impl<F: Field> GKRCircuitDescription<F> {
                     fiat_shamir_challenge.verify(claim_mle.get_claim()).unwrap();
                 });
             } else {
-                //FIXME use an error
-                panic!("No claims found for verifier challenge layer");
+                return Err(GKRError::NoClaimsForLayer(fiat_shamir_challenge.layer_id()));
             }
         }
         end_timer!(fiat_shamir_challenges_timer);
