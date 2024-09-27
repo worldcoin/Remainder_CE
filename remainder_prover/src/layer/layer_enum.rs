@@ -8,10 +8,10 @@ use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
 use crate::claims::YieldClaim;
 use crate::layer_enum;
 
-use super::gate::{CircuitGateLayer, GateLayer, VerifierGateLayer};
-use super::identity_gate::{CircuitIdentityGateLayer, IdentityGate, VerifierIdentityGateLayer};
-use super::matmult::{CircuitMatMultLayer, MatMult, VerifierMatMultLayer};
-use super::regular_layer::{CircuitRegularLayer, RegularLayer, VerifierRegularLayer};
+use super::gate::{GateLayerDescription, GateLayer, VerifierGateLayer};
+use super::identity_gate::{IdentityGateLayerDescription, IdentityGate, VerifierIdentityGateLayer};
+use super::matmult::{MatMultLayerDescription, MatMult, VerifierMatMultLayer};
+use super::regular_layer::{RegularLayerDescription, RegularLayer, VerifierRegularLayer};
 use crate::mle::mle_enum::MleEnum;
 
 use super::LayerError;
@@ -22,15 +22,15 @@ layer_enum!(LayerEnum, (Regular: RegularLayer<F>), (Gate: GateLayer<F>), (Identi
 #[serde(bound = "F: Field")]
 /// An enum representing the different types of descriptions for each layer,
 /// each description containing the shape information of the corresponding layer.
-pub enum CircuitLayerEnum<F: Field> {
+pub enum LayerDescriptionEnum<F: Field> {
     /// The circuit description for a regular layer variant.
-    Regular(CircuitRegularLayer<F>),
+    Regular(RegularLayerDescription<F>),
     /// The circuit description for a gate layer variant.
-    Gate(CircuitGateLayer<F>),
+    Gate(GateLayerDescription<F>),
     /// The circuit description for a identity gate layer variant.
-    IdentityGate(CircuitIdentityGateLayer<F>),
+    IdentityGate(IdentityGateLayerDescription<F>),
     /// The circuit description for a matmult layer variant.
-    MatMult(CircuitMatMultLayer<F>),
+    MatMult(MatMultLayerDescription<F>),
 }
 
 #[derive(Serialize, Deserialize, Debug)]

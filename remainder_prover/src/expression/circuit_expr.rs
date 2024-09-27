@@ -31,11 +31,11 @@ use super::{
 };
 
 /// A metadata-only version of [crate::mle::dense::DenseMle] used in the Circuit
-/// Descrption.  A [CircuitMle] is stored in the leaves of an `Expression<F,
-/// CircuitExpr>` tree.
+/// Descrption.  A [MleDescription] is stored in the leaves of an `Expression<F,
+/// ExprDescription>` tree.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[serde(bound = "F: Field")]
-pub struct CircuitMle<F: Field> {
+pub struct MleDescription<F: Field> {
     /// Layer whose data this MLE's is a subset of.
     layer_id: LayerId,
 
@@ -43,8 +43,8 @@ pub struct CircuitMle<F: Field> {
     var_indices: Vec<MleIndex<F>>,
 }
 
-impl<F: Field> CircuitMle<F> {
-    /// Create a new [CircuitMle] given its layer id and the [MleIndex]s that it holds.
+impl<F: Field> MleDescription<F> {
+    /// Create a new [MleDescription] given its layer id and the [MleIndex]s that it holds.
     /// This is effectively the "shape" of a [DenseMle].
     pub fn new(layer_id: LayerId, var_indices: &[MleIndex<F>]) -> Self {
         Self {
@@ -76,19 +76,19 @@ impl<F: Field> CircuitMle<F> {
             });
     }
 
-    /// Returns the [LayerId] of this CircuitMle.
+    /// Returns the [LayerId] of this MleDescription.
     pub fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 
-    /// Returns the MLE indices of this CircuitMle.
+    /// Returns the MLE indices of this MleDescription.
     pub fn mle_indices(&self) -> &[MleIndex<F>] {
         &self.var_indices
     }
 
-    /// Returns a [CircuitExpr] representing just this MLE.
-    pub fn expression(self) -> Expression<F, CircuitExpr> {
-        Expression::new(ExpressionNode::<F, CircuitExpr>::Mle(self), ())
+    /// Returns a [ExprDescription] representing just this MLE.
+    pub fn expression(self) -> Expression<F, ExprDescription> {
+        Expression::new(ExpressionNode::<F, ExprDescription>::Mle(self), ())
     }
 
     /// The number of Indexed OR Iterated bits in this MLE.
@@ -123,7 +123,7 @@ impl<F: Field> CircuitMle<F> {
     }
 
     /// Bind the variable with index `var_index` to `value`. Note that since
-    /// [CircuitMle] is the representation of a multilinear extension function
+    /// [MleDescription] is the representation of a multilinear extension function
     /// sans data, it need not alter its internal MLE evaluations in any way.
     pub fn fix_variable(&mut self, var_index: usize, value: F) {
         for mle_index in self.var_indices.iter_mut() {
@@ -171,25 +171,25 @@ impl<F: Field> CircuitMle<F> {
     }
 }
 
-/// Type for defining [Expression<F, CircuitExpr>], the type used
+/// Type for defining [Expression<F, ExprDescription>], the type used
 /// for representing expressions in the circuit description.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct CircuitExpr;
+pub struct ExprDescription;
 
-// The leaves of an expression of this type contain a [CircuitMle], an analogue
+// The leaves of an expression of this type contain a [MleDescription], an analogue
 // of [crate::mle::dense::DenseMle], storing only metadata related to the MLE,
 // without any evaluations.
 // TODO(Makis): Consider allowing for re-use of MLEs, like in a [ProverExpr]:
 // ```ignore
 //     type MLENodeRepr = usize,
-//     type MleVec = Vec<CircuitMle<F>>,
+//     type MleVec = Vec<MleDescription<F>>,
 // ```
-impl<F: Field> ExpressionType<F> for CircuitExpr {
-    type MLENodeRepr = CircuitMle<F>;
+impl<F: Field> ExpressionType<F> for ExprDescription {
+    type MLENodeRepr = MleDescription<F>;
     type MleVec = ();
 }
 
-impl<F: Field> Expression<F, CircuitExpr> {
+impl<F: Field> Expression<F, ExprDescription> {
     /// Binds the variables of this expression to `point`, and retrieves the
     /// leaf MLE values from the `transcript_reader`.  Returns a `Expression<F,
     /// VerifierExpr>` version of `self`.
@@ -215,8 +215,8 @@ impl<F: Field> Expression<F, CircuitExpr> {
             .collect()
     }
 
-    /// Get the [CircuitMle]s for this expression, which are at the leaves of the expression.
-    pub fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
+    /// Get the [MleDescription]s for this expression, which are at the leaves of the expression.
+    pub fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
         let circuit_mles = self.expression_node.get_circuit_mles();
         circuit_mles
     }
@@ -226,7 +226,7 @@ impl<F: Field> Expression<F, CircuitExpr> {
         self.expression_node.index_mle_indices(start_index);
     }
 
-    /// Get the [Expression<F, ProverExpr>] corresponding to this [Expression<F, CircuitExpr>] using the
+    /// Get the [Expression<F, ProverExpr>] corresponding to this [Expression<F, ExprDescription>] using the
     /// associated data in the [CircuitMap].
     pub fn into_prover_expression(&self, circuit_map: &CircuitMap<F>) -> Expression<F, ProverExpr> {
         self.expression_node.into_prover_expression(circuit_map)
@@ -254,8 +254,8 @@ impl<F: Field> Expression<F, CircuitExpr> {
         // --- By default, all rounds have degree at least 2 (beta table included) ---
         let mut round_degree = 1;
 
-        let mut get_degree_closure = |expr: &ExpressionNode<F, CircuitExpr>,
-                                      _mle_vec: &<CircuitExpr as ExpressionType<F>>::MleVec|
+        let mut get_degree_closure = |expr: &ExpressionNode<F, ExprDescription>,
+                                      _mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec|
          -> Result<(), ()> {
             let round_degree = &mut round_degree;
 
@@ -284,7 +284,7 @@ impl<F: Field> Expression<F, CircuitExpr> {
     }
 }
 
-impl<F: Field> ExpressionNode<F, CircuitExpr> {
+impl<F: Field> ExpressionNode<F, ExprDescription> {
     /// Turn this expression into a [VerifierExpr] which represents a fully bound expression.
     /// Should only be applicable after a full layer of sumcheck.
     pub fn into_verifier_node(
@@ -328,8 +328,8 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
     }
 
     /// Compute the expression-wise bookkeeping table (coefficients of the MLE representing the expression)
-    /// for a given [CircuitExpr]. This uses a [CircuitMap] in order to grab the correct data
-    /// corresponding to the [CircuitMle].
+    /// for a given [ExprDescription]. This uses a [CircuitMap] in order to grab the correct data
+    /// corresponding to the [MleDescription].
     pub fn compute_bookkeeping_table(
         &self,
         circuit_map: &CircuitMap<F>,
@@ -418,10 +418,10 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
         &self,
         constant: &mut impl FnMut(F) -> T,
         selector_column: &mut impl FnMut(&MleIndex<F>, T, T) -> T,
-        mle_eval: &mut impl FnMut(&<CircuitExpr as ExpressionType<F>>::MLENodeRepr) -> T,
+        mle_eval: &mut impl FnMut(&<ExprDescription as ExpressionType<F>>::MLENodeRepr) -> T,
         negated: &mut impl FnMut(T) -> T,
         sum: &mut impl FnMut(T, T) -> T,
-        product: &mut impl FnMut(&[<CircuitExpr as ExpressionType<F>>::MLENodeRepr]) -> T,
+        product: &mut impl FnMut(&[<ExprDescription as ExpressionType<F>>::MLENodeRepr]) -> T,
         scaled: &mut impl FnMut(T, F) -> T,
     ) -> T {
         match self {
@@ -502,7 +502,7 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
     pub fn get_all_nonlinear_rounds(
         &self,
         curr_nonlinear_indices: &mut Vec<usize>,
-        _mle_vec: &<CircuitExpr as ExpressionType<F>>::MleVec,
+        _mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
         let nonlinear_indices_in_node = {
             match self {
@@ -588,9 +588,9 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
         curr_nonlinear_indices.clone()
     }
 
-    /// Get all the [CircuitMle]s, recursively, for this expression by adding the MLEs in the leaves into the vector of CircuitMles.
-    pub fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
-        let mut circuit_mles: Vec<&CircuitMle<F>> = vec![];
+    /// Get all the [MleDescription]s, recursively, for this expression by adding the MLEs in the leaves into the vector of MleDescriptions.
+    pub fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
+        let mut circuit_mles: Vec<&MleDescription<F>> = vec![];
         match self {
             ExpressionNode::Selector(_mle_index, a, b) => {
                 circuit_mles.extend(a.get_circuit_mles());
@@ -749,7 +749,7 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
     }
 
     /// Get the maximum degree of an ExpressionNode, recursively.
-    fn get_max_degree(&self, _mle_vec: &<CircuitExpr as ExpressionType<F>>::MleVec) -> usize {
+    fn get_max_degree(&self, _mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec) -> usize {
         match self {
             ExpressionNode::Selector(_, a, b) | ExpressionNode::Sum(a, b) => {
                 let a_degree = a.get_max_degree(_mle_vec);
@@ -773,7 +773,7 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
     /// the MLE representing the output "data" of this particular expression.
     ///
     /// Note that unlike within the `AbstractExpr` case, we don't need to return
-    /// a `Result` since all MLEs within a `CircuitExpr` are instantiated with their
+    /// a `Result` since all MLEs within a `ExprDescription` are instantiated with their
     /// appropriate number of variables.
     fn get_num_vars(&self) -> usize {
         match self {
@@ -792,26 +792,26 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
     }
 }
 
-impl<F: Field> Expression<F, CircuitExpr> {
+impl<F: Field> Expression<F, ExprDescription> {
     /// Returns the total number of variables (i.e. number of rounds of sumcheck)
     /// within the MLE representing the output "data" of this particular expression.
     ///
     /// Note that unlike within the AbstractExpr case, we don't need to return
-    /// a `Result` since all MLEs within a `CircuitExpr` are instantiated with their appropriate number of variables.
+    /// a `Result` since all MLEs within a `ExprDescription` are instantiated with their appropriate number of variables.
     pub fn num_vars(&self) -> usize {
         self.expression_node.get_num_vars()
     }
 
-    /// Creates an `Expression<F, CircuitExpr>` which describes the polynomial relationship
+    /// Creates an `Expression<F, ExprDescription>` which describes the polynomial relationship
     ///
     /// `circuit_mle_descs[0](x_1, ..., x_{n_0}) * circuit_mle_descs[1](x_1, ..., x_{n_1}) * ...`
-    pub fn products(circuit_mle_descs: Vec<CircuitMle<F>>) -> Self {
+    pub fn products(circuit_mle_descs: Vec<MleDescription<F>>) -> Self {
         let product_node = ExpressionNode::Product(circuit_mle_descs);
 
         Expression::new(product_node, ())
     }
 
-    /// Creates an [Expression<F, CircuitExpr>] which describes the polynomial relationship
+    /// Creates an [Expression<F, ExprDescription>] which describes the polynomial relationship
     /// `(1 - x_0) * lhs(x_1, ..., x_{n_lhs}) + b_0 * Self(x_1, ..., x_{n_rhs})`
     ///
     /// TODO(ryancao): Change this so that `Self` is the `lhs`, rather than the other way around!
@@ -828,7 +828,7 @@ impl<F: Field> Expression<F, CircuitExpr> {
     /// subtree with 5 variables:
     /// (1 - x_0) * (1 - x_1) * (1 - x_2) * V_i(x_3, ..., x_7) +
     /// x_0 * V_i(x_1, ..., x_7)
-    pub fn concat_expr(self, lhs: Expression<F, CircuitExpr>) -> Self {
+    pub fn concat_expr(self, lhs: Expression<F, ExprDescription>) -> Self {
         let (lhs_node, _) = lhs.deconstruct();
         let (rhs_node, _) = self.deconstruct();
 
@@ -933,7 +933,7 @@ impl<F: Field> Expression<F, CircuitExpr> {
     }
 
     /// scales an Expression by a field element
-    pub fn scaled(expression: Expression<F, CircuitExpr>, scale: F) -> Self {
+    pub fn scaled(expression: Expression<F, ExprDescription>, scale: F) -> Self {
         let (node, _) = expression.deconstruct();
 
         Expression::new(ExpressionNode::Scaled(Box::new(node), scale), ())
@@ -995,36 +995,36 @@ fn evaluate_bookkeeping_tables_given_operation<F: Field>(
     MultilinearExtension::new(output_table)
 }
 
-impl<F: Field> Neg for Expression<F, CircuitExpr> {
-    type Output = Expression<F, CircuitExpr>;
+impl<F: Field> Neg for Expression<F, ExprDescription> {
+    type Output = Expression<F, ExprDescription>;
     fn neg(self) -> Self::Output {
-        Expression::<F, CircuitExpr>::negated(self)
+        Expression::<F, ExprDescription>::negated(self)
     }
 }
 
 /// implement the Add, Sub, and Mul traits for the Expression
-impl<F: Field> Add for Expression<F, CircuitExpr> {
-    type Output = Expression<F, CircuitExpr>;
-    fn add(self, rhs: Expression<F, CircuitExpr>) -> Expression<F, CircuitExpr> {
-        Expression::<F, CircuitExpr>::sum(self, rhs)
+impl<F: Field> Add for Expression<F, ExprDescription> {
+    type Output = Expression<F, ExprDescription>;
+    fn add(self, rhs: Expression<F, ExprDescription>) -> Expression<F, ExprDescription> {
+        Expression::<F, ExprDescription>::sum(self, rhs)
     }
 }
 
-impl<F: Field> Sub for Expression<F, CircuitExpr> {
-    type Output = Expression<F, CircuitExpr>;
-    fn sub(self, rhs: Expression<F, CircuitExpr>) -> Expression<F, CircuitExpr> {
+impl<F: Field> Sub for Expression<F, ExprDescription> {
+    type Output = Expression<F, ExprDescription>;
+    fn sub(self, rhs: Expression<F, ExprDescription>) -> Expression<F, ExprDescription> {
         self.add(rhs.neg())
     }
 }
 
-impl<F: Field> Mul<F> for Expression<F, CircuitExpr> {
-    type Output = Expression<F, CircuitExpr>;
+impl<F: Field> Mul<F> for Expression<F, ExprDescription> {
+    type Output = Expression<F, ExprDescription>;
     fn mul(self, rhs: F) -> Self::Output {
-        Expression::<F, CircuitExpr>::scaled(self, rhs)
+        Expression::<F, ExprDescription>::scaled(self, rhs)
     }
 }
 
-impl<F: std::fmt::Debug + Field> std::fmt::Debug for Expression<F, CircuitExpr> {
+impl<F: std::fmt::Debug + Field> std::fmt::Debug for Expression<F, ExprDescription> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Circuit Expression")
             .field("Expression_Node", &self.expression_node)
@@ -1032,7 +1032,7 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for Expression<F, CircuitExpr> 
     }
 }
 
-impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, CircuitExpr> {
+impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, ExprDescription> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExpressionNode::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),

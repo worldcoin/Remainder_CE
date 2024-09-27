@@ -78,7 +78,7 @@ impl<F: Field> ExpressionType<F> for ProverExpr {
 /// this is what the prover manipulates to prove the correctness of the computation.
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
 impl<F: Field> Expression<F, ProverExpr> {
-    /// See documentation in [super::circuit_expr::CircuitExpr]'s `concat_expr`
+    /// See documentation in [super::circuit_expr::ExprDescription]'s `concat_expr`
     /// function for more details!
     pub fn concat_expr(mut self, lhs: Expression<F, ProverExpr>) -> Self {
         let offset = lhs.num_mle_ref();
@@ -384,7 +384,7 @@ impl<F: Field> Expression<F, ProverExpr> {
 impl<F: Field> ExpressionNode<F, ProverExpr> {
     /// Transforms the expression to a verifier expression
     /// should only be called when no variables are bound in the expression.
-    /// Traverses the expression and changes the DenseMle to CircuitMle.
+    /// Traverses the expression and changes the DenseMle to MleDescription.
     pub fn transform_to_verifier_expression_node(
         &mut self,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,

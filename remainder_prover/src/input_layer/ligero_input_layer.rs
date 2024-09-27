@@ -24,7 +24,7 @@ use crate::{
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CircuitInputLayer, InputLayer,
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, InputLayerDescription, InputLayer,
     InputLayerError,
 };
 
@@ -64,7 +64,7 @@ pub type LigeroRoot<F> = LcRoot<LigeroAuxInfo<F>, F>;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: Field")]
 /// The circuit description of a [LigeroInputLayer]. Stores the shape information of this layer.
-pub struct CircuitLigeroInputLayer<F: Field> {
+pub struct LigeroInputLayerDescription<F: Field> {
     /// The ID of this Ligero Input Layer.
     layer_id: LayerId,
 
@@ -77,8 +77,8 @@ pub struct CircuitLigeroInputLayer<F: Field> {
     _marker: PhantomData<F>,
 }
 
-impl<F: Field> CircuitLigeroInputLayer<F> {
-    /// Constructor for the [CircuitLigeroInputLayer] using layer_id, num_bits
+impl<F: Field> LigeroInputLayerDescription<F> {
+    /// Constructor for the [LigeroInputLayerDescription] using layer_id, num_bits
     /// which is the number of variables in the underlying MLE, and auxiliary
     /// information, which is [LigeroAuxInfo] and includes information about
     /// the encoded num rows, num cols, of the matrix of coefficients and rho_inv
@@ -152,7 +152,7 @@ impl<F: Field> InputLayer<F> for LigeroInputLayer<F> {
     }
 }
 
-impl<F: Field> CircuitInputLayer<F> for CircuitLigeroInputLayer<F> {
+impl<F: Field> InputLayerDescription<F> for LigeroInputLayerDescription<F> {
     type Commitment = LigeroRoot<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -290,7 +290,7 @@ mod tests {
         let (pre_commitment, _root) = remainder_ligero_commit(&evals, &aux);
 
         let verifier_ligero_input_layer =
-            CircuitLigeroInputLayer::new(layer_id, dense_mle.num_iterated_vars(), aux);
+            LigeroInputLayerDescription::new(layer_id, dense_mle.num_iterated_vars(), aux);
         let mut ligero_input_layer = LigeroInputLayer::new(
             dense_mle.original_mle,
             layer_id,
@@ -354,7 +354,7 @@ mod tests {
         let claim_result = Fr::from(2);
         let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
 
-        let verifier_ligero_input_layer = CircuitLigeroInputLayer::new(
+        let verifier_ligero_input_layer = LigeroInputLayerDescription::new(
             layer_id,
             dense_mle.num_iterated_vars(),
             LigeroAuxInfo::new(evals.len(), rho_inv, ratio, None),

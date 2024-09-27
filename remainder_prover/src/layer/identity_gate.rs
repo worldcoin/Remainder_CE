@@ -12,7 +12,7 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
+    expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{gate::gate_helpers::bind_round_identity, LayerError, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
@@ -38,16 +38,16 @@ use super::{
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
     regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
-    CircuitLayer, Layer, LayerId, VerifierLayer,
+    LayerDescription, Layer, LayerId, VerifierLayer,
 };
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-/// The Circuit Description for an [IdentityGate].
+/// The circuit Description for an [IdentityGate].
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: Field")]
-pub struct CircuitIdentityGateLayer<F: Field> {
+pub struct IdentityGateLayerDescription<F: Field> {
     /// The layer id associated with this gate layer.
     id: LayerId,
 
@@ -58,13 +58,13 @@ pub struct CircuitIdentityGateLayer<F: Field> {
 
     /// The source MLE of the expression, i.e. the mle that makes up the "x"
     /// variables.
-    source_mle: CircuitMle<F>,
+    source_mle: MleDescription<F>,
 }
 
-impl<F: Field> CircuitIdentityGateLayer<F> {
-    /// Constructor for the [CircuitIdentityGateLayer] using the gate wiring, the source mle
+impl<F: Field> IdentityGateLayerDescription<F> {
+    /// Constructor for the [IdentityGateLayerDescription] using the gate wiring, the source mle
     /// for the rerouting, and the layer_id.
-    pub fn new(id: LayerId, wiring: Vec<(usize, usize)>, source_mle: CircuitMle<F>) -> Self {
+    pub fn new(id: LayerId, wiring: Vec<(usize, usize)>, source_mle: MleDescription<F>) -> Self {
         Self {
             id,
             wiring,
@@ -78,7 +78,7 @@ impl<F: Field> CircuitIdentityGateLayer<F> {
 /// V_i(g_1) = \sum_{x} f_1(g_1, x) (V_{i + 1}(x))
 const NON_DATAPARALLEL_ROUND_ID_NUM_EVALS: usize = 3;
 
-impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
+impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
     type VerifierLayer = VerifierIdentityGateLayer<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -230,7 +230,7 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
         2
     }
 
-    fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
+    fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
         vec![&self.source_mle]
     }
 
@@ -246,7 +246,7 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
 
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
+        mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
     ) -> bool {
         assert_eq!(mle_outputs_necessary.len(), 1);

@@ -34,7 +34,7 @@ macro_rules! layer_enum {
 
                 fn compute_data_outputs(
                     &self,
-                    mle_outputs_necessary: &std::collections::HashSet<&$crate::expression::circuit_expr::CircuitMle<F>>,
+                    mle_outputs_necessary: &std::collections::HashSet<&$crate::expression::circuit_expr::MleDescription<F>>,
                     circuit_map: &mut $crate::layouter::layouting::CircuitMap<F>,
                 ) -> bool {
                     match self {
@@ -81,7 +81,7 @@ macro_rules! layer_enum {
 
                 fn get_circuit_mles(
                     &self,
-                ) -> Vec<& $crate::expression::circuit_expr::CircuitMle<F>> {
+                ) -> Vec<& $crate::expression::circuit_expr::MleDescription<F>> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.get_circuit_mles(),

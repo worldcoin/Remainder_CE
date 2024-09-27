@@ -21,7 +21,7 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
+    expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
@@ -40,7 +40,7 @@ pub use self::gate_helpers::{
 
 use super::{
     layer_enum::{LayerEnum, VerifierLayerEnum},
-    CircuitLayer, VerifierLayer,
+    LayerDescription, VerifierLayer,
 };
 
 #[cfg(feature = "parallel")]
@@ -197,7 +197,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 /// The circuit-description counterpart of a Gate layer description.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: Field")]
-pub struct CircuitGateLayer<F: Field> {
+pub struct GateLayerDescription<F: Field> {
     /// The layer id associated with this gate layer.
     id: LayerId,
 
@@ -211,28 +211,28 @@ pub struct CircuitGateLayer<F: Field> {
 
     /// The left side of the expression, i.e. the mle that makes up the "x"
     /// variables.
-    lhs_mle: CircuitMle<F>,
+    lhs_mle: MleDescription<F>,
 
     /// The mles that are constructed when initializing phase 2 (binding the y
     /// variables).
-    rhs_mle: CircuitMle<F>,
+    rhs_mle: MleDescription<F>,
 
     /// The number of bits representing the number of "dataparallel" copies of
     /// the circuit.
     num_dataparallel_bits: usize,
 }
 
-impl<F: Field> CircuitGateLayer<F> {
-    /// Constructor for a [CircuitGateLayer].
+impl<F: Field> GateLayerDescription<F> {
+    /// Constructor for a [GateLayerDescription].
     pub fn new(
         num_dataparallel_bits: Option<usize>,
         wiring: Vec<(usize, usize, usize)>,
-        lhs_circuit_mle: CircuitMle<F>,
-        rhs_circuit_mle: CircuitMle<F>,
+        lhs_circuit_mle: MleDescription<F>,
+        rhs_circuit_mle: MleDescription<F>,
         gate_layer_id: LayerId,
         gate_operation: BinaryOperation,
     ) -> Self {
-        CircuitGateLayer {
+        GateLayerDescription {
             id: gate_layer_id,
             gate_operation,
             wiring,
@@ -252,7 +252,7 @@ const DATAPARALLEL_ROUND_ADD_NUM_EVALS: usize = 3;
 const NON_DATAPARALLEL_ROUND_MUL_NUM_EVALS: usize = 3;
 const NON_DATAPARALLEL_ROUND_ADD_NUM_EVALS: usize = 3;
 
-impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
+impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
     type VerifierLayer = VerifierGateLayer<F>;
 
     /// Gets this layer's id.
@@ -467,7 +467,7 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
         todo!()
     }
 
-    fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
+    fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
         vec![&self.lhs_mle, &self.rhs_mle]
     }
 
@@ -497,7 +497,7 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
 
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
+        mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
     ) -> bool {
         // dbg!(&mle_outputs_necessary);
