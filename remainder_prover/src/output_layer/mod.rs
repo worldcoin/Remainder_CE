@@ -57,7 +57,7 @@ pub trait OutputLayer<F: Field> {
 }
 
 /// The interface for the circuit description counterpart of an Output Layer.
-pub trait CircuitOutputLayer<F: Field> {
+pub trait OutputLayerDescription<F: Field> {
     /// The associated type used by the verifier for manipulating an Ouput
     /// Layer.
     type VerifierOutputLayer: VerifierOutputLayer<F> + Serialize + for<'a> Deserialize<'a>;

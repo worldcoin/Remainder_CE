@@ -14,14 +14,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::{wlx_eval::ClaimMle, ClaimError, YieldClaim},
-    expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
+    expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{LayerError, LayerId},
     layouter::layouting::CircuitMap,
     mle::{dense::DenseMle, mle_enum::MleEnum, zero::ZeroMle, Mle, MleIndex},
 };
 
 use super::{
-    CircuitOutputLayer, OutputLayer, OutputLayerError, VerifierOutputLayer,
+    OutputLayerDescription, OutputLayer, OutputLayerError, VerifierOutputLayer,
     VerifierOutputLayerError,
 };
 
@@ -116,15 +116,15 @@ impl<F: Field> OutputLayer<F> for MleOutputLayer<F> {
 /// MLE.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(bound = "F: Field")]
-pub struct CircuitMleOutputLayer<F: Field> {
+pub struct MleOutputLayerDescription<F: Field> {
     /// The metadata of this MLE: indices and associated layer.
-    pub mle: CircuitMle<F>,
+    pub mle: MleDescription<F>,
 
     /// Whether this is an MLE that is supposed to evaluate to zero.
     is_zero: bool,
 }
 
-impl<F: Field> CircuitMleOutputLayer<F> {
+impl<F: Field> MleOutputLayerDescription<F> {
     /// Generate an output layer containing a verifier equivalent of a
     /// [DenseMle], with a given `layer_id` and `mle_indices`.
     pub fn new_dense(_layer_id: LayerId, _mle_indices: &[MleIndex<F>]) -> Self {
@@ -136,7 +136,7 @@ impl<F: Field> CircuitMleOutputLayer<F> {
     /// [ZeroMle], with a given `layer_id` and `mle_indices`.
     pub fn new_zero(layer_id: LayerId, mle_indices: &[MleIndex<F>]) -> Self {
         Self {
-            mle: CircuitMle::new(layer_id, mle_indices),
+            mle: MleDescription::new(layer_id, mle_indices),
             is_zero: true,
         }
     }
@@ -174,7 +174,7 @@ impl<F: Field> CircuitMleOutputLayer<F> {
     }
 }
 
-impl<F: Field> CircuitOutputLayer<F> for CircuitMleOutputLayer<F> {
+impl<F: Field> OutputLayerDescription<F> for MleOutputLayerDescription<F> {
     type VerifierOutputLayer = VerifierMleOutputLayer<F>;
 
     fn layer_id(&self) -> LayerId {

@@ -5,8 +5,8 @@ use remainder_shared_types::Field;
 
 use crate::{
     input_layer::{
-        enum_input_layer::CircuitInputLayerEnum, hyrax_input_layer::CircuitHyraxInputLayer,
-        ligero_input_layer::CircuitLigeroInputLayer, public_input_layer::CircuitPublicInputLayer,
+        enum_input_layer::InputLayerDescriptionEnum, hyrax_input_layer::HyraxInputLayerDescription,
+        ligero_input_layer::LigeroInputLayerDescription, public_input_layer::PublicInputLayerDescription,
     },
     layer::LayerId,
     layouter::{
@@ -151,7 +151,7 @@ impl InputLayerNode {
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-    ) -> Result<CircuitInputLayerEnum<F>, DAGError> {
+    ) -> Result<InputLayerDescriptionEnum<F>, DAGError> {
         let input_layer_id = layer_id.get_and_inc();
         let Self {
             id: _,
@@ -176,23 +176,23 @@ impl InputLayerNode {
                     *ratio,
                     None,
                 );
-                let ligero_input_layer_description: CircuitLigeroInputLayer<F> =
-                    CircuitLigeroInputLayer::new(
+                let ligero_input_layer_description: LigeroInputLayerDescription<F> =
+                    LigeroInputLayerDescription::new(
                         input_layer_id.to_owned(),
                         num_vars_combined_mle,
                         aux,
                     );
-                CircuitInputLayerEnum::LigeroInputLayer(ligero_input_layer_description)
+                InputLayerDescriptionEnum::LigeroInputLayer(ligero_input_layer_description)
             }
             InputLayerType::PublicInputLayer => {
                 let public_input_layer_description =
-                    CircuitPublicInputLayer::new(input_layer_id.to_owned(), num_vars_combined_mle);
-                CircuitInputLayerEnum::PublicInputLayer(public_input_layer_description)
+                    PublicInputLayerDescription::new(input_layer_id.to_owned(), num_vars_combined_mle);
+                InputLayerDescriptionEnum::PublicInputLayer(public_input_layer_description)
             }
             InputLayerType::HyraxInputLayer => {
                 let hyrax_input_layer_description =
-                    CircuitHyraxInputLayer::new(input_layer_id.to_owned(), num_vars_combined_mle);
-                CircuitInputLayerEnum::HyraxInputLayer(hyrax_input_layer_description)
+                    HyraxInputLayerDescription::new(input_layer_id.to_owned(), num_vars_combined_mle);
+                InputLayerDescriptionEnum::HyraxInputLayer(hyrax_input_layer_description)
             }
         };
 

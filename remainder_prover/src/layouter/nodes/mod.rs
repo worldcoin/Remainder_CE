@@ -8,7 +8,7 @@ pub use remainder_shared_types::{Field, Fr};
 use serde::{Deserialize, Serialize};
 
 use crate::expression::{abstract_expr::AbstractExpr, generic_expr::Expression};
-use crate::layer::layer_enum::CircuitLayerEnum;
+use crate::layer::layer_enum::LayerDescriptionEnum;
 use crate::layer::LayerId;
 
 use super::layouting::{CircuitDescriptionMap, DAGError};
@@ -100,7 +100,7 @@ pub trait CompilableNode<F: Field>: CircuitNode {
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-    ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError>;
+    ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError>;
 }
 
 /// An organized grouping of many node types

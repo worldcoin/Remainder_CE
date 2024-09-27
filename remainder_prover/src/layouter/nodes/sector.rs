@@ -7,7 +7,7 @@ use remainder_shared_types::Field;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    layer::{layer_enum::CircuitLayerEnum, regular_layer::CircuitRegularLayer, LayerId},
+    layer::{layer_enum::LayerDescriptionEnum, regular_layer::RegularLayerDescription, LayerId},
     layouter::layouting::{topo_sort, CircuitDescriptionMap, CircuitLocation, DAGError},
 };
 
@@ -125,7 +125,7 @@ impl<F: Field> CompilableNode<F> for SectorGroup<F> {
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-    ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError> {
+    ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError> {
         //topo sort the children
         let children = self.children.iter().collect_vec();
         let children = topo_sort(children)?;
@@ -159,7 +159,7 @@ impl<F: Field> CompilableNode<F> for SectorGroup<F> {
         let compiled_layers = layers
             .into_iter()
             .map(|children| {
-                CircuitLayerEnum::Regular(
+                LayerDescriptionEnum::Regular(
                     compile_layer(children.as_slice(), layer_id, circuit_description_map).unwrap(),
                 )
             })
@@ -174,7 +174,7 @@ fn compile_layer<F: Field>(
     children: &[&Sector<F>],
     layer_id: &mut LayerId,
     circuit_description_map: &mut CircuitDescriptionMap,
-) -> Result<CircuitRegularLayer<F>, DAGError> {
+) -> Result<RegularLayerDescription<F>, DAGError> {
     // This will store all the expression yet to be merged
     let mut expression = children
         .iter()
@@ -234,7 +234,7 @@ fn compile_layer<F: Field>(
     let expr = new_expr.build_circuit_expr(circuit_description_map)?;
 
     let regular_layer_id = layer_id.get_and_inc();
-    let layer = CircuitRegularLayer::new_raw(regular_layer_id, expr);
+    let layer = RegularLayerDescription::new_raw(regular_layer_id, expr);
 
     // Add the new sectors to the circuit map
     for (node_id, mut prefix_bits) in prefix_bits {

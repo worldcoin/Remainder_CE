@@ -14,13 +14,13 @@ use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
 use rand::Rng;
-use remainder::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
+use remainder::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
 use remainder::input_layer::enum_input_layer::{
-    CircuitInputLayerEnum, InputLayerEnumVerifierCommitment,
+    InputLayerDescriptionEnum, InputLayerEnumVerifierCommitment,
 };
-use remainder::input_layer::{CircuitInputLayer, InputLayer};
-use remainder::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
-use remainder::layer::{CircuitLayer, Layer};
+use remainder::input_layer::{InputLayerDescription, InputLayer};
+use remainder::layer::layer_enum::{LayerDescriptionEnum, LayerEnum};
+use remainder::layer::{LayerDescription, Layer};
 use remainder::layouter::component::ComponentSet;
 use remainder::layouter::layouting::{
     CircuitLocation, CircuitMap, InputLayerHintMap, InputNodeMap,
@@ -164,7 +164,7 @@ impl<
 
         // Forward pass to get the map of circuit MLEs whose data is expected to be "compiled"
         // for future layers.
-        let mut mle_claim_map = HashMap::<LayerId, HashSet<&CircuitMle<C::Scalar>>>::new();
+        let mut mle_claim_map = HashMap::<LayerId, HashSet<&MleDescription<C::Scalar>>>::new();
         intermediate_layer_descriptions
             .iter()
             .for_each(|intermediate_layer| {
@@ -206,7 +206,7 @@ impl<
         // we add the data in the input data corresopnding with the circuit location for each input data struct into the circuit map
         let mut prover_input_layers: Vec<HyraxInputLayerEnum<C>> = Vec::new();
         let mut input_commitments: Vec<HyraxVerifierCommitmentEnum<C>> = Vec::new();
-        let mut hint_input_layers: Vec<&CircuitInputLayerEnum<C::Scalar>> = Vec::new();
+        let mut hint_input_layers: Vec<&InputLayerDescriptionEnum<C::Scalar>> = Vec::new();
         input_layer_descriptions
             .iter()
             .for_each(|input_layer_description| {
@@ -231,7 +231,7 @@ impl<
                     });
 
                     match input_layer_description {
-                        CircuitInputLayerEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
+                        InputLayerDescriptionEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
                             let (hyrax_commit, hyrax_prover_input_layer) = if let Some(HyraxProverCommitmentEnum::HyraxCommitment((hyrax_precommit, hyrax_blinding_factors))) = &corresponding_input_data.precommit {
                                 let dtype = &corresponding_input_data.input_data_type;
                                 let hyrax_input_layer = HyraxInputLayer::new_with_hyrax_commitment(
@@ -258,7 +258,7 @@ impl<
                             prover_input_layers.push(HyraxInputLayerEnum::HyraxInputLayer(hyrax_prover_input_layer));
 
                         }
-                        CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
+                        InputLayerDescriptionEnum::PublicInputLayer(circuit_public_input_layer) => {
                             assert!(corresponding_input_data.precommit.is_none(), "public input layers should not have precommits");
                             let mut prover_public_input_layer = circuit_public_input_layer.convert_into_prover_input_layer(combined_mle, &None);
                             let public_commit_timer = start_timer!(|| format!("committing to public input layer, {:?}", prover_public_input_layer.layer_id()));
@@ -273,14 +273,14 @@ impl<
                             }
                             prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
                         },
-                        CircuitInputLayerEnum::VerifierChallengeInputLayer(_circuit_verifier_challenge_input_layer) => {
+                        InputLayerDescriptionEnum::VerifierChallengeInputLayer(_circuit_verifier_challenge_input_layer) => {
                             panic!("Verifier challenge input layers do not have corresponding input data, as the challenges are sent by the verifier")
                         },
-                        CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
+                        InputLayerDescriptionEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
                             panic!("Hyrax proof system does not support ligero input layers because the PCS implementation is not zero knowledge")
                         },
                     }
-                } else if let CircuitInputLayerEnum::VerifierChallengeInputLayer(
+                } else if let InputLayerDescriptionEnum::VerifierChallengeInputLayer(
                     verifier_challenge_input_layer_description,
                 ) = input_layer_description
                 {
@@ -309,7 +309,7 @@ impl<
         // forward pass of the layers
         // convert the circuit layer into a prover layer using circuit map -> populate a GKRCircuit as you do this
         // prover layer ( mle_claim_map ) -> populates circuit map
-        let mut uninstantiated_intermediate_layers: Vec<&CircuitLayerEnum<C::Scalar>> = Vec::new();
+        let mut uninstantiated_intermediate_layers: Vec<&LayerDescriptionEnum<C::Scalar>> = Vec::new();
         intermediate_layer_descriptions
             .iter()
             .for_each(|intermediate_layer_description| {
@@ -337,14 +337,14 @@ impl<
                             function_applied_to_data.clone(),
                         );
                         match hint_input_layer_description {
-                            CircuitInputLayerEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
+                            InputLayerDescriptionEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
                                 let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(function_applied_to_data, hint_input_layer_description.layer_id(), self.committer, &None);
                                 let hyrax_commit = hyrax_input_layer.commit();
                                 transcript_writer.append_ec_points("Hyrax commitment", &hyrax_commit);
                                 input_commitments.push(HyraxVerifierCommitmentEnum::HyraxCommitment(hyrax_commit));
                                 prover_input_layers.push(HyraxInputLayerEnum::HyraxInputLayer(hyrax_input_layer));
                             }
-                            CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
+                            InputLayerDescriptionEnum::PublicInputLayer(circuit_public_input_layer) => {
                                 let mut prover_public_input_layer = circuit_public_input_layer.convert_into_prover_input_layer(function_applied_to_data, &None);
                                 let commitment = prover_public_input_layer.commit().unwrap();
                                 if let InputLayerEnumVerifierCommitment::PublicInputLayer(public_input_coefficients) = commitment {
@@ -356,10 +356,10 @@ impl<
                                 }
                                 prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
                             },
-                            CircuitInputLayerEnum::VerifierChallengeInputLayer(_circuit_verifier_challenge_input_layer) => {
+                            InputLayerDescriptionEnum::VerifierChallengeInputLayer(_circuit_verifier_challenge_input_layer) => {
                                 panic!("Verifier challenge input layers do not have corresponding input data, as the challenges are sent by the verifier")
                             },
-                            CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
+                            InputLayerDescriptionEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
                                 panic!("Hyrax proof system does not support ligero input layers because the PCS implementation is not zero knowledge")
                             },
                         }

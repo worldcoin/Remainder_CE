@@ -5,10 +5,10 @@ use itertools::{repeat_n, Itertools};
 use remainder_shared_types::Field;
 
 use crate::{
-    expression::circuit_expr::CircuitMle,
+    expression::circuit_expr::MleDescription,
     layer::{
-        gate::{BinaryOperation, CircuitGateLayer},
-        layer_enum::CircuitLayerEnum,
+        gate::{BinaryOperation, GateLayerDescription},
+        layer_enum::LayerDescriptionEnum,
         LayerId,
     },
     layouter::layouting::{CircuitLocation, DAGError},
@@ -82,7 +82,7 @@ impl<F: Field> CompilableNode<F> for GateNode {
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut crate::layouter::layouting::CircuitDescriptionMap,
-    ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError> {
+    ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError> {
         let (lhs_location, lhs_num_vars) =
             circuit_description_map.get_location_num_vars_from_node_id(&self.lhs)?;
         let total_indices = lhs_location
@@ -91,7 +91,7 @@ impl<F: Field> CompilableNode<F> for GateNode {
             .map(|bit| MleIndex::Fixed(*bit))
             .chain(repeat_n(MleIndex::Iterated, *lhs_num_vars))
             .collect_vec();
-        let lhs_circuit_mle = CircuitMle::new(lhs_location.layer_id, &total_indices);
+        let lhs_circuit_mle = MleDescription::new(lhs_location.layer_id, &total_indices);
 
         let (rhs_location, rhs_num_vars) =
             circuit_description_map.get_location_num_vars_from_node_id(&self.rhs)?;
@@ -101,10 +101,10 @@ impl<F: Field> CompilableNode<F> for GateNode {
             .map(|bit| MleIndex::Fixed(*bit))
             .chain(repeat_n(MleIndex::Iterated, *rhs_num_vars))
             .collect_vec();
-        let rhs_circuit_mle = CircuitMle::new(rhs_location.layer_id, &total_indices);
+        let rhs_circuit_mle = MleDescription::new(rhs_location.layer_id, &total_indices);
 
         let gate_layer_id = layer_id.get_and_inc();
-        let gate_circuit_description = CircuitGateLayer::new(
+        let gate_circuit_description = GateLayerDescription::new(
             self.num_dataparallel_bits,
             self.nonzero_gates.clone(),
             lhs_circuit_mle,
@@ -120,7 +120,7 @@ impl<F: Field> CompilableNode<F> for GateNode {
             ),
         );
 
-        Ok(vec![CircuitLayerEnum::Gate(gate_circuit_description)])
+        Ok(vec![LayerDescriptionEnum::Gate(gate_circuit_description)])
     }
 }
 

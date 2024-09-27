@@ -15,7 +15,7 @@ use crate::{
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CircuitInputLayer,
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, InputLayerDescription,
     CommitmentEnum, InputLayer, InputLayerError,
 };
 use crate::mle::Mle;
@@ -32,7 +32,7 @@ pub struct VerifierChallengeInputLayer<F: Field> {
 /// Verifier's description of a [VerifierChallengeInputLayer].
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: Field")]
-pub struct CircuitVerifierChallengeInputLayer<F: Field> {
+pub struct VerifierChallengeInputLayerDescription<F: Field> {
     /// The ID of this Random Input Layer.
     layer_id: LayerId,
 
@@ -42,8 +42,8 @@ pub struct CircuitVerifierChallengeInputLayer<F: Field> {
     _marker: PhantomData<F>,
 }
 
-impl<F: Field> CircuitVerifierChallengeInputLayer<F> {
-    /// Constructor for the [CircuitVerifierChallengeInputLayer] using the
+impl<F: Field> VerifierChallengeInputLayerDescription<F> {
+    /// Constructor for the [VerifierChallengeInputLayerDescription] using the
     /// number of bits that are in the MLE of the layer.
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         Self {
@@ -90,7 +90,7 @@ impl<F: Field> InputLayer<F> for VerifierChallengeInputLayer<F> {
     }
 }
 
-impl<F: Field> CircuitInputLayer<F> for CircuitVerifierChallengeInputLayer<F> {
+impl<F: Field> InputLayerDescription<F> for VerifierChallengeInputLayerDescription<F> {
     type Commitment = Vec<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -215,7 +215,7 @@ mod tests {
         let mle = MultilinearExtension::new(mle_vec);
 
         let verifier_random_input_layer =
-            CircuitVerifierChallengeInputLayer::<Fr>::new(layer_id, mle.num_vars());
+            VerifierChallengeInputLayerDescription::<Fr>::new(layer_id, mle.num_vars());
         let mut random_input_layer = VerifierChallengeInputLayer::new(mle, layer_id);
 
         // Prover phase.

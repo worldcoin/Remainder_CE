@@ -23,7 +23,7 @@
 //! Note that there are four "phases" to the "life cycle" of an expression, i.e.
 //! the changes it goes through during the circuit-building process (see documentation
 //! for this under under TODO(vishady): write documentation for the compilation process):
-//! * [circuit_expr::CircuitExpr]: The "circuit description" view of an
+//! * [circuit_expr::ExprDescription]: The "circuit description" view of an
 //!   expression. In particular, it describes the polynomial relationship between
 //!   the MLE representing the data output of a particular layer against MLEs
 //!   representing data "slices" within other layers, and contains information about
@@ -37,11 +37,11 @@
 //!   depends on, without specifying the sizes of any MLEs which are represented
 //!   by those nodes.
 //! * [prover_expr::ProverExpr]: The prover's view of an expression. It contains
-//!   all the information within [circuit_expr::CircuitExpr], but contains
-//!   [crate::mle::dense::DenseMle]s rather than [circuit_expr::CircuitMle]s.
+//!   all the information within [circuit_expr::ExprDescription], but contains
+//!   [crate::mle::dense::DenseMle]s rather than [circuit_expr::MleDescription]s.
 //! * [verifier_expr::VerifierExpr]: The verifier's view of an expression. It
-//!   contains all the information within [circuit_expr::CircuitExpr], but contains
-//!   [verifier_expr::VerifierMle]s rather than [circuit_expr::CircuitMle]s.
+//!   contains all the information within [circuit_expr::ExprDescription], but contains
+//!   [verifier_expr::VerifierMle]s rather than [circuit_expr::MleDescription]s.
 
 #![allow(missing_docs)]
 pub mod abstract_expr;

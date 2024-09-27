@@ -40,7 +40,7 @@ use crate::{
 };
 
 use super::{
-    circuit_expr::{CircuitExpr, CircuitMle},
+    circuit_expr::{ExprDescription, MleDescription},
     generic_expr::{Expression, ExpressionNode, ExpressionType},
 };
 
@@ -88,7 +88,7 @@ impl<F: Field> Expression<F, AbstractExpr> {
     pub fn build_circuit_expr(
         self,
         circuit_description_map: &CircuitDescriptionMap,
-    ) -> Result<Expression<F, CircuitExpr>, DAGError> {
+    ) -> Result<Expression<F, ExprDescription>, DAGError> {
         // First we get all the mles that this expression will need to store
         let mut nodes = self.expression_node.get_node_ids(vec![]);
         nodes.sort();
@@ -213,7 +213,7 @@ impl<F: Field> ExpressionNode<F, AbstractExpr> {
     fn build_circuit_node(
         self,
         node_map: &HashMap<NodeId, (usize, &CircuitLocation)>,
-    ) -> Result<ExpressionNode<F, CircuitExpr>, DAGError> {
+    ) -> Result<ExpressionNode<F, ExprDescription>, DAGError> {
         // Note that the node_map is the map of node_ids to the internal vec of MLEs, not the circuit_map
         match self {
             ExpressionNode::Constant(val) => Ok(ExpressionNode::Constant(val)),
@@ -237,7 +237,7 @@ impl<F: Field> ExpressionNode<F, AbstractExpr> {
                     .get(&node_id)
                     .ok_or(DAGError::DanglingNodeId(node_id))?;
                 let total_indices = get_total_mle_indices(prefix_bits, *num_vars);
-                let circuit_mle = CircuitMle::new(*layer_id, &total_indices);
+                let circuit_mle = MleDescription::new(*layer_id, &total_indices);
                 Ok(ExpressionNode::Mle(circuit_mle))
             }
             ExpressionNode::Negated(expr) => Ok(ExpressionNode::Negated(Box::new(
@@ -263,9 +263,9 @@ impl<F: Field> ExpressionNode<F, AbstractExpr> {
                             .ok_or(DAGError::DanglingNodeId(node_id))
                             .unwrap();
                         let total_indices = get_total_mle_indices::<F>(prefix_bits, *num_vars);
-                        CircuitMle::new(*layer_id, &total_indices)
+                        MleDescription::new(*layer_id, &total_indices)
                     })
-                    .collect::<Vec<CircuitMle<F>>>();
+                    .collect::<Vec<MleDescription<F>>>();
                 Ok(ExpressionNode::Product(circuit_mles))
             }
             ExpressionNode::Scaled(expr, scalar) => {

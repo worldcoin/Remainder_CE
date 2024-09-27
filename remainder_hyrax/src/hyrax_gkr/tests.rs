@@ -10,14 +10,14 @@ use itertools::{repeat_n, Itertools};
 use rand::rngs::ThreadRng;
 use rand::RngCore;
 use remainder::expression::abstract_expr::ExprBuilder;
-use remainder::expression::circuit_expr::{CircuitExpr, CircuitMle};
+use remainder::expression::circuit_expr::{ExprDescription, MleDescription};
 use remainder::expression::generic_expr::Expression;
 use remainder::expression::prover_expr::ProverExpr;
-use remainder::layer::identity_gate::{CircuitIdentityGateLayer, IdentityGate};
-use remainder::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
-use remainder::layer::matmult::{CircuitMatMultLayer, CircuitMatrix, MatMult, Matrix};
-use remainder::layer::regular_layer::{CircuitRegularLayer, RegularLayer};
-use remainder::layer::{CircuitLayer, LayerId};
+use remainder::layer::identity_gate::{IdentityGateLayerDescription, IdentityGate};
+use remainder::layer::layer_enum::{LayerDescriptionEnum, LayerEnum};
+use remainder::layer::matmult::{MatMultLayerDescription, MatrixDescription, MatMult, Matrix};
+use remainder::layer::regular_layer::{RegularLayerDescription, RegularLayer};
+use remainder::layer::{LayerDescription, LayerId};
 use remainder::layouter::component::ComponentSet;
 use remainder::layouter::nodes::circuit_inputs::{
     InputLayerNode, InputLayerType, InputShred, InputShredData,
@@ -89,12 +89,12 @@ fn degree_one_regular_hyrax_layer_test() {
         LayerId::Input(0),
     );
     let expression = mle_1.expression();
-    let circuit_mle_1 = CircuitMle::new(
+    let circuit_mle_1 = MleDescription::new(
         LayerId::Input(0),
         &repeat_n(MleIndex::Iterated, NUM_VARS).collect_vec(),
     );
     let circuit_expr = circuit_mle_1.expression();
-    let mut circuit_layer_enum = CircuitLayerEnum::Regular(CircuitRegularLayer::new_raw(
+    let mut circuit_layer_enum = LayerDescriptionEnum::Regular(RegularLayerDescription::new_raw(
         LayerId::Layer(0),
         circuit_expr,
     ));
@@ -134,7 +134,7 @@ fn degree_one_regular_hyrax_layer_test() {
     }];
 
     // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = circuit_layer_enum;
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
 
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
@@ -180,7 +180,7 @@ fn identity_gate_hyrax_layer_test() {
         vec![Fr::one(), Fr::from(2_u64), Fr::one(), Fr::from(3_u64)],
         LayerId::Layer(0),
     );
-    let circuit_mle_1 = CircuitMle::new(
+    let circuit_mle_1 = MleDescription::new(
         LayerId::Layer(0),
         &repeat_n(MleIndex::Iterated, NUM_VARS_MLE).collect_vec(),
     );
@@ -189,7 +189,7 @@ fn identity_gate_hyrax_layer_test() {
     let nonzero_gates = vec![(0, 1), (1, 3)];
 
     // Construct the layer from the underlying MLE and the wirings
-    let mut circuit_layer_enum = CircuitLayerEnum::IdentityGate(CircuitIdentityGateLayer::new(
+    let mut circuit_layer_enum = LayerDescriptionEnum::IdentityGate(IdentityGateLayerDescription::new(
         LayerId::Layer(0),
         nonzero_gates.clone(),
         circuit_mle_1,
@@ -221,7 +221,7 @@ fn identity_gate_hyrax_layer_test() {
     }];
 
     // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = circuit_layer_enum;
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
 
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
@@ -277,17 +277,17 @@ fn matmult_hyrax_layer_test() {
         LayerId::Layer(0),
     );
     let matrix_b = Matrix::new(mle_2, 1, 1);
-    let circuit_mle_1 = CircuitMle::new(
+    let circuit_mle_1 = MleDescription::new(
         LayerId::Layer(0),
         &repeat_n(MleIndex::Iterated, NUM_VARS_MLE).collect_vec(),
     );
-    let circuit_mle_2 = CircuitMle::new(
+    let circuit_mle_2 = MleDescription::new(
         LayerId::Layer(0),
         &repeat_n(MleIndex::Iterated, NUM_VARS_MLE).collect_vec(),
     );
-    let circuit_matrix_a = CircuitMatrix::new(circuit_mle_1, 1, 1);
-    let circuit_matrix_b = CircuitMatrix::new(circuit_mle_2, 1, 1);
-    let mut circuit_layer_enum = CircuitLayerEnum::MatMult(CircuitMatMultLayer::new(
+    let circuit_matrix_a = MatrixDescription::new(circuit_mle_1, 1, 1);
+    let circuit_matrix_b = MatrixDescription::new(circuit_mle_2, 1, 1);
+    let mut circuit_layer_enum = LayerDescriptionEnum::MatMult(MatMultLayerDescription::new(
         LayerId::Layer(0),
         circuit_matrix_a,
         circuit_matrix_b,
@@ -322,7 +322,7 @@ fn matmult_hyrax_layer_test() {
     }];
 
     // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = circuit_layer_enum;
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
 
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
@@ -372,20 +372,20 @@ fn product_of_mles_regular_layer_test() {
         LayerId::Input(0),
     );
     let expression = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_2.clone()]);
-    let circuit_mle_1 = CircuitMle::new(
+    let circuit_mle_1 = MleDescription::new(
         LayerId::Layer(0),
         &repeat_n(MleIndex::Iterated, 2).collect_vec(),
     );
-    let circuit_mle_2 = CircuitMle::new(
+    let circuit_mle_2 = MleDescription::new(
         LayerId::Layer(0),
         &repeat_n(MleIndex::Iterated, 2).collect_vec(),
     );
-    let circuit_expr = Expression::<Fr, CircuitExpr>::products(vec![circuit_mle_1, circuit_mle_2]);
+    let circuit_expr = Expression::<Fr, ExprDescription>::products(vec![circuit_mle_1, circuit_mle_2]);
 
     // Construct the GKR Layer from the expression
     let layer: RegularLayer<Scalar> = RegularLayer::new_raw(LayerId::Layer(0), expression);
     let mut layer_enum = LayerEnum::Regular(Box::new(layer));
-    let mut circuit_layer_enum = CircuitLayerEnum::Regular(CircuitRegularLayer::new_raw(
+    let mut circuit_layer_enum = LayerDescriptionEnum::Regular(RegularLayerDescription::new_raw(
         LayerId::Layer(0),
         circuit_expr,
     ));
@@ -416,7 +416,7 @@ fn product_of_mles_regular_layer_test() {
     }];
 
     // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = circuit_layer_enum;
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
 
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
@@ -467,11 +467,11 @@ fn selector_only_test() {
         vec![Fr::from(2), Fr::from(1), Fr::from(6), Fr::from(4)],
         LayerId::Input(0),
     );
-    let circuit_mle_left = CircuitMle::new(
+    let circuit_mle_left = MleDescription::new(
         LayerId::Input(0),
         &repeat_n(MleIndex::Iterated, 2).collect_vec(),
     );
-    let circuit_mle_right = CircuitMle::new(
+    let circuit_mle_right = MleDescription::new(
         LayerId::Input(0),
         &repeat_n(MleIndex::Iterated, 2).collect_vec(),
     );
@@ -485,7 +485,7 @@ fn selector_only_test() {
     // Construct the GKR Layer from the expression
     let layer: RegularLayer<Scalar> = RegularLayer::new_raw(LayerId::Layer(0), selector_expression);
     let mut layer_enum = LayerEnum::Regular(Box::new(layer));
-    let mut circuit_layer_enum = CircuitLayerEnum::Regular(CircuitRegularLayer::new_raw(
+    let mut circuit_layer_enum = LayerDescriptionEnum::Regular(RegularLayerDescription::new_raw(
         LayerId::Layer(0),
         selector_circuit_expression,
     ));
@@ -524,7 +524,7 @@ fn selector_only_test() {
     }];
 
     // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = circuit_layer_enum;
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
 
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
@@ -578,15 +578,15 @@ fn degree_two_selector_regular_hyrax_layer_test() {
         vec![Fr::from(3), Fr::from(1), Fr::from(5), Fr::from(2)],
         LayerId::Input(0),
     );
-    let circuit_mle_left = CircuitMle::new(
+    let circuit_mle_left = MleDescription::new(
         LayerId::Input(0),
         &repeat_n(MleIndex::Iterated, 2).collect_vec(),
     );
-    let circuit_mle_right_1 = CircuitMle::new(
+    let circuit_mle_right_1 = MleDescription::new(
         LayerId::Input(0),
         &repeat_n(MleIndex::Iterated, 2).collect_vec(),
     );
-    let circuit_mle_right_2 = CircuitMle::new(
+    let circuit_mle_right_2 = MleDescription::new(
         LayerId::Input(0),
         &repeat_n(MleIndex::Iterated, 2).collect_vec(),
     );
@@ -594,14 +594,14 @@ fn degree_two_selector_regular_hyrax_layer_test() {
     let circuit_expression_left = circuit_mle_left.expression();
     let expression_right = Expression::<Fr, ProverExpr>::products(vec![mle_right_1, mle_right_2]);
     let circuit_expression_right =
-        Expression::<Fr, CircuitExpr>::products(vec![circuit_mle_right_1, circuit_mle_right_2]);
+        Expression::<Fr, ExprDescription>::products(vec![circuit_mle_right_1, circuit_mle_right_2]);
     let selector_expression = expression_right.concat_expr(expression_left);
     let circuit_selector_expression = circuit_expression_right.concat_expr(circuit_expression_left);
 
     // Construct the GKR Layer from the expression
     let layer: RegularLayer<Scalar> = RegularLayer::new_raw(LayerId::Layer(0), selector_expression);
     let mut layer_enum = LayerEnum::Regular(Box::new(layer));
-    let mut circuit_layer_enum = CircuitLayerEnum::Regular(CircuitRegularLayer::new_raw(
+    let mut circuit_layer_enum = LayerDescriptionEnum::Regular(RegularLayerDescription::new_raw(
         LayerId::Layer(0),
         circuit_selector_expression,
     ));
@@ -639,7 +639,7 @@ fn degree_two_selector_regular_hyrax_layer_test() {
     }];
 
     // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = circuit_layer_enum;
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
 
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(

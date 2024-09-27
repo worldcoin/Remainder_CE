@@ -13,7 +13,7 @@ use crate::{
     claims::{wlx_eval::ClaimMle, YieldClaim},
     layer::LayerId,
     mle::{mle_enum::MleEnum, zero::ZeroMle, Mle, MleIndex},
-    output_layer::{mle_output_layer::CircuitMleOutputLayer, CircuitOutputLayer},
+    output_layer::{mle_output_layer::MleOutputLayerDescription, OutputLayerDescription},
 };
 
 use super::{mle_output_layer::MleOutputLayer, OutputLayer};
@@ -69,7 +69,7 @@ fn test_output_layer_get_claims() {
     let mle = ZeroMle::new(num_vars, None, layer_id);
 
     let mut output_layer = MleOutputLayer::new_zero(mle.clone());
-    let mut circuit_output_layer = CircuitMleOutputLayer::new_zero(
+    let mut circuit_output_layer = MleOutputLayerDescription::new_zero(
         layer_id,
         &repeat_n(MleIndex::Iterated, num_vars).collect_vec(),
     );
@@ -129,7 +129,7 @@ fn test_output_layer_get_claims_with_prefix_bits() {
     let mle = ZeroMle::new(num_iterated_vars, Some(prefix_bits.clone()), layer_id);
 
     let mut output_layer = MleOutputLayer::new_zero(mle.clone());
-    let mut circuit_output_layer = CircuitMleOutputLayer::new_zero(
+    let mut circuit_output_layer = MleOutputLayerDescription::new_zero(
         layer_id,
         &prefix_bits
             .into_iter()

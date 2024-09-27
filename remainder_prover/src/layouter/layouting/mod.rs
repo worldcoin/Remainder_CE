@@ -10,7 +10,7 @@ use remainder_shared_types::Field;
 use thiserror::Error;
 
 use crate::{
-    expression::circuit_expr::CircuitMle,
+    expression::circuit_expr::MleDescription,
     layer::LayerId,
     layouter::nodes::sector::{Sector, SectorGroup},
     mle::evals::MultilinearExtension,
@@ -51,7 +51,7 @@ impl<F: Field> CircuitMap<F> {
     /// An alias to [get_data_from_location] above,
     pub fn get_data_from_circuit_mle(
         &self,
-        circuit_mle: &CircuitMle<F>,
+        circuit_mle: &MleDescription<F>,
     ) -> Result<&MultilinearExtension<F>, DAGError> {
         let circuit_location =
             CircuitLocation::new(circuit_mle.layer_id(), circuit_mle.prefix_bits());
