@@ -155,18 +155,18 @@ impl InputLayerNode {
         let input_layer_id = layer_id.get_and_inc();
         let Self {
             id: _,
-            children,
+            input_shreds,
             input_layer_type,
         } = &self;
 
-        let input_mle_num_vars = children
+        let input_mle_num_vars = input_shreds
             .iter()
             .map(|node| node.get_num_vars())
             .collect_vec();
 
         let (prefix_bits, input_shred_indices, num_vars_combined_mle) =
             index_input_mles(&input_mle_num_vars);
-        debug_assert_eq!(input_shred_indices.len(), children.len());
+        debug_assert_eq!(input_shred_indices.len(), input_shreds.len());
 
         let out = match input_layer_type {
             InputLayerType::LigeroInputLayer((rho_inv, ratio)) => {
@@ -200,7 +200,7 @@ impl InputLayerNode {
             .iter()
             .zip(prefix_bits)
             .for_each(|(input_shred_index, prefix_bits)| {
-                let input_shred = &children[*input_shred_index];
+                let input_shred = &input_shreds[*input_shred_index];
                 circuit_description_map.add_node_id_and_location_num_vars(
                     input_shred.id,
                     (
