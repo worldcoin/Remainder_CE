@@ -289,7 +289,7 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
                         .into_iter()
                         .for_each(|(mle_index, count)| {
                             if count > 1 {
-                                if let MleIndex::IndexedBit(i) = mle_index {
+                                if let MleIndex::Indexed(i) = mle_index {
                                     product_nonlinear_indices.insert(i);
                                 }
                             }

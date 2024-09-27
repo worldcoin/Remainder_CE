@@ -59,15 +59,15 @@ impl<F: Field> MleDescription<F> {
         self.var_indices = new_mle_indices;
     }
 
-    /// Convert [MleIndex::Iterated] into [MleIndex::IndexedBit] with the correct
+    /// Convert [MleIndex::Free] into [MleIndex::IndexedBit] with the correct
     /// index labeling, given by start_index parameter.
     pub fn index_mle_indices(&mut self, start_index: usize) {
         let mut index_counter = start_index;
         self.var_indices
             .iter_mut()
             .for_each(|mle_index| match mle_index {
-                MleIndex::Iterated => {
-                    let indexed_mle_index = MleIndex::IndexedBit(index_counter);
+                MleIndex::Free => {
+                    let indexed_mle_index = MleIndex::Indexed(index_counter);
                     index_counter += 1;
                     *mle_index = indexed_mle_index;
                 }
@@ -91,13 +91,12 @@ impl<F: Field> MleDescription<F> {
         Expression::new(ExpressionNode::<F, ExprDescription>::Mle(self), ())
     }
 
-    /// The number of Indexed OR Iterated bits in this MLE.
-    /// TODO(vishady): figure this out -- maybe just get rid of Iterated altogether.
-    pub fn num_iterated_vars(&self) -> usize {
+    /// The number of [MleIndex::Indexed] OR [MleIndex::Free] bits in this MLE.
+    pub fn num_free_vars(&self) -> usize {
         self.var_indices.iter().fold(0, |acc, idx| {
             acc + match idx {
-                MleIndex::Iterated => 1,
-                MleIndex::IndexedBit(_) => 1,
+                MleIndex::Free => 1,
+                MleIndex::Indexed(_) => 1,
                 _ => 0,
             }
         })
@@ -127,7 +126,7 @@ impl<F: Field> MleDescription<F> {
     /// sans data, it need not alter its internal MLE evaluations in any way.
     pub fn fix_variable(&mut self, var_index: usize, value: F) {
         for mle_index in self.var_indices.iter_mut() {
-            if *mle_index == MleIndex::IndexedBit(var_index) {
+            if *mle_index == MleIndex::Indexed(var_index) {
                 mle_index.bind_index(value);
             }
         }
@@ -141,8 +140,8 @@ impl<F: Field> MleDescription<F> {
             .map(|index| match index {
                 MleIndex::Bound(chal, _idx) => *chal,
                 MleIndex::Fixed(chal) => F::from(*chal as u64),
-                MleIndex::IndexedBit(i) => challenges[*i],
-                _ => panic!("DenseMleRefDesc contained iterated bit!"),
+                MleIndex::Indexed(i) => challenges[*i],
+                _ => panic!("DenseMleRefDesc contained free variables!"),
             })
             .collect()
     }
@@ -157,7 +156,7 @@ impl<F: Field> MleDescription<F> {
             .var_indices
             .iter()
             .map(|mle_index| match mle_index {
-                MleIndex::IndexedBit(idx) => Ok(MleIndex::Bound(point[*idx], *idx)),
+                MleIndex::Indexed(idx) => Ok(MleIndex::Bound(point[*idx], *idx)),
                 MleIndex::Fixed(val) => Ok(MleIndex::Fixed(*val)),
                 _ => Err(ExpressionError::SelectorBitNotBoundError),
             })
@@ -221,9 +220,9 @@ impl<F: Field> Expression<F, ExprDescription> {
         circuit_mles
     }
 
-    /// Label the iterated indices in an expression.
-    pub fn index_mle_indices(&mut self, start_index: usize) {
-        self.expression_node.index_mle_indices(start_index);
+    /// Label the free variables in an expression.
+    pub fn index_mle_vars(&mut self, start_index: usize) {
+        self.expression_node.index_mle_vars(start_index);
     }
 
     /// Get the [Expression<F, ProverExpr>] corresponding to this [Expression<F, ExprDescription>] using the
@@ -265,7 +264,7 @@ impl<F: Field> Expression<F, ExprDescription> {
                 for circuit_mle in circuit_mles {
                     let mle_indices = &circuit_mle.var_indices;
                     for mle_index in mle_indices {
-                        if *mle_index == MleIndex::IndexedBit(curr_round) {
+                        if *mle_index == MleIndex::Indexed(curr_round) {
                             product_round_degree += 1;
                             break;
                         }
@@ -295,7 +294,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
         match self {
             ExpressionNode::Constant(scalar) => Ok(ExpressionNode::Constant(*scalar)),
             ExpressionNode::Selector(index, lhs, rhs) => match index {
-                MleIndex::IndexedBit(idx) => Ok(ExpressionNode::Selector(
+                MleIndex::Indexed(idx) => Ok(ExpressionNode::Selector(
                     MleIndex::Bound(point[*idx], *idx),
                     Box::new(lhs.into_verifier_node(point, transcript_reader)?),
                     Box::new(rhs.into_verifier_node(point, transcript_reader)?),
@@ -530,7 +529,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                         .into_iter()
                         .for_each(|(mle_index, count)| {
                             if count > 1 {
-                                if let MleIndex::IndexedBit(i) = mle_index {
+                                if let MleIndex::Indexed(i) = mle_index {
                                     product_nonlinear_indices.insert(i);
                                 } else if let MleIndex::Bound(_, i) = mle_index {
                                     product_nonlinear_indices.insert(i);
@@ -616,20 +615,20 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     }
 
     /// Label the MLE indices of an expression, starting from the `start_index`.
-    pub fn index_mle_indices(&mut self, start_index: usize) {
+    pub fn index_mle_vars(&mut self, start_index: usize) {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
                 match mle_index {
-                    MleIndex::Iterated => *mle_index = MleIndex::IndexedBit(start_index),
+                    MleIndex::Free => *mle_index = MleIndex::Indexed(start_index),
                     MleIndex::Fixed(_bit) => {}
                     _ => panic!("should not have indexed or bound bits at this point!"),
                 };
-                a.index_mle_indices(start_index + 1);
-                b.index_mle_indices(start_index + 1);
+                a.index_mle_vars(start_index + 1);
+                b.index_mle_vars(start_index + 1);
             }
             ExpressionNode::Sum(a, b) => {
-                a.index_mle_indices(start_index);
-                b.index_mle_indices(start_index);
+                a.index_mle_vars(start_index);
+                b.index_mle_vars(start_index);
             }
             ExpressionNode::Mle(mle) => {
                 mle.index_mle_indices(start_index);
@@ -639,10 +638,10 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                     .for_each(|mle| mle.index_mle_indices(start_index));
             }
             ExpressionNode::Scaled(a, _scale_factor) => {
-                a.index_mle_indices(start_index);
+                a.index_mle_vars(start_index);
             }
             ExpressionNode::Negated(a) => {
-                a.index_mle_indices(start_index);
+                a.index_mle_vars(start_index);
             }
             ExpressionNode::Constant(_constant) => {}
         }
@@ -651,9 +650,9 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     /// Get the [ExpressionNode<F, ProverExpr>] recursively, for this expression.
     pub fn into_prover_expression(&self, circuit_map: &CircuitMap<F>) -> Expression<F, ProverExpr> {
         match self {
-            ExpressionNode::Selector(_mle_index, a, b) => b
+            ExpressionNode::Selector(_mle_index, a, b) => a
                 .into_prover_expression(circuit_map)
-                .concat_expr(a.into_prover_expression(circuit_map)),
+                .select(b.into_prover_expression(circuit_map)),
             ExpressionNode::Sum(a, b) => {
                 a.into_prover_expression(circuit_map) + b.into_prover_expression(circuit_map)
             }
@@ -691,7 +690,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
                 let idx_val = match mle_index {
-                    MleIndex::IndexedBit(idx) => challenges[*idx],
+                    MleIndex::Indexed(idx) => challenges[*idx],
                     MleIndex::Bound(chal, _idx) => *chal,
                     // TODO(vishady): actually we should just have an assertion that circuit description only
                     // contains indexed bits
@@ -781,11 +780,11 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             ExpressionNode::Selector(_, lhs, rhs) => {
                 max(lhs.get_num_vars() + 1, rhs.get_num_vars() + 1)
             }
-            ExpressionNode::Mle(circuit_mle_desc) => circuit_mle_desc.num_iterated_vars(),
+            ExpressionNode::Mle(circuit_mle_desc) => circuit_mle_desc.num_free_vars(),
             ExpressionNode::Negated(expr) => expr.get_num_vars(),
             ExpressionNode::Sum(lhs, rhs) => max(lhs.get_num_vars(), rhs.get_num_vars()),
             ExpressionNode::Product(nodes) => nodes.iter().fold(0, |cur_max, circuit_mle_desc| {
-                max(cur_max, circuit_mle_desc.num_iterated_vars())
+                max(cur_max, circuit_mle_desc.num_free_vars())
             }),
             ExpressionNode::Scaled(expr, _) => expr.get_num_vars(),
         }
@@ -812,35 +811,33 @@ impl<F: Field> Expression<F, ExprDescription> {
     }
 
     /// Creates an [Expression<F, ExprDescription>] which describes the polynomial relationship
-    /// `(1 - x_0) * lhs(x_1, ..., x_{n_lhs}) + b_0 * Self(x_1, ..., x_{n_rhs})`
+    /// `(1 - x_0) * Self(x_1, ..., x_{n_lhs}) + b_0 * rhs(x_1, ..., x_{n_rhs})`
     ///
-    /// TODO(ryancao): Change this so that `Self` is the `lhs`, rather than the other way around!
-    ///
-    /// NOTE that by default, performing a `concat_expr()` over an LHS and an RHS
+    /// NOTE that by default, performing a `select()` over an LHS and an RHS
     /// with different numbers of variables will create a selector tree such that
     /// the side with fewer variables always falls down the left-most side of
     /// that subtree.
     ///
-    /// For example, if we are calling `concat_expr()` on two MLEs,
+    /// For example, if we are calling `select()` on two MLEs,
     /// V_i(x_0, ..., x_4) and V_i(x_0, ..., x_6)
     /// then the resulting expression will have a single top-level selector, and
     /// will forcibly move the first MLE (with two fewer variables) to the left-most
     /// subtree with 5 variables:
     /// (1 - x_0) * (1 - x_1) * (1 - x_2) * V_i(x_3, ..., x_7) +
     /// x_0 * V_i(x_1, ..., x_7)
-    pub fn concat_expr(self, lhs: Expression<F, ExprDescription>) -> Self {
-        let (lhs_node, _) = lhs.deconstruct();
-        let (rhs_node, _) = self.deconstruct();
+    pub fn select(self, rhs: Expression<F, ExprDescription>) -> Self {
+        let (lhs_node, _) = self.deconstruct();
+        let (rhs_node, _) = rhs.deconstruct();
 
-        // --- Compute the difference in number of iterated bits, to add the appropriate number of selectors ---
+        // --- Compute the difference in number of free variables, to add the appropriate number of selectors ---
         let num_left_selectors = max(0, rhs_node.get_num_vars() - lhs_node.get_num_vars());
         let num_right_selectors = max(0, lhs_node.get_num_vars() - rhs_node.get_num_vars());
 
         let lhs_subtree = if num_left_selectors > 0 {
-            // --- Always "go left" and "concatenate" against a constant zero ---
+            // --- Always "go left" and "select" against a constant zero ---
             (0..num_left_selectors).fold(lhs_node, |cur_subtree, _| {
                 ExpressionNode::Selector(
-                    MleIndex::Iterated,
+                    MleIndex::Free,
                     Box::new(cur_subtree),
                     Box::new(ExpressionNode::Constant(F::ZERO)),
                 )
@@ -850,10 +847,10 @@ impl<F: Field> Expression<F, ExprDescription> {
         };
 
         let rhs_subtree = if num_right_selectors > 0 {
-            // --- Always "go left" and "concatenate" against a constant zero ---
+            // --- Always "go left" and "select" against a constant zero ---
             (0..num_right_selectors).fold(rhs_node, |cur_subtree, _| {
                 ExpressionNode::Selector(
-                    MleIndex::Iterated,
+                    MleIndex::Free,
                     Box::new(cur_subtree),
                     Box::new(ExpressionNode::Constant(F::ZERO)),
                 )
@@ -866,11 +863,8 @@ impl<F: Field> Expression<F, ExprDescription> {
         debug_assert_eq!(lhs_subtree.get_num_vars(), rhs_subtree.get_num_vars());
 
         // --- Finally, a selector against the two (equal-num-vars) sides! ---
-        let concat_node = ExpressionNode::Selector(
-            MleIndex::Iterated,
-            Box::new(lhs_subtree),
-            Box::new(rhs_subtree),
-        );
+        let concat_node =
+            ExpressionNode::Selector(MleIndex::Free, Box::new(lhs_subtree), Box::new(rhs_subtree));
 
         Expression::new(concat_node, ())
     }
@@ -878,7 +872,7 @@ impl<F: Field> Expression<F, ExprDescription> {
     /// Create a nested selector Expression that selects between 2^k Expressions
     /// by creating a binary tree of Selector Expressions.
     /// The order of the leaves is the order of the input expressions.
-    /// (Note that this is very different from calling concat_expr consecutively.)
+    /// (Note that this is very different from calling `select()` consecutively.)
     /// See also [calculate_selector_values].
     pub fn selectors(expressions: Vec<Self>) -> Self {
         // Ensure length is a power of two
@@ -894,7 +888,7 @@ impl<F: Field> Expression<F, ExprDescription> {
                     let (rhs_node, _) = rhs.deconstruct();
 
                     let selector_node = ExpressionNode::Selector(
-                        MleIndex::Iterated,
+                        MleIndex::Free,
                         Box::new(lhs_node),
                         Box::new(rhs_node),
                     );

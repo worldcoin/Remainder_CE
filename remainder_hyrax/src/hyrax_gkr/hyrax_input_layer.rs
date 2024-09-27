@@ -11,7 +11,7 @@ use remainder::{
         enum_input_layer::{InputLayerDescriptionEnum, InputLayerEnum},
         public_input_layer::PublicInputLayer,
         verifier_challenge_input_layer::VerifierChallengeInputLayer,
-        InputLayerDescription, InputLayer,
+        InputLayer, InputLayerDescription,
     },
     layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
     layouter::nodes::circuit_inputs::HyraxInputDType,
@@ -411,7 +411,7 @@ pub fn verify_public_and_random_input_layer<C: PrimeOrderCurve>(
     let mut mle = DenseMle::new_from_raw(mle_vec.to_vec(), LayerId::Input(0));
     mle.index_mle_indices(0);
 
-    let eval = if mle.num_iterated_vars() != 0 {
+    let eval = if mle.num_free_vars() != 0 {
         let mut eval = None;
         for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
             eval = mle.fix_variable(curr_bit, chal);

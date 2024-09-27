@@ -1,6 +1,6 @@
 // a breakdown of the functions that are tested here
-// 1. constructors in prover_expr such as products, mle, constant, sum, scaled, and concat_expr
-// 2. increment_mle_vec_indices is indirectly tested because of sum, concat_expr, etc.
+// 1. constructors in prover_expr such as products, mle, constant, sum, scaled, and select
+// 2. increment_mle_vec_indices is indirectly tested because of sum, select, etc.
 // 3. evalute_expr (and fix_variable is indirectly tested bc this)
 // 4. evaluate_sumcheck is tested in sumcheck/tests.rs (bc it's in compute_sumcheck_message)
 // 5. index_mle_indices
@@ -137,7 +137,7 @@ fn test_mle_eval_selector() {
 
     let expression_2 = Expression::<Fr, ProverExpr>::mle(mle_2);
 
-    let mut expression = expression_1.concat_expr(expression_2);
+    let mut expression = expression_1.select(expression_2);
 
     let num_indices = expression.index_mle_indices(0);
     assert_eq!(num_indices, 3);
@@ -147,17 +147,17 @@ fn test_mle_eval_selector() {
 
     let mle_concat = DenseMle::new_from_raw(
         vec![
-            Fr::from(1),
-            Fr::from(9),
-            Fr::from(8),
-            Fr::from(2),
             Fr::from(4),
             Fr::from(2),
             Fr::from(1),
             Fr::from(7),
+            Fr::from(1),
+            Fr::from(9),
+            Fr::from(8),
+            Fr::from(2),
         ],
         LayerId::Input(0),
-    ); // cancat actually prepends
+    );
 
     let challenge_concat = vec![Fr::from(7), Fr::from(3), Fr::from(2)]; // move the first challenge towards the end
 
@@ -180,8 +180,8 @@ fn test_mle_eval_selector_w_constant() {
 
     let expression_1 = Expression::<Fr, ProverExpr>::mle(mle_1);
 
-    let mut expression =
-        expression_1.concat_expr(Expression::<Fr, ProverExpr>::constant(Fr::from(5)));
+    let constant_expr = Expression::<Fr, ProverExpr>::constant(Fr::from(5));
+    let mut expression = constant_expr.select(expression_1);
 
     let num_indices = expression.index_mle_indices(0);
     assert_eq!(num_indices, 3);
@@ -292,7 +292,7 @@ fn test_all_mle_indices() {
     let expression_product_2 = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_1]);
     let mut expression_full = Expression::<Fr, ProverExpr>::sum(
         *expression_product,
-        expression_mle.concat_expr(expression_product_2),
+        expression_product_2.select(expression_mle),
     );
     expression_full.index_mle_indices(0);
     let mut curr_all_indices: Vec<usize> = Vec::new();
@@ -334,7 +334,7 @@ fn test_nonlinear_mle_indices() {
     let expression_product_2 = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_1]);
     let mut expression_full = Expression::<Fr, ProverExpr>::sum(
         *expression_product,
-        expression_mle.concat_expr(expression_product_2),
+        expression_product_2.select(expression_mle),
     );
     expression_full.index_mle_indices(0);
     let mut curr_all_indices: Vec<usize> = Vec::new();
@@ -378,7 +378,7 @@ fn test_linear_mle_indices() {
     let expression_product_2 = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_1]);
     let mut expression_full = Expression::<Fr, ProverExpr>::sum(
         *expression_product,
-        expression_mle.concat_expr(expression_product_2),
+        expression_product_2.select(expression_mle),
     );
     expression_full.index_mle_indices(0);
     let all_linear_indices = expression_full
@@ -420,13 +420,13 @@ fn test_linear_mle_indices_2() {
     let expression_product_2 = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_1]);
     let expression_half = Expression::<Fr, ProverExpr>::sum(
         *expression_product.clone(),
-        expression_mle.concat_expr(expression_product_2.clone()),
+        expression_mle.select(expression_product_2.clone()),
     );
     let expression_other_half = Expression::<Fr, ProverExpr>::sum(
         expression_product_2,
         Expression::<Fr, ProverExpr>::negated(*expression_product),
     );
-    let mut expression_full = expression_half.concat_expr(expression_other_half);
+    let mut expression_full = expression_half.select(expression_other_half);
     expression_full.index_mle_indices(0);
     let all_linear_indices = expression_full
         .expression_node
@@ -459,7 +459,7 @@ fn big_test_eval() {
 
     let expression = expression * Fr::from(2);
 
-    let mut expression = expression3.concat_expr(expression);
+    let mut expression = expression.select(expression3);
     let num_indices = expression.index_mle_indices(0);
     assert_eq!(num_indices, 3);
 
