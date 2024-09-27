@@ -69,7 +69,7 @@ impl OutputNode {
         let total_indices = prefix_bits
             .iter()
             .map(|bit| MleIndex::Fixed(*bit))
-            .chain(repeat_n(MleIndex::Iterated, *num_vars))
+            .chain(repeat_n(MleIndex::Free, *num_vars))
             .collect_vec();
 
         let out = CircuitMleOutputLayer::new_zero(*layer_id, &total_indices);

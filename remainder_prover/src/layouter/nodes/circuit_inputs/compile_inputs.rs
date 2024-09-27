@@ -19,14 +19,14 @@ use crate::{
 
 use super::{InputLayerNode, InputLayerType};
 
-/// Function which returns a vector of `MleIndex::Fixed` for prefix bits according to which
-/// position we are in the range from 0 to `total_num_bits` - `num_iterated_bits`.
+/// Function which returns a vector of [MleIndex::Fixed] for prefix bits according to which
+/// position we are in the range from 0 to `total_num_bits` - `num_free_bits`.
 fn get_prefix_bits_from_capacity(
     capacity: u32,
     total_num_bits: usize,
-    num_iterated_bits: usize,
+    num_free_bits: usize,
 ) -> Vec<bool> {
-    (0..total_num_bits - num_iterated_bits)
+    (0..total_num_bits - num_free_bits)
         .map(|bit_position| {
             // Divide capacity by 2**(total_num_bits - bit_position - 1) and see whether the last bit is 1
             let bit_val = (capacity >> (total_num_bits - bit_position - 1)) & 1;

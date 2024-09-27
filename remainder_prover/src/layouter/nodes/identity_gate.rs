@@ -120,10 +120,10 @@ mod test {
     #[test]
     fn test_identity_gate_node_in_circuit() {
         let circuit = LayouterCircuit::new(|ctx| {
-            const NUM_ITERATED_BITS: usize = 4;
+            const NUM_FREE_BITS: usize = 4;
 
             let mut rng = test_rng();
-            let size = 1 << NUM_ITERATED_BITS;
+            let size = 1 << NUM_FREE_BITS;
 
             let mle_vec: Vec<Fr> = (0..size).map(|_| Fr::from(rng.gen::<u64>())).collect();
             let mle = MultilinearExtension::new(mle_vec.clone());

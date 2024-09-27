@@ -116,7 +116,7 @@ impl<F: Field> Expression<F, AbstractExpr> {
         let (rhs_node, _) = self.deconstruct();
 
         let concat_node =
-            ExpressionNode::Selector(MleIndex::Iterated, Box::new(lhs_node), Box::new(rhs_node));
+            ExpressionNode::Selector(MleIndex::Free, Box::new(lhs_node), Box::new(rhs_node));
 
         Expression::new(concat_node, ())
     }
@@ -140,7 +140,7 @@ impl<F: Field> Expression<F, AbstractExpr> {
                     let (rhs_node, _) = rhs.deconstruct();
 
                     let selector_node = ExpressionNode::Selector(
-                        MleIndex::Iterated,
+                        MleIndex::Free,
                         Box::new(lhs_node),
                         Box::new(rhs_node),
                     );

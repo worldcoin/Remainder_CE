@@ -29,7 +29,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayer<C> {
         &mut self,
         prover_transcript: &mut impl ECProverTranscript<C>,
     ) {
-        let challenge: Vec<C::Scalar> = (0..self.underlying_mle.num_iterated_vars())
+        let challenge: Vec<C::Scalar> = (0..self.underlying_mle.num_free_vars())
             .map(|_idx| prover_transcript.get_scalar_field_challenge("output claim point"))
             .collect_vec();
         self.underlying_mle.index_mle_indices(0);
@@ -125,12 +125,12 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
             .iter()
             .map(|mle_index| match mle_index {
                 MleIndex::Fixed(val) => C::Scalar::from(*val as u64),
-                MleIndex::IndexedBit(_) => transcript
+                MleIndex::Indexed(_) => transcript
                     .get_scalar_field_challenge("output claim point")
                     .unwrap(),
 
                 _ => {
-                    panic!("should not have bound or iterated bits here!")
+                    panic!("should not have bound or free variables here!")
                 }
             })
             .collect_vec();

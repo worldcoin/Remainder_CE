@@ -91,7 +91,7 @@ fn degree_one_regular_hyrax_layer_test() {
     let expression = mle_1.expression();
     let circuit_mle_1 = CircuitMle::new(
         LayerId::Input(0),
-        &repeat_n(MleIndex::Iterated, NUM_VARS).collect_vec(),
+        &repeat_n(MleIndex::Free, NUM_VARS).collect_vec(),
     );
     let circuit_expr = circuit_mle_1.expression();
     let mut circuit_layer_enum = CircuitLayerEnum::Regular(CircuitRegularLayer::new_raw(
@@ -182,7 +182,7 @@ fn identity_gate_hyrax_layer_test() {
     );
     let circuit_mle_1 = CircuitMle::new(
         LayerId::Layer(0),
-        &repeat_n(MleIndex::Iterated, NUM_VARS_MLE).collect_vec(),
+        &repeat_n(MleIndex::Free, NUM_VARS_MLE).collect_vec(),
     );
 
     // The wirings
@@ -279,11 +279,11 @@ fn matmult_hyrax_layer_test() {
     let matrix_b = Matrix::new(mle_2, 1, 1);
     let circuit_mle_1 = CircuitMle::new(
         LayerId::Layer(0),
-        &repeat_n(MleIndex::Iterated, NUM_VARS_MLE).collect_vec(),
+        &repeat_n(MleIndex::Free, NUM_VARS_MLE).collect_vec(),
     );
     let circuit_mle_2 = CircuitMle::new(
         LayerId::Layer(0),
-        &repeat_n(MleIndex::Iterated, NUM_VARS_MLE).collect_vec(),
+        &repeat_n(MleIndex::Free, NUM_VARS_MLE).collect_vec(),
     );
     let circuit_matrix_a = CircuitMatrix::new(circuit_mle_1, 1, 1);
     let circuit_matrix_b = CircuitMatrix::new(circuit_mle_2, 1, 1);
@@ -374,11 +374,11 @@ fn product_of_mles_regular_layer_test() {
     let expression = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_2.clone()]);
     let circuit_mle_1 = CircuitMle::new(
         LayerId::Layer(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
     let circuit_mle_2 = CircuitMle::new(
         LayerId::Layer(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
     let circuit_expr = Expression::<Fr, CircuitExpr>::products(vec![circuit_mle_1, circuit_mle_2]);
 
@@ -469,11 +469,11 @@ fn selector_only_test() {
     );
     let circuit_mle_left = CircuitMle::new(
         LayerId::Input(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
     let circuit_mle_right = CircuitMle::new(
         LayerId::Input(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
     let circuit_expression_left = circuit_mle_left.expression();
     let circuit_expression_right = circuit_mle_right.expression();
@@ -580,15 +580,15 @@ fn degree_two_selector_regular_hyrax_layer_test() {
     );
     let circuit_mle_left = CircuitMle::new(
         LayerId::Input(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
     let circuit_mle_right_1 = CircuitMle::new(
         LayerId::Input(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
     let circuit_mle_right_2 = CircuitMle::new(
         LayerId::Input(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
     let expression_left = mle_left.expression();
     let circuit_expression_left = circuit_mle_left.expression();

@@ -60,7 +60,7 @@ impl<F: Field> CircuitMap<F> {
             .get(&circuit_location)
             .ok_or(DAGError::NoCircuitLocation);
         if let Ok(actual_result) = result {
-            assert_eq!(actual_result.num_vars(), circuit_mle.num_iterated_vars());
+            assert_eq!(actual_result.num_vars(), circuit_mle.num_free_vars());
         }
         result
     }

@@ -123,7 +123,7 @@ impl<F: Field> CircuitInputLayer<F> for CircuitPublicInputLayer<F> {
         let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), self.layer_id());
         mle_ref.index_mle_indices(0);
 
-        let eval = if mle_ref.num_iterated_vars() != 0 {
+        let eval = if mle_ref.num_free_vars() != 0 {
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
@@ -200,7 +200,7 @@ mod tests {
         let claim_result = Fr::from(2);
         let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
         let verifier_public_input_layer =
-            CircuitPublicInputLayer::new(layer_id, dense_mle.num_iterated_vars());
+            CircuitPublicInputLayer::new(layer_id, dense_mle.num_free_vars());
         let mut public_input_layer = PublicInputLayer::new(dense_mle.original_mle, layer_id);
 
         // Transcript writer with test sponge that always returns `1`.

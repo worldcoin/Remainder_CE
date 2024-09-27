@@ -192,7 +192,7 @@ impl LookupTable {
             layer_id
         );
 
-        let lhs_denominator_vars = repeat_n(MleIndex::Iterated, expr_num_vars).collect_vec();
+        let lhs_denominator_vars = repeat_n(MleIndex::Free, expr_num_vars).collect_vec();
         let lhs_denominator_desc = CircuitMle::new(layer_id, &lhs_denominator_vars);
 
         // Super special case: need to create a 0-variable MLE for the numerator which is JUST
@@ -294,7 +294,7 @@ impl LookupTable {
 
         let rhs_denominator_desc = CircuitMle::new(
             layer_id,
-            &repeat_n(MleIndex::Iterated, r_minus_table_num_vars).collect_vec(),
+            &repeat_n(MleIndex::Free, r_minus_table_num_vars).collect_vec(),
         );
 
         // Build the numerator and denominator of the sum of the fractions
@@ -374,7 +374,7 @@ impl LookupTable {
             layer_id
         );
         // Add an output layer that checks that the result is zero
-        let output_layer = CircuitMleOutputLayer::new_zero(layer_id, &[MleIndex::Iterated]);
+        let output_layer = CircuitMleOutputLayer::new_zero(layer_id, &[MleIndex::Free]);
         let mut output_layers = vec![output_layer];
 
         // Add a layer that calculates the difference between the fractions on the LHS and RHS
@@ -443,27 +443,27 @@ impl CircuitNode for LookupTable {
 }
 
 /// Extract the prefix bits from a DenseMle.
-fn extract_prefix_num_iterated_bits<F: Field>(mle: &CircuitMle<F>) -> (Vec<MleIndex<F>>, usize) {
-    let mut num_iterated_bits = 0;
+fn extract_prefix_num_free_bits<F: Field>(mle: &CircuitMle<F>) -> (Vec<MleIndex<F>>, usize) {
+    let mut num_free_bits = 0;
     let prefix_bits = mle
         .mle_indices()
         .iter()
         .filter_map(|mle_index| match mle_index {
             MleIndex::Fixed(_) => Some(mle_index.clone()),
-            MleIndex::Iterated => {
-                num_iterated_bits += 1;
+            MleIndex::Free => {
+                num_free_bits += 1;
                 None
             }
             _ => None,
         })
         .collect();
-    (prefix_bits, num_iterated_bits)
+    (prefix_bits, num_free_bits)
 }
 
 /// Split a DenseMle into two DenseMles, with the left half containing the even-indexed elements and
 /// the right half containing the odd-indexed elements, setting the prefix bits accordingly.
 fn split_circuit_mle<F: Field>(mle_desc: &CircuitMle<F>) -> (CircuitMle<F>, CircuitMle<F>) {
-    let (prefix_bits, num_iterated_bits) = extract_prefix_num_iterated_bits(mle_desc);
+    let (prefix_bits, num_free_bits) = extract_prefix_num_free_bits(mle_desc);
 
     let left_mle_desc = CircuitMle::new(
         mle_desc.layer_id(),
@@ -471,7 +471,7 @@ fn split_circuit_mle<F: Field>(mle_desc: &CircuitMle<F>) -> (CircuitMle<F>, Circ
             .iter()
             .cloned()
             .chain(vec![MleIndex::Fixed(false)])
-            .chain(repeat_n(MleIndex::Iterated, num_iterated_bits - 1))
+            .chain(repeat_n(MleIndex::Free, num_free_bits - 1))
             .collect_vec(),
     );
     let right_mle_desc = CircuitMle::new(
@@ -480,7 +480,7 @@ fn split_circuit_mle<F: Field>(mle_desc: &CircuitMle<F>) -> (CircuitMle<F>, Circ
             .iter()
             .cloned()
             .chain(vec![MleIndex::Fixed(true)])
-            .chain(repeat_n(MleIndex::Iterated, num_iterated_bits - 1))
+            .chain(repeat_n(MleIndex::Free, num_free_bits - 1))
             .collect_vec(),
     );
     (left_mle_desc, right_mle_desc)
@@ -504,15 +504,15 @@ fn build_fractional_sum<F: Field>(
     // EXCEPT when we're working with the fraction with constant 1 in the numerator
     if let Some(numerator_desc) = maybe_numerator_desc.as_ref() {
         assert_eq!(
-            numerator_desc.num_iterated_vars(),
-            denominator_desc.num_iterated_vars()
+            numerator_desc.num_free_vars(),
+            denominator_desc.num_free_vars()
         );
     }
 
     let mut maybe_numerator_desc = maybe_numerator_desc;
     let mut denominator_desc = denominator_desc;
 
-    for i in 0..denominator_desc.num_iterated_vars() {
+    for i in 0..denominator_desc.num_free_vars() {
         let denominators = split_circuit_mle(&denominator_desc);
         let next_numerator_expr = if let Some(numerator_desc) = maybe_numerator_desc {
             let numerators = split_circuit_mle(&numerator_desc);
@@ -551,19 +551,19 @@ fn build_fractional_sum<F: Field>(
         denominator_desc = CircuitMle::new(
             layer_id,
             &std::iter::once(MleIndex::Fixed(false))
-                .chain(repeat_n(MleIndex::Iterated, next_denominator_num_vars))
+                .chain(repeat_n(MleIndex::Free, next_denominator_num_vars))
                 .collect_vec(),
         );
         maybe_numerator_desc = Some(CircuitMle::new(
             layer_id,
             &std::iter::once(MleIndex::Fixed(true))
-                .chain(repeat_n(MleIndex::Iterated, next_numerator_num_vars))
+                .chain(repeat_n(MleIndex::Free, next_numerator_num_vars))
                 .collect_vec(),
         ));
     }
     if let Some(numerator_desc) = maybe_numerator_desc.as_ref() {
-        assert_eq!(numerator_desc.num_iterated_vars(), 0);
+        assert_eq!(numerator_desc.num_free_vars(), 0);
     }
-    assert_eq!(denominator_desc.num_iterated_vars(), 0);
+    assert_eq!(denominator_desc.num_free_vars(), 0);
     (maybe_numerator_desc, denominator_desc)
 }

@@ -34,7 +34,7 @@ fn regular_layer_test_prove_verify_product() {
     let circuit_mle_2 = CircuitMle::new(LayerId::Input(0), mle_ref_2.mle_indices());
     let mut circuit_expression =
         Expression::<Fr, CircuitExpr>::products(vec![circuit_mle_1, circuit_mle_2]);
-    circuit_expression.index_mle_indices(0);
+    circuit_expression.index_mle_vars(0);
 
     let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_ref_1, mle_ref_2]);
     let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
@@ -73,7 +73,7 @@ fn regular_layer_test_prove_verify_sum() {
     let circuit_mle_2 = CircuitMle::new(LayerId::Input(0), mle_ref_2.mle_indices());
     let mut circuit_expression =
         Expression::<Fr, CircuitExpr>::sum(circuit_mle_1.expression(), circuit_mle_2.expression());
-    circuit_expression.index_mle_indices(0);
+    circuit_expression.index_mle_vars(0);
 
     let lhs = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
     let rhs = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
@@ -119,7 +119,7 @@ fn regular_layer_test_prove_verify_selector() {
         circuit_mle_1.expression(),
         circuit_mle_2.expression(),
     ]);
-    circuit_expression.index_mle_indices(0);
+    circuit_expression.index_mle_vars(0);
 
     let lhs = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
     let rhs = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
@@ -167,7 +167,7 @@ fn regular_layer_test_prove_verify_complex() {
         Expression::<Fr, CircuitExpr>::products(vec![circuit_mle_1.clone(), circuit_mle_2.clone()]),
         circuit_mle_2.expression() + circuit_mle_1.expression(),
     ]);
-    circuit_expression.index_mle_indices(0);
+    circuit_expression.index_mle_vars(0);
     let sum = Expression::<Fr, ProverExpr>::sum(leaf_mle_2, leaf_mle_1);
 
     let prod = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_2.clone()]);

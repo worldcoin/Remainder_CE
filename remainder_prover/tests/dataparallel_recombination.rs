@@ -145,13 +145,13 @@ where
 
 #[test]
 fn test_dataparallel_recombination_newmainder() {
-    const ITERATED_VARS: usize = 2;
+    const FREE_VARS: usize = 2;
     const DATAPARALLEL_VARS: usize = 2;
     let mut rng = test_rng();
 
     let (mles_vec, vecs_vec): (Vec<DenseMle<Fr>>, Vec<Vec<Fr>>) = (0..(1 << DATAPARALLEL_VARS))
         .map(|_| {
-            let mle = get_dummy_random_mle(ITERATED_VARS, &mut rng);
+            let mle = get_dummy_random_mle(FREE_VARS, &mut rng);
             let mle_copy = mle.clone();
             let mle_vec = mle_copy.bookkeeping_table();
             (mle, mle_vec.to_vec())
