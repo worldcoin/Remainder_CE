@@ -8,10 +8,10 @@ use remainder::{
         Claim,
     },
     input_layer::{
-        enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum},
+        enum_input_layer::{InputLayerDescriptionEnum, InputLayerEnum},
         public_input_layer::PublicInputLayer,
         verifier_challenge_input_layer::VerifierChallengeInputLayer,
-        CircuitInputLayer, InputLayer,
+        InputLayer, InputLayerDescription,
     },
     layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
     layouter::nodes::circuit_inputs::HyraxInputDType,
@@ -62,21 +62,21 @@ pub enum HyraxInputLayerEnum<C: PrimeOrderCurve> {
 
 impl<C: PrimeOrderCurve> HyraxInputLayerEnum<C> {
     pub fn from_circuit_input_layer_enum(
-        circuit_input_layer_enum: CircuitInputLayerEnum<C::Scalar>,
+        circuit_input_layer_enum: InputLayerDescriptionEnum<C::Scalar>,
         input_layer_mle: MultilinearExtension<C::Scalar>,
         precommit: Option<HyraxProverCommitmentEnum<C>>,
     ) -> Self {
         match circuit_input_layer_enum {
-            CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
+            InputLayerDescriptionEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
                 panic!("hyrax does not support ligero pcs")
             }
-            CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
+            InputLayerDescriptionEnum::PublicInputLayer(circuit_public_input_layer) => {
                 assert!(precommit.is_none());
                 let input_layer_enum = circuit_public_input_layer
                     .convert_into_prover_input_layer(input_layer_mle, &None);
                 Self::from_input_layer_enum(input_layer_enum)
             }
-            CircuitInputLayerEnum::VerifierChallengeInputLayer(
+            InputLayerDescriptionEnum::VerifierChallengeInputLayer(
                 circuit_verifier_challenge_input_layer,
             ) => {
                 assert!(precommit.is_none());
@@ -84,7 +84,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerEnum<C> {
                     .convert_into_prover_input_layer(input_layer_mle, &None);
                 Self::from_input_layer_enum(input_layer_enum)
             }
-            CircuitInputLayerEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
+            InputLayerDescriptionEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
                 unimplemented!("We handle the hyrax case separately")
             }
         }
@@ -411,7 +411,7 @@ pub fn verify_public_and_random_input_layer<C: PrimeOrderCurve>(
     let mut mle = DenseMle::new_from_raw(mle_vec.to_vec(), LayerId::Input(0));
     mle.index_mle_indices(0);
 
-    let eval = if mle.num_iterated_vars() != 0 {
+    let eval = if mle.num_free_vars() != 0 {
         let mut eval = None;
         for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
             eval = mle.fix_variable(curr_bit, chal);

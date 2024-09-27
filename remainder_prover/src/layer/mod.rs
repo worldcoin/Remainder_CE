@@ -17,7 +17,7 @@ use thiserror::Error;
 
 use crate::{
     claims::{Claim, ClaimError},
-    expression::{circuit_expr::CircuitMle, expr_errors::ExpressionError},
+    expression::{circuit_expr::MleDescription, expr_errors::ExpressionError},
     layouter::layouting::CircuitMap,
     sumcheck::InterpError,
 };
@@ -141,7 +141,7 @@ pub trait Layer<F: Field> {
 }
 
 /// A circuit-description counterpart of the GKR [Layer] trait.
-pub trait CircuitLayer<F: Field> {
+pub trait LayerDescription<F: Field> {
     /// The associated type that the verifier uses to work with a layer of this
     /// kind.
     type VerifierLayer: VerifierLayer<F> + Debug + Serialize + for<'a> Deserialize<'a>;
@@ -162,7 +162,7 @@ pub trait CircuitLayer<F: Field> {
     /// The list of sumcheck rounds this layer will prove, by index.
     fn sumcheck_round_indices(&self) -> Vec<usize>;
 
-    /// Turns this Circuit Layer into a Verifier Layer
+    /// Turns this [LayerDescription] into a Verifier Layer
     fn convert_into_verifier_layer(
         &self,
         sumcheck_bindings: &[F],
@@ -182,21 +182,21 @@ pub trait CircuitLayer<F: Field> {
     fn max_degree(&self) -> usize;
 
     /// Label the MLE indices, starting from the `start_index` by
-    /// converting [MleIndex::Iterated] to [MleIndex::IndexedBit].
+    /// converting [MleIndex::Free] to [MleIndex::IndexedBit].
     fn index_mle_indices(&mut self, start_index: usize);
 
-    /// Given the [CircuitMle]s of which outputs are expected of this layer, compute the data
+    /// Given the [MleDescription]s of which outputs are expected of this layer, compute the data
     /// that populates these bookkeeping tables and mutate the circuit map to reflect this.
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
+        mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
     ) -> bool;
 
-    /// The Circuit MLEs that make up the leaves of the expression in this layer.
-    fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>>;
+    /// The [MleDescription]s that make up the leaves of the expression in this layer.
+    fn get_circuit_mles(&self) -> Vec<&MleDescription<F>>;
 
-    /// Given a [CircuitMap], turn this [CircuitLayer] into a ProverLayer.
+    /// Given a [CircuitMap], turn this [LayerDescription] into a ProverLayer.
     fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F>;
 }
 

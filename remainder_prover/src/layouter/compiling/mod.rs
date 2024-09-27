@@ -11,12 +11,12 @@ use tracing::{instrument, span, Level};
 
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::claims::ClaimAggregator;
-use crate::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
-use crate::input_layer::enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum};
-use crate::input_layer::{CircuitInputLayer, InputLayer};
-use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
+use crate::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
+use crate::input_layer::enum_input_layer::{InputLayerDescriptionEnum, InputLayerEnum};
+use crate::input_layer::{InputLayer, InputLayerDescription};
+use crate::layer::layer_enum::{LayerDescriptionEnum, LayerEnum};
 use crate::layer::LayerId;
-use crate::layer::{CircuitLayer, Layer};
+use crate::layer::{Layer, LayerDescription};
 use crate::layouter::layouting::CircuitMap;
 use crate::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
 use crate::mle::evals::MultilinearExtension;
@@ -91,7 +91,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
 
         // Forward pass to get the map of circuit MLEs whose data is expected to be "compiled"
         // for future layers.
-        let mut mle_claim_map = HashMap::<LayerId, HashSet<&CircuitMle<F>>>::new();
+        let mut mle_claim_map = HashMap::<LayerId, HashSet<&MleDescription<F>>>::new();
         intermediate_layer_descriptions
             .iter()
             .for_each(|intermediate_layer| {
@@ -132,12 +132,12 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         // we convert the circuit input layer into a prover input layer using this big bookkeeping table
         // we add the data in the input data corresopnding with the circuit location for each input data struct into the circuit map
         let mut prover_input_layers: Vec<InputLayerEnum<F>> = Vec::new();
-        let mut hint_input_layers: Vec<&CircuitInputLayerEnum<F>> = Vec::new();
+        let mut hint_input_layers: Vec<&InputLayerDescriptionEnum<F>> = Vec::new();
         input_layer_descriptions
             .iter()
             .for_each(|input_layer_description| {
                 let input_layer_id = input_layer_description.layer_id();
-                let maybe_input_node_id = input_layer_to_node_map.get_node_id(&input_layer_id);
+                let maybe_input_node_id = input_layer_to_node_map.get_node_id(input_layer_id);
                 if let Some(input_node_id) = maybe_input_node_id {
                     assert!(input_id_data_map.contains_key(input_node_id));
                     let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
@@ -163,7 +163,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                     let commitment = prover_input_layer.commit().unwrap();
                     InputLayerEnum::append_commitment_to_transcript(&commitment, transcript_writer);
                     prover_input_layers.push(prover_input_layer);
-                } else if let CircuitInputLayerEnum::VerifierChallengeInputLayer(
+                } else if let InputLayerDescriptionEnum::VerifierChallengeInputLayer(
                     verifier_challenge_input_layer_description,
                 ) = input_layer_description
                 {
@@ -191,7 +191,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         // forward pass of the layers
         // convert the circuit layer into a prover layer using circuit map -> populate a GKRCircuit as you do this
         // prover layer ( mle_claim_map ) -> populates circuit map
-        let mut uninstantiated_intermediate_layers: Vec<&CircuitLayerEnum<F>> = Vec::new();
+        let mut uninstantiated_intermediate_layers: Vec<&LayerDescriptionEnum<F>> = Vec::new();
         intermediate_layer_descriptions
             .iter()
             .for_each(|intermediate_layer_description| {
@@ -211,7 +211,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 .iter()
                 .filter_map(|hint_input_layer_description| {
                     let (hint_circuit_location, hint_function) = input_layer_hint_map
-                        .get_hint_function(&hint_input_layer_description.layer_id());
+                        .get_hint_function(hint_input_layer_description.layer_id());
                     if let Some(data) = circuit_map.get_data_from_location(hint_circuit_location) {
                         let function_applied_to_data = hint_function(data);
                         // also here @ryan do we actually need to add to circuit map? also there are several places (see: logup) where we never add to circuit

@@ -21,7 +21,7 @@ impl<F: Field> LayerBuilder<F> for ZeroBuilder<F> {
             - Expression::<F, ProverExpr>::mle(self.mle.clone())
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let mle_num_vars = self.mle.num_iterated_vars();
+        let mle_num_vars = self.mle.num_free_vars();
         ZeroMle::new(mle_num_vars, prefix_bits, id)
     }
 }
@@ -49,10 +49,7 @@ impl<F: Field> LayerBuilder<F> for EqualityCheck<F> {
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let num_vars = max(
-            self.mle_1.num_iterated_vars(),
-            self.mle_2.num_iterated_vars(),
-        );
+        let num_vars = max(self.mle_1.num_free_vars(), self.mle_2.num_free_vars());
         ZeroMle::new(num_vars, prefix_bits, id)
     }
 }

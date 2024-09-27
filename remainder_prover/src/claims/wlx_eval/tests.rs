@@ -26,7 +26,7 @@ fn test_get_claim() {
     let expression = expression1.clone() + expression3.clone();
     let expression = expression1 - expression;
     let expression = expression * Fr::from(2);
-    let _expression = expression3.concat_expr(expression);
+    let _expression = expression.select(expression3);
 }
 
 // ------- Helper functions for claim aggregation tests -------

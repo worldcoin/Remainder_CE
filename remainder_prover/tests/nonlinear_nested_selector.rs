@@ -67,9 +67,9 @@ impl<F: Field> NonlinearNestedSelectorBuilderComponent<F> {
 
                 let left_inner_sel_side = ExprBuilder::<F>::mle(left_inner_sel_mle_id);
                 let right_inner_sel_side = ExprBuilder::<F>::mle(right_inner_sel_mle_id);
-                let left_outer_sel_side = right_inner_sel_side.concat_expr(left_inner_sel_side);
+                let left_outer_sel_side = left_inner_sel_side.select(right_inner_sel_side);
                 let left_sum_side =
-                    ExprBuilder::<F>::mle(right_outer_sel_mle_id).concat_expr(left_outer_sel_side);
+                    left_outer_sel_side.select(ExprBuilder::<F>::mle(right_outer_sel_mle_id));
                 let right_sum_side =
                     ExprBuilder::<F>::products(vec![right_sum_mle_1_id, right_sum_mle_2_id]);
                 left_sum_side + right_sum_side

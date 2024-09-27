@@ -8,7 +8,7 @@ pub use remainder_shared_types::{Field, Fr};
 use serde::{Deserialize, Serialize};
 
 use crate::expression::{abstract_expr::AbstractExpr, generic_expr::Expression};
-use crate::layer::layer_enum::CircuitLayerEnum;
+use crate::layer::layer_enum::LayerDescriptionEnum;
 use crate::layer::LayerId;
 
 use super::layouting::{CircuitDescriptionMap, DAGError};
@@ -75,11 +75,10 @@ pub trait CircuitNode {
     /// The unique ID of this node
     fn id(&self) -> NodeId;
 
-    // FIXME rename to e.g. "subnodes".
     /// Return the "sub-nodes" of this node.  These are nodes that are "owned" by this node.  Note
     /// that this is not a relationship in the DAG.
-    /// e.g. [InputLayerNode] owns the [InputShredNode]s that are its children.
-    fn children(&self) -> Option<Vec<NodeId>> {
+    /// e.g. [InputLayerNode] owns the [InputShredNode]s that are its subnodes.
+    fn subnodes(&self) -> Option<Vec<NodeId>> {
         None
     }
     /// Return the ids of the nodes that this node depends upon, i.e. nodes whose values must be
@@ -101,7 +100,7 @@ pub trait CompilableNode<F: Field>: CircuitNode {
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-    ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError>;
+    ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError>;
 }
 
 /// An organized grouping of many node types
@@ -147,10 +146,10 @@ macro_rules! node_enum {
                 }
             }
 
-            fn children(&self) -> Option<Vec<$crate::layouter::nodes::NodeId>> {
+            fn subnodes(&self) -> Option<Vec<$crate::layouter::nodes::NodeId>> {
                 match self {
                     $(
-                        Self::$var_name(node) => node.children(),
+                        Self::$var_name(node) => node.subnodes(),
                     )*
                 }
             }

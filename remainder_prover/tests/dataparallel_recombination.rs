@@ -37,10 +37,10 @@ impl<F: Field> DataParallelRecombinationInterleaveBuilder<F> {
             let mle_3_id = input_nodes[2];
             let mle_4_id = input_nodes[3];
 
-            let lhs = mle_2_id.expr().concat_expr(mle_1_id.expr());
-            let rhs = mle_4_id.expr().concat_expr(mle_3_id.expr());
+            let lhs = mle_1_id.expr().select(mle_2_id.expr());
+            let rhs = mle_3_id.expr().select(mle_4_id.expr());
 
-            rhs.concat_expr(lhs)
+            lhs.select(rhs)
         });
 
         Self {
@@ -81,10 +81,10 @@ impl<F: Field> DataParallelRecombinationStackBuilder<F> {
             let mle_3_id = input_nodes[2];
             let mle_4_id = input_nodes[3];
 
-            let lhs = mle_2_id.expr().concat_expr(mle_1_id.expr());
-            let rhs = mle_4_id.expr().concat_expr(mle_3_id.expr());
+            let lhs = mle_1_id.expr().select(mle_2_id.expr());
+            let rhs = mle_3_id.expr().select(mle_4_id.expr());
 
-            rhs.concat_expr(lhs)
+            lhs.select(rhs)
         });
 
         Self {
@@ -145,13 +145,13 @@ where
 
 #[test]
 fn test_dataparallel_recombination_newmainder() {
-    const ITERATED_VARS: usize = 2;
+    const FREE_VARS: usize = 2;
     const DATAPARALLEL_VARS: usize = 2;
     let mut rng = test_rng();
 
     let (mles_vec, vecs_vec): (Vec<DenseMle<Fr>>, Vec<Vec<Fr>>) = (0..(1 << DATAPARALLEL_VARS))
         .map(|_| {
-            let mle = get_dummy_random_mle(ITERATED_VARS, &mut rng);
+            let mle = get_dummy_random_mle(FREE_VARS, &mut rng);
             let mle_copy = mle.clone();
             let mle_vec = mle_copy.bookkeeping_table();
             (mle, mle_vec.to_vec())

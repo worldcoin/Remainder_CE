@@ -3,10 +3,10 @@
 use remainder_shared_types::Field;
 
 use crate::{
-    expression::circuit_expr::CircuitMle,
+    expression::circuit_expr::MleDescription,
     layer::{
-        layer_enum::CircuitLayerEnum,
-        matmult::{CircuitMatMultLayer, CircuitMatrix},
+        layer_enum::LayerDescriptionEnum,
+        matmult::{MatMultLayerDescription, MatrixDescription},
         LayerId,
     },
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
@@ -68,16 +68,16 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-    ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError> {
+    ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError> {
         let (matrix_a_location, matrix_a_num_vars) =
             circuit_description_map.get_location_num_vars_from_node_id(&self.matrix_a)?;
 
         let mle_a_indices =
             get_total_mle_indices(&matrix_a_location.prefix_bits, *matrix_a_num_vars);
-        let circuit_mle_a = CircuitMle::new(matrix_a_location.layer_id, &mle_a_indices);
+        let circuit_mle_a = MleDescription::new(matrix_a_location.layer_id, &mle_a_indices);
 
         // Matrix A and matrix B are not padded because the data from the previous layer is only stored as the raw [MultilinearExtension].
-        let matrix_a = CircuitMatrix::new(
+        let matrix_a = MatrixDescription::new(
             circuit_mle_a,
             self.rows_cols_num_vars_a.0,
             self.rows_cols_num_vars_a.1,
@@ -86,17 +86,17 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
             circuit_description_map.get_location_num_vars_from_node_id(&self.matrix_b)?;
         let mle_b_indices =
             get_total_mle_indices(&matrix_b_location.prefix_bits, *matrix_b_num_vars);
-        let circuit_mle_b = CircuitMle::new(matrix_b_location.layer_id, &mle_b_indices);
+        let circuit_mle_b = MleDescription::new(matrix_b_location.layer_id, &mle_b_indices);
 
         // should already been padded
-        let matrix_b = CircuitMatrix::new(
+        let matrix_b = MatrixDescription::new(
             circuit_mle_b,
             self.rows_cols_num_vars_b.0,
             self.rows_cols_num_vars_b.1,
         );
 
         let matmult_layer_id = layer_id.get_and_inc();
-        let matmult_layer = CircuitMatMultLayer::new(matmult_layer_id, matrix_a, matrix_b);
+        let matmult_layer = MatMultLayerDescription::new(matmult_layer_id, matrix_a, matrix_b);
         circuit_description_map.add_node_id_and_location_num_vars(
             self.id,
             (
@@ -105,7 +105,7 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
             ),
         );
 
-        Ok(vec![CircuitLayerEnum::MatMult(matmult_layer)])
+        Ok(vec![LayerDescriptionEnum::MatMult(matmult_layer)])
     }
 }
 

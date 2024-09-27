@@ -5,7 +5,7 @@ use rand::Rng;
 use remainder::mle::dense::DenseMle;
 use remainder::mle::mle_enum::MleEnum;
 use remainder::mle::{Mle, MleIndex};
-use remainder::output_layer::mle_output_layer::CircuitMleOutputLayer;
+use remainder::output_layer::mle_output_layer::MleOutputLayerDescription;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
@@ -29,7 +29,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayer<C> {
         &mut self,
         prover_transcript: &mut impl ECProverTranscript<C>,
     ) {
-        let challenge: Vec<C::Scalar> = (0..self.underlying_mle.num_iterated_vars())
+        let challenge: Vec<C::Scalar> = (0..self.underlying_mle.num_free_vars())
             .map(|_idx| prover_transcript.get_scalar_field_challenge("output claim point"))
             .collect_vec();
         self.underlying_mle.index_mle_indices(0);
@@ -50,7 +50,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayer<C> {
     ) -> HyraxClaim<C::Scalar, CommittedScalar<C>> {
         assert_eq!(self.underlying_mle.bookkeeping_table().len(), 1);
 
-        let layer_id = self.underlying_mle.get_layer_id();
+        let layer_id = self.underlying_mle.layer_id();
         let claim_chal = if !self.underlying_mle.mle_indices().is_empty() {
             self.underlying_mle
                 .mle_indices()
@@ -114,7 +114,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     /// challenges that it ITSELF draws from the transcript.
     pub fn verify(
         proof: &HyraxOutputLayerProof<C>,
-        layer_desc: &CircuitMleOutputLayer<C::Scalar>,
+        layer_desc: &MleOutputLayerDescription<C::Scalar>,
         transcript: &mut impl ECVerifierTranscript<C>,
     ) -> HyraxClaim<C::Scalar, C> {
         // Get the first set of challenges needed for the output layer.
@@ -125,12 +125,12 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
             .iter()
             .map(|mle_index| match mle_index {
                 MleIndex::Fixed(val) => C::Scalar::from(*val as u64),
-                MleIndex::IndexedBit(_) => transcript
+                MleIndex::Indexed(_) => transcript
                     .get_scalar_field_challenge("output claim point")
                     .unwrap(),
 
                 _ => {
-                    panic!("should not have bound or iterated bits here!")
+                    panic!("should not have bound or free variables here!")
                 }
             })
             .collect_vec();
