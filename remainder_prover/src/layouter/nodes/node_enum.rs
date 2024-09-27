@@ -8,13 +8,13 @@ use super::{
     circuit_inputs::{InputLayerNode, InputShred},
     circuit_outputs::OutputNode,
     debug::DebugNode,
+    fiat_shamir::FiatShamirChallengeNode,
     gate::GateNode,
     identity_gate::IdentityGateNode,
     lookup::{LookupConstraint, LookupTable},
     matmult::MatMultNode,
     sector::{Sector, SectorGroup},
     split_node::SplitNode,
-    fiat_shamir::FiatShamirChallengeNode,
     NodeGroup, YieldNode,
 };
 

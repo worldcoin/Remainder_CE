@@ -7,8 +7,8 @@ use crate::utils::vandermonde::VandermondeInverse;
 use ark_std::{end_timer, start_timer};
 use hyrax_circuit_inputs::HyraxInputLayerData;
 use hyrax_input_layer::{
-    verify_public_input_layer, HyraxInputLayer, HyraxInputLayerEnum,
-    HyraxInputLayerProof, HyraxProverCommitmentEnum, HyraxVerifierCommitmentEnum, InputProofEnum
+    verify_public_input_layer, HyraxInputLayer, HyraxInputLayerEnum, HyraxInputLayerProof,
+    HyraxProverCommitmentEnum, HyraxVerifierCommitmentEnum, InputProofEnum,
 };
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
@@ -23,9 +23,7 @@ use remainder::input_layer::{CircuitInputLayer, InputLayer};
 use remainder::layer::layer_enum::LayerEnum;
 use remainder::layer::{CircuitLayer, Layer};
 use remainder::layouter::component::ComponentSet;
-use remainder::layouter::layouting::{
-    CircuitLocation, CircuitMap, InputNodeMap,
-};
+use remainder::layouter::layouting::{CircuitLocation, CircuitMap, InputNodeMap};
 use remainder::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
 use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::{Context, NodeId};
@@ -291,10 +289,11 @@ impl<
         fiat_shamir_challenge_descriptions
             .iter()
             .for_each(|fiat_shamir_challenge_description| {
-                let fiat_shamir_challenge_mle = MultilinearExtension::new(transcript_writer.get_scalar_field_challenges(
-                    "Verifier challenges",
-                    1 << fiat_shamir_challenge_description.num_bits,
-                ));
+                let fiat_shamir_challenge_mle =
+                    MultilinearExtension::new(transcript_writer.get_scalar_field_challenges(
+                        "Verifier challenges",
+                        1 << fiat_shamir_challenge_description.num_bits,
+                    ));
                 circuit_map.add_node(
                     CircuitLocation::new(fiat_shamir_challenge_description.layer_id(), vec![]),
                     fiat_shamir_challenge_mle.clone(),
@@ -314,7 +313,8 @@ impl<
                 let mle_outputs_necessary = mle_claim_map
                     .get(&intermediate_layer_description.layer_id())
                     .unwrap();
-                intermediate_layer_description.compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
+                intermediate_layer_description
+                    .compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
             });
 
         let mut prover_intermediate_layers: Vec<LayerEnum<C::Scalar>> =
@@ -523,11 +523,14 @@ impl<
         });
 
         // Get the verifier challenges from the transcript.
-        let fiat_shamir_challenges: Vec<FiatShamirChallenge<C::Scalar>> = circuit_description.fiat_shamir_challenges
+        let fiat_shamir_challenges: Vec<FiatShamirChallenge<C::Scalar>> = circuit_description
+            .fiat_shamir_challenges
             .iter()
             .map(|fs_desc| {
                 let num_evals = 1 << fs_desc.num_bits;
-                let values = verifier_transcript.get_scalar_field_challenges("Verifier challenges", num_evals).unwrap();
+                let values = verifier_transcript
+                    .get_scalar_field_challenges("Verifier challenges", num_evals)
+                    .unwrap();
                 fs_desc.instantiate(values)
             })
             .collect();
@@ -656,11 +659,15 @@ impl<
         fiat_shamir_challenges
             .iter()
             .for_each(|fiat_shamir_challenge| {
-                let claims_as_commitments = claim_tracker.remove(&fiat_shamir_challenge.layer_id()).unwrap();
+                let claims_as_commitments = claim_tracker
+                    .remove(&fiat_shamir_challenge.layer_id())
+                    .unwrap();
                 Self::match_claims(&claims_as_commitments, claims_on_public_values, committer)
                     .iter()
                     .for_each(|plaintext_claim| {
-                        fiat_shamir_challenge.verify(plaintext_claim.get_claim()).unwrap();
+                        fiat_shamir_challenge
+                            .verify(plaintext_claim.get_claim())
+                            .unwrap();
                     });
             });
 

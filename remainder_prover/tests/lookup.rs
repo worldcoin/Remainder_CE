@@ -4,9 +4,9 @@ use remainder::{
         component::ComponentSet,
         nodes::{
             circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
+            fiat_shamir::FiatShamirChallengeNode,
             lookup::{LookupConstraint, LookupTable},
             node_enum::NodeEnum,
-            fiat_shamir::FiatShamirChallengeNode,
             CircuitNode,
         },
     },

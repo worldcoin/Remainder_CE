@@ -16,6 +16,7 @@ use super::layouting::{CircuitDescriptionMap, DAGError};
 pub mod circuit_inputs;
 pub mod circuit_outputs;
 pub mod debug;
+pub mod fiat_shamir;
 pub mod gate;
 pub mod identity_gate;
 pub mod lookup;
@@ -23,7 +24,6 @@ pub mod matmult;
 pub mod node_enum;
 pub mod sector;
 pub mod split_node;
-pub mod fiat_shamir;
 
 /// Container of global context for node creation
 ///

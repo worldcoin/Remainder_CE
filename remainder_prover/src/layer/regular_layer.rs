@@ -289,7 +289,9 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
         expression_nodes_to_compile
             .iter()
             .for_each(|(expression_node, prefix_bit_vec)| {
-                let full_bookkeeping_table = expression_node.compute_bookkeeping_table(circuit_map).unwrap();
+                let full_bookkeeping_table = expression_node
+                    .compute_bookkeeping_table(circuit_map)
+                    .unwrap();
                 prefix_bit_vec
                     .iter()
                     .for_each(|(unfiltered_prefix_bits, prefix_bits)| {

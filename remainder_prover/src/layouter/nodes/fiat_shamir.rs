@@ -55,10 +55,8 @@ impl FiatShamirChallengeNode {
     ) -> CircuitFiatShamirChallenge<F> {
         let verifier_challenge_layer_id = layer_id.get_and_inc();
 
-        let verifier_challenge_layer = CircuitFiatShamirChallenge::new(
-            verifier_challenge_layer_id,
-            self.get_num_vars(),
-        );
+        let verifier_challenge_layer =
+            CircuitFiatShamirChallenge::new(verifier_challenge_layer_id, self.get_num_vars());
 
         circuit_description_map.add_node_id_and_location_num_vars(
             self.id,

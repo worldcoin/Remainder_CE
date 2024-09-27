@@ -8,11 +8,11 @@ use remainder::{
         nodes::{
             circuit_inputs::{HyraxInputDType, InputLayerNode, InputLayerType},
             circuit_outputs::OutputNode,
+            fiat_shamir::FiatShamirChallengeNode,
             identity_gate::IdentityGateNode,
             lookup::{LookupConstraint, LookupTable},
             matmult::MatMultNode,
             node_enum::NodeEnum,
-            fiat_shamir::FiatShamirChallengeNode,
             CircuitNode, Context,
         },
     },
@@ -137,11 +137,8 @@ pub fn build_hyrax_circuit_public_input_layer<
         println!("{:?} = Digit range check input", lookup_table_values.id());
 
         let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new::<C::Scalar>(
-            ctx,
-            &lookup_table_values,
-            &fiat_shamir_challenge_node,
-        );
+        let lookup_table =
+            LookupTable::new::<C::Scalar>(ctx, &lookup_table_values, &fiat_shamir_challenge_node);
         println!("{:?} = Lookup table", lookup_table.id());
         let (digit_multiplicities, digit_multiplicities_data) =
             get_input_shred_and_data(digit_multiplicities.clone(), ctx, &input_layer);
@@ -351,11 +348,8 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         println!("{:?} = Digit range check input", lookup_table_values.id());
 
         let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new::<C::Scalar>(
-            ctx,
-            &lookup_table_values,
-            &fiat_shamir_challenge_node,
-        );
+        let lookup_table =
+            LookupTable::new::<C::Scalar>(ctx, &lookup_table_values, &fiat_shamir_challenge_node);
         println!("{:?} = Lookup table", lookup_table.id());
         let (digit_multiplicities, digit_multiplicities_data) = get_input_shred_and_data(
             digit_multiplicities.clone(),

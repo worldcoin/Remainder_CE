@@ -119,7 +119,6 @@ pub struct GKRCircuitDescription<F: Field> {
 }
 
 impl<F: Field> GKRCircuitDescription<F> {
-
     /// Label the MLE indices contained within a circuit description, starting
     /// each layer with the start_index.
     pub fn index_mle_indices(&mut self, start_index: usize) {
@@ -173,10 +172,13 @@ impl<F: Field> GKRCircuitDescription<F> {
         end_timer!(input_layer_commitments_timer);
 
         // Get the verifier challenges from the transcript.
-        let fiat_shamir_challenges: Vec<FiatShamirChallenge<F>> = self.fiat_shamir_challenges
+        let fiat_shamir_challenges: Vec<FiatShamirChallenge<F>> = self
+            .fiat_shamir_challenges
             .iter()
             .map(|fs_desc| {
-                let values = transcript_reader.get_challenges("Verifier challenges", 1 << fs_desc.num_bits).unwrap();
+                let values = transcript_reader
+                    .get_challenges("Verifier challenges", 1 << fs_desc.num_bits)
+                    .unwrap();
                 fs_desc.instantiate(values)
             })
             .collect();
@@ -343,11 +345,10 @@ pub fn generate_circuit_description<F: Field>(
     let fiat_shamir_challenges = fiat_shamir_challenge_nodes
         .iter()
         .map(|fiat_shamir_challenge_node| {
-            fiat_shamir_challenge_node
-                .generate_circuit_description::<F>(
-                    &mut fiat_shamir_challenge_layer_id,
-                    &mut circuit_description_map,
-                )
+            fiat_shamir_challenge_node.generate_circuit_description::<F>(
+                &mut fiat_shamir_challenge_layer_id,
+                &mut circuit_description_map,
+            )
         })
         .collect_vec();
 
@@ -361,8 +362,7 @@ pub fn generate_circuit_description<F: Field>(
     // Get the contributions of each LookupTable to the circuit description.
     (intermediate_layers, output_layers) = lookup_nodes.iter().fold(
         (intermediate_layers, output_layers),
-        |(mut lookup_intermediate_acc, mut lookup_output_acc),
-         lookup_node| {
+        |(mut lookup_intermediate_acc, mut lookup_output_acc), lookup_node| {
             let (intermediate_layers, output_layer) = lookup_node
                 .generate_lookup_circuit_description(
                     &mut intermediate_layer_id,
@@ -383,16 +383,12 @@ pub fn generate_circuit_description<F: Field>(
             output_layer_acc
         });
 
-    let circuit_description =
-        GKRCircuitDescription{
-            input_layers,
-            fiat_shamir_challenges,
-            intermediate_layers,
-            output_layers
-        };
+    let circuit_description = GKRCircuitDescription {
+        input_layers,
+        fiat_shamir_challenges,
+        intermediate_layers,
+        output_layers,
+    };
 
-    Ok((
-        circuit_description,
-        input_node_to_layer_map,
-    ))
+    Ok((circuit_description, input_node_to_layer_map))
 }

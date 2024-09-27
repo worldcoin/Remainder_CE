@@ -5,9 +5,7 @@ use crate::expression::circuit_expr::{CircuitExpr, CircuitMle};
 use crate::layer::layer_enum::CircuitLayerEnum;
 use crate::layer::regular_layer::CircuitRegularLayer;
 use crate::layer::LayerId;
-use crate::layouter::layouting::{
-    CircuitDescriptionMap, DAGError,
-};
+use crate::layouter::layouting::{CircuitDescriptionMap, DAGError};
 use crate::mle::MleIndex;
 use crate::output_layer::mle_output_layer::CircuitMleOutputLayer;
 use crate::utils::mle::get_total_mle_indices;
@@ -74,10 +72,7 @@ impl CircuitNode for LookupConstraint {
     }
 }
 
-type LookupCircuitDescription<F> = (
-    Vec<CircuitLayerEnum<F>>,
-    CircuitMleOutputLayer<F>,
-);
+type LookupCircuitDescription<F> = (Vec<CircuitLayerEnum<F>>, CircuitMleOutputLayer<F>);
 /// Represents a table of data that can be looked up into, e.g. for a range check.
 /// Implements "Improving logarithmic derivative lookups using GKR" (2023) by Papini & Haböck. Note
 /// that (as is usual e.g. in permutation checks) we do not check that the product of the
@@ -144,7 +139,8 @@ impl LookupTable {
         println!("Build the LHS of the equation (defined by the constrained values)");
 
         let (fiat_shamir_challenge_location, fiat_shamir_challenge_node_vars) =
-            circuit_description_map.get_location_num_vars_from_node_id(&self.fiat_shamir_challenge_node_id)?;
+            circuit_description_map
+                .get_location_num_vars_from_node_id(&self.fiat_shamir_challenge_node_id)?;
 
         let fiat_shamir_challenge_mle_indices = get_total_mle_indices(
             &fiat_shamir_challenge_location.prefix_bits,
@@ -313,10 +309,7 @@ impl LookupTable {
         // Add an output layer that checks that the result is zero
         let output_layer = CircuitMleOutputLayer::new_zero(layer_id, &[]);
 
-        Ok((
-            intermediate_layers,
-            output_layer,
-        ))
+        Ok((intermediate_layers, output_layer))
     }
 }
 
