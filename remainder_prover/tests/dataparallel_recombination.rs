@@ -37,10 +37,10 @@ impl<F: Field> DataParallelRecombinationInterleaveBuilder<F> {
             let mle_3_id = input_nodes[2];
             let mle_4_id = input_nodes[3];
 
-            let lhs = mle_2_id.expr().concat_expr(mle_1_id.expr());
-            let rhs = mle_4_id.expr().concat_expr(mle_3_id.expr());
+            let lhs = mle_1_id.expr().select(mle_2_id.expr());
+            let rhs = mle_3_id.expr().select(mle_4_id.expr());
 
-            rhs.concat_expr(lhs)
+            lhs.select(rhs)
         });
 
         Self {
@@ -81,10 +81,10 @@ impl<F: Field> DataParallelRecombinationStackBuilder<F> {
             let mle_3_id = input_nodes[2];
             let mle_4_id = input_nodes[3];
 
-            let lhs = mle_2_id.expr().concat_expr(mle_1_id.expr());
-            let rhs = mle_4_id.expr().concat_expr(mle_3_id.expr());
+            let lhs = mle_1_id.expr().select(mle_2_id.expr());
+            let rhs = mle_3_id.expr().select(mle_4_id.expr());
 
-            rhs.concat_expr(lhs)
+            lhs.select(rhs)
         });
 
         Self {

@@ -365,7 +365,7 @@ impl LookupTable {
             CE::<F>::products(vec![lhs_denominator.clone(), lhs_inverse_mle_desc.clone()]);
         let rhs_expr =
             CE::<F>::products(vec![rhs_denominator.clone(), rhs_inverse_mle_desc.clone()]);
-        let expr = lhs_expr.concat_expr(rhs_expr) - CE::<F>::constant(F::from(1u64));
+        let expr = rhs_expr.select(lhs_expr) - CE::<F>::constant(F::from(1u64));
         let layer_id = intermediate_layer_id.get_and_inc();
         let layer = CircuitRegularLayer::new_raw(layer_id, expr);
         intermediate_layers.push(CircuitLayerEnum::Regular(layer));
@@ -538,7 +538,7 @@ fn build_fractional_sum<F: Field>(
 
         let layer = CircuitRegularLayer::new_raw(
             layer_id,
-            next_numerator_expr.concat_expr(next_denominator_expr),
+            next_denominator_expr.select(next_numerator_expr),
         );
 
         layers.push(CircuitLayerEnum::Regular(layer));

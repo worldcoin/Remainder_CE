@@ -477,10 +477,10 @@ fn selector_only_test() {
     );
     let circuit_expression_left = circuit_mle_left.expression();
     let circuit_expression_right = circuit_mle_right.expression();
-    let selector_circuit_expression = circuit_expression_right.concat_expr(circuit_expression_left);
+    let selector_circuit_expression = circuit_expression_left.select(circuit_expression_right);
     let expression_left = mle_left.expression();
     let expression_right = mle_right.expression();
-    let selector_expression = expression_right.concat_expr(expression_left);
+    let selector_expression = expression_left.select(expression_right);
 
     // Construct the GKR Layer from the expression
     let layer: RegularLayer<Scalar> = RegularLayer::new_raw(LayerId::Layer(0), selector_expression);
@@ -595,8 +595,8 @@ fn degree_two_selector_regular_hyrax_layer_test() {
     let expression_right = Expression::<Fr, ProverExpr>::products(vec![mle_right_1, mle_right_2]);
     let circuit_expression_right =
         Expression::<Fr, CircuitExpr>::products(vec![circuit_mle_right_1, circuit_mle_right_2]);
-    let selector_expression = expression_right.concat_expr(expression_left);
-    let circuit_selector_expression = circuit_expression_right.concat_expr(circuit_expression_left);
+    let selector_expression = expression_left.select(expression_right);
+    let circuit_selector_expression = circuit_expression_left.select(circuit_expression_right);
 
     // Construct the GKR Layer from the expression
     let layer: RegularLayer<Scalar> = RegularLayer::new_raw(LayerId::Layer(0), selector_expression);
@@ -947,8 +947,7 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
         let selector_squaring_sector = Sector::new(ctx, &[&&squaring_sector], |mle_vec| {
             assert_eq!(mle_vec.len(), 1);
             let mle = mle_vec[0];
-
-            mle.expr().concat_expr(mle.expr() + mle.expr())
+            (mle.expr() + mle.expr()).select(mle.expr())
         });
 
         // Middle layer 3: subtract middle layer 2 from itself.
@@ -1034,9 +1033,7 @@ fn medium_regular_circuit_public_input_layer_test() {
         let selector_squaring_sector = Sector::new(ctx, &[&&squaring_sector], |mle_vec| {
             assert_eq!(mle_vec.len(), 1);
             let mle = mle_vec[0];
-
-            mle.expr()
-                .concat_expr(ExprBuilder::products(vec![mle, mle]))
+            ExprBuilder::products(vec![mle, mle]).select(mle.expr())
         });
 
         // Middle layer 3: subtract middle layer 2 from itself.

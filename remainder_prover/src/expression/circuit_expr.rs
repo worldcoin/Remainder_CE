@@ -650,9 +650,9 @@ impl<F: Field> ExpressionNode<F, CircuitExpr> {
     /// Get the [ExpressionNode<F, ProverExpr>] recursively, for this expression.
     pub fn into_prover_expression(&self, circuit_map: &CircuitMap<F>) -> Expression<F, ProverExpr> {
         match self {
-            ExpressionNode::Selector(_mle_index, a, b) => b
+            ExpressionNode::Selector(_mle_index, a, b) => a
                 .into_prover_expression(circuit_map)
-                .concat_expr(a.into_prover_expression(circuit_map)),
+                .select(b.into_prover_expression(circuit_map)),
             ExpressionNode::Sum(a, b) => {
                 a.into_prover_expression(circuit_map) + b.into_prover_expression(circuit_map)
             }
@@ -811,32 +811,30 @@ impl<F: Field> Expression<F, CircuitExpr> {
     }
 
     /// Creates an [Expression<F, CircuitExpr>] which describes the polynomial relationship
-    /// `(1 - x_0) * lhs(x_1, ..., x_{n_lhs}) + b_0 * Self(x_1, ..., x_{n_rhs})`
+    /// `(1 - x_0) * Self(x_1, ..., x_{n_lhs}) + b_0 * rhs(x_1, ..., x_{n_rhs})`
     ///
-    /// TODO(ryancao): Change this so that `Self` is the `lhs`, rather than the other way around!
-    ///
-    /// NOTE that by default, performing a `concat_expr()` over an LHS and an RHS
+    /// NOTE that by default, performing a `select()` over an LHS and an RHS
     /// with different numbers of variables will create a selector tree such that
     /// the side with fewer variables always falls down the left-most side of
     /// that subtree.
     ///
-    /// For example, if we are calling `concat_expr()` on two MLEs,
+    /// For example, if we are calling `select()` on two MLEs,
     /// V_i(x_0, ..., x_4) and V_i(x_0, ..., x_6)
     /// then the resulting expression will have a single top-level selector, and
     /// will forcibly move the first MLE (with two fewer variables) to the left-most
     /// subtree with 5 variables:
     /// (1 - x_0) * (1 - x_1) * (1 - x_2) * V_i(x_3, ..., x_7) +
     /// x_0 * V_i(x_1, ..., x_7)
-    pub fn concat_expr(self, lhs: Expression<F, CircuitExpr>) -> Self {
-        let (lhs_node, _) = lhs.deconstruct();
-        let (rhs_node, _) = self.deconstruct();
+    pub fn select(self, rhs: Expression<F, CircuitExpr>) -> Self {
+        let (lhs_node, _) = self.deconstruct();
+        let (rhs_node, _) = rhs.deconstruct();
 
         // --- Compute the difference in number of free variables, to add the appropriate number of selectors ---
         let num_left_selectors = max(0, rhs_node.get_num_vars() - lhs_node.get_num_vars());
         let num_right_selectors = max(0, lhs_node.get_num_vars() - rhs_node.get_num_vars());
 
         let lhs_subtree = if num_left_selectors > 0 {
-            // --- Always "go left" and "concatenate" against a constant zero ---
+            // --- Always "go left" and "select" against a constant zero ---
             (0..num_left_selectors).fold(lhs_node, |cur_subtree, _| {
                 ExpressionNode::Selector(
                     MleIndex::Free,
@@ -849,7 +847,7 @@ impl<F: Field> Expression<F, CircuitExpr> {
         };
 
         let rhs_subtree = if num_right_selectors > 0 {
-            // --- Always "go left" and "concatenate" against a constant zero ---
+            // --- Always "go left" and "select" against a constant zero ---
             (0..num_right_selectors).fold(rhs_node, |cur_subtree, _| {
                 ExpressionNode::Selector(
                     MleIndex::Free,
@@ -874,7 +872,7 @@ impl<F: Field> Expression<F, CircuitExpr> {
     /// Create a nested selector Expression that selects between 2^k Expressions
     /// by creating a binary tree of Selector Expressions.
     /// The order of the leaves is the order of the input expressions.
-    /// (Note that this is very different from calling concat_expr consecutively.)
+    /// (Note that this is very different from calling `select()` consecutively.)
     /// See also [calculate_selector_values].
     pub fn selectors(expressions: Vec<Self>) -> Self {
         // Ensure length is a power of two
