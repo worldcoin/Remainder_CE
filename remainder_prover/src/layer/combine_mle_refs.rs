@@ -73,7 +73,7 @@ pub fn get_og_mle_refs<F: Field>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>> {
                 original_mle: dense_mle_ref.original_mle.clone(),
                 mle_indices: dense_mle_ref.original_mle_indices.clone(),
                 original_mle_indices: dense_mle_ref.original_mle_indices.clone(),
-                layer_id: dense_mle_ref.get_layer_id(),
+                layer_id: dense_mle_ref.layer_id(),
             };
             mle_ref_og.index_mle_indices(0);
             MleEnum::Dense(mle_ref_og)
@@ -434,7 +434,7 @@ fn combine_pair<F: Field>(
         original_mle,
         mle_indices: interleaved_mle_indices,
         original_mle_indices: interleaved_mle_indices_og,
-        layer_id: mle_ref_first.get_layer_id(),
+        layer_id: mle_ref_first.layer_id(),
     }
 }
 

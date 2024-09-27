@@ -318,7 +318,7 @@ impl LookupTable {
             MultilinearExtension::new(vec![mle.get_evals_vector()[0].invert().unwrap()])
         };
         input_hint_map.add_hint_function(
-            &lhs_denom_inverse_layer_id,
+            lhs_denom_inverse_layer_id,
             (lhs_denom_circuit_location, inverse_function),
         );
         let lhs_inverse_input_layer = if self.secret_constrained_values {
@@ -345,7 +345,7 @@ impl LookupTable {
         let rhs_denom_circuit_location =
             CircuitLocation::new(rhs_denominator.layer_id(), rhs_denominator.prefix_bits());
         input_hint_map.add_hint_function(
-            &rhs_denom_inverse_layer_id,
+            rhs_denom_inverse_layer_id,
             (rhs_denom_circuit_location, inverse_function),
         );
         let rhs_inverse_mle =

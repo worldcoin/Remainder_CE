@@ -137,7 +137,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             .iter()
             .for_each(|input_layer_description| {
                 let input_layer_id = input_layer_description.layer_id();
-                let maybe_input_node_id = input_layer_to_node_map.get_node_id(&input_layer_id);
+                let maybe_input_node_id = input_layer_to_node_map.get_node_id(input_layer_id);
                 if let Some(input_node_id) = maybe_input_node_id {
                     assert!(input_id_data_map.contains_key(input_node_id));
                     let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
@@ -211,7 +211,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 .iter()
                 .filter_map(|hint_input_layer_description| {
                     let (hint_circuit_location, hint_function) = input_layer_hint_map
-                        .get_hint_function(&hint_input_layer_description.layer_id());
+                        .get_hint_function(hint_input_layer_description.layer_id());
                     if let Some(data) = circuit_map.get_data_from_location(hint_circuit_location) {
                         let function_applied_to_data = hint_function(data);
                         // also here @ryan do we actually need to add to circuit map? also there are several places (see: logup) where we never add to circuit

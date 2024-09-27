@@ -119,13 +119,13 @@ impl InputNodeMap {
     }
 
     /// Get the node ID from a layer ID.
-    pub fn get_node_id(&self, layer_id: &LayerId) -> Option<&NodeId> {
-        self.0.get(layer_id)
+    pub fn get_node_id(&self, layer_id: LayerId) -> Option<&NodeId> {
+        self.0.get(&layer_id)
     }
 
     /// Add a layer ID, node ID correspondence to the map.
-    pub fn add_node_layer_id(&mut self, layer_id: &LayerId, node_id: &NodeId) {
-        self.0.insert(*layer_id, *node_id);
+    pub fn add_node_layer_id(&mut self, layer_id: LayerId, node_id: NodeId) {
+        self.0.insert(layer_id, node_id);
     }
 }
 
@@ -145,14 +145,14 @@ impl<F: Field> InputLayerHintMap<F> {
 
     /// Given a layer ID, get the hint function that generates
     /// the data for this layer.
-    pub fn get_hint_function(&self, layer_id: &LayerId) -> &HintFunctionMapping<F> {
-        self.0.get(layer_id).unwrap()
+    pub fn get_hint_function(&self, layer_id: LayerId) -> &HintFunctionMapping<F> {
+        self.0.get(&layer_id).unwrap()
     }
 
     /// Add a corresponding hint function to a layer in the circuit,
     /// given its layer ID.
-    pub fn add_hint_function(&mut self, layer_id: &LayerId, hint_function: HintFunctionMapping<F>) {
-        self.0.insert(*layer_id, hint_function);
+    pub fn add_hint_function(&mut self, layer_id: LayerId, hint_function: HintFunctionMapping<F>) {
+        self.0.insert(layer_id, hint_function);
     }
 }
 

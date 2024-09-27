@@ -185,10 +185,6 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         curr_index + new_indices
     }
 
-    fn get_layer_id(&self) -> LayerId {
-        self.layer_id
-    }
-
     fn get_enum(self) -> MleEnum<F> {
         MleEnum::Dense(self)
     }

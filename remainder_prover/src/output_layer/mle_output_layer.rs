@@ -87,7 +87,7 @@ impl<F: Field> MleOutputLayer<F> {
 
 impl<F: Field> OutputLayer<F> for MleOutputLayer<F> {
     fn layer_id(&self) -> LayerId {
-        self.mle.get_layer_id()
+        self.mle.layer_id()
     }
 
     fn fix_layer(
