@@ -10,9 +10,11 @@ pub mod proof_system;
 pub mod layers;
 
 use std::collections::HashMap;
+use std::marker::PhantomData;
 
 use self::layers::Layers;
 use crate::claims::wlx_eval::WLXAggregator;
+use crate::claims::Claim;
 use crate::input_layer::enum_input_layer::{
     CircuitInputLayerEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
 };
@@ -22,8 +24,10 @@ use crate::layer::layer_enum::{CircuitLayerEnum, VerifierLayerEnum};
 use crate::layer::CircuitLayer;
 use crate::layouter::component::Component;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputNodeMap};
+use crate::layouter::nodes::circuit_inputs::InputShredData;
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, Context, NodeId};
+use crate::mle::evals::MultilinearExtension;
 use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
 use crate::output_layer::CircuitOutputLayer;
 use crate::{
@@ -33,7 +37,7 @@ use crate::{
 };
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
-use remainder_shared_types::transcript::TranscriptReaderError;
+use remainder_shared_types::transcript::{Transcript, TranscriptReaderError, TranscriptWriter};
 use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
@@ -88,6 +92,55 @@ impl<F: Field> From<Vec<Vec<F>>> for SumcheckProof<F> {
     fn from(value: Vec<Vec<F>>) -> Self {
         Self(value)
     }
+}
+/// A pairing of a input NodeId and its data, for the purposes of [GKRCircuitProof].
+/// Similar to InputShredData & InputLayerData, but: there are no precommits (whether the data is
+/// committed or not, or even public or private, is no longer the business of GKRCircuitProof,
+/// because it doesn't prove input layer claims).  Also there is not inputshred/node distinction.
+/// _In fact every input is its own input layer_ and shreds just don't even exist.
+/// (Otherwise caller can't resolve input layer claims to the input nodes, though nodes are what the caller cares about!)
+pub struct InputNodeData<F: Field> {
+    pub node_id: NodeId,
+    pub data: MultilinearExtension<F> // or similar
+}
+
+// The following follows the XYZProof pattern from older Hyrax, would need to adapt particularly re:
+// transcript use.
+pub struct GKRCircuitProof<F: Field> {
+    // NB: GKRCircuitDescription will include a user-provided closure that takes a Vec<Mles> and produces Vec<InputNodeData>
+    // Front-end user creates this closure when they are building their circuit.  See [remainder::worldcoin::circuits::build_circuit_description].
+    pub circuit_description: GKRCircuitDescription<F>,
+}
+
+impl<F: Field> GKRCircuitProof<F> {
+    /// Proves a GKR circuit given a circuit description and input data, returning a new
+    /// [GKRCircuitProof] and the claims on the input layer. Responsibilities of the caller: adding
+    /// input_data to transcript, and proving the returned claims on the input layer.
+    pub fn prove(
+        circuit_description: GKRCircuitDescription<F>,
+        input_data: Vec<InputNodeData<F>>,
+        transcript: &mut Transcript<F>,
+    ) -> (Self, HashMap<NodeId, Vec<Claim<F>>>) {
+        // add circuit_description to transcript
+        // populate circuit using input data
+        // create proof, gathering (but not proving) claims on input layers
+        // instantiate Self, return along with claims
+        todo!()
+    }
+
+    /// Verify this [GKRCircuitProof], returning the claims on the input layers. As with prove(),
+    /// the caller is responsible for adding input data to the transcript before calling and proving
+    /// the returned claims on the input layers afterwards.
+    pub fn verify(
+        &self,
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<Vec<Claim<F>>, GKRError> {
+        // add circuit_description to transcript
+        // remainder is simplification of implementation of self.circuit_description.verify() (we
+        // don't verify the input layer claims, just return them!)
+        todo!()
+    }
+
 }
 
 /// The witness of a GKR circuit, used to actually prove the circuit
