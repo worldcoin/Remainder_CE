@@ -507,7 +507,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for IdentityGate<F> {
                 fixed_mle_indices_u,
                 val,
                 Some(self.layer_id()),
-                Some(mle_ref.get_layer_id()),
+                Some(mle_ref.layer_id()),
                 Some(MleEnum::Dense(mle_ref.clone())),
             );
             claims.push(claim);
@@ -704,7 +704,7 @@ impl<F: std::fmt::Debug + Field> IdentityGate<F> {
         impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for IdentityGateCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("IdentityGate")
-                    .field("mle_ref_layer_id", &self.0.mle_ref.get_layer_id())
+                    .field("mle_ref_layer_id", &self.0.mle_ref.layer_id())
                     .field("mle_ref_mle_indices", &self.0.mle_ref.mle_indices())
                     .field("identity_nonzero_gates", &self.0.nonzero_gates)
                     .finish()

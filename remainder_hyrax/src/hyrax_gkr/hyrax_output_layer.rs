@@ -50,7 +50,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayer<C> {
     ) -> HyraxClaim<C::Scalar, CommittedScalar<C>> {
         assert_eq!(self.underlying_mle.bookkeeping_table().len(), 1);
 
-        let layer_id = self.underlying_mle.get_layer_id();
+        let layer_id = self.underlying_mle.layer_id();
         let claim_chal = if !self.underlying_mle.mle_indices().is_empty() {
             self.underlying_mle
                 .mle_indices()

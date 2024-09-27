@@ -672,7 +672,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for GateLayer<F> {
             fixed_mle_indices_u,
             val,
             Some(self.layer_id()),
-            Some(self.lhs.get_layer_id()),
+            Some(self.lhs.layer_id()),
             Some(MleEnum::Dense(lhs_reduced)),
         );
         claims.push(claim);
@@ -691,7 +691,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for GateLayer<F> {
             fixed_mle_indices_v,
             val,
             Some(self.layer_id()),
-            Some(self.rhs.get_layer_id()),
+            Some(self.rhs.layer_id()),
             Some(MleEnum::Dense(rhs_reduced)),
         );
         claims.push(claim);
@@ -1290,9 +1290,9 @@ impl<F: std::fmt::Debug + Field> GateLayer<F> {
         impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for GateCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("Gate")
-                    .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())
+                    .field("lhs_mle_ref_layer_id", &self.0.lhs.layer_id())
                     .field("lhs_mle_ref_mle_indices", &self.0.lhs.mle_indices())
-                    .field("rhs_mle_ref_layer_id", &self.0.rhs.get_layer_id())
+                    .field("rhs_mle_ref_layer_id", &self.0.rhs.layer_id())
                     .field("rhs_mle_ref_mle_indices", &self.0.rhs.mle_indices())
                     .field("add_nonzero_gates", &self.0.nonzero_gates)
                     .field("num_dataparallel_bits", &self.0.num_dataparallel_bits)
