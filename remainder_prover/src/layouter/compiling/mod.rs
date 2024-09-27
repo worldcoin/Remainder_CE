@@ -95,17 +95,17 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
     ///
     /// # Arguments:
     /// * gkr_circuit_description: type [GKRCircuitDescription], which is the
-    /// circuit description of the circuit we wish to populate
+    ///     circuit description of the circuit we wish to populate
     /// * input_layer_to_node_map: type [InputNodeMap], which the corresponding
-    /// [super::nodes::circuit_inputs::InputLayerNode]'s [NodeId] to a
-    /// [LayerId], in order to associate the [InputLayerData] to the correct
-    /// [InputLayer].
+    ///     [super::nodes::circuit_inputs::InputLayerNode]'s [NodeId] to a
+    ///     [LayerId], in order to associate the [InputLayerData] to the correct
+    ///     [InputLayer].
     /// * data_input_layers: type [Vec<InputLayerData<F>>], which contains all
-    /// of the data needed in order to populate the circuit description.
+    ///     of the data needed in order to populate the circuit description.
     /// * transcript_writer: type implements [ProverTranscript<F>], which is
-    /// primarily used for [FiatShamirChallenge] in order to grab the challenges
-    /// from the transcript in order to generate the concretized
-    /// [FiatShamirChallenge] for the circuit.
+    ///     primarily used for [FiatShamirChallenge] in order to grab the
+    ///     challenges from the transcript in order to generate the concretized
+    ///     [FiatShamirChallenge] for the circuit.
     ///
     /// # Requires:
     /// The order of the data in the `data_input_layers` vector must match the
