@@ -331,7 +331,7 @@ fn test_topo_sort_without_cycle_no_children() {
     let mut id_to_index_map: HashMap<NodeId, usize> = HashMap::new();
     for (idx, node) in out.iter().enumerate() {
         id_to_index_map.insert(node.id(), idx);
-        if let Some(children) = node.children() {
+        if let Some(children) = node.subnodes() {
             for child in children.into_iter() {
                 children_to_parent_map.insert(child, node.id());
             }
@@ -447,7 +447,7 @@ fn test_topo_sort_without_cycle_include_children() {
     let mut id_to_index_map: HashMap<NodeId, usize> = HashMap::new();
     for (idx, node) in out.iter().enumerate() {
         id_to_index_map.insert(node.id(), idx);
-        if let Some(children) = node.children() {
+        if let Some(children) = node.subnodes() {
             for child in children.into_iter() {
                 children_to_parent_map.insert(child, node.id());
             }

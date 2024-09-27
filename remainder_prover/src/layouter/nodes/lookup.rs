@@ -414,7 +414,7 @@ impl CircuitNode for LookupTable {
         self.id
     }
 
-    fn children(&self) -> Option<Vec<NodeId>> {
+    fn subnodes(&self) -> Option<Vec<NodeId>> {
         Some(
             self.constraints
                 .iter()
