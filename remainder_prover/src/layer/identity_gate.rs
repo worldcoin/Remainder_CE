@@ -38,7 +38,7 @@ use super::{
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
     regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
-    LayerDescription, Layer, LayerId, VerifierLayer,
+    Layer, LayerDescription, LayerId, VerifierLayer,
 };
 
 #[cfg(feature = "parallel")]
@@ -351,7 +351,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
         let mut challenges: Vec<F> = vec![];
         transcript_writer.append_elements("Initial Sumcheck evaluations", &first_message);
-        let num_rounds = self.mle_ref.num_iterated_vars();
+        let num_rounds = self.mle_ref.num_free_vars();
 
         // sumcheck rounds (binding x)
         let _sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
@@ -396,7 +396,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         self.set_beta_g(beta_g);
 
         self.mle_ref.index_mle_indices(0);
-        let num_vars = self.mle_ref.num_iterated_vars();
+        let num_vars = self.mle_ref.num_free_vars();
 
         let mut a_hg_mle_ref = vec![F::ZERO; 1 << num_vars];
 
@@ -432,7 +432,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             .map(|mle_ref| {
                 mle_ref
                     .mle_indices()
-                    .contains(&MleIndex::IndexedBit(round_index))
+                    .contains(&MleIndex::Indexed(round_index))
             })
             .reduce(|acc, item| acc | item)
             .unwrap();
@@ -451,7 +451,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        (0..self.mle_ref.num_iterated_vars()).collect_vec()
+        (0..self.mle_ref.num_free_vars()).collect_vec()
     }
 
     fn max_degree(&self) -> usize {
@@ -507,7 +507,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for IdentityGate<F> {
                 fixed_mle_indices_u,
                 val,
                 Some(self.layer_id()),
-                Some(mle_ref.get_layer_id()),
+                Some(mle_ref.layer_id()),
                 Some(MleEnum::Dense(mle_ref.clone())),
             );
             claims.push(claim);
@@ -650,7 +650,7 @@ impl<F: Field> IdentityGate<F> {
         self.set_beta_g(beta_g);
 
         self.mle_ref.index_mle_indices(0);
-        let num_vars = self.mle_ref.num_iterated_vars();
+        let num_vars = self.mle_ref.num_free_vars();
 
         let mut a_hg_mle_ref = vec![F::ZERO; 1 << num_vars];
 
@@ -678,7 +678,7 @@ impl<F: Field> IdentityGate<F> {
 
         let independent_variable = phase_1
             .iter()
-            .map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::IndexedBit(0)))
+            .map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::Indexed(0)))
             .reduce(|acc, item| acc | item)
             .ok_or(GateError::EmptyMleList)?;
         let phase_1_mle_references: Vec<&DenseMle<F>> = phase_1.iter().collect();
@@ -704,7 +704,7 @@ impl<F: std::fmt::Debug + Field> IdentityGate<F> {
         impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for IdentityGateCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("IdentityGate")
-                    .field("mle_ref_layer_id", &self.0.mle_ref.get_layer_id())
+                    .field("mle_ref_layer_id", &self.0.mle_ref.layer_id())
                     .field("mle_ref_mle_indices", &self.0.mle_ref.mle_indices())
                     .field("identity_nonzero_gates", &self.0.nonzero_gates)
                     .finish()

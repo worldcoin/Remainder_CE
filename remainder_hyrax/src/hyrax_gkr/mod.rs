@@ -18,9 +18,9 @@ use remainder::expression::circuit_expr::{filter_bookkeeping_table, MleDescripti
 use remainder::input_layer::enum_input_layer::{
     InputLayerDescriptionEnum, InputLayerEnumVerifierCommitment,
 };
-use remainder::input_layer::{InputLayerDescription, InputLayer};
+use remainder::input_layer::{InputLayer, InputLayerDescription};
 use remainder::layer::layer_enum::{LayerDescriptionEnum, LayerEnum};
-use remainder::layer::{LayerDescription, Layer};
+use remainder::layer::{Layer, LayerDescription};
 use remainder::layouter::component::ComponentSet;
 use remainder::layouter::layouting::{
     CircuitLocation, CircuitMap, InputLayerHintMap, InputNodeMap,
@@ -211,7 +211,7 @@ impl<
             .iter()
             .for_each(|input_layer_description| {
                 let input_layer_id = input_layer_description.layer_id();
-                let maybe_input_node_id = input_layer_to_node_map.get_node_id(&input_layer_id);
+                let maybe_input_node_id = input_layer_to_node_map.get_node_id(input_layer_id);
                 if let Some(input_node_id) = maybe_input_node_id {
                     assert!(input_id_data_map.contains_key(input_node_id));
                     let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
@@ -309,7 +309,8 @@ impl<
         // forward pass of the layers
         // convert the circuit layer into a prover layer using circuit map -> populate a GKRCircuit as you do this
         // prover layer ( mle_claim_map ) -> populates circuit map
-        let mut uninstantiated_intermediate_layers: Vec<&LayerDescriptionEnum<C::Scalar>> = Vec::new();
+        let mut uninstantiated_intermediate_layers: Vec<&LayerDescriptionEnum<C::Scalar>> =
+            Vec::new();
         intermediate_layer_descriptions
             .iter()
             .for_each(|intermediate_layer_description| {
@@ -329,7 +330,7 @@ impl<
                 .iter()
                 .filter_map(|hint_input_layer_description| {
                     let (hint_circuit_location, hint_function) = input_layer_hint_map
-                        .get_hint_function(&hint_input_layer_description.layer_id());
+                        .get_hint_function(hint_input_layer_description.layer_id());
                     if let Some(data) = circuit_map.get_data_from_location(hint_circuit_location) {
                         let function_applied_to_data = hint_function(data);
                         circuit_map.add_node(

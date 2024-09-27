@@ -21,7 +21,7 @@ use crate::layouter::component::Component;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputLayerHintMap, InputNodeMap};
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, Context};
-use crate::output_layer::mle_output_layer::{MleOutputLayerDescription, MleOutputLayer};
+use crate::output_layer::mle_output_layer::{MleOutputLayer, MleOutputLayerDescription};
 use crate::output_layer::OutputLayerDescription;
 use crate::{
     claims::ClaimAggregator,
@@ -320,7 +320,7 @@ pub fn generate_circuit_description<F: Field>(
                 )
                 .unwrap();
             input_node_to_layer_map
-                .add_node_layer_id(&input_circuit_description.layer_id(), &input_node.id());
+                .add_node_layer_id(input_circuit_description.layer_id(), input_node.id());
             input_circuit_description
         })
         .collect_vec();

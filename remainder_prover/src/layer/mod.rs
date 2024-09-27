@@ -182,7 +182,7 @@ pub trait LayerDescription<F: Field> {
     fn max_degree(&self) -> usize;
 
     /// Label the MLE indices, starting from the `start_index` by
-    /// converting [MleIndex::Iterated] to [MleIndex::IndexedBit].
+    /// converting [MleIndex::Free] to [MleIndex::IndexedBit].
     fn index_mle_indices(&mut self, start_index: usize);
 
     /// Given the [MleDescription]s of which outputs are expected of this layer, compute the data

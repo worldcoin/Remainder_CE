@@ -8,15 +8,15 @@ use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
 use crate::claims::YieldClaim;
 use crate::layer_enum;
 
-use super::gate::{GateLayerDescription, GateLayer, VerifierGateLayer};
-use super::identity_gate::{IdentityGateLayerDescription, IdentityGate, VerifierIdentityGateLayer};
-use super::matmult::{MatMultLayerDescription, MatMult, VerifierMatMultLayer};
-use super::regular_layer::{RegularLayerDescription, RegularLayer, VerifierRegularLayer};
+use super::gate::{GateLayer, GateLayerDescription, VerifierGateLayer};
+use super::identity_gate::{IdentityGate, IdentityGateLayerDescription, VerifierIdentityGateLayer};
+use super::matmult::{MatMult, MatMultLayerDescription, VerifierMatMultLayer};
+use super::regular_layer::{RegularLayer, RegularLayerDescription, VerifierRegularLayer};
 use crate::mle::mle_enum::MleEnum;
 
 use super::LayerError;
 
-layer_enum!(LayerEnum, (Regular: RegularLayer<F>), (Gate: GateLayer<F>), (IdentityGate: IdentityGate<F>), (MatMult: MatMult<F>));
+layer_enum!(Layer, (Regular: RegularLayer<F>), (Gate: GateLayer<F>), (IdentityGate: IdentityGate<F>), (MatMult: MatMult<F>));
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(bound = "F: Field")]

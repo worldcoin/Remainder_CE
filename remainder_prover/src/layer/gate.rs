@@ -269,7 +269,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         let mut challenges = vec![];
 
         // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
-        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR ITERATED/INDEXED ---
+        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
         // --- BITS ---
         let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
@@ -392,7 +392,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
         // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
-        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR ITERATED/INDEXED ---
+        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
         // --- BITS ---
         let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
@@ -672,7 +672,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for GateLayer<F> {
             fixed_mle_indices_u,
             val,
             Some(self.layer_id()),
-            Some(self.lhs.get_layer_id()),
+            Some(self.lhs.layer_id()),
             Some(MleEnum::Dense(lhs_reduced)),
         );
         claims.push(claim);
@@ -691,7 +691,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for GateLayer<F> {
             fixed_mle_indices_v,
             val,
             Some(self.layer_id()),
-            Some(self.rhs.get_layer_id()),
+            Some(self.rhs.layer_id()),
             Some(MleEnum::Dense(rhs_reduced)),
         );
         claims.push(claim);
@@ -903,7 +903,7 @@ impl<F: Field> GateLayer<F> {
         let beta_g1 = BetaValues::new_beta_equality_mle(challenges);
 
         self.lhs.index_mle_indices(self.num_dataparallel_bits);
-        let num_x = self.lhs.num_iterated_vars();
+        let num_x = self.lhs.num_free_vars();
 
         // Because we are binding `x` variables after this phase, all bookkeeping tables should have size
         // 2^(number of x variables).
@@ -992,7 +992,7 @@ impl<F: Field> GateLayer<F> {
     ) -> Result<Vec<F>, GateError> {
         // Create a beta table according to the challenges used to bind the x variables.
         let beta_u = BetaValues::new_beta_equality_mle(u_claim);
-        let num_y = self.rhs.num_iterated_vars();
+        let num_y = self.rhs.num_free_vars();
 
         // Because we are binding the "y" variables, the size of the bookkeeping tables after this init
         // phase are 2^(number of y variables).
@@ -1153,7 +1153,7 @@ impl<F: Field> GateLayer<F> {
 
         let mut challenges: Vec<F> = vec![];
         transcript_writer.append_elements("Sumcheck evaluations PHASE 1", &first_message);
-        let num_rounds_phase1 = self.lhs.num_iterated_vars();
+        let num_rounds_phase1 = self.lhs.num_free_vars();
 
         // Sumcheck rounds (binding x).
         let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
@@ -1224,7 +1224,7 @@ impl<F: Field> GateLayer<F> {
 
         let mut challenges: Vec<F> = vec![];
 
-        if self.rhs.num_iterated_vars() > 0 {
+        if self.rhs.num_free_vars() > 0 {
             let phase_2_mles = self
                 .phase_2_mles
                 .as_mut()
@@ -1233,7 +1233,7 @@ impl<F: Field> GateLayer<F> {
 
             transcript_writer.append_elements("Sumcheck evaluations", &first_message);
 
-            let num_rounds_phase2 = self.rhs.num_iterated_vars();
+            let num_rounds_phase2 = self.rhs.num_free_vars();
 
             // Bind y, the right side of the sum.
             let sumcheck_rounds_y: Vec<Vec<F>> = std::iter::once(Ok(first_message))
@@ -1290,9 +1290,9 @@ impl<F: std::fmt::Debug + Field> GateLayer<F> {
         impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for GateCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("Gate")
-                    .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())
+                    .field("lhs_mle_ref_layer_id", &self.0.lhs.layer_id())
                     .field("lhs_mle_ref_mle_indices", &self.0.lhs.mle_indices())
-                    .field("rhs_mle_ref_layer_id", &self.0.rhs.get_layer_id())
+                    .field("rhs_mle_ref_layer_id", &self.0.rhs.layer_id())
                     .field("rhs_mle_ref_mle_indices", &self.0.rhs.mle_indices())
                     .field("add_nonzero_gates", &self.0.nonzero_gates)
                     .field("num_dataparallel_bits", &self.0.num_dataparallel_bits)

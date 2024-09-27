@@ -89,7 +89,7 @@ impl<F: Field> CompilableNode<F> for GateNode {
             .prefix_bits
             .iter()
             .map(|bit| MleIndex::Fixed(*bit))
-            .chain(repeat_n(MleIndex::Iterated, *lhs_num_vars))
+            .chain(repeat_n(MleIndex::Free, *lhs_num_vars))
             .collect_vec();
         let lhs_circuit_mle = MleDescription::new(lhs_location.layer_id, &total_indices);
 
@@ -99,7 +99,7 @@ impl<F: Field> CompilableNode<F> for GateNode {
             .prefix_bits
             .iter()
             .map(|bit| MleIndex::Fixed(*bit))
-            .chain(repeat_n(MleIndex::Iterated, *rhs_num_vars))
+            .chain(repeat_n(MleIndex::Free, *rhs_num_vars))
             .collect_vec();
         let rhs_circuit_mle = MleDescription::new(rhs_location.layer_id, &total_indices);
 
@@ -154,10 +154,10 @@ mod test {
     #[test]
     fn test_gate_node_in_circuit() {
         let circuit = LayouterCircuit::new(|ctx| {
-            const NUM_ITERATED_BITS: usize = 4;
+            const NUM_FREE_BITS: usize = 4;
 
             let mut rng = test_rng();
-            let size = 1 << NUM_ITERATED_BITS;
+            let size = 1 << NUM_FREE_BITS;
 
             let mle =
                 MultilinearExtension::new((0..size).map(|_| Fr::from(rng.gen::<u64>())).collect());
@@ -218,10 +218,10 @@ mod test {
     fn test_data_parallel_gate_node_in_circuit() {
         let circuit = LayouterCircuit::new(|ctx| {
             const NUM_DATAPARALLEL_BITS: usize = 3;
-            const NUM_ITERATED_BITS: usize = 4;
+            const NUM_FREE_BITS: usize = 4;
 
             let mut rng = test_rng();
-            let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
+            let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_FREE_BITS);
 
             let mle =
                 MultilinearExtension::new((0..size).map(|_| Fr::from(rng.gen::<u64>())).collect());
@@ -235,7 +235,7 @@ mod test {
             );
 
             let mut nonzero_gates = vec![];
-            let table_size = 1 << NUM_ITERATED_BITS;
+            let table_size = 1 << NUM_FREE_BITS;
 
             (0..table_size).for_each(|idx| {
                 nonzero_gates.push((idx, idx, idx));

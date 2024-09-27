@@ -6,7 +6,8 @@ use remainder_shared_types::Field;
 use crate::{
     input_layer::{
         enum_input_layer::InputLayerDescriptionEnum, hyrax_input_layer::HyraxInputLayerDescription,
-        ligero_input_layer::LigeroInputLayerDescription, public_input_layer::PublicInputLayerDescription,
+        ligero_input_layer::LigeroInputLayerDescription,
+        public_input_layer::PublicInputLayerDescription,
     },
     layer::LayerId,
     layouter::{
@@ -19,14 +20,14 @@ use crate::{
 
 use super::{InputLayerNode, InputLayerType};
 
-/// Function which returns a vector of `MleIndex::Fixed` for prefix bits according to which
-/// position we are in the range from 0 to `total_num_bits` - `num_iterated_bits`.
+/// Function which returns a vector of [MleIndex::Fixed] for prefix bits according to which
+/// position we are in the range from 0 to `total_num_bits` - `num_free_bits`.
 fn get_prefix_bits_from_capacity(
     capacity: u32,
     total_num_bits: usize,
-    num_iterated_bits: usize,
+    num_free_bits: usize,
 ) -> Vec<bool> {
-    (0..total_num_bits - num_iterated_bits)
+    (0..total_num_bits - num_free_bits)
         .map(|bit_position| {
             // Divide capacity by 2**(total_num_bits - bit_position - 1) and see whether the last bit is 1
             let bit_val = (capacity >> (total_num_bits - bit_position - 1)) & 1;
@@ -185,13 +186,17 @@ impl InputLayerNode {
                 InputLayerDescriptionEnum::LigeroInputLayer(ligero_input_layer_description)
             }
             InputLayerType::PublicInputLayer => {
-                let public_input_layer_description =
-                    PublicInputLayerDescription::new(input_layer_id.to_owned(), num_vars_combined_mle);
+                let public_input_layer_description = PublicInputLayerDescription::new(
+                    input_layer_id.to_owned(),
+                    num_vars_combined_mle,
+                );
                 InputLayerDescriptionEnum::PublicInputLayer(public_input_layer_description)
             }
             InputLayerType::HyraxInputLayer => {
-                let hyrax_input_layer_description =
-                    HyraxInputLayerDescription::new(input_layer_id.to_owned(), num_vars_combined_mle);
+                let hyrax_input_layer_description = HyraxInputLayerDescription::new(
+                    input_layer_id.to_owned(),
+                    num_vars_combined_mle,
+                );
                 InputLayerDescriptionEnum::HyraxInputLayer(hyrax_input_layer_description)
             }
         };

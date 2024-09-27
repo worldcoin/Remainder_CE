@@ -10,12 +10,12 @@ use crate::{
 
 use super::{
     hyrax_input_layer::HyraxInputLayerDescription,
-    ligero_input_layer::{LigeroInputLayerDescription, LigeroInputLayer},
-    public_input_layer::{PublicInputLayerDescription, PublicInputLayer},
+    ligero_input_layer::{LigeroInputLayer, LigeroInputLayerDescription},
+    public_input_layer::{PublicInputLayer, PublicInputLayerDescription},
     verifier_challenge_input_layer::{
-        VerifierChallengeInputLayerDescription, VerifierChallengeInputLayer,
+        VerifierChallengeInputLayer, VerifierChallengeInputLayerDescription,
     },
-    InputLayerDescription, CommitmentEnum, InputLayer, InputLayerError,
+    CommitmentEnum, InputLayer, InputLayerDescription, InputLayerError,
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -114,13 +114,18 @@ impl<F: Field> InputLayerDescription<F> for InputLayerDescriptionEnum<F> {
         transcript_reader: &mut impl remainder_shared_types::transcript::VerifierTranscript<F>,
     ) -> Result<(), super::InputLayerError> {
         match self {
-            InputLayerDescriptionEnum::PublicInputLayer(circuit_public_input_layer) => match commitment
-            {
-                InputLayerEnumVerifierCommitment::PublicInputLayer(public_commitment) => {
-                    circuit_public_input_layer.verify(public_commitment, claim, transcript_reader)
+            InputLayerDescriptionEnum::PublicInputLayer(circuit_public_input_layer) => {
+                match commitment {
+                    InputLayerEnumVerifierCommitment::PublicInputLayer(public_commitment) => {
+                        circuit_public_input_layer.verify(
+                            public_commitment,
+                            claim,
+                            transcript_reader,
+                        )
+                    }
+                    _ => panic!("wrong commitment type for input layer description!"),
                 }
-                _ => panic!("wrong commitment type for input layer description!"),
-            },
+            }
             InputLayerDescriptionEnum::VerifierChallengeInputLayer(
                 circuit_verifier_challenge_input_layer,
             ) => match commitment {
@@ -133,13 +138,18 @@ impl<F: Field> InputLayerDescription<F> for InputLayerDescriptionEnum<F> {
                 }
                 _ => panic!("wrong commitment type for input layer description!"),
             },
-            InputLayerDescriptionEnum::LigeroInputLayer(circuit_ligero_input_layer) => match commitment
-            {
-                InputLayerEnumVerifierCommitment::LigeroInputLayer(ligero_commitment) => {
-                    circuit_ligero_input_layer.verify(ligero_commitment, claim, transcript_reader)
+            InputLayerDescriptionEnum::LigeroInputLayer(circuit_ligero_input_layer) => {
+                match commitment {
+                    InputLayerEnumVerifierCommitment::LigeroInputLayer(ligero_commitment) => {
+                        circuit_ligero_input_layer.verify(
+                            ligero_commitment,
+                            claim,
+                            transcript_reader,
+                        )
+                    }
+                    _ => panic!("wrong commitment type for input layer description!"),
                 }
-                _ => panic!("wrong commitment type for input layer description!"),
-            },
+            }
             InputLayerDescriptionEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
                 panic!("Hyrax input layer is not supported by this trait!")
             }

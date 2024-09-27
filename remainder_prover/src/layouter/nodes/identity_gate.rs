@@ -5,7 +5,9 @@ use remainder_shared_types::Field;
 
 use crate::{
     expression::circuit_expr::MleDescription,
-    layer::{identity_gate::IdentityGateLayerDescription, layer_enum::LayerDescriptionEnum, LayerId},
+    layer::{
+        identity_gate::IdentityGateLayerDescription, layer_enum::LayerDescriptionEnum, LayerId,
+    },
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
     utils::mle::get_total_mle_indices,
 };
@@ -71,7 +73,8 @@ impl<F: Field> CompilableNode<F> for IdentityGateNode {
             .ok_or(DAGError::DanglingNodeId(self.pre_routed_data))?;
         let total_mle_indices =
             get_total_mle_indices(&pre_routed_data_location.prefix_bits, *pre_routed_num_vars);
-        let pre_routed_mle = MleDescription::new(pre_routed_data_location.layer_id, &total_mle_indices);
+        let pre_routed_mle =
+            MleDescription::new(pre_routed_data_location.layer_id, &total_mle_indices);
 
         let id_gate_layer_id = layer_id.get_and_inc();
         let id_gate_layer = IdentityGateLayerDescription::new(
@@ -120,10 +123,10 @@ mod test {
     #[test]
     fn test_identity_gate_node_in_circuit() {
         let circuit = LayouterCircuit::new(|ctx| {
-            const NUM_ITERATED_BITS: usize = 4;
+            const NUM_FREE_BITS: usize = 4;
 
             let mut rng = test_rng();
-            let size = 1 << NUM_ITERATED_BITS;
+            let size = 1 << NUM_FREE_BITS;
 
             let mle_vec: Vec<Fr> = (0..size).map(|_| Fr::from(rng.gen::<u64>())).collect();
             let mle = MultilinearExtension::new(mle_vec.clone());

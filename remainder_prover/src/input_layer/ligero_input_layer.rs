@@ -24,8 +24,8 @@ use crate::{
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, InputLayerDescription, InputLayer,
-    InputLayerError,
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, InputLayer,
+    InputLayerDescription, InputLayerError,
 };
 
 /// An input layer in which `mle` will be committed to using the Ligero polynomial
@@ -290,7 +290,7 @@ mod tests {
         let (pre_commitment, _root) = remainder_ligero_commit(&evals, &aux);
 
         let verifier_ligero_input_layer =
-            LigeroInputLayerDescription::new(layer_id, dense_mle.num_iterated_vars(), aux);
+            LigeroInputLayerDescription::new(layer_id, dense_mle.num_free_vars(), aux);
         let mut ligero_input_layer = LigeroInputLayer::new(
             dense_mle.original_mle,
             layer_id,
@@ -356,7 +356,7 @@ mod tests {
 
         let verifier_ligero_input_layer = LigeroInputLayerDescription::new(
             layer_id,
-            dense_mle.num_iterated_vars(),
+            dense_mle.num_free_vars(),
             LigeroAuxInfo::new(evals.len(), rho_inv, ratio, None),
         );
         let mut ligero_input_layer =
