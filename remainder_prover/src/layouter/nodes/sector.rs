@@ -109,7 +109,8 @@ impl<F: Field> CircuitNode for SectorGroup<F> {
             .flat_map(|sector| sector.sources())
             .collect()
     }
-    fn children(&self) -> Option<Vec<NodeId>> {
+
+    fn subnodes(&self) -> Option<Vec<NodeId>> {
         let children = self.children.iter().map(|sector| sector.id()).collect();
         Some(children)
     }

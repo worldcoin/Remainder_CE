@@ -94,10 +94,10 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         }
     }
 
-    fn get_layer_id(&self) -> LayerId {
+    fn layer_id(&self) -> LayerId {
         match self {
-            MleEnum::Dense(item) => item.get_layer_id(),
-            MleEnum::Zero(item) => item.get_layer_id(),
+            MleEnum::Dense(item) => item.layer_id(),
+            MleEnum::Zero(item) => item.layer_id(),
         }
     }
 
@@ -111,13 +111,6 @@ impl<F: Field> Mle<F> for MleEnum<F> {
 
     fn add_prefix_bits(&mut self, _new_bits: Vec<MleIndex<F>>) {
         todo!()
-    }
-
-    fn layer_id(&self) -> crate::layer::LayerId {
-        match self {
-            MleEnum::Dense(dense_mle) => dense_mle.layer_id(),
-            MleEnum::Zero(zero_mle) => zero_mle.layer_id(),
-        }
     }
 }
 

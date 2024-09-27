@@ -403,7 +403,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     return Err(ExpressionError::EvaluateNotFullyBoundError);
                 }
 
-                let layer_id = mle_ref.get_layer_id();
+                let layer_id = mle_ref.layer_id();
                 let mle_indices = mle_ref.mle_indices().to_vec();
                 let eval = mle_ref.bookkeeping_table()[0];
 
@@ -436,7 +436,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     mles.into_iter()
                         .map(|mle| {
                             VerifierMle::new(
-                                mle.get_layer_id(),
+                                mle.layer_id(),
                                 mle.mle_indices().to_vec(),
                                 mle.bookkeeping_table()[0],
                             )
@@ -1153,7 +1153,7 @@ impl<F: std::fmt::Debug + Field> Expression<F, ProverExpr> {
                         let mle_ref = mle_vec_idx.get_mle(self.1);
 
                         f.debug_struct("mle")
-                            .field("layer", &mle_ref.get_layer_id())
+                            .field("layer", &mle_ref.layer_id())
                             .field("indices", &mle_ref.mle_indices())
                             .finish()
                     }
@@ -1171,7 +1171,7 @@ impl<F: std::fmt::Debug + Field> Expression<F, ProverExpr> {
                             .map(|mle_vec_idx| {
                                 let mle = mle_vec_idx.get_mle(self.1);
 
-                                format!("{:?}; {:?}", mle.get_layer_id(), mle.mle_indices())
+                                format!("{:?}; {:?}", mle.layer_id(), mle.mle_indices())
                             })
                             .reduce(|acc, str| acc + &str)
                             .unwrap();

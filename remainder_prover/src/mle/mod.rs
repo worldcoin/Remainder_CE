@@ -101,9 +101,6 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     /// MleIndices`.
     fn index_mle_indices(&mut self, curr_index: usize) -> usize;
 
-    /// The layer_id of the layer that this MLE belongs to.
-    fn get_layer_id(&self) -> LayerId;
-
     /// Get the associated enum that this MLE is a part of ([MleEnum::Dense] or [MleEnum::Zero]).
     fn get_enum(self) -> MleEnum<F>;
 }

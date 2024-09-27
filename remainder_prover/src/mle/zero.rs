@@ -110,7 +110,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         curr_index + new_indices
     }
 
-    fn get_layer_id(&self) -> LayerId {
+    fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 
@@ -128,11 +128,6 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
     #[doc = " are working with dataparallel circuits and new bits need to be added."]
     fn add_prefix_bits(&mut self, _new_bits: Vec<MleIndex<F>>) {
         todo!()
-    }
-
-    #[doc = " Get the layer ID of the associated MLE."]
-    fn layer_id(&self) -> LayerId {
-        self.layer_id
     }
 }
 

@@ -75,11 +75,10 @@ pub trait CircuitNode {
     /// The unique ID of this node
     fn id(&self) -> NodeId;
 
-    // FIXME rename to e.g. "subnodes".
     /// Return the "sub-nodes" of this node.  These are nodes that are "owned" by this node.  Note
     /// that this is not a relationship in the DAG.
-    /// e.g. [InputLayerNode] owns the [InputShredNode]s that are its children.
-    fn children(&self) -> Option<Vec<NodeId>> {
+    /// e.g. [InputLayerNode] owns the [InputShredNode]s that are its subnodes.
+    fn subnodes(&self) -> Option<Vec<NodeId>> {
         None
     }
     /// Return the ids of the nodes that this node depends upon, i.e. nodes whose values must be
@@ -147,10 +146,10 @@ macro_rules! node_enum {
                 }
             }
 
-            fn children(&self) -> Option<Vec<$crate::layouter::nodes::NodeId>> {
+            fn subnodes(&self) -> Option<Vec<$crate::layouter::nodes::NodeId>> {
                 match self {
                     $(
-                        Self::$var_name(node) => node.children(),
+                        Self::$var_name(node) => node.subnodes(),
                     )*
                 }
             }

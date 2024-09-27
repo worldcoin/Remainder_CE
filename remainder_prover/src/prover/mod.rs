@@ -320,7 +320,7 @@ pub fn generate_circuit_description<F: Field>(
                 )
                 .unwrap();
             input_node_to_layer_map
-                .add_node_layer_id(&input_circuit_description.layer_id(), &input_node.id());
+                .add_node_layer_id(input_circuit_description.layer_id(), input_node.id());
             input_circuit_description
         })
         .collect_vec();

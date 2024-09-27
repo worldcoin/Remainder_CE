@@ -251,7 +251,7 @@ fn add_bits_to_layer_refs<F: Field>(
                 }
             }
             MleEnum::Zero(mle) => {
-                if mle.get_layer_id() == effected_layer {
+                if mle.layer_id() == effected_layer {
                     mle.mle_indices = new_bits
                         .iter()
                         .chain(mle.mle_indices.iter())
