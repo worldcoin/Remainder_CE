@@ -126,8 +126,8 @@ impl<F: Field> MatMult<F> {
             .clone()
             .into_iter()
             .filter_map(|index: MleIndex<F>| {
-                if let MleIndex::IndexedBit(_) = index {
-                    Some(MleIndex::Iterated)
+                if let MleIndex::Indexed(_) = index {
+                    Some(MleIndex::Free)
                 } else if let MleIndex::Bound(..) = index {
                     bound_indices_a.push(index);
                     None
@@ -159,8 +159,8 @@ impl<F: Field> MatMult<F> {
             .mle_indices
             .into_iter()
             .map(|index| {
-                if let MleIndex::IndexedBit(_) = index {
-                    MleIndex::Iterated
+                if let MleIndex::Indexed(_) = index {
+                    MleIndex::Free
                 } else {
                     index
                 }
@@ -509,9 +509,9 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
             .mle_indices()
             .iter()
             .map(|mle_idx| match mle_idx {
-                &MleIndex::IndexedBit(_) => {
+                &MleIndex::Indexed(_) => {
                     if indexed_index_counter < self.matrix_a.cols_num_vars {
-                        let ret = MleIndex::IndexedBit(indexed_index_counter);
+                        let ret = MleIndex::Indexed(indexed_index_counter);
                         indexed_index_counter += 1;
                         ret
                     } else {
@@ -524,7 +524,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
                     }
                 }
                 MleIndex::Fixed(_) => mle_idx.clone(),
-                MleIndex::Iterated => panic!("should not have any iterated indices"),
+                MleIndex::Free => panic!("should not have any free indices"),
                 MleIndex::Bound(_, _) => panic!("should not have any bound indices"),
             })
             .collect_vec();
@@ -540,7 +540,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
             .mle_indices()
             .iter()
             .map(|mle_idx| match mle_idx {
-                &MleIndex::IndexedBit(_) => {
+                &MleIndex::Indexed(_) => {
                     if bound_index_counter < self.matrix_b.cols_num_vars {
                         let ret = MleIndex::Bound(
                             claim_chals_matrix_b[bound_index_counter],
@@ -549,13 +549,13 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
                         bound_index_counter += 1;
                         ret
                     } else {
-                        let ret = MleIndex::IndexedBit(indexed_index_counter);
+                        let ret = MleIndex::Indexed(indexed_index_counter);
                         indexed_index_counter += 1;
                         ret
                     }
                 }
                 MleIndex::Fixed(_) => mle_idx.clone(),
-                MleIndex::Iterated => panic!("should not have any iterated indices"),
+                MleIndex::Free => panic!("should not have any free indices"),
                 MleIndex::Bound(_, _) => panic!("should not have any bound indices"),
             })
             .collect_vec();

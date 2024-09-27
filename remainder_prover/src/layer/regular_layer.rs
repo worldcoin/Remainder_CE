@@ -518,7 +518,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
     }
 
     fn index_mle_indices(&mut self, start_index: usize) {
-        self.expression.index_mle_indices(start_index);
+        self.expression.index_mle_vars(start_index);
     }
 }
 

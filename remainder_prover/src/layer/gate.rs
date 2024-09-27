@@ -269,7 +269,7 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
         let mut challenges = vec![];
 
         // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
-        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR ITERATED/INDEXED ---
+        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
         // --- BITS ---
         let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
@@ -392,7 +392,7 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
         // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
-        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR ITERATED/INDEXED ---
+        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
         // --- BITS ---
         let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
@@ -903,7 +903,7 @@ impl<F: Field> GateLayer<F> {
         let beta_g1 = BetaValues::new_beta_equality_mle(challenges);
 
         self.lhs.index_mle_indices(self.num_dataparallel_bits);
-        let num_x = self.lhs.num_iterated_vars();
+        let num_x = self.lhs.num_free_vars();
 
         // Because we are binding `x` variables after this phase, all bookkeeping tables should have size
         // 2^(number of x variables).
@@ -992,7 +992,7 @@ impl<F: Field> GateLayer<F> {
     ) -> Result<Vec<F>, GateError> {
         // Create a beta table according to the challenges used to bind the x variables.
         let beta_u = BetaValues::new_beta_equality_mle(u_claim);
-        let num_y = self.rhs.num_iterated_vars();
+        let num_y = self.rhs.num_free_vars();
 
         // Because we are binding the "y" variables, the size of the bookkeeping tables after this init
         // phase are 2^(number of y variables).
@@ -1153,7 +1153,7 @@ impl<F: Field> GateLayer<F> {
 
         let mut challenges: Vec<F> = vec![];
         transcript_writer.append_elements("Sumcheck evaluations PHASE 1", &first_message);
-        let num_rounds_phase1 = self.lhs.num_iterated_vars();
+        let num_rounds_phase1 = self.lhs.num_free_vars();
 
         // Sumcheck rounds (binding x).
         let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
@@ -1224,7 +1224,7 @@ impl<F: Field> GateLayer<F> {
 
         let mut challenges: Vec<F> = vec![];
 
-        if self.rhs.num_iterated_vars() > 0 {
+        if self.rhs.num_free_vars() > 0 {
             let phase_2_mles = self
                 .phase_2_mles
                 .as_mut()
@@ -1233,7 +1233,7 @@ impl<F: Field> GateLayer<F> {
 
             transcript_writer.append_elements("Sumcheck evaluations", &first_message);
 
-            let num_rounds_phase2 = self.rhs.num_iterated_vars();
+            let num_rounds_phase2 = self.rhs.num_free_vars();
 
             // Bind y, the right side of the sum.
             let sumcheck_rounds_y: Vec<Vec<F>> = std::iter::once(Ok(first_message))

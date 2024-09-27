@@ -51,10 +51,10 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         }
     }
 
-    fn num_iterated_vars(&self) -> usize {
+    fn num_free_vars(&self) -> usize {
         match self {
-            MleEnum::Dense(item) => item.num_iterated_vars(),
-            MleEnum::Zero(item) => item.num_iterated_vars(),
+            MleEnum::Dense(item) => item.num_free_vars(),
+            MleEnum::Zero(item) => item.num_free_vars(),
         }
     }
 

@@ -71,7 +71,7 @@ fn test_output_layer_get_claims() {
     let mut output_layer = MleOutputLayer::new_zero(mle.clone());
     let mut circuit_output_layer = CircuitMleOutputLayer::new_zero(
         layer_id,
-        &repeat_n(MleIndex::Iterated, num_vars).collect_vec(),
+        &repeat_n(MleIndex::Free, num_vars).collect_vec(),
     );
     circuit_output_layer.index_mle_indices(0);
 
@@ -123,17 +123,17 @@ fn test_output_layer_get_claims() {
 fn test_output_layer_get_claims_with_prefix_bits() {
     // ---- Part 1: Generate Output layer.
     let layer_id = LayerId::Layer(0);
-    let num_iterated_vars = 2;
+    let num_free_vars = 2;
     let prefix_bits = vec![MleIndex::Fixed(true), MleIndex::Fixed(false)];
 
-    let mle = ZeroMle::new(num_iterated_vars, Some(prefix_bits.clone()), layer_id);
+    let mle = ZeroMle::new(num_free_vars, Some(prefix_bits.clone()), layer_id);
 
     let mut output_layer = MleOutputLayer::new_zero(mle.clone());
     let mut circuit_output_layer = CircuitMleOutputLayer::new_zero(
         layer_id,
         &prefix_bits
             .into_iter()
-            .chain(repeat_n(MleIndex::Iterated, num_iterated_vars))
+            .chain(repeat_n(MleIndex::Free, num_free_vars))
             .collect_vec(),
     );
     circuit_output_layer.index_mle_indices(0);
