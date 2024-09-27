@@ -70,7 +70,6 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
     fn populate_circuit(
         &mut self,
         gkr_circuit_description: &GKRCircuitDescription<F>,
-        input_layer_to_node_map: InputNodeMap,
         data_input_layers: Vec<InputLayerData<F>>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> InstantiatedCircuit<F> {
@@ -79,6 +78,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             fiat_shamir_challenges: fiat_shamir_challenge_descriptions,
             intermediate_layers: intermediate_layer_descriptions,
             output_layers: output_layer_descriptions,
+            input_node_to_layer_map: input_layer_to_node_map,
         } = gkr_circuit_description;
 
         // Forward pass through input layer data to map input layer ID to the data that the circuit builder provides.
@@ -226,12 +226,10 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         let ctx = Context::new();
         let (component, input_layer_data) = (self.witness_builder)(&ctx);
         // TODO(vishady): ADD CIRCUIT DESCRIPTION TO TRANSCRIPT (maybe not here...)
-        let (circuit_description, input_node_map) =
-            generate_circuit_description(component, ctx).unwrap();
+        let circuit_description = generate_circuit_description(component.yield_nodes()).unwrap();
 
         let instantiated_circuit = self.populate_circuit(
             &circuit_description,
-            input_node_map,
             input_layer_data,
             transcript_writer,
         );

@@ -19,10 +19,10 @@ use remainder::input_layer::enum_input_layer::{
     CircuitInputLayerEnum, InputLayerEnumVerifierCommitment,
 };
 use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
-use remainder::input_layer::{CircuitInputLayer, InputLayer};
+use remainder::input_layer::{self, CircuitInputLayer, InputLayer};
 use remainder::layer::layer_enum::LayerEnum;
 use remainder::layer::{CircuitLayer, Layer};
-use remainder::layouter::component::ComponentSet;
+use remainder::layouter::component::{Component, ComponentSet};
 use remainder::layouter::layouting::{
     CircuitLocation, CircuitMap, InputNodeMap,
 };
@@ -137,7 +137,7 @@ impl<
         let (component, input_layer_data) = (witness_function)(&ctx);
         let circuit_description_timer = start_timer!(|| "generating circuit description");
         let result = (
-            generate_circuit_description(component, ctx).unwrap(),
+            generate_circuit_description(component.yield_nodes()).unwrap(),
             input_layer_data,
         );
         end_timer!(circuit_description_timer);
@@ -147,7 +147,6 @@ impl<
     pub fn populate_hyrax_circuit(
         &self,
         gkr_circuit_description: &GKRCircuitDescription<C::Scalar>,
-        input_layer_to_node_map: InputNodeMap,
         data_input_layers: Vec<HyraxInputLayerData<C>>,
         transcript_writer: &mut impl ECProverTranscript<C>,
     ) -> (
@@ -159,6 +158,7 @@ impl<
             fiat_shamir_challenges: fiat_shamir_challenge_descriptions,
             intermediate_layers: intermediate_layer_descriptions,
             output_layers: output_layer_descriptions,
+            input_node_to_layer_map: input_layer_to_node_map,
         } = gkr_circuit_description;
 
         let hyrax_populate_circuit_timer =
@@ -363,7 +363,6 @@ impl<
             Self::generate_circuit_description(witness_function);
         let (mut instantiated_circuit, commitments) = self.populate_hyrax_circuit(
             &circuit_description,
-            input_layer_to_node_map,
             input_data,
             transcript_writer,
         );

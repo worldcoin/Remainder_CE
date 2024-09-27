@@ -13,6 +13,7 @@ use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::fiat_shamir::FiatShamirChallengeNode;
 use crate::layouter::nodes::{CircuitNode, Context};
 use crate::mle::bundled_input_mle::BundledInputMle;
+use crate::prover::{generate_circuit_description, GKRCircuitDescription};
 use crate::utils::get_input_shred_and_data;
 use crate::worldcoin::components::Subtractor;
 
@@ -107,7 +108,7 @@ pub fn build_circuit<
         let subtractor = Subtractor::new(ctx, &matmult, &to_sub_from_matmult);
 
         let (digits_input_shreds, digits_input_shreds_data) =
-            digits.make_input_shred_and_data(ctx, &input_layer);
+            (*digits).make_input_shred_and_data(ctx, &input_layer);
         for (i, shred) in digits_input_shreds.iter().enumerate() {
             println!("{:?} = {}th digit input", shred.id(), i);
         }
@@ -208,7 +209,8 @@ pub fn build_circuit<
     })
 }
 
-pub fn build_core_circuit<
+/// Builds the iriscode circuit description.
+pub fn build_circuit_description<
     F: Field,
     const TO_REROUTE_NUM_VARS: usize,
     const MATMULT_ROWS_NUM_VARS: usize,
@@ -217,49 +219,51 @@ pub fn build_core_circuit<
     const BASE: u64,
     const NUM_DIGITS: usize,
 >(
-    data: CircuitData<
-        F,
-        MATMULT_ROWS_NUM_VARS,
-        MATMULT_COLS_NUM_VARS,
-        MATMULT_INTERNAL_DIM_NUM_VARS,
-        BASE,
-        NUM_DIGITS,
-    >,
-    &mut ctx: &mut Context,
+    reroutings: Vec<(usize, usize)>,
+    // FIXME ctx is only necessary because we are passing in the private input layer and we don't
+    // want collisons - we can remove this if we create a separate inputlayer for each input inside
+    // the function
+    ctx: &mut Context,
     private_input_layer: &InputLayerNode,
-) -> ComponentSet<NodeEnum<F>> {
+) -> GKRCircuitDescription<F> {
     assert!(BASE.is_power_of_two());
-    let log_table_size = BASE.ilog2() as usize;
-
-    let CircuitData {
-        to_reroute: _,
-        reroutings,
-        rh_matmult_multiplicand,
-        digits,
-        sign_bits,
-        digit_multiplicities,
-        to_sub_from_matmult,
-    } = data;
+    let log_base = BASE.ilog2() as usize;
     let mut output_nodes = vec![];
 
     // Private inputs
     let to_reroute = InputShred::new(&ctx, TO_REROUTE_NUM_VARS, &private_input_layer);
     println!("{:?} = Image to_reroute input", to_reroute.id());
-    let digits_input_shreds = digits.make_input_shreds(&ctx, &private_input_layer);
-    for (i, shred) in digits_input_shreds.iter().enumerate() {
-        println!("{:?} = {}th digit input", shred.id(), i);
-    }
 
+    let digits_input_shreds: Vec<_> = (0..NUM_DIGITS)
+        .into_iter()
+        .map(|i| {
+            let shred = InputShred::new(&ctx, log_base, &private_input_layer);
+            println!("{:?} = {}th digit input", shred.id(), i);
+            shred
+        })
+        .collect();
+
+    let digit_multiplicities = InputShred::new(&ctx, log_base, &private_input_layer);
+    println!("{:?} = Digit multiplicities", digit_multiplicities.id());
+
+    let sign_bits = InputShred::new(&ctx, MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS, &private_input_layer);
+    println!("{:?} = Sign bits (iris code) input", sign_bits.id());
+    
     // Public inputs
     let public_input_layer = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
     println!("{:?} = Input layer", public_input_layer.id());
+
     let to_sub_from_matmult = InputShred::new(&ctx, MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS, &public_input_layer);
     println!("{:?} = input to sub from matmult", to_sub_from_matmult.id());
+
     let rh_matmult_multiplicand = InputShred::new(&ctx, MATMULT_INTERNAL_DIM_NUM_VARS + MATMULT_COLS_NUM_VARS, &public_input_layer);
     println!("{:?} = RH multiplicand of matmult (input)", rh_matmult_multiplicand.id());
 
+    let lookup_table_values = InputShred::new(&ctx, log_base, &public_input_layer);
+    println!("{:?} = Lookup table values for digit range check (input)", lookup_table_values.id());
+
     // Intermediate layers
-    let rerouted_image = IdentityGateNode::new(&ctx, &to_reroute, reroutings.clone());
+    let rerouted_image = IdentityGateNode::new(&ctx, &to_reroute, reroutings);
     println!("{:?} = Identity gate", rerouted_image.id());
 
     let matmult = MatMultNode::new(
@@ -273,65 +277,46 @@ pub fn build_core_circuit<
 
     let subtractor = Subtractor::new(&ctx, &matmult, &to_sub_from_matmult);
 
+    // Concatenate the digits (which are stored for each digital place separately) into a single
+    // MLE
     let digits_refs = digits_input_shreds
         .iter()
         .map(|shred| shred as &dyn CircuitNode)
         .collect_vec();
-    // Concatenate the digits (which are stored for each digital place separately) into a single
-    // MLE
     let digits_concatenator = DigitsConcatenator::new(&ctx, &digits_refs);
-
-    // Use a lookup to range check the digits to the range 0..BASE
-    let lookup_table_values = InputShred::new(&ctx, log_table_size, &input_layer);
-    println!("{:?} = Digit range check input", lookup_table_values.id());
 
     let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(&ctx, 1);
     let lookup_table =
         LookupTable::new::<F>(&ctx, &lookup_table_values, &fiat_shamir_challenge_node);
     println!("{:?} = Lookup table", lookup_table.id());
 
-    let digit_multiplicities = InputShred::new(&ctx, log_table_size, &input_layer);
-    println!("{:?} = Digit multiplicities", digit_multiplicities.id());
     let lookup_constraint = LookupConstraint::new::<F>(
-        ctx,
+        &ctx,
         &lookup_table,
         &&digits_concatenator.sector,
         &digit_multiplicities,
     );
     println!("{:?} = Lookup constraint", lookup_constraint.id());
 
-    let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE);
+    let unsigned_recomp = UnsignedRecomposition::new(&ctx, &digits_refs, BASE);
 
-    let (sign_bits, sign_bits_data) =
-        get_input_shred_and_data(sign_bits.clone(), ctx, &input_layer);
-    println!("{:?} = Sign bits (iris code) input", sign_bits.id());
     let complementary_checker = ComplementaryRecompChecker::new(
-        ctx,
+        &ctx,
         &&subtractor.sector,
         &sign_bits,
         &&unsigned_recomp.sector,
         BASE,
         NUM_DIGITS,
     );
-    output_nodes.push(OutputNode::new_zero(ctx, &complementary_checker.sector));
+    output_nodes.push(OutputNode::new_zero(&ctx, &complementary_checker.sector));
 
-    let bits_are_binary = BitsAreBinary::new(ctx, &sign_bits);
-    output_nodes.push(OutputNode::new_zero(ctx, &bits_are_binary.sector));
-
-    let mut input_data_shreds = vec![
-        to_reroute_data,
-        rh_matmult_multiplicand_data,
-        sign_bits_data,
-        to_sub_from_matmult_data,
-        digit_multiplicities_data,
-        lookup_table_values_data,
-    ];
-    input_data_shreds.extend(digits_input_shreds_data);
-    let input_layer_data = InputLayerData::new(input_layer.id(), input_data_shreds, None);
+    let bits_are_binary = BitsAreBinary::new(&ctx, &sign_bits);
+    output_nodes.push(OutputNode::new_zero(&ctx, &bits_are_binary.sector));
 
     // Collect all the nodes, starting with the input nodes
     let mut all_nodes: Vec<NodeEnum<F>> = vec![
-        input_layer.into(),
+        public_input_layer.into(),
+        private_input_layer.clone().into(),
         fiat_shamir_challenge_node.into(),
         to_reroute.into(),
         rh_matmult_multiplicand.into(),
@@ -362,5 +347,5 @@ pub fn build_core_circuit<
     // Add output nodes
     all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));
 
-    ComponentSet::<NodeEnum<F>>::new_raw(all_nodes)
+    generate_circuit_description(all_nodes).unwrap()
 }

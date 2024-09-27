@@ -9,6 +9,8 @@ pub mod proof_system;
 /// Struct for representing a list of layers
 pub mod layers;
 
+use std::collections::HashMap;
+
 use self::layers::Layers;
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::input_layer::enum_input_layer::{
@@ -21,7 +23,7 @@ use crate::layer::CircuitLayer;
 use crate::layouter::component::Component;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputNodeMap};
 use crate::layouter::nodes::node_enum::NodeEnum;
-use crate::layouter::nodes::{CircuitNode, Context};
+use crate::layouter::nodes::{CircuitNode, Context, NodeId};
 use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
 use crate::output_layer::CircuitOutputLayer;
 use crate::{
@@ -116,6 +118,7 @@ pub struct GKRCircuitDescription<F: Field> {
     pub intermediate_layers: Vec<CircuitLayerEnum<F>>,
     /// The circuit desriptions of the output layers.
     pub output_layers: Vec<CircuitMleOutputLayer<F>>,
+    pub input_node_to_layer_map: InputNodeMap,
 }
 
 impl<F: Field> GKRCircuitDescription<F> {
@@ -128,6 +131,7 @@ impl<F: Field> GKRCircuitDescription<F> {
             fiat_shamir_challenges: _,
             intermediate_layers,
             output_layers,
+            input_node_to_layer_map: _,
         } = self;
         intermediate_layers
             .iter_mut()
@@ -306,15 +310,13 @@ impl<F: Field> GKRCircuitDescription<F> {
     }
 }
 
-/// Generate the circuit description given a set of nodes along with the context,
-/// which determines the unique ID for each of the nodes.
+/// Generate the circuit description given a set of nodes.
 pub fn generate_circuit_description<F: Field>(
-    component: impl Component<NodeEnum<F>>,
-    ctx: Context,
-) -> Result<(GKRCircuitDescription<F>, InputNodeMap), GKRError> {
-    let nodes = component.yield_nodes();
+    nodes: Vec<NodeEnum<F>>,
+) -> Result<GKRCircuitDescription<F>, GKRError> {
+    // FIXME(Ben) consider inlining the layout function, if this is the only place we'll ever call it?  doesn't seem well factored.
     let (input_nodes, fiat_shamir_challenge_nodes, intermediate_nodes, lookup_nodes, output_nodes) =
-        layout(ctx, nodes).unwrap();
+        layout(nodes).unwrap();
 
     let mut input_layer_id = LayerId::Input(0);
     let mut intermediate_layer_id = LayerId::Layer(0);
@@ -388,11 +390,9 @@ pub fn generate_circuit_description<F: Field>(
             input_layers,
             fiat_shamir_challenges,
             intermediate_layers,
-            output_layers
+            output_layers,
+            input_node_to_layer_map,
         };
 
-    Ok((
-        circuit_description,
-        input_node_to_layer_map,
-    ))
+    Ok(circuit_description)
 }

@@ -51,15 +51,12 @@ pub trait BundledInputMle<F: Field, const N: usize> {
     /// returns the references to all the underlying MLEs
     fn get_mle_refs(&self) -> &[DenseMle<F>; N];
 
-    /// Returns all the InputShreds for the MLEs.
-    fn make_input_shreds(
+    /// returns all the MLEs as InputShreds
+    fn make_input_shred_and_data(
         &self,
         ctx: &Context,
         source: &InputLayerNode,
-    ) -> Vec<InputShred>;
-
-    /// Returns the copies of all MLEs in an order aligned with [make_input_shreds].
-    fn get_mles(&self) -> Vec<MultilinearExtension<F>>;
+    ) -> (Vec<InputShred>, Vec<InputShredData<F>>);
 }
 
 /// A struct that bundles N MLEs together for semantic reasons.
@@ -73,29 +70,25 @@ impl<F: Field, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
         &self.mles
     }
 
-    fn make_input_shreds(
+    fn make_input_shred_and_data(
         &self,
         ctx: &Context,
         source: &InputLayerNode,
-    ) -> Vec<InputShred> {
-        self.mles
-            .iter()
-            .map(|mle| {
-                let input_shred = InputShred::new(ctx, mle.original_num_vars(), source);
-                input_shred
-            })
-            .collect()
-    }
-
-    fn get_mles(&self) -> Vec<MultilinearExtension<F>> {
+    ) -> (Vec<InputShred>, Vec<InputShredData<F>>) {
         self.mles
             .clone()
             .into_iter()
             .map(|mle| {
                 // this part needs changes
-                MultilinearExtension::new_from_evals(Evaluations::<F>::new(mle.num_iterated_vars(), mle.get_padded_evaluations()))
+                let mle: MultilinearExtension<F> = MultilinearExtension::new_from_evals(
+                    Evaluations::<F>::new(mle.num_iterated_vars(), mle.get_padded_evaluations()),
+                );
+                let input_shred = InputShred::new(ctx, mle.num_vars(), source);
+                dbg!(&mle.num_vars());
+                let input_shred_data = InputShredData::new(input_shred.id(), mle);
+                (input_shred, input_shred_data)
             })
-            .collect()
+            .unzip()
     }
 }
 
