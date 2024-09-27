@@ -78,13 +78,13 @@ impl<F: Field> ExpressionType<F> for ProverExpr {
 /// this is what the prover manipulates to prove the correctness of the computation.
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
 impl<F: Field> Expression<F, ProverExpr> {
-    /// See documentation in [super::circuit_expr::CircuitExpr]'s `concat_expr`
+    /// See documentation in [super::circuit_expr::CircuitExpr]'s `select()`
     /// function for more details!
-    pub fn concat_expr(mut self, lhs: Expression<F, ProverExpr>) -> Self {
-        let offset = lhs.num_mle_ref();
-        self.increment_mle_vec_indices(offset);
-        let (lhs_node, lhs_mle_vec) = lhs.deconstruct();
-        let (rhs_node, rhs_mle_vec) = self.deconstruct();
+    pub fn select(self, mut rhs: Expression<F, ProverExpr>) -> Self {
+        let offset = self.num_mle_ref();
+        rhs.increment_mle_vec_indices(offset);
+        let (lhs_node, lhs_mle_vec) = self.deconstruct();
+        let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
 
         let concat_node =
             ExpressionNode::Selector(MleIndex::Iterated, Box::new(lhs_node), Box::new(rhs_node));

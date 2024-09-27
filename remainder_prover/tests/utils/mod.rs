@@ -128,11 +128,15 @@ impl<F: Field> TripleNestedBuilderComponent<F> {
                 let outer_sel_mle = triple_sel_nodes[2];
 
                 let inner_inner_sel =
-                    ExprBuilder::<F>::products(vec![inner_inner_sel_mle, inner_inner_sel_mle])
-                        .concat_expr(inner_inner_sel_mle.expr());
-                let inner_sel = inner_sel_mle.expr().concat_expr(inner_inner_sel);
+                    inner_inner_sel_mle
+                        .expr()
+                        .select(ExprBuilder::<F>::products(vec![
+                            inner_inner_sel_mle,
+                            inner_inner_sel_mle,
+                        ]));
+                let inner_sel = inner_inner_sel.select(inner_sel_mle.expr());
 
-                outer_sel_mle.expr().concat_expr(inner_sel)
+                inner_sel.select(outer_sel_mle.expr())
             },
         );
 

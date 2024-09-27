@@ -201,7 +201,7 @@ fn compile_layer<F: Field>(
 
         // Add any new selector nodes that are needed for padding
         for _ in 0..padding_bits {
-            smallest = smallest.concat_expr(Expression::<_, AbstractExpr>::constant(F::ZERO));
+            smallest = Expression::<_, AbstractExpr>::constant(F::ZERO).select(smallest);
             for node_id in &smallest_ids {
                 let prefix_bits = prefix_bits.get_mut(node_id).unwrap();
                 prefix_bits.push(true);
@@ -209,7 +209,7 @@ fn compile_layer<F: Field>(
         }
 
         // Merge the two expressions
-        smallest = smallest.concat_expr(next);
+        smallest = next.select(smallest);
 
         // Track the prefix bits we're creating so they can be added to the circuit_map; each concat operation pushes a new prefix_bit
         for node_id in &smallest_ids {

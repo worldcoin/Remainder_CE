@@ -123,7 +123,7 @@ fn regular_layer_test_prove_verify_selector() {
 
     let lhs = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
     let rhs = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
-    let mut expression = rhs.concat_expr(lhs);
+    let mut expression = lhs.select(rhs);
     // let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
     dbg!(&expression);
     let claim = Claim::<Fr>::new(vec![Fr::from(4), Fr::from(2), Fr::from(3)], Fr::from(33));
@@ -172,7 +172,7 @@ fn regular_layer_test_prove_verify_complex() {
 
     let prod = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_2.clone()]);
 
-    let mut root = sum.concat_expr(prod);
+    let mut root = prod.select(sum);
     dbg!(&root);
 
     let claim = Claim::<Fr>::new(vec![Fr::from(4), Fr::from(2), Fr::from(3)], Fr::from(37));
