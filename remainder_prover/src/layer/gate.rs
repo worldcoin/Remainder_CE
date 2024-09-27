@@ -514,8 +514,12 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
         let res_table_num_entries =
             ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
 
-        let lhs_data = circuit_map.get_data_from_circuit_mle(&self.lhs_mle).unwrap();
-        let rhs_data = circuit_map.get_data_from_circuit_mle(&self.rhs_mle).unwrap();
+        let lhs_data = circuit_map
+            .get_data_from_circuit_mle(&self.lhs_mle)
+            .unwrap();
+        let rhs_data = circuit_map
+            .get_data_from_circuit_mle(&self.rhs_mle)
+            .unwrap();
 
         let mut res_table = vec![F::ZERO; res_table_num_entries];
         (0..num_dataparallel_vals).for_each(|idx| {

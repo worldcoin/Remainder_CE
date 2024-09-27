@@ -251,7 +251,9 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
     ) {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
-        let source_mle_data = circuit_map.get_data_from_circuit_mle(&self.source_mle).unwrap();
+        let source_mle_data = circuit_map
+            .get_data_from_circuit_mle(&self.source_mle)
+            .unwrap();
 
         let max_gate_val = self
             .wiring

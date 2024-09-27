@@ -81,10 +81,7 @@ impl<F: Field> FiatShamirChallenge<F> {
     /// On a copy of the underlying data, fix variables for each of the coordinates of the the point
     /// in `claim`, and check whether the single element left in the bookkeeping table is equal to
     /// the claimed value in `claim`.
-    pub fn verify(
-        &self,
-        claim: &Claim<F>,
-    ) -> Result<(), FiatShamirChallengeError> {
+    pub fn verify(&self, claim: &Claim<F>) -> Result<(), FiatShamirChallengeError> {
         let mle_evals = self.mle.get_evals_vector().clone();
         let mut mle_ref = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
         mle_ref.index_mle_indices(0);
@@ -109,7 +106,6 @@ impl<F: Field> FiatShamirChallenge<F> {
             Err(FiatShamirChallengeError::EvaluationMismatch)
         }
     }
-
 }
 
 impl<F: Field> CircuitFiatShamirChallenge<F> {
@@ -122,21 +118,21 @@ impl<F: Field> CircuitFiatShamirChallenge<F> {
     /// Panics if the length of `values` is not equal to the number of evaluations in the MLE.
     pub fn instantiate(&self, values: Vec<F>) -> FiatShamirChallenge<F> {
         assert_eq!(values.len(), 1 << self.num_bits);
-        FiatShamirChallenge::new(
-            MultilinearExtension::new(values),
-            self.layer_id,
-        )
+        FiatShamirChallenge::new(MultilinearExtension::new(values), self.layer_id)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use remainder_shared_types::ff_field;
     use remainder_shared_types::{
-        transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter, ProverTranscript, VerifierTranscript},
+        transcript::{
+            test_transcript::TestSponge, ProverTranscript, TranscriptReader, TranscriptWriter,
+            VerifierTranscript,
+        },
         Fr,
     };
-    use super::*;
 
     #[test]
     fn test_circuit_fiat_shamir_challenge() {
@@ -169,14 +165,14 @@ mod tests {
             TranscriptReader::new(transcript);
 
         // 2. Get commitment from transcript.
-        let values = transcript_reader.get_challenges("Verifier challenges", 1 << fs_desc.num_bits).unwrap();
+        let values = transcript_reader
+            .get_challenges("Verifier challenges", 1 << fs_desc.num_bits)
+            .unwrap();
         let fiat_shamir_challenge = fs_desc.instantiate(values);
 
         // 3. ... [skip] verify other layers.
 
         // 4. Verify this layer's commitment.
-        fiat_shamir_challenge
-            .verify(&claim)
-            .unwrap();
+        fiat_shamir_challenge.verify(&claim).unwrap();
     }
 }
