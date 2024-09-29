@@ -8,7 +8,7 @@ use remainder::{
         nodes::{
             circuit_inputs::{HyraxInputDType, InputLayerNode, InputLayerType},
             circuit_outputs::OutputNode,
-            fiat_shamir::FiatShamirChallengeNode,
+            fiat_shamir_challenge::FiatShamirChallengeNode,
             identity_gate::IdentityGateNode,
             lookup::{LookupConstraint, LookupTable},
             matmult::MatMultNode,

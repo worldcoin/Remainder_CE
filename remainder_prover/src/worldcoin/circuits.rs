@@ -5,7 +5,7 @@ use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::{Component, ComponentSet};
 use crate::layouter::nodes::circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType};
 use crate::layouter::nodes::circuit_outputs::OutputNode;
-use crate::layouter::nodes::fiat_shamir::FiatShamirChallengeNode;
+use crate::layouter::nodes::fiat_shamir_challenge::FiatShamirChallengeNode;
 use crate::layouter::nodes::identity_gate::IdentityGateNode;
 use crate::layouter::nodes::lookup::{LookupConstraint, LookupTable};
 use crate::layouter::nodes::matmult::MatMultNode;

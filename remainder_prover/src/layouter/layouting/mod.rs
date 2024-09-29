@@ -19,7 +19,7 @@ use crate::{
 use super::nodes::{
     circuit_inputs::{InputLayerNode, InputShred},
     circuit_outputs::OutputNode,
-    fiat_shamir::FiatShamirChallengeNode,
+    fiat_shamir_challenge::FiatShamirChallengeNode,
     gate::GateNode,
     identity_gate::IdentityGateNode,
     lookup::{LookupConstraint, LookupTable},

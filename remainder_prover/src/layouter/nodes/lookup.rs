@@ -15,7 +15,7 @@ use remainder_shared_types::Field;
 
 use crate::expression::generic_expr::Expression;
 
-use super::fiat_shamir::FiatShamirChallengeNode;
+use super::fiat_shamir_challenge::FiatShamirChallengeNode;
 use super::{CircuitNode, Context, NodeId};
 
 /// Represents the use of a lookup into a particular table (represented by a LookupTable).

@@ -16,7 +16,7 @@ use super::layouting::{CircuitDescriptionMap, DAGError};
 pub mod circuit_inputs;
 pub mod circuit_outputs;
 pub mod debug;
-pub mod fiat_shamir;
+pub mod fiat_shamir_challenge;
 pub mod gate;
 pub mod identity_gate;
 pub mod lookup;
