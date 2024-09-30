@@ -4,7 +4,7 @@
 use remainder_shared_types::Field;
 
 use super::LayerId;
-use crate::expression::circuit_expr::CircuitMle;
+use crate::expression::circuit_expr::MleDescription;
 use crate::expression::verifier_expr::VerifierMle;
 use crate::mle::dense::DenseMle;
 use crate::mle::Mle;
@@ -38,8 +38,8 @@ pub struct Product<F: Field, T> {
 }
 
 impl<F: Field> Product<F, Option<F>> {
-    /// Creates a new Product from a vector of [CircuitMles].
-    pub fn new(mles: &[CircuitMle<F>], coefficient: F, bindings: &[F]) -> Self {
+    /// Creates a new Product from a vector of [MleDescriptions].
+    pub fn new(mles: &[MleDescription<F>], coefficient: F, bindings: &[F]) -> Self {
         if mles.is_empty() {
             return Product {
                 intermediates: vec![Intermediate::Composite {
@@ -60,7 +60,7 @@ impl<F: Field> Product<F, Option<F>> {
     }
 
     // Helper function for new
-    fn build_atom(mle: &CircuitMle<F>, bindings: &[F]) -> Intermediate<F, Option<F>> {
+    fn build_atom(mle: &MleDescription<F>, bindings: &[F]) -> Intermediate<F, Option<F>> {
         Intermediate::Atom {
             layer_id: mle.layer_id(),
             point: mle.get_claim_point(bindings),

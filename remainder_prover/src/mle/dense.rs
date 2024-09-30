@@ -35,7 +35,7 @@ pub struct DenseMle<F> {
 }
 
 impl<F: Field> Mle<F> for DenseMle<F> {
-    fn num_iterated_vars(&self) -> usize {
+    fn num_free_vars(&self) -> usize {
         self.mle.num_vars()
     }
 
@@ -87,7 +87,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
                     if state.0 {
                         // Index already found; do nothing.
                         state
-                    } else if let MleIndex::IndexedBit(current_bit_index) = *mle_index {
+                    } else if let MleIndex::Indexed(current_bit_index) = *mle_index {
                         if current_bit_index == indexed_bit_index {
                             // Found the indexed bit in the current index;
                             // bind it and increment the bit count.
@@ -106,11 +106,11 @@ impl<F: Field> Mle<F> for DenseMle<F> {
                 });
 
         assert!(index_found);
-        debug_assert!(1 <= bit_count && bit_count <= self.num_iterated_vars());
+        debug_assert!(1 <= bit_count && bit_count <= self.num_free_vars());
 
         self.mle.fix_variable_at_index(bit_count - 1, point);
 
-        if self.num_iterated_vars() == 0 {
+        if self.num_free_vars() == 0 {
             let fixed_claim_return = Claim::new(
                 self.mle_indices
                     .iter()
@@ -124,19 +124,19 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         }
     }
 
-    /// Ryan's note -- I assume this function updates the bookkeeping tables as
-    /// described by [Tha13].
-    fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<Claim<F>> {
-        // --- Bind the current indexed bit to the challenge value ---
+    /// Bind the bit `index` to the value `binding`.
+    /// If this was the last unbound variable, then return a Claim object giving the fully specified
+    /// evaluation point and the (single) value of the bookkeeping table.  Otherwise, return None.
+    fn fix_variable(&mut self, index: usize, binding: F) -> Option<Claim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
-            if *mle_index == MleIndex::IndexedBit(round_index) {
-                mle_index.bind_index(challenge);
+            if *mle_index == MleIndex::Indexed(index) {
+                mle_index.bind_index(binding);
             }
         }
+        // Update the bookkeeping table.
+        self.mle.fix_variable(binding);
 
-        self.mle.fix_variable(challenge);
-
-        if self.num_iterated_vars() == 0 {
+        if self.num_free_vars() == 0 {
             let fixed_claim_return = Claim::new(
                 self.mle_indices
                     .iter()
@@ -153,17 +153,13 @@ impl<F: Field> Mle<F> for DenseMle<F> {
     fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         let mut new_indices = 0;
         for mle_index in self.mle_indices.iter_mut() {
-            if *mle_index == MleIndex::Iterated {
-                *mle_index = MleIndex::IndexedBit(curr_index + new_indices);
+            if *mle_index == MleIndex::Free {
+                *mle_index = MleIndex::Indexed(curr_index + new_indices);
                 new_indices += 1;
             }
         }
 
         curr_index + new_indices
-    }
-
-    fn get_layer_id(&self) -> LayerId {
-        self.layer_id
     }
 
     fn get_enum(self) -> MleEnum<F> {
@@ -204,12 +200,12 @@ impl<F: Field> DenseMle<F> {
         layer_id: LayerId,
         prefix_bits: Vec<bool>,
     ) -> Self {
-        let iterated_bits = data.num_vars();
+        let free_bits = data.num_vars();
 
         let mle_indices: Vec<MleIndex<F>> = prefix_bits
             .into_iter()
             .map(|bit| MleIndex::Fixed(bit))
-            .chain((0..iterated_bits).map(|_| MleIndex::Iterated))
+            .chain((0..free_bits).map(|_| MleIndex::Free))
             .collect();
         Self {
             layer_id,
@@ -227,12 +223,12 @@ impl<F: Field> DenseMle<F> {
     pub fn new_with_indices(data: &[F], layer_id: LayerId, mle_indices: &[MleIndex<F>]) -> Self {
         let mut mle = DenseMle::new_from_raw(data.to_vec(), layer_id);
 
-        let all_indices_iterated_or_fixed = mle_indices.iter().all(|index| {
-            index == &MleIndex::Iterated
+        let all_indices_free_or_fixed = mle_indices.iter().all(|index| {
+            index == &MleIndex::Free
                 || index == &MleIndex::Fixed(true)
                 || index == &MleIndex::Fixed(false)
         });
-        assert!(all_indices_iterated_or_fixed);
+        assert!(all_indices_free_or_fixed);
 
         mle.mle_indices = mle_indices.to_vec();
         mle
@@ -251,13 +247,12 @@ impl<F: Field> DenseMle<F> {
     /// ```
     pub fn new_from_iter(iter: impl Iterator<Item = F>, layer_id: LayerId) -> Self {
         let items = iter.collect_vec();
-        let num_iterated_vars = log2(items.len()) as usize;
+        let num_free_vars = log2(items.len()) as usize;
 
-        let mle_indices: Vec<MleIndex<F>> =
-            ((0..num_iterated_vars).map(|_| MleIndex::Iterated)).collect();
+        let mle_indices: Vec<MleIndex<F>> = ((0..num_free_vars).map(|_| MleIndex::Free)).collect();
 
         let current_mle =
-            MultilinearExtension::new_from_evals(Evaluations::<F>::new(num_iterated_vars, items));
+            MultilinearExtension::new_from_evals(Evaluations::<F>::new(num_free_vars, items));
         Self {
             layer_id,
             mle: current_mle,
@@ -277,13 +272,12 @@ impl<F: Field> DenseMle<F> {
     ///     DenseMle::<Fr>::new_from_raw(vec![Fr::one()], LayerId::Input(0));
     /// ```
     pub fn new_from_raw(items: Vec<F>, layer_id: LayerId) -> Self {
-        let num_iterated_vars = log2(items.len()) as usize;
+        let num_free_vars = log2(items.len()) as usize;
 
-        let mle_indices: Vec<MleIndex<F>> =
-            ((0..num_iterated_vars).map(|_| MleIndex::Iterated)).collect();
+        let mle_indices: Vec<MleIndex<F>> = ((0..num_free_vars).map(|_| MleIndex::Free)).collect();
 
         let current_mle =
-            MultilinearExtension::new_from_evals(Evaluations::<F>::new(num_iterated_vars, items));
+            MultilinearExtension::new_from_evals(Evaluations::<F>::new(num_free_vars, items));
 
         Self {
             layer_id,
@@ -294,10 +288,10 @@ impl<F: Field> DenseMle<F> {
 
     /// batch merges the MLEs into a single MLE, in a big endian fashion.
     pub fn batch_mles(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
-        let first_mle_num_vars = mles[0].num_iterated_vars();
+        let first_mle_num_vars = mles[0].num_free_vars();
         let all_same_num_vars = mles
             .iter()
-            .all(|mle| mle.num_iterated_vars() == first_mle_num_vars);
+            .all(|mle| mle.num_free_vars() == first_mle_num_vars);
         assert!(all_same_num_vars);
         let layer_id = mles[0].layer_id;
         let mle_flattened = mles.into_iter().flat_map(|mle| mle.into_iter());
@@ -307,17 +301,17 @@ impl<F: Field> DenseMle<F> {
 
     /// batch merges the MLEs into a single MLE, in a lil endian fashion.
     pub fn batch_mles_lil(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
-        let first_mle_num_vars = mles[0].num_iterated_vars();
+        let first_mle_num_vars = mles[0].num_free_vars();
         let all_same_num_vars = mles
             .iter()
-            .all(|mle| mle.num_iterated_vars() == first_mle_num_vars);
+            .all(|mle| mle.num_free_vars() == first_mle_num_vars);
         assert!(all_same_num_vars);
 
         let super_big_endian_vector = mles
             .iter()
             .flat_map(|mle| {
                 let mle_vec = mle.bookkeeping_table();
-                let evals = Evaluations::new_from_big_endian(mle.num_iterated_vars(), mle_vec);
+                let evals = Evaluations::new_from_big_endian(mle.num_free_vars(), mle_vec);
                 evals.to_vec()
             })
             .collect_vec();

@@ -649,7 +649,7 @@ fn create_dense_mle_from_vec() {
 
     assert!(*mle_iter.mle.get_evals_vector() == *mle_new.mle.get_evals_vector());
     assert!(
-        mle_iter.num_iterated_vars() == 3 && mle_new.num_iterated_vars() == 3,
+        mle_iter.num_free_vars() == 3 && mle_new.num_free_vars() == 3,
         "Num vars must be the log_2 of the length of the vector"
     );
 }
@@ -674,7 +674,7 @@ fn create_dense_mle_from_vec() {
 //             .collect_vec()
 //             == [first, second]
 //     );
-//     assert!(tuple2_mle.combile_mle_refs().num_iterated_vars() == 3);
+//     assert!(tuple2_mle.combile_mle_refs().num_free_vars() == 3);
 // }
 
 #[test]
@@ -694,9 +694,7 @@ fn create_dense_mle_ref_from_flat_mle() {
 
     let mle_ref: DenseMle<Fr> = mle;
 
-    assert!(
-        mle_ref.mle_indices == vec![MleIndex::Iterated, MleIndex::Iterated, MleIndex::Iterated]
-    );
+    assert!(mle_ref.mle_indices == vec![MleIndex::Free, MleIndex::Free, MleIndex::Free]);
     assert_eq!(*mle_ref.mle.get_evals_vector(), mle_vec);
 }
 
@@ -721,16 +719,16 @@ fn create_dense_mle_ref_from_flat_mle() {
 //         first.mle_indices
 //             == vec![
 //                 MleIndex::Fixed(false),
-//                 MleIndex::Iterated,
-//                 MleIndex::Iterated
+//                 MleIndex::Free,
+//                 MleIndex::Free
 //             ]
 //     );
 //     assert!(
 //         second.mle_indices
 //             == vec![
 //                 MleIndex::Fixed(true),
-//                 MleIndex::Iterated,
-//                 MleIndex::Iterated
+//                 MleIndex::Free,
+//                 MleIndex::Free
 //             ]
 //     );
 
