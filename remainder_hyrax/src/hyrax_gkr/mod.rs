@@ -287,22 +287,22 @@ impl<
             });
 
         fiat_shamir_challenge_descriptions
-        .iter()
-        .for_each(|fiat_shamir_challenge_description| {
-            let fiat_shamir_challenge_mle =
-                MultilinearExtension::new(transcript_writer.get_scalar_field_challenges(
-                    "Verifier challenges",
-                    1 << fiat_shamir_challenge_description.num_bits,
+            .iter()
+            .for_each(|fiat_shamir_challenge_description| {
+                let fiat_shamir_challenge_mle =
+                    MultilinearExtension::new(transcript_writer.get_scalar_field_challenges(
+                        "Verifier challenges",
+                        1 << fiat_shamir_challenge_description.num_bits,
+                    ));
+                circuit_map.add_node(
+                    CircuitLocation::new(fiat_shamir_challenge_description.layer_id(), vec![]),
+                    fiat_shamir_challenge_mle.clone(),
+                );
+                fiat_shamir_challenges.push(FiatShamirChallenge::new(
+                    fiat_shamir_challenge_mle,
+                    fiat_shamir_challenge_description.layer_id(),
                 ));
-            circuit_map.add_node(
-                CircuitLocation::new(fiat_shamir_challenge_description.layer_id(), vec![]),
-                fiat_shamir_challenge_mle.clone(),
-            );
-            fiat_shamir_challenges.push(FiatShamirChallenge::new(
-                fiat_shamir_challenge_mle,
-                fiat_shamir_challenge_description.layer_id(),
-            ));
-        });
+            });
 
         // forward pass of the layers
         // convert the circuit layer into a prover layer using circuit map -> populate a GKRCircuit as you do this

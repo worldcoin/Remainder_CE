@@ -14,10 +14,12 @@ use crate::claims::wlx_eval::WLXAggregator;
 use crate::input_layer::enum_input_layer::{
     InputLayerDescriptionEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
 };
+use crate::input_layer::fiat_shamir_challenge::{
+    FiatShamirChallenge, FiatShamirChallengeDescription,
+};
 use crate::input_layer::InputLayerDescription;
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::LayerDescription;
-use crate::input_layer::fiat_shamir_challenge::{FiatShamirChallengeDescription, FiatShamirChallenge};
 use crate::layouter::component::Component;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputNodeMap};
 use crate::layouter::nodes::node_enum::NodeEnum;

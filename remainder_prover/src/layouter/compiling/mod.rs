@@ -193,9 +193,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             .iter()
             .for_each(|input_layer_description| {
                 let input_layer_id = input_layer_description.layer_id();
-                let input_node_id = input_layer_to_node_map
-                    .get_node_id(input_layer_id)
-                    .unwrap();
+                let input_node_id = input_layer_to_node_map.get_node_id(input_layer_id).unwrap();
                 let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
                 let input_mles = corresponding_input_data
                     .data

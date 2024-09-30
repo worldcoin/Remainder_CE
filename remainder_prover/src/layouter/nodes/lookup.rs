@@ -312,10 +312,7 @@ impl LookupTable {
         // Add an output layer that checks that the result is zero
         let output_layer = MleOutputLayerDescription::new_zero(layer_id, &[]);
 
-        Ok((
-            intermediate_layers,
-            output_layer,
-        ))
+        Ok((intermediate_layers, output_layer))
     }
 }
 
