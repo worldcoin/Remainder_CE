@@ -883,12 +883,12 @@ mod test {
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
         let exp_product = vec![
-            Fr::from(1 * 3 + 2 * 9),
-            Fr::from(1 * 5 + 2 * 6),
+            Fr::from(3 + 2 * 9),
+            Fr::from(5 + 2 * 6),
             Fr::from(9 * 3 + 10 * 9),
             Fr::from(9 * 5 + 10 * 6),
-            Fr::from(13 * 3 + 1 * 9),
-            Fr::from(13 * 5 + 1 * 6),
+            Fr::from(13 * 3 + 9),
+            Fr::from(13 * 5 + 6),
             Fr::from(3 * 3 + 10 * 9),
             Fr::from(3 * 5 + 10 * 6),
         ];

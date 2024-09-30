@@ -336,7 +336,7 @@ fn test_dummy_sumcheck_1() {
         mle_new
             .clone()
             .into_iter()
-            .zip(mle_2.clone().into_iter())
+            .zip(mle_2.clone())
             .map(|(first, second)| first * second),
         LayerId::Input(0),
     );
@@ -367,7 +367,7 @@ fn test_dummy_sumcheck_2() {
     let mle_output = DenseMle::new_from_iter(
         mle1.clone()
             .into_iter()
-            .zip(mle2.clone().into_iter())
+            .zip(mle2.clone())
             .map(|(first, second)| first * second),
         LayerId::Input(0),
     );
@@ -404,7 +404,7 @@ fn test_dummy_sumcheck_3() {
     let mle_output = DenseMle::new_from_iter(
         mle1.clone()
             .into_iter()
-            .zip(mle2.clone().into_iter().chain(mle2.clone().into_iter()))
+            .zip(mle2.clone().into_iter().chain(mle2.clone()))
             .map(|(first, second)| first * second),
         LayerId::Input(0),
     );
@@ -432,7 +432,7 @@ fn test_dummy_sumcheck_sum_small() {
     let mle_output = DenseMle::new_from_iter(
         mle1.clone()
             .into_iter()
-            .zip(mle2.clone().into_iter())
+            .zip(mle2.clone())
             .map(|(first, second)| first + second),
         LayerId::Input(0),
     );
@@ -547,7 +547,7 @@ fn test_dummy_sumcheck_concat_aggro() {
 
     let mle_output = DenseMle::new_from_iter(
         mle1.into_iter()
-            .zip(mle2.clone().into_iter().chain(mle2.into_iter()))
+            .zip(mle2.clone().into_iter().chain(mle2))
             .map(|(first, second)| first * second)
             .flat_map(|x| vec![x, x]),
         LayerId::Input(0),

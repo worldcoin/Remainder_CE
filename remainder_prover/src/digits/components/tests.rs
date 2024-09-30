@@ -23,7 +23,6 @@ use remainder_shared_types::Fr;
 fn test_complementary_recomposition_vertical() {
     let values = [-3, -2, -1, 0, 1, 2, 3, 4];
     let (digits_raw, bits): (Vec<_>, Vec<_>) = values
-        .clone()
         .into_iter()
         .map(|value| complementary_decomposition::<2, 2>(value).unwrap())
         .unzip();
@@ -50,7 +49,7 @@ fn test_complementary_recomposition_vertical() {
             &input_layer,
         );
         let (values_input_shred, values_input_shred_data) = get_input_shred_and_data(
-            values.iter().map(|value| i64_to_field(value)).collect(),
+            values.iter().map(i64_to_field).collect(),
             ctx,
             &input_layer,
         );
@@ -93,8 +92,7 @@ fn test_complementary_recomposition_vertical() {
 fn test_unsigned_recomposition() {
     let base: u64 = 16;
     let num_digits = 2;
-    let digits = vec![
-        vec![
+    let digits = [vec![
             // MSBs
             Fr::from(1u64),
             Fr::from(0u64),
@@ -107,8 +105,7 @@ fn test_unsigned_recomposition() {
             Fr::from(2u64),
             Fr::from(1u64),
             Fr::from(0u64),
-        ],
-    ];
+        ]];
     assert_eq!(digits.len(), num_digits);
     let expected = vec![Fr::from(19), Fr::from(2), Fr::from(33), Fr::from(48)];
 
@@ -163,8 +160,7 @@ fn test_complementary_recomposition() {
     let base: u64 = 16;
     let num_digits = 2;
     let base_pow = base.pow(num_digits as u32);
-    let digits = vec![
-        vec![
+    let digits = [vec![
             // MSBs
             Fr::from(1u64),
             Fr::from(0u64),
@@ -177,8 +173,7 @@ fn test_complementary_recomposition() {
             Fr::from(2u64),
             Fr::from(1u64),
             Fr::from(0u64),
-        ],
-    ];
+        ]];
     assert_eq!(digits.len(), num_digits);
     let bits = vec![
         // 1 iff strictly positive
@@ -188,9 +183,9 @@ fn test_complementary_recomposition() {
         Fr::from(0u64),
     ];
     let expected = vec![
-        Fr::from((base_pow - 19) as u64),
+        Fr::from((base_pow - 19)),
         Fr::from(2u64).neg(),
-        Fr::from((base_pow - 33) as u64),
+        Fr::from((base_pow - 33)),
         Fr::from(48u64).neg(),
     ];
 

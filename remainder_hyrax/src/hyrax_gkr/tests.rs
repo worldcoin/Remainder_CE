@@ -757,7 +757,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -835,7 +835,7 @@ fn small_regular_circuit_public_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -913,7 +913,7 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -999,7 +999,7 @@ fn medium_regular_circuit_public_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -1085,7 +1085,7 @@ fn matmult_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -1158,7 +1158,7 @@ fn regular_identity_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -1241,7 +1241,7 @@ fn regular_identity_matmult_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,

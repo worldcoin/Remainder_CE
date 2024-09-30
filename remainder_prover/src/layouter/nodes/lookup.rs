@@ -2,9 +2,6 @@
 
 use crate::expression::abstract_expr::AbstractExpr;
 use crate::expression::circuit_expr::{ExprDescription, MleDescription};
-use crate::input_layer::enum_input_layer::InputLayerDescriptionEnum;
-use crate::input_layer::hyrax_input_layer::HyraxInputLayerDescription;
-use crate::input_layer::public_input_layer::PublicInputLayerDescription;
 use crate::layer::layer_enum::LayerDescriptionEnum;
 use crate::layer::regular_layer::RegularLayerDescription;
 use crate::layer::LayerId;
