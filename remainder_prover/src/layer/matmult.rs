@@ -403,20 +403,16 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
-    ) -> bool {
+    ) {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
 
-        let maybe_matrix_a_data = circuit_map.get_data_from_circuit_mle(&self.matrix_a.mle);
-        if maybe_matrix_a_data.is_err() {
-            return false;
-        }
-        let matrix_a_data = maybe_matrix_a_data.unwrap();
-        let maybe_matrix_b_data = circuit_map.get_data_from_circuit_mle(&self.matrix_b.mle);
-        if maybe_matrix_b_data.is_err() {
-            return false;
-        }
-        let matrix_b_data = maybe_matrix_b_data.unwrap();
+        let matrix_a_data = circuit_map
+            .get_data_from_circuit_mle(&self.matrix_a.mle)
+            .unwrap();
+        let matrix_b_data = circuit_map
+            .get_data_from_circuit_mle(&self.matrix_b.mle)
+            .unwrap();
         let product = product_two_matrices_from_flattened_vectors(
             matrix_a_data.get_evals_vector(),
             matrix_b_data.get_evals_vector(),
@@ -433,7 +429,6 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
-        true
     }
 
     fn convert_into_verifier_layer(
@@ -888,12 +883,12 @@ mod test {
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
         let exp_product = vec![
-            Fr::from(1 * 3 + 2 * 9),
-            Fr::from(1 * 5 + 2 * 6),
+            Fr::from(3 + 2 * 9),
+            Fr::from(5 + 2 * 6),
             Fr::from(9 * 3 + 10 * 9),
             Fr::from(9 * 5 + 10 * 6),
-            Fr::from(13 * 3 + 1 * 9),
-            Fr::from(13 * 5 + 1 * 6),
+            Fr::from(13 * 3 + 9),
+            Fr::from(13 * 5 + 6),
             Fr::from(3 * 3 + 10 * 9),
             Fr::from(3 * 5 + 10 * 6),
         ];

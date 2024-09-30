@@ -499,8 +499,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
-    ) -> bool {
-        // dbg!(&mle_outputs_necessary);
+    ) {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
 
@@ -515,17 +514,12 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         let res_table_num_entries =
             ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
 
-        let maybe_lhs_data = circuit_map.get_data_from_circuit_mle(&self.lhs_mle);
-        if maybe_lhs_data.is_err() {
-            return false;
-        }
-        let lhs_data = maybe_lhs_data.unwrap();
-
-        let maybe_rhs_data = circuit_map.get_data_from_circuit_mle(&self.rhs_mle);
-        if maybe_rhs_data.is_err() {
-            return false;
-        }
-        let rhs_data = maybe_rhs_data.unwrap();
+        let lhs_data = circuit_map
+            .get_data_from_circuit_mle(&self.lhs_mle)
+            .unwrap();
+        let rhs_data = circuit_map
+            .get_data_from_circuit_mle(&self.rhs_mle)
+            .unwrap();
 
         let mut res_table = vec![F::ZERO; res_table_num_entries];
         (0..num_dataparallel_vals).for_each(|idx| {
@@ -551,7 +545,6 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
-        true
     }
 }
 

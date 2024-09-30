@@ -279,7 +279,7 @@ mod tests {
         let ratio = 1.;
 
         // MLE on 2 variables.
-        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(|i| Fr::from(i)).collect();
+        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(Fr::from).collect();
         let dense_mle = DenseMle::new_from_raw(evals.clone(), layer_id);
 
         let claim_point = vec![Fr::ONE, Fr::ZERO];
@@ -347,7 +347,7 @@ mod tests {
         let ratio = 1.;
 
         // MLE on 2 variables.
-        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(|i| Fr::from(i)).collect();
+        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(Fr::from).collect();
         let dense_mle = DenseMle::new_from_raw(evals.clone(), layer_id);
 
         let claim_point = vec![Fr::ONE, Fr::ZERO];

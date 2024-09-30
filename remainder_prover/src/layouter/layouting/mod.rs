@@ -19,13 +19,13 @@ use crate::{
 use super::nodes::{
     circuit_inputs::{InputLayerNode, InputShred},
     circuit_outputs::OutputNode,
+    fiat_shamir_challenge::FiatShamirChallengeNode,
     gate::GateNode,
     identity_gate::IdentityGateNode,
     lookup::{LookupConstraint, LookupTable},
     matmult::MatMultNode,
     node_enum::{NodeEnum, NodeEnumGroup},
     split_node::SplitNode,
-    verifier_challenge::VerifierChallengeNode,
     CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode,
 };
 
@@ -126,33 +126,6 @@ impl InputNodeMap {
     /// Add a layer ID, node ID correspondence to the map.
     pub fn add_node_layer_id(&mut self, layer_id: LayerId, node_id: NodeId) {
         self.0.insert(layer_id, node_id);
-    }
-}
-
-type HintFunctionMapping<F> = (
-    CircuitLocation,
-    fn(&MultilinearExtension<F>) -> MultilinearExtension<F>,
-);
-
-/// A HashMap that maps a circuit location to the function that should
-/// be used on a MLE in order to generate its data.
-pub struct InputLayerHintMap<F: Field>(pub HashMap<LayerId, HintFunctionMapping<F>>);
-
-impl<F: Field> InputLayerHintMap<F> {
-    pub(crate) fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    /// Given a layer ID, get the hint function that generates
-    /// the data for this layer.
-    pub fn get_hint_function(&self, layer_id: LayerId) -> &HintFunctionMapping<F> {
-        self.0.get(&layer_id).unwrap()
-    }
-
-    /// Add a corresponding hint function to a layer in the circuit,
-    /// given its layer ID.
-    pub fn add_hint_function(&mut self, layer_id: LayerId, hint_function: HintFunctionMapping<F>) {
-        self.0.insert(layer_id, hint_function);
     }
 }
 
@@ -326,7 +299,7 @@ impl<F: Field> CircuitNode for IntermediateNode<F> {
 
 type LayouterNodes<F> = (
     Vec<InputLayerNode>,
-    Vec<VerifierChallengeNode>,
+    Vec<FiatShamirChallengeNode>,
     Vec<Box<dyn CompilableNode<F>>>,
     Vec<LookupTable>,
     Vec<OutputNode>,
@@ -350,7 +323,7 @@ pub fn layout<F: Field>(
     // Handle input layers
     let input_shreds: Vec<InputShred> = dag.get_nodes();
     let mut input_layer_nodes: Vec<InputLayerNode> = dag.get_nodes();
-    let verifier_challenge_nodes: Vec<VerifierChallengeNode> = dag.get_nodes();
+    let fiat_shamir_challenge_nodes: Vec<FiatShamirChallengeNode> = dag.get_nodes();
 
     let mut input_layer_map: HashMap<NodeId, &mut InputLayerNode> = HashMap::new();
 
@@ -448,7 +421,7 @@ pub fn layout<F: Field>(
 
     Ok((
         input_layer_nodes,
-        verifier_challenge_nodes,
+        fiat_shamir_challenge_nodes,
         intermediate_nodes,
         lookup_tables,
         output_layers,

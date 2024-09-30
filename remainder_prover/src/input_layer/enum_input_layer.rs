@@ -12,9 +12,6 @@ use super::{
     hyrax_input_layer::HyraxInputLayerDescription,
     ligero_input_layer::{LigeroInputLayer, LigeroInputLayerDescription},
     public_input_layer::{PublicInputLayer, PublicInputLayerDescription},
-    verifier_challenge_input_layer::{
-        VerifierChallengeInputLayer, VerifierChallengeInputLayerDescription,
-    },
     CommitmentEnum, InputLayer, InputLayerDescription, InputLayerError,
 };
 
@@ -25,8 +22,6 @@ use super::{
 pub enum InputLayerDescriptionEnum<F: Field> {
     /// The circuit description for a public input layer.
     PublicInputLayer(PublicInputLayerDescription<F>),
-    /// The circuit description for a verifier challenge input layer.
-    VerifierChallengeInputLayer(VerifierChallengeInputLayerDescription<F>),
     /// The circuit description for a ligero input layer.
     LigeroInputLayer(LigeroInputLayerDescription<F>),
     /// The circuit description for a hyrax input layer.
@@ -41,9 +36,6 @@ impl<F: Field> InputLayerDescription<F> for InputLayerDescriptionEnum<F> {
             InputLayerDescriptionEnum::PublicInputLayer(circuit_public_input_layer) => {
                 circuit_public_input_layer.layer_id()
             }
-            InputLayerDescriptionEnum::VerifierChallengeInputLayer(
-                circuit_verifier_challenge_input_layer,
-            ) => circuit_verifier_challenge_input_layer.layer_id(),
             InputLayerDescriptionEnum::LigeroInputLayer(circuit_ligero_input_layer) => {
                 circuit_ligero_input_layer.layer_id()
             }
@@ -65,13 +57,6 @@ impl<F: Field> InputLayerDescription<F> for InputLayerDescriptionEnum<F> {
                         .unwrap(),
                 ))
             }
-            InputLayerDescriptionEnum::VerifierChallengeInputLayer(
-                circuit_verifier_challenge_input_layer,
-            ) => Ok(InputLayerEnumVerifierCommitment::RandomInputLayer(
-                circuit_verifier_challenge_input_layer
-                    .get_commitment_from_transcript(transcript_reader)
-                    .unwrap(),
-            )),
             InputLayerDescriptionEnum::LigeroInputLayer(circuit_ligero_input_layer) => {
                 Ok(InputLayerEnumVerifierCommitment::LigeroInputLayer(
                     circuit_ligero_input_layer
@@ -94,10 +79,6 @@ impl<F: Field> InputLayerDescription<F> for InputLayerDescriptionEnum<F> {
             InputLayerDescriptionEnum::PublicInputLayer(circuit_public_input_layer) => {
                 circuit_public_input_layer.convert_into_prover_input_layer(mle, precommit)
             }
-            InputLayerDescriptionEnum::VerifierChallengeInputLayer(
-                circuit_verifier_challenge_input_layer,
-            ) => circuit_verifier_challenge_input_layer
-                .convert_into_prover_input_layer(mle, precommit),
             InputLayerDescriptionEnum::LigeroInputLayer(circuit_ligero_input_layer) => {
                 circuit_ligero_input_layer.convert_into_prover_input_layer(mle, precommit)
             }
@@ -126,18 +107,6 @@ impl<F: Field> InputLayerDescription<F> for InputLayerDescriptionEnum<F> {
                     _ => panic!("wrong commitment type for input layer description!"),
                 }
             }
-            InputLayerDescriptionEnum::VerifierChallengeInputLayer(
-                circuit_verifier_challenge_input_layer,
-            ) => match commitment {
-                InputLayerEnumVerifierCommitment::RandomInputLayer(verifier_challenges) => {
-                    circuit_verifier_challenge_input_layer.verify(
-                        verifier_challenges,
-                        claim,
-                        transcript_reader,
-                    )
-                }
-                _ => panic!("wrong commitment type for input layer description!"),
-            },
             InputLayerDescriptionEnum::LigeroInputLayer(circuit_ligero_input_layer) => {
                 match commitment {
                     InputLayerEnumVerifierCommitment::LigeroInputLayer(ligero_commitment) => {
@@ -160,8 +129,7 @@ impl<F: Field> InputLayerDescription<F> for InputLayerDescriptionEnum<F> {
 input_layer_enum!(
     InputLayerEnum,
     (LigeroInputLayer: LigeroInputLayer<F>),
-    (PublicInputLayer: PublicInputLayer<F>),
-    (RandomInputLayer: VerifierChallengeInputLayer<F>)
+    (PublicInputLayer: PublicInputLayer<F>)
 );
 
 impl<F: Field> InputLayerEnum<F> {
@@ -170,7 +138,6 @@ impl<F: Field> InputLayerEnum<F> {
         match self {
             InputLayerEnum::LigeroInputLayer(layer) => layer.layer_id = layer_id,
             InputLayerEnum::PublicInputLayer(layer) => layer.layer_id = layer_id,
-            InputLayerEnum::RandomInputLayer(layer) => layer.layer_id = layer_id,
         }
     }
 }
@@ -195,13 +162,6 @@ impl<F: Field> YieldWLXEvals<F> for InputLayerEnum<F> {
                 num_idx,
             ),
             InputLayerEnum::PublicInputLayer(layer) => layer.get_wlx_evaluations(
-                claim_vecs,
-                claimed_vals,
-                claimed_mles,
-                num_claims,
-                num_idx,
-            ),
-            InputLayerEnum::RandomInputLayer(layer) => layer.get_wlx_evaluations(
                 claim_vecs,
                 claimed_vals,
                 claimed_mles,

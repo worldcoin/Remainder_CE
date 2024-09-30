@@ -5,7 +5,7 @@ use ark_std::log2;
 use remainder_shared_types::Field;
 
 use crate::{
-    input_layer::verifier_challenge_input_layer::VerifierChallengeInputLayerDescription,
+    input_layer::fiat_shamir_challenge::FiatShamirChallengeDescription,
     layer::LayerId,
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation},
 };
@@ -14,12 +14,12 @@ use super::{CircuitNode, Context, NodeId};
 
 #[derive(Debug, Clone)]
 /// The node representing the random challenge that the verifier supplies via Fiat-Shamir.
-pub struct VerifierChallengeNode {
+pub struct FiatShamirChallengeNode {
     id: NodeId,
     num_vars: usize,
 }
 
-impl CircuitNode for VerifierChallengeNode {
+impl CircuitNode for FiatShamirChallengeNode {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -37,8 +37,8 @@ impl CircuitNode for VerifierChallengeNode {
     }
 }
 
-impl VerifierChallengeNode {
-    /// Constructor for a [VerifierChallengeNode].
+impl FiatShamirChallengeNode {
+    /// Constructor for a [FiatShamirChallengeNode].
     pub fn new(ctx: &Context, num_challenges: usize) -> Self {
         Self {
             id: ctx.get_new_id(),
@@ -46,19 +46,17 @@ impl VerifierChallengeNode {
         }
     }
 
-    /// Generate a [VerifierChallengeInputLayerDescription], which is the
-    /// circuit description for a [VerifierChallengeNode].
+    /// Generate a [iatShamirChallengeDescription], which is the
+    /// circuit description for a [FiatShamirChallengeNode].
     pub fn generate_circuit_description<F: Field>(
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-    ) -> VerifierChallengeInputLayerDescription<F> {
+    ) -> FiatShamirChallengeDescription<F> {
         let verifier_challenge_layer_id = layer_id.get_and_inc();
 
-        let verifier_challenge_layer = VerifierChallengeInputLayerDescription::new(
-            verifier_challenge_layer_id,
-            self.get_num_vars(),
-        );
+        let verifier_challenge_layer =
+            FiatShamirChallengeDescription::new(verifier_challenge_layer_id, self.get_num_vars());
 
         circuit_description_map.add_node_id_and_location_num_vars(
             self.id,
@@ -95,7 +93,7 @@ mod test {
         prover::helpers::test_circuit,
     };
 
-    use super::VerifierChallengeNode;
+    use super::FiatShamirChallengeNode;
 
     #[test]
     fn test_verifier_challenge_node_in_circuit() {
@@ -111,7 +109,7 @@ mod test {
                 Fr::from(10),
             ]);
 
-            let verifier_challenge_node = VerifierChallengeNode::new(ctx, 8);
+            let verifier_challenge_node = FiatShamirChallengeNode::new(ctx, 8);
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let input_a = InputShred::new(ctx, mle_vec_a.num_vars(), &input_layer);

@@ -332,7 +332,7 @@ mod tests {
         );
 
         let neg_mle_2 = DenseMle::new_from_iter(
-            mle_2.bookkeeping_table().into_iter().map(|elem| -elem),
+            mle_2.bookkeeping_table().iter().map(|elem| -elem),
             LayerId::Input(0),
         );
 
@@ -526,7 +526,7 @@ mod tests {
         let neg_mle_2_dataparallel = DenseMle::new_from_iter(
             mle_2_dataparallel
                 .bookkeeping_table()
-                .into_iter()
+                .iter()
                 .map(|elem| -elem),
             LayerId::Input(0),
         );

@@ -370,7 +370,7 @@ impl<F: Field, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReade
     }
 }
 
-impl<F, T: Default> TranscriptReader<F, T> {
+impl<F: std::fmt::Debug, T: Default> TranscriptReader<F, T> {
     /// Generate a new `TranscriptReader` to operate on a given `transcript`.
     pub fn new(transcript: Transcript<F>) -> Self {
         Self {
