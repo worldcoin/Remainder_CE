@@ -17,7 +17,7 @@ use remainder::{
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     sumcheck::evaluate_at_a_point,
 };
-use remainder_shared_types::ff_field;
+use remainder_shared_types::{ff_field, Field};
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
@@ -36,15 +36,6 @@ use super::hyrax_layer::HyraxClaim;
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-/// FIXME: temporary fix to work with hyrax input layer proofs and the generic input layer proof for
-/// [HyraxCircuitInputLayerEnum]. Need this for circuits that use multiple different types of input layers.
-pub enum InputProofEnum<C: PrimeOrderCurve> {
-    HyraxInputLayerProof(HyraxInputLayerProof<C>),
-    PublicInputLayerProof(
-        PublicInputLayer<C::Scalar>,
-        Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
-    ),
-}
 /// FIXME: temporary fix to work with hyrax input layers and the generic input layers for
 /// [InputLayerEnum] in `remainder_prover`. Need this for circuits that use multiple different
 /// types of input layers.
@@ -106,8 +97,8 @@ pub enum HyraxProverCommitmentEnum<C: PrimeOrderCurve> {
 /// added to transcript.
 #[derive(Debug, Clone)]
 pub enum HyraxVerifierCommitmentEnum<C: PrimeOrderCurve> {
-    HyraxCommitment(Vec<C>),
-    PublicCommitment(Vec<C::Scalar>),
+    HyraxCommitment(LayerId, Vec<C>),
+    PublicCommitment(LayerId, Vec<C::Scalar>),
 }
 
 /// The appropriate proof structure for a [HyraxInputLayer], which includes
@@ -383,6 +374,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
     }
 }
 
+// FIXME(Ben) make this a helper, and use it also for FS challenge
 pub fn verify_public_input_layer<C: PrimeOrderCurve>(
     mle_vec: &[C::Scalar],
     claim: &Claim<C::Scalar>,
