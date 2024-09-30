@@ -19,9 +19,9 @@ fn test_completeness() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("testing proof of product (completeness) - prover");
 
-    let x = committer.committed_scalar(&Fr::from(7 as u64), &Fr::from(4211 as u64));
-    let y = committer.committed_scalar(&Fr::from(4 as u64), &Fr::from(112 as u64));
-    let z = committer.committed_scalar(&Fr::from(28 as u64), &Fr::from(741 as u64));
+    let x = committer.committed_scalar(&Fr::from(7_u64), &Fr::from(4211_u64));
+    let y = committer.committed_scalar(&Fr::from(4_u64), &Fr::from(112_u64));
+    let z = committer.committed_scalar(&Fr::from(28_u64), &Fr::from(741_u64));
     let proof = ProofOfProduct::prove(
         &x,
         &y,
@@ -53,9 +53,9 @@ fn test_soundness() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("testing proof of product (soundness) - prover");
 
-    let x = committer.committed_scalar(&Fr::from(7 as u64), &Fr::from(20 as u64));
-    let y = committer.committed_scalar(&Fr::from(4 as u64), &Fr::from(31 as u64));
-    let z = committer.committed_scalar(&Fr::from(28 as u64).neg(), &Fr::from(414 as u64));
+    let x = committer.committed_scalar(&Fr::from(7_u64), &Fr::from(20_u64));
+    let y = committer.committed_scalar(&Fr::from(4_u64), &Fr::from(31_u64));
+    let z = committer.committed_scalar(&Fr::from(28_u64).neg(), &Fr::from(414_u64));
     let proof = ProofOfProduct::prove(
         &x,
         &y,
