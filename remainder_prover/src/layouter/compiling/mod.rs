@@ -48,7 +48,7 @@ use log::info;
 use remainder_shared_types::transcript::{ProverTranscript, Transcript, TranscriptWriter};
 use remainder_shared_types::Field;
 
-use super::layouting::{CircuitLocation, InputNodeMap};
+use super::layouting::{CircuitLocation, InputNodeMap, LayerMap};
 use super::nodes::circuit_inputs::InputLayerData;
 use super::nodes::NodeId;
 use super::{
@@ -117,7 +117,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         input_layer_to_node_map: InputNodeMap,
         data_input_layers: Vec<InputLayerData<F>>,
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> InstantiatedCircuit<F> {
+    ) -> (InstantiatedCircuit<F>, LayerMap<F>) {
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
             fiat_shamir_challenges: fiat_shamir_challenge_descriptions,
@@ -279,18 +279,26 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                     output_layer_description.into_prover_output_layer(&circuit_map);
                 prover_output_layers.push(prover_output_layer)
             });
-        InstantiatedCircuit {
+        let instantiated_circuit = InstantiatedCircuit {
             input_layers: prover_input_layers,
             fiat_shamir_challenges,
             layers: Layers::new_with_layers(prover_intermediate_layers),
             output_layers: prover_output_layers,
-        }
+        };
+
+        let layer_map = circuit_map.convert_to_layer_map();
+
+        (instantiated_circuit, layer_map)
     }
 
     fn synthesize_and_commit(
         &mut self,
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> (InstantiatedCircuit<F>, GKRCircuitDescription<F>) {
+    ) -> (
+        InstantiatedCircuit<F>,
+        LayerMap<F>,
+        GKRCircuitDescription<F>,
+    ) {
         let ctx = Context::new();
         let (component, input_layer_data) = (self.witness_builder)(&ctx);
         // TODO(vishady): ADD CIRCUIT DESCRIPTION TO TRANSCRIPT (maybe not
@@ -298,14 +306,14 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         let (circuit_description, input_node_map) =
             generate_circuit_description(component, ctx).unwrap();
 
-        let instantiated_circuit = self.populate_circuit(
+        let (instantiated_circuit, layer_map) = self.populate_circuit(
             &circuit_description,
             input_node_map,
             input_layer_data,
             transcript_writer,
         );
 
-        (instantiated_circuit, circuit_description)
+        (instantiated_circuit, layer_map, circuit_description)
     }
 
     /// From the witness builder, generate a circuit description and then an
@@ -326,6 +334,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 layers,
                 fiat_shamir_challenges: _fiat_shamir_challenges,
             },
+            layer_map,
             circuit_description,
         ) = self.synthesize_and_commit(&mut transcript_writer);
 
@@ -385,7 +394,12 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             let claim_aggr_timer =
                 start_timer!(|| format!("Claim aggregation for layer {:?}", layer_id));
 
-            let layer_claim = aggregator.prover_aggregate_claims(&layer, &mut transcript_writer)?;
+            let output_mles_from_layer = layer_map.get(&layer_id).unwrap();
+            let layer_claim = aggregator.prover_aggregate_claims(
+                &layer,
+                output_mles_from_layer,
+                &mut transcript_writer,
+            )?;
 
             end_timer!(claim_aggr_timer);
 
@@ -429,8 +443,12 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 input_layer.layer_id()
             ));
 
-            let layer_claim =
-                aggregator.prover_aggregate_claims_input(&input_layer, &mut transcript_writer)?;
+            let output_mles_from_layer = layer_map.get(&layer_id).unwrap();
+            let layer_claim = aggregator.prover_aggregate_claims_input(
+                &input_layer,
+                output_mles_from_layer,
+                &mut transcript_writer,
+            )?;
 
             end_timer!(claim_aggr_timer);
 

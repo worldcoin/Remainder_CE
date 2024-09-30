@@ -7,7 +7,6 @@ use super::LayerId;
 use crate::expression::circuit_expr::MleDescription;
 use crate::expression::verifier_expr::VerifierMle;
 use crate::mle::dense::DenseMle;
-use crate::mle::mle_enum::MleEnum;
 use crate::mle::Mle;
 
 /// Represents a normal form for a layer expression in which the layer is represented as a linear
@@ -65,7 +64,6 @@ impl<F: Field> Product<F, Option<F>> {
         Intermediate::Atom {
             layer_id: mle.layer_id(),
             point: mle.get_claim_point(bindings),
-            mle_enum: Box::new(None),
             value: None,
         }
     }
@@ -106,7 +104,6 @@ impl<F: Field> Product<F, F> {
         Intermediate::Atom {
             layer_id: mle_ref.layer_id,
             point: mle_ref.get_bound_point(),
-            mle_enum: Box::new(Some(MleEnum::Dense(mle_ref.clone()))),
             value: mle_ref.bookkeeping_table()[0],
         }
     }
@@ -140,7 +137,6 @@ impl<F: Field> Product<F, F> {
         Intermediate::Atom {
             layer_id: verifier_mle.layer_id(),
             point: verifier_mle.get_bound_point(),
-            mle_enum: Box::new(None),
             value: verifier_mle.value(),
         }
     }
@@ -158,9 +154,6 @@ pub enum Intermediate<F: Field, T> {
         point: Vec<F>,
         /// the value (C::Scalar), commitment to the value (C), or CommittedScalar
         value: T,
-        /// the mle enum associated with the point and the value above,
-        /// populated for the prover but None for the verifier.
-        mle_enum: Box<Option<MleEnum<F>>>,
     },
     /// A struct representing a commitment to the product of two MLE evaluations.
     Composite {
@@ -235,15 +228,11 @@ fn new_with_values_single<F: Field, S, T>(
             .zip(values)
             .map(|(pp, value)| match pp {
                 Intermediate::Atom {
-                    layer_id,
-                    point,
-                    mle_enum,
-                    ..
+                    layer_id, point, ..
                 } => Intermediate::Atom {
                     layer_id: *layer_id,
                     point: point.clone(),
                     value,
-                    mle_enum: mle_enum.clone(),
                 },
                 Intermediate::Composite { .. } => Intermediate::Composite { value },
             })

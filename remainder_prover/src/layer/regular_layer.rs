@@ -615,14 +615,14 @@ impl<F: Field> RegularLayer<F> {
             match expr_node {
                 ExpressionNode::Mle(mle_vec_index) => {
                     let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
-                    let val = mle.current_mle.value();
+                    let val = mle.mle.value();
                     transcript_writer.append("Leaf MLE value", val);
                     Ok(())
                 }
                 ExpressionNode::Product(mle_vec_indices) => {
                     for mle_vec_index in mle_vec_indices {
                         let mle = &mle_vec[mle_vec_index.index()];
-                        let eval = mle.current_mle.value();
+                        let eval = mle.mle.value();
                         transcript_writer.append("Product MLE value", eval);
                     }
                     Ok(())

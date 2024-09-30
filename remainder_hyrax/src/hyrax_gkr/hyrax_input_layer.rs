@@ -398,7 +398,7 @@ pub fn verify_public_input_layer<C: PrimeOrderCurve>(
         debug_assert_eq!(mle.bookkeeping_table().len(), 1);
         eval.unwrap()
     } else {
-        Claim::new(vec![], mle.current_mle[0])
+        Claim::new(vec![], mle.mle[0])
     };
 
     assert_eq!(eval.get_point(), claim.get_point());

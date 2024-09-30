@@ -16,7 +16,7 @@ use crate::{
         combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
         LayerError, VerifierLayer,
     },
-    mle::{dense::DenseMle, mle_enum::MleEnum},
+    mle::dense::DenseMle,
     sumcheck::evaluate_at_a_point,
 };
 
@@ -78,7 +78,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for RegularLayer<F> {
                             claimed_value,
                             Some(self.layer_id()),
                             Some(mle_layer_id),
-                            Some(MleEnum::Dense(mle_ref.clone())),
                         );
 
                         // --- Push it into the list of claims ---
@@ -112,7 +111,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for RegularLayer<F> {
                                 claimed_value,
                                 Some(self.layer_id()),
                                 Some(mle_layer_id),
-                                Some(MleEnum::Dense(mle_ref.clone())),
                             );
 
                             // --- Push it into the list of claims ---
@@ -136,7 +134,7 @@ impl<F: Field> YieldWLXEvals<F> for RegularLayer<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        claim_mle_refs: Vec<MleEnum<F>>,
+        claim_mle_refs: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
@@ -210,17 +208,12 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierRegularLayer<F> {
                     // --- Grab the actual value that the claim is supposed to evaluate to ---
                     let claimed_value = verifier_mle.value();
 
-                    // Dummy MLE ref.
-                    let mle_ref =
-                        MleEnum::Dense(DenseMle::new_from_raw(vec![claimed_value], mle_layer_id));
-
                     // --- Construct the claim ---
                     let claim: ClaimMle<F> = ClaimMle::new(
                         fixed_mle_indices,
                         claimed_value,
                         Some(self.layer_id()),
                         Some(mle_layer_id),
-                        Some(mle_ref),
                     );
 
                     // --- Push it into the list of claims ---
@@ -239,19 +232,12 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierRegularLayer<F> {
 
                         let claimed_value = verifier_mle.value();
 
-                        // Dummy MLE ref.
-                        let mle_ref = MleEnum::Dense(DenseMle::new_from_raw(
-                            vec![claimed_value],
-                            mle_layer_id,
-                        ));
-
                         // --- Construct the claim ---
                         let claim: ClaimMle<F> = ClaimMle::new(
                             fixed_mle_indices,
                             claimed_value,
                             Some(self.layer_id()),
                             Some(mle_layer_id),
-                            Some(mle_ref),
                         );
 
                         // --- Push it into the list of claims ---

@@ -17,7 +17,7 @@ use crate::{
         combine_mle_refs::get_og_mle_refs,
         regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
     },
-    mle::mle_enum::MleEnum,
+    mle::dense::DenseMle,
     prover::GKRError,
 };
 
@@ -30,6 +30,8 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 ///   to be aggregated into one.
 /// * `layer`: typically, the GKR layer this claim group is making claims on,
 ///    but in general could be anything that yields WLX evalutions.
+/// * `output_mles_from_layer`: The compiled bookkeeping tables that result from
+///    this layer, in order to aggregate into the layerwise bookkeeping table.
 /// * `transcript_writer`: is used to post wlx evaluations and generate
 ///   challenges.
 ///
@@ -43,6 +45,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 pub fn prover_aggregate_claims_helper<F: Field>(
     claims: &ClaimGroup<F>,
     layer: &impl YieldWLXEvals<F>,
+    output_mles_from_layer: &[DenseMle<F>],
     transcript_writer: &mut impl ProverTranscript<F>,
 ) -> Result<Claim<F>, GKRError> {
     let num_claims = claims.get_num_claims();
@@ -51,7 +54,7 @@ pub fn prover_aggregate_claims_helper<F: Field>(
 
     let claim_preproc_timer = start_timer!(|| "Claim preprocessing".to_string());
 
-    let layer_mle_refs = get_og_mle_refs(claims.get_claim_mle_refs());
+    let fixed_output_mles = get_og_mle_refs(output_mles_from_layer);
 
     let claim_groups = form_claim_groups(claims.get_claims().to_vec());
 
@@ -69,7 +72,7 @@ pub fn prover_aggregate_claims_helper<F: Field>(
         .map(|claim_group| {
             prover_aggregate_claims_in_one_round(
                 &claim_group,
-                &layer_mle_refs,
+                &fixed_output_mles,
                 layer,
                 transcript_writer,
             )
@@ -90,7 +93,7 @@ pub fn prover_aggregate_claims_helper<F: Field>(
     // Finally, aggregate all intermediate claims.
     let claim = prover_aggregate_claims_in_one_round(
         &ClaimGroup::new(intermediate_claims).unwrap(),
-        &layer_mle_refs,
+        &fixed_output_mles,
         layer,
         transcript_writer,
     )?;
@@ -200,16 +203,12 @@ pub fn compute_aggregated_challenges<F: Field>(
 /// aggregation on the claim group `claims` in a single stage without further
 /// grouping.
 /// * `claims`: the group of claims to be aggregated.
-/// * `compute_wlx_fn`: closure for computing the wlx evaluations. If
-///   `aggregate_claims_in_one_round` is called by the prover, the closure
-///   should compute the wlx evaluations, potentially using "smart" aggregation
-///   controlled by `ENABLE_REDUCED_WLX_EVALS` which provides tighter bounds on
-///   the degree of `W(l(x))`. A prover's `compute_wlx_fn` should never produce
-///   an error. If called by the verifier, the closure should return the wlx
-///   evaluations sent by the prover. In case claim aggregation requires more
-///   evaluations than the ones provided by the prover, the closure should
-///   return a `GKRError` which is propagated back to the caller of
-///   `aggregate_claims_in_one_round`.
+/// * `layer_mles`: the compiled bookkeeping tables from this layer, which
+///    when aggregated appropriately with their prefix bits, make up the
+///    layerwise bookkeeping table.
+/// * `layer`: the layer whose output MLE is being made a claim on. Each of the
+///    claims are aggregated into one claim, whose validity is reduced to the
+///    validity of a claim in a future layer throught he sumcheck protocol.
 /// * `transcript_writer`: is used to post wlx evaluations and generate
 ///   challenges.
 ///
@@ -218,7 +217,7 @@ pub fn compute_aggregated_challenges<F: Field>(
 /// If successful, returns a single aggregated claim.
 fn prover_aggregate_claims_in_one_round<F: Field>(
     claims: &ClaimGroup<F>,
-    layer_mle_refs: &[MleEnum<F>],
+    layer_mles: &[DenseMle<F>],
     layer: &impl YieldWLXEvals<F>,
     transcript_writer: &mut impl ProverTranscript<F>,
 ) -> Result<Claim<F>, GKRError> {
@@ -243,11 +242,12 @@ fn prover_aggregate_claims_in_one_round<F: Field>(
         .get_wlx_evaluations(
             claims.get_claim_points_matrix(),
             claims.get_results(),
-            layer_mle_refs.to_vec(),
+            layer_mles.to_vec(),
             claims.get_num_claims(),
             claims.get_num_vars(),
         )
         .unwrap();
+    dbg!(&wlx_evaluations);
     let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 
     // Append evaluations to the transcript before sampling a challenge.

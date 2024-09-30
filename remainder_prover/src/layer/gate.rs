@@ -24,10 +24,7 @@ use crate::{
     expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{
-        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum,
-        Mle, MleIndex,
-    },
+    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
     prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
@@ -666,7 +663,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for GateLayer<F> {
             val,
             Some(self.layer_id()),
             Some(self.lhs.layer_id()),
-            Some(MleEnum::Dense(lhs_reduced)),
         );
         claims.push(claim);
 
@@ -685,7 +681,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for GateLayer<F> {
             val,
             Some(self.layer_id()),
             Some(self.rhs.layer_id()),
-            Some(MleEnum::Dense(rhs_reduced)),
         );
         claims.push(claim);
 
@@ -714,15 +709,11 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
             .collect_vec();
         let lhs_val = self.lhs_mle.value();
 
-        // WARNING: DO NOT TRUST THIS MLE! IT IS INCORRECT
-        let dummy_lhs_mle = DenseMle::new_from_raw(vec![lhs_val], self.layer_id());
-
         let lhs_claim: ClaimMle<F> = ClaimMle::new(
             lhs_point,
             lhs_val,
             Some(self.layer_id()),
             Some(self.lhs_mle.layer_id()),
-            Some(MleEnum::Dense(dummy_lhs_mle)),
         );
 
         // Grab the claim on the right side.
@@ -744,15 +735,11 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
             .collect_vec();
         let rhs_val = self.rhs_mle.value();
 
-        // WARNING: DO NOT TRUST THIS MLE! IT IS INCORRECT
-        let dummy_rhs_mle = DenseMle::new_from_raw(vec![rhs_val], self.layer_id());
-
         let rhs_claim: ClaimMle<F> = ClaimMle::new(
             rhs_point,
             rhs_val,
             Some(self.layer_id()),
             Some(self.rhs_mle.layer_id()),
-            Some(MleEnum::Dense(dummy_rhs_mle)),
         );
 
         Ok(vec![lhs_claim, rhs_claim])
@@ -764,7 +751,7 @@ impl<F: Field> YieldWLXEvals<F> for GateLayer<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        _claimed_mles: Vec<MleEnum<F>>,
+        _claimed_mles: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {

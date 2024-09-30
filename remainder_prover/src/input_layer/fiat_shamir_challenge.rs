@@ -83,24 +83,24 @@ impl<F: Field> FiatShamirChallenge<F> {
     /// the claimed value in `claim`.
     pub fn verify(&self, claim: &Claim<F>) -> Result<(), FiatShamirChallengeError> {
         let mle_evals = self.mle.get_evals_vector().clone();
-        let mut mle_ref = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
-        mle_ref.index_mle_indices(0);
+        let mut mle = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
+        mle.index_mle_indices(0);
 
-        if mle_ref.num_free_vars() != claim.get_point().len() {
+        if mle.num_free_vars() != claim.get_point().len() {
             return Err(FiatShamirChallengeError::NumVarsMismatch(
                 claim.get_point().len(),
-                mle_ref.num_free_vars(),
+                mle.num_free_vars(),
             ));
         }
 
-        let eval = if mle_ref.num_free_vars() != 0 {
+        let eval = if mle.num_free_vars() != 0 {
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
-                eval = mle_ref.fix_variable(curr_bit, chal);
+                eval = mle.fix_variable(curr_bit, chal);
             }
             eval.unwrap()
         } else {
-            Claim::new(vec![], mle_ref.current_mle[0])
+            Claim::new(vec![], mle.mle[0])
         };
 
         // This is an internal error as it should never happen.

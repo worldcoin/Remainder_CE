@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
     layer::LayerId,
-    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
+    mle::{dense::DenseMle, evals::MultilinearExtension},
 };
 
 use super::{
@@ -131,7 +131,7 @@ impl<F: Field> InputLayerDescription<F> for PublicInputLayerDescription<F> {
             debug_assert_eq!(mle_ref.bookkeeping_table().len(), 1);
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
-            Claim::new(vec![], mle_ref.current_mle[0])
+            Claim::new(vec![], mle_ref.mle[0])
         };
 
         if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {
@@ -162,7 +162,7 @@ impl<F: Field> YieldWLXEvals<F> for PublicInputLayer<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        claimed_mles: Vec<MleEnum<F>>,
+        claimed_mles: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
@@ -201,7 +201,7 @@ mod tests {
         let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
         let verifier_public_input_layer =
             PublicInputLayerDescription::new(layer_id, dense_mle.num_free_vars());
-        let mut public_input_layer = PublicInputLayer::new(dense_mle.original_mle, layer_id);
+        let mut public_input_layer = PublicInputLayer::new(dense_mle.mle, layer_id);
 
         // Transcript writer with test sponge that always returns `1`.
         let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =

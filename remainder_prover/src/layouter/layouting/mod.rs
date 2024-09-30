@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests;
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{hash_map::Entry, BTreeSet, HashMap, HashSet};
 
 use itertools::Itertools;
 use remainder_shared_types::Field;
@@ -13,7 +13,7 @@ use crate::{
     expression::circuit_expr::MleDescription,
     layer::LayerId,
     layouter::nodes::sector::{Sector, SectorGroup},
-    mle::evals::MultilinearExtension,
+    mle::{dense::DenseMle, evals::MultilinearExtension},
 };
 
 use super::nodes::{
@@ -32,6 +32,9 @@ use super::nodes::{
 /// A HashMap that records during circuit compilation where nodes live in the circuit and what data they yield.
 #[derive(Debug)]
 pub struct CircuitMap<F>(pub(crate) HashMap<CircuitLocation, MultilinearExtension<F>>);
+/// A map that maps layer ID to all the MLEs that are output from that layer. Together these MLEs are combined
+/// along with the information from their prefix bits to form the layerwise bookkeeping table.
+pub type LayerMap<F> = HashMap<LayerId, Vec<DenseMle<F>>>;
 
 impl<F: Field> CircuitMap<F> {
     /// Create a new circuit map, which maps circuit location to the data stored at that location.removing
@@ -68,6 +71,30 @@ impl<F: Field> CircuitMap<F> {
     /// Adds a new node to the CircuitMap
     pub fn add_node(&mut self, circuit_location: CircuitLocation, value: MultilinearExtension<F>) {
         self.0.insert(circuit_location, value);
+    }
+
+    /// Destructively convert this into a map that maps LayerId to the [MultilinearExtension]s
+    /// that generate claims on this area. This is to aid in claim aggregation,
+    /// so we know the parts of the layerwise bookkeeping table in order to aggregate claims
+    /// on this layer.
+    pub fn convert_to_layer_map(mut self) -> LayerMap<F> {
+        let mut layer_map = HashMap::<LayerId, Vec<DenseMle<F>>>::new();
+        self.0.drain().for_each(|(circuit_location, data)| {
+            let corresponding_mle = DenseMle::new_with_prefix_bits(
+                data,
+                circuit_location.layer_id,
+                circuit_location.prefix_bits,
+            );
+            if let Entry::Vacant(e) = layer_map.entry(circuit_location.layer_id) {
+                e.insert(vec![corresponding_mle]);
+            } else {
+                layer_map
+                    .get_mut(&circuit_location.layer_id)
+                    .unwrap()
+                    .push(corresponding_mle);
+            }
+        });
+        layer_map
     }
 }
 
