@@ -8,7 +8,7 @@ use ark_std::{end_timer, start_timer};
 use hyrax_circuit_inputs::HyraxInputLayerData;
 use hyrax_input_layer::{
     verify_public_input_layer, HyraxInputLayer, HyraxInputLayerEnum, HyraxInputLayerProof,
-    HyraxProverCommitmentEnum, HyraxVerifierCommitmentEnum, InputProofEnum,
+    HyraxProverCommitmentEnum, HyraxVerifierCommitmentEnum,
 };
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
@@ -58,9 +58,10 @@ pub mod tests;
 pub struct HyraxProof<C: PrimeOrderCurve> {
     /// The [HyraxLayerProof] for each of the intermediate layers in this circuit.
     layer_proofs: Vec<HyraxLayerProof<C>>,
+    /// The MLEs of the public inputs, along with their layer ids
+    public_inputs: Vec<(LayerId, Vec<C::Scalar>)>,
     /// The [HyraxInputLayerProof] for each of the input polynomial commitments using the Hyrax PCS.
-    input_layer_proofs: Vec<InputProofEnum<C>>,
-    // FIXME move the input layer proofs for PublicInputLayers here
+    hyrax_input_proofs: Vec<HyraxInputLayerProof<C>>,
     /// The prover's claims on public input layers and verifier challenges, in CommittedScalar form, i.e. including the blinding factors.
     claims_on_public_values: Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
     /// A commitment to the output of the circuit, i.e. what the final value of the output layer is.
@@ -148,10 +149,7 @@ impl<
         input_layer_to_node_map: InputNodeMap,
         data_input_layers: Vec<HyraxInputLayerData<C>>,
         transcript_writer: &mut impl ECProverTranscript<C>,
-    ) -> (
-        HyraxInstantiatedCircuit<C>,
-        Vec<HyraxVerifierCommitmentEnum<C>>,
-    ) {
+    ) -> HyraxInstantiatedCircuit<C> {
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
             fiat_shamir_challenges: fiat_shamir_challenge_descriptions,
@@ -215,7 +213,6 @@ impl<
         // we add the data in the input data corresopnding with the circuit location for each input data struct into the circuit map
         let mut prover_input_layers: Vec<HyraxInputLayerEnum<C>> = Vec::new();
         let mut fiat_shamir_challenges = Vec::new();
-        let mut input_commitments: Vec<HyraxVerifierCommitmentEnum<C>> = Vec::new();
         input_layer_descriptions
             .iter()
             .for_each(|input_layer_description| {
@@ -261,7 +258,6 @@ impl<
                             panic!("We should only have no precommit or a hyrax precommit for hyrax input layers!")
                         };
                         transcript_writer.append_ec_points("Hyrax commitment", &hyrax_commit);
-                        input_commitments.push(HyraxVerifierCommitmentEnum::HyraxCommitment(hyrax_commit.clone()));
                         prover_input_layers.push(HyraxInputLayerEnum::HyraxInputLayer(hyrax_prover_input_layer));
 
                     }
@@ -276,7 +272,6 @@ impl<
                                 "Input Coefficients for Public Input",
                                 &public_input_coefficients,
                             );
-                            input_commitments.push(HyraxVerifierCommitmentEnum::PublicCommitment(public_input_coefficients));
                         }
                         prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
                     },
@@ -347,7 +342,7 @@ impl<
         };
         end_timer!(hyrax_populate_circuit_timer);
 
-        (hyrax_circuit, input_commitments)
+        hyrax_circuit
     }
 
     pub fn prove_gkr_circuit(
@@ -355,13 +350,12 @@ impl<
         witness_function: Fn,
         transcript_writer: &mut impl ECProverTranscript<C>,
     ) -> (
-        Vec<HyraxVerifierCommitmentEnum<C>>,
         GKRCircuitDescription<C::Scalar>,
         HyraxProof<C>,
     ) {
         let ((circuit_description, input_layer_to_node_map), input_data) =
             Self::generate_circuit_description(witness_function);
-        let (mut instantiated_circuit, commitments) = self.populate_hyrax_circuit(
+        let mut instantiated_circuit = self.populate_hyrax_circuit(
             &circuit_description,
             input_layer_to_node_map,
             input_data,
@@ -370,7 +364,7 @@ impl<
         let prove_timer = start_timer!(|| "prove hyrax circuit");
         let proof = self.prove(&mut instantiated_circuit, transcript_writer);
         end_timer!(prove_timer);
-        (commitments, circuit_description, proof)
+        (circuit_description, proof)
     }
 
     #[allow(clippy::type_complexity)]
@@ -444,54 +438,70 @@ impl<
             })
             .collect_vec();
 
-        // Input layer proofs
-        let input_layer_proofs = input_layers
+        // Hyrax input layer proofs
+        let hyrax_input_layer_proofs = input_layers
             .iter_mut()
-            .map(|input_layer| {
+            .filter_map(|input_layer| {
                 let layer_id = input_layer.layer_id();
                 let committed_claims = claim_tracker.get(&layer_id).unwrap();
-                match input_layer {
-                    HyraxInputLayerEnum::HyraxInputLayer(hyrax_input_layer) => {
-                        let hyrax_commitment = hyrax_input_layer.comm.as_ref().unwrap();
-                        let input_proof = HyraxInputLayerProof::prove(
-                            hyrax_input_layer,
-                            hyrax_commitment,
-                            committed_claims,
-                            committer,
-                            &mut blinding_rng,
-                            transcript,
-                            converter,
-                        );
-                        InputProofEnum::HyraxInputLayerProof(input_proof)
-                    }
-                    // For the other input layers, the prover just hands over the (CommittedScalar-valued) HyraxClaim for each claim.
-                    // The verifier will need to check that each of the claims is consistent with the input layer.
-                    HyraxInputLayerEnum::PublicInputLayer(layer) => {
-                        InputProofEnum::PublicInputLayerProof(
-                            layer.clone(),
-                            committed_claims.clone(),
-                        )
-                    }
+                if let HyraxInputLayerEnum::HyraxInputLayer(hyrax_input_layer) = input_layer {
+                    let hyrax_commitment = hyrax_input_layer.comm.as_ref().unwrap();
+                    let input_proof = HyraxInputLayerProof::prove(
+                        hyrax_input_layer,
+                        hyrax_commitment,
+                        committed_claims,
+                        committer,
+                        &mut blinding_rng,
+                        transcript,
+                        converter,
+                    );
+                    Some(input_proof)
+                } else {
+                    None
                 }
             })
             .collect_vec();
 
-        // --------- Verifier Challenges ---------
-        // The the claims on verifier challenges are checked directly by the verifier, without
-        // aggregation, so there is almost nothing to do here.  However, the verifier receives the
-        // prover's claims in committed form (this is just how we implemented it) and so we need to
-        // provide the blinding factors in order for V to be able to check them.
-        let claims_on_public_values = fiat_shamir_challenges
+        // --------- Public Input Layers & Verifier Challenges ---------
+        // The the claims on both public input layers and verifier challenges are checked directly
+        // by the verifier, without aggregation, so there is almost nothing to do here.  However,
+        // the verifier received the prover's claims as committed form (this is just how we
+        // implemented layer proof) and so we provide here the CommittedScalar forms in order for V
+        // to be able to actually verify the claims. 
+        let claims_on_public_values = input_layers
             .iter()
-            .flat_map(|fiat_shamir_challenge| {
-                let layer_id = fiat_shamir_challenge.layer_id();
-                claim_tracker.get(&layer_id).unwrap().clone()
+            .filter_map(|input_layer| {
+                if let HyraxInputLayerEnum::PublicInputLayer(layer) = input_layer {
+                    let layer_id = layer.layer_id();
+                    Some(claim_tracker.get(&layer_id).unwrap())
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .chain(fiat_shamir_challenges.iter().flat_map(|fiat_shamir_challenge| {
+                claim_tracker.get(&fiat_shamir_challenge.layer_id()).unwrap()
+            })).cloned().collect_vec();
+
+        // Collect the values of the public inputs
+        let public_inputs = input_layers
+            .iter()
+            .filter_map(|input_layer| {
+                if let HyraxInputLayerEnum::PublicInputLayer(layer) = input_layer {
+                    let layer_id = layer.layer_id();
+                    // FIXME(Ben) remove the clone here somehow
+                    let public_values = layer.get_evaluations_as_vec().clone();
+                    Some((layer_id, public_values))
+                } else {
+                    None
+                }
             })
             .collect_vec();
 
         HyraxProof {
             layer_proofs,
-            input_layer_proofs,
+            public_inputs,
+            hyrax_input_proofs: hyrax_input_layer_proofs,
             claims_on_public_values,
             output_layer_proofs,
         }
@@ -501,25 +511,25 @@ impl<
         &self,
         proof: &HyraxProof<C>,
         circuit_description: &mut GKRCircuitDescription<C::Scalar>,
-        commitments: &[HyraxVerifierCommitmentEnum<C>],
         verifier_transcript: &mut impl ECVerifierTranscript<C>,
     ) {
         // TODO(vishady, ryancao): add circuit description to verifier transcript as well!!
 
-        // First consume all input layer commitments from the transcript
-        commitments.iter().for_each(|commitment| match commitment {
-            HyraxVerifierCommitmentEnum::HyraxCommitment(hyrax_commit) => {
-                let transcript_hyrax_commit = verifier_transcript
-                    .consume_ec_points("hyrax pcs commitment", hyrax_commit.len())
-                    .unwrap();
-                assert_eq!(&transcript_hyrax_commit, hyrax_commit);
-            }
-            HyraxVerifierCommitmentEnum::PublicCommitment(public_commit) => {
-                let transcript_public_commit = verifier_transcript
-                    .consume_scalar_points("public commitment", public_commit.len())
-                    .unwrap();
-                assert_eq!(&transcript_public_commit, public_commit);
-            }
+        // Append the commitments to the private inputs to transcript
+        proof.hyrax_input_proofs.iter().for_each(|input_proof| {
+            let hyrax_commit = &input_proof.input_commitment;
+            let transcript_hyrax_commit = verifier_transcript
+                .consume_ec_points("hyrax pcs commitment", hyrax_commit.len())
+                .unwrap();
+            assert_eq!(&transcript_hyrax_commit, hyrax_commit);
+        });
+        
+        // Append the public inputs to the transcript
+        proof.public_inputs.iter().for_each(|(_layer_id, public_input)| {
+            let transcript_values = verifier_transcript
+                .consume_scalar_points("public values", public_input.len())
+                .unwrap();
+            assert_eq!(&transcript_values, public_input);
         });
 
         // Get the verifier challenges from the transcript.
@@ -537,12 +547,23 @@ impl<
 
         circuit_description.index_mle_indices(0);
 
+        // Get the commitments for hyrax input layers
+        // FIXME(Ben) in the next refactor the HyraxVerifierCommitmentEnum will be removed, so will
+        // the following transformation.
+        let hyrax_input_commitments = proof.hyrax_input_proofs
+            .iter()
+            .map(|input_proof| {
+                (&input_proof.layer_id, &input_proof.input_commitment)
+            })
+            .collect_vec();
+
         let verify_timer = start_timer!(|| "verify hyrax circuit");
         Self::verify(
             proof,
             circuit_description,
             self.committer,
-            commitments,
+            &proof.public_inputs,
+            hyrax_input_commitments,
             fiat_shamir_challenges,
             verifier_transcript,
         );
@@ -556,14 +577,16 @@ impl<
         proof: &HyraxProof<C>,
         circuit_description: &GKRCircuitDescription<C::Scalar>,
         committer: &PedersenCommitter<C>,
-        commitments: &[HyraxVerifierCommitmentEnum<C>],
+        public_inputs: &Vec<(LayerId, Vec<C::Scalar>)>,
+        hyrax_input_commitments: Vec<(&LayerId, &Vec<C>)>,
         fiat_shamir_challenges: Vec<FiatShamirChallenge<C::Scalar>>,
         transcript: &mut impl ECVerifierTranscript<C>,
     ) {
         // Unpack the Hyrax proof.
         let HyraxProof {
             layer_proofs,
-            input_layer_proofs,
+            public_inputs,
+            hyrax_input_proofs,
             claims_on_public_values,
             output_layer_proofs,
         } = proof;
@@ -614,46 +637,38 @@ impl<
             }
         });
 
-        // Input layers verification
-        input_layer_proofs
+        // Verify the hyrax input layer proofs
+        hyrax_input_proofs
             .iter()
-            .zip(commitments)
+            .zip(hyrax_input_commitments.into_iter())
             .for_each(
-                |(input_layer_proof, input_commit)| match input_layer_proof {
-                    InputProofEnum::HyraxInputLayerProof(hyrax_input_proof) => {
-                        // Check that the commitment given also matches with the commitment in the proof
-                        match input_commit {
-                            HyraxVerifierCommitmentEnum::HyraxCommitment(hyrax_commit) => {
-                                assert_eq!(&hyrax_input_proof.input_commitment, hyrax_commit);
-                            }
-                            _ => panic!("should have a hyrax commitment here!"),
-                        }
-                        let layer_id = hyrax_input_proof.layer_id;
-                        let layer_claims_vec = claim_tracker.remove(&layer_id).unwrap().clone();
-                        hyrax_input_proof.verify(&layer_claims_vec, committer, transcript);
-                    }
-                    InputProofEnum::PublicInputLayerProof(layer, committed_claims) => {
-                        let public_commit_from_proof = layer.clone().commit().unwrap();
-                        // Check that the commitment given also matches with the commitment in the proof
-                        match input_commit {
-                            HyraxVerifierCommitmentEnum::PublicCommitment(public_commit) => {
-                                assert_eq!(&public_commit_from_proof, public_commit);
-                            }
-                            _ => panic!("should have a public commitment here!"),
-                        }
-                        let claims_as_commitments =
-                            claim_tracker.remove(&layer.layer_id()).unwrap().clone();
-                        let plaintext_claims =
-                            Self::match_claims(&claims_as_commitments, committed_claims, committer);
-                        plaintext_claims.into_iter().for_each(|claim| {
-                            verify_public_input_layer::<C>(
-                                &public_commit_from_proof,
-                                claim.get_claim(),
-                            );
-                        });
-                    }
-                },
+                |(hyrax_input_proof, (layer_id, hyrax_input_commit))| {
+                    // Check that the commitment given also matches with the commitment in the proof
+                    assert_eq!(layer_id, &hyrax_input_proof.layer_id);
+                    assert_eq!(&hyrax_input_proof.input_commitment, hyrax_input_commit);
+                    let layer_id = hyrax_input_proof.layer_id;
+                    let layer_claims_vec = claim_tracker.remove(&layer_id).unwrap().clone();
+                    hyrax_input_proof.verify(&layer_claims_vec, committer, transcript);
+                }
             );
+
+        // Check the claims on the public input layers
+        public_inputs
+            .iter()
+            .for_each(|(layer_id, values)| {
+                let claims_as_commitments = claim_tracker.remove(&layer_id).unwrap();
+                let plaintext_claims = Self::match_claims(
+                    &claims_as_commitments,
+                    claims_on_public_values,
+                    committer,
+                );
+                plaintext_claims.into_iter().for_each(|claim| {
+                    verify_public_input_layer::<C>(
+                        &values,
+                        claim.get_claim(),
+                    );
+                });
+            });
 
         // Check the claims on the verifier challenges
         fiat_shamir_challenges
@@ -671,7 +686,6 @@ impl<
                     });
             });
 
-        // @vishady this is new, so that we can be sure that the prover didn't e.g. leave out an input layer proof!  (I changed all the claims.get() to claims.remove() above)
         // Check that there aren't any claims left in our claim tracking table!
         assert_eq!(claim_tracker.len(), 0);
     }

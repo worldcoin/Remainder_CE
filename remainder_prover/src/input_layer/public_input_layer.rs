@@ -51,10 +51,18 @@ impl<F: Field> CircuitPublicInputLayer<F> {
     }
 }
 
+impl<F: Field> PublicInputLayer<F> {
+    /// FIXME(Ben) document or remove - could make self.mle public instead?
+    pub fn get_evaluations_as_vec(&self) -> &Vec<F> {
+        &self.mle.get_evals_vector()
+    }
+}
+
 impl<F: Field> InputLayer<F> for PublicInputLayer<F> {
     type ProverCommitment = Vec<F>;
     type VerifierCommitment = Vec<F>;
 
+    // FIXME(Ben) this function will be redundant
     fn commit(&mut self) -> Result<Self::VerifierCommitment, super::InputLayerError> {
         // Because this is a public input layer, we do not need to commit to the
         // MLE and the "commitment" is just the MLE evaluations themselves.
