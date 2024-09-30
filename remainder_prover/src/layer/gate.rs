@@ -21,7 +21,7 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
+    expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
@@ -40,7 +40,7 @@ pub use self::gate_helpers::{
 
 use super::{
     layer_enum::{LayerEnum, VerifierLayerEnum},
-    CircuitLayer, VerifierLayer,
+    LayerDescription, VerifierLayer,
 };
 
 #[cfg(feature = "parallel")]
@@ -197,7 +197,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 /// The circuit-description counterpart of a Gate layer description.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: Field")]
-pub struct CircuitGateLayer<F: Field> {
+pub struct GateLayerDescription<F: Field> {
     /// The layer id associated with this gate layer.
     id: LayerId,
 
@@ -211,28 +211,28 @@ pub struct CircuitGateLayer<F: Field> {
 
     /// The left side of the expression, i.e. the mle that makes up the "x"
     /// variables.
-    lhs_mle: CircuitMle<F>,
+    lhs_mle: MleDescription<F>,
 
     /// The mles that are constructed when initializing phase 2 (binding the y
     /// variables).
-    rhs_mle: CircuitMle<F>,
+    rhs_mle: MleDescription<F>,
 
     /// The number of bits representing the number of "dataparallel" copies of
     /// the circuit.
     num_dataparallel_bits: usize,
 }
 
-impl<F: Field> CircuitGateLayer<F> {
-    /// Constructor for a [CircuitGateLayer].
+impl<F: Field> GateLayerDescription<F> {
+    /// Constructor for a [GateLayerDescription].
     pub fn new(
         num_dataparallel_bits: Option<usize>,
         wiring: Vec<(usize, usize, usize)>,
-        lhs_circuit_mle: CircuitMle<F>,
-        rhs_circuit_mle: CircuitMle<F>,
+        lhs_circuit_mle: MleDescription<F>,
+        rhs_circuit_mle: MleDescription<F>,
         gate_layer_id: LayerId,
         gate_operation: BinaryOperation,
     ) -> Self {
-        CircuitGateLayer {
+        GateLayerDescription {
             id: gate_layer_id,
             gate_operation,
             wiring,
@@ -252,7 +252,7 @@ const DATAPARALLEL_ROUND_ADD_NUM_EVALS: usize = 3;
 const NON_DATAPARALLEL_ROUND_MUL_NUM_EVALS: usize = 3;
 const NON_DATAPARALLEL_ROUND_ADD_NUM_EVALS: usize = 3;
 
-impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
+impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
     type VerifierLayer = VerifierGateLayer<F>;
 
     /// Gets this layer's id.
@@ -269,7 +269,7 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
         let mut challenges = vec![];
 
         // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
-        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR ITERATED/INDEXED ---
+        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
         // --- BITS ---
         let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
@@ -392,7 +392,7 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
         // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
-        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR ITERATED/INDEXED ---
+        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
         // --- BITS ---
         let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
@@ -467,7 +467,7 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
         todo!()
     }
 
-    fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
+    fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
         vec![&self.lhs_mle, &self.rhs_mle]
     }
 
@@ -497,7 +497,7 @@ impl<F: Field> CircuitLayer<F> for CircuitGateLayer<F> {
 
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
+        mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
     ) {
         assert_eq!(mle_outputs_necessary.len(), 1);
@@ -665,7 +665,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for GateLayer<F> {
             fixed_mle_indices_u,
             val,
             Some(self.layer_id()),
-            Some(self.lhs.get_layer_id()),
+            Some(self.lhs.layer_id()),
             Some(MleEnum::Dense(lhs_reduced)),
         );
         claims.push(claim);
@@ -684,7 +684,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for GateLayer<F> {
             fixed_mle_indices_v,
             val,
             Some(self.layer_id()),
-            Some(self.rhs.get_layer_id()),
+            Some(self.rhs.layer_id()),
             Some(MleEnum::Dense(rhs_reduced)),
         );
         claims.push(claim);
@@ -896,7 +896,7 @@ impl<F: Field> GateLayer<F> {
         let beta_g1 = BetaValues::new_beta_equality_mle(challenges);
 
         self.lhs.index_mle_indices(self.num_dataparallel_bits);
-        let num_x = self.lhs.num_iterated_vars();
+        let num_x = self.lhs.num_free_vars();
 
         // Because we are binding `x` variables after this phase, all bookkeeping tables should have size
         // 2^(number of x variables).
@@ -985,7 +985,7 @@ impl<F: Field> GateLayer<F> {
     ) -> Result<Vec<F>, GateError> {
         // Create a beta table according to the challenges used to bind the x variables.
         let beta_u = BetaValues::new_beta_equality_mle(u_claim);
-        let num_y = self.rhs.num_iterated_vars();
+        let num_y = self.rhs.num_free_vars();
 
         // Because we are binding the "y" variables, the size of the bookkeeping tables after this init
         // phase are 2^(number of y variables).
@@ -1146,7 +1146,7 @@ impl<F: Field> GateLayer<F> {
 
         let mut challenges: Vec<F> = vec![];
         transcript_writer.append_elements("Sumcheck evaluations PHASE 1", &first_message);
-        let num_rounds_phase1 = self.lhs.num_iterated_vars();
+        let num_rounds_phase1 = self.lhs.num_free_vars();
 
         // Sumcheck rounds (binding x).
         let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
@@ -1217,7 +1217,7 @@ impl<F: Field> GateLayer<F> {
 
         let mut challenges: Vec<F> = vec![];
 
-        if self.rhs.num_iterated_vars() > 0 {
+        if self.rhs.num_free_vars() > 0 {
             let phase_2_mles = self
                 .phase_2_mles
                 .as_mut()
@@ -1226,7 +1226,7 @@ impl<F: Field> GateLayer<F> {
 
             transcript_writer.append_elements("Sumcheck evaluations", &first_message);
 
-            let num_rounds_phase2 = self.rhs.num_iterated_vars();
+            let num_rounds_phase2 = self.rhs.num_free_vars();
 
             // Bind y, the right side of the sum.
             let sumcheck_rounds_y: Vec<Vec<F>> = std::iter::once(Ok(first_message))
@@ -1283,9 +1283,9 @@ impl<F: std::fmt::Debug + Field> GateLayer<F> {
         impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for GateCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("Gate")
-                    .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())
+                    .field("lhs_mle_ref_layer_id", &self.0.lhs.layer_id())
                     .field("lhs_mle_ref_mle_indices", &self.0.lhs.mle_indices())
-                    .field("rhs_mle_ref_layer_id", &self.0.rhs.get_layer_id())
+                    .field("rhs_mle_ref_layer_id", &self.0.rhs.layer_id())
                     .field("rhs_mle_ref_mle_indices", &self.0.rhs.mle_indices())
                     .field("add_nonzero_gates", &self.0.nonzero_gates)
                     .field("num_dataparallel_bits", &self.0.num_dataparallel_bits)

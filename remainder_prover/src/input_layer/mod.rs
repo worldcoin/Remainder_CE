@@ -107,7 +107,7 @@ pub trait InputLayer<F: Field> {
 }
 
 /// The trait representing methods necessary for the circuit description of an input layer.
-pub trait CircuitInputLayer<F: Field> {
+pub trait InputLayerDescription<F: Field> {
     /// The struct that contains the commitment to the contents of the input_layer.
     type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
 

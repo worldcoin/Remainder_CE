@@ -15,7 +15,7 @@ use remainder::layer::product::{Intermediate, PostSumcheckLayer};
 use remainder::layer::Layer;
 use remainder::layer::LayerId;
 use remainder::mle::mle_enum::MleEnum;
-use remainder::{claims::wlx_eval::ClaimMle, layer::CircuitLayer};
+use remainder::{claims::wlx_eval::ClaimMle, layer::LayerDescription};
 use remainder::{claims::wlx_eval::YieldWLXEvals, layer::layer_enum::LayerEnum};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
@@ -228,7 +228,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
     pub fn verify(
         proof: &HyraxLayerProof<C>,
         // a description of the layer being proven
-        layer_desc: &impl CircuitLayer<C::Scalar>,
+        layer_desc: &impl LayerDescription<C::Scalar>,
         // commitments to the unaggregated claims
         claim_commitments: &[HyraxClaim<C::Scalar, C>],
         committer: &PedersenCommitter<C>,

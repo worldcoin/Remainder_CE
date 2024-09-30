@@ -27,7 +27,7 @@ pub enum ExpressionError {
     #[error("MLE ref with more than one element in its bookkeeping table")]
     EvaluateNotFullyBoundError,
 
-    /// During evaluation, an MLE should *not* contain [crate::mle::MleIndex::Iterated] variables.
+    /// During evaluation, an MLE should *not* contain [crate::mle::MleIndex::Free] variables.
     #[error("MLE contains indices other than indexed.")]
     EvaluateNotFullyIndexedError,
 

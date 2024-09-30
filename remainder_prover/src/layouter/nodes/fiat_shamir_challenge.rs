@@ -5,7 +5,7 @@ use ark_std::log2;
 use remainder_shared_types::Field;
 
 use crate::{
-    input_layer::fiat_shamir_challenge::CircuitFiatShamirChallenge,
+    input_layer::fiat_shamir_challenge::FiatShamirChallengeDescription,
     layer::LayerId,
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation},
 };
@@ -24,7 +24,7 @@ impl CircuitNode for FiatShamirChallengeNode {
         self.id
     }
 
-    fn children(&self) -> Option<Vec<NodeId>> {
+    fn subnodes(&self) -> Option<Vec<NodeId>> {
         None
     }
 
@@ -46,17 +46,17 @@ impl FiatShamirChallengeNode {
         }
     }
 
-    /// Generate a [CircuitFiatShamirChallenge], which is the
+    /// Generate a [iatShamirChallengeDescription], which is the
     /// circuit description for a [FiatShamirChallengeNode].
     pub fn generate_circuit_description<F: Field>(
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-    ) -> CircuitFiatShamirChallenge<F> {
+    ) -> FiatShamirChallengeDescription<F> {
         let verifier_challenge_layer_id = layer_id.get_and_inc();
 
         let verifier_challenge_layer =
-            CircuitFiatShamirChallenge::new(verifier_challenge_layer_id, self.get_num_vars());
+            FiatShamirChallengeDescription::new(verifier_challenge_layer_id, self.get_num_vars());
 
         circuit_description_map.add_node_id_and_location_num_vars(
             self.id,

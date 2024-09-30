@@ -59,7 +59,7 @@ impl<F: Field> NonlinearSelectorBuilderComponent<F> {
 
                 let left_sel_side = ExprBuilder::<F>::mle(left_sel_mle_id);
                 let right_sel_side = ExprBuilder::<F>::mle(right_sel_mle_id);
-                let left_sum_side = right_sel_side.concat_expr(left_sel_side);
+                let left_sum_side = left_sel_side.select(right_sel_side);
                 let right_sum_side =
                     ExprBuilder::<F>::products(vec![right_sum_mle_1_id, right_sum_mle_2_id]);
                 left_sum_side + right_sum_side

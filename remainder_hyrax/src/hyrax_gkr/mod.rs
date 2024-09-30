@@ -14,14 +14,14 @@ use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
 use rand::Rng;
-use remainder::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
+use remainder::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
 use remainder::input_layer::enum_input_layer::{
-    CircuitInputLayerEnum, InputLayerEnumVerifierCommitment,
+    InputLayerDescriptionEnum, InputLayerEnumVerifierCommitment,
 };
 use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
-use remainder::input_layer::{CircuitInputLayer, InputLayer};
+use remainder::input_layer::{InputLayer, InputLayerDescription};
 use remainder::layer::layer_enum::LayerEnum;
-use remainder::layer::{CircuitLayer, Layer};
+use remainder::layer::{Layer, LayerDescription};
 use remainder::layouter::component::ComponentSet;
 use remainder::layouter::layouting::{CircuitLocation, CircuitMap, InputNodeMap};
 use remainder::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
@@ -173,7 +173,7 @@ impl<
 
         // Forward pass to get the map of circuit MLEs whose data is expected to be "compiled"
         // for future layers.
-        let mut mle_claim_map = HashMap::<LayerId, HashSet<&CircuitMle<C::Scalar>>>::new();
+        let mut mle_claim_map = HashMap::<LayerId, HashSet<&MleDescription<C::Scalar>>>::new();
         intermediate_layer_descriptions
             .iter()
             .for_each(|intermediate_layer| {
@@ -220,7 +220,7 @@ impl<
             .iter()
             .for_each(|input_layer_description| {
                 let input_layer_id = input_layer_description.layer_id();
-                let input_node_id = input_layer_to_node_map.get_node_id(&input_layer_id).unwrap();
+                let input_node_id = input_layer_to_node_map.get_node_id(input_layer_id).unwrap();
                 let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
                 let input_mles = corresponding_input_data
                     .data
@@ -238,7 +238,7 @@ impl<
                 });
 
                 match input_layer_description {
-                    CircuitInputLayerEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
+                    InputLayerDescriptionEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
                         let (hyrax_commit, hyrax_prover_input_layer) = if let Some(HyraxProverCommitmentEnum::HyraxCommitment((hyrax_precommit, hyrax_blinding_factors))) = &corresponding_input_data.precommit {
                             let dtype = &corresponding_input_data.input_data_type;
                             let hyrax_input_layer = HyraxInputLayer::new_with_hyrax_commitment(
@@ -265,7 +265,7 @@ impl<
                         prover_input_layers.push(HyraxInputLayerEnum::HyraxInputLayer(hyrax_prover_input_layer));
 
                     }
-                    CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
+                    InputLayerDescriptionEnum::PublicInputLayer(circuit_public_input_layer) => {
                         assert!(corresponding_input_data.precommit.is_none(), "public input layers should not have precommits");
                         let mut prover_public_input_layer = circuit_public_input_layer.convert_into_prover_input_layer(combined_mle, &None);
                         let public_commit_timer = start_timer!(|| format!("committing to public input layer, {:?}", prover_public_input_layer.layer_id()));
@@ -280,29 +280,29 @@ impl<
                         }
                         prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
                     },
-                    CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
+                    InputLayerDescriptionEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
                         panic!("Hyrax proof system does not support ligero input layers because the PCS implementation is not zero knowledge")
                     },
                 }
             });
 
         fiat_shamir_challenge_descriptions
-            .iter()
-            .for_each(|fiat_shamir_challenge_description| {
-                let fiat_shamir_challenge_mle =
-                    MultilinearExtension::new(transcript_writer.get_scalar_field_challenges(
-                        "Verifier challenges",
-                        1 << fiat_shamir_challenge_description.num_bits,
-                    ));
-                circuit_map.add_node(
-                    CircuitLocation::new(fiat_shamir_challenge_description.layer_id(), vec![]),
-                    fiat_shamir_challenge_mle.clone(),
-                );
-                fiat_shamir_challenges.push(FiatShamirChallenge::new(
-                    fiat_shamir_challenge_mle,
-                    fiat_shamir_challenge_description.layer_id(),
+        .iter()
+        .for_each(|fiat_shamir_challenge_description| {
+            let fiat_shamir_challenge_mle =
+                MultilinearExtension::new(transcript_writer.get_scalar_field_challenges(
+                    "Verifier challenges",
+                    1 << fiat_shamir_challenge_description.num_bits,
                 ));
-            });
+            circuit_map.add_node(
+                CircuitLocation::new(fiat_shamir_challenge_description.layer_id(), vec![]),
+                fiat_shamir_challenge_mle.clone(),
+            );
+            fiat_shamir_challenges.push(FiatShamirChallenge::new(
+                fiat_shamir_challenge_mle,
+                fiat_shamir_challenge_description.layer_id(),
+            ));
+        });
 
         // forward pass of the layers
         // convert the circuit layer into a prover layer using circuit map -> populate a GKRCircuit as you do this

@@ -26,13 +26,13 @@ use tracing::{instrument, span, Level};
 
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::claims::ClaimAggregator;
-use crate::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
-use crate::input_layer::enum_input_layer::InputLayerEnum;
+use crate::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
+use crate::input_layer::enum_input_layer::{InputLayerDescriptionEnum, InputLayerEnum};
 use crate::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
-use crate::input_layer::{CircuitInputLayer, InputLayer};
-use crate::layer::layer_enum::LayerEnum;
+use crate::input_layer::{InputLayer, InputLayerDescription};
+use crate::layer::layer_enum::{LayerDescriptionEnum, LayerEnum};
 use crate::layer::LayerId;
-use crate::layer::{CircuitLayer, Layer};
+use crate::layer::{Layer, LayerDescription};
 use crate::layouter::layouting::CircuitMap;
 use crate::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
 use crate::mle::evals::MultilinearExtension;
@@ -142,7 +142,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         // and its second half is also used in a future layer, we would expect
         // both of these to be represented as MLE descriptions in the HashSet
         // associated with this layer with the appropriate prefix bits.
-        let mut mle_claim_map = HashMap::<LayerId, HashSet<&CircuitMle<F>>>::new();
+        let mut mle_claim_map = HashMap::<LayerId, HashSet<&MleDescription<F>>>::new();
         // Do a forward pass through all of the intermediate layer descriptions
         // and look into the "future" to see which parts of each layer are
         // required for future layers.
@@ -194,7 +194,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             .for_each(|input_layer_description| {
                 let input_layer_id = input_layer_description.layer_id();
                 let input_node_id = input_layer_to_node_map
-                    .get_node_id(&input_layer_id)
+                    .get_node_id(input_layer_id)
                     .unwrap();
                 let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
                 let input_mles = corresponding_input_data

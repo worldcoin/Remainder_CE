@@ -15,8 +15,8 @@ use crate::{
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CircuitInputLayer,
-    CommitmentEnum, InputLayer, InputLayerError,
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CommitmentEnum, InputLayer,
+    InputLayerDescription, InputLayerError,
 };
 use crate::mle::Mle;
 
@@ -32,14 +32,14 @@ pub struct PublicInputLayer<F: Field> {
 #[serde(bound = "F: Field")]
 /// The circuit description of a [PublicInputLayer] which stores
 /// the shape information of this input layer.
-pub struct CircuitPublicInputLayer<F: Field> {
+pub struct PublicInputLayerDescription<F: Field> {
     layer_id: LayerId,
     num_bits: usize,
     _marker: PhantomData<F>,
 }
 
-impl<F: Field> CircuitPublicInputLayer<F> {
-    /// Constructor for the [CircuitPublicInputLayer] using the layer_id
+impl<F: Field> PublicInputLayerDescription<F> {
+    /// Constructor for the [PublicInputLayerDescription] using the layer_id
     /// and the number of variables in the MLE we are storing in the
     /// input layer.
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
@@ -96,7 +96,7 @@ impl<F: Field> PublicInputLayer<F> {
     }
 }
 
-impl<F: Field> CircuitInputLayer<F> for CircuitPublicInputLayer<F> {
+impl<F: Field> InputLayerDescription<F> for PublicInputLayerDescription<F> {
     type Commitment = Vec<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -123,7 +123,7 @@ impl<F: Field> CircuitInputLayer<F> for CircuitPublicInputLayer<F> {
         let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), self.layer_id());
         mle_ref.index_mle_indices(0);
 
-        let eval = if mle_ref.num_iterated_vars() != 0 {
+        let eval = if mle_ref.num_free_vars() != 0 {
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
@@ -200,7 +200,7 @@ mod tests {
         let claim_result = Fr::from(2);
         let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
         let verifier_public_input_layer =
-            CircuitPublicInputLayer::new(layer_id, dense_mle.num_iterated_vars());
+            PublicInputLayerDescription::new(layer_id, dense_mle.num_free_vars());
         let mut public_input_layer = PublicInputLayer::new(dense_mle.original_mle, layer_id);
 
         // Transcript writer with test sponge that always returns `1`.

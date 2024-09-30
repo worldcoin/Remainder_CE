@@ -39,7 +39,7 @@ pub struct FiatShamirChallenge<F: Field> {
 /// Verifier's description of a [FiatShamirChallenge].
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: Field")]
-pub struct CircuitFiatShamirChallenge<F: Field> {
+pub struct FiatShamirChallengeDescription<F: Field> {
     /// The layer ID.
     layer_id: LayerId,
 
@@ -49,7 +49,7 @@ pub struct CircuitFiatShamirChallenge<F: Field> {
     _marker: PhantomData<F>,
 }
 
-impl<F: Field> CircuitFiatShamirChallenge<F> {
+impl<F: Field> FiatShamirChallengeDescription<F> {
     /// Constructor for the [CircuitFiatShamirChallenge] using the
     /// number of bits that are in the MLE of the layer.
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
@@ -86,14 +86,14 @@ impl<F: Field> FiatShamirChallenge<F> {
         let mut mle_ref = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
         mle_ref.index_mle_indices(0);
 
-        if mle_ref.num_iterated_vars() != claim.get_point().len() {
+        if mle_ref.num_free_vars() != claim.get_point().len() {
             return Err(FiatShamirChallengeError::NumVarsMismatch(
                 claim.get_point().len(),
-                mle_ref.num_iterated_vars(),
+                mle_ref.num_free_vars(),
             ));
         }
 
-        let eval = if mle_ref.num_iterated_vars() != 0 {
+        let eval = if mle_ref.num_free_vars() != 0 {
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
@@ -115,7 +115,7 @@ impl<F: Field> FiatShamirChallenge<F> {
     }
 }
 
-impl<F: Field> CircuitFiatShamirChallenge<F> {
+impl<F: Field> FiatShamirChallengeDescription<F> {
     /// Return the layer id.
     pub fn layer_id(&self) -> LayerId {
         self.layer_id
@@ -161,7 +161,7 @@ mod tests {
         let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
         let mle = MultilinearExtension::new(mle_vec);
 
-        let fs_desc = CircuitFiatShamirChallenge::<Fr>::new(layer_id, mle.num_vars());
+        let fs_desc = FiatShamirChallengeDescription::<Fr>::new(layer_id, mle.num_vars());
         // Nothing really to test for FiatShamirChallenge
         let _fiat_shamir_challenge = FiatShamirChallenge::new(mle, layer_id);
 

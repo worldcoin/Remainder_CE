@@ -137,7 +137,7 @@ pub enum InputLayerType {
 /// that indicate different things to the layouter
 pub struct InputLayerNode {
     id: NodeId,
-    children: Vec<InputShred>,
+    input_shreds: Vec<InputShred>,
     pub(in crate::layouter) input_layer_type: InputLayerType,
 }
 
@@ -146,8 +146,8 @@ impl CircuitNode for InputLayerNode {
         self.id
     }
 
-    fn children(&self) -> Option<Vec<NodeId>> {
-        Some(self.children.iter().map(CircuitNode::id).collect())
+    fn subnodes(&self) -> Option<Vec<NodeId>> {
+        Some(self.input_shreds.iter().map(CircuitNode::id).collect())
     }
 
     fn sources(&self) -> Vec<NodeId> {
@@ -161,21 +161,21 @@ impl CircuitNode for InputLayerNode {
 
 impl InputLayerNode {
     /// A constructor for an InputLayerNode. Can either be initialized empty
-    /// or with some children.
+    /// or with some InputShreds.
     pub fn new(
         ctx: &Context,
-        children: Option<Vec<InputShred>>,
+        input_shreds: Option<Vec<InputShred>>,
         input_layer_type: InputLayerType,
     ) -> Self {
         InputLayerNode {
             id: ctx.get_new_id(),
-            children: children.unwrap_or_default(),
+            input_shreds: input_shreds.unwrap_or_default(),
             input_layer_type,
         }
     }
 
     /// A method to add an InputShred to this InputLayerNode
-    pub fn add_shred(&mut self, new_shred: InputShred) {
-        self.children.push(new_shred);
+    pub fn add_shred(&mut self, shred: InputShred) {
+        self.input_shreds.push(shred);
     }
 }
