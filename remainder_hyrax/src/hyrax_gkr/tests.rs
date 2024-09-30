@@ -749,7 +749,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -827,7 +827,7 @@ fn small_regular_circuit_public_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -905,7 +905,7 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -991,7 +991,7 @@ fn medium_regular_circuit_public_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -1077,7 +1077,7 @@ fn matmult_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -1150,7 +1150,7 @@ fn regular_identity_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -1233,7 +1233,7 @@ fn regular_identity_matmult_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,

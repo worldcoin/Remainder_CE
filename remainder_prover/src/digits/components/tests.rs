@@ -183,9 +183,9 @@ fn test_complementary_recomposition() {
         Fr::from(0u64),
     ];
     let expected = vec![
-        Fr::from((base_pow - 19)),
+        Fr::from(base_pow - 19),
         Fr::from(2u64).neg(),
-        Fr::from((base_pow - 33)),
+        Fr::from(base_pow - 33),
         Fr::from(48u64).neg(),
     ];
 
