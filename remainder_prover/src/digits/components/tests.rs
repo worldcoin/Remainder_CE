@@ -48,11 +48,8 @@ fn test_complementary_recomposition_vertical() {
             ctx,
             &input_layer,
         );
-        let (values_input_shred, values_input_shred_data) = get_input_shred_and_data(
-            values.iter().map(i64_to_field).collect(),
-            ctx,
-            &input_layer,
-        );
+        let (values_input_shred, values_input_shred_data) =
+            get_input_shred_and_data(values.iter().map(i64_to_field).collect(), ctx, &input_layer);
 
         let recomp = UnsignedRecomposition::new(ctx, &digits_refs, 2);
         let comp_checker = ComplementaryRecompChecker::new(
@@ -92,7 +89,8 @@ fn test_complementary_recomposition_vertical() {
 fn test_unsigned_recomposition() {
     let base: u64 = 16;
     let num_digits = 2;
-    let digits = [vec![
+    let digits = [
+        vec![
             // MSBs
             Fr::from(1u64),
             Fr::from(0u64),
@@ -105,7 +103,8 @@ fn test_unsigned_recomposition() {
             Fr::from(2u64),
             Fr::from(1u64),
             Fr::from(0u64),
-        ]];
+        ],
+    ];
     assert_eq!(digits.len(), num_digits);
     let expected = vec![Fr::from(19), Fr::from(2), Fr::from(33), Fr::from(48)];
 
@@ -160,7 +159,8 @@ fn test_complementary_recomposition() {
     let base: u64 = 16;
     let num_digits = 2;
     let base_pow = base.pow(num_digits as u32);
-    let digits = [vec![
+    let digits = [
+        vec![
             // MSBs
             Fr::from(1u64),
             Fr::from(0u64),
@@ -173,7 +173,8 @@ fn test_complementary_recomposition() {
             Fr::from(2u64),
             Fr::from(1u64),
             Fr::from(0u64),
-        ]];
+        ],
+    ];
     assert_eq!(digits.len(), num_digits);
     let bits = vec![
         // 1 iff strictly positive
