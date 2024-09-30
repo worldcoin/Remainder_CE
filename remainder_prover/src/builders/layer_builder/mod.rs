@@ -110,7 +110,7 @@ impl<F: Field, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Conca
         let first_padded = if let Padding::Left(padding) = self.padding {
             let mut left = first;
             for _ in 0..padding {
-                left = zero_expression.clone().concat_expr(left);
+                left = left.select(zero_expression.clone());
             }
             left
         } else {
@@ -120,14 +120,14 @@ impl<F: Field, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Conca
         let second_padded = if let Padding::Right(padding) = self.padding {
             let mut right = second;
             for _ in 0..padding {
-                right = zero_expression.clone().concat_expr(right);
+                right = right.select(zero_expression.clone());
             }
             right
         } else {
             second
         };
 
-        first_padded.concat_expr(second_padded)
+        first_padded.select(second_padded)
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {

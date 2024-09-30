@@ -10,7 +10,7 @@ use remainder_shared_types::Field;
 use thiserror::Error;
 
 use crate::{
-    expression::circuit_expr::CircuitMle,
+    expression::circuit_expr::MleDescription,
     layer::LayerId,
     layouter::nodes::sector::{Sector, SectorGroup},
     mle::{dense::DenseMle, evals::MultilinearExtension},
@@ -19,13 +19,13 @@ use crate::{
 use super::nodes::{
     circuit_inputs::{InputLayerNode, InputShred},
     circuit_outputs::OutputNode,
+    fiat_shamir_challenge::FiatShamirChallengeNode,
     gate::GateNode,
     identity_gate::IdentityGateNode,
     lookup::{LookupConstraint, LookupTable},
     matmult::MatMultNode,
     node_enum::{NodeEnum, NodeEnumGroup},
     split_node::SplitNode,
-    verifier_challenge::VerifierChallengeNode,
     CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode,
 };
 
@@ -54,7 +54,7 @@ impl<F: Field> CircuitMap<F> {
     /// An alias to [get_data_from_location] above,
     pub fn get_data_from_circuit_mle(
         &self,
-        circuit_mle: &CircuitMle<F>,
+        circuit_mle: &MleDescription<F>,
     ) -> Result<&MultilinearExtension<F>, DAGError> {
         let circuit_location =
             CircuitLocation::new(circuit_mle.layer_id(), circuit_mle.prefix_bits());
@@ -63,7 +63,7 @@ impl<F: Field> CircuitMap<F> {
             .get(&circuit_location)
             .ok_or(DAGError::NoCircuitLocation);
         if let Ok(actual_result) = result {
-            assert_eq!(actual_result.num_vars(), circuit_mle.num_iterated_vars());
+            assert_eq!(actual_result.num_vars(), circuit_mle.num_free_vars());
         }
         result
     }
@@ -146,40 +146,13 @@ impl InputNodeMap {
     }
 
     /// Get the node ID from a layer ID.
-    pub fn get_node_id(&self, layer_id: &LayerId) -> Option<&NodeId> {
-        self.0.get(layer_id)
+    pub fn get_node_id(&self, layer_id: LayerId) -> Option<&NodeId> {
+        self.0.get(&layer_id)
     }
 
     /// Add a layer ID, node ID correspondence to the map.
-    pub fn add_node_layer_id(&mut self, layer_id: &LayerId, node_id: &NodeId) {
-        self.0.insert(*layer_id, *node_id);
-    }
-}
-
-type HintFunctionMapping<F> = (
-    CircuitLocation,
-    fn(&MultilinearExtension<F>) -> MultilinearExtension<F>,
-);
-
-/// A HashMap that maps a circuit location to the function that should
-/// be used on a MLE in order to generate its data.
-pub struct InputLayerHintMap<F: Field>(pub HashMap<LayerId, HintFunctionMapping<F>>);
-
-impl<F: Field> InputLayerHintMap<F> {
-    pub(crate) fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    /// Given a layer ID, get the hint function that generates
-    /// the data for this layer.
-    pub fn get_hint_function(&self, layer_id: &LayerId) -> &HintFunctionMapping<F> {
-        self.0.get(layer_id).unwrap()
-    }
-
-    /// Add a corresponding hint function to a layer in the circuit,
-    /// given its layer ID.
-    pub fn add_hint_function(&mut self, layer_id: &LayerId, hint_function: HintFunctionMapping<F>) {
-        self.0.insert(*layer_id, hint_function);
+    pub fn add_node_layer_id(&mut self, layer_id: LayerId, node_id: NodeId) {
+        self.0.insert(layer_id, node_id);
     }
 }
 
@@ -233,7 +206,7 @@ pub fn topo_sort<N: CircuitNode>(nodes: Vec<N>) -> Result<Vec<N>, DAGError> {
     let mut id_to_index_map: HashMap<NodeId, usize> = HashMap::new();
     for (idx, node) in nodes.iter().enumerate() {
         id_to_index_map.insert(node.id(), idx);
-        if let Some(children) = node.children() {
+        if let Some(children) = node.subnodes() {
             for child in children.into_iter() {
                 children_to_parent_map.insert(child, node.id());
             }
@@ -244,7 +217,7 @@ pub fn topo_sort<N: CircuitNode>(nodes: Vec<N>) -> Result<Vec<N>, DAGError> {
 
     for node in nodes.iter() {
         subgraph_nodes.insert(node.id());
-        for node in node.children().iter().flatten() {
+        for node in node.subnodes().iter().flatten() {
             subgraph_nodes.insert(*node);
         }
     }
@@ -336,10 +309,10 @@ impl<F: Field> CircuitNode for IntermediateNode<F> {
         }
     }
 
-    fn children(&self) -> Option<Vec<NodeId>> {
+    fn subnodes(&self) -> Option<Vec<NodeId>> {
         match self {
-            IntermediateNode::CompilableNode(node) => node.children(),
-            IntermediateNode::Sector(node) => node.children(),
+            IntermediateNode::CompilableNode(node) => node.subnodes(),
+            IntermediateNode::Sector(node) => node.subnodes(),
         }
     }
 
@@ -353,7 +326,7 @@ impl<F: Field> CircuitNode for IntermediateNode<F> {
 
 type LayouterNodes<F> = (
     Vec<InputLayerNode>,
-    Vec<VerifierChallengeNode>,
+    Vec<FiatShamirChallengeNode>,
     Vec<Box<dyn CompilableNode<F>>>,
     Vec<LookupTable>,
     Vec<OutputNode>,
@@ -377,7 +350,7 @@ pub fn layout<F: Field>(
     // Handle input layers
     let input_shreds: Vec<InputShred> = dag.get_nodes();
     let mut input_layer_nodes: Vec<InputLayerNode> = dag.get_nodes();
-    let verifier_challenge_nodes: Vec<VerifierChallengeNode> = dag.get_nodes();
+    let fiat_shamir_challenge_nodes: Vec<FiatShamirChallengeNode> = dag.get_nodes();
 
     let mut input_layer_map: HashMap<NodeId, &mut InputLayerNode> = HashMap::new();
 
@@ -475,7 +448,7 @@ pub fn layout<F: Field>(
 
     Ok((
         input_layer_nodes,
-        verifier_challenge_nodes,
+        fiat_shamir_challenge_nodes,
         intermediate_nodes,
         lookup_tables,
         output_layers,

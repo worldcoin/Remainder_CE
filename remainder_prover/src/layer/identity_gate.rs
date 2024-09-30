@@ -12,7 +12,7 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
+    expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{gate::gate_helpers::bind_round_identity, LayerError, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
@@ -35,16 +35,16 @@ use super::{
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
     regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
-    CircuitLayer, Layer, LayerId, VerifierLayer,
+    Layer, LayerDescription, LayerId, VerifierLayer,
 };
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-/// The Circuit Description for an [IdentityGate].
+/// The circuit Description for an [IdentityGate].
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: Field")]
-pub struct CircuitIdentityGateLayer<F: Field> {
+pub struct IdentityGateLayerDescription<F: Field> {
     /// The layer id associated with this gate layer.
     id: LayerId,
 
@@ -55,13 +55,13 @@ pub struct CircuitIdentityGateLayer<F: Field> {
 
     /// The source MLE of the expression, i.e. the mle that makes up the "x"
     /// variables.
-    source_mle: CircuitMle<F>,
+    source_mle: MleDescription<F>,
 }
 
-impl<F: Field> CircuitIdentityGateLayer<F> {
-    /// Constructor for the [CircuitIdentityGateLayer] using the gate wiring, the source mle
+impl<F: Field> IdentityGateLayerDescription<F> {
+    /// Constructor for the [IdentityGateLayerDescription] using the gate wiring, the source mle
     /// for the rerouting, and the layer_id.
-    pub fn new(id: LayerId, wiring: Vec<(usize, usize)>, source_mle: CircuitMle<F>) -> Self {
+    pub fn new(id: LayerId, wiring: Vec<(usize, usize)>, source_mle: MleDescription<F>) -> Self {
         Self {
             id,
             wiring,
@@ -75,7 +75,7 @@ impl<F: Field> CircuitIdentityGateLayer<F> {
 /// V_i(g_1) = \sum_{x} f_1(g_1, x) (V_{i + 1}(x))
 const NON_DATAPARALLEL_ROUND_ID_NUM_EVALS: usize = 3;
 
-impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
+impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
     type VerifierLayer = VerifierIdentityGateLayer<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -227,7 +227,7 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
         2
     }
 
-    fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
+    fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
         vec![&self.source_mle]
     }
 
@@ -243,16 +243,14 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
 
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
+        mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
-    ) -> bool {
+    ) {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
-        let maybe_source_mle_data = circuit_map.get_data_from_circuit_mle(&self.source_mle);
-        if maybe_source_mle_data.is_err() {
-            return false;
-        }
-        let source_mle_data = maybe_source_mle_data.unwrap();
+        let source_mle_data = circuit_map
+            .get_data_from_circuit_mle(&self.source_mle)
+            .unwrap();
 
         let max_gate_val = self
             .wiring
@@ -274,7 +272,6 @@ impl<F: Field> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
-        true
     }
 }
 
@@ -348,7 +345,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
         let mut challenges: Vec<F> = vec![];
         transcript_writer.append_elements("Initial Sumcheck evaluations", &first_message);
-        let num_rounds = self.mle_ref.num_iterated_vars();
+        let num_rounds = self.mle_ref.num_free_vars();
 
         // sumcheck rounds (binding x)
         let _sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
@@ -393,7 +390,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         self.set_beta_g(beta_g);
 
         self.mle_ref.index_mle_indices(0);
-        let num_vars = self.mle_ref.num_iterated_vars();
+        let num_vars = self.mle_ref.num_free_vars();
 
         let mut a_hg_mle_ref = vec![F::ZERO; 1 << num_vars];
 
@@ -429,7 +426,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             .map(|mle_ref| {
                 mle_ref
                     .mle_indices()
-                    .contains(&MleIndex::IndexedBit(round_index))
+                    .contains(&MleIndex::Indexed(round_index))
             })
             .reduce(|acc, item| acc | item)
             .unwrap();
@@ -448,7 +445,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        (0..self.mle_ref.num_iterated_vars()).collect_vec()
+        (0..self.mle_ref.num_free_vars()).collect_vec()
     }
 
     fn max_degree(&self) -> usize {
@@ -504,7 +501,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for IdentityGate<F> {
                 fixed_mle_indices_u,
                 val,
                 Some(self.layer_id()),
-                Some(mle_ref.get_layer_id()),
+                Some(mle_ref.layer_id()),
             );
             claims.push(claim);
         } else {
@@ -642,7 +639,7 @@ impl<F: Field> IdentityGate<F> {
         self.set_beta_g(beta_g);
 
         self.mle_ref.index_mle_indices(0);
-        let num_vars = self.mle_ref.num_iterated_vars();
+        let num_vars = self.mle_ref.num_free_vars();
 
         let mut a_hg_mle_ref = vec![F::ZERO; 1 << num_vars];
 
@@ -670,7 +667,7 @@ impl<F: Field> IdentityGate<F> {
 
         let independent_variable = phase_1
             .iter()
-            .map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::IndexedBit(0)))
+            .map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::Indexed(0)))
             .reduce(|acc, item| acc | item)
             .ok_or(GateError::EmptyMleList)?;
         let phase_1_mle_references: Vec<&DenseMle<F>> = phase_1.iter().collect();
@@ -696,7 +693,7 @@ impl<F: std::fmt::Debug + Field> IdentityGate<F> {
         impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for IdentityGateCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("IdentityGate")
-                    .field("mle_ref_layer_id", &self.0.mle_ref.get_layer_id())
+                    .field("mle_ref_layer_id", &self.0.mle_ref.layer_id())
                     .field("mle_ref_mle_indices", &self.0.mle_ref.mle_indices())
                     .field("identity_nonzero_gates", &self.0.nonzero_gates)
                     .finish()

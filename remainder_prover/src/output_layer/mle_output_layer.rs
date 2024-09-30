@@ -14,14 +14,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::{wlx_eval::ClaimMle, ClaimError, YieldClaim},
-    expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
+    expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{LayerError, LayerId},
     layouter::layouting::CircuitMap,
     mle::{dense::DenseMle, mle_enum::MleEnum, zero::ZeroMle, Mle, MleIndex},
 };
 
 use super::{
-    CircuitOutputLayer, OutputLayer, OutputLayerError, VerifierOutputLayer,
+    OutputLayer, OutputLayerDescription, OutputLayerError, VerifierOutputLayer,
     VerifierOutputLayerError,
 };
 
@@ -75,7 +75,7 @@ impl<F: Field> MleOutputLayer<F> {
         match &self.mle {
             MleEnum::Dense(_) => unimplemented!(),
             MleEnum::Zero(zero_mle) => {
-                if zero_mle.num_iterated_vars() != 0 {
+                if zero_mle.num_free_vars() != 0 {
                     return Err(OutputLayerError::MleNotFullyBound);
                 }
 
@@ -87,7 +87,7 @@ impl<F: Field> MleOutputLayer<F> {
 
 impl<F: Field> OutputLayer<F> for MleOutputLayer<F> {
     fn layer_id(&self) -> LayerId {
-        self.mle.get_layer_id()
+        self.mle.layer_id()
     }
 
     fn fix_layer(
@@ -102,7 +102,7 @@ impl<F: Field> OutputLayer<F> for MleOutputLayer<F> {
             self.mle.fix_variable(bit, challenge);
         }
 
-        debug_assert_eq!(self.mle.num_iterated_vars(), 0);
+        debug_assert_eq!(self.mle.num_free_vars(), 0);
 
         Ok(())
     }
@@ -116,15 +116,15 @@ impl<F: Field> OutputLayer<F> for MleOutputLayer<F> {
 /// MLE.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(bound = "F: Field")]
-pub struct CircuitMleOutputLayer<F: Field> {
+pub struct MleOutputLayerDescription<F: Field> {
     /// The metadata of this MLE: indices and associated layer.
-    pub mle: CircuitMle<F>,
+    pub mle: MleDescription<F>,
 
     /// Whether this is an MLE that is supposed to evaluate to zero.
     is_zero: bool,
 }
 
-impl<F: Field> CircuitMleOutputLayer<F> {
+impl<F: Field> MleOutputLayerDescription<F> {
     /// Generate an output layer containing a verifier equivalent of a
     /// [DenseMle], with a given `layer_id` and `mle_indices`.
     pub fn new_dense(_layer_id: LayerId, _mle_indices: &[MleIndex<F>]) -> Self {
@@ -136,7 +136,7 @@ impl<F: Field> CircuitMleOutputLayer<F> {
     /// [ZeroMle], with a given `layer_id` and `mle_indices`.
     pub fn new_zero(layer_id: LayerId, mle_indices: &[MleIndex<F>]) -> Self {
         Self {
-            mle: CircuitMle::new(layer_id, mle_indices),
+            mle: MleDescription::new(layer_id, mle_indices),
             is_zero: true,
         }
     }
@@ -174,7 +174,7 @@ impl<F: Field> CircuitMleOutputLayer<F> {
     }
 }
 
-impl<F: Field> CircuitOutputLayer<F> for CircuitMleOutputLayer<F> {
+impl<F: Field> OutputLayerDescription<F> for MleOutputLayerDescription<F> {
     type VerifierOutputLayer = VerifierMleOutputLayer<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -196,7 +196,7 @@ impl<F: Field> CircuitOutputLayer<F> for CircuitMleOutputLayer<F> {
             return Err(VerifierOutputLayerError::NonZeroEvalForZeroMle);
         }
 
-        let bits = self.mle.num_iterated_vars();
+        let bits = self.mle.num_free_vars();
 
         let mut mle = self.mle.clone();
 
@@ -206,7 +206,7 @@ impl<F: Field> CircuitOutputLayer<F> for CircuitMleOutputLayer<F> {
             mle.fix_variable(bit, challenge);
         }
 
-        debug_assert_eq!(mle.num_iterated_vars(), 0);
+        debug_assert_eq!(mle.num_free_vars(), 0);
 
         let verifier_output_layer =
             VerifierMleOutputLayer::new_zero(self.mle.layer_id(), mle.mle_indices(), F::ZERO);
@@ -318,14 +318,13 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
 
         let num_vars = self.num_vars();
         let num_prefix_bits = prefix_bits.len();
-        let num_iterated_vars = num_vars - num_prefix_bits;
+        let num_free_vars = num_vars - num_prefix_bits;
 
         let claim_value = self.mle.value();
 
-        // The verifier is expecting to receive a fully-bound [MleRef].
-        // Start with an iterated MLE, index it, and then bound its variables.
-        let mut claim_mle =
-            MleEnum::Zero(ZeroMle::new(num_iterated_vars, Some(prefix_bits), layer_id));
+        // The verifier is expecting to receive a fully-bound [MleRef]. Start
+        // with an unindexed MLE, index it, and then bound its variables.
+        let mut claim_mle = MleEnum::Zero(ZeroMle::new(num_free_vars, Some(prefix_bits), layer_id));
         claim_mle.index_mle_indices(0);
 
         for mle_index in self.mle.mle_indices().iter() {

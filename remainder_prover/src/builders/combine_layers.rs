@@ -236,7 +236,7 @@ fn add_bits_to_layer_refs<F: Field>(
                 }
             }
             MleEnum::Zero(mle) => {
-                if mle.get_layer_id() == effected_layer {
+                if mle.layer_id() == effected_layer {
                     mle.mle_indices = new_bits
                         .iter()
                         .chain(mle.mle_indices.iter())
@@ -288,9 +288,9 @@ fn combine_expressions<F: Field>(
         let first = add_padding(first, diff);
 
         let expr = if first_index < second_index {
-            second.concat_expr(first)
+            first.select(second)
         } else {
-            first.concat_expr(second)
+            second.select(first)
         };
         exprs.insert(0, (min(first_index, second_index), expr));
     }
@@ -304,7 +304,7 @@ fn add_padding<F: Field>(
     num_padding: usize,
 ) -> Expression<F, ProverExpr> {
     for _ in 0..num_padding {
-        expr = Expression::<F, ProverExpr>::constant(F::ZERO).concat_expr(expr);
+        expr = expr.select(Expression::<F, ProverExpr>::constant(F::ZERO))
     }
     expr
 }

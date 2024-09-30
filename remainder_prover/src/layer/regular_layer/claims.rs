@@ -57,7 +57,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for RegularLayer<F> {
                             .collect::<Result<Vec<_>, _>>()?;
 
                         // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
-                        let mle_layer_id = mle_ref.get_layer_id();
+                        let mle_layer_id = mle_ref.layer_id();
 
                         // --- Grab the actual value that the claim is supposed to evaluate to ---
                         if mle_ref.bookkeeping_table().len() > 1 {
@@ -93,7 +93,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for RegularLayer<F> {
                                 .collect::<Result<Vec<_>, _>>()?;
 
                             // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
-                            let mle_layer_id = mle_ref.get_layer_id();
+                            let mle_layer_id = mle_ref.layer_id();
 
                             // --- Grab the actual value that the claim is supposed to evaluate to ---
                             if mle_ref.bookkeeping_table().len() != 1 {

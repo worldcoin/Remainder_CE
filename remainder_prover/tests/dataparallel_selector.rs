@@ -103,26 +103,20 @@ fn test_dataparallel_selector_alt_newmainder() {
     let all_num_vars_1_2: Vec<usize> = mle_1_vec
         .iter()
         .chain(mle_2_vec.iter())
-        .map(|mle| mle.num_iterated_vars())
+        .map(|mle| mle.num_free_vars())
         .collect();
     let all_vars_same_1_2 = all_num_vars_1_2.iter().fold(true, |acc, elem| {
-        (*elem == mle_3_vec[0].num_iterated_vars() - 1) & acc
+        (*elem == mle_3_vec[0].num_free_vars() - 1) & acc
     });
     assert!(all_vars_same_1_2);
-    let all_num_vars_3: Vec<usize> = mle_3_vec
-        .iter()
-        .map(|mle| mle.num_iterated_vars())
-        .collect();
+    let all_num_vars_3: Vec<usize> = mle_3_vec.iter().map(|mle| mle.num_free_vars()).collect();
     let all_vars_same_3 = all_num_vars_3.iter().fold(true, |acc, elem| {
-        (*elem == mle_4_vec[0].num_iterated_vars() - 1) & acc
+        (*elem == mle_4_vec[0].num_free_vars() - 1) & acc
     });
     assert!(all_vars_same_3);
-    let all_num_vars_4: Vec<usize> = mle_4_vec
-        .iter()
-        .map(|mle| mle.num_iterated_vars())
-        .collect();
+    let all_num_vars_4: Vec<usize> = mle_4_vec.iter().map(|mle| mle.num_free_vars()).collect();
     let all_vars_same_4 = all_num_vars_4.iter().fold(true, |acc, elem| {
-        (*elem == mle_4_vec[0].num_iterated_vars()) & acc
+        (*elem == mle_4_vec[0].num_free_vars()) & acc
     });
     assert!(all_vars_same_4);
     // These checks can possibly be done with the newly designed batching bits/system

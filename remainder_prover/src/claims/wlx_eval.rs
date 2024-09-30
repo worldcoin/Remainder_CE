@@ -1,7 +1,7 @@
 #[cfg(test)]
 pub mod tests;
 
-mod helpers;
+pub(crate) mod helpers;
 
 /// The module which performs claim aggregation algorithms.
 pub mod claim_group;

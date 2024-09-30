@@ -6,7 +6,7 @@ use remainder_shared_types::Field;
 use crate::{
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation},
     mle::MleIndex,
-    output_layer::mle_output_layer::CircuitMleOutputLayer,
+    output_layer::mle_output_layer::MleOutputLayerDescription,
 };
 
 use super::{CircuitNode, Context, NodeId};
@@ -52,12 +52,12 @@ impl OutputNode {
         }
     }
 
-    /// Using the [CircuitDescriptionMap], create a [CircuitMleOutputLayer] which
+    /// Using the [CircuitDescriptionMap], create a [MleDescriptionOutputLayer] which
     /// represents the circuit description of an [OutputNode].
     pub fn generate_circuit_description<F: Field>(
         &self,
         circuit_map: &mut CircuitDescriptionMap,
-    ) -> Result<CircuitMleOutputLayer<F>, crate::layouter::layouting::DAGError> {
+    ) -> Result<MleOutputLayerDescription<F>, crate::layouter::layouting::DAGError> {
         let (circuit_location, num_vars) =
             circuit_map.get_location_num_vars_from_node_id(&self.source)?;
 
@@ -69,10 +69,10 @@ impl OutputNode {
         let total_indices = prefix_bits
             .iter()
             .map(|bit| MleIndex::Fixed(*bit))
-            .chain(repeat_n(MleIndex::Iterated, *num_vars))
+            .chain(repeat_n(MleIndex::Free, *num_vars))
             .collect_vec();
 
-        let out = CircuitMleOutputLayer::new_zero(*layer_id, &total_indices);
+        let out = MleOutputLayerDescription::new_zero(*layer_id, &total_indices);
 
         Ok(out)
     }

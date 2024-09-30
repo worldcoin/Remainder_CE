@@ -75,14 +75,14 @@ fn test_topo_sort_with_cycle_include_children() {
     let sector_0_node = Sector::new(
         &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
-        |ids| Expression::<Fr, AbstractExpr>::products(ids),
+        Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [9]
     let sector_1_node = Sector::new(
         &ctx,
         &[&input_shred_2, &input_shred_4_node, &sector_0_node],
-        |ids| Expression::<Fr, AbstractExpr>::products(ids),
+        Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [10]
@@ -92,7 +92,7 @@ fn test_topo_sort_with_cycle_include_children() {
     let sector_2_node = Sector::new(
         &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
-        |ids| Expression::<Fr, AbstractExpr>::products(ids),
+        Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [12]
@@ -180,14 +180,14 @@ fn test_topo_sort_with_cycle_no_children() {
     let sector_0_node = Sector::new(
         &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
-        |ids| Expression::<Fr, AbstractExpr>::products(ids),
+        Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [9]
     let sector_1_node = Sector::new(
         &ctx,
         &[&input_shred_2, &input_shred_4_node, &sector_0_node],
-        |ids| Expression::<Fr, AbstractExpr>::products(ids),
+        Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [10]
@@ -197,7 +197,7 @@ fn test_topo_sort_with_cycle_no_children() {
     let sector_2_node = Sector::new(
         &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
-        |ids| Expression::<Fr, AbstractExpr>::products(ids),
+        Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [12]
@@ -288,14 +288,14 @@ fn test_topo_sort_without_cycle_no_children() {
     let sector_0_node = Sector::new(
         &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
-        |ids| Expression::<Fr, AbstractExpr>::products(ids),
+        Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [9]
     let sector_1_node = Sector::new(
         &ctx,
         &[&input_shred_2, &input_shred_4_node, &sector_0_node],
-        |ids| Expression::<Fr, AbstractExpr>::products(ids),
+        Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [10]
@@ -305,7 +305,7 @@ fn test_topo_sort_without_cycle_no_children() {
     let sector_2_node = Sector::new(
         &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
-        |ids| Expression::<Fr, AbstractExpr>::products(ids),
+        Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [12]
@@ -331,7 +331,7 @@ fn test_topo_sort_without_cycle_no_children() {
     let mut id_to_index_map: HashMap<NodeId, usize> = HashMap::new();
     for (idx, node) in out.iter().enumerate() {
         id_to_index_map.insert(node.id(), idx);
-        if let Some(children) = node.children() {
+        if let Some(children) = node.subnodes() {
             for child in children.into_iter() {
                 children_to_parent_map.insert(child, node.id());
             }
@@ -401,14 +401,14 @@ fn test_topo_sort_without_cycle_include_children() {
     let sector_0_node = Sector::new(
         &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
-        |ids| Expression::<Fr, AbstractExpr>::products(ids),
+        Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [9]
     let sector_1_node = Sector::new(
         &ctx,
         &[&input_shred_2, &input_shred_4_node, &sector_0_node],
-        |ids| Expression::<Fr, AbstractExpr>::products(ids),
+        Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [10]
@@ -418,7 +418,7 @@ fn test_topo_sort_without_cycle_include_children() {
     let sector_2_node = Sector::new(
         &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
-        |ids| Expression::<Fr, AbstractExpr>::products(ids),
+        Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [12]
@@ -447,7 +447,7 @@ fn test_topo_sort_without_cycle_include_children() {
     let mut id_to_index_map: HashMap<NodeId, usize> = HashMap::new();
     for (idx, node) in out.iter().enumerate() {
         id_to_index_map.insert(node.id(), idx);
-        if let Some(children) = node.children() {
+        if let Some(children) = node.subnodes() {
             for child in children.into_iter() {
                 children_to_parent_map.insert(child, node.id());
             }
@@ -558,6 +558,6 @@ fn toposorted_property(graph: QDepGraph) -> TestResult {
         };
         ids_seen.insert(u_id);
 
-        vs.into_iter().all(|v_id| !ids_seen.get(&v_id).is_none())
+        vs.into_iter().all(|v_id| ids_seen.get(&v_id).is_some())
     }))
 }

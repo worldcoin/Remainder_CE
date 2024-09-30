@@ -16,14 +16,14 @@ use super::{
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
     regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
-    CircuitLayer, Layer, LayerError, LayerId, VerifierLayer,
+    Layer, LayerDescription, LayerError, LayerId, VerifierLayer,
 };
 use crate::{
     claims::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
+    expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::VerificationError,
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
@@ -126,8 +126,8 @@ impl<F: Field> MatMult<F> {
             .clone()
             .into_iter()
             .filter_map(|index: MleIndex<F>| {
-                if let MleIndex::IndexedBit(_) = index {
-                    Some(MleIndex::Iterated)
+                if let MleIndex::Indexed(_) = index {
+                    Some(MleIndex::Free)
                 } else if let MleIndex::Bound(..) = index {
                     bound_indices_a.push(index);
                     None
@@ -159,8 +159,8 @@ impl<F: Field> MatMult<F> {
             .mle_indices
             .into_iter()
             .map(|index| {
-                if let MleIndex::IndexedBit(_) = index {
-                    MleIndex::Iterated
+                if let MleIndex::Indexed(_) = index {
+                    MleIndex::Free
                 } else {
                     index
                 }
@@ -262,18 +262,18 @@ impl<F: Field> Layer<F> for MatMult<F> {
 /// The circuit description counterpart of a [Matrix].
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: Field")]
-pub struct CircuitMatrix<F: Field> {
-    mle: CircuitMle<F>,
+pub struct MatrixDescription<F: Field> {
+    mle: MleDescription<F>,
     rows_num_vars: usize,
     cols_num_vars: usize,
 }
 
-impl<F: Field> CircuitMatrix<F> {
-    /// The constructor for a [CircuitMatrix], which is the circuit
+impl<F: Field> MatrixDescription<F> {
+    /// The constructor for a [MatrixDescription], which is the circuit
     /// description of matrix, only containing shape information
     /// which is the number of variables in the rows and the number
     /// of variables in the columns.
-    pub fn new(mle: CircuitMle<F>, rows_num_vars: usize, cols_num_vars: usize) -> Self {
+    pub fn new(mle: MleDescription<F>, rows_num_vars: usize, cols_num_vars: usize) -> Self {
         Self {
             mle,
             rows_num_vars,
@@ -295,21 +295,25 @@ impl<F: Field> CircuitMatrix<F> {
 /// The circuit description counterpart of a [MatMult] layer.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: Field")]
-pub struct CircuitMatMultLayer<F: Field> {
+pub struct MatMultLayerDescription<F: Field> {
     /// The layer id associated with this matmult layer.
     layer_id: LayerId,
 
     /// The LHS Matrix to be multiplied.
-    matrix_a: CircuitMatrix<F>,
+    matrix_a: MatrixDescription<F>,
 
     /// The RHS Matrix to be multiplied.
-    matrix_b: CircuitMatrix<F>,
+    matrix_b: MatrixDescription<F>,
 }
 
-impl<F: Field> CircuitMatMultLayer<F> {
-    /// Constructor for the [CircuitMatMultLayer], using the circuit description
+impl<F: Field> MatMultLayerDescription<F> {
+    /// Constructor for the [MatMultLayerDescription], using the circuit description
     /// of the matrices that make up this layer.
-    pub fn new(layer_id: LayerId, matrix_a: CircuitMatrix<F>, matrix_b: CircuitMatrix<F>) -> Self {
+    pub fn new(
+        layer_id: LayerId,
+        matrix_a: MatrixDescription<F>,
+        matrix_b: MatrixDescription<F>,
+    ) -> Self {
         Self {
             layer_id,
             matrix_a,
@@ -318,7 +322,7 @@ impl<F: Field> CircuitMatMultLayer<F> {
     }
 }
 
-impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
+impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
     type VerifierLayer = VerifierMatMultLayer<F>;
 
     /// Gets this layer's id.
@@ -397,22 +401,18 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
 
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
+        mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
-    ) -> bool {
+    ) {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
 
-        let maybe_matrix_a_data = circuit_map.get_data_from_circuit_mle(&self.matrix_a.mle);
-        if maybe_matrix_a_data.is_err() {
-            return false;
-        }
-        let matrix_a_data = maybe_matrix_a_data.unwrap();
-        let maybe_matrix_b_data = circuit_map.get_data_from_circuit_mle(&self.matrix_b.mle);
-        if maybe_matrix_b_data.is_err() {
-            return false;
-        }
-        let matrix_b_data = maybe_matrix_b_data.unwrap();
+        let matrix_a_data = circuit_map
+            .get_data_from_circuit_mle(&self.matrix_a.mle)
+            .unwrap();
+        let matrix_b_data = circuit_map
+            .get_data_from_circuit_mle(&self.matrix_b.mle)
+            .unwrap();
         let product = product_two_matrices_from_flattened_vectors(
             matrix_a_data.get_evals_vector(),
             matrix_b_data.get_evals_vector(),
@@ -429,7 +429,6 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
-        true
     }
 
     fn convert_into_verifier_layer(
@@ -509,9 +508,9 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
             .mle_indices()
             .iter()
             .map(|mle_idx| match mle_idx {
-                &MleIndex::IndexedBit(_) => {
+                &MleIndex::Indexed(_) => {
                     if indexed_index_counter < self.matrix_a.cols_num_vars {
-                        let ret = MleIndex::IndexedBit(indexed_index_counter);
+                        let ret = MleIndex::Indexed(indexed_index_counter);
                         indexed_index_counter += 1;
                         ret
                     } else {
@@ -524,7 +523,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
                     }
                 }
                 MleIndex::Fixed(_) => mle_idx.clone(),
-                MleIndex::Iterated => panic!("should not have any iterated indices"),
+                MleIndex::Free => panic!("should not have any free indices"),
                 MleIndex::Bound(_, _) => panic!("should not have any bound indices"),
             })
             .collect_vec();
@@ -540,7 +539,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
             .mle_indices()
             .iter()
             .map(|mle_idx| match mle_idx {
-                &MleIndex::IndexedBit(_) => {
+                &MleIndex::Indexed(_) => {
                     if bound_index_counter < self.matrix_b.cols_num_vars {
                         let ret = MleIndex::Bound(
                             claim_chals_matrix_b[bound_index_counter],
@@ -549,13 +548,13 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
                         bound_index_counter += 1;
                         ret
                     } else {
-                        let ret = MleIndex::IndexedBit(indexed_index_counter);
+                        let ret = MleIndex::Indexed(indexed_index_counter);
                         indexed_index_counter += 1;
                         ret
                     }
                 }
                 MleIndex::Fixed(_) => mle_idx.clone(),
-                MleIndex::Iterated => panic!("should not have any iterated indices"),
+                MleIndex::Free => panic!("should not have any free indices"),
                 MleIndex::Bound(_, _) => panic!("should not have any bound indices"),
             })
             .collect_vec();
@@ -573,7 +572,7 @@ impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
         2
     }
 
-    fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
+    fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
         vec![&self.matrix_a.mle, &self.matrix_b.mle]
     }
 
@@ -874,12 +873,12 @@ mod test {
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
         let exp_product = vec![
-            Fr::from(1 * 3 + 2 * 9),
-            Fr::from(1 * 5 + 2 * 6),
+            Fr::from(3 + 2 * 9),
+            Fr::from(5 + 2 * 6),
             Fr::from(9 * 3 + 10 * 9),
             Fr::from(9 * 5 + 10 * 6),
-            Fr::from(13 * 3 + 1 * 9),
-            Fr::from(13 * 5 + 1 * 6),
+            Fr::from(13 * 3 + 9),
+            Fr::from(13 * 5 + 6),
             Fr::from(3 * 3 + 10 * 9),
             Fr::from(3 * 5 + 10 * 6),
         ];

@@ -88,10 +88,10 @@ fn test_dataparallel_simple_newmainder() {
     let all_num_vars: Vec<usize> = mle_1_vec
         .iter()
         .chain(mle_2_vec.iter())
-        .map(|mle| mle.num_iterated_vars())
+        .map(|mle| mle.num_free_vars())
         .collect();
     let all_vars_same = all_num_vars.iter().fold(true, |acc, elem| {
-        (*elem == mle_1_vec[0].num_iterated_vars()) & acc
+        (*elem == mle_1_vec[0].num_free_vars()) & acc
     });
     assert!(all_vars_same);
     assert_eq!(mle_1_vec.len(), mle_2_vec.len());

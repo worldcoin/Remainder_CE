@@ -436,7 +436,7 @@ fn poseidon_end_to_end_test() {
     // --- Transcript includes the Merkle root, the code rate, and the number of columns to be sampled ---
     transcript_writer.append("polycommit", root.root);
 
-    let _result = prove(&comm, &outer_tensor[..], &enc, &mut transcript_writer).unwrap();
+    prove(&comm, &outer_tensor[..], &enc, &mut transcript_writer).unwrap();
 
     let transcript = transcript_writer.get_transcript();
     let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript);

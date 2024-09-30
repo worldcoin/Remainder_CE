@@ -1,19 +1,13 @@
 //! Nodes that implement LogUp.
 
 use crate::expression::abstract_expr::AbstractExpr;
-use crate::expression::circuit_expr::{CircuitExpr, CircuitMle};
-use crate::input_layer::enum_input_layer::CircuitInputLayerEnum;
-use crate::input_layer::hyrax_input_layer::CircuitHyraxInputLayer;
-use crate::input_layer::public_input_layer::CircuitPublicInputLayer;
-use crate::layer::layer_enum::CircuitLayerEnum;
-use crate::layer::regular_layer::CircuitRegularLayer;
+use crate::expression::circuit_expr::{ExprDescription, MleDescription};
+use crate::layer::layer_enum::LayerDescriptionEnum;
+use crate::layer::regular_layer::RegularLayerDescription;
 use crate::layer::LayerId;
-use crate::layouter::layouting::{
-    CircuitDescriptionMap, CircuitLocation, DAGError, InputLayerHintMap,
-};
-use crate::mle::evals::MultilinearExtension;
+use crate::layouter::layouting::{CircuitDescriptionMap, DAGError};
 use crate::mle::MleIndex;
-use crate::output_layer::mle_output_layer::CircuitMleOutputLayer;
+use crate::output_layer::mle_output_layer::MleOutputLayerDescription;
 use crate::utils::mle::get_total_mle_indices;
 
 use itertools::{repeat_n, Itertools};
@@ -21,7 +15,7 @@ use remainder_shared_types::Field;
 
 use crate::expression::generic_expr::Expression;
 
-use super::verifier_challenge::VerifierChallengeNode;
+use super::fiat_shamir_challenge::FiatShamirChallengeNode;
 use super::{CircuitNode, Context, NodeId};
 
 /// Represents the use of a lookup into a particular table (represented by a LookupTable).
@@ -78,12 +72,13 @@ impl CircuitNode for LookupConstraint {
     }
 }
 
-type LookupCircuitDescription<F> = (
-    Vec<CircuitInputLayerEnum<F>>,
-    Vec<CircuitLayerEnum<F>>,
-    Vec<CircuitMleOutputLayer<F>>,
-);
+type LookupCircuitDescription<F> = (Vec<LayerDescriptionEnum<F>>, MleOutputLayerDescription<F>);
 /// Represents a table of data that can be looked up into, e.g. for a range check.
+/// Implements "Improving logarithmic derivative lookups using GKR" (2023) by Papini & Haböck. Note
+/// that (as is usual e.g. in permutation checks) we do not check that the product of the
+/// denominators is nonzero. This means the soundness of logUp is bounded by
+///     `|F| / max{num_constrained_values, num_table_values}`.
+/// To adapt this to a small field setting, consider using Fermat's Little Theorem.
 #[derive(Clone, Debug)]
 pub struct LookupTable {
     id: NodeId,
@@ -92,34 +87,26 @@ pub struct LookupTable {
     constraints: Vec<LookupConstraint>,
     /// The id of the node providing the table entries.
     table_node_id: NodeId,
-    /// The ID of the random input node for the FS challenge.
-    random_node_id: NodeId,
-    /// Whether any of the values to be constrained by this LookupTable should be considered secret
-    /// (Determines which InputLayer type is used for the denominator inverse for the LHS.)
-    secret_constrained_values: bool,
+    /// The ID of the [FiatShamirChallengeNode] for the FS challenge.
+    fiat_shamir_challenge_node_id: NodeId,
 }
 
 impl LookupTable {
     /// Create a new LookupTable to use for subsequent lookups. (To perform a lookup using this
-    /// table, create a [LookupConstraint].) `secret_constrained_values` controls whether a public
-    /// or a hiding input layer is used for the denominator inverse on the LHS, which is derived
-    /// from the constrained values (note that LookupTable does not hide the constrained values
-    /// themselves - that is up to the caller).
+    /// table, create a [LookupConstraint].)
     ///
     /// # Requires
     /// * The length of the table must be a power of two.
     pub fn new<F: Field>(
         ctx: &Context,
         table: &dyn CircuitNode,
-        secret_constrained_values: bool,
-        random_input_node: &VerifierChallengeNode,
+        fiat_shamir_challenge_node: &FiatShamirChallengeNode,
     ) -> Self {
         LookupTable {
             id: ctx.get_new_id(),
             constraints: vec![],
             table_node_id: table.id(),
-            random_node_id: random_input_node.id(),
-            secret_constrained_values,
+            fiat_shamir_challenge_node_id: fiat_shamir_challenge_node.id(),
         }
     }
 
@@ -129,22 +116,15 @@ impl LookupTable {
         self.constraints.push(constraint);
     }
 
-    /// Create the circuit description of a lookup node by returning
-    /// the corresponding input circuit descriptions, intermediate
-    /// circuit descriptions, and output circuit descriptions needed
-    /// in order to verify the lookup.
+    /// Create the circuit description of a lookup node by returning the corresponding circuit
+    /// descriptions, and output circuit description needed in order to verify the lookup.
     pub fn generate_lookup_circuit_description<F: Field>(
         &self,
-        input_layer_id: &mut LayerId,
         intermediate_layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-        input_hint_map: &mut InputLayerHintMap<F>,
     ) -> Result<LookupCircuitDescription<F>, DAGError> {
         type AE<F> = Expression<F, AbstractExpr>;
-        type CE<F> = Expression<F, CircuitExpr>;
-
-        // LogUp adds a few circuit "inputs" in the flavor of the denominator inverses
-        let mut logup_additional_input_layers: Vec<CircuitInputLayerEnum<F>> = vec![];
+        type CE<F> = Expression<F, ExprDescription>;
 
         // Ensure that number of LookupConstraints is a power of two (otherwise when we concat the
         // constrained nodes, there will be padding, and the padding value is potentially not in the
@@ -158,16 +138,17 @@ impl LookupTable {
         // Build the LHS of the equation (defined by the constrained values)
         println!("Build the LHS of the equation (defined by the constrained values)");
 
-        let (verifier_challenge_location, verifier_challenge_node_vars) =
-            circuit_description_map.get_location_num_vars_from_node_id(&self.random_node_id)?;
+        let (fiat_shamir_challenge_location, fiat_shamir_challenge_node_vars) =
+            circuit_description_map
+                .get_location_num_vars_from_node_id(&self.fiat_shamir_challenge_node_id)?;
 
-        let verifier_challenge_mle_indices = get_total_mle_indices(
-            &verifier_challenge_location.prefix_bits,
-            *verifier_challenge_node_vars,
+        let fiat_shamir_challenge_mle_indices = get_total_mle_indices(
+            &fiat_shamir_challenge_location.prefix_bits,
+            *fiat_shamir_challenge_node_vars,
         );
-        let verifier_challenge_mle = CircuitMle::new(
-            verifier_challenge_location.layer_id,
-            &verifier_challenge_mle_indices,
+        let fiat_shamir_challenge_mle = MleDescription::new(
+            fiat_shamir_challenge_location.layer_id,
+            &fiat_shamir_challenge_mle_indices,
         );
 
         // Build the denominator r - constrained
@@ -179,26 +160,26 @@ impl LookupTable {
                 .collect(),
         );
         let expr = CE::sum(
-            verifier_challenge_mle.expression(),
+            fiat_shamir_challenge_mle.expression(),
             CE::negated(constrained_expr.build_circuit_expr(circuit_description_map)?),
         );
         let expr_num_vars = expr.num_vars();
 
         let layer_id = intermediate_layer_id.get_and_inc();
-        let layer = CircuitRegularLayer::new_raw(layer_id, expr);
-        let mut intermediate_layers = vec![CircuitLayerEnum::Regular(layer)];
+        let layer = RegularLayerDescription::new_raw(layer_id, expr);
+        let mut intermediate_layers = vec![LayerDescriptionEnum::Regular(layer)];
         println!(
             "Layer that calcs r - constrained has layer id: {:?}",
             layer_id
         );
 
-        let lhs_denominator_vars = repeat_n(MleIndex::Iterated, expr_num_vars).collect_vec();
-        let lhs_denominator_desc = CircuitMle::new(layer_id, &lhs_denominator_vars);
+        let lhs_denominator_vars = repeat_n(MleIndex::Free, expr_num_vars).collect_vec();
+        let lhs_denominator_desc = MleDescription::new(layer_id, &lhs_denominator_vars);
 
         // Super special case: need to create a 0-variable MLE for the numerator which is JUST
         // derived from an expression producing the constant 1
         let maybe_lhs_numerator_desc = if lhs_denominator_vars.is_empty() {
-            Some(CircuitMle::new(layer_id, &[]))
+            Some(MleDescription::new(layer_id, &[]))
         } else {
             None
         };
@@ -217,7 +198,7 @@ impl LookupTable {
         // Build the numerator (the multiplicities, which we aggregate with an extra layer if there is more than one constraint)
         let (multiplicities_location, multiplicities_num_vars) =
             &circuit_description_map.0[&self.constraints[0].multiplicities_node_id];
-        let mut rhs_numerator_desc = CircuitMle::new(
+        let mut rhs_numerator_desc = MleDescription::new(
             multiplicities_location.layer_id,
             &get_total_mle_indices(
                 &multiplicities_location.prefix_bits,
@@ -232,7 +213,7 @@ impl LookupTable {
                 |acc, constraint| {
                     let (multiplicities_location, multiplicities_num_vars) =
                         &circuit_description_map.0[&constraint.multiplicities_node_id];
-                    let mult_constraint_mle_desc = CircuitMle::new(
+                    let mult_constraint_mle_desc = MleDescription::new(
                         multiplicities_location.layer_id,
                         &get_total_mle_indices(
                             &multiplicities_location.prefix_bits,
@@ -243,8 +224,8 @@ impl LookupTable {
                 },
             );
             let layer_id = intermediate_layer_id.get_and_inc();
-            let layer = CircuitRegularLayer::new_raw(layer_id, expr);
-            intermediate_layers.push(CircuitLayerEnum::Regular(layer));
+            let layer = RegularLayerDescription::new_raw(layer_id, expr);
+            intermediate_layers.push(LayerDescriptionEnum::Regular(layer));
             println!(
                 "Layer that aggs the multiplicities has layer id: {:?}",
                 layer_id
@@ -256,7 +237,7 @@ impl LookupTable {
             // just take the number of variables within the *first* constraint
             let (_first_self_constraint_loc, first_self_constraint_num_vars) =
                 circuit_description_map.0[&self.constraints[0].multiplicities_node_id].clone();
-            rhs_numerator_desc = CircuitMle::new(
+            rhs_numerator_desc = MleDescription::new(
                 layer_id,
                 &get_total_mle_indices(&[], first_self_constraint_num_vars),
             )
@@ -265,36 +246,36 @@ impl LookupTable {
         // Build the denominator r - table
 
         // First grab `r` as a `CircuitMle` from the `circuit_description_map`
-        let (verifier_challenge_loc, verifier_challenge_num_vars) =
-            circuit_description_map.0[&self.random_node_id].clone();
-        let verifier_challenge_circuit_mle = CircuitMle::new(
-            verifier_challenge_loc.layer_id,
+        let (fiat_shamir_challenge_loc, fiat_shamir_challenge_num_vars) =
+            circuit_description_map.0[&self.fiat_shamir_challenge_node_id].clone();
+        let fiat_shamir_challenge_circuit_mle = MleDescription::new(
+            fiat_shamir_challenge_loc.layer_id,
             &get_total_mle_indices(
-                &verifier_challenge_loc.prefix_bits,
-                verifier_challenge_num_vars,
+                &fiat_shamir_challenge_loc.prefix_bits,
+                fiat_shamir_challenge_num_vars,
             ),
         );
 
-        // Next grab `table` as a `CircuitMle` from the `circuit_description_map`
+        // Next grab `table` as a `MleDescription` from the `circuit_description_map`
         let (table_loc, table_num_vars) = circuit_description_map.0[&self.table_node_id].clone();
-        let table_circuit_mle = CircuitMle::new(
+        let table_circuit_mle = MleDescription::new(
             table_loc.layer_id,
             &get_total_mle_indices(&table_loc.prefix_bits, table_num_vars),
         );
 
-        let expr = verifier_challenge_circuit_mle.expression() - table_circuit_mle.expression();
+        let expr = fiat_shamir_challenge_circuit_mle.expression() - table_circuit_mle.expression();
         let r_minus_table_num_vars = expr.num_vars();
         let layer_id = intermediate_layer_id.get_and_inc();
-        let layer = CircuitRegularLayer::new_raw(layer_id, expr);
-        intermediate_layers.push(CircuitLayerEnum::Regular(layer));
+        let layer = RegularLayerDescription::new_raw(layer_id, expr);
+        intermediate_layers.push(LayerDescriptionEnum::Regular(layer));
         println!(
             "Layer that calculates r - table has layer id: {:?}",
             layer_id
         );
 
-        let rhs_denominator_desc = CircuitMle::new(
+        let rhs_denominator_desc = MleDescription::new(
             layer_id,
-            &repeat_n(MleIndex::Iterated, r_minus_table_num_vars).collect_vec(),
+            &repeat_n(MleIndex::Free, r_minus_table_num_vars).collect_vec(),
         );
 
         // Build the numerator and denominator of the sum of the fractions
@@ -304,78 +285,6 @@ impl LookupTable {
             &mut intermediate_layers,
             intermediate_layer_id,
         );
-
-        // Add an input layer for the inverse of the denominators of the LHS. This value holds
-        // reveals some information about the constrained values, so we optionally use a
-        // HyraxInputLayer.
-        // Grab the layer ID for the new "input layer" to be added.
-        let lhs_denom_inverse_layer_id = input_layer_id.get_and_inc();
-        let lhs_denom_circuit_location =
-            CircuitLocation::new(lhs_denominator.layer_id(), lhs_denominator.prefix_bits());
-
-        let inverse_function = |mle: &MultilinearExtension<F>| {
-            assert_eq!(mle.get_evals_vector().len(), 1);
-            MultilinearExtension::new(vec![mle.get_evals_vector()[0].invert().unwrap()])
-        };
-        input_hint_map.add_hint_function(
-            &lhs_denom_inverse_layer_id,
-            (lhs_denom_circuit_location, inverse_function),
-        );
-        let lhs_inverse_input_layer = if self.secret_constrained_values {
-            let hyrax_input_layer_description =
-                CircuitHyraxInputLayer::<F>::new(lhs_denom_inverse_layer_id.to_owned(), 0);
-            CircuitInputLayerEnum::HyraxInputLayer(hyrax_input_layer_description)
-        } else {
-            let public_input_layer_description =
-                CircuitPublicInputLayer::<F>::new(lhs_denom_inverse_layer_id.to_owned(), 0);
-            CircuitInputLayerEnum::PublicInputLayer(public_input_layer_description)
-        };
-        logup_additional_input_layers.push(lhs_inverse_input_layer);
-
-        let lhs_inverse_mle_desc = CircuitMle::new(lhs_denom_inverse_layer_id, &[]);
-        println!(
-            "Input layer that for LHS denom prod inverse has layer id: {:?}",
-            lhs_denom_inverse_layer_id
-        );
-
-        // Add an input layer for the inverse of the denominators of the RHS. This doesn't reveal
-        // any information about the constrained values, so it's OK to use PublicInputLayer.
-        // Grab the layer ID for the new input layer to be added.
-        let rhs_denom_inverse_layer_id = input_layer_id.get_and_inc();
-        let rhs_denom_circuit_location =
-            CircuitLocation::new(rhs_denominator.layer_id(), rhs_denominator.prefix_bits());
-        input_hint_map.add_hint_function(
-            &rhs_denom_inverse_layer_id,
-            (rhs_denom_circuit_location, inverse_function),
-        );
-        let rhs_inverse_mle =
-            CircuitPublicInputLayer::<F>::new(rhs_denom_inverse_layer_id.to_owned(), 0);
-        let rhs_inverse_input_layer = CircuitInputLayerEnum::PublicInputLayer(rhs_inverse_mle);
-        logup_additional_input_layers.push(rhs_inverse_input_layer);
-
-        let rhs_inverse_mle_desc = CircuitMle::new(rhs_denom_inverse_layer_id, &[]);
-        println!(
-            "Input layer that for RHS denom prod inverse has layer id: {:?}",
-            rhs_denom_inverse_layer_id
-        );
-
-        // Add a layer that calculates the product of the denominator and the inverse and subtracts
-        // 1 (for both LHS and RHS)
-        let lhs_expr =
-            CE::<F>::products(vec![lhs_denominator.clone(), lhs_inverse_mle_desc.clone()]);
-        let rhs_expr =
-            CE::<F>::products(vec![rhs_denominator.clone(), rhs_inverse_mle_desc.clone()]);
-        let expr = lhs_expr.concat_expr(rhs_expr) - CE::<F>::constant(F::from(1u64));
-        let layer_id = intermediate_layer_id.get_and_inc();
-        let layer = CircuitRegularLayer::new_raw(layer_id, expr);
-        intermediate_layers.push(CircuitLayerEnum::Regular(layer));
-        println!(
-            "Layer calcs product of (product of denoms) and their inverses has layer id: {:?}",
-            layer_id
-        );
-        // Add an output layer that checks that the result is zero
-        let output_layer = CircuitMleOutputLayer::new_zero(layer_id, &[MleIndex::Iterated]);
-        let mut output_layers = vec![output_layer];
 
         // Add a layer that calculates the difference between the fractions on the LHS and RHS
         assert!(rhs_numerator.is_some());
@@ -390,22 +299,17 @@ impl LookupTable {
         };
 
         let layer_id = intermediate_layer_id.get_and_inc();
-        let layer = CircuitRegularLayer::new_raw(layer_id, expr);
-        intermediate_layers.push(CircuitLayerEnum::Regular(layer));
+        let layer = RegularLayerDescription::new_raw(layer_id, expr);
+        intermediate_layers.push(LayerDescriptionEnum::Regular(layer));
         println!(
             "Layer that checks that fractions are equal has layer id: {:?}",
             layer_id
         );
 
         // Add an output layer that checks that the result is zero
-        let output_layer = CircuitMleOutputLayer::new_zero(layer_id, &[]);
-        output_layers.push(output_layer);
+        let output_layer = MleOutputLayerDescription::new_zero(layer_id, &[]);
 
-        Ok((
-            logup_additional_input_layers,
-            intermediate_layers,
-            output_layers,
-        ))
+        Ok((intermediate_layers, output_layer))
     }
 }
 
@@ -414,7 +318,7 @@ impl CircuitNode for LookupTable {
         self.id
     }
 
-    fn children(&self) -> Option<Vec<NodeId>> {
+    fn subnodes(&self) -> Option<Vec<NodeId>> {
         Some(
             self.constraints
                 .iter()
@@ -443,44 +347,46 @@ impl CircuitNode for LookupTable {
 }
 
 /// Extract the prefix bits from a DenseMle.
-fn extract_prefix_num_iterated_bits<F: Field>(mle: &CircuitMle<F>) -> (Vec<MleIndex<F>>, usize) {
-    let mut num_iterated_bits = 0;
+fn extract_prefix_num_free_bits<F: Field>(mle: &MleDescription<F>) -> (Vec<MleIndex<F>>, usize) {
+    let mut num_free_bits = 0;
     let prefix_bits = mle
         .mle_indices()
         .iter()
         .filter_map(|mle_index| match mle_index {
             MleIndex::Fixed(_) => Some(mle_index.clone()),
-            MleIndex::Iterated => {
-                num_iterated_bits += 1;
+            MleIndex::Free => {
+                num_free_bits += 1;
                 None
             }
             _ => None,
         })
         .collect();
-    (prefix_bits, num_iterated_bits)
+    (prefix_bits, num_free_bits)
 }
 
 /// Split a DenseMle into two DenseMles, with the left half containing the even-indexed elements and
 /// the right half containing the odd-indexed elements, setting the prefix bits accordingly.
-fn split_circuit_mle<F: Field>(mle_desc: &CircuitMle<F>) -> (CircuitMle<F>, CircuitMle<F>) {
-    let (prefix_bits, num_iterated_bits) = extract_prefix_num_iterated_bits(mle_desc);
+fn split_circuit_mle<F: Field>(
+    mle_desc: &MleDescription<F>,
+) -> (MleDescription<F>, MleDescription<F>) {
+    let (prefix_bits, num_free_bits) = extract_prefix_num_free_bits(mle_desc);
 
-    let left_mle_desc = CircuitMle::new(
+    let left_mle_desc = MleDescription::new(
         mle_desc.layer_id(),
         &prefix_bits
             .iter()
             .cloned()
             .chain(vec![MleIndex::Fixed(false)])
-            .chain(repeat_n(MleIndex::Iterated, num_iterated_bits - 1))
+            .chain(repeat_n(MleIndex::Free, num_free_bits - 1))
             .collect_vec(),
     );
-    let right_mle_desc = CircuitMle::new(
+    let right_mle_desc = MleDescription::new(
         mle_desc.layer_id(),
         &prefix_bits
             .iter()
             .cloned()
             .chain(vec![MleIndex::Fixed(true)])
-            .chain(repeat_n(MleIndex::Iterated, num_iterated_bits - 1))
+            .chain(repeat_n(MleIndex::Free, num_free_bits - 1))
             .collect_vec(),
     );
     (left_mle_desc, right_mle_desc)
@@ -493,26 +399,26 @@ fn split_circuit_mle<F: Field>(mle_desc: &CircuitMle<F>) -> (CircuitMle<F>, Circ
 /// Setting `maybe_numerator_desc` to None indicates that the numerator has the same length as
 /// `denominator_desc` and takes the constant value 1.
 fn build_fractional_sum<F: Field>(
-    maybe_numerator_desc: Option<CircuitMle<F>>,
-    denominator_desc: CircuitMle<F>,
-    layers: &mut Vec<CircuitLayerEnum<F>>,
+    maybe_numerator_desc: Option<MleDescription<F>>,
+    denominator_desc: MleDescription<F>,
+    layers: &mut Vec<LayerDescriptionEnum<F>>,
     current_layer_id: &mut LayerId,
-) -> (Option<CircuitMle<F>>, CircuitMle<F>) {
-    type CE<F> = Expression<F, CircuitExpr>;
+) -> (Option<MleDescription<F>>, MleDescription<F>) {
+    type CE<F> = Expression<F, ExprDescription>;
 
     // Sanitycheck number of vars in numerator == number of vars in denominator
     // EXCEPT when we're working with the fraction with constant 1 in the numerator
     if let Some(numerator_desc) = maybe_numerator_desc.as_ref() {
         assert_eq!(
-            numerator_desc.num_iterated_vars(),
-            denominator_desc.num_iterated_vars()
+            numerator_desc.num_free_vars(),
+            denominator_desc.num_free_vars()
         );
     }
 
     let mut maybe_numerator_desc = maybe_numerator_desc;
     let mut denominator_desc = denominator_desc;
 
-    for i in 0..denominator_desc.num_iterated_vars() {
+    for i in 0..denominator_desc.num_free_vars() {
         let denominators = split_circuit_mle(&denominator_desc);
         let next_numerator_expr = if let Some(numerator_desc) = maybe_numerator_desc {
             let numerators = split_circuit_mle(&numerator_desc);
@@ -536,34 +442,34 @@ fn build_fractional_sum<F: Field>(
         // Create the circuit layer by combining the two
         let layer_id = current_layer_id.get_and_inc();
 
-        let layer = CircuitRegularLayer::new_raw(
+        let layer = RegularLayerDescription::new_raw(
             layer_id,
-            next_numerator_expr.concat_expr(next_denominator_expr),
+            next_denominator_expr.select(next_numerator_expr),
         );
 
-        layers.push(CircuitLayerEnum::Regular(layer));
+        layers.push(LayerDescriptionEnum::Regular(layer));
 
         println!(
             "Iteration {:?} of build_fractional_sumcheck has layer id: {:?}",
             i, layer_id
         );
 
-        denominator_desc = CircuitMle::new(
+        denominator_desc = MleDescription::new(
             layer_id,
             &std::iter::once(MleIndex::Fixed(false))
-                .chain(repeat_n(MleIndex::Iterated, next_denominator_num_vars))
+                .chain(repeat_n(MleIndex::Free, next_denominator_num_vars))
                 .collect_vec(),
         );
-        maybe_numerator_desc = Some(CircuitMle::new(
+        maybe_numerator_desc = Some(MleDescription::new(
             layer_id,
             &std::iter::once(MleIndex::Fixed(true))
-                .chain(repeat_n(MleIndex::Iterated, next_numerator_num_vars))
+                .chain(repeat_n(MleIndex::Free, next_numerator_num_vars))
                 .collect_vec(),
         ));
     }
     if let Some(numerator_desc) = maybe_numerator_desc.as_ref() {
-        assert_eq!(numerator_desc.num_iterated_vars(), 0);
+        assert_eq!(numerator_desc.num_free_vars(), 0);
     }
-    assert_eq!(denominator_desc.num_iterated_vars(), 0);
+    assert_eq!(denominator_desc.num_free_vars(), 0);
     (maybe_numerator_desc, denominator_desc)
 }

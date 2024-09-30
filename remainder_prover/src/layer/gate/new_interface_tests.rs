@@ -79,10 +79,10 @@ mod tests {
     ///     of that of `mle`.
     #[test]
     fn test_add_gate_circuit_newmainder() {
-        const NUM_ITERATED_BITS: usize = 1;
+        const NUM_FREE_BITS: usize = 1;
 
         let mut rng = test_rng();
-        let size = 1 << NUM_ITERATED_BITS;
+        let size = 1 << NUM_FREE_BITS;
 
         let mle: DenseMle<Fr> = DenseMle::new_from_iter(
             (0..size).map(|_| Fr::from(rng.gen::<u64>())),
@@ -164,10 +164,10 @@ mod tests {
     #[test]
     fn test_dataparallel_add_gate_circuit_newmainder() {
         const NUM_DATAPARALLEL_BITS: usize = 1;
-        const NUM_ITERATED_BITS: usize = 1;
+        const NUM_FREE_BITS: usize = 1;
 
         let mut rng = test_rng();
-        let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
+        let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_FREE_BITS);
 
         // --- This should be 2^4 ---
         let mle_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
@@ -210,7 +210,7 @@ mod tests {
             );
 
             let mut nonzero_gates = vec![];
-            let table_size = 1 << (NUM_ITERATED_BITS);
+            let table_size = 1 << (NUM_FREE_BITS);
 
             (0..table_size).for_each(|idx| {
                 nonzero_gates.push((idx, idx, idx));
@@ -254,10 +254,10 @@ mod tests {
     ///     of that of `mle`.
     #[test]
     fn test_uneven_add_gate_circuit_newmainder() {
-        const NUM_ITERATED_BITS: usize = 4;
+        const NUM_FREE_BITS: usize = 4;
 
         let mut rng = test_rng();
-        let size = 1 << NUM_ITERATED_BITS;
+        let size = 1 << NUM_FREE_BITS;
 
         let mle: DenseMle<Fr> = DenseMle::new_from_iter(
             (0..size).map(|_| Fr::from(rng.gen::<u64>())),
@@ -312,10 +312,10 @@ mod tests {
 
     #[test]
     fn test_mul_add_gate_circuit_newmainder() {
-        const NUM_ITERATED_BITS: usize = 4;
+        const NUM_FREE_BITS: usize = 4;
 
         let mut rng = test_rng();
-        let size = 1 << NUM_ITERATED_BITS;
+        let size = 1 << NUM_FREE_BITS;
 
         let mle_1: DenseMle<Fr> = DenseMle::new_from_iter(
             (0..size).map(|_| Fr::from(rng.gen::<u64>())),
@@ -328,7 +328,7 @@ mod tests {
         );
 
         let neg_mle_2 = DenseMle::new_from_iter(
-            mle_2.bookkeeping_table().into_iter().map(|elem| -elem),
+            mle_2.bookkeeping_table().iter().map(|elem| -elem),
             LayerId::Input(0),
         );
 
@@ -356,7 +356,7 @@ mod tests {
             );
 
             let mut nonzero_gates = vec![];
-            let table_size = 1 << NUM_ITERATED_BITS;
+            let table_size = 1 << NUM_FREE_BITS;
 
             (0..table_size).for_each(|idx| {
                 nonzero_gates.push((idx, idx, idx));
@@ -424,10 +424,10 @@ mod tests {
     #[test]
     fn test_dataparallel_uneven_add_gate_circuit_newmainder() {
         const NUM_DATAPARALLEL_BITS: usize = 4;
-        const NUM_ITERATED_BITS: usize = 4;
+        const NUM_FREE_BITS: usize = 4;
 
         let mut rng = test_rng();
-        let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
+        let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_FREE_BITS);
 
         let mle_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
             (0..size).map(|_| Fr::from(rng.gen::<u64>())),
@@ -498,10 +498,10 @@ mod tests {
     #[test]
     fn test_dataparallel_mul_add_gate_circuit_newmainder() {
         const NUM_DATAPARALLEL_BITS: usize = 2;
-        const NUM_ITERATED_BITS: usize = 2;
+        const NUM_FREE_BITS: usize = 2;
 
         let mut rng = test_rng();
-        let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
+        let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_FREE_BITS);
 
         let mle_1_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
             (0..size).map(|_| Fr::from(rng.gen::<u64>())),
@@ -516,7 +516,7 @@ mod tests {
         let neg_mle_2_dataparallel = DenseMle::new_from_iter(
             mle_2_dataparallel
                 .bookkeeping_table()
-                .into_iter()
+                .iter()
                 .map(|elem| -elem),
             LayerId::Input(0),
         );
@@ -554,7 +554,7 @@ mod tests {
             );
 
             let mut nonzero_gates = vec![];
-            let table_size = 1 << NUM_ITERATED_BITS;
+            let table_size = 1 << NUM_FREE_BITS;
 
             (0..table_size).for_each(|idx| {
                 nonzero_gates.push((idx, idx, idx));
