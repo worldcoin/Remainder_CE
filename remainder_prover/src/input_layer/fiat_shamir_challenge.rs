@@ -18,8 +18,8 @@ use thiserror::Error;
 /// The errors which can be encountered when constructing an input layer.
 pub enum FiatShamirChallengeError {
     /// The point of the claim is too short.
-    #[error("The evaluation point of the claim is too short")]
-    InsufficientBinding,
+    #[error("Claim binds {0} variables, but MLE has only {1} variables")]
+    NumVarsMismatch(usize, usize),
     /// The [FiatShamirChallenge] evaluation does not equal the claimed value.
     #[error("Evaluation of MLE does not match the claimed value")]
     EvaluationMismatch,
@@ -86,17 +86,24 @@ impl<F: Field> FiatShamirChallenge<F> {
         let mut mle_ref = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
         mle_ref.index_mle_indices(0);
 
+        if mle_ref.num_iterated_vars() != claim.get_point().len() {
+            return Err(FiatShamirChallengeError::NumVarsMismatch(
+                claim.get_point().len(),
+                mle_ref.num_iterated_vars(),
+            ));
+        }
+
         let eval = if mle_ref.num_iterated_vars() != 0 {
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
             }
-            eval.ok_or(FiatShamirChallengeError::InsufficientBinding)?
+            eval.unwrap()
         } else {
             Claim::new(vec![], mle_ref.current_mle[0])
         };
 
-        // This would be an internal error and should never happen.
+        // This is an internal error as it should never happen.
         assert_eq!(eval.get_point(), claim.get_point());
 
         // Check if the evaluation of the MLE matches the claimed value.
