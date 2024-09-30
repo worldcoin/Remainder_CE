@@ -28,7 +28,7 @@ pub enum DimensionError {
     NoDimensionInfoError(),
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize, Eq, Hash)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 /// the dimension information of the MLE.
 /// contains the dim: [IxDyn], see ndarray for more detailed documentation
 /// and the names of the axes.
