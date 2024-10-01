@@ -1,13 +1,11 @@
 //! The implementation of `RegularLayer`
 
-/// The implementation of claim handling helpers for `RegularLayer`
-pub mod claims;
-
 #[cfg(test)]
 mod tests;
 
 use std::collections::{HashMap, HashSet};
 
+use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
@@ -18,7 +16,12 @@ use tracing::info;
 
 use crate::{
     builders::layer_builder::LayerBuilder,
-    claims::Claim,
+    claims::{
+        claim_aggregation::{
+            get_num_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
+        },
+        Claim, ClaimError, RawClaim,
+    },
     expression::{
         circuit_expr::{filter_bookkeeping_table, ExprDescription, MleDescription},
         generic_expr::{Expression, ExpressionNode, ExpressionType},
@@ -27,21 +30,26 @@ use crate::{
     },
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{betavalues::BetaValues, dense::DenseMle},
+    mle::{betavalues::BetaValues, dense::DenseMle, Mle},
     sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
 };
 
 use super::{
+    combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::PostSumcheckLayer,
+    GenericLayer,
 };
 
 use super::{LayerDescription, VerifierLayer};
 
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
+
 /// The most common implementation of [crate::layer::Layer].
 ///
-/// A layer is made up of a structured polynomial relationship between MLEs of
-/// previous layers.
+/// A regular layer is made up of a structured polynomial relationship between
+/// MLEs of previous layers.
 ///
 /// Proofs are generated with the Sumcheck protocol.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -56,66 +64,230 @@ pub struct RegularLayer<F: Field> {
 
     /// Stores the indices of the non-linear rounds in this GKR layer so we
     /// only produce sumcheck proofs over those.
+    /// Initially set to `None`. Computed during initialization.
     nonlinear_rounds: Option<Vec<usize>>,
 
-    /// Store the beta values associated with an expression.
+    /// Stores the beta values associated with the `expression`.
+    /// Initially set to `None`. Computed during initialization.
     beta_vals: Option<BetaValues<F>>,
 }
 
-/// The circuit description counterpart of a [RegularLayer].
-#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
-#[serde(bound = "F: Field")]
-pub struct RegularLayerDescription<F: Field> {
-    /// This layer's ID.
-    id: LayerId,
+impl<F: Field> RegularLayer<F> {
+    /// Generates a new [RegularLayer] from an `expression` and a `layer_id`.
+    /// The `layer_id` uniquely identifies this layer and the `expression` is
+    /// the relationship this layer proves.
+    /// The `nonlinear_rounds` and `beta_vals` are initiliazed to `None`
+    /// and they're later computed by [Layer::initialize_sumcheck]
+    pub fn new_raw(id: LayerId, expression: Expression<F, ProverExpr>) -> Self {
+        RegularLayer {
+            id,
+            expression,
+            nonlinear_rounds: None,
+            beta_vals: None,
+        }
+    }
 
-    /// A structural description of the polynomial expression defining this
-    /// layer. Leaves of the expression describe the MLE characteristics without
-    /// storing any values.
-    expression: Expression<F, ExprDescription>,
-}
+    pub(crate) fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
+        Self {
+            id,
+            expression: builder.build_expression(),
+            nonlinear_rounds: None,
+            beta_vals: None,
+        }
+    }
 
-impl<F: Field> RegularLayerDescription<F> {
-    /// To be used internally only!
-    /// Generates a new [RegularLayerDescription] given raw data.
-    pub fn new_raw(id: LayerId, expression: Expression<F, ExprDescription>) -> Self {
-        Self { id, expression }
+    /// Returns a reference to the expression that this layer is proving.
+    pub fn get_expression(&self) -> &Expression<F, ProverExpr> {
+        &self.expression
+    }
+
+    /// Initialize all necessary information in order to start sumcheck within a
+    /// layer of GKR. This includes pre-fixing all of the rounds within the
+    /// layer which are linear, and then appropriately initializing the
+    /// necessary beta values over the nonlinear rounds.
+    fn start_sumcheck(&mut self, claim: &RawClaim<F>) -> Result<(), LayerError> {
+        println!("Starting sumcheck for layer: {:?}", self.id);
+        let claim_point = claim.get_point();
+
+        // Grab and index the expression.
+        let expression = &mut self.expression;
+        let expression_num_indices = expression.index_mle_indices(0);
+
+        let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
+        let expression_linear_indices = expression.get_all_linear_rounds();
+        debug_assert_eq!(
+            expression_num_indices,
+            expression_nonlinear_indices.len() + expression_linear_indices.len()
+        );
+
+        // For each of the linear indices in the expression, we can fix the
+        // variable at that index for the expression, so that now the only
+        // unbound indices are the nonlinear indices.
+        expression_linear_indices
+            .into_iter()
+            .sorted()
+            .for_each(|round_idx| {
+                expression.fix_variable_at_index(round_idx, claim_point[round_idx]);
+            });
+
+        // We need the beta values over the nonlinear indices of the
+        // expression, so we grab the claim points that are over these
+        // nonlinear indices and then initialize the betavalues struct over
+        // them.
+        let betavec = expression_nonlinear_indices
+            .iter()
+            .map(|idx| (*idx, claim_point[*idx]))
+            .collect_vec();
+        let newbeta = BetaValues::new(betavec);
+        self.beta_vals = Some(newbeta);
+
+        // Store the nonlinear rounds of the expression within the layer so
+        // that we know these are the rounds we perform sumcheck over.
+        self.nonlinear_rounds = Some(expression_nonlinear_indices);
+
+        Ok(())
+    }
+
+    /// Performs a round of the sumcheck protocol on this Layer.
+    fn prove_nonlinear_round(
+        &mut self,
+        transcript_writer: &mut impl ProverTranscript<F>,
+        round_index: usize,
+    ) -> Result<(), LayerError> {
+        println!("Proving round: {round_index}");
+
+        // Grabs the degree of univariate polynomial we are sending over.
+        let degree = get_round_degree(&self.expression, round_index);
+
+        // Compute the sumcheck message for this round.
+        let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
+            &self.expression,
+            round_index,
+            degree,
+            self.beta_vals.as_ref().unwrap(),
+        )?
+        .0;
+
+        transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
+
+        let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+
+        self.expression.fix_variable(round_index, challenge);
+
+        self.beta_vals
+            .as_mut()
+            .unwrap()
+            .beta_update(round_index, challenge);
+
+        Ok(())
+    }
+
+    /// Traverse the fully-bound `self.expression` and append all MLE values
+    /// to the trascript.
+    pub fn append_leaf_mles_to_transcript(
+        &self,
+        transcript_writer: &mut impl ProverTranscript<F>,
+    ) -> Result<(), LayerError> {
+        let mut observer_fn = |expr_node: &ExpressionNode<F, ProverExpr>,
+                               mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
+         -> Result<(), ()> {
+            match expr_node {
+                ExpressionNode::Mle(mle_vec_index) => {
+                    let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
+                    let val = mle.mle.value();
+                    transcript_writer.append("Leaf MLE value", val);
+                    Ok(())
+                }
+                ExpressionNode::Product(mle_vec_indices) => {
+                    for mle_vec_index in mle_vec_indices {
+                        let mle = &mle_vec[mle_vec_index.index()];
+                        let eval = mle.mle.value();
+                        transcript_writer.append("Product MLE value", eval);
+                    }
+                    Ok(())
+                }
+                ExpressionNode::Constant(_)
+                | ExpressionNode::Scaled(_, _)
+                | ExpressionNode::Sum(_, _)
+                | ExpressionNode::Negated(_)
+                | ExpressionNode::Selector(_, _, _) => Ok(()),
+            }
+        };
+
+        let _ = self.expression.traverse(&mut observer_fn);
+
+        Ok(())
     }
 }
 
-/// The verifier counterpart of a [RegularLayer].
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: Field")]
-pub struct VerifierRegularLayer<F: Field> {
-    /// This layer's ID.
-    id: LayerId,
+impl<F: Field> GenericLayer<F> for RegularLayer<F> {
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: &[Vec<F>],
+        claimed_vals: &[F],
+        claim_mle_refs: Vec<DenseMle<F>>,
+        num_claims: usize,
+        num_idx: usize,
+    ) -> Result<Vec<F>, ClaimError> {
+        // get the number of evaluations
 
-    /// A fully-bound expression defining the layer.
-    expression: Expression<F, VerifierExpr>,
-}
+        let (num_evals, common_idx) = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
+            let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
+            (num_evals, common_idx)
+        } else {
+            assert!(claim_vecs.len() > 1);
+            (((num_claims - 1) * num_idx) + 1, None)
+        };
 
-impl<F: Field> VerifierRegularLayer<F> {
-    /// To be used internally only!
-    /// Generates a new [VerifierRegularLayer] given raw data.
-    pub(crate) fn new_raw(id: LayerId, expression: Expression<F, VerifierExpr>) -> Self {
-        Self { id, expression }
+        let mut claim_mle_refs = claim_mle_refs;
+
+        if let Some(common_idx) = common_idx {
+            pre_fix_mle_refs(&mut claim_mle_refs, &claim_vecs[0], common_idx);
+        }
+
+        // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
+        let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
+            .map(|idx| {
+                // get the challenge l(idx)
+                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+                    .map(|claim_idx| {
+                        let evals: Vec<F> = cfg_into_iter!(claim_vecs)
+                            .map(|claim| claim[claim_idx])
+                            .collect();
+                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
+                    })
+                    .collect();
+
+                let wlx_eval_on_mle_ref =
+                    combine_mle_refs_with_aggregate(&claim_mle_refs, &new_chal);
+                wlx_eval_on_mle_ref.unwrap()
+            })
+            .collect();
+
+        // concat this with the first k evaluations from the claims to
+        // get num_evals evaluations
+        let mut wlx_evals = claimed_vals.to_vec();
+        wlx_evals.extend(&next_evals);
+        Ok(wlx_evals)
     }
 }
-
 impl<F: Field> Layer<F> for RegularLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.id
     }
 
-    fn prove_rounds(
+    fn prove(
         &mut self,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError> {
         info!("Proving a GKR Layer.");
 
         // Initialize tables and pre-fix variables.
         self.start_sumcheck(&claim)?;
+
+        assert!(self.nonlinear_rounds.is_some());
+        assert!(self.beta_vals.is_some());
 
         let nonlinear_rounds = self.nonlinear_rounds.take().unwrap();
 
@@ -133,14 +305,15 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         Ok(())
     }
 
-    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
+    fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
         let expression = &mut self.expression;
         let _expression_num_indices = expression.index_mle_indices(0);
         let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
         let expression_linear_indices = expression.get_all_linear_rounds();
 
-        // for each of the linear indices in the expression, we can fix the variable at that index for
-        // the expression, so that now the only unbound indices are the nonlinear indices.
+        // For each of the linear indices in the expression, we can fix the
+        // variable at that index of the expression, so that now the only
+        // unbound indices are the nonlinear indices.
         expression_linear_indices
             .iter()
             .sorted()
@@ -148,9 +321,9 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                 expression.fix_variable_at_index(*round_idx, claim_point[*round_idx]);
             });
 
-        // we need the beta values over the nonlinear indices of the expression, so we grab
-        // the claim points that are over these nonlinear indices and then initialize the betavalues
-        // struct over them.
+        // We need the beta values over the nonlinear indices of the expression,
+        // so we grab the claim points that are over these nonlinear indices and
+        // then initialize the betavalues struct over them.
         let betavec = expression_nonlinear_indices
             .iter()
             .map(|idx| (*idx, claim_point[*idx]))
@@ -235,6 +408,141 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
 
         self.expression.get_post_sumcheck_layer(fully_bound_beta)
     }
+
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+        // First off, parse the expression that is associated with the layer.
+        // Next, get to the actual claims that are generated by each expression and grab them
+        // Return basically a list of (usize, Claim)
+        let layerwise_expr = &self.expression;
+
+        let mut claims: Vec<Claim<F>> = Vec::new();
+
+        // Define how to parse the expression tree.
+        // Basically we just want to go down it and pass up claims.
+        // We can only add a new claim if we see an MLE with all its indices
+        // bound.
+        let mut observer_fn =
+            |expr: &ExpressionNode<F, ProverExpr>,
+             mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec| {
+                match expr {
+                    ExpressionNode::Mle(mle_vec_idx) => {
+                        let mle_ref = mle_vec_idx.get_mle(mle_vec);
+
+                        let fixed_mle_indices = mle_ref
+                            .mle_indices
+                            .iter()
+                            .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
+                            .collect::<Result<Vec<_>, _>>()?;
+
+                        // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
+                        let mle_layer_id = mle_ref.layer_id();
+
+                        // --- Grab the actual value that the claim is supposed to evaluate to ---
+                        if mle_ref.bookkeeping_table().len() > 1 {
+                            return Err(ClaimError::MleRefMleError);
+                        }
+                        if mle_ref.bookkeeping_table().is_empty() {
+                            return Err(ClaimError::IntermediateZeroMLERefError);
+                        }
+                        let claimed_value = mle_ref.bookkeeping_table()[0];
+
+                        // Note: No need to append claim values here.
+                        // We already appended them when evaluating the
+                        // expression for sumcheck.
+
+                        // --- Construct the claim ---
+                        let claim = Claim::new(
+                            fixed_mle_indices,
+                            claimed_value,
+                            self.layer_id(),
+                            mle_layer_id,
+                        );
+
+                        // --- Push it into the list of claims ---
+                        claims.push(claim);
+                    }
+                    ExpressionNode::Product(mle_vec_indices) => {
+                        for mle_vec_index in mle_vec_indices {
+                            let mle_ref = mle_vec_index.get_mle(mle_vec);
+                            let fixed_mle_indices = mle_ref
+                                .mle_indices
+                                .iter()
+                                .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
+                                .collect::<Result<Vec<_>, _>>()?;
+
+                            // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
+                            let mle_layer_id = mle_ref.layer_id();
+
+                            // --- Grab the actual value that the claim is supposed to evaluate to ---
+                            if mle_ref.bookkeeping_table().len() != 1 {
+                                return Err(ClaimError::MleRefMleError);
+                            }
+                            let claimed_value = mle_ref.bookkeeping_table()[0];
+
+                            // Note: No need to append the claim value to the transcript here. We
+                            // already appended when evaluating the expression for sumcheck.
+
+                            // --- Construct the claim ---
+                            // need to populate the claim with the mle ref we are grabbing the claim from
+                            let claim = Claim::new(
+                                fixed_mle_indices,
+                                claimed_value,
+                                self.layer_id(),
+                                mle_layer_id,
+                            );
+
+                            // --- Push it into the list of claims ---
+                            claims.push(claim);
+                        }
+                    }
+                    _ => {}
+                }
+                Ok(())
+            };
+
+        // --- Apply the observer function from above onto the expression ---
+        layerwise_expr.traverse(&mut observer_fn)?;
+
+        Ok(claims)
+    }
+}
+
+/// The circuit description counterpart of a [RegularLayer].
+#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
+#[serde(bound = "F: Field")]
+pub struct RegularLayerDescription<F: Field> {
+    /// This layer's ID.
+    id: LayerId,
+
+    /// A structural description of the polynomial expression defining this
+    /// layer. The leaves of the expression describe the MLE characteristics
+    /// without storing any values.
+    expression: Expression<F, ExprDescription>,
+}
+
+impl<F: Field> RegularLayerDescription<F> {
+    /// Generates a new [RegularLayerDescription] given raw data.
+    pub fn new_raw(id: LayerId, expression: Expression<F, ExprDescription>) -> Self {
+        Self { id, expression }
+    }
+}
+
+/// The verifier's counterpart of a [RegularLayer].
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: Field")]
+pub struct VerifierRegularLayer<F: Field> {
+    /// This layer's ID.
+    id: LayerId,
+
+    /// A fully-bound expression defining the layer.
+    expression: Expression<F, VerifierExpr>,
+}
+
+impl<F: Field> VerifierRegularLayer<F> {
+    /// Generates a new [VerifierRegularLayer] given raw data.
+    pub(crate) fn new_raw(id: LayerId, expression: Expression<F, VerifierExpr>) -> Self {
+        Self { id, expression }
+    }
 }
 
 impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
@@ -309,7 +617,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
 
     fn verify_rounds(
         &self,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierLayerEnum<F>, VerificationError> {
         let nonlinear_rounds = self.expression.get_all_nonlinear_rounds();
@@ -320,7 +628,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         // Represents `g_{i-1}(x)` of the previous round.
         // This is initialized to the constant polynomial `g_0(x)` which evaluates
         // to the claim result for any `x`.
-        let mut g_prev_round = vec![claim.get_result()];
+        let mut g_prev_round = vec![claim.get_eval()];
 
         // Previous round's challege: r_{i-1}.
         let mut prev_challenge = F::ZERO;
@@ -519,151 +827,77 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.id
     }
-}
 
-impl<F: Field> RegularLayer<F> {
-    /// Initialize all necessary information in order to start sumcheck within a
-    /// layer of GKR. This includes pre-fixing all of the rounds within the
-    /// layer which are linear, and then appropriately initializing the
-    /// necessary beta values over the nonlinear rounds.
-    fn start_sumcheck(&mut self, claim: &Claim<F>) -> Result<(), LayerError> {
-        println!("Starting sumcheck for layer: {:?}", self.id);
-        let claim_point = claim.get_point();
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+        let expr = &self.expression;
 
-        // Grab and index the expression.
-        let expression = &mut self.expression;
-        let expression_num_indices = expression.index_mle_indices(0);
+        // --- Define how to parse the expression tree ---
+        // - Basically we just want to go down it and pass up claims
+        // - We can only add a new claim if we see an MLE with all its indices bound
 
-        let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
-        let expression_linear_indices = expression.get_all_linear_rounds();
-        debug_assert_eq!(
-            expression_num_indices,
-            expression_nonlinear_indices.len() + expression_linear_indices.len()
-        );
+        let mut claims: Vec<Claim<F>> = Vec::new();
 
-        // For each of the linear indices in the expression, we can fix the
-        // variable at that index for the expression, so that now the only
-        // unbound indices are the nonlinear indices.
-        expression_linear_indices
-            .into_iter()
-            .sorted()
-            .for_each(|round_idx| {
-                expression.fix_variable_at_index(round_idx, claim_point[round_idx]);
-            });
+        let mut observer_fn = |exp: &ExpressionNode<F, VerifierExpr>,
+                               _mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec|
+         -> Result<(), LayerError> {
+            match exp {
+                ExpressionNode::Mle(verifier_mle) => {
+                    let fixed_mle_indices = verifier_mle
+                        .mle_indices()
+                        .iter()
+                        .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
+                        .collect::<Result<Vec<_>, _>>()?;
 
-        // We need the beta values over the nonlinear indices of the
-        // expression, so we grab the claim points that are over these
-        // nonlinear indices and then initialize the betavalues struct over
-        // them.
-        let betavec = expression_nonlinear_indices
-            .iter()
-            .map(|idx| (*idx, claim_point[*idx]))
-            .collect_vec();
-        let newbeta = BetaValues::new(betavec);
-        self.beta_vals = Some(newbeta);
+                    // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
+                    let mle_layer_id = verifier_mle.layer_id();
 
-        // Store the nonlinear rounds of the expression within the layer so
-        // that we know these are the rounds we perform sumcheck over.
-        self.nonlinear_rounds = Some(expression_nonlinear_indices);
+                    // --- Grab the actual value that the claim is supposed to evaluate to ---
+                    let claimed_value = verifier_mle.value();
 
-        Ok(())
-    }
+                    // --- Construct the claim ---
+                    let claim: Claim<F> = Claim::new(
+                        fixed_mle_indices,
+                        claimed_value,
+                        self.layer_id(),
+                        mle_layer_id,
+                    );
 
-    /// Performs a round of the sumcheck protocol on this Layer.
-    fn prove_nonlinear_round(
-        &mut self,
-        transcript_writer: &mut impl ProverTranscript<F>,
-        round_index: usize,
-    ) -> Result<(), LayerError> {
-        println!("Proving round: {round_index}");
-
-        // Grabs the degree of univariate polynomial we are sending over.
-        let degree = get_round_degree(&self.expression, round_index);
-
-        // Compute the sumcheck message for this round.
-        let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
-            &self.expression,
-            round_index,
-            degree,
-            self.beta_vals.as_ref().unwrap(),
-        )?
-        .0;
-
-        transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
-
-        let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-
-        self.expression.fix_variable(round_index, challenge);
-
-        self.beta_vals
-            .as_mut()
-            .unwrap()
-            .beta_update(round_index, challenge);
-
-        Ok(())
-    }
-
-    /// Traverse the fully-bound `self.expression` and append all MLE values
-    /// to the trascript.
-    pub fn append_leaf_mles_to_transcript(
-        &self,
-        transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<(), LayerError> {
-        let mut observer_fn = |expr_node: &ExpressionNode<F, ProverExpr>,
-                               mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
-         -> Result<(), ()> {
-            match expr_node {
-                ExpressionNode::Mle(mle_vec_index) => {
-                    let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
-                    let val = mle.mle.value();
-                    transcript_writer.append("Leaf MLE value", val);
-                    Ok(())
+                    // --- Push it into the list of claims ---
+                    claims.push(claim);
                 }
-                ExpressionNode::Product(mle_vec_indices) => {
-                    for mle_vec_index in mle_vec_indices {
-                        let mle = &mle_vec[mle_vec_index.index()];
-                        let eval = mle.mle.value();
-                        transcript_writer.append("Product MLE value", eval);
+                ExpressionNode::Product(verifier_mle_vec) => {
+                    for verifier_mle in verifier_mle_vec {
+                        let fixed_mle_indices = verifier_mle
+                            .mle_indices()
+                            .iter()
+                            .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
+                            .collect::<Result<Vec<_>, _>>()?;
+
+                        // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
+                        let mle_layer_id = verifier_mle.layer_id();
+
+                        let claimed_value = verifier_mle.value();
+
+                        // --- Construct the claim ---
+                        let claim: Claim<F> = Claim::new(
+                            fixed_mle_indices,
+                            claimed_value,
+                            self.layer_id(),
+                            mle_layer_id,
+                        );
+
+                        // --- Push it into the list of claims ---
+                        claims.push(claim);
                     }
-                    Ok(())
                 }
-                ExpressionNode::Constant(_)
-                | ExpressionNode::Scaled(_, _)
-                | ExpressionNode::Sum(_, _)
-                | ExpressionNode::Negated(_)
-                | ExpressionNode::Selector(_, _, _) => Ok(()),
+                _ => {}
             }
+            Ok(())
         };
 
-        let _ = self.expression.traverse(&mut observer_fn);
+        // --- Apply the observer function from above onto the expression ---
+        expr.traverse(&mut observer_fn)?;
 
-        Ok(())
-    }
-
-    ///Gets the expression that this layer is proving
-    pub fn expression(&self) -> &Expression<F, ProverExpr> {
-        &self.expression
-    }
-
-    /// Creates a new `RegularLayer` from an `Expression` and a `LayerId`
-    ///
-    /// The `Expression` is the relationship this `Layer` proves
-    /// and the `LayerId` is the location of this `Layer` in the overall circuit
-    pub fn new_raw(id: LayerId, expression: Expression<F, ProverExpr>) -> Self {
-        RegularLayer {
-            id,
-            expression,
-            nonlinear_rounds: None,
-            beta_vals: None,
-        }
-    }
-
-    pub(crate) fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
-        Self {
-            id,
-            expression: builder.build_expression(),
-            nonlinear_rounds: None,
-            beta_vals: None,
-        }
+        Ok(claims)
     }
 }

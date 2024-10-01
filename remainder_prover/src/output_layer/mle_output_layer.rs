@@ -13,7 +13,7 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::{wlx_eval::ClaimMle, ClaimError, YieldClaim},
+    claims::{Claim, ClaimError},
     expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{LayerError, LayerId},
     layouter::layouting::CircuitMap,
@@ -109,6 +109,32 @@ impl<F: Field> OutputLayer<F> for MleOutputLayer<F> {
 
     fn append_mle_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
         transcript_writer.append_elements("Output Layer MLE evals", self.mle.bookkeeping_table());
+    }
+
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, crate::layer::LayerError> {
+        if self.mle.bookkeeping_table().len() != 1 {
+            return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
+        }
+
+        let mle_indices: Result<Vec<F>, _> = self
+            .mle
+            .mle_indices()
+            .iter()
+            .map(|index| {
+                index
+                    .val()
+                    .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
+            })
+            .collect();
+
+        let claim_value = self.mle.bookkeeping_table()[0];
+
+        Ok(vec![Claim::new(
+            mle_indices?,
+            claim_value,
+            self.mle.layer_id(), // this used to be `None`.
+            self.mle.layer_id(),
+        )])
     }
 }
 
@@ -260,38 +286,8 @@ impl<F: Field> VerifierOutputLayer<F> for VerifierMleOutputLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.mle.layer_id()
     }
-}
 
-impl<F: Field> YieldClaim<ClaimMle<F>> for MleOutputLayer<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
-        if self.mle.bookkeeping_table().len() != 1 {
-            return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
-        }
-
-        let mle_indices: Result<Vec<F>, _> = self
-            .mle
-            .mle_indices()
-            .iter()
-            .map(|index| {
-                index
-                    .val()
-                    .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
-            })
-            .collect();
-
-        let claim_value = self.mle.bookkeeping_table()[0];
-
-        Ok(vec![ClaimMle::new(
-            mle_indices?,
-            claim_value,
-            None,
-            Some(self.mle.layer_id()),
-        )])
-    }
-}
-
-impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, crate::layer::LayerError> {
         // We do not support non-zero MLEs on Output Layers at this point!
         assert!(self.is_zero());
 
@@ -333,11 +329,11 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
             }
         }
 
-        Ok(vec![ClaimMle::new(
+        Ok(vec![Claim::new(
             claim_point,
             claim_value,
-            None,
-            Some(self.mle.layer_id()),
+            self.mle.layer_id(), // used to be `None`.
+            self.mle.layer_id(),
         )])
     }
 }

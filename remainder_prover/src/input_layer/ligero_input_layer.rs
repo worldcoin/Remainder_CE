@@ -17,15 +17,14 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::wlx_eval::YieldWLXEvals,
     input_layer::CommitmentEnum,
-    layer::LayerId,
+    layer::{GenericLayer, LayerId},
     mle::{dense::DenseMle, evals::MultilinearExtension},
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, InputLayer,
-    InputLayerDescription, InputLayerError,
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations, InputLayer, InputLayerDescription,
+    InputLayerError,
 };
 
 /// An input layer in which `mle` will be committed to using the Ligero polynomial
@@ -125,7 +124,7 @@ impl<F: Field> InputLayer<F> for LigeroInputLayer<F> {
     fn open(
         &self,
         transcript_writer: &mut impl ProverTranscript<F>,
-        claim: crate::claims::Claim<F>,
+        claim: crate::claims::RawClaim<F>,
     ) -> Result<(), InputLayerError> {
         let comm = self
             .comm
@@ -171,7 +170,7 @@ impl<F: Field> InputLayerDescription<F> for LigeroInputLayerDescription<F> {
     fn verify(
         &self,
         commitment: &Self::Commitment,
-        claim: crate::claims::Claim<F>,
+        claim: crate::claims::RawClaim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), InputLayerError> {
         // let num_coeffs = 2_usize.pow(claim.get_num_vars() as u32);
@@ -181,7 +180,7 @@ impl<F: Field> InputLayerDescription<F> for LigeroInputLayerDescription<F> {
             ligero_aux,
             transcript_reader,
             claim.get_point(),
-            claim.get_result(),
+            claim.get_eval(),
         );
         Ok(())
     }
@@ -238,21 +237,20 @@ impl<F: Field> LigeroInputLayer<F> {
     }
 }
 
-impl<F: Field> YieldWLXEvals<F> for LigeroInputLayer<F> {
-    /// Computes the V_d(l(x)) evaluations for the input layer V_d.
+impl<F: Field> GenericLayer<F> for LigeroInputLayer<F> {
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        claimed_mles: Vec<DenseMle<F>>,
+        claim_mle_refs: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
-        get_wlx_evaluations_helper(
+        get_wlx_evaluations(
             self.mle.clone(),
             claim_vecs,
             claimed_vals,
-            claimed_mles,
+            claim_mle_refs,
             num_claims,
             num_idx,
         )
@@ -266,7 +264,7 @@ mod tests {
         Fr,
     };
 
-    use crate::{claims::Claim, mle::Mle};
+    use crate::{claims::RawClaim, mle::Mle};
     use remainder_shared_types::ff_field;
 
     use super::*;
@@ -284,7 +282,7 @@ mod tests {
 
         let claim_point = vec![Fr::ONE, Fr::ZERO];
         let claim_result = Fr::from(2);
-        let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
+        let claim: RawClaim<Fr> = RawClaim::new(claim_point, claim_result);
 
         let aux = LigeroAuxInfo::new(evals.len().next_power_of_two(), rho_inv, ratio, None);
         let (pre_commitment, _root) = remainder_ligero_commit(&evals, &aux);
@@ -352,7 +350,7 @@ mod tests {
 
         let claim_point = vec![Fr::ONE, Fr::ZERO];
         let claim_result = Fr::from(2);
-        let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
+        let claim: RawClaim<Fr> = RawClaim::new(claim_point, claim_result);
 
         let verifier_ligero_input_layer = LigeroInputLayerDescription::new(
             layer_id,

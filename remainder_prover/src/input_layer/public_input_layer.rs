@@ -9,13 +9,13 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::{wlx_eval::YieldWLXEvals, Claim},
-    layer::LayerId,
+    claims::RawClaim,
+    layer::{GenericLayer, LayerId},
     mle::{dense::DenseMle, evals::MultilinearExtension},
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CommitmentEnum, InputLayer,
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations, CommitmentEnum, InputLayer,
     InputLayerDescription, InputLayerError,
 };
 use crate::mle::Mle;
@@ -74,7 +74,7 @@ impl<F: Field> InputLayer<F> for PublicInputLayer<F> {
     fn open(
         &self,
         _: &mut impl ProverTranscript<F>,
-        _: crate::claims::Claim<F>,
+        _: crate::claims::RawClaim<F>,
     ) -> Result<(), super::InputLayerError> {
         Ok(())
     }
@@ -117,7 +117,7 @@ impl<F: Field> InputLayerDescription<F> for PublicInputLayerDescription<F> {
     fn verify(
         &self,
         commitment: &Self::Commitment,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         _: &mut impl VerifierTranscript<F>,
     ) -> Result<(), super::InputLayerError> {
         let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), self.layer_id());
@@ -131,10 +131,10 @@ impl<F: Field> InputLayerDescription<F> for PublicInputLayerDescription<F> {
             debug_assert_eq!(mle_ref.bookkeeping_table().len(), 1);
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
-            Claim::new(vec![], mle_ref.mle[0])
+            RawClaim::new(vec![], mle_ref.mle[0])
         };
 
-        if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {
+        if eval.get_point() == claim.get_point() && eval.get_eval() == claim.get_eval() {
             Ok(())
         } else {
             Err(InputLayerError::PublicInputVerificationFailed)
@@ -156,21 +156,20 @@ impl<F: Field> InputLayerDescription<F> for PublicInputLayerDescription<F> {
     }
 }
 
-impl<F: Field> YieldWLXEvals<F> for PublicInputLayer<F> {
-    /// Computes the V_d(l(x)) evaluations for the input layer V_d.
+impl<F: Field> GenericLayer<F> for PublicInputLayer<F> {
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        claimed_mles: Vec<DenseMle<F>>,
+        claim_mle_refs: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
-        get_wlx_evaluations_helper(
+        get_wlx_evaluations(
             self.mle.clone(),
             claim_vecs,
             claimed_vals,
-            claimed_mles,
+            claim_mle_refs,
             num_claims,
             num_idx,
         )
@@ -198,7 +197,7 @@ mod tests {
 
         let claim_point = vec![Fr::ONE, Fr::ZERO];
         let claim_result = Fr::from(2);
-        let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
+        let claim: RawClaim<Fr> = RawClaim::new(claim_point, claim_result);
         let verifier_public_input_layer =
             PublicInputLayerDescription::new(layer_id, dense_mle.num_free_vars());
         let mut public_input_layer = PublicInputLayer::new(dense_mle.mle, layer_id);

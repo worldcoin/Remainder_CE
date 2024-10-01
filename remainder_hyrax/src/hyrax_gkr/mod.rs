@@ -13,6 +13,7 @@ use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
 use rand::Rng;
+use remainder::claims::RawClaim;
 use remainder::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
 use remainder::input_layer::enum_input_layer::{
     InputLayerDescriptionEnum, InputLayerEnumVerifierCommitment,
@@ -20,6 +21,7 @@ use remainder::input_layer::enum_input_layer::{
 use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
 use remainder::input_layer::{InputLayer, InputLayerDescription};
 use remainder::layer::layer_enum::LayerEnum;
+use remainder::layer::LayerId;
 use remainder::layer::{Layer, LayerDescription};
 use remainder::layouter::component::ComponentSet;
 use remainder::layouter::layouting::{CircuitLocation, CircuitMap, InputNodeMap, LayerMap};
@@ -29,7 +31,6 @@ use remainder::layouter::nodes::{Context, NodeId};
 use remainder::mle::evals::MultilinearExtension;
 use remainder::mle::Mle;
 use remainder::prover::{generate_circuit_description, GKRCircuitDescription};
-use remainder::{claims::wlx_eval::ClaimMle, layer::LayerId};
 
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
@@ -650,10 +651,7 @@ impl<
                         let plaintext_claims =
                             Self::match_claims(&claims_as_commitments, committed_claims, committer);
                         plaintext_claims.into_iter().for_each(|claim| {
-                            verify_public_input_layer::<C>(
-                                &public_commit_from_proof,
-                                claim.get_claim(),
-                            );
+                            verify_public_input_layer::<C>(&public_commit_from_proof, &claim);
                         });
                     }
                 },
@@ -669,9 +667,7 @@ impl<
                 Self::match_claims(&claims_as_commitments, claims_on_public_values, committer)
                     .iter()
                     .for_each(|plaintext_claim| {
-                        fiat_shamir_challenge
-                            .verify(plaintext_claim.get_claim())
-                            .unwrap();
+                        fiat_shamir_challenge.verify(plaintext_claim).unwrap();
                     });
             });
 
@@ -691,7 +687,7 @@ impl<
         verifier_claims: &[HyraxClaim<C::Scalar, C>],
         prover_claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],
         committer: &PedersenCommitter<C>,
-    ) -> Vec<ClaimMle<C::Scalar>> {
+    ) -> Vec<RawClaim<C::Scalar>> {
         verifier_claims
             .iter()
             .map(|claim| {
@@ -704,7 +700,7 @@ impl<
                     // (necessary in order to conclude that the plain-text value is the correct one)
                     committed_claim.evaluation.verify(committer);
                     // ok, return the claim
-                    committed_claim.to_claim()
+                    committed_claim.to_raw_claim()
                 } else {
                     // TODO return an error instead of panicking
                     panic!("Claim has not counterpart in committed claims!");

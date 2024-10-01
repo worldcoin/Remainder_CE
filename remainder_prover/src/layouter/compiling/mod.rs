@@ -24,8 +24,8 @@ use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use tracing::{instrument, span, Level};
 
-use crate::claims::wlx_eval::WLXAggregator;
-use crate::claims::ClaimAggregator;
+use crate::claims::claim_aggregation::prover_aggregate_claims;
+use crate::claims::ClaimTracker;
 use crate::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
 use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
@@ -382,8 +382,8 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         info!("Circuit synthesized and witness generated.");
         end_timer!(synthesize_commit_timer);
 
-        // Claim aggregator to keep track of GKR-style claims across all layers.
-        let mut aggregator = WLXAggregator::<F, LayerEnum<F>, InputLayerEnum<F>>::new();
+        // Maps a `LayerId` to a collection of claims made on that layer.
+        let mut claim_tracker = ClaimTracker::new();
 
         // --------- STAGE 1: Output Claim Generation ---------
         let claims_timer = start_timer!(|| "Output claims generation");
@@ -400,11 +400,12 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 .fix_layer(&mut transcript_writer)
                 .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
-            // Add the claim to either the set of current claims we're proving
-            // or the global set of claims we need to eventually prove.
-            aggregator
-                .extract_claims(output)
-                .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
+            for claim in output
+                .get_claims()
+                .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?
+            {
+                claim_tracker.insert(claim.get_to_layer_id(), claim);
+            }
         }
 
         end_timer!(claims_timer);
@@ -436,7 +437,9 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
                 start_timer!(|| format!("Claim aggregation for layer {:?}", layer_id));
 
             let output_mles_from_layer = layer_map.get(&layer_id).unwrap();
-            let layer_claim = aggregator.prover_aggregate_claims(
+            let layer_claims = claim_tracker.get(layer_id).unwrap();
+            let layer_claim = prover_aggregate_claims(
+                layer_claims,
                 &layer,
                 output_mles_from_layer,
                 &mut transcript_writer,
@@ -452,14 +455,17 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
 
             // Compute all sumcheck messages across this particular layer.
             layer
-                .prove_rounds(layer_claim, &mut transcript_writer)
+                .prove(layer_claim, &mut transcript_writer)
                 .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
             end_timer!(sumcheck_msg_timer);
 
-            aggregator
-                .extract_claims(&layer)
-                .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
+            for claim in layer
+                .get_claims()
+                .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?
+            {
+                claim_tracker.insert(claim.get_to_layer_id(), claim);
+            }
 
             end_timer!(layer_timer);
             layer_sumcheck_proving_span.exit();
@@ -485,7 +491,9 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             ));
 
             let output_mles_from_layer = layer_map.get(&layer_id).unwrap();
-            let layer_claim = aggregator.prover_aggregate_claims_input(
+            let layer_claims = claim_tracker.get(layer_id).unwrap();
+            let layer_claim = prover_aggregate_claims(
+                layer_claims,
                 &input_layer,
                 output_mles_from_layer,
                 &mut transcript_writer,

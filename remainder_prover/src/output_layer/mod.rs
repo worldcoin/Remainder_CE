@@ -7,7 +7,10 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::layer::{LayerError, LayerId};
+use crate::{
+    claims::Claim,
+    layer::{LayerError, LayerId},
+};
 
 // The default implementation of an Output layer which is an MLE.
 pub mod mle_output_layer;
@@ -54,6 +57,9 @@ pub trait OutputLayer<F: Field> {
         &mut self,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError>;
+
+    /// Generates and returns all claims this layer makes onto other layers.
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError>;
 }
 
 /// The interface for the circuit description counterpart of an Output Layer.
@@ -89,4 +95,7 @@ pub trait VerifierOutputLayer<F: Field> {
     /// Returns the [LayerId] of the intermediate/input layer that his output
     /// layer is associated with.
     fn layer_id(&self) -> LayerId;
+
+    /// Return the claims that this layer makes onto other layers.
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError>;
 }

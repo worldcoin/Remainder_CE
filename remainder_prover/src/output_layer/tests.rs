@@ -9,8 +9,9 @@ use remainder_shared_types::{
     Fr,
 };
 
+use crate::claims::Claim;
+use crate::output_layer::VerifierOutputLayer;
 use crate::{
-    claims::{wlx_eval::ClaimMle, YieldClaim},
     layer::LayerId,
     mle::{zero::ZeroMle, MleIndex},
     output_layer::{mle_output_layer::MleOutputLayerDescription, OutputLayerDescription},
@@ -66,11 +67,11 @@ fn test_output_layer_get_claims() {
 
     let expected_point = vec![Fr::ONE, Fr::ONE];
     let expected_result = Fr::from(0);
-    let expected_claims = vec![ClaimMle::new(
+    let expected_claims = vec![Claim::new(
         expected_point.clone(),
         expected_result,
-        None,
-        Some(layer_id),
+        layer_id,
+        layer_id,
     )];
 
     assert_eq!(claims, expected_claims);
@@ -120,11 +121,11 @@ fn test_output_layer_get_claims_with_prefix_bits() {
     let expected_point = vec![Fr::ONE, Fr::ZERO, Fr::ONE, Fr::ONE];
     let expected_result = Fr::from(0);
 
-    let expected_claims = vec![ClaimMle::new(
+    let expected_claims = vec![Claim::new(
         expected_point.clone(),
         expected_result,
-        None,
-        Some(layer_id),
+        layer_id,
+        layer_id,
     )];
 
     assert_eq!(claims, expected_claims);

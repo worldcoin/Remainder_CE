@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
-    claims::Claim, expression::generic_expr::ExpressionNode, layer::LayerId, mle::dense::DenseMle,
+    claims::RawClaim, expression::generic_expr::ExpressionNode, layer::LayerId,
+    mle::dense::DenseMle,
 };
 
 use ark_std::test_rng;
@@ -11,7 +12,7 @@ use remainder_shared_types::Fr;
 pub fn dummy_sumcheck<F: Field>(
     expr: &mut Expression<F, ProverExpr>,
     rng: &mut impl Rng,
-    layer_claim: Claim<F>,
+    layer_claim: RawClaim<F>,
 ) -> Vec<(Vec<F>, Option<F>)> {
     let claim_point = layer_claim.get_point();
     let expression_nonlinear_indices = expr.get_all_nonlinear_rounds();
@@ -72,7 +73,7 @@ pub fn dummy_sumcheck<F: Field>(
 pub fn verify_sumcheck_messages<F: Field>(
     messages: Vec<(Vec<F>, Option<F>)>,
     mut expression: Expression<F, ProverExpr>,
-    layer_claim: Claim<F>,
+    layer_claim: RawClaim<F>,
     rng: &mut impl Rng,
 ) -> Result<F, VerifyError> {
     if messages.is_empty() {
@@ -87,7 +88,7 @@ pub fn verify_sumcheck_messages<F: Field>(
     // This is the claimed sumcheck result from the prover.
     // TODO!(ende): degree check?
     let claimed_val = messages[0].0[0] + messages[0].0[1];
-    if claimed_val != layer_claim.get_result() {
+    if claimed_val != layer_claim.get_eval() {
         return Err(VerifyError::SumcheckBad);
     }
     let mut challenges = vec![];
@@ -137,7 +138,7 @@ pub fn get_dummy_claim<F: Field>(
     mle_ref: DenseMle<F>,
     rng: &mut impl Rng,
     challenges: Option<Vec<F>>,
-) -> Claim<F> {
+) -> RawClaim<F> {
     let mut expression = mle_ref.expression();
     let num_vars = expression.index_mle_indices(0);
     let challenges = if let Some(challenges) = challenges {
@@ -161,13 +162,13 @@ pub fn get_dummy_claim<F: Field>(
             .collect_vec(),
         _ => panic!(),
     };
-    Claim::new(claim, eval)
+    RawClaim::new(claim, eval)
 }
 
 pub(crate) fn get_dummy_expression_eval<F: Field>(
     expression: &Expression<F, ProverExpr>,
     rng: &mut impl Rng,
-) -> Claim<F> {
+) -> RawClaim<F> {
     let mut expression = expression.clone();
     let num_vars = expression.index_mle_indices(0);
 
@@ -194,7 +195,7 @@ pub(crate) fn get_dummy_expression_eval<F: Field>(
         evals[0]
     };
 
-    Claim::new(challenges, result)
+    RawClaim::new(challenges, result)
 }
 
 /// Test regular numerical evaluation, last round.

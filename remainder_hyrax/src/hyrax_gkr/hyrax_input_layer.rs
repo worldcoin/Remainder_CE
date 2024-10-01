@@ -2,17 +2,17 @@ use ark_std::{cfg_into_iter, log2};
 use itertools::Itertools;
 use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
+use remainder::claims::claim_aggregation::{
+    get_num_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
+};
 use remainder::{
-    claims::{
-        wlx_eval::{claim_group::ClaimGroup, get_num_wlx_evaluations},
-        Claim,
-    },
+    claims::{claim_group::ClaimGroup, RawClaim},
     input_layer::{
         enum_input_layer::{InputLayerDescriptionEnum, InputLayerEnum},
         public_input_layer::PublicInputLayer,
         InputLayer, InputLayerDescription,
     },
-    layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
+    layer::LayerId,
     layouter::nodes::circuit_inputs::HyraxInputDType,
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     sumcheck::evaluate_at_a_point,
@@ -141,10 +141,10 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         // Calculate the coefficients of the polynomial that interpolates the claims
         // NB we don't use aggregate_claims here because the sampling of the evaluation
         // point for the aggregate claim needs to happen elsewhere in Hyrax.
-        let claims = ClaimGroup::new(
+        let claims = ClaimGroup::new_from_raw_claims(
             committed_claims
                 .iter()
-                .map(|committed_claim| committed_claim.to_claim())
+                .map(|committed_claim| committed_claim.to_raw_claim())
                 .collect_vec(),
         )
         .unwrap();
@@ -387,7 +387,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
 
 pub fn verify_public_input_layer<C: PrimeOrderCurve>(
     mle_vec: &[C::Scalar],
-    claim: &Claim<C::Scalar>,
+    claim: &RawClaim<C::Scalar>,
 ) {
     let mut mle = DenseMle::new_from_raw(mle_vec.to_vec(), LayerId::Input(0));
     mle.index_mle_indices(0);
@@ -400,9 +400,9 @@ pub fn verify_public_input_layer<C: PrimeOrderCurve>(
         debug_assert_eq!(mle.bookkeeping_table().len(), 1);
         eval.unwrap()
     } else {
-        Claim::new(vec![], mle.mle[0])
+        RawClaim::new(vec![], mle.mle[0])
     };
 
     assert_eq!(eval.get_point(), claim.get_point());
-    assert_eq!(eval.get_result(), claim.get_result());
+    assert_eq!(eval.get_eval(), claim.get_eval());
 }

@@ -5,7 +5,7 @@ use core::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{claims::Claim, layer::LayerId};
+use crate::{claims::RawClaim, layer::LayerId};
 use remainder_shared_types::Field;
 
 use self::mle_enum::MleEnum;
@@ -72,7 +72,7 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     ///
     /// If the new MLE becomes fully bound, returns the evaluation of the fully
     /// bound Mle.
-    fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<Claim<F>>;
+    fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<RawClaim<F>>;
 
     /// Fix the (indexed) free variable at `indexed_bit_index` with a given
     /// challenge `point`. Mutates `self`` to be the bookeeping table for the
@@ -82,7 +82,7 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     /// # Panics
     /// If `indexed_bit_index` does not correspond to a
     /// `MleIndex::Indexed(indexed_bit_index)` in `mle_indices`.
-    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<Claim<F>>;
+    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<RawClaim<F>>;
 
     /// Mutates the [MleIndex]es stored in `self` that are [MleIndex::Free] and
     /// turns them into [MleIndex::Indexed] with the bit index being determined

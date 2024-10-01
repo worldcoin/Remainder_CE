@@ -7,14 +7,16 @@ use remainder_ligero::ligero_structs::LigeroCommit;
 use remainder_ligero::poseidon_ligero::PoseidonSpongeHasher;
 use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 
-use crate::layer::regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION;
+use crate::claims::claim_aggregation::{
+    get_num_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
+};
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use remainder_shared_types::{transcript::TranscriptReaderError, Field};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{claims::Claim, layer::LayerId};
+use crate::{claims::RawClaim, layer::LayerId};
 
 /// An enum which represents which type of input layer we are working with.
 pub mod enum_input_layer;
@@ -27,7 +29,7 @@ pub mod ligero_input_layer;
 /// An input layer which requires no commitment and is openly evaluated at the random point.
 pub mod public_input_layer;
 
-use crate::{claims::wlx_eval::get_num_wlx_evaluations, sumcheck::evaluate_at_a_point};
+use crate::sumcheck::evaluate_at_a_point;
 
 use ark_std::{end_timer, start_timer};
 #[cfg(feature = "parallel")]
@@ -92,7 +94,7 @@ pub trait InputLayer<F: Field> {
     fn open(
         &self,
         transcript_writer: &mut impl ProverTranscript<F>,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
     ) -> Result<(), InputLayerError>;
 
     /// Returns the `LayerId` of this layer.
@@ -129,13 +131,13 @@ pub trait InputLayerDescription<F: Field> {
     fn verify(
         &self,
         commitment: &Self::Commitment,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), InputLayerError>;
 }
 
 /// Computes the V_d(l(x)) evaluations for the input layer V_d.
-fn get_wlx_evaluations_helper<F: Field>(
+fn get_wlx_evaluations<F: Field>(
     mut mle_ref: MultilinearExtension<F>,
     claim_vecs: &[Vec<F>],
     claimed_vals: &[F],

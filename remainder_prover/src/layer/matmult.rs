@@ -15,13 +15,14 @@ use super::{
     gate::compute_sumcheck_message_no_beta_table,
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
-    regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
-    Layer, LayerDescription, LayerError, LayerId, VerifierLayer,
+    GenericLayer, Layer, LayerDescription, LayerError, LayerId, VerifierLayer,
 };
 use crate::{
     claims::{
-        wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
-        Claim, ClaimError, YieldClaim,
+        claim_aggregation::{
+            get_num_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
+        },
+        Claim, ClaimError, RawClaim,
     },
     expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::VerificationError,
@@ -150,13 +151,62 @@ impl<F: Field> MatMult<F> {
     }
 }
 
+impl<F: Field> GenericLayer<F> for MatMult<F> {
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: &[Vec<F>],
+        claimed_vals: &[F],
+        claim_mles: Vec<DenseMle<F>>,
+        num_claims: usize,
+        num_idx: usize,
+    ) -> Result<Vec<F>, ClaimError> {
+        // get the number of evaluations
+        let (num_evals, common_idx) = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
+            let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
+            (num_evals, common_idx)
+        } else {
+            (((num_claims - 1) * num_idx) + 1, None)
+        };
+
+        let mut claim_mles = claim_mles.clone();
+
+        if let Some(common_idx) = common_idx {
+            pre_fix_mle_refs(&mut claim_mles, &claim_vecs[0], common_idx);
+        }
+
+        // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
+        let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
+            .map(|idx| {
+                // get the challenge l(idx)
+                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+                    .map(|claim_idx| {
+                        let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                            .map(|claim| claim[claim_idx])
+                            .collect();
+                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
+                    })
+                    .collect();
+
+                let wlx_eval_on_mle_ref = combine_mle_refs_with_aggregate(&claim_mles, &new_chal);
+                wlx_eval_on_mle_ref.unwrap()
+            })
+            .collect();
+
+        // concat this with the first k evaluations from the claims to
+        // get num_evals evaluations
+        let mut wlx_evals = claimed_vals.to_vec();
+        wlx_evals.extend(&next_evals);
+        Ok(wlx_evals)
+    }
+}
+
 impl<F: Field> Layer<F> for MatMult<F> {
-    fn prove_rounds(
+    fn prove(
         &mut self,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError> {
-        let mut claim_b = claim.get_point().clone();
+        let mut claim_b = claim.get_point().to_vec();
         let claim_a = claim_b.split_off(self.matrix_b.cols_num_vars);
         self.pre_processing_step(claim_a, claim_b);
 
@@ -184,7 +234,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
         self.layer_id
     }
 
-    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
+    fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
         let mut claim_b = claim_point.to_vec();
         let claim_a = claim_b.split_off(self.matrix_b.cols_num_vars);
         self.pre_processing_step(claim_a, claim_b);
@@ -222,6 +272,35 @@ impl<F: Field> Layer<F> for MatMult<F> {
     ) -> PostSumcheckLayer<F, F> {
         let mle_refs = vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()];
         PostSumcheckLayer(vec![Product::<F, F>::new(&mle_refs, F::ONE)])
+    }
+    /// Get the claims that this layer makes on other layers
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+        let claims = vec![&self.matrix_a.mle, &self.matrix_b.mle]
+            .into_iter()
+            .map(|matrix_mle| {
+                let matrix_fixed_indices = matrix_mle
+                    .mle_indices()
+                    .iter()
+                    .map(|index| {
+                        index
+                            .val()
+                            .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))
+                            .unwrap()
+                    })
+                    .collect_vec();
+
+                let matrix_val = matrix_mle.bookkeeping_table()[0];
+                let claim: Claim<F> = Claim::new(
+                    matrix_fixed_indices,
+                    matrix_val,
+                    self.layer_id,
+                    matrix_mle.layer_id,
+                );
+                claim
+            })
+            .collect_vec();
+
+        Ok(claims)
     }
 }
 
@@ -298,7 +377,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
 
     fn verify_rounds(
         &self,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierLayerEnum<F>, VerificationError> {
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
@@ -307,7 +386,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         // Represents `g_{i-1}(x)` of the previous round.
         // This is initialized to the constant polynomial `g_0(x)` which evaluates
         // to the claim result for any `x`.
-        let mut g_prev_round = vec![claim.get_result()];
+        let mut g_prev_round = vec![claim.get_eval()];
 
         // Previous round's challege: r_{i-1}.
         let mut prev_challenge = F::ZERO;
@@ -582,16 +661,8 @@ impl<F: Field> VerifierLayer<F> for VerifierMatMultLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
-}
 
-impl<F: Field> VerifierMatMultLayer<F> {
-    fn evaluate(&self) -> F {
-        self.matrix_a.mle.value() * self.matrix_b.mle.value()
-    }
-}
-
-impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
         let claims = vec![&self.matrix_a, &self.matrix_b]
             .into_iter()
             .map(|matrix| {
@@ -609,11 +680,11 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
 
                 let matrix_claimed_val = matrix.mle.value();
 
-                let claim: ClaimMle<F> = ClaimMle::new(
+                let claim: Claim<F> = Claim::new(
                     matrix_fixed_indices,
                     matrix_claimed_val,
-                    Some(self.layer_id),
-                    Some(matrix.mle.layer_id()),
+                    self.layer_id,
+                    matrix.mle.layer_id(),
                 );
                 claim
             })
@@ -623,84 +694,9 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
     }
 }
 
-impl<F: Field> YieldClaim<ClaimMle<F>> for MatMult<F> {
-    /// Get the claims that this layer makes on other layers
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
-        let claims = vec![&self.matrix_a.mle, &self.matrix_b.mle]
-            .into_iter()
-            .map(|matrix_mle| {
-                let matrix_fixed_indices = matrix_mle
-                    .mle_indices()
-                    .iter()
-                    .map(|index| {
-                        index
-                            .val()
-                            .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))
-                            .unwrap()
-                    })
-                    .collect_vec();
-
-                let matrix_val = matrix_mle.bookkeeping_table()[0];
-                let claim: ClaimMle<F> = ClaimMle::new(
-                    matrix_fixed_indices,
-                    matrix_val,
-                    Some(self.layer_id),
-                    Some(matrix_mle.layer_id),
-                );
-                claim
-            })
-            .collect_vec();
-
-        Ok(claims)
-    }
-}
-
-impl<F: Field> YieldWLXEvals<F> for MatMult<F> {
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &[Vec<F>],
-        claimed_vals: &[F],
-        claim_mles: Vec<DenseMle<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, ClaimError> {
-        // get the number of evaluations
-        let (num_evals, common_idx) = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
-            let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
-            (num_evals, common_idx)
-        } else {
-            (((num_claims - 1) * num_idx) + 1, None)
-        };
-
-        let mut claim_mles = claim_mles.clone();
-
-        if let Some(common_idx) = common_idx {
-            pre_fix_mle_refs(&mut claim_mles, &claim_vecs[0], common_idx);
-        }
-
-        // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
-        let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
-            .map(|idx| {
-                // get the challenge l(idx)
-                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                    .map(|claim_idx| {
-                        let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-                            .map(|claim| claim[claim_idx])
-                            .collect();
-                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
-                    })
-                    .collect();
-
-                let wlx_eval_on_mle_ref = combine_mle_refs_with_aggregate(&claim_mles, &new_chal);
-                wlx_eval_on_mle_ref.unwrap()
-            })
-            .collect();
-
-        // concat this with the first k evaluations from the claims to
-        // get num_evals evaluations
-        let mut wlx_evals = claimed_vals.to_vec();
-        wlx_evals.extend(&next_evals);
-        Ok(wlx_evals)
+impl<F: Field> VerifierMatMultLayer<F> {
+    fn evaluate(&self) -> F {
+        self.matrix_a.mle.value() * self.matrix_b.mle.value()
     }
 }
 

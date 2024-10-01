@@ -4,7 +4,6 @@ use remainder_shared_types::{transcript::VerifierTranscript, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::wlx_eval::YieldWLXEvals,
     input_layer_enum,
     layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension},
@@ -93,7 +92,7 @@ impl<F: Field> InputLayerDescription<F> for InputLayerDescriptionEnum<F> {
     fn verify(
         &self,
         commitment: &Self::Commitment,
-        claim: crate::claims::Claim<F>,
+        claim: crate::claims::RawClaim<F>,
         transcript_reader: &mut impl remainder_shared_types::transcript::VerifierTranscript<F>,
     ) -> Result<(), super::InputLayerError> {
         match self {
@@ -140,36 +139,6 @@ impl<F: Field> InputLayerEnum<F> {
         match self {
             InputLayerEnum::LigeroInputLayer(layer) => layer.layer_id = layer_id,
             InputLayerEnum::PublicInputLayer(layer) => layer.layer_id = layer_id,
-        }
-    }
-}
-
-impl<F: Field> YieldWLXEvals<F> for InputLayerEnum<F> {
-    /// Get the evaluations of the bookkeeping table of this layer over enumerated points
-    /// in order to perform claim aggregation.
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &[Vec<F>],
-        claimed_vals: &[F],
-        claimed_mles: Vec<DenseMle<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, crate::claims::ClaimError> {
-        match self {
-            InputLayerEnum::LigeroInputLayer(layer) => layer.get_wlx_evaluations(
-                claim_vecs,
-                claimed_vals,
-                claimed_mles,
-                num_claims,
-                num_idx,
-            ),
-            InputLayerEnum::PublicInputLayer(layer) => layer.get_wlx_evaluations(
-                claim_vecs,
-                claimed_vals,
-                claimed_mles,
-                num_claims,
-                num_idx,
-            ),
         }
     }
 }

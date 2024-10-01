@@ -16,9 +16,10 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    claims::{Claim, ClaimError},
+    claims::{Claim, ClaimError, RawClaim},
     expression::{circuit_expr::MleDescription, expr_errors::ExpressionError},
     layouter::layouting::CircuitMap,
+    mle::dense::DenseMle,
     sumcheck::InterpError,
 };
 use remainder_shared_types::{
@@ -91,13 +92,32 @@ pub enum VerificationError {
     InterpError(#[from] InterpError),
 }
 
+/// A trait for any struct that can produce wlx evaluations.
+pub trait GenericLayer<F: Field> {
+    /// Returns a vector of evaluations of this layer's MLE on a sequence of
+    /// points computed by interpolating a polynomial that passes through the
+    /// points of `claims_vecs`.
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: &[Vec<F>],
+        claimed_vals: &[F],
+        claim_mle_refs: Vec<DenseMle<F>>,
+        num_claims: usize,
+        num_idx: usize,
+    ) -> Result<Vec<F>, ClaimError>;
+}
+
 /// A layer is the smallest component of the GKR protocol.
 ///
 /// Each `Layer` is a sub-protocol that takes in some `Claim` and creates a proof
 /// that the `Claim` is correct
-pub trait Layer<F: Field> {
+pub trait Layer<F: Field>: GenericLayer<F> {
     /// Gets this layer's ID.
     fn layer_id(&self) -> LayerId;
+
+    /// Initialize this layer and perform any necessary pre-computation: beta
+    /// table, number of rounds, etc.
+    fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError>;
 
     /// Tries to prove `claim` for this layer.
     ///
@@ -106,14 +126,11 @@ pub trait Layer<F: Field> {
     ///
     /// If successful, the proof is implicitly included in the modified
     /// transcript.
-    fn prove_rounds(
+    fn prove(
         &mut self,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         transcript: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError>;
-
-    /// Initialize the sumcheck round by setting the beta table, computing the number of rounds, etc.
-    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError>;
 
     /// Return the evaluations of the univariate polynomial generated during this round of sumcheck.
     ///
@@ -138,6 +155,10 @@ pub trait Layer<F: Field> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F>;
+
+    /// Generates and returns all claims that this layer makes onto previous
+    /// layers.
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError>;
 }
 
 /// A circuit-description counterpart of the GKR [Layer] trait.
@@ -155,7 +176,7 @@ pub trait LayerDescription<F: Field> {
     /// The proof is implicitly included in the `transcript`.
     fn verify_rounds(
         &self,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         transcript: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierLayerEnum<F>, VerificationError>;
 
@@ -204,6 +225,9 @@ pub trait LayerDescription<F: Field> {
 pub trait VerifierLayer<F: Field> {
     /// Returns this layer's ID.
     fn layer_id(&self) -> LayerId;
+
+    /// Get the claims that this layer makes on other layers.
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Copy, PartialOrd)]
