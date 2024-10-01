@@ -1,5 +1,9 @@
-use remainder_shared_types::transcript::Transcript;
-use crate::prover::GKRCircuitDescription;
+use remainder_shared_types::{transcript::Transcript};
+use remainder::prover::GKRCircuitDescription;
+use remainder_shared_types::halo2curves::{bn256::G1 as Bn256Point, group::Group};
+
+pub enum UpgradeError {
+}
 
 type Scalar = <Bn256Point as Group>::Scalar;
 /// Prove the upgrade from v2 to v3 using the Hyrax proof system. Receives the image, commitment and

@@ -3,7 +3,7 @@ use std::path::Path;
 use clap::Parser;
 use remainder::{
     prover::helpers::test_circuit,
-    worldcoin::{circuits::build_circuit, data::load_worldcoin_data},
+    worldcoin::{circuits::build_circuit, data::{load_worldcoin_data_v2, load_worldcoin_data_v3}},
 };
 use remainder_shared_types::Fr;
 
@@ -32,15 +32,14 @@ fn main() {
             BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
             NUM_DIGITS,
         };
-        let path = Path::new("worldcoin/v2/").to_path_buf();
-        let data = load_worldcoin_data::<
+        let data = load_worldcoin_data_v2::<
             Fr,
             MATMULT_ROWS_NUM_VARS,
             MATMULT_COLS_NUM_VARS,
             MATMULT_INTERNAL_DIM_NUM_VARS,
             BASE,
             NUM_DIGITS,
-        >(path, image_path, args.is_mask);
+        >(image_path, args.is_mask);
         let circuit = build_circuit(data);
         test_circuit(circuit, None);
     } else if args.version == 3 {
@@ -48,15 +47,14 @@ fn main() {
             BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
             NUM_DIGITS,
         };
-        let path = Path::new("worldcoin/v3/").to_path_buf();
-        let data = load_worldcoin_data::<
+        let data = load_worldcoin_data_v3::<
             Fr,
             MATMULT_ROWS_NUM_VARS,
             MATMULT_COLS_NUM_VARS,
             MATMULT_INTERNAL_DIM_NUM_VARS,
             BASE,
             NUM_DIGITS,
-        >(path, image_path, args.is_mask);
+        >(image_path, args.is_mask);
         let circuit = build_circuit(data);
         test_circuit(circuit, None);
     } else {

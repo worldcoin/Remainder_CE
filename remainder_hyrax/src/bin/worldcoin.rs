@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use remainder::worldcoin::data::{load_worldcoin_data, CircuitData};
+use remainder::worldcoin::data::{load_worldcoin_data_v2, CircuitData};
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
     transcript::{
@@ -63,18 +63,17 @@ fn test_hyrax_worldcoin_hyrax_input_layer<
 
 fn main() {
     use remainder::worldcoin::parameters_v2::{
-        BASE, CONSTANT_DATA_FOLDER, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+        BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
         MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
     };
-    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
-    let image_path = path.join("iris/test_image.npy");
-    let data = load_worldcoin_data::<
+    let image_path = Path::new("../worldcoin/v2/iris/test_image.npy").to_path_buf();
+    let data = load_worldcoin_data_v2::<
         Scalar,
         MATMULT_ROWS_NUM_VARS,
         MATMULT_COLS_NUM_VARS,
         MATMULT_INTERNAL_DIM_NUM_VARS,
         BASE,
         NUM_DIGITS,
-    >(path.clone(), image_path, false);
+    >(image_path, false);
     test_hyrax_worldcoin_hyrax_input_layer(data, 512);
 }

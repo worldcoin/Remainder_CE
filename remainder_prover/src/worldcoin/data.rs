@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use ndarray::{Array, Array2, Array3};
+use ndarray::{Array, Array2};
 use ndarray_npy::read_npy;
 use remainder_shared_types::Field;
 use std::path::PathBuf;
@@ -10,9 +10,9 @@ use crate::mle::bundled_input_mle::BundledInputMle;
 use crate::mle::bundled_input_mle::{to_slice_of_vectors, FlatMles};
 use crate::mle::Mle;
 use crate::utils::arithmetic::i64_to_field;
-use crate::utils::array::pad_with_rows;
 use crate::utils::mle::pad_with;
-use crate::worldcoin::parameters_v2::MATMULT_COLS_NUM_VARS;
+use crate::worldcoin::parameters::decode_i32_array;
+use super::parameters::{decode_wirings, decode_i64_array};
 
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two 2x1 kernels (1, 0).T and (6, -1).T
@@ -20,11 +20,10 @@ use crate::worldcoin::parameters_v2::MATMULT_COLS_NUM_VARS;
 pub fn trivial_wiring_2x2_circuit_data<F: Field>() -> CircuitData<F, 1, 1, 1, 16, 1> {
     CircuitData::build_worldcoin_circuit_data(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
-        Array3::from_shape_vec((2, 2, 1), vec![1, 0, 6, -1]).unwrap(),
-        Array2::from_shape_vec((2, 2), vec![1, 0, 1, 0]).unwrap(),
+        &vec![1, 0, 6, -1],
+        &vec![1, 0, 1, 0],
         // rewirings for the 2x2 identity matrix
-        Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1])
-            .unwrap(),
+        &vec![(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)]
     )
 }
 
@@ -35,10 +34,10 @@ pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: Field>() -> CircuitDat
 {
     CircuitData::build_worldcoin_circuit_data(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
-        Array3::from_shape_vec((2, 3, 1), vec![1, 0, -4, 6, -1, 3]).unwrap(),
-        Array2::from_shape_vec((2, 2), vec![1, 0, 1, 0]).unwrap(),
-        Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1])
-            .unwrap(),
+        &vec![1, 0, -4, 6, -1, 3, 0, 0],
+        &vec![1, 0, 1, 0],
+        // rewirings for the 2x2 identity matrix
+        &vec![(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)]
     )
 }
 
@@ -99,6 +98,8 @@ impl<
         NUM_DIGITS,
     >
 {
+    // FIXME(Ben) update documenation
+    // rh_multipland and thresholds_matrix are assumed PADDED.
     /// Create a new instance.
     ///
     /// # Arguments:
@@ -115,18 +116,14 @@ impl<
     /// + `thresholds_matrix.dim().1 == kernel_values.dim().0`
     /// + Generics should be constrained as per [CircuitData].
     pub fn build_worldcoin_circuit_data(
-        image: Array2<u8>,
-        rh_multiplicand: &[i64],
+        image: Array2<u8>, // FIXME(Ben) this should be serialized, too
+        rh_multiplicand: &[i32],
         thresholds_matrix: &[i64],
         wirings: &[(u16, u16, u16, u16)],
     ) -> Self {
         assert!(BASE.is_power_of_two());
         assert!(NUM_DIGITS.is_power_of_two());
         let (_, im_num_cols) = image.dim();
-        let (num_kernels, kernel_num_rows, kernel_num_cols) = kernel_values.dim();
-        assert_eq!(num_kernels, (1 << MATMULT_COLS_NUM_VARS));
-        assert!(kernel_num_rows * kernel_num_cols <= (1 << MATMULT_INTERNAL_DIM_NUM_VARS));
-        assert!(thresholds_matrix.len() <= (1 << MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS));
 
         // Derive the re-routings from the wirings (this is what is needed for identity gate)
         // And calculate the left-hand side of the matrix multiplication
@@ -148,18 +145,17 @@ impl<
             rerouted_matrix[[a_row, a_col]] = image[[im_row, im_col]] as i64;
         });
 
-        // Pad kernel values to have dimensions (MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_COLS_NUM_VARS).
-        // This is the RH multiplicand of the matrix multiplication.
-        assert_eq!(kernel_values.dim().1, 1 << MATMULT_COLS_NUM_VARS);
-        let rh_multiplicand: Array2<i64> = pad_with_rows(
-            kernel_values,
-            1 << MATMULT_INTERNAL_DIM_NUM_VARS,
-        );
+        // Build the RH multiplicand for the matmult.
+        let rh_multiplicand = Array2::from_shape_vec(
+            (1 << MATMULT_INTERNAL_DIM_NUM_VARS, 1 << MATMULT_COLS_NUM_VARS),
+            rh_multiplicand.iter().map(|&x| x as i64).collect_vec(),
+        ).unwrap();
 
-        // Pad the thresholds matrix with extra rows of zeros so that it has dimensions
-        // (MATMULT_ROWS_NUM_VARS, MATMULT_COLS_NUM_VARS).
-        assert_eq!(thresholds_matrix.dim().1, 1 << MATMULT_COLS_NUM_VARS);
-        let thresholds_matrix = pad_with_rows(thresholds_matrix, 1 << MATMULT_ROWS_NUM_VARS);
+        // Build the thresholds matrix from the 1d serialization.
+        let thresholds_matrix = Array2::from_shape_vec(
+            (1 << MATMULT_ROWS_NUM_VARS, 1 << MATMULT_COLS_NUM_VARS),
+            thresholds_matrix.to_vec(),
+        ).unwrap();
 
         // Calculate the matrix product. Has dimensions (1 << MATMULT_ROWS_NUM_VARS, 1 << MATMULT_COLS_NUM_VARS).
         let responses = rerouted_matrix.dot(&rh_multiplicand);
@@ -263,14 +259,13 @@ impl<
     }
 }
 
-/// Loads circuit structure data and witnesses for a run of the iris code circuit from disk for either the iris or mask case.
-/// Works for both v2 and v3 of the iriscode circuit.
+/// Loads circuit structure data and witnesses for a run of the iris code circuit from disk for
+/// either the iris or mask case.
 ///
 /// # Arguments:
-/// * `constant_data_path` is the path to the root folder (containing the wirings, and subfolders).
 /// * `image_path` is the path to an image file (could be the iris or the mask).
 /// * `is_mask` indicates whether to load the files for the mask or the iris.
-pub fn load_worldcoin_data<
+pub fn load_worldcoin_data_v2<
     F: Field,
     const MATMULT_ROWS_NUM_VARS: usize,
     const MATMULT_COLS_NUM_VARS: usize,
@@ -278,7 +273,6 @@ pub fn load_worldcoin_data<
     const BASE: u64,
     const NUM_DIGITS: usize,
 >(
-    constant_data_folder: PathBuf,
     image_path: PathBuf,
     is_mask: bool,
 ) -> CircuitData<
@@ -289,17 +283,66 @@ pub fn load_worldcoin_data<
     BASE,
     NUM_DIGITS,
 > {
-    dbg!(&constant_data_folder);
-    println!("Current directory: {:?}", std::env::current_dir().unwrap());
-    // FIXME(Ben)
-    use super::parameters_v3::{WIRINGS, IRIS_THRESHOLDS, IRIS_RH_MULTIPLICAND};
-
-    let data_folder = constant_data_folder.join(if is_mask { "mask" } else { "iris" });
     let image: Array2<u8> = read_npy(image_path).unwrap();
-    let rh_multiplicand: Array3<i64> = Array3::from_shape_vec(
-        (1 << MATMULT_INTERNAL_DIM_NUM_VARS, 1 << MATMULT_COLS_NUM_VARS, 1),
-        IRIS_RH_MULTIPLICAND.to_vec(),
-    )
 
-    CircuitData::build_worldcoin_circuit_data(image, IRIS_RH_MULTIPLICAND, IRIS_THRESHOLDS, WIRINGS)
+    use super::parameters_v2::{WIRINGS, IRIS_THRESHOLDS, MASK_THRESHOLDS, IRIS_RH_MULTIPLICAND, MASK_RH_MULTIPLICAND};
+    if is_mask {
+        CircuitData::build_worldcoin_circuit_data(
+            image,
+            &decode_i32_array(MASK_RH_MULTIPLICAND),
+            &decode_i64_array(MASK_THRESHOLDS),
+            &decode_wirings(WIRINGS)
+        )
+    } else {
+        CircuitData::build_worldcoin_circuit_data(
+            image,
+            &decode_i32_array(IRIS_RH_MULTIPLICAND),
+            &decode_i64_array(IRIS_THRESHOLDS),
+            &decode_wirings(WIRINGS)
+        )
+    }
+}
+
+/// Loads circuit structure data and witnesses for a run of the iris code circuit from disk for
+/// either the iris or mask case.
+///
+/// # Arguments:
+/// * `image_path` is the path to an image file (could be the iris or the mask).
+/// * `is_mask` indicates whether to load the files for the mask or the iris.
+pub fn load_worldcoin_data_v3<
+    F: Field,
+    const MATMULT_ROWS_NUM_VARS: usize,
+    const MATMULT_COLS_NUM_VARS: usize,
+    const MATMULT_INTERNAL_DIM_NUM_VARS: usize,
+    const BASE: u64,
+    const NUM_DIGITS: usize,
+>(
+    image_path: PathBuf,
+    is_mask: bool,
+) -> CircuitData<
+    F,
+    MATMULT_ROWS_NUM_VARS,
+    MATMULT_COLS_NUM_VARS,
+    MATMULT_INTERNAL_DIM_NUM_VARS,
+    BASE,
+    NUM_DIGITS,
+> {
+    let image: Array2<u8> = read_npy(image_path).unwrap();
+
+    use super::parameters_v3::{WIRINGS, IRIS_THRESHOLDS, MASK_THRESHOLDS, IRIS_RH_MULTIPLICAND, MASK_RH_MULTIPLICAND};
+    if is_mask {
+        CircuitData::build_worldcoin_circuit_data(
+            image,
+            &decode_i32_array(MASK_RH_MULTIPLICAND),
+            &decode_i64_array(MASK_THRESHOLDS),
+            &decode_wirings(WIRINGS)
+        )
+    } else {
+        CircuitData::build_worldcoin_circuit_data(
+            image,
+            &decode_i32_array(IRIS_RH_MULTIPLICAND),
+            &decode_i64_array(IRIS_THRESHOLDS),
+            &decode_wirings(WIRINGS)
+        )
+    }
 }

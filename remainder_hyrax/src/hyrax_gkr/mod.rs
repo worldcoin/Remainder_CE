@@ -148,6 +148,7 @@ impl<
         gkr_circuit_description: &GKRCircuitDescription<C::Scalar>,
         data_input_layers: Vec<HyraxInputLayerData<C>>,
         transcript_writer: &mut impl ECProverTranscript<C>,
+        input_layer_to_node_map: InputNodeMap,
     ) -> (
         HyraxInstantiatedCircuit<C>,
         LayerMap<C::Scalar>,
@@ -157,7 +158,6 @@ impl<
             fiat_shamir_challenges: fiat_shamir_challenge_descriptions,
             intermediate_layers: intermediate_layer_descriptions,
             output_layers: output_layer_descriptions,
-            input_node_to_layer_map: input_layer_to_node_map,
         } = gkr_circuit_description;
 
         let hyrax_populate_circuit_timer =
@@ -363,6 +363,7 @@ impl<
             &circuit_description,
             input_data,
             transcript_writer,
+            input_layer_to_node_map,
         );
         let prove_timer = start_timer!(|| "prove hyrax circuit");
         let proof = self.prove(&mut instantiated_circuit, &mut layer_map, transcript_writer);
@@ -668,7 +669,7 @@ impl<
                     committer,
                 );
                 plaintext_claims.into_iter().for_each(|claim| {
-                    verify_claim::<C>(
+                    verify_claim::<C::Scalar>(
                         &values,
                         claim.get_claim(),
                     );
