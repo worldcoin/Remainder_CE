@@ -8,7 +8,7 @@ use ark_std::{end_timer, start_timer};
 use hyrax_circuit_inputs::HyraxInputLayerData;
 use hyrax_input_layer::{
     verify_claim, HyraxInputLayer, HyraxInputLayerEnum, HyraxInputLayerProof,
-    HyraxProverCommitmentEnum, HyraxVerifierCommitmentEnum,
+    HyraxProverCommitmentEnum
 };
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
@@ -19,7 +19,7 @@ use remainder::input_layer::enum_input_layer::{
     InputLayerDescriptionEnum, InputLayerEnumVerifierCommitment,
 };
 use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
-use remainder::input_layer::{self, InputLayer, InputLayerDescription};
+use remainder::input_layer::{InputLayer, InputLayerDescription};
 use remainder::layer::layer_enum::LayerEnum;
 use remainder::layer::{Layer, LayerDescription};
 use remainder::layouter::component::{Component, ComponentSet};

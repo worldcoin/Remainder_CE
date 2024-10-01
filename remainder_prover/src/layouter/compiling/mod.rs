@@ -29,7 +29,7 @@ use crate::claims::ClaimAggregator;
 use crate::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
 use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
-use crate::input_layer::{self, InputLayer, InputLayerDescription};
+use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::LayerEnum;
 use crate::layer::LayerId;
 use crate::layer::{Layer, LayerDescription};

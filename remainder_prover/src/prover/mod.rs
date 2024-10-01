@@ -9,12 +9,9 @@ pub mod proof_system;
 /// Struct for representing a list of layers
 pub mod layers;
 
-use std::collections::HashMap;
-use std::marker::PhantomData;
 
 use self::layers::Layers;
 use crate::claims::wlx_eval::WLXAggregator;
-use crate::claims::Claim;
 use crate::input_layer::enum_input_layer::{
     InputLayerDescriptionEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
 };
@@ -24,11 +21,9 @@ use crate::input_layer::fiat_shamir_challenge::{
 use crate::input_layer::InputLayerDescription;
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::LayerDescription;
-use crate::layouter::component::Component;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputNodeMap};
-use crate::layouter::nodes::circuit_inputs::InputShredData;
 use crate::layouter::nodes::node_enum::NodeEnum;
-use crate::layouter::nodes::{CircuitNode, Context, NodeId};
+use crate::layouter::nodes::CircuitNode;
 use crate::output_layer::mle_output_layer::{MleOutputLayer, MleOutputLayerDescription};
 use crate::output_layer::OutputLayerDescription;
 use crate::{
@@ -38,7 +33,7 @@ use crate::{
 };
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
-use remainder_shared_types::transcript::{Transcript, TranscriptReaderError, TranscriptWriter};
+use remainder_shared_types::transcript::TranscriptReaderError;
 use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};

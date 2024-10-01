@@ -1,7 +1,6 @@
 use crate::digits::components::{
     BitsAreBinary, ComplementaryRecompChecker, DigitsConcatenator, UnsignedRecomposition,
 };
-use crate::input_layer::public_input_layer;
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::{Component, ComponentSet};
 use crate::layouter::layouting::InputNodeMap;

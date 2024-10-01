@@ -17,7 +17,7 @@ use super::parameters::{decode_wirings, decode_i64_array};
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two 2x1 kernels (1, 0).T and (6, -1).T
 /// The rewirings are trivial: the image _is_ the LH multiplicand of matmult.
-pub fn trivial_wiring_2x2_circuit_data<F: Field>() -> CircuitData<F, 1, 1, 1, 16, 1> {
+pub fn trivial_wiring_2x2_circuit_data<F: Field>() -> CircuitData<F, 1, 1, 1, 16, 2> {
     CircuitData::build_worldcoin_circuit_data(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
         &vec![1, 0, 6, -1],
@@ -30,7 +30,7 @@ pub fn trivial_wiring_2x2_circuit_data<F: Field>() -> CircuitData<F, 1, 1, 1, 16
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two 3x1 kernels.
 /// The rewirings are trivial: the image _is_ the LH multiplicand of matmult.
-pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: Field>() -> CircuitData<F, 1, 1, 2, 16, 1>
+pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: Field>() -> CircuitData<F, 1, 1, 2, 16, 2>
 {
     CircuitData::build_worldcoin_circuit_data(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),

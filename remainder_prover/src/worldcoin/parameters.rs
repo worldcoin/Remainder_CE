@@ -1,19 +1,4 @@
-// FIXME(Ben) should this file go somewhere else?  are the doc comments below better than those in v2, v3?
-
-    /// The number of variables for the rows of the result of the matrix multiplication
-    /// In iris code: rows index kernel placements.
-    
-    /// The number of variables for the columns of the result of the matrix multiplication
-    /// In iris code: columns index kernels.
-    
-    /// The number of internal dimension variables of the matrix multiplication
-    /// In iris code: the internal dimension indexes the values of the kernel.
-    
-    /// The number of digits in the complementary decomposition of the thresholded responses.
-    
-    /// The base of the complementary decomposition of the thresholded responses.
-    
-    /// A flattened 2d array of u16s encoding the input `wirings` of [remainder::worldcoin::data::CircuitData::build_worldcoin_circuit_data].
+// FIXME(Ben) should this file go somewhere else?
 
 // FIXME(Ben) document
 pub fn decode_wirings(wirings_bytes: &[u8]) -> Vec<(u16, u16, u16, u16)> {
