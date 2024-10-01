@@ -4,11 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::Field;
 
-use crate::{
-    claims::{wlx_eval::ClaimMle, YieldClaim},
-    layer::{LayerError, LayerId},
-    mle::Mle,
-};
+use crate::{layer::LayerId, mle::Mle};
 
 use super::{dense::DenseMle, zero::ZeroMle, MleIndex};
 
@@ -47,7 +43,7 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         &mut self,
         round_index: usize,
         challenge: F,
-    ) -> Option<crate::claims::Claim<F>> {
+    ) -> Option<crate::claims::RawClaim<F>> {
         match self {
             MleEnum::Dense(item) => item.fix_variable(round_index, challenge),
             MleEnum::Zero(item) => item.fix_variable(round_index, challenge),
@@ -58,7 +54,7 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         &mut self,
         indexed_bit_index: usize,
         point: F,
-    ) -> Option<crate::claims::Claim<F>> {
+    ) -> Option<crate::claims::RawClaim<F>> {
         match self {
             MleEnum::Dense(item) => item.fix_variable_at_index(indexed_bit_index, point),
             MleEnum::Zero(item) => item.fix_variable_at_index(indexed_bit_index, point),
@@ -92,6 +88,7 @@ impl<F: Field> Mle<F> for MleEnum<F> {
     }
 }
 
+/*
 impl<F: Field> YieldClaim<ClaimMle<F>> for MleEnum<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
@@ -100,6 +97,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for MleEnum<F> {
         }
     }
 }
+*/
 
 impl<F: Field> From<DenseMle<F>> for MleEnum<F> {
     fn from(value: DenseMle<F>) -> Self {

@@ -17,10 +17,7 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::{
-        wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
-        Claim, ClaimError, YieldClaim,
-    },
+    claims::{claim_aggregation::get_num_wlx_evaluations, Claim, ClaimError, RawClaim},
     expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
@@ -37,7 +34,7 @@ pub use self::gate_helpers::{
 
 use super::{
     layer_enum::{LayerEnum, VerifierLayerEnum},
-    LayerDescription, VerifierLayer,
+    GenericLayer, LayerDescription, VerifierLayer,
 };
 
 #[cfg(feature = "parallel")]
@@ -95,15 +92,58 @@ pub struct GateLayer<F: Field> {
     challenges: Vec<F>,
 }
 
+impl<F: Field> GenericLayer<F> for GateLayer<F> {
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: &[Vec<F>],
+        claimed_vals: &[F],
+        _claimed_mles: Vec<DenseMle<F>>,
+        num_claims: usize,
+        num_idx: usize,
+    ) -> Result<Vec<F>, ClaimError> {
+        // Get the number of evaluations.
+        let (num_evals, _, _) = get_num_wlx_evaluations(claim_vecs);
+
+        // We already have the first #claims evaluations, get the next num_evals - #claims evaluations.
+        let next_evals: Vec<F> = (num_claims..num_evals)
+            .map(|idx| {
+                // Get the challenge l(idx).
+                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+                    .map(|claim_idx| {
+                        let evals: Vec<F> = cfg_into_iter!(claim_vecs)
+                            .map(|claim| claim[claim_idx])
+                            .collect();
+                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
+                    })
+                    .collect();
+
+                compute_full_gate(
+                    new_chal,
+                    &mut self.lhs.clone(),
+                    &mut self.rhs.clone(),
+                    &self.nonzero_gates,
+                    self.num_dataparallel_bits,
+                )
+            })
+            .collect();
+
+        // Concat this with the first k evaluations from the claims to get num_evals evaluations.
+        let mut claimed_vals = claimed_vals.to_vec();
+
+        claimed_vals.extend(&next_evals);
+        let wlx_evals = claimed_vals;
+        Ok(wlx_evals)
+    }
+}
 impl<F: Field> Layer<F> for GateLayer<F> {
     /// Gets this layer's id.
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 
-    fn prove_rounds(
+    fn prove(
         &mut self,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError> {
         let mut sumcheck_rounds = vec![];
@@ -159,7 +199,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         Ok(())
     }
 
-    fn initialize_sumcheck(&mut self, _claim_point: &[F]) -> Result<(), LayerError> {
+    fn initialize(&mut self, _claim_point: &[F]) -> Result<(), LayerError> {
         todo!()
     }
 
@@ -189,6 +229,51 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         _claim_challenges: &[F],
     ) -> super::product::PostSumcheckLayer<F, F> {
         todo!()
+    }
+
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+        let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
+        let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
+
+        let mut claims = vec![];
+
+        // Grab the claim on the left side.
+        let mut fixed_mle_indices_u: Vec<F> = vec![];
+        for index in lhs_reduced.mle_indices() {
+            fixed_mle_indices_u.push(
+                index
+                    .val()
+                    .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
+            );
+        }
+        let val = lhs_reduced.bookkeeping_table()[0];
+        let claim: Claim<F> = Claim::new(
+            fixed_mle_indices_u,
+            val,
+            self.layer_id(),
+            self.lhs.layer_id(),
+        );
+        claims.push(claim);
+
+        // Grab the claim on the right side.
+        let mut fixed_mle_indices_v: Vec<F> = vec![];
+        for index in rhs_reduced.mle_indices() {
+            fixed_mle_indices_v.push(
+                index
+                    .val()
+                    .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
+            );
+        }
+        let val = rhs_reduced.bookkeeping_table()[0];
+        let claim: Claim<F> = Claim::new(
+            fixed_mle_indices_v,
+            val,
+            self.layer_id(),
+            self.rhs.layer_id(),
+        );
+        claims.push(claim);
+
+        Ok(claims)
     }
 }
 
@@ -260,7 +345,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
     fn verify_rounds(
         &self,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierLayerEnum<F>, VerificationError> {
         // --- Storing challenges for the sake of claim generation later ---
@@ -298,8 +383,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
         // Check: V_i(g_2, g_1) =? g_1(0) + g_1(1)
         // TODO(ryancao): SUPER overloaded notation (in e.g. above comments); fix across the board
-        if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1] != claim.get_result()
-        {
+        if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1] != claim.get_eval() {
             return Err(VerificationError::SumcheckStartFailed);
         }
 
@@ -548,7 +632,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
 impl<F: Field> VerifierGateLayer<F> {
     /// Computes the oracle query's value for a given [VerifierGateLayer].
-    pub fn evaluate(&self, claim: &Claim<F>) -> F {
+    pub fn evaluate(&self, claim: &RawClaim<F>) -> F {
         let g2_challenges = claim.get_point()[..self.num_dataparallel_rounds].to_vec();
         let g1_challenges = claim.get_point()[self.num_dataparallel_rounds..].to_vec();
 
@@ -639,58 +723,8 @@ impl<F: Field> VerifierLayer<F> for VerifierGateLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
-}
 
-impl<F: Field> YieldClaim<ClaimMle<F>> for GateLayer<F> {
-    /// Get the claims that this layer makes on other layers.
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
-        let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
-        let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
-
-        let mut claims = vec![];
-
-        // Grab the claim on the left side.
-        let mut fixed_mle_indices_u: Vec<F> = vec![];
-        for index in lhs_reduced.mle_indices() {
-            fixed_mle_indices_u.push(
-                index
-                    .val()
-                    .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
-            );
-        }
-        let val = lhs_reduced.bookkeeping_table()[0];
-        let claim: ClaimMle<F> = ClaimMle::new(
-            fixed_mle_indices_u,
-            val,
-            Some(self.layer_id()),
-            Some(self.lhs.layer_id()),
-        );
-        claims.push(claim);
-
-        // Grab the claim on the right side.
-        let mut fixed_mle_indices_v: Vec<F> = vec![];
-        for index in rhs_reduced.mle_indices() {
-            fixed_mle_indices_v.push(
-                index
-                    .val()
-                    .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
-            );
-        }
-        let val = rhs_reduced.bookkeeping_table()[0];
-        let claim: ClaimMle<F> = ClaimMle::new(
-            fixed_mle_indices_v,
-            val,
-            Some(self.layer_id()),
-            Some(self.rhs.layer_id()),
-        );
-        claims.push(claim);
-
-        Ok(claims)
-    }
-}
-
-impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
         // Grab the claim on the left side.
         // TODO!(ryancao): Do error handling here!
         let lhs_vars = self.lhs_mle.mle_indices();
@@ -710,12 +744,8 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
             .collect_vec();
         let lhs_val = self.lhs_mle.value();
 
-        let lhs_claim: ClaimMle<F> = ClaimMle::new(
-            lhs_point,
-            lhs_val,
-            Some(self.layer_id()),
-            Some(self.lhs_mle.layer_id()),
-        );
+        let lhs_claim: Claim<F> =
+            Claim::new(lhs_point, lhs_val, self.layer_id(), self.lhs_mle.layer_id());
 
         // Grab the claim on the right side.
         // TODO!(ryancao): Do error handling here!
@@ -736,58 +766,10 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
             .collect_vec();
         let rhs_val = self.rhs_mle.value();
 
-        let rhs_claim: ClaimMle<F> = ClaimMle::new(
-            rhs_point,
-            rhs_val,
-            Some(self.layer_id()),
-            Some(self.rhs_mle.layer_id()),
-        );
+        let rhs_claim: Claim<F> =
+            Claim::new(rhs_point, rhs_val, self.layer_id(), self.rhs_mle.layer_id());
 
         Ok(vec![lhs_claim, rhs_claim])
-    }
-}
-
-impl<F: Field> YieldWLXEvals<F> for GateLayer<F> {
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &[Vec<F>],
-        claimed_vals: &[F],
-        _claimed_mles: Vec<DenseMle<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, ClaimError> {
-        // Get the number of evaluations.
-        let (num_evals, _, _) = get_num_wlx_evaluations(claim_vecs);
-
-        // We already have the first #claims evaluations, get the next num_evals - #claims evaluations.
-        let next_evals: Vec<F> = (num_claims..num_evals)
-            .map(|idx| {
-                // Get the challenge l(idx).
-                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                    .map(|claim_idx| {
-                        let evals: Vec<F> = cfg_into_iter!(claim_vecs)
-                            .map(|claim| claim[claim_idx])
-                            .collect();
-                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
-                    })
-                    .collect();
-
-                compute_full_gate(
-                    new_chal,
-                    &mut self.lhs.clone(),
-                    &mut self.rhs.clone(),
-                    &self.nonzero_gates,
-                    self.num_dataparallel_bits,
-                )
-            })
-            .collect();
-
-        // Concat this with the first k evaluations from the claims to get num_evals evaluations.
-        let mut claimed_vals = claimed_vals.to_vec();
-
-        claimed_vals.extend(&next_evals);
-        let wlx_evals = claimed_vals;
-        Ok(wlx_evals)
     }
 }
 
