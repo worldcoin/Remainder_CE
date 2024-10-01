@@ -87,9 +87,9 @@ impl<F: Field> IdentityGateLayerDescription<F> {
 }
 
 /// Degree of independent variable is always quadratic!
-///
-/// V_i(g_1) = \sum_{x} f_1(g_1, x) (V_{i + 1}(x))
-const NON_DATAPARALLEL_ROUND_ID_NUM_EVALS: usize = 3;
+/// (regardless of if there's data parralel or not)
+/// V_i(g_2, g_1) = \sum_{p_2} \sum_{x} \beta(g_2, p_2) f_1(g_1, x) (V_{i + 1}(p_2, x))
+const ID_NUM_EVALS: usize = 3;
 
 impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
     type VerifierLayer = VerifierIdentityGateLayer<F>;
@@ -106,17 +106,30 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         claim: Claim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierLayerEnum<F>, VerificationError> {
-        let num_sumcheck_rounds = self.sumcheck_round_indices().len();
+        let _num_sumcheck_rounds = self.sumcheck_round_indices().len();
 
         // --- Store challenges for later claim generation ---
         let mut challenges = vec![];
 
+        // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
+        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
+        // --- BITS ---
+        let num_u = self
+            .source_mle
+            .mle_indices()
+            .iter()
+            .fold(0_usize, |acc, idx| {
+                acc + match idx {
+                    MleIndex::Fixed(_) => 0,
+                    _ => 1,
+                }
+            })
+            - self.num_dataparallel_bits;
+
         // --- Grab the first round prover sumcheck message g_1(x) ---
         let mut sumcheck_messages: Vec<Vec<F>> = vec![];
-        let first_round_sumcheck_messages = transcript_reader.consume_elements(
-            "Initial sumcheck evaluations",
-            NON_DATAPARALLEL_ROUND_ID_NUM_EVALS,
-        )?;
+        let first_round_sumcheck_messages =
+            transcript_reader.consume_elements("Initial sumcheck evaluations", ID_NUM_EVALS)?;
         sumcheck_messages.push(first_round_sumcheck_messages.clone());
 
         // Check: V_i(g_1) =? g_1(0) + g_1(1)
@@ -126,7 +139,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             return Err(VerificationError::SumcheckStartFailed);
         }
 
-        for _sumcheck_round_idx in 1..num_sumcheck_rounds {
+        for _sumcheck_round_idx in 1..self.num_dataparallel_bits + num_u {
             // --- Read challenge r_{i - 1} from transcript ---
             let challenge = transcript_reader
                 .get_challenge("Sumcheck challenge")
@@ -138,7 +151,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
             // --- Read off g_i(0), g_i(1), ..., g_i(d) from transcript ---
             let curr_evals = transcript_reader
-                .consume_elements("Sumcheck evaluations", NON_DATAPARALLEL_ROUND_ID_NUM_EVALS)
+                .consume_elements("Sumcheck evaluations", ID_NUM_EVALS)
                 .unwrap();
 
             // --- Check: g_i(0) + g_i(1) =? g_{i - 1}(r_{i - 1}) ---
@@ -177,9 +190,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        // --- SAME ISSUE HERE AS IN GATE.RS: JUST ASSUMING THAT TOTAL NUMBER
-        // --- OF SUMCHECK ROUNDS IS GOING TO BE THE NUMBER OF NON-FIXED BITS
-        let num_sumcheck_rounds = self
+        let num_u = self
             .source_mle
             .mle_indices()
             .iter()
@@ -188,8 +199,10 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
                     MleIndex::Fixed(_) => 0,
                     _ => 1,
                 }
-            });
-        (0..num_sumcheck_rounds).collect_vec()
+            })
+            - self.num_dataparallel_bits;
+
+        (0..num_u + self.num_dataparallel_bits).collect_vec()
     }
 
     fn convert_into_verifier_layer(
@@ -198,6 +211,30 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         _claim_point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
+        // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
+        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
+        // --- BITS ---
+        let num_u = self
+            .source_mle
+            .mle_indices()
+            .iter()
+            .fold(0_usize, |acc, idx| {
+                acc + match idx {
+                    MleIndex::Fixed(_) => 0,
+                    _ => 1,
+                }
+            })
+            - self.num_dataparallel_bits;
+
+        // We want to separate the challenges into which ones are from the dataparallel bits,
+        // which ones and are for binding x (phase 1)
+        let mut sumcheck_bindings_vec = sumcheck_challenges.to_vec();
+        let first_u_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_bits);
+        let dataparallel_sumcheck_challenges = sumcheck_bindings_vec;
+
+        assert_eq!(first_u_challenges.len(), num_u);
+
+        // Since the original mles are dataparallel, the challenges are the concat of the copy bits and the variable bound bits.
         let src_verifier_mle = self
             .source_mle
             .into_verifier_mle(sumcheck_challenges, transcript_reader)
@@ -209,7 +246,9 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             layer_id: self.layer_id(),
             wiring: self.wiring.clone(),
             source_mle: src_verifier_mle,
-            first_u_challenges: sumcheck_challenges.to_vec(),
+            first_u_challenges,
+            num_dataparallel_rounds: self.num_dataparallel_bits,
+            dataparallel_sumcheck_challenges,
         };
 
         Ok(verifier_id_gate_layer)
@@ -220,6 +259,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
+        // TODO!(ende): need to add data parallel support here
         let beta_u = BetaValues::new_beta_equality_mle(round_challenges.to_vec());
         let beta_g = BetaValues::new_beta_equality_mle(claim_challenges.to_vec());
         let f_1_uv = self
@@ -285,14 +325,23 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             .iter()
             .fold(&0, |acc, (z, _)| std::cmp::max(acc, z));
 
-        let mut remap_table = vec![F::ZERO; (max_gate_val + 1).next_power_of_two()];
+        // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
+        // evaluating over all values in the boolean hypercube which includes dataparallel bits
+        let num_dataparallel_vals = 1 << (self.num_dataparallel_bits);
+        let res_table_num_entries =
+            ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
 
-        self.wiring.iter().for_each(|(z, x)| {
-            let zero = F::ZERO;
-            let id_val = source_mle_data.get_evals_vector().get(*x).unwrap_or(&zero);
-            remap_table[*z] = *id_val;
+        let mut remap_table = vec![F::ZERO; res_table_num_entries];
+        (0..num_dataparallel_vals).for_each(|idx| {
+            self.wiring.iter().for_each(|(z, x)| {
+                let zero = F::ZERO;
+                let id_val = source_mle_data
+                    .get_evals_vector()
+                    .get(idx + (x * num_dataparallel_vals))
+                    .unwrap_or(&zero);
+                remap_table[idx + z * num_dataparallel_vals] = *id_val;
+            });
         });
-
         let output_data = MultilinearExtension::new(remap_table);
         assert_eq!(
             output_data.num_vars(),
@@ -307,9 +356,12 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 impl<F: Field> VerifierIdentityGateLayer<F> {
     /// Computes the oracle query's value for a given [IdentityGateVerifierLayer].
     pub fn evaluate(&self, claim: &Claim<F>) -> F {
+        let g2_challenges = claim.get_point()[..self.num_dataparallel_rounds].to_vec();
+        let g1_challenges = claim.get_point()[self.num_dataparallel_rounds..].to_vec();
+
         // compute the sum over all the variables of the gate function
         let beta_u = BetaValues::new_beta_equality_mle(self.first_u_challenges.clone());
-        let beta_g = BetaValues::new_beta_equality_mle(claim.get_point().clone());
+        let beta_g = BetaValues::new_beta_equality_mle(g1_challenges);
 
         let f_1_uv = self
             .wiring
@@ -322,9 +374,14 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
                 acc + gz * ux
             });
 
+        let beta_bound = BetaValues::compute_beta_over_two_challenges(
+            &g2_challenges,
+            &self.dataparallel_sumcheck_challenges,
+        );
+
         // get the fully evaluated "expression"
 
-        f_1_uv * self.source_mle.value()
+        beta_bound * f_1_uv * self.source_mle.value()
     }
 }
 
@@ -346,6 +403,12 @@ pub struct VerifierIdentityGateLayer<F: Field> {
 
     /// The challenges for `x`, as derived from sumcheck.
     first_u_challenges: Vec<F>,
+
+    /// The number of dataparallel rounds.
+    num_dataparallel_rounds: usize,
+
+    /// The challenges for `p_2`, as derived from sumcheck.
+    dataparallel_sumcheck_challenges: Vec<F>,
 }
 
 impl<F: Field> VerifierLayer<F> for VerifierIdentityGateLayer<F> {
@@ -431,6 +494,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         self.layer_id
     }
 
+    // TODO!(ende): no references in codebase as of now, if so, add data parallel support
     fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
         let beta_g = BetaValues::new_beta_equality_mle(claim_point.to_vec());
         self.set_beta_g(beta_g);
@@ -465,6 +529,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         Ok(())
     }
 
+    // TODO!(ende): no references in codebase as of now, if so, add data parallel support
     fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
         let mles: Vec<&DenseMle<F>> = self.phase_1_mles.as_ref().unwrap().iter().collect();
         let independent_variable = mles
@@ -482,6 +547,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         Ok(evaluations)
     }
 
+    // TODO!(ende): no references in codebase as of now
     fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
         let mles = self.phase_1_mles.as_mut().unwrap();
         mles.iter_mut().for_each(|mle_ref| {
@@ -490,14 +556,17 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         Ok(())
     }
 
+    // TODO!(ende): no references in codebase as of now
     fn sumcheck_round_indices(&self) -> Vec<usize> {
         (0..self.mle_ref.num_free_vars()).collect_vec()
     }
 
+    // TODO!(ende): no references in codebase as of now
     fn max_degree(&self) -> usize {
         2
     }
 
+    // TODO!(ende): no references in codebase as of now
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
@@ -590,7 +659,12 @@ impl<F: Field> YieldWLXEvals<F> for IdentityGate<F> {
                     })
                     .collect();
 
-                compute_full_gate_identity(new_chal, &mut self.mle_ref.clone(), &self.nonzero_gates)
+                compute_full_gate_identity(
+                    new_chal,
+                    &mut self.mle_ref.clone(),
+                    &self.nonzero_gates,
+                    self.num_dataparallel_bits,
+                )
             })
             .collect();
 

@@ -344,16 +344,53 @@ pub fn compute_full_gate_identity<F: Field>(
     challenges: Vec<F>,
     mle_ref: &mut DenseMle<F>,
     nonzero_gates: &[(usize, usize)],
+    copy_bits: usize,
 ) -> F {
+    // Split the challenges into which ones are for batched bits, which ones are for others.
+    let mut copy_chals: Vec<F> = vec![];
+    let mut z_chals: Vec<F> = vec![];
+    challenges.into_iter().enumerate().for_each(|(idx, chal)| {
+        if (0..copy_bits).contains(&idx) {
+            copy_chals.push(chal);
+        } else {
+            z_chals.push(chal);
+        }
+    });
+
     // if the gate looks like f1(z, x)(f2(p2, x)) then this is the beta table for the challenges on z
-    let beta_g = BetaValues::new_beta_equality_mle(challenges);
+    let beta_g = BetaValues::new_beta_equality_mle(z_chals);
     let zero = F::ZERO;
 
-    nonzero_gates.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
-        let gz = *beta_g.bookkeeping_table().get(*z_ind).unwrap_or(&F::ZERO);
-        let ux = mle_ref.bookkeeping_table().get(*x_ind).unwrap_or(&zero);
-        acc + gz * (*ux)
-    })
+    if copy_bits == 0 {
+        nonzero_gates.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
+            let gz = *beta_g.bookkeeping_table().get(*z_ind).unwrap_or(&F::ZERO);
+            let ux = mle_ref.bookkeeping_table().get(*x_ind).unwrap_or(&zero);
+            acc + gz * (*ux)
+        })
+    } else {
+        let num_copy_idx = 1 << copy_bits;
+        // If the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is the beta table for the challenges on p2.
+        let beta_g2 = BetaValues::new_beta_equality_mle(copy_chals);
+        {
+            // Sum over everything else, outer sum being over p2, inner sum over (x, y).
+            (0..(1 << num_copy_idx)).fold(F::ZERO, |acc_outer, idx| {
+                let g2 = *beta_g2.bookkeeping_table().get(idx).unwrap_or(&F::ZERO);
+                let inner_sum =
+                    nonzero_gates
+                        .iter()
+                        .copied()
+                        .fold(F::ZERO, |acc, (z_ind, x_ind)| {
+                            let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                            let ux = mle_ref
+                                .bookkeeping_table()
+                                .get(idx + (x_ind * num_copy_idx))
+                                .unwrap_or(&zero);
+                            acc + gz * (*ux)
+                        });
+                acc_outer + (g2 * inner_sum)
+            })
+        }
+    }
 }
 
 /// Compute sumcheck message without a beta table.
