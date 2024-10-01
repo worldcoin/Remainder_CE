@@ -7,7 +7,7 @@ use crate::utils::vandermonde::VandermondeInverse;
 use ark_std::{end_timer, start_timer};
 use hyrax_circuit_inputs::HyraxInputLayerData;
 use hyrax_input_layer::{
-    verify_public_input_layer, HyraxInputLayer, HyraxInputLayerEnum, HyraxInputLayerProof,
+    verify_claim, HyraxInputLayer, HyraxInputLayerEnum, HyraxInputLayerProof,
     HyraxProverCommitmentEnum, HyraxVerifierCommitmentEnum,
 };
 use hyrax_layer::HyraxClaim;
@@ -669,7 +669,7 @@ impl<
                     committer,
                 );
                 plaintext_claims.into_iter().for_each(|claim| {
-                    verify_public_input_layer::<C>(
+                    verify_claim::<C>(
                         &values,
                         claim.get_claim(),
                     );

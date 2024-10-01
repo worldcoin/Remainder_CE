@@ -374,10 +374,11 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
     }
 }
 
-// FIXME(Ben) make this a helper, and use it also for FS challenge
-pub fn verify_public_input_layer<C: PrimeOrderCurve>(
-    mle_vec: &[C::Scalar],
-    claim: &Claim<C::Scalar>,
+// FIXME(Ben) make this a helper, and use it also for FS challenge (what about error handling?)
+/// Verifies a claim by evaluating the MLE at the challenge point and checking that the result.
+pub fn verify_claim<F: Field>(
+    mle_vec: &[F],
+    claim: &Claim<F>,
 ) {
     let mut mle = DenseMle::new_from_raw(mle_vec.to_vec(), LayerId::Input(0));
     mle.index_mle_indices(0);
