@@ -18,6 +18,7 @@ use super::{CircuitNode, CompilableNode, Context, NodeId};
 #[derive(Clone, Debug)]
 pub struct IdentityGateNode {
     id: NodeId,
+    num_dataparallel_bits: Option<usize>,
     nonzero_gates: Vec<(usize, usize)>,
     pre_routed_data: NodeId,
     num_vars: usize,
@@ -43,17 +44,23 @@ impl IdentityGateNode {
         ctx: &Context,
         pre_routed_data: &impl CircuitNode,
         nonzero_gates: Vec<(usize, usize)>,
+        num_dataparallel_bits: Option<usize>,
     ) -> Self {
         let max_gate_val = nonzero_gates
             .clone()
             .into_iter()
             .fold(0, |acc, (z, _)| std::cmp::max(acc, z));
 
-        let remap_table_len = (max_gate_val + 1).next_power_of_two();
+        // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
+        // evaluating over all values in the boolean hypercube which includes dataparallel bits
+        let num_dataparallel_vals = 1 << (num_dataparallel_bits.unwrap_or(0));
+        let remap_table_len = (max_gate_val + 1) * num_dataparallel_vals;
+
         let num_vars = log2(remap_table_len) as usize;
 
         Self {
             id: ctx.get_new_id(),
+            num_dataparallel_bits,
             nonzero_gates,
             pre_routed_data: pre_routed_data.id(),
             num_vars,
@@ -81,6 +88,7 @@ impl<F: Field> CompilableNode<F> for IdentityGateNode {
             id_gate_layer_id,
             self.nonzero_gates.clone(),
             pre_routed_mle,
+            self.num_dataparallel_bits,
         );
         circuit_description_map.0.insert(
             self.id,
@@ -153,7 +161,8 @@ mod test {
                 None,
             );
 
-            let gate_sector = IdentityGateNode::new(ctx, &input_shred_pre_routed, nonzero_gates);
+            let gate_sector =
+                IdentityGateNode::new(ctx, &input_shred_pre_routed, nonzero_gates, None);
             let diff_sector =
                 Sector::new(ctx, &[&gate_sector, &input_shred_expected], |input_nodes| {
                     assert_eq!(input_nodes.len(), 2);

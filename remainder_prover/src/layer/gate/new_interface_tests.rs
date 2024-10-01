@@ -155,7 +155,7 @@ mod tests {
                 nonzero_gates.push((idx, idx));
             });
 
-            let gate_node = IdentityGateNode::new(ctx, &mle_input_shred, nonzero_gates);
+            let gate_node = IdentityGateNode::new(ctx, &mle_input_shred, nonzero_gates, None);
 
             let component_2 = EqualityCheckerComponent::new(ctx, &gate_node, &half_mle_input_shred);
 
