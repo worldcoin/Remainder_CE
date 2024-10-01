@@ -32,7 +32,10 @@ use thiserror::Error;
 
 use super::{
     gate::{
-        gate_helpers::{compute_full_gate_identity, evaluate_mle_ref_product_no_beta_table},
+        gate_helpers::{
+            compute_full_gate_identity, compute_sumcheck_messages_data_parallel_identity_gate,
+            evaluate_mle_ref_product_no_beta_table, prove_round_identity_gate_dataparallel_phase,
+        },
         index_mle_indices_gate, GateError,
     },
     layer_enum::{LayerEnum, VerifierLayerEnum},
@@ -358,10 +361,24 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         claim: Claim<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError> {
+        let (mut beta_g1, mut beta_g2) = self.compute_beta_tables(claim.get_point());
+        let mut beta_g2_fully_bound = F::ONE;
+
+        // We perform the dataparallel initialization only if there is at least one variable
+        // representing which copy we are in.
+        if self.num_dataparallel_bits > 0 {
+            beta_g2_fully_bound = self
+                .perform_dataparallel_phase(&mut beta_g1, &mut beta_g2, transcript_writer)
+                .unwrap();
+        }
+
         // initialization, get the first sumcheck message
         let first_message = self
             .init_phase_1(claim)
-            .expect("could not evaluate original lhs and rhs");
+            .expect("could not evaluate original lhs and rhs")
+            .into_iter()
+            .map(|eval| eval * beta_g2_fully_bound)
+            .collect_vec();
 
         let phase_1_mle_refs = self
             .phase_1_mles
@@ -381,8 +398,11 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 // if there are copy bits, we want to start at that index
                 bind_round_identity(round, challenge, phase_1_mle_refs);
                 let phase_1_mle_references: Vec<&DenseMle<F>> = phase_1_mle_refs.iter().collect();
-                let eval =
-                    compute_sumcheck_message_identity(round, &phase_1_mle_references).unwrap();
+                let eval = compute_sumcheck_message_identity(round, &phase_1_mle_references)
+                    .unwrap()
+                    .into_iter()
+                    .map(|eval| eval * beta_g2_fully_bound)
+                    .collect_vec();
                 transcript_writer.append_elements("Sumcheck evaluations", &eval);
                 Ok::<_, LayerError>(eval)
             }))
@@ -656,6 +676,109 @@ impl<F: Field> IdentityGate<F> {
             beta_g: None,
             phase_1_mles: None,
             num_dataparallel_bits: num_dataparallel_bits.unwrap_or(0),
+        }
+    }
+
+    fn compute_beta_tables(&mut self, challenges: &[F]) -> (DenseMle<F>, DenseMle<F>) {
+        let mut g2_challenges = vec![];
+        let mut g1_challenges = vec![];
+
+        challenges
+            .iter()
+            .enumerate()
+            .for_each(|(bit_idx, challenge)| {
+                if bit_idx < self.num_dataparallel_bits {
+                    g2_challenges.push(*challenge);
+                } else {
+                    g1_challenges.push(*challenge);
+                }
+            });
+
+        // Create two separate beta tables for each, as they are handled differently.
+        let mut beta_g2 = BetaValues::new_beta_equality_mle(g2_challenges);
+        beta_g2.index_mle_indices(0);
+        let beta_g1 = BetaValues::new_beta_equality_mle(g1_challenges);
+
+        (beta_g1, beta_g2)
+    }
+
+    /// Initialize the dataparallel phase: construct the necessary mles and return the first sumcheck message.
+    /// This will then set the necessary fields of the [Gate] struct so that the dataparallel bits can be
+    /// correctly bound during the first `num_dataparallel_bits` rounds of sumcheck.
+    fn init_dataparallel_phase(
+        &mut self,
+        beta_g1: &mut DenseMle<F>,
+        beta_g2: &mut DenseMle<F>,
+    ) -> Result<Vec<F>, GateError> {
+        // Index original bookkeeping tables.
+        self.mle_ref.index_mle_indices(0);
+
+        // Result of initializing is the first sumcheck message.
+
+        compute_sumcheck_messages_data_parallel_identity_gate(
+            &self.mle_ref,
+            beta_g2,
+            beta_g1,
+            &self.nonzero_gates,
+            self.num_dataparallel_bits,
+        )
+    }
+
+    // Once the initialization of the dataparallel phase is done, we can perform the dataparallel phase.
+    // This means that we are binding all bits that represent which copy of the circuit we are in.
+    fn perform_dataparallel_phase(
+        &mut self,
+        beta_g1: &mut DenseMle<F>,
+        beta_g2: &mut DenseMle<F>,
+        transcript_writer: &mut impl ProverTranscript<F>,
+    ) -> Result<F, LayerError> {
+        // Initialization, first message comes from here.
+        let mut challenges: Vec<F> = vec![];
+
+        let first_message = self.init_dataparallel_phase(beta_g1, beta_g2).expect(
+            "could not evaluate original lhs and rhs in order to get first sumcheck message",
+        );
+
+        let mle_ref = &mut self.mle_ref;
+
+        transcript_writer
+            .append_elements("Initial Sumcheck evaluations DATAPARALLEL", &first_message);
+        let num_rounds_copy_phase = self.num_dataparallel_bits;
+
+        // Do the first dataparallel bits number sumcheck rounds using libra giraffe.
+        let _sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
+            .chain((1..num_rounds_copy_phase).map(|round| {
+                let challenge = transcript_writer.get_challenge("Sumcheck challenge DATAPARALLEL");
+                challenges.push(challenge);
+                let eval = prove_round_identity_gate_dataparallel_phase(
+                    mle_ref,
+                    beta_g1,
+                    beta_g2,
+                    round,
+                    challenge,
+                    &self.nonzero_gates,
+                    self.num_dataparallel_bits - round,
+                )
+                .unwrap();
+                transcript_writer.append_elements("Sumcheck evaluations DATAPARALLEL", &eval);
+                Ok::<_, LayerError>(eval)
+            }))
+            .try_collect()?;
+
+        // Bind the final challenge, update the final beta table.
+        let final_chal_copy =
+            transcript_writer.get_challenge("Final Sumcheck challenge DATAPARALLEL");
+        // Fix the variable and everything as you would in the last round of sumcheck
+        // the evaluations from this is what you return from the first round of sumcheck in the next phase!
+        beta_g2.fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
+        self.mle_ref
+            .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
+
+        if beta_g2.bookkeeping_table().len() == 1 {
+            let beta_g2_fully_bound = beta_g2.bookkeeping_table()[0];
+            Ok(beta_g2_fully_bound)
+        } else {
+            Err(LayerError::LayerNotReady)
         }
     }
 
