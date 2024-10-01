@@ -59,16 +59,26 @@ pub struct IdentityGateLayerDescription<F: Field> {
     /// The source MLE of the expression, i.e. the mle that makes up the "x"
     /// variables.
     source_mle: MleDescription<F>,
+
+    /// The number of bits representing the number of "dataparallel" copies of
+    /// the circuit.
+    num_dataparallel_bits: usize,
 }
 
 impl<F: Field> IdentityGateLayerDescription<F> {
     /// Constructor for the [IdentityGateLayerDescription] using the gate wiring, the source mle
     /// for the rerouting, and the layer_id.
-    pub fn new(id: LayerId, wiring: Vec<(usize, usize)>, source_mle: MleDescription<F>) -> Self {
+    pub fn new(
+        id: LayerId,
+        wiring: Vec<(usize, usize)>,
+        source_mle: MleDescription<F>,
+        num_dataparallel_bits: Option<usize>,
+    ) -> Self {
         Self {
             id,
             wiring,
             source_mle,
+            num_dataparallel_bits: num_dataparallel_bits.unwrap_or(0),
         }
     }
 }
@@ -236,7 +246,17 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
     fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
         let source_mle = self.source_mle.into_dense_mle(circuit_map);
-        let id_gate_layer = IdentityGate::new(self.layer_id(), self.wiring.clone(), source_mle);
+        let num_dataparallel_bits = if self.num_dataparallel_bits == 0 {
+            None
+        } else {
+            Some(self.num_dataparallel_bits)
+        };
+        let id_gate_layer = IdentityGate::new(
+            self.layer_id(),
+            self.wiring.clone(),
+            source_mle,
+            num_dataparallel_bits,
+        );
         id_gate_layer.into()
     }
 
@@ -617,6 +637,8 @@ pub struct IdentityGate<F: Field> {
     /// the mles that are created from the initial phase, where we automatically
     /// filter through the nonzero gates using the libra trick
     pub phase_1_mles: Option<[DenseMle<F>; 2]>,
+    /// The number of bits representing the number of "dataparallel" copies of the circuit.
+    pub num_dataparallel_bits: usize,
 }
 
 impl<F: Field> IdentityGate<F> {
@@ -625,6 +647,7 @@ impl<F: Field> IdentityGate<F> {
         layer_id: LayerId,
         nonzero_gates: Vec<(usize, usize)>,
         mle_ref: DenseMle<F>,
+        num_dataparallel_bits: Option<usize>,
     ) -> IdentityGate<F> {
         IdentityGate {
             layer_id,
@@ -632,6 +655,7 @@ impl<F: Field> IdentityGate<F> {
             mle_ref,
             beta_g: None,
             phase_1_mles: None,
+            num_dataparallel_bits: num_dataparallel_bits.unwrap_or(0),
         }
     }
 
