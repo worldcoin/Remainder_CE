@@ -12,55 +12,19 @@ use crate::mle::Mle;
 use crate::utils::arithmetic::i64_to_field;
 use crate::utils::array::pad_with_rows;
 use crate::utils::mle::pad_with;
-use crate::worldcoin::parameters::{decode_rh_multiplicand, decode_thresholds, decode_wirings};
-
-use super::parameters::Parameters;
-
-// FIXME(Ben) check this function is inverse of decode!
-fn encode_wirings(wirings: &[(u16, u16, u16, u16)]) -> Vec<u8> {
-    wirings
-        .iter()
-        .flat_map(|(a, b, c, d)| vec![*a as u8, *b as u8, *c as u8, *d as u8])
-        .collect()
-}
-
-// FIXME(Ben) check this function is inverse of decode!
-fn encode_i64_vec(vec: &[i64]) -> Vec<u8> {
-    // Convert the Vec<i32> into a Vec<u8> using unsafe pointer casting
-    unsafe {
-        std::slice::from_raw_parts(
-            vec.as_ptr() as *const u8, 
-            vec.len() * std::mem::size_of::<i64>()
-        ).to_vec()
-    }
-}
+use crate::worldcoin::parameters_v2::MATMULT_COLS_NUM_VARS;
 
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two 2x1 kernels (1, 0).T and (6, -1).T
 /// The rewirings are trivial: the image _is_ the LH multiplicand of matmult.
 pub fn trivial_wiring_2x2_circuit_data<F: Field>() -> CircuitData<F, 1, 1, 1, 16, 1> {
-    let image = Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap();
-    let wirings: Vec<(u16, u16, u16, u16)> = vec![
-        (0, 0, 0, 0),
-        (0, 1, 0, 1),
-        (1, 0, 1, 0),
-        (1, 1, 1, 1),
-    ];
-    let parameters = Parameters {
-        matmult_rows_num_vars: 1,
-        matmult_cols_num_vars: 1,
-        matmult_internal_dim_num_vars: 1,
-        num_digits: 1,
-        base: 16,
-        wirings_bytes: encode_wirings(&wirings),
-        thresholds_bytes: encode_i64_vec(&[0, 0, 0, 0]),
-        rh_multiplicand_bytes: encode_i64_vec(&[1, 0, 6, -1]),
-        im_num_rows: 2,
-        im_num_cols: 2,
-    };
     CircuitData::build_worldcoin_circuit_data(
-        image,
-        parameters
+        Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
+        Array3::from_shape_vec((2, 2, 1), vec![1, 0, 6, -1]).unwrap(),
+        Array2::from_shape_vec((2, 2), vec![1, 0, 1, 0]).unwrap(),
+        // rewirings for the 2x2 identity matrix
+        Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1])
+            .unwrap(),
     )
 }
 
@@ -73,12 +37,8 @@ pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: Field>() -> CircuitDat
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
         Array3::from_shape_vec((2, 3, 1), vec![1, 0, -4, 6, -1, 3]).unwrap(),
         Array2::from_shape_vec((2, 2), vec![1, 0, 1, 0]).unwrap(),
-        vec![
-            (0, 0, 0, 0),
-            (0, 1, 0, 1),
-            (1, 0, 1, 0),
-            (1, 1, 1, 1),
-        ],
+        Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1])
+            .unwrap(),
     )
 }
 
@@ -156,12 +116,17 @@ impl<
     /// + Generics should be constrained as per [CircuitData].
     pub fn build_worldcoin_circuit_data(
         image: Array2<u8>,
-        parameters: Parameters,
+        rh_multiplicand: &[i64],
+        thresholds_matrix: &[i64],
+        wirings: &[(u16, u16, u16, u16)],
     ) -> Self {
         assert!(BASE.is_power_of_two());
         assert!(NUM_DIGITS.is_power_of_two());
-        let thresholds_matrix = decode_thresholds(&parameters);
-        let rh_multiplicand = decode_rh_multiplicand(&parameters);
+        let (_, im_num_cols) = image.dim();
+        let (num_kernels, kernel_num_rows, kernel_num_cols) = kernel_values.dim();
+        assert_eq!(num_kernels, (1 << MATMULT_COLS_NUM_VARS));
+        assert!(kernel_num_rows * kernel_num_cols <= (1 << MATMULT_INTERNAL_DIM_NUM_VARS));
+        assert!(thresholds_matrix.len() <= (1 << MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS));
 
         // Derive the re-routings from the wirings (this is what is needed for identity gate)
         // And calculate the left-hand side of the matrix multiplication
@@ -170,7 +135,7 @@ impl<
             (1 << MATMULT_ROWS_NUM_VARS),
             (1 << MATMULT_INTERNAL_DIM_NUM_VARS),
         ));
-        decode_wirings(&parameters).iter().for_each(|row| {
+        wirings.iter().for_each(|row| {
             let (im_row, im_col, a_row, a_col) = (
                 row.0 as usize,
                 row.1 as usize,
@@ -178,16 +143,16 @@ impl<
                 row.3 as usize,
             );
             let a_gate_label = a_row * (1 << MATMULT_INTERNAL_DIM_NUM_VARS) + a_col;
-            let im_gate_label = im_row * parameters.im_num_cols + im_col;
+            let im_gate_label = im_row * im_num_cols + im_col;
             reroutings.push((a_gate_label, im_gate_label));
             rerouted_matrix[[a_row, a_col]] = image[[im_row, im_col]] as i64;
         });
 
         // Pad kernel values to have dimensions (MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_COLS_NUM_VARS).
         // This is the RH multiplicand of the matrix multiplication.
-        assert_eq!(rh_multiplicand.dim().1, 1 << MATMULT_COLS_NUM_VARS);
+        assert_eq!(kernel_values.dim().1, 1 << MATMULT_COLS_NUM_VARS);
         let rh_multiplicand: Array2<i64> = pad_with_rows(
-            rh_multiplicand,
+            kernel_values,
             1 << MATMULT_INTERNAL_DIM_NUM_VARS,
         );
 
@@ -327,15 +292,14 @@ pub fn load_worldcoin_data<
     dbg!(&constant_data_folder);
     println!("Current directory: {:?}", std::env::current_dir().unwrap());
     // FIXME(Ben)
-    use super::parameters_v3::WIRINGS_BYTES;
-    use super::io::decode_wirings;
-    let wirings = decode_wirings(WIRINGS_BYTES);
+    use super::parameters_v3::{WIRINGS, IRIS_THRESHOLDS, IRIS_RH_MULTIPLICAND};
+
     let data_folder = constant_data_folder.join(if is_mask { "mask" } else { "iris" });
     let image: Array2<u8> = read_npy(image_path).unwrap();
+    let rh_multiplicand: Array3<i64> = Array3::from_shape_vec(
+        (1 << MATMULT_INTERNAL_DIM_NUM_VARS, 1 << MATMULT_COLS_NUM_VARS, 1),
+        IRIS_RH_MULTIPLICAND.to_vec(),
+    )
 
-    let kernel_values: Array3<i32> = read_npy(data_folder.join("kernel_values.npy")).unwrap();
-
-    let thresholds: Array2<i64> = read_npy(data_folder.join("thresholds.npy")).unwrap();
-
-    CircuitData::build_worldcoin_circuit_data(image, kernel_values, thresholds, wirings)
+    CircuitData::build_worldcoin_circuit_data(image, IRIS_RH_MULTIPLICAND, IRIS_THRESHOLDS, WIRINGS)
 }

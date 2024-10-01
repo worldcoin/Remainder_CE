@@ -1,89 +1,23 @@
-use ndarray::Array2;
+// FIXME(Ben) should this file go somewhere else?  are the doc comments below better than those in v2, v3?
 
-pub struct Parameters {
     /// The number of variables for the rows of the result of the matrix multiplication
     /// In iris code: rows index kernel placements.
-    pub matmult_rows_num_vars: usize,
+    
     /// The number of variables for the columns of the result of the matrix multiplication
     /// In iris code: columns index kernels.
-    pub matmult_cols_num_vars: usize,
+    
     /// The number of internal dimension variables of the matrix multiplication
     /// In iris code: the internal dimension indexes the values of the kernel.
-    pub matmult_internal_dim_num_vars: usize,
+    
     /// The number of digits in the complementary decomposition of the thresholded responses.
-    pub num_digits: usize,
+    
     /// The base of the complementary decomposition of the thresholded responses.
-    pub base: u64,
+    
     /// A flattened 2d array of u16s encoding the input `wirings` of [remainder::worldcoin::data::CircuitData::build_worldcoin_circuit_data].
-    pub wirings_bytes: &'static [u8],
-    /// A flattened 2d array of i64s encoding the thresholds for each placement and kernel combination (so has shape `(num_placements, num_kernels)`).
-    pub thresholds_bytes: &'static [u8],
-    /// A flattened 2d array of i64s encoding the right-hand multiplicand for the matrix multiplication.
-    pub rh_multiplicand_bytes: &'static [u8],
-    // FIXME(Ben)
-    /// The number of rows in the input image.
-    pub im_num_rows: usize,
-    // FIXME(Ben)
-    /// The number of columns in the input image.
-    pub im_num_cols: usize,
-}
-
-pub const V2_IRIS: Parameters = Parameters {
-    matmult_rows_num_vars: 12,
-    matmult_cols_num_vars: 2,
-    matmult_internal_dim_num_vars: 11,
-    num_digits: 4,
-    base: 256,
-    wirings_bytes: include_bytes!("constants/v2/wirings.bin"),
-    thresholds_bytes: include_bytes!("constants/v2/iris/thresholds.bin"),
-    rh_multiplicand_bytes: include_bytes!("constants/v2/iris/rh_multiplicand.bin"),
-    im_num_rows: 100,
-    im_num_cols: 400,
-};
-
-pub const V2_MASK: Parameters = Parameters {
-    matmult_rows_num_vars: 12,
-    matmult_cols_num_vars: 2,
-    matmult_internal_dim_num_vars: 11,
-    num_digits: 4,
-    base: 256,
-    wirings_bytes: include_bytes!("constants/v2/wirings.bin"),
-    thresholds_bytes: include_bytes!("constants/v2/mask/thresholds.bin"),
-    rh_multiplicand_bytes: include_bytes!("constants/v2/mask/rh_multiplicand.bin"),
-    im_num_rows: 100,
-    im_num_cols: 400,
-};
-
-pub const V3_IRIS: Parameters = Parameters {
-    matmult_rows_num_vars: 12,
-    matmult_cols_num_vars: 2,
-    matmult_internal_dim_num_vars: 11,
-    num_digits: 4,
-    base: 256,
-    wirings_bytes: include_bytes!("constants/v3/wirings.bin"),
-    thresholds_bytes: include_bytes!("constants/v3/iris/thresholds.bin"),
-    rh_multiplicand_bytes: include_bytes!("constants/v3/iris/rh_multiplicand.bin"),
-    im_num_rows: 128,
-    im_num_cols: 1024,
-};
-
-pub const V3_MASK: Parameters = Parameters {
-    matmult_rows_num_vars: 12,
-    matmult_cols_num_vars: 2,
-    matmult_internal_dim_num_vars: 11,
-    num_digits: 4,
-    base: 256,
-    wirings_bytes: include_bytes!("constants/v3/wirings.bin"),
-    thresholds_bytes: include_bytes!("constants/v3/mask/thresholds.bin"),
-    rh_multiplicand_bytes: include_bytes!("constants/v3/mask/rh_multiplicand.bin"),
-    im_num_rows: 128,
-    im_num_cols: 1024,
-};
-
-const BLAH: [(u16, u16, u16, u16); 2] = static_decode_wirings(include_bytes!("constants/v3/wirings.bin"));
 
 // FIXME(Ben)
-const fn static_decode_wirings<const N: usize>(bytes: &[u8]) -> [(u16, u16, u16, u16); N] {
+#[allow(long_running_const_eval)]
+pub const fn static_decode_wirings<const N: usize>(bytes: &[u8]) -> [(u16, u16, u16, u16); N] {
     let mut result = [(0, 0, 0, 0); N];
     let mut row_idx = 0;
     while row_idx < N {
@@ -99,7 +33,7 @@ const fn static_decode_wirings<const N: usize>(bytes: &[u8]) -> [(u16, u16, u16,
 }
 
 // FIXME(Ben)
-const fn static_decode_i64_slice<const N: usize>(bytes: &[u8]) -> [i64; N] {
+pub const fn static_decode_i64_slice<const N: usize>(bytes: &[u8]) -> [i64; N] {
     let mut result = [0; N];
     let mut out_idx = 0;
     while out_idx < N {
