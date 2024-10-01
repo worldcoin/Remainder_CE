@@ -400,7 +400,7 @@ fn test_interlace_mles() {
         vec![Fr::from(3), Fr::from(7), Fr::from(1), Fr::from(5)],
     ]
     .into_iter()
-    .map(|data| MultilinearExtension::new(data))
+    .map(MultilinearExtension::new)
     .collect::<Vec<_>>();
 
     let interlaced_mle = MultilinearExtension::interlace_mles(mles);

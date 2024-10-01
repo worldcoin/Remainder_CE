@@ -193,7 +193,7 @@ fn test_example_with_regular_layer() {
     // let evaluations = compute_sumcheck_message(&mle_ref.expression(), 0, 2, &equality_mle).unwrap();
     // assert_eq!(evaluations.0, vec![Fr::from(0), Fr::from(1), Fr::from(2),]);
 
-    let evaluations = vec![Fr::from(0), Fr::from(1), Fr::from(2)];
+    let evaluations = [Fr::from(0), Fr::from(1), Fr::from(2)];
     let mut converter = VandermondeInverse::<Fr>::new();
     let coefficients = converter.convert_to_coefficients(evaluations.to_vec());
     assert_eq!(coefficients, vec![Fr::from(0), Fr::from(1), Fr::from(0)]);

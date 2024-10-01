@@ -7,22 +7,20 @@
 #[macro_export]
 macro_rules! layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
-        #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-        #[serde(bound = "F: Field")]
-        #[doc = r"Remainder generated trait enum"]
-        pub enum $type_name<F: Field> {
-            $(
-                #[doc = "Remainder generated layer variant"]
-                $var_name(Box<$variant>),
-            )*
-        }
 
         paste::paste! {
+            #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+            #[serde(bound = "F: Field")]
+            #[doc = r"Remainder generated trait enum"]
+            pub enum [<$type_name Enum>]<F: Field> {
+                $(
+                    #[doc = "Remainder generated layer variant"]
+                    $var_name(Box<$variant>),
+                )*
+            }
 
-
-
-            impl<F: Field> $crate::layer::CircuitLayer<F> for [<Circuit$type_name>]<F> {
-                type VerifierLayer = [<Verifier $type_name>]<F>;
+            impl<F: Field> $crate::layer::LayerDescription<F> for [<$type_name DescriptionEnum>]<F> {
+                type VerifierLayer = [<Verifier $type_name Enum>]<F>;
 
                 fn layer_id(&self) -> super::LayerId {
                     match self {
@@ -34,7 +32,7 @@ macro_rules! layer_enum {
 
                 fn compute_data_outputs(
                     &self,
-                    mle_outputs_necessary: &std::collections::HashSet<&$crate::expression::circuit_expr::CircuitMle<F>>,
+                    mle_outputs_necessary: &std::collections::HashSet<&$crate::expression::circuit_expr::MleDescription<F>>,
                     circuit_map: &mut $crate::layouter::layouting::CircuitMap<F>,
                 ) {
                     match self {
@@ -81,7 +79,7 @@ macro_rules! layer_enum {
 
                 fn get_circuit_mles(
                     &self,
-                ) -> Vec<& $crate::expression::circuit_expr::CircuitMle<F>> {
+                ) -> Vec<& $crate::expression::circuit_expr::MleDescription<F>> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.get_circuit_mles(),
@@ -131,7 +129,7 @@ macro_rules! layer_enum {
                 }
             }
 
-            impl<F: Field> $crate::layer::VerifierLayer<F> for [<Verifier$type_name>]<F> {
+            impl<F: Field> $crate::layer::VerifierLayer<F> for [<Verifier$type_name Enum>]<F> {
                 fn layer_id(&self) -> super::LayerId {
                     match self {
                         $(
@@ -140,92 +138,89 @@ macro_rules! layer_enum {
                     }
                 }
             }
-        }
 
-        impl<F: Field> $crate::layer::Layer<F> for $type_name<F> {
-            fn layer_id(&self) -> super::LayerId {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.layer_id(),
-                    )*
+            impl<F: Field> $crate::layer::Layer<F> for [<$type_name Enum>]<F> {
+                fn layer_id(&self) -> super::LayerId {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.layer_id(),
+                        )*
+                    }
+                }
+
+                fn prove_rounds(
+                    &mut self,
+                    claim: $crate::claims::Claim<F>,
+                    transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
+                ) -> Result<(), super::LayerError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.prove_rounds(claim, transcript),
+                        )*
+                    }
+                }
+
+                fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), super::LayerError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.initialize_sumcheck(claim_point),
+                        )*
+                    }
+                }
+
+                fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, super::LayerError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.compute_round_sumcheck_message(round_index),
+                        )*
+                    }
+                }
+
+                fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), super::LayerError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.bind_round_variable(round_index, challenge),
+                        )*
+                    }
+                }
+
+                fn sumcheck_round_indices(&self) -> Vec<usize> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.sumcheck_round_indices(),
+                        )*
+                    }
+                }
+
+                fn max_degree(&self) -> usize {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.max_degree(),
+                        )*
+                    }
+                }
+
+                fn get_post_sumcheck_layer(
+                    &self,
+                    round_challenges: &[F],
+                    claim_challenges: &[F],
+                ) -> $crate::layer::PostSumcheckLayer<F, F> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges),
+                        )*
+                    }
                 }
             }
-
-            fn prove_rounds(
-                &mut self,
-                claim: $crate::claims::Claim<F>,
-                transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
-            ) -> Result<(), super::LayerError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.prove_rounds(claim, transcript),
-                    )*
-                }
-            }
-
-            fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), super::LayerError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.initialize_sumcheck(claim_point),
-                    )*
-                }
-            }
-
-            fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, super::LayerError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.compute_round_sumcheck_message(round_index),
-                    )*
-                }
-            }
-
-            fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), super::LayerError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.bind_round_variable(round_index, challenge),
-                    )*
-                }
-            }
-
-            fn sumcheck_round_indices(&self) -> Vec<usize> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.sumcheck_round_indices(),
-                    )*
-                }
-            }
-
-            fn max_degree(&self) -> usize {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.max_degree(),
-                    )*
-                }
-            }
-
-            fn get_post_sumcheck_layer(
-                &self,
-                round_challenges: &[F],
-                claim_challenges: &[F],
-            ) -> $crate::layer::PostSumcheckLayer<F, F> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges),
-                    )*
-                }
-            }
-        }
 
         $(
-            impl<F: Field> From<$variant> for $type_name<F> {
-                fn from(var: $variant) -> $type_name<F> {
+            impl<F: Field> From<$variant> for [<$type_name Enum>]<F> {
+                fn from(var: $variant) -> [<$type_name Enum>]<F> {
                     Self::$var_name(Box::new(var))
                 }
             }
         )*
-
-        paste::paste! {
-            impl<F: Field> YieldClaim<ClaimMle<F>> for [<Verifier $type_name>]<F> {
+            impl<F: Field> YieldClaim<ClaimMle<F>> for [<Verifier $type_name Enum>]<F> {
                 fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
                     match self {
                         $(

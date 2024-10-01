@@ -26,7 +26,7 @@ fn sanity_check_test_honest_prover_small_identity() {
     );
     let committer_copy = PedersenCommitter::new_with_generators(
         committer.generators.clone(),
-        committer.blinding_generator.clone(),
+        committer.blinding_generator,
         Some(committer.int_abs_val_bitwidth),
     );
     let input_layer_mle_coeff =
@@ -88,7 +88,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
     );
     let committer_copy = PedersenCommitter::new_with_generators(
         committer.generators.clone(),
-        committer.blinding_generator.clone(),
+        committer.blinding_generator,
         Some(committer.int_abs_val_bitwidth),
     );
     let input_layer_mle_coeff =
@@ -142,7 +142,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
     let committer = PedersenCommitter::<Bn256Point>::new(3, "asymmetric proverasymmetric proverasymmetric proverasymmetric proverasymmetric proverasymmetric prover", None);
     let committer_copy = PedersenCommitter::new_with_generators(
         committer.generators.clone(),
-        committer.blinding_generator.clone(),
+        committer.blinding_generator,
         Some(committer.int_abs_val_bitwidth),
     );
     let input_layer_mle_coeff_raw_vec = (0..8)
@@ -155,9 +155,9 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         .collect_vec();
 
     let (r_1, r_2, r_3) = (
-        challenge_coordinates[0].clone(),
-        challenge_coordinates[1].clone(),
-        challenge_coordinates[2].clone(),
+        challenge_coordinates[0],
+        challenge_coordinates[1],
+        challenge_coordinates[2],
     );
 
     let challenge_vec = vec![
@@ -229,7 +229,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
     );
     let committer_copy = PedersenCommitter::new_with_generators(
         committer.generators.clone(),
-        committer.blinding_generator.clone(),
+        committer.blinding_generator,
         Some(committer.int_abs_val_bitwidth),
     );
     let input_layer_mle_coeff_raw_vec = (0..(1 << 18))
