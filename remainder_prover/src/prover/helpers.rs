@@ -13,6 +13,27 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
+/// Writes the circuit description for the provided [LayouterCircuit]
+/// to the `circuit_description_path` specified, in JSON format.
+///
+/// WARNING: THIS FUNCTION CALLS THE `self.witness_builder` FUNCTION
+/// ON THE CIRCUIT AND THUS CANNOT BE USED IN TANDEM WITH [test_circuit()]!!!
+/// INSTEAD, CREATE A NEW INSTANCE OF THE CIRCUIT IF YOU ARE TO USE
+/// [test_circuit()] AS WELL!!!
+pub fn write_circuit_description_to_file<
+    F: Field,
+    C: Component<NodeEnum<F>>,
+    Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>),
+>(
+    mut circuit: LayouterCircuit<F, C, Fn>,
+    circuit_description_path: &Path,
+) {
+    let circuit_description = circuit.get_circuit_description();
+    let f = File::create(circuit_description_path).unwrap();
+    let writer = BufWriter::new(f);
+    serde_json::to_writer(writer, &circuit_description).unwrap();
+}
+
 /// Boilerplate code for testing a circuit
 pub fn test_circuit<
     F: Field,

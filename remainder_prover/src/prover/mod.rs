@@ -108,7 +108,8 @@ pub const ENABLE_OPTIMIZATION: bool = true;
 
 /// The Verifier Key associated with a GKR proof of a [ProofSystem].
 /// It consists of consice GKR Circuit description to be use by the Verifier.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(bound = "F: Field")]
 pub struct GKRCircuitDescription<F: Field> {
     /// The circuit descriptions of the input layers.
     pub input_layers: Vec<InputLayerDescriptionEnum<F>>,
