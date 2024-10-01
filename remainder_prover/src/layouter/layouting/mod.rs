@@ -342,9 +342,9 @@ type LayouterNodes<F> = (
 /// Returns a vector of [CompilableNode] in which inputs are first, then intermediates
 /// (topologically sorted), then lookups, then outputs.
 pub fn layout<F: Field>(
-    ctx: Context,
     nodes: Vec<NodeEnum<F>>,
 ) -> Result<LayouterNodes<F>, DAGError> {
+    let ctx = Context::new();
     let mut dag = NodeEnumGroup::new(nodes);
 
     // Handle input layers

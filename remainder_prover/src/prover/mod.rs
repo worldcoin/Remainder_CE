@@ -9,8 +9,12 @@ pub mod proof_system;
 /// Struct for representing a list of layers
 pub mod layers;
 
+use std::collections::HashMap;
+use std::marker::PhantomData;
+
 use self::layers::Layers;
 use crate::claims::wlx_eval::WLXAggregator;
+use crate::claims::Claim;
 use crate::input_layer::enum_input_layer::{
     InputLayerDescriptionEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
 };
@@ -22,8 +26,9 @@ use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::LayerDescription;
 use crate::layouter::component::Component;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputNodeMap};
+use crate::layouter::nodes::circuit_inputs::InputShredData;
 use crate::layouter::nodes::node_enum::NodeEnum;
-use crate::layouter::nodes::{CircuitNode, Context};
+use crate::layouter::nodes::{CircuitNode, Context, NodeId};
 use crate::output_layer::mle_output_layer::{MleOutputLayer, MleOutputLayerDescription};
 use crate::output_layer::OutputLayerDescription;
 use crate::{
@@ -33,7 +38,7 @@ use crate::{
 };
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
-use remainder_shared_types::transcript::TranscriptReaderError;
+use remainder_shared_types::transcript::{Transcript, TranscriptReaderError, TranscriptWriter};
 use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
@@ -310,16 +315,17 @@ impl<F: Field> GKRCircuitDescription<F> {
     }
 }
 
-/// Generate the circuit description given a set of nodes along with the context,
-/// which determines the unique ID for each of the nodes.
+/// Generate the circuit description given a set of nodes.
+/// Returns a [GKRCircuitDescription] and a [InputNodeMap] that maps the ids of [InputLayerNode] to
+/// their corresponding input layer id (this is a 1:1 correspondence).
 pub fn generate_circuit_description<F: Field>(
-    component: impl Component<NodeEnum<F>>,
-    ctx: Context,
+    nodes: Vec<NodeEnum<F>>,
 ) -> Result<(GKRCircuitDescription<F>, InputNodeMap), GKRError> {
-    let nodes = component.yield_nodes();
-    let (input_nodes, fiat_shamir_challenge_nodes, intermediate_nodes, lookup_nodes, output_nodes) =
-        layout(ctx, nodes).unwrap();
+    // FIXME(Ben) consider inlining the layout function, if this is the only place we'll ever call it?  doesn't seem well factored.  or instead pass in the return values of layout() as arguments to this function?
+    let (input_layer_nodes, fiat_shamir_challenge_nodes, intermediate_nodes, lookup_nodes, output_nodes) =
+        layout(nodes).unwrap();
 
+    // Define counters for the layer ids
     let mut input_layer_id = LayerId::Input(0);
     let mut intermediate_layer_id = LayerId::Layer(0);
     let mut fiat_shamir_challenge_layer_id = LayerId::FiatShamirChallengeLayer(0);
@@ -327,20 +333,20 @@ pub fn generate_circuit_description<F: Field>(
     let mut intermediate_layers = Vec::<LayerDescriptionEnum<F>>::new();
     let mut output_layers = Vec::<MleOutputLayerDescription<F>>::new();
     let mut circuit_description_map = CircuitDescriptionMap::new();
-    let mut input_node_to_layer_map = InputNodeMap::new();
+    let mut input_layer_node_to_layer_map = InputNodeMap::new();
 
-    let input_layers = input_nodes
+    let input_layers = input_layer_nodes
         .iter()
-        .map(|input_node| {
-            let input_circuit_description = input_node
-                .generate_input_circuit_description(
+        .map(|input_layer_node| {
+            let input_layer_description = input_layer_node
+                .generate_input_layer_description(
                     &mut input_layer_id,
                     &mut circuit_description_map,
                 )
                 .unwrap();
-            input_node_to_layer_map
-                .add_node_layer_id(input_circuit_description.layer_id(), input_node.id());
-            input_circuit_description
+            input_layer_node_to_layer_map
+                .add_node_layer_id(input_layer_description.layer_id(), input_layer_node.id());
+            input_layer_description
         })
         .collect_vec();
 
@@ -392,5 +398,6 @@ pub fn generate_circuit_description<F: Field>(
         output_layers,
     };
 
-    Ok((circuit_description, input_node_to_layer_map))
+    // FIXME(Ben) this should return a function that builds the inputs from the input node data.  @vishady has some ideas
+    Ok((circuit_description, input_layer_node_to_layer_map))
 }

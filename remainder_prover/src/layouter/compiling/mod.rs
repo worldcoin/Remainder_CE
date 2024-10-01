@@ -29,7 +29,7 @@ use crate::claims::ClaimAggregator;
 use crate::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
 use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
-use crate::input_layer::{InputLayer, InputLayerDescription};
+use crate::input_layer::{self, InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::LayerEnum;
 use crate::layer::LayerId;
 use crate::layer::{Layer, LayerDescription};
@@ -114,9 +114,9 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
     fn populate_circuit(
         &mut self,
         gkr_circuit_description: &GKRCircuitDescription<F>,
-        input_layer_to_node_map: InputNodeMap,
         data_input_layers: Vec<InputLayerData<F>>,
         transcript_writer: &mut impl ProverTranscript<F>,
+        input_layer_to_node_map: InputNodeMap,
     ) -> (InstantiatedCircuit<F>, LayerMap<F>) {
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
@@ -304,13 +304,13 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         // TODO(vishady): ADD CIRCUIT DESCRIPTION TO TRANSCRIPT (maybe not
         // here...)
         let (circuit_description, input_node_map) =
-            generate_circuit_description(component, ctx).unwrap();
+            generate_circuit_description(component.yield_nodes()).unwrap();
 
         let (instantiated_circuit, layer_map) = self.populate_circuit(
             &circuit_description,
-            input_node_map,
             input_layer_data,
             transcript_writer,
+            input_node_map
         );
 
         (instantiated_circuit, layer_map, circuit_description)

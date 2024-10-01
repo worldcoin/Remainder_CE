@@ -148,7 +148,7 @@ fn invert_mle_bookkeeping_table<F: Field>(bookkeeping_table: Vec<F>) -> Vec<F> {
 impl InputLayerNode {
     /// From the circuit description map and a starting layer id,
     /// create the circuit description of an input layer.
-    pub fn generate_input_circuit_description<F: Field>(
+    pub fn generate_input_layer_description<F: Field>(
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
