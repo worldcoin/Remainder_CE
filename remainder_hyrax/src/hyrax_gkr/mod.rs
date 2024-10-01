@@ -14,16 +14,16 @@ use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
 use rand::Rng;
-use remainder::expression::circuit_expr::{filter_bookkeeping_table, CircuitMle};
+use remainder::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
 use remainder::input_layer::enum_input_layer::{
-    CircuitInputLayerEnum, InputLayerEnumVerifierCommitment,
+    InputLayerDescriptionEnum, InputLayerEnumVerifierCommitment,
 };
 use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
-use remainder::input_layer::{CircuitInputLayer, InputLayer};
+use remainder::input_layer::{InputLayer, InputLayerDescription};
 use remainder::layer::layer_enum::LayerEnum;
-use remainder::layer::{CircuitLayer, Layer};
+use remainder::layer::{Layer, LayerDescription};
 use remainder::layouter::component::ComponentSet;
-use remainder::layouter::layouting::{CircuitLocation, CircuitMap, InputNodeMap};
+use remainder::layouter::layouting::{CircuitLocation, CircuitMap, InputNodeMap, LayerMap};
 use remainder::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
 use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::{Context, NodeId};
@@ -149,7 +149,10 @@ impl<
         input_layer_to_node_map: InputNodeMap,
         data_input_layers: Vec<HyraxInputLayerData<C>>,
         transcript_writer: &mut impl ECProverTranscript<C>,
-    ) -> HyraxInstantiatedCircuit<C> {
+    ) -> (
+        HyraxInstantiatedCircuit<C>,
+        LayerMap<C::Scalar>,
+    ) {
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
             fiat_shamir_challenges: fiat_shamir_challenge_descriptions,
@@ -171,7 +174,7 @@ impl<
 
         // Forward pass to get the map of circuit MLEs whose data is expected to be "compiled"
         // for future layers.
-        let mut mle_claim_map = HashMap::<LayerId, HashSet<&CircuitMle<C::Scalar>>>::new();
+        let mut mle_claim_map = HashMap::<LayerId, HashSet<&MleDescription<C::Scalar>>>::new();
         intermediate_layer_descriptions
             .iter()
             .for_each(|intermediate_layer| {
@@ -217,7 +220,7 @@ impl<
             .iter()
             .for_each(|input_layer_description| {
                 let input_layer_id = input_layer_description.layer_id();
-                let input_node_id = input_layer_to_node_map.get_node_id(&input_layer_id).unwrap();
+                let input_node_id = input_layer_to_node_map.get_node_id(input_layer_id).unwrap();
                 let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
                 let input_mles = corresponding_input_data
                     .data
@@ -235,7 +238,7 @@ impl<
                 });
 
                 match input_layer_description {
-                    CircuitInputLayerEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
+                    InputLayerDescriptionEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
                         let (hyrax_commit, hyrax_prover_input_layer) = if let Some(HyraxProverCommitmentEnum::HyraxCommitment((hyrax_precommit, hyrax_blinding_factors))) = &corresponding_input_data.precommit {
                             let dtype = &corresponding_input_data.input_data_type;
                             let hyrax_input_layer = HyraxInputLayer::new_with_hyrax_commitment(
@@ -261,7 +264,7 @@ impl<
                         prover_input_layers.push(HyraxInputLayerEnum::HyraxInputLayer(hyrax_prover_input_layer));
 
                     }
-                    CircuitInputLayerEnum::PublicInputLayer(circuit_public_input_layer) => {
+                    InputLayerDescriptionEnum::PublicInputLayer(circuit_public_input_layer) => {
                         assert!(corresponding_input_data.precommit.is_none(), "public input layers should not have precommits");
                         let mut prover_public_input_layer = circuit_public_input_layer.convert_into_prover_input_layer(combined_mle, &None);
                         let public_commit_timer = start_timer!(|| format!("committing to public input layer, {:?}", prover_public_input_layer.layer_id()));
@@ -275,7 +278,7 @@ impl<
                         }
                         prover_input_layers.push(HyraxInputLayerEnum::from_input_layer_enum(prover_public_input_layer));
                     },
-                    CircuitInputLayerEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
+                    InputLayerDescriptionEnum::LigeroInputLayer(_circuit_ligero_input_layer) => {
                         panic!("Hyrax proof system does not support ligero input layers because the PCS implementation is not zero knowledge")
                     },
                 }
@@ -340,9 +343,10 @@ impl<
             layers: prover_intermediate_layers,
             output_layers: prover_output_layers,
         };
+        let layer_map = circuit_map.convert_to_layer_map();
         end_timer!(hyrax_populate_circuit_timer);
 
-        hyrax_circuit
+        (hyrax_circuit, layer_map)
     }
 
     pub fn prove_gkr_circuit(
@@ -355,14 +359,14 @@ impl<
     ) {
         let ((circuit_description, input_layer_to_node_map), input_data) =
             Self::generate_circuit_description(witness_function);
-        let mut instantiated_circuit = self.populate_hyrax_circuit(
+        let (mut instantiated_circuit, mut layer_map) = self.populate_hyrax_circuit(
             &circuit_description,
             input_layer_to_node_map,
             input_data,
             transcript_writer,
         );
         let prove_timer = start_timer!(|| "prove hyrax circuit");
-        let proof = self.prove(&mut instantiated_circuit, transcript_writer);
+        let proof = self.prove(&mut instantiated_circuit, &mut layer_map, transcript_writer);
         end_timer!(prove_timer);
         (circuit_description, proof)
     }
@@ -378,6 +382,7 @@ impl<
     pub fn prove(
         &mut self,
         instantiated_circuit: &mut HyraxInstantiatedCircuit<C>,
+        layer_map: &mut LayerMap<C::Scalar>,
         transcript: &mut impl ECProverTranscript<C>,
     ) -> HyraxProof<C> {
         let committer = self.committer;
@@ -416,10 +421,11 @@ impl<
             .rev()
             .map(|layer| {
                 let claims = claim_tracker.get(&layer.layer_id()).unwrap().clone();
-
+                let output_mles_from_layer = layer_map.get(&layer.layer_id()).unwrap();
                 let (layer_proof, claims_from_layer) = HyraxLayerProof::prove(
                     layer,
                     &claims,
+                    output_mles_from_layer,
                     committer,
                     &mut blinding_rng,
                     transcript,

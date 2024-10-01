@@ -11,12 +11,12 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
     layer::LayerId,
-    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
+    mle::{dense::DenseMle, evals::MultilinearExtension},
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CircuitInputLayer,
-    CommitmentEnum, InputLayer, InputLayerError,
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CommitmentEnum, InputLayer,
+    InputLayerDescription, InputLayerError,
 };
 use crate::mle::Mle;
 
@@ -32,14 +32,14 @@ pub struct PublicInputLayer<F: Field> {
 #[serde(bound = "F: Field")]
 /// The circuit description of a [PublicInputLayer] which stores
 /// the shape information of this input layer.
-pub struct CircuitPublicInputLayer<F: Field> {
+pub struct PublicInputLayerDescription<F: Field> {
     layer_id: LayerId,
     num_bits: usize,
     _marker: PhantomData<F>,
 }
 
-impl<F: Field> CircuitPublicInputLayer<F> {
-    /// Constructor for the [CircuitPublicInputLayer] using the layer_id
+impl<F: Field> PublicInputLayerDescription<F> {
+    /// Constructor for the [PublicInputLayerDescription] using the layer_id
     /// and the number of variables in the MLE we are storing in the
     /// input layer.
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
@@ -104,7 +104,7 @@ impl<F: Field> PublicInputLayer<F> {
     }
 }
 
-impl<F: Field> CircuitInputLayer<F> for CircuitPublicInputLayer<F> {
+impl<F: Field> InputLayerDescription<F> for PublicInputLayerDescription<F> {
     type Commitment = Vec<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -131,7 +131,7 @@ impl<F: Field> CircuitInputLayer<F> for CircuitPublicInputLayer<F> {
         let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), self.layer_id());
         mle_ref.index_mle_indices(0);
 
-        let eval = if mle_ref.num_iterated_vars() != 0 {
+        let eval = if mle_ref.num_free_vars() != 0 {
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
@@ -139,7 +139,7 @@ impl<F: Field> CircuitInputLayer<F> for CircuitPublicInputLayer<F> {
             debug_assert_eq!(mle_ref.bookkeeping_table().len(), 1);
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
-            Claim::new(vec![], mle_ref.current_mle[0])
+            Claim::new(vec![], mle_ref.mle[0])
         };
 
         if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {
@@ -170,7 +170,7 @@ impl<F: Field> YieldWLXEvals<F> for PublicInputLayer<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        claimed_mles: Vec<MleEnum<F>>,
+        claimed_mles: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
@@ -201,15 +201,15 @@ mod tests {
         let layer_id = LayerId::Input(0);
 
         // MLE on 2 variables.
-        let evals = [1, 2, 3, 4].into_iter().map(|i| Fr::from(i)).collect();
+        let evals = [1, 2, 3, 4].into_iter().map(Fr::from).collect();
         let dense_mle = DenseMle::new_from_raw(evals, layer_id);
 
         let claim_point = vec![Fr::ONE, Fr::ZERO];
         let claim_result = Fr::from(2);
         let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
         let verifier_public_input_layer =
-            CircuitPublicInputLayer::new(layer_id, dense_mle.num_iterated_vars());
-        let mut public_input_layer = PublicInputLayer::new(dense_mle.original_mle, layer_id);
+            PublicInputLayerDescription::new(layer_id, dense_mle.num_free_vars());
+        let mut public_input_layer = PublicInputLayer::new(dense_mle.mle, layer_id);
 
         // Transcript writer with test sponge that always returns `1`.
         let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =

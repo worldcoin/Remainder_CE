@@ -50,7 +50,7 @@ fn test_hyrax_worldcoin_public_input_layer<
 
     let witness_function = build_hyrax_circuit_public_input_layer(data);
 
-    let (input_commits, mut circuit_description, hyrax_proof) =
+    let (mut circuit_description, hyrax_proof) =
         hyrax_prover.prove_gkr_circuit(witness_function, &mut prover_transcript);
 
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
@@ -59,7 +59,6 @@ fn test_hyrax_worldcoin_public_input_layer<
     hyrax_prover.verify_gkr_circuit(
         &hyrax_proof,
         &mut circuit_description,
-        &input_commits,
         &mut verifier_transcript,
     );
 }
@@ -96,7 +95,7 @@ fn test_hyrax_worldcoin_hyrax_input_layer<
 
     let witness_function = build_hyrax_circuit_hyrax_input_layer(data, None);
 
-    let (input_commits, mut circuit_description, hyrax_proof) =
+    let (mut circuit_description, hyrax_proof) =
         hyrax_prover.prove_gkr_circuit(witness_function, &mut prover_transcript);
 
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
@@ -105,7 +104,6 @@ fn test_hyrax_worldcoin_hyrax_input_layer<
     hyrax_prover.verify_gkr_circuit(
         &hyrax_proof,
         &mut circuit_description,
-        &input_commits,
         &mut verifier_transcript,
     );
 }

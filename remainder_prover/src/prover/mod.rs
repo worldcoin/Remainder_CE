@@ -12,18 +12,20 @@ pub mod layers;
 use self::layers::Layers;
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::input_layer::enum_input_layer::{
-    CircuitInputLayerEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
+    InputLayerDescriptionEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
 };
-use crate::input_layer::fiat_shamir_challenge::{CircuitFiatShamirChallenge, FiatShamirChallenge};
-use crate::input_layer::CircuitInputLayer;
-use crate::layer::layer_enum::{CircuitLayerEnum, VerifierLayerEnum};
-use crate::layer::CircuitLayer;
+use crate::input_layer::fiat_shamir_challenge::{
+    FiatShamirChallenge, FiatShamirChallengeDescription,
+};
+use crate::input_layer::InputLayerDescription;
+use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
+use crate::layer::LayerDescription;
 use crate::layouter::component::Component;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputNodeMap};
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, Context};
-use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
-use crate::output_layer::CircuitOutputLayer;
+use crate::output_layer::mle_output_layer::{MleOutputLayer, MleOutputLayerDescription};
+use crate::output_layer::OutputLayerDescription;
 use crate::{
     claims::ClaimAggregator,
     input_layer::InputLayerError,
@@ -109,13 +111,13 @@ pub const ENABLE_OPTIMIZATION: bool = true;
 #[derive(Debug)]
 pub struct GKRCircuitDescription<F: Field> {
     /// The circuit descriptions of the input layers.
-    pub input_layers: Vec<CircuitInputLayerEnum<F>>,
+    pub input_layers: Vec<InputLayerDescriptionEnum<F>>,
     /// The circuit descriptions of the verifier challengs
-    pub fiat_shamir_challenges: Vec<CircuitFiatShamirChallenge<F>>,
+    pub fiat_shamir_challenges: Vec<FiatShamirChallengeDescription<F>>,
     /// The circuit descriptions of the intermediate layers.
-    pub intermediate_layers: Vec<CircuitLayerEnum<F>>,
+    pub intermediate_layers: Vec<LayerDescriptionEnum<F>>,
     /// The circuit desriptions of the output layers.
-    pub output_layers: Vec<CircuitMleOutputLayer<F>>,
+    pub output_layers: Vec<MleOutputLayerDescription<F>>,
 }
 
 impl<F: Field> GKRCircuitDescription<F> {
@@ -322,8 +324,8 @@ pub fn generate_circuit_description<F: Field>(
     let mut intermediate_layer_id = LayerId::Layer(0);
     let mut fiat_shamir_challenge_layer_id = LayerId::FiatShamirChallengeLayer(0);
 
-    let mut intermediate_layers = Vec::<CircuitLayerEnum<F>>::new();
-    let mut output_layers = Vec::<CircuitMleOutputLayer<F>>::new();
+    let mut intermediate_layers = Vec::<LayerDescriptionEnum<F>>::new();
+    let mut output_layers = Vec::<MleOutputLayerDescription<F>>::new();
     let mut circuit_description_map = CircuitDescriptionMap::new();
     let mut input_node_to_layer_map = InputNodeMap::new();
 
@@ -337,7 +339,7 @@ pub fn generate_circuit_description<F: Field>(
                 )
                 .unwrap();
             input_node_to_layer_map
-                .add_node_layer_id(&input_circuit_description.layer_id(), &input_node.id());
+                .add_node_layer_id(input_circuit_description.layer_id(), input_node.id());
             input_circuit_description
         })
         .collect_vec();

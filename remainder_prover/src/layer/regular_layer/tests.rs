@@ -7,15 +7,15 @@ use remainder_shared_types::{
 use crate::{
     claims::Claim,
     expression::{
-        circuit_expr::{CircuitExpr, CircuitMle},
+        circuit_expr::{ExprDescription, MleDescription},
         generic_expr::Expression,
         prover_expr::ProverExpr,
     },
-    layer::{CircuitLayer, Layer, LayerId},
+    layer::{Layer, LayerDescription, LayerId},
     mle::{dense::DenseMle, Mle},
 };
 
-use super::{CircuitRegularLayer, RegularLayer};
+use super::{RegularLayer, RegularLayerDescription};
 
 #[test]
 /// E2E test of Proving/Verifying a `RegularLayer`
@@ -30,11 +30,11 @@ fn regular_layer_test_prove_verify_product() {
     let mle_ref_1 = mle_new;
     let mle_ref_2 = mle_2;
 
-    let circuit_mle_1 = CircuitMle::new(LayerId::Input(0), mle_ref_1.mle_indices());
-    let circuit_mle_2 = CircuitMle::new(LayerId::Input(0), mle_ref_2.mle_indices());
+    let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_ref_1.mle_indices());
+    let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_ref_2.mle_indices());
     let mut circuit_expression =
-        Expression::<Fr, CircuitExpr>::products(vec![circuit_mle_1, circuit_mle_2]);
-    circuit_expression.index_mle_indices(0);
+        Expression::<Fr, ExprDescription>::products(vec![circuit_mle_1, circuit_mle_2]);
+    circuit_expression.index_mle_vars(0);
 
     let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_ref_1, mle_ref_2]);
     let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
@@ -50,7 +50,7 @@ fn regular_layer_test_prove_verify_product() {
 
     expression.index_mle_indices(0);
 
-    let verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
+    let verifier_layer = RegularLayerDescription::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
         .verify_rounds(claim, &mut transcript)
@@ -69,11 +69,13 @@ fn regular_layer_test_prove_verify_sum() {
     let mle_ref_1 = mle_new;
     let mle_ref_2 = mle_2;
 
-    let circuit_mle_1 = CircuitMle::new(LayerId::Input(0), mle_ref_1.mle_indices());
-    let circuit_mle_2 = CircuitMle::new(LayerId::Input(0), mle_ref_2.mle_indices());
-    let mut circuit_expression =
-        Expression::<Fr, CircuitExpr>::sum(circuit_mle_1.expression(), circuit_mle_2.expression());
-    circuit_expression.index_mle_indices(0);
+    let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_ref_1.mle_indices());
+    let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_ref_2.mle_indices());
+    let mut circuit_expression = Expression::<Fr, ExprDescription>::sum(
+        circuit_mle_1.expression(),
+        circuit_mle_2.expression(),
+    );
+    circuit_expression.index_mle_vars(0);
 
     let lhs = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
     let rhs = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
@@ -94,7 +96,7 @@ fn regular_layer_test_prove_verify_sum() {
 
     expression.index_mle_indices(0);
     dbg!(&circuit_expression);
-    let verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
+    let verifier_layer = RegularLayerDescription::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
         .verify_rounds(claim, &mut transcript)
@@ -113,17 +115,17 @@ fn regular_layer_test_prove_verify_selector() {
     let mle_ref_1 = mle_new;
     let mle_ref_2 = mle_2;
 
-    let circuit_mle_1 = CircuitMle::new(LayerId::Input(0), mle_ref_1.mle_indices());
-    let circuit_mle_2 = CircuitMle::new(LayerId::Input(0), mle_ref_2.mle_indices());
-    let mut circuit_expression = Expression::<Fr, CircuitExpr>::selectors(vec![
+    let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_ref_1.mle_indices());
+    let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_ref_2.mle_indices());
+    let mut circuit_expression = Expression::<Fr, ExprDescription>::selectors(vec![
         circuit_mle_1.expression(),
         circuit_mle_2.expression(),
     ]);
-    circuit_expression.index_mle_indices(0);
+    circuit_expression.index_mle_vars(0);
 
     let lhs = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
     let rhs = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
-    let mut expression = rhs.concat_expr(lhs);
+    let mut expression = lhs.select(rhs);
     // let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
     dbg!(&expression);
     let claim = Claim::<Fr>::new(vec![Fr::from(4), Fr::from(2), Fr::from(3)], Fr::from(33));
@@ -140,7 +142,7 @@ fn regular_layer_test_prove_verify_selector() {
 
     expression.index_mle_indices(0);
 
-    let verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
+    let verifier_layer = RegularLayerDescription::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
         .verify_rounds(claim, &mut transcript)
@@ -161,18 +163,21 @@ fn regular_layer_test_prove_verify_complex() {
     let leaf_mle_1 = Expression::<Fr, ProverExpr>::mle(mle_1.clone());
     let leaf_mle_2 = Expression::<Fr, ProverExpr>::mle(mle_2.clone());
 
-    let circuit_mle_1 = CircuitMle::new(LayerId::Input(0), mle_1.mle_indices());
-    let circuit_mle_2 = CircuitMle::new(LayerId::Input(0), mle_2.mle_indices());
-    let mut circuit_expression = Expression::<Fr, CircuitExpr>::selectors(vec![
-        Expression::<Fr, CircuitExpr>::products(vec![circuit_mle_1.clone(), circuit_mle_2.clone()]),
+    let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_1.mle_indices());
+    let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_2.mle_indices());
+    let mut circuit_expression = Expression::<Fr, ExprDescription>::selectors(vec![
+        Expression::<Fr, ExprDescription>::products(vec![
+            circuit_mle_1.clone(),
+            circuit_mle_2.clone(),
+        ]),
         circuit_mle_2.expression() + circuit_mle_1.expression(),
     ]);
-    circuit_expression.index_mle_indices(0);
+    circuit_expression.index_mle_vars(0);
     let sum = Expression::<Fr, ProverExpr>::sum(leaf_mle_2, leaf_mle_1);
 
     let prod = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_2.clone()]);
 
-    let mut root = sum.concat_expr(prod);
+    let mut root = prod.select(sum);
     dbg!(&root);
 
     let claim = Claim::<Fr>::new(vec![Fr::from(4), Fr::from(2), Fr::from(3)], Fr::from(37));
@@ -189,7 +194,7 @@ fn regular_layer_test_prove_verify_complex() {
 
     root.index_mle_indices(0);
     dbg!(&circuit_expression);
-    let verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
+    let verifier_layer = RegularLayerDescription::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
         .verify_rounds(claim, &mut transcript)

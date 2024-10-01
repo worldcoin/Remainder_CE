@@ -18,8 +18,8 @@ use thiserror::Error;
 /// The errors which can be encountered when constructing an input layer.
 pub enum FiatShamirChallengeError {
     /// The point of the claim is too short.
-    #[error("The evaluation point of the claim is too short")]
-    InsufficientBinding,
+    #[error("Claim binds {0} variables, but MLE has only {1} variables")]
+    NumVarsMismatch(usize, usize),
     /// The [FiatShamirChallenge] evaluation does not equal the claimed value.
     #[error("Evaluation of MLE does not match the claimed value")]
     EvaluationMismatch,
@@ -39,7 +39,7 @@ pub struct FiatShamirChallenge<F: Field> {
 /// Verifier's description of a [FiatShamirChallenge].
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: Field")]
-pub struct CircuitFiatShamirChallenge<F: Field> {
+pub struct FiatShamirChallengeDescription<F: Field> {
     /// The layer ID.
     layer_id: LayerId,
 
@@ -49,7 +49,7 @@ pub struct CircuitFiatShamirChallenge<F: Field> {
     _marker: PhantomData<F>,
 }
 
-impl<F: Field> CircuitFiatShamirChallenge<F> {
+impl<F: Field> FiatShamirChallengeDescription<F> {
     /// Constructor for the [CircuitFiatShamirChallenge] using the
     /// number of bits that are in the MLE of the layer.
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
@@ -83,20 +83,27 @@ impl<F: Field> FiatShamirChallenge<F> {
     /// the claimed value in `claim`.
     pub fn verify(&self, claim: &Claim<F>) -> Result<(), FiatShamirChallengeError> {
         let mle_evals = self.mle.get_evals_vector().clone();
-        let mut mle_ref = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
-        mle_ref.index_mle_indices(0);
+        let mut mle = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
+        mle.index_mle_indices(0);
 
-        let eval = if mle_ref.num_iterated_vars() != 0 {
+        if mle.num_free_vars() != claim.get_point().len() {
+            return Err(FiatShamirChallengeError::NumVarsMismatch(
+                claim.get_point().len(),
+                mle.num_free_vars(),
+            ));
+        }
+
+        let eval = if mle.num_free_vars() != 0 {
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
-                eval = mle_ref.fix_variable(curr_bit, chal);
+                eval = mle.fix_variable(curr_bit, chal);
             }
-            eval.ok_or(FiatShamirChallengeError::InsufficientBinding)?
+            eval.unwrap()
         } else {
-            Claim::new(vec![], mle_ref.current_mle[0])
+            Claim::new(vec![], mle.mle[0])
         };
 
-        // This would be an internal error and should never happen.
+        // This is an internal error as it should never happen.
         assert_eq!(eval.get_point(), claim.get_point());
 
         // Check if the evaluation of the MLE matches the claimed value.
@@ -108,7 +115,7 @@ impl<F: Field> FiatShamirChallenge<F> {
     }
 }
 
-impl<F: Field> CircuitFiatShamirChallenge<F> {
+impl<F: Field> FiatShamirChallengeDescription<F> {
     /// Return the layer id.
     pub fn layer_id(&self) -> LayerId {
         self.layer_id
@@ -154,7 +161,7 @@ mod tests {
         let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
         let mle = MultilinearExtension::new(mle_vec);
 
-        let fs_desc = CircuitFiatShamirChallenge::<Fr>::new(layer_id, mle.num_vars());
+        let fs_desc = FiatShamirChallengeDescription::<Fr>::new(layer_id, mle.num_vars());
         // Nothing really to test for FiatShamirChallenge
         let _fiat_shamir_challenge = FiatShamirChallenge::new(mle, layer_id);
 

@@ -8,14 +8,13 @@ use crate::{
 };
 use itertools::Itertools;
 use rand::Rng;
-use remainder::claims::wlx_eval::claim_group::ClaimGroup;
 use remainder::layer::combine_mle_refs::get_og_mle_refs;
 use remainder::layer::product::{new_with_values, Product};
 use remainder::layer::product::{Intermediate, PostSumcheckLayer};
 use remainder::layer::Layer;
 use remainder::layer::LayerId;
-use remainder::mle::mle_enum::MleEnum;
-use remainder::{claims::wlx_eval::ClaimMle, layer::CircuitLayer};
+use remainder::{claims::wlx_eval::claim_group::ClaimGroup, mle::dense::DenseMle};
+use remainder::{claims::wlx_eval::ClaimMle, layer::LayerDescription};
 use remainder::{claims::wlx_eval::YieldWLXEvals, layer::layer_enum::LayerEnum};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
@@ -84,6 +83,8 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         layer: &mut LayerEnum<C::Scalar>,
         // The claims on that layer (unaggregated)
         claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],
+        // The output MLEs from this layer, whose bookkeeping tables combined make the layerwise bookkeeping table.
+        output_mles_from_layer: &[DenseMle<C::Scalar>],
         committer: &PedersenCommitter<C>,
         mut blinding_rng: &mut impl Rng,
         transcript: &mut impl ECProverTranscript<C>,
@@ -105,7 +106,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
                 .get_wlx_evaluations(
                     claim_group.get_claim_points_matrix(),
                     claim_group.get_results(),
-                    get_og_mle_refs(claim_group.get_claim_mle_refs()),
+                    get_og_mle_refs(output_mles_from_layer),
                     claim_group.get_num_claims(),
                     claim_group.get_num_vars(),
                 )
@@ -228,7 +229,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
     pub fn verify(
         proof: &HyraxLayerProof<C>,
         // a description of the layer being proven
-        layer_desc: &impl CircuitLayer<C::Scalar>,
+        layer_desc: &impl LayerDescription<C::Scalar>,
         // commitments to the unaggregated claims
         claim_commitments: &[HyraxClaim<C::Scalar, C>],
         committer: &PedersenCommitter<C>,
@@ -369,12 +370,10 @@ pub fn committed_scalar_psl_as_commitments<C: PrimeOrderCurve>(
                             layer_id,
                             point,
                             value,
-                            mle_enum: _,
                         } => Intermediate::Atom {
                             layer_id: *layer_id,
                             point: point.clone(),
                             value: value.commitment,
-                            mle_enum: Box::new(None),
                         },
                         Intermediate::Composite { value } => Intermediate::Composite {
                             value: value.commitment,
@@ -414,10 +413,8 @@ pub fn get_claims_from_product<F: Field, T: Clone>(
                 layer_id,
                 point,
                 value,
-                mle_enum,
             } => Some(HyraxClaim {
                 to_layer_id: *layer_id,
-                mle_enum: *mle_enum.clone(),
                 point: point.clone(),
                 evaluation: value.clone(),
             }),
@@ -432,7 +429,6 @@ impl<C: PrimeOrderCurve> HyraxClaim<C::Scalar, CommittedScalar<C>> {
     pub fn to_claim(&self) -> ClaimMle<C::Scalar> {
         let mut claim = ClaimMle::new_raw(self.point.clone(), self.evaluation.value);
         claim.to_layer_id = Some(self.to_layer_id);
-        claim.mle_ref.clone_from(&self.mle_enum);
         claim
     }
 
@@ -441,7 +437,6 @@ impl<C: PrimeOrderCurve> HyraxClaim<C::Scalar, CommittedScalar<C>> {
         HyraxClaim {
             point: self.point.clone(),
             to_layer_id: self.to_layer_id,
-            mle_enum: self.mle_enum.clone(),
             evaluation: self.evaluation.commitment,
         }
     }
@@ -459,8 +454,6 @@ pub struct HyraxClaim<F: Field, T> {
     pub to_layer_id: LayerId,
     /// The evaluation point
     pub point: Vec<F>,
-    /// The original mle_enum (or None)
-    pub mle_enum: Option<MleEnum<F>>,
     /// The value of the claim
     pub evaluation: T,
 }
@@ -495,12 +488,10 @@ fn commit_to_product<C: PrimeOrderCurve>(
                 layer_id,
                 point,
                 value,
-                mle_enum,
             } => Intermediate::Atom {
                 layer_id: *layer_id,
                 point: point.clone(),
                 value: committer.committed_scalar(value, &C::Scalar::random(&mut blinding_rng)),
-                mle_enum: mle_enum.clone(),
             },
             Intermediate::Composite { value } => Intermediate::Composite {
                 value: committer.committed_scalar(value, &C::Scalar::random(&mut blinding_rng)),

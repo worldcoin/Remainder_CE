@@ -197,11 +197,6 @@ fn add_bits_to_layer_refs<F: Field>(
                             .chain(mle_ref.mle_indices.iter())
                             .cloned()
                             .collect();
-                        mle_ref.original_mle_indices = new_bits
-                            .iter()
-                            .chain(mle_ref.original_mle_indices.iter())
-                            .cloned()
-                            .collect();
                     }
                     Ok(())
                 }
@@ -213,11 +208,6 @@ fn add_bits_to_layer_refs<F: Field>(
                             mle_ref.mle_indices = new_bits
                                 .iter()
                                 .chain(mle_ref.mle_indices.iter())
-                                .cloned()
-                                .collect();
-                            mle_ref.original_mle_indices = new_bits
-                                .iter()
-                                .chain(mle_ref.original_mle_indices.iter())
                                 .cloned()
                                 .collect();
                         }
@@ -243,23 +233,13 @@ fn add_bits_to_layer_refs<F: Field>(
                         .chain(mle.mle_indices.iter())
                         .cloned()
                         .collect();
-                    mle.original_mle_indices = new_bits
-                        .iter()
-                        .chain(mle.original_mle_indices.iter())
-                        .cloned()
-                        .collect();
                 }
             }
             MleEnum::Zero(mle) => {
-                if mle.get_layer_id() == effected_layer {
+                if mle.layer_id() == effected_layer {
                     mle.mle_indices = new_bits
                         .iter()
                         .chain(mle.mle_indices.iter())
-                        .cloned()
-                        .collect();
-                    mle.original_mle_indices = new_bits
-                        .iter()
-                        .chain(mle.original_mle_indices.iter())
                         .cloned()
                         .collect();
                 }
@@ -308,9 +288,9 @@ fn combine_expressions<F: Field>(
         let first = add_padding(first, diff);
 
         let expr = if first_index < second_index {
-            second.concat_expr(first)
+            first.select(second)
         } else {
-            first.concat_expr(second)
+            second.select(first)
         };
         exprs.insert(0, (min(first_index, second_index), expr));
     }
@@ -324,7 +304,7 @@ fn add_padding<F: Field>(
     num_padding: usize,
 ) -> Expression<F, ProverExpr> {
     for _ in 0..num_padding {
-        expr = Expression::<F, ProverExpr>::constant(F::ZERO).concat_expr(expr);
+        expr = expr.select(Expression::<F, ProverExpr>::constant(F::ZERO))
     }
     expr
 }

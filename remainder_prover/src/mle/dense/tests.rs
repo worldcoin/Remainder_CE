@@ -170,8 +170,8 @@ fn fix_variable_twovars() {
     let mle_vec_exp = vec![Fr::from(2), Fr::from(3)];
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 }
 #[test]
@@ -195,8 +195,8 @@ fn fix_variable_threevars() {
     let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 }
 
@@ -222,8 +222,8 @@ fn fix_variable_nested() {
     let mle_vec_exp = vec![Fr::from(6), Fr::from(11)];
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 }
 
@@ -251,8 +251,8 @@ fn fix_variable_full() {
     let mle_vec_exp = vec![Fr::from(26)];
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 }
 
@@ -273,8 +273,8 @@ fn smart_fix_variable_two_vars_forward() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 2nd variable to 1.
@@ -284,8 +284,8 @@ fn smart_fix_variable_two_vars_forward() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 }
 
@@ -303,8 +303,8 @@ fn smart_fix_variable_two_vars_backwards() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 1st variable to 1.
@@ -314,8 +314,8 @@ fn smart_fix_variable_two_vars_backwards() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 }
 
@@ -343,8 +343,8 @@ fn smart_fix_variable_three_vars_123() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 2nd variable to 4.
@@ -354,8 +354,8 @@ fn smart_fix_variable_three_vars_123() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 3rd variable to 5.
@@ -365,8 +365,8 @@ fn smart_fix_variable_three_vars_123() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 }
 
@@ -394,8 +394,8 @@ fn smart_fix_variable_three_vars_132() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 3rd variable to 5.
@@ -405,8 +405,8 @@ fn smart_fix_variable_three_vars_132() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 2nd variable to 4.
@@ -416,8 +416,8 @@ fn smart_fix_variable_three_vars_132() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 }
 
@@ -445,8 +445,8 @@ fn smart_fix_variable_three_vars_213() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 1st variable to 3.
@@ -456,8 +456,8 @@ fn smart_fix_variable_three_vars_213() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 3rd variable to 5.
@@ -467,8 +467,8 @@ fn smart_fix_variable_three_vars_213() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 }
 
@@ -496,8 +496,8 @@ fn smart_fix_variable_three_vars_231() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 3rd variable to 5.
@@ -507,8 +507,8 @@ fn smart_fix_variable_three_vars_231() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 1st variable to 3.
@@ -518,8 +518,8 @@ fn smart_fix_variable_three_vars_231() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 }
 
@@ -547,8 +547,8 @@ fn smart_fix_variable_three_vars_312() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 1st variable to 3.
@@ -558,8 +558,8 @@ fn smart_fix_variable_three_vars_312() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 2nd variable to 4.
@@ -569,8 +569,8 @@ fn smart_fix_variable_three_vars_312() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 }
 #[test]
@@ -598,8 +598,8 @@ fn smart_fix_variable_three_vars_321() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 2nd variable to 4.
@@ -609,8 +609,8 @@ fn smart_fix_variable_three_vars_321() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 
     // Fix 1st variable to 3.
@@ -620,8 +620,8 @@ fn smart_fix_variable_three_vars_321() {
     let mle_exp: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0));
 
     assert_eq!(
-        *mle_ref.current_mle.get_evals_vector(),
-        *mle_exp.current_mle.get_evals_vector()
+        *mle_ref.mle.get_evals_vector(),
+        *mle_exp.mle.get_evals_vector()
     );
 }
 
@@ -647,9 +647,9 @@ fn create_dense_mle_from_vec() {
 
     let mle_new: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
 
-    assert!(*mle_iter.current_mle.get_evals_vector() == *mle_new.current_mle.get_evals_vector());
+    assert!(*mle_iter.mle.get_evals_vector() == *mle_new.mle.get_evals_vector());
     assert!(
-        mle_iter.num_iterated_vars() == 3 && mle_new.num_iterated_vars() == 3,
+        mle_iter.num_free_vars() == 3 && mle_new.num_free_vars() == 3,
         "Num vars must be the log_2 of the length of the vector"
     );
 }
@@ -674,7 +674,7 @@ fn create_dense_mle_from_vec() {
 //             .collect_vec()
 //             == [first, second]
 //     );
-//     assert!(tuple2_mle.combile_mle_refs().num_iterated_vars() == 3);
+//     assert!(tuple2_mle.combile_mle_refs().num_free_vars() == 3);
 // }
 
 #[test]
@@ -694,10 +694,8 @@ fn create_dense_mle_ref_from_flat_mle() {
 
     let mle_ref: DenseMle<Fr> = mle;
 
-    assert!(
-        mle_ref.mle_indices == vec![MleIndex::Iterated, MleIndex::Iterated, MleIndex::Iterated]
-    );
-    assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_vec);
+    assert!(mle_ref.mle_indices == vec![MleIndex::Free, MleIndex::Free, MleIndex::Free]);
+    assert_eq!(*mle_ref.mle.get_evals_vector(), mle_vec);
 }
 
 // TODO! move this test, should be layouter's job to include prefix bits
@@ -721,16 +719,16 @@ fn create_dense_mle_ref_from_flat_mle() {
 //         first.mle_indices
 //             == vec![
 //                 MleIndex::Fixed(false),
-//                 MleIndex::Iterated,
-//                 MleIndex::Iterated
+//                 MleIndex::Free,
+//                 MleIndex::Free
 //             ]
 //     );
 //     assert!(
 //         second.mle_indices
 //             == vec![
 //                 MleIndex::Fixed(true),
-//                 MleIndex::Iterated,
-//                 MleIndex::Iterated
+//                 MleIndex::Free,
+//                 MleIndex::Free
 //             ]
 //     );
 

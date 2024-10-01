@@ -13,7 +13,7 @@
 //!   and additionally add in prover-claimed values for each of the MLEs at the
 //!   leaves of Expr(x_1, ..., x_n) to check the above. The [VerifierExpr] allows
 //!   the verifier to do exactly this, as the conversion from a
-//!   [super::circuit_expr::CircuitExpr] to a [VerifierExpr] involves exactly the
+//!   [super::circuit_expr::ExprDescription] to a [VerifierExpr] involves exactly the
 //!   process of "binding" the sumcheck challenges and "populating" each leaf
 //!   MLE with the prover-claimed value for the evaluation of that MLE at the
 //!   bound sumcheck challenge points.
@@ -289,7 +289,7 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
                         .into_iter()
                         .for_each(|(mle_index, count)| {
                             if count > 1 {
-                                if let MleIndex::IndexedBit(i) = mle_index {
+                                if let MleIndex::Indexed(i) = mle_index {
                                     product_nonlinear_indices.insert(i);
                                 }
                             }

@@ -81,7 +81,7 @@ impl<F: Field, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
             .map(|mle| {
                 // this part needs changes
                 let mle: MultilinearExtension<F> = MultilinearExtension::new_from_evals(
-                    Evaluations::<F>::new(mle.num_iterated_vars(), mle.get_padded_evaluations()),
+                    Evaluations::<F>::new(mle.num_free_vars(), mle.get_padded_evaluations()),
                 );
                 let input_shred = InputShred::new(ctx, mle.num_vars(), source);
                 dbg!(&mle.num_vars());

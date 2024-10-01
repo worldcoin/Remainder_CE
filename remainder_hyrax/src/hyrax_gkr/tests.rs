@@ -10,14 +10,14 @@ use itertools::{repeat_n, Itertools};
 use rand::rngs::ThreadRng;
 use rand::RngCore;
 use remainder::expression::abstract_expr::ExprBuilder;
-use remainder::expression::circuit_expr::{CircuitExpr, CircuitMle};
+use remainder::expression::circuit_expr::{ExprDescription, MleDescription};
 use remainder::expression::generic_expr::Expression;
 use remainder::expression::prover_expr::ProverExpr;
-use remainder::layer::identity_gate::{CircuitIdentityGateLayer, IdentityGate};
-use remainder::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
-use remainder::layer::matmult::{CircuitMatMultLayer, CircuitMatrix, MatMult, Matrix};
-use remainder::layer::regular_layer::{CircuitRegularLayer, RegularLayer};
-use remainder::layer::{CircuitLayer, LayerId};
+use remainder::layer::identity_gate::{IdentityGate, IdentityGateLayerDescription};
+use remainder::layer::layer_enum::{LayerDescriptionEnum, LayerEnum};
+use remainder::layer::matmult::{MatMult, MatMultLayerDescription, Matrix, MatrixDescription};
+use remainder::layer::regular_layer::{RegularLayer, RegularLayerDescription};
+use remainder::layer::{LayerDescription, LayerId};
 use remainder::layouter::component::ComponentSet;
 use remainder::layouter::nodes::circuit_inputs::{
     InputLayerNode, InputLayerType, InputShred, InputShredData,
@@ -30,7 +30,6 @@ use remainder::layouter::nodes::sector::Sector;
 use remainder::layouter::nodes::{CircuitNode, Context};
 use remainder::mle::dense::DenseMle;
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
-use remainder::mle::mle_enum::MleEnum;
 use remainder::mle::{Mle, MleIndex};
 use remainder_shared_types::transcript::ec_transcript::{
     ECProverTranscript, ECTranscriptReader, ECTranscriptWriter, ECVerifierTranscript,
@@ -89,12 +88,12 @@ fn degree_one_regular_hyrax_layer_test() {
         LayerId::Input(0),
     );
     let expression = mle_1.expression();
-    let circuit_mle_1 = CircuitMle::new(
+    let circuit_mle_1 = MleDescription::new(
         LayerId::Input(0),
-        &repeat_n(MleIndex::Iterated, NUM_VARS).collect_vec(),
+        &repeat_n(MleIndex::Free, NUM_VARS).collect_vec(),
     );
     let circuit_expr = circuit_mle_1.expression();
-    let mut circuit_layer_enum = CircuitLayerEnum::Regular(CircuitRegularLayer::new_raw(
+    let mut circuit_layer_enum = LayerDescriptionEnum::Regular(RegularLayerDescription::new_raw(
         LayerId::Layer(0),
         circuit_expr,
     ));
@@ -129,17 +128,17 @@ fn degree_one_regular_hyrax_layer_test() {
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Input(0),
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(mle_producing_claim.clone())),
         evaluation: commitment_to_eval,
     }];
 
     // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = circuit_layer_enum;
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
 
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
+        &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -180,20 +179,18 @@ fn identity_gate_hyrax_layer_test() {
         vec![Fr::one(), Fr::from(2_u64), Fr::one(), Fr::from(3_u64)],
         LayerId::Layer(0),
     );
-    let circuit_mle_1 = CircuitMle::new(
+    let circuit_mle_1 = MleDescription::new(
         LayerId::Layer(0),
-        &repeat_n(MleIndex::Iterated, NUM_VARS_MLE).collect_vec(),
+        &repeat_n(MleIndex::Free, NUM_VARS_MLE).collect_vec(),
     );
 
     // The wirings
     let nonzero_gates = vec![(0, 1), (1, 3)];
 
     // Construct the layer from the underlying MLE and the wirings
-    let mut circuit_layer_enum = CircuitLayerEnum::IdentityGate(CircuitIdentityGateLayer::new(
-        LayerId::Layer(0),
-        nonzero_gates.clone(),
-        circuit_mle_1,
-    ));
+    let mut circuit_layer_enum = LayerDescriptionEnum::IdentityGate(
+        IdentityGateLayerDescription::new(LayerId::Layer(0), nonzero_gates.clone(), circuit_mle_1),
+    );
     circuit_layer_enum.index_mle_indices(0);
     let identity_layer: IdentityGate<Scalar> =
         IdentityGate::new(LayerId::Layer(0), nonzero_gates, mle_1);
@@ -216,17 +213,17 @@ fn identity_gate_hyrax_layer_test() {
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(mle_producing_claim)),
         evaluation: commitment_to_eval,
     }];
 
     // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = circuit_layer_enum;
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
 
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
+        &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -277,17 +274,17 @@ fn matmult_hyrax_layer_test() {
         LayerId::Layer(0),
     );
     let matrix_b = Matrix::new(mle_2, 1, 1);
-    let circuit_mle_1 = CircuitMle::new(
+    let circuit_mle_1 = MleDescription::new(
         LayerId::Layer(0),
-        &repeat_n(MleIndex::Iterated, NUM_VARS_MLE).collect_vec(),
+        &repeat_n(MleIndex::Free, NUM_VARS_MLE).collect_vec(),
     );
-    let circuit_mle_2 = CircuitMle::new(
+    let circuit_mle_2 = MleDescription::new(
         LayerId::Layer(0),
-        &repeat_n(MleIndex::Iterated, NUM_VARS_MLE).collect_vec(),
+        &repeat_n(MleIndex::Free, NUM_VARS_MLE).collect_vec(),
     );
-    let circuit_matrix_a = CircuitMatrix::new(circuit_mle_1, 1, 1);
-    let circuit_matrix_b = CircuitMatrix::new(circuit_mle_2, 1, 1);
-    let mut circuit_layer_enum = CircuitLayerEnum::MatMult(CircuitMatMultLayer::new(
+    let circuit_matrix_a = MatrixDescription::new(circuit_mle_1, 1, 1);
+    let circuit_matrix_b = MatrixDescription::new(circuit_mle_2, 1, 1);
+    let mut circuit_layer_enum = LayerDescriptionEnum::MatMult(MatMultLayerDescription::new(
         LayerId::Layer(0),
         circuit_matrix_a,
         circuit_matrix_b,
@@ -317,17 +314,17 @@ fn matmult_hyrax_layer_test() {
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(mle_producing_claim)),
         evaluation: commitment_to_eval,
     }];
 
     // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = circuit_layer_enum;
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
 
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
+        &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -372,20 +369,21 @@ fn product_of_mles_regular_layer_test() {
         LayerId::Input(0),
     );
     let expression = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_2.clone()]);
-    let circuit_mle_1 = CircuitMle::new(
+    let circuit_mle_1 = MleDescription::new(
         LayerId::Layer(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
-    let circuit_mle_2 = CircuitMle::new(
+    let circuit_mle_2 = MleDescription::new(
         LayerId::Layer(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
-    let circuit_expr = Expression::<Fr, CircuitExpr>::products(vec![circuit_mle_1, circuit_mle_2]);
+    let circuit_expr =
+        Expression::<Fr, ExprDescription>::products(vec![circuit_mle_1, circuit_mle_2]);
 
     // Construct the GKR Layer from the expression
     let layer: RegularLayer<Scalar> = RegularLayer::new_raw(LayerId::Layer(0), expression);
     let mut layer_enum = LayerEnum::Regular(Box::new(layer));
-    let mut circuit_layer_enum = CircuitLayerEnum::Regular(CircuitRegularLayer::new_raw(
+    let mut circuit_layer_enum = LayerDescriptionEnum::Regular(RegularLayerDescription::new_raw(
         LayerId::Layer(0),
         circuit_expr,
     ));
@@ -404,24 +402,24 @@ fn product_of_mles_regular_layer_test() {
         LayerId::Input(0),
     );
     let claim_point = vec![Fr::from(3), Fr::from(5)];
-    let mle_ref = mle_producing_claim;
+    let mle = mle_producing_claim;
     let blinding = Fr::from(blinding_rng.next_u64());
     let commitment_to_eval =
-        committer.committed_scalar(&evaluate_mle(&mle_ref, &claim_point), &blinding);
+        committer.committed_scalar(&evaluate_mle(&mle, &claim_point), &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Input(0),
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(mle_ref.clone())),
         evaluation: commitment_to_eval,
     }];
 
     // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = circuit_layer_enum;
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
 
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
+        &vec![mle],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -467,25 +465,25 @@ fn selector_only_test() {
         vec![Fr::from(2), Fr::from(1), Fr::from(6), Fr::from(4)],
         LayerId::Input(0),
     );
-    let circuit_mle_left = CircuitMle::new(
+    let circuit_mle_left = MleDescription::new(
         LayerId::Input(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
-    let circuit_mle_right = CircuitMle::new(
+    let circuit_mle_right = MleDescription::new(
         LayerId::Input(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
     let circuit_expression_left = circuit_mle_left.expression();
     let circuit_expression_right = circuit_mle_right.expression();
-    let selector_circuit_expression = circuit_expression_right.concat_expr(circuit_expression_left);
+    let selector_circuit_expression = circuit_expression_left.select(circuit_expression_right);
     let expression_left = mle_left.expression();
     let expression_right = mle_right.expression();
-    let selector_expression = expression_right.concat_expr(expression_left);
+    let selector_expression = expression_left.select(expression_right);
 
     // Construct the GKR Layer from the expression
     let layer: RegularLayer<Scalar> = RegularLayer::new_raw(LayerId::Layer(0), selector_expression);
     let mut layer_enum = LayerEnum::Regular(Box::new(layer));
-    let mut circuit_layer_enum = CircuitLayerEnum::Regular(CircuitRegularLayer::new_raw(
+    let mut circuit_layer_enum = LayerDescriptionEnum::Regular(RegularLayerDescription::new_raw(
         LayerId::Layer(0),
         selector_circuit_expression,
     ));
@@ -519,17 +517,17 @@ fn selector_only_test() {
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Input(0),
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(mle_producing_claim.clone())),
         evaluation: commitment_to_eval,
     }];
 
     // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = circuit_layer_enum;
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
 
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
+        &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -578,30 +576,30 @@ fn degree_two_selector_regular_hyrax_layer_test() {
         vec![Fr::from(3), Fr::from(1), Fr::from(5), Fr::from(2)],
         LayerId::Input(0),
     );
-    let circuit_mle_left = CircuitMle::new(
+    let circuit_mle_left = MleDescription::new(
         LayerId::Input(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
-    let circuit_mle_right_1 = CircuitMle::new(
+    let circuit_mle_right_1 = MleDescription::new(
         LayerId::Input(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
-    let circuit_mle_right_2 = CircuitMle::new(
+    let circuit_mle_right_2 = MleDescription::new(
         LayerId::Input(0),
-        &repeat_n(MleIndex::Iterated, 2).collect_vec(),
+        &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
     let expression_left = mle_left.expression();
     let circuit_expression_left = circuit_mle_left.expression();
     let expression_right = Expression::<Fr, ProverExpr>::products(vec![mle_right_1, mle_right_2]);
     let circuit_expression_right =
-        Expression::<Fr, CircuitExpr>::products(vec![circuit_mle_right_1, circuit_mle_right_2]);
-    let selector_expression = expression_right.concat_expr(expression_left);
-    let circuit_selector_expression = circuit_expression_right.concat_expr(circuit_expression_left);
+        Expression::<Fr, ExprDescription>::products(vec![circuit_mle_right_1, circuit_mle_right_2]);
+    let selector_expression = expression_left.select(expression_right);
+    let circuit_selector_expression = circuit_expression_left.select(circuit_expression_right);
 
     // Construct the GKR Layer from the expression
     let layer: RegularLayer<Scalar> = RegularLayer::new_raw(LayerId::Layer(0), selector_expression);
     let mut layer_enum = LayerEnum::Regular(Box::new(layer));
-    let mut circuit_layer_enum = CircuitLayerEnum::Regular(CircuitRegularLayer::new_raw(
+    let mut circuit_layer_enum = LayerDescriptionEnum::Regular(RegularLayerDescription::new_raw(
         LayerId::Layer(0),
         circuit_selector_expression,
     ));
@@ -634,17 +632,17 @@ fn degree_two_selector_regular_hyrax_layer_test() {
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Input(0),
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(mle_producing_claim.clone())),
         evaluation: commitment_to_eval,
     }];
 
     // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = circuit_layer_enum;
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
 
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
+        &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -717,7 +715,6 @@ fn hyrax_input_layer_proof_test() {
     let claim = HyraxClaim {
         to_layer_id: layer_id,
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(input_dense_mle.clone())),
         evaluation: commitment_to_eval,
     };
 
@@ -750,7 +747,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -758,7 +755,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -809,7 +806,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
         )
     };
 
-    let (input_commits, mut circuit_description, proof) =
+    let (mut circuit_description, proof) =
         hyrax_prover.prove_gkr_circuit(&mut circuit_function, &mut prover_transcript);
 
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
@@ -818,7 +815,6 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     hyrax_prover.verify_gkr_circuit(
         &proof,
         &mut circuit_description,
-        &input_commits,
         &mut verifier_transcript,
     );
 }
@@ -828,7 +824,7 @@ fn small_regular_circuit_public_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -836,7 +832,7 @@ fn small_regular_circuit_public_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -887,7 +883,7 @@ fn small_regular_circuit_public_input_layer_test() {
         )
     };
 
-    let (input_commits, mut circuit_description, proof) =
+    let (mut circuit_description, proof) =
         hyrax_prover.prove_gkr_circuit(&mut circuit_function, &mut prover_transcript);
 
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
@@ -896,7 +892,6 @@ fn small_regular_circuit_public_input_layer_test() {
     hyrax_prover.verify_gkr_circuit(
         &proof,
         &mut circuit_description,
-        &input_commits,
         &mut verifier_transcript,
     );
 }
@@ -906,7 +901,7 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -914,7 +909,7 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -947,8 +942,7 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
         let selector_squaring_sector = Sector::new(ctx, &[&&squaring_sector], |mle_vec| {
             assert_eq!(mle_vec.len(), 1);
             let mle = mle_vec[0];
-
-            mle.expr().concat_expr(mle.expr() + mle.expr())
+            (mle.expr() + mle.expr()).select(mle.expr())
         });
 
         // Middle layer 3: subtract middle layer 2 from itself.
@@ -974,7 +968,7 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
         )
     };
 
-    let (input_commits, mut circuit_description, proof) =
+    let (mut circuit_description, proof) =
         hyrax_prover.prove_gkr_circuit(&mut circuit_function, &mut prover_transcript);
 
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
@@ -983,7 +977,6 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
     hyrax_prover.verify_gkr_circuit(
         &proof,
         &mut circuit_description,
-        &input_commits,
         &mut verifier_transcript,
     );
 }
@@ -993,7 +986,7 @@ fn medium_regular_circuit_public_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -1001,7 +994,7 @@ fn medium_regular_circuit_public_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -1034,9 +1027,7 @@ fn medium_regular_circuit_public_input_layer_test() {
         let selector_squaring_sector = Sector::new(ctx, &[&&squaring_sector], |mle_vec| {
             assert_eq!(mle_vec.len(), 1);
             let mle = mle_vec[0];
-
-            mle.expr()
-                .concat_expr(ExprBuilder::products(vec![mle, mle]))
+            ExprBuilder::products(vec![mle, mle]).select(mle.expr())
         });
 
         // Middle layer 3: subtract middle layer 2 from itself.
@@ -1062,7 +1053,7 @@ fn medium_regular_circuit_public_input_layer_test() {
         )
     };
 
-    let (input_commits, mut circuit_description, proof) =
+    let (mut circuit_description, proof) =
         hyrax_prover.prove_gkr_circuit(&mut circuit_function, &mut prover_transcript);
 
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
@@ -1071,7 +1062,6 @@ fn medium_regular_circuit_public_input_layer_test() {
     hyrax_prover.verify_gkr_circuit(
         &proof,
         &mut circuit_description,
-        &input_commits,
         &mut verifier_transcript,
     );
 }
@@ -1081,7 +1071,7 @@ fn matmult_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -1089,7 +1079,7 @@ fn matmult_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -1135,7 +1125,7 @@ fn matmult_hyrax_input_layer_test() {
         )
     };
 
-    let (input_commits, mut circuit_description, proof) =
+    let (mut circuit_description, proof) =
         hyrax_prover.prove_gkr_circuit(&mut circuit_function, &mut prover_transcript);
 
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
@@ -1144,7 +1134,6 @@ fn matmult_hyrax_input_layer_test() {
     hyrax_prover.verify_gkr_circuit(
         &proof,
         &mut circuit_description,
-        &input_commits,
         &mut verifier_transcript,
     );
 }
@@ -1154,7 +1143,7 @@ fn regular_identity_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -1162,7 +1151,7 @@ fn regular_identity_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -1218,7 +1207,7 @@ fn regular_identity_hyrax_input_layer_test() {
         )
     };
 
-    let (input_commits, mut circuit_description, proof) =
+    let (mut circuit_description, proof) =
         hyrax_prover.prove_gkr_circuit(&mut circuit_function, &mut prover_transcript);
 
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
@@ -1227,7 +1216,6 @@ fn regular_identity_hyrax_input_layer_test() {
     hyrax_prover.verify_gkr_circuit(
         &proof,
         &mut circuit_description,
-        &input_commits,
         &mut verifier_transcript,
     );
 }
@@ -1237,7 +1225,7 @@ fn regular_identity_matmult_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -1245,7 +1233,7 @@ fn regular_identity_matmult_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -1310,7 +1298,7 @@ fn regular_identity_matmult_hyrax_input_layer_test() {
         )
     };
 
-    let (input_commits, mut circuit_description, proof) =
+    let (mut circuit_description, proof) =
         hyrax_prover.prove_gkr_circuit(&mut circuit_function, &mut prover_transcript);
 
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
@@ -1319,7 +1307,6 @@ fn regular_identity_matmult_hyrax_input_layer_test() {
     hyrax_prover.verify_gkr_circuit(
         &proof,
         &mut circuit_description,
-        &input_commits,
         &mut verifier_transcript,
     );
 }

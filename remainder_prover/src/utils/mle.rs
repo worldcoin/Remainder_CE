@@ -164,15 +164,15 @@ pub fn get_mle_idx_decomp_for_idx<F: Field>(idx: usize, num_bits: usize) -> Vec<
 }
 
 /// Returns the total MLE indices given a Vec<bool>
-/// for the prefix bits and then the number of iterated
+/// for the prefix bits and then the number of free
 /// bits after.
 pub fn get_total_mle_indices<F: Field>(
     prefix_bits: &[bool],
-    num_iterated_bits: usize,
+    num_free_bits: usize,
 ) -> Vec<MleIndex<F>> {
     prefix_bits
         .iter()
         .map(|bit| MleIndex::Fixed(*bit))
-        .chain(repeat_n(MleIndex::Iterated, num_iterated_bits))
+        .chain(repeat_n(MleIndex::Free, num_free_bits))
         .collect()
 }

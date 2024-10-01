@@ -78,16 +78,16 @@ impl<F: Field> ExpressionType<F> for ProverExpr {
 /// this is what the prover manipulates to prove the correctness of the computation.
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
 impl<F: Field> Expression<F, ProverExpr> {
-    /// See documentation in [super::circuit_expr::CircuitExpr]'s `concat_expr`
+    /// See documentation in [super::circuit_expr::ExprDescription]'s `select()`
     /// function for more details!
-    pub fn concat_expr(mut self, lhs: Expression<F, ProverExpr>) -> Self {
-        let offset = lhs.num_mle_ref();
-        self.increment_mle_vec_indices(offset);
-        let (lhs_node, lhs_mle_vec) = lhs.deconstruct();
-        let (rhs_node, rhs_mle_vec) = self.deconstruct();
+    pub fn select(self, mut rhs: Expression<F, ProverExpr>) -> Self {
+        let offset = self.num_mle_ref();
+        rhs.increment_mle_vec_indices(offset);
+        let (lhs_node, lhs_mle_vec) = self.deconstruct();
+        let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
 
         let concat_node =
-            ExpressionNode::Selector(MleIndex::Iterated, Box::new(lhs_node), Box::new(rhs_node));
+            ExpressionNode::Selector(MleIndex::Free, Box::new(lhs_node), Box::new(rhs_node));
 
         let concat_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect_vec();
 
@@ -354,8 +354,9 @@ impl<F: Field> Expression<F, ProverExpr> {
         linear_rounds
     }
 
-    /// Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
-    /// Returns the max number of bits that are indexed
+    /// Mutate the MLE indices that are [MleIndex::Free] in the expression and
+    /// turn them into [MleIndex::IndexedBit]. Returns the max number of bits
+    /// that are indexed.
     pub fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         let (expression_node, mle_vec) = self.deconstruct_mut();
         expression_node.index_mle_indices_node(curr_index, mle_vec)
@@ -384,7 +385,7 @@ impl<F: Field> Expression<F, ProverExpr> {
 impl<F: Field> ExpressionNode<F, ProverExpr> {
     /// Transforms the expression to a verifier expression
     /// should only be called when no variables are bound in the expression.
-    /// Traverses the expression and changes the DenseMle to CircuitMle.
+    /// Traverses the expression and changes the DenseMle to MleDescription.
     pub fn transform_to_verifier_expression_node(
         &mut self,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
@@ -403,7 +404,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     return Err(ExpressionError::EvaluateNotFullyBoundError);
                 }
 
-                let layer_id = mle_ref.get_layer_id();
+                let layer_id = mle_ref.layer_id();
                 let mle_indices = mle_ref.mle_indices().to_vec();
                 let eval = mle_ref.bookkeeping_table()[0];
 
@@ -436,7 +437,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     mles.into_iter()
                         .map(|mle| {
                             VerifierMle::new(
-                                mle.get_layer_id(),
+                                mle.layer_id(),
                                 mle.mle_indices().to_vec(),
                                 mle.bookkeeping_table()[0],
                             )
@@ -460,7 +461,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     ) {
         match self {
             ExpressionNode::Selector(index, a, b) => {
-                if *index == MleIndex::IndexedBit(round_index) {
+                if *index == MleIndex::Indexed(round_index) {
                     index.bind_index(challenge);
                 } else {
                     a.fix_variable_node(round_index, challenge, mle_vec);
@@ -472,7 +473,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
 
                 if mle_ref
                     .mle_indices()
-                    .contains(&MleIndex::IndexedBit(round_index))
+                    .contains(&MleIndex::Indexed(round_index))
                 {
                     mle_ref.fix_variable(round_index, challenge);
                 }
@@ -490,7 +491,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
 
                         if mle_ref
                             .mle_indices()
-                            .contains(&MleIndex::IndexedBit(round_index))
+                            .contains(&MleIndex::Indexed(round_index))
                         {
                             mle_ref.fix_variable(round_index, challenge);
                         }
@@ -513,7 +514,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     ) {
         match self {
             ExpressionNode::Selector(index, a, b) => {
-                if *index == MleIndex::IndexedBit(round_index) {
+                if *index == MleIndex::Indexed(round_index) {
                     index.bind_index(challenge);
                 } else {
                     a.fix_variable_at_index_node(round_index, challenge, mle_vec);
@@ -525,7 +526,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
 
                 if mle_ref
                     .mle_indices()
-                    .contains(&MleIndex::IndexedBit(round_index))
+                    .contains(&MleIndex::Indexed(round_index))
                 {
                     mle_ref.fix_variable_at_index(round_index, challenge);
                 }
@@ -545,7 +546,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
 
                         if mle_ref
                             .mle_indices()
-                            .contains(&MleIndex::IndexedBit(round_index))
+                            .contains(&MleIndex::Indexed(round_index))
                         {
                             mle_ref.fix_variable_at_index(round_index, challenge);
                         }
@@ -682,8 +683,9 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         }
     }
 
-    /// Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
-    /// Returns the max number of bits that are indexed
+    /// Mutate the MLE indices that are [MleIndex::Free] in the expression and
+    /// turn them into [MleIndex::IndexedBit]. Returns the max number of bits
+    /// that are indexed.
     pub fn index_mle_indices_node(
         &mut self,
         curr_index: usize,
@@ -692,8 +694,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
                 let mut new_index = curr_index;
-                if *mle_index == MleIndex::Iterated {
-                    *mle_index = MleIndex::IndexedBit(curr_index);
+                if *mle_index == MleIndex::Free {
+                    *mle_index = MleIndex::Indexed(curr_index);
                     new_index += 1;
                 }
                 let a_bits = a.index_mle_indices_node(new_index, mle_vec);
@@ -741,7 +743,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     let mut product_indices: HashSet<usize> = HashSet::new();
                     mle_refs.into_iter().for_each(|mle_ref| {
                         mle_ref.mle_indices.iter().for_each(|mle_index| {
-                            if let MleIndex::IndexedBit(i) = mle_index {
+                            if let MleIndex::Indexed(i) = mle_index {
                                 product_indices.insert(*i);
                             }
                         })
@@ -756,7 +758,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                         .clone()
                         .into_iter()
                         .filter_map(|mle_index| match mle_index {
-                            MleIndex::IndexedBit(i) => Some(i),
+                            MleIndex::Indexed(i) => Some(i),
                             _ => None,
                         })
                         .collect()
@@ -765,7 +767,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 // itself to the total set of all indices in an expression.
                 ExpressionNode::Selector(sel_index, a, b) => {
                     let mut sel_indices: HashSet<usize> = HashSet::new();
-                    if let MleIndex::IndexedBit(i) = sel_index {
+                    if let MleIndex::Indexed(i) = sel_index {
                         sel_indices.insert(*i);
                     };
 
@@ -850,7 +852,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                         .into_iter()
                         .for_each(|(mle_index, count)| {
                             if count > 1 {
-                                if let MleIndex::IndexedBit(i) = mle_index {
+                                if let MleIndex::Indexed(i) = mle_index {
                                     product_nonlinear_indices.insert(i);
                                 }
                             }
@@ -948,9 +950,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .filter(|item| {
                         matches!(
                             item,
-                            &&MleIndex::Iterated
-                                | &&MleIndex::IndexedBit(_)
-                                | &&MleIndex::Bound(_, _)
+                            &&MleIndex::Free | &&MleIndex::Indexed(_) | &&MleIndex::Bound(_, _)
                         )
                     })
                     .collect_vec()
@@ -977,8 +977,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                             .filter(|item| {
                                 matches!(
                                     item,
-                                    &&MleIndex::Iterated
-                                        | &&MleIndex::IndexedBit(_)
+                                    &&MleIndex::Free
+                                        | &&MleIndex::Indexed(_)
                                         | &&MleIndex::Bound(_, _)
                                 )
                             })
@@ -1153,7 +1153,7 @@ impl<F: std::fmt::Debug + Field> Expression<F, ProverExpr> {
                         let mle_ref = mle_vec_idx.get_mle(self.1);
 
                         f.debug_struct("mle")
-                            .field("layer", &mle_ref.get_layer_id())
+                            .field("layer", &mle_ref.layer_id())
                             .field("indices", &mle_ref.mle_indices())
                             .finish()
                     }
@@ -1171,7 +1171,7 @@ impl<F: std::fmt::Debug + Field> Expression<F, ProverExpr> {
                             .map(|mle_vec_idx| {
                                 let mle = mle_vec_idx.get_mle(self.1);
 
-                                format!("{:?}; {:?}", mle.get_layer_id(), mle.mle_indices())
+                                format!("{:?}; {:?}", mle.layer_id(), mle.mle_indices())
                             })
                             .reduce(|acc, str| acc + &str)
                             .unwrap();

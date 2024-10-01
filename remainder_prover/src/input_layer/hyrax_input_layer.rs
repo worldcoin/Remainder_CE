@@ -10,7 +10,7 @@ use crate::layer::LayerId;
 /// The circuit description of a [HyraxInputLayer]. Stores the shape information of this layer.
 /// All of the functionality of Hyrax input layers are taken care of in `remainder_hyrax/`, so
 /// this is meant just to generate a circuit description.
-pub struct CircuitHyraxInputLayer<F: Field> {
+pub struct HyraxInputLayerDescription<F: Field> {
     /// The input layer ID.
     pub layer_id: LayerId,
     /// The number of variables this Hyrax Input Layer is on.
@@ -21,8 +21,8 @@ pub struct CircuitHyraxInputLayer<F: Field> {
     _marker: PhantomData<F>,
 }
 
-impl<F: Field> CircuitHyraxInputLayer<F> {
-    /// Constructor for the [CircuitHyraxInputLayer].
+impl<F: Field> HyraxInputLayerDescription<F> {
+    /// Constructor for the [HyraxInputLayerDescription].
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         let log_num_cols = num_bits / 2;
         Self {
