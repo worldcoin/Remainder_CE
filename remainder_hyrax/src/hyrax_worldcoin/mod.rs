@@ -29,6 +29,8 @@ use crate::hyrax_gkr::{
 #[cfg(test)]
 /// The testing module for worldcoin circuit.
 pub mod test_worldcoin;
+// FIXME(Ben) remove (it's temporary).
+pub mod mock_interface;
 
 /// Builds the iriscode circuit.
 ///
