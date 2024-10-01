@@ -66,7 +66,7 @@ fn main() {
         BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
         MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
     };
-    let image_path = Path::new("../worldcoin/v2/iris/test_image.npy").to_path_buf();
+    let image_path = Path::new("../remainder_prover/src/worldcoin/constants/v2/iris/test_image.npy").to_path_buf();
     let data = load_worldcoin_data_v2::<
         Scalar,
         MATMULT_ROWS_NUM_VARS,

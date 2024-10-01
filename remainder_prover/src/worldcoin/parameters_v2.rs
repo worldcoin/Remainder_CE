@@ -12,10 +12,24 @@ pub const NUM_DIGITS: usize = (1 << LOG_NUM_DIGITS) as usize;
 /// The base of the complementary decomposition of the thresholded responses.
 pub const BASE: u64 = 256;
 
+/// The number of rows in the image
 pub const IM_NUM_ROWS: usize = 100;
+
+/// The number of columns in the image
 pub const IM_NUM_COLS: usize = 400;
+
+/// The wirings from the image (2d) to the LH matrix multiplicand (2d), first a flattened u16 array,
+/// then serialized as bytes
 pub static WIRINGS: &'static [u8] = include_bytes!("constants/v2/wirings.bin"); 
+
+/// The thresholds for the iris circuit, first flattened as a 1d i64 array, then serialized as bytes.
 pub static IRIS_THRESHOLDS: &'static [u8] = include_bytes!("constants/v2/iris/thresholds.bin");
+
+/// The thresholds for the mask circuit, first flattened as a 1d i64 array, then serialized as bytes.
 pub static MASK_THRESHOLDS: &'static [u8] = include_bytes!("constants/v2/mask/thresholds.bin");
+
+/// The RH multiplicand for the iris circuit, first flattened as a 1d i32 array, then serialized as bytes.
 pub static IRIS_RH_MULTIPLICAND: &'static [u8] = include_bytes!("constants/v2/iris/rh_multiplicand.bin");
+
+/// The RH multiplicand for the mask circuit, first flattened as a 1d i32 array, then serialized as bytes.
 pub static MASK_RH_MULTIPLICAND: &'static [u8] = include_bytes!("constants/v2/mask/rh_multiplicand.bin");

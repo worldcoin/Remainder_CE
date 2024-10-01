@@ -146,6 +146,9 @@ impl<
         });
 
         // Build the RH multiplicand for the matmult.
+        dbg!(rh_multiplicand.len());
+        dbg!(MATMULT_ROWS_NUM_VARS);
+        dbg!(MATMULT_COLS_NUM_VARS);
         let rh_multiplicand = Array2::from_shape_vec(
             (1 << MATMULT_INTERNAL_DIM_NUM_VARS, 1 << MATMULT_COLS_NUM_VARS),
             rh_multiplicand.iter().map(|&x| x as i64).collect_vec(),

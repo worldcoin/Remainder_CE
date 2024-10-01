@@ -1,3 +1,4 @@
+#![allow(warnings)]
 use remainder_shared_types::{transcript::Transcript};
 use remainder::prover::GKRCircuitDescription;
 use remainder_shared_types::halo2curves::{bn256::G1 as Bn256Point, group::Group};

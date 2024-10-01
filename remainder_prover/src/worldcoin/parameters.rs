@@ -1,6 +1,8 @@
 // FIXME(Ben) should this file go somewhere else?
 
-// FIXME(Ben) document
+/// Given a byte array representing the wirings from the image (2d) to the LH matrix multiplicand
+/// (2d), first a flattened u16 array, then serialized as bytes, return the wirings as a Vec of
+/// tuples of 4 u16s.
 pub fn decode_wirings(wirings_bytes: &[u8]) -> Vec<(u16, u16, u16, u16)> {
     assert!(wirings_bytes.len() % 8 == 0); // 4 u16s
     // Process the data in chunks of 8 bytes (one row)
@@ -17,7 +19,7 @@ pub fn decode_wirings(wirings_bytes: &[u8]) -> Vec<(u16, u16, u16, u16)> {
         .collect()
 }
 
-// FIXME(Ben)
+/// Given a byte array representing a 1d i32 array, then serialized as bytes, return the i32 array.
 pub fn decode_i32_array(bytes: &[u8]) -> Vec<i32> {
     assert!(bytes.len() % 4 == 0); // 4 bytes per i32
     bytes
@@ -28,7 +30,7 @@ pub fn decode_i32_array(bytes: &[u8]) -> Vec<i32> {
         .collect()
 }
 
-// FIXME(Ben)
+/// Given a byte array representing a 1d i64 array, then serialized as bytes, return the i64 array.
 pub fn decode_i64_array(bytes: &[u8]) -> Vec<i64> {
     assert!(bytes.len() % 8 == 0); // 8 bytes per i64
     bytes
