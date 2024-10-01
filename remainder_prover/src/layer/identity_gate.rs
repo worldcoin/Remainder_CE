@@ -437,7 +437,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
         // initialization, get the first sumcheck message
         let first_message = self
-            .init_phase_1(claim)
+            .init_phase_1(claim.get_point()[self.num_dataparallel_bits..].to_vec())
             .expect("could not evaluate original lhs and rhs")
             .into_iter()
             .map(|eval| eval * beta_g2_fully_bound)
@@ -459,13 +459,20 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 let challenge = transcript_writer.get_challenge("Sumcheck challenge");
                 challenges.push(challenge);
                 // if there are copy bits, we want to start at that index
-                bind_round_identity(round, challenge, phase_1_mle_refs);
+                bind_round_identity(
+                    round + self.num_dataparallel_bits,
+                    challenge,
+                    phase_1_mle_refs,
+                );
                 let phase_1_mle_references: Vec<&DenseMle<F>> = phase_1_mle_refs.iter().collect();
-                let eval = compute_sumcheck_message_identity(round, &phase_1_mle_references)
-                    .unwrap()
-                    .into_iter()
-                    .map(|eval| eval * beta_g2_fully_bound)
-                    .collect_vec();
+                let eval = compute_sumcheck_message_identity(
+                    round + self.num_dataparallel_bits,
+                    &phase_1_mle_references,
+                )
+                .unwrap()
+                .into_iter()
+                .map(|eval| eval * beta_g2_fully_bound)
+                .collect_vec();
                 transcript_writer.append_elements("Sumcheck evaluations", &eval);
                 Ok::<_, LayerError>(eval)
             }))
@@ -476,7 +483,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         challenges.push(final_chal);
 
         phase_1_mle_refs.iter_mut().for_each(|mle| {
-            mle.fix_variable(num_rounds - 1, final_chal);
+            mle.fix_variable(num_rounds - 1 + self.num_dataparallel_bits, final_chal);
         });
 
         // --- Finally, send the claimed values for each of the bound MLE to the verifier ---
@@ -866,8 +873,8 @@ impl<F: Field> IdentityGate<F> {
     }
 
     /// initialize necessary bookkeeping tables by traversing the nonzero gates
-    pub fn init_phase_1(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
-        let beta_g = BetaValues::new_beta_equality_mle(claim.get_point().clone());
+    pub fn init_phase_1(&mut self, challenge: Vec<F>) -> Result<Vec<F>, GateError> {
+        let beta_g = BetaValues::new_beta_equality_mle(challenge);
         self.set_beta_g(beta_g);
 
         self.mle_ref.index_mle_indices(0);
@@ -894,12 +901,16 @@ impl<F: Field> IdentityGate<F> {
             self.mle_ref.clone(),
         ];
 
-        index_mle_indices_gate(&mut phase_1, 0);
+        index_mle_indices_gate(&mut phase_1, self.num_dataparallel_bits);
         self.set_phase_1(phase_1.clone());
 
         let independent_variable = phase_1
             .iter()
-            .map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::Indexed(0)))
+            .map(|mle_ref| {
+                mle_ref
+                    .mle_indices()
+                    .contains(&MleIndex::Indexed(self.num_dataparallel_bits))
+            })
             .reduce(|acc, item| acc | item)
             .ok_or(GateError::EmptyMleList)?;
         let phase_1_mle_references: Vec<&DenseMle<F>> = phase_1.iter().collect();

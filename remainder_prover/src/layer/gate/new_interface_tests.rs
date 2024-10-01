@@ -175,6 +175,100 @@ mod tests {
         test_circuit(circuit, None)
     }
 
+    /// Performs a dataparallel version of [test_identity_gate_circuit_newmainder()].
+    /// A circuit which takes in two MLEs, select the first half of the first MLE
+    /// and compute the difference between that and the second MLE.
+    /// The second MLE has one less num_var, and is the same as the half of the
+    /// first MLE.
+    /// The expected output of this circuit is the zero MLE.
+    ///
+    /// ## Arguments
+    /// * `mle` - An MLE with arbitrary bookkeeping table values.
+    /// * `first_half_mle` - An MLE whose bookkeeping table is the first half of
+    /// `mle`.
+    /// These are similar to their counterparts within [test_add_gate_circuit_newmainder()].
+    /// Note that they are interpreted to be dataparallel MLEs with
+    /// `2^num_dataparallel_bits` copies of smaller MLEs.
+    #[test]
+    fn test_dataparallel_identity_gate_circuit_newmainder() {
+        const NUM_DATAPARALLEL_BITS: usize = 2;
+        const NUM_FREE_BITS: usize = 2;
+
+        let mut rng = test_rng();
+        let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_FREE_BITS);
+
+        // --- This should be 2^4 ---
+        let mle: DenseMle<Fr> = DenseMle::new_from_iter(
+            (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+            LayerId::Input(0),
+        );
+
+        // we assume the batch bits are in the beginning
+        // so the (individual first halves of batched mles) batched
+        // is just the first half of the bookkeeping table of the batched mles
+        let half_mle = DenseMle::new_from_iter(
+            mle.current_mle.get_evals_vector()[..size / 2]
+                .into_iter()
+                .map(|elem| *elem),
+            LayerId::Input(0),
+        );
+
+        println!("mle {:?}", mle.current_mle.get_evals_vector());
+        println!("half_mle {:?}", half_mle.current_mle.get_evals_vector());
+
+        let circuit = LayouterCircuit::new(|ctx| {
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let mle_input_shred =
+                InputShred::new(ctx, mle.current_mle.clone().num_vars(), &input_layer);
+            let mle_input_shred_data = InputShredData::new(
+                mle_input_shred.id(),
+                MultilinearExtension::new(mle.current_mle.get_evals_vector().to_vec()),
+            );
+            let half_mle_input_shred =
+                InputShred::new(ctx, half_mle.current_mle.clone().num_vars(), &input_layer);
+            let half_mle_input_shred_data = InputShredData::new(
+                half_mle_input_shred.id(),
+                MultilinearExtension::new(half_mle.current_mle.get_evals_vector().to_vec()),
+            );
+
+            let input_layer_data = InputLayerData::new(
+                input_layer.id(),
+                vec![mle_input_shred_data, half_mle_input_shred_data],
+                None,
+            );
+            let mut nonzero_gates = vec![];
+            let table_size = 1 << (NUM_FREE_BITS - 1);
+
+            (0..table_size).for_each(|idx| {
+                nonzero_gates.push((idx, idx));
+            });
+            println!("nonzero_gates {:?}", nonzero_gates);
+
+            let gate_node = IdentityGateNode::new(
+                ctx,
+                &mle_input_shred,
+                nonzero_gates,
+                Some(NUM_DATAPARALLEL_BITS),
+            );
+
+            let component_2 = EqualityCheckerComponent::new(ctx, &gate_node, &half_mle_input_shred);
+
+            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+                input_layer.into(),
+                mle_input_shred.into(),
+                half_mle_input_shred.into(),
+                gate_node.into(),
+            ];
+            all_nodes.extend(component_2.yield_nodes());
+            (
+                ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
+                vec![input_layer_data],
+            )
+        });
+
+        test_circuit(circuit, None)
+    }
+
     /// A circuit which takes in two MLEs of the same size and adds
     /// the contents, element-wise, to one another.
     ///
