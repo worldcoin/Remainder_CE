@@ -26,7 +26,6 @@ use crate::hyrax_gkr::{
     hyrax_circuit_inputs::HyraxInputLayerData, hyrax_input_layer::HyraxProverCommitmentEnum,
 };
 
-#[cfg(test)]
 /// The testing module for worldcoin circuit.
 pub mod test_worldcoin;
 // FIXME(Ben) remove (it's temporary).
@@ -72,6 +71,7 @@ pub fn build_hyrax_circuit_public_input_layer<
         BASE,
         NUM_DIGITS,
     >,
+    reroutings: Vec<(usize, usize)>,
 ) -> impl FnMut(
     &Context,
 ) -> (
@@ -81,7 +81,6 @@ pub fn build_hyrax_circuit_public_input_layer<
     move |ctx| {
         let CircuitData {
             to_reroute,
-            reroutings,
             rh_matmult_multiplicand,
             digits,
             sign_bits,
@@ -265,6 +264,7 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         BASE,
         NUM_DIGITS,
     >,
+    reroutings: Vec<(usize, usize)>,
     maybe_input_to_be_rerouted_raw_precommit: Option<(Vec<C>, Vec<C::Scalar>)>,
 ) -> impl FnMut(
     &Context,
@@ -277,7 +277,6 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
     move |ctx| {
         let CircuitData {
             to_reroute,
-            reroutings,
             rh_matmult_multiplicand,
             digits,
             sign_bits,

@@ -135,10 +135,8 @@ impl<
         let ctx = Context::new();
         let (component, input_layer_data) = (witness_function)(&ctx);
         let circuit_description_timer = start_timer!(|| "generating circuit description");
-        let result = (
-            generate_circuit_description(component.yield_nodes()).unwrap(),
-            input_layer_data,
-        );
+        let circ_desc = generate_circuit_description(component.yield_nodes()).unwrap();
+        let result = ((circ_desc.0, circ_desc.1), input_layer_data);
         end_timer!(circuit_description_timer);
         result
     }

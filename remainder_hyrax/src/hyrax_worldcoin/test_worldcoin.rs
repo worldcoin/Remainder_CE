@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use remainder::worldcoin::data::{load_worldcoin_data_v2, load_worldcoin_data_v3, CircuitData};
+use remainder::worldcoin::{data::{load_worldcoin_data_v2, load_worldcoin_data_v3, wirings_to_reroutings, CircuitData}, parameters::decode_wirings, parameters_v2::IM_NUM_ROWS};
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
     transcript::{
@@ -20,7 +20,7 @@ type Base = <Bn256Point as CurveExt>::Base;
 
 /// Helper function that runs the Hyrax Worldcoin test against a given data set
 /// with public input layers.
-fn test_hyrax_worldcoin_public_input_layer<
+pub fn test_hyrax_worldcoin_public_input_layer<
     const MATMULT_ROWS_NUM_VARS: usize,
     const MATMULT_COLS_NUM_VARS: usize,
     const MATMULT_INTERNAL_DIM_NUM_VARS: usize,
@@ -35,6 +35,7 @@ fn test_hyrax_worldcoin_public_input_layer<
         BASE,
         NUM_DIGITS,
     >,
+    reroutings: Vec<(usize, usize)>,
     num_generators: usize,
 ) {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
@@ -48,7 +49,7 @@ fn test_hyrax_worldcoin_public_input_layer<
     );
     let mut hyrax_prover = HyraxProver::new(&committer, blinding_rng, converter);
 
-    let witness_function = build_hyrax_circuit_public_input_layer(data);
+    let witness_function = build_hyrax_circuit_public_input_layer(data, reroutings);
 
     let (mut circuit_description, hyrax_proof) =
         hyrax_prover.prove_gkr_circuit(witness_function, &mut prover_transcript);
@@ -65,7 +66,7 @@ fn test_hyrax_worldcoin_public_input_layer<
 
 /// Helper function that runs the Hyrax Worldcoin test against a given data set
 /// with hyrax input layers when data needs to be blinded.
-fn test_hyrax_worldcoin_hyrax_input_layer<
+pub fn test_hyrax_worldcoin_hyrax_input_layer<
     const MATMULT_ROWS_NUM_VARS: usize,
     const MATMULT_COLS_NUM_VARS: usize,
     const MATMULT_INTERNAL_DIM_NUM_VARS: usize,
@@ -80,6 +81,7 @@ fn test_hyrax_worldcoin_hyrax_input_layer<
         BASE,
         NUM_DIGITS,
     >,
+    reroutings: Vec<(usize, usize)>,
     num_generators: usize,
 ) {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
@@ -93,7 +95,7 @@ fn test_hyrax_worldcoin_hyrax_input_layer<
     );
     let mut hyrax_prover = HyraxProver::new(&committer, blinding_rng, converter);
 
-    let witness_function = build_hyrax_circuit_hyrax_input_layer(data, None);
+    let witness_function = build_hyrax_circuit_hyrax_input_layer(data, reroutings, None);
 
     let (mut circuit_description, hyrax_proof) =
         hyrax_prover.prove_gkr_circuit(witness_function, &mut prover_transcript);
@@ -112,8 +114,9 @@ fn test_hyrax_worldcoin_hyrax_input_layer<
 #[test]
 fn test_hyrax_worldcoin_v2_iris_public_input_layer() {
     use remainder::worldcoin::parameters_v2::{
+        IM_NUM_COLS,
         BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
-        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS, WIRINGS
     };
     let image_path = Path::new("../remainder_prover/src/worldcoin/constants/v2/iris/test_image.npy").to_path_buf();
     let data = load_worldcoin_data_v2::<
@@ -124,15 +127,17 @@ fn test_hyrax_worldcoin_v2_iris_public_input_layer() {
         BASE,
         NUM_DIGITS,
     >(image_path, false);
-    test_hyrax_worldcoin_public_input_layer(data, 100);
+    let reroutings = wirings_to_reroutings(&decode_wirings(WIRINGS), IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+    test_hyrax_worldcoin_public_input_layer(data, reroutings, 100);
 }
 
 #[ignore] // Takes a long time to run
 #[test]
 fn test_hyrax_worldcoin_v2_mask_public_input_layer() {
     use remainder::worldcoin::parameters_v2::{
+        IM_NUM_COLS,
         BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
-        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS, WIRINGS
     };
     let image_path = Path::new("../remainder_prover/src/worldcoin/constants/v2/mask/test_image.npy").to_path_buf();
     let data = load_worldcoin_data_v2::<
@@ -143,15 +148,17 @@ fn test_hyrax_worldcoin_v2_mask_public_input_layer() {
         BASE,
         NUM_DIGITS,
     >(image_path, true);
-    test_hyrax_worldcoin_public_input_layer(data, 100);
+    let reroutings = wirings_to_reroutings(&decode_wirings(WIRINGS), IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+    test_hyrax_worldcoin_public_input_layer(data, reroutings, 100);
 }
 
 #[ignore] // Takes a long time to run
 #[test]
 fn test_hyrax_worldcoin_v3_iris_public_input_layer() {
     use remainder::worldcoin::parameters_v3::{
+        IM_NUM_COLS,
         BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
-        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS, WIRINGS
     };
     let image_path = Path::new("../remainder_prover/src/worldcoin/constants/v3/iris/test_image.npy").to_path_buf();
     let data = load_worldcoin_data_v3::<
@@ -162,15 +169,17 @@ fn test_hyrax_worldcoin_v3_iris_public_input_layer() {
         BASE,
         NUM_DIGITS,
     >(image_path, false);
-    test_hyrax_worldcoin_public_input_layer(data, 100);
+    let reroutings = wirings_to_reroutings(&decode_wirings(WIRINGS), IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+    test_hyrax_worldcoin_public_input_layer(data, reroutings, 100);
 }
 
 #[ignore] // Takes a long time to run
 #[test]
 fn test_hyrax_worldcoin_v3_mask_public_input_layer() {
     use remainder::worldcoin::parameters_v3::{
+        IM_NUM_COLS,
         BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
-        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS, WIRINGS
     };
     let image_path = Path::new("../remainder_prover/src/worldcoin/constants/v3/mask/test_image.npy").to_path_buf();
     let data = load_worldcoin_data_v3::<
@@ -181,15 +190,17 @@ fn test_hyrax_worldcoin_v3_mask_public_input_layer() {
         BASE,
         NUM_DIGITS,
     >(image_path, true);
-    test_hyrax_worldcoin_public_input_layer(data, 100);
+    let reroutings = wirings_to_reroutings(&decode_wirings(WIRINGS), IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+    test_hyrax_worldcoin_public_input_layer(data, reroutings, 100);
 }
 
 #[ignore] // Takes a long time to run
 #[test]
 fn test_hyrax_worldcoin_v2_iris_hyrax_input_layer() {
-    use remainder::worldcoin::parameters_v2::{
+    use remainder::worldcoin::parameters_v3::{
+        IM_NUM_COLS,
         BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
-        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS, WIRINGS
     };
     let image_path = Path::new("../remainder_prover/src/worldcoin/constants/v2/iris/test_image.npy").to_path_buf();
     let data = load_worldcoin_data_v2::<
@@ -200,5 +211,6 @@ fn test_hyrax_worldcoin_v2_iris_hyrax_input_layer() {
         BASE,
         NUM_DIGITS,
     >(image_path, false);
-    test_hyrax_worldcoin_hyrax_input_layer(data, 512);
+    let reroutings = wirings_to_reroutings(&decode_wirings(WIRINGS), IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+    test_hyrax_worldcoin_hyrax_input_layer(data, reroutings, 512);
 }

@@ -49,7 +49,7 @@ use remainder_shared_types::transcript::{ProverTranscript, Transcript, Transcrip
 use remainder_shared_types::Field;
 
 use super::layouting::{CircuitLocation, InputNodeMap, LayerMap};
-use super::nodes::circuit_inputs::InputLayerData;
+use super::nodes::circuit_inputs::InputLayerNodeData;
 use super::nodes::NodeId;
 use super::{
     component::Component,
@@ -63,13 +63,13 @@ use super::{
 pub struct LayouterCircuit<
     F: Field,
     C: Component<NodeEnum<F>>,
-    Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>),
+    Fn: FnMut(&Context) -> (C, Vec<InputLayerNodeData<F>>),
 > {
     witness_builder: Fn,
     _marker: PhantomData<F>,
 }
 
-impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>)>
+impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLayerNodeData<F>>)>
     LayouterCircuit<F, C, Fn>
 {
     /// Constructs a `LayouterCircuit` by taking in a closure whose parameter is
@@ -77,7 +77,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
     /// circuit whose data output will be computed for future layers. The
     /// function itself returns a [Component], which is a set of circuit "nodes"
     /// which will be used to build the circuit itself. The closure also returns
-    /// a [Vec<InputLayerData>], which is a vector of all of the data that will
+    /// a [Vec<InputLayerNodeData>], which is a vector of all of the data that will
     /// be fed into the input layers of the circuit.
     pub fn new(witness_builder: Fn) -> Self {
         Self {
@@ -178,10 +178,10 @@ pub fn instantiate<F: Field>(
             // Compute the concretized input layer since we have the
             // layerwise bookkeeping table.
             // FIXME(Ben) precommits are none of its business here.  We can fix this after we remove the different layer types.
-            let mut prover_input_layer = input_layer_description
+            let prover_input_layer = input_layer_description
                 .convert_into_prover_input_layer(
                     combined_mle.clone(),
-                    &corresponding_input_data.precommit,
+                    &None,
                 );
             prover_input_layers.push(prover_input_layer);
         });
@@ -253,7 +253,7 @@ pub fn instantiate<F: Field>(
 }
 
 
-impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>)>
+impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLayerNodeData<F>>)>
     LayouterCircuit<F, C, Fn>
 {
     /// Returns an [InstantiatedCircuit] by populating the
@@ -264,9 +264,9 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
     ///     circuit description of the circuit we wish to populate
     /// * input_layer_to_node_map: type [InputNodeMap], which the corresponding
     ///     [super::nodes::circuit_inputs::InputLayerNode]'s [NodeId] to a
-    ///     [LayerId], in order to associate the [InputLayerData] to the correct
+    ///     [LayerId], in order to associate the [InputLayerNodeData] to the correct
     ///     [InputLayer].
-    /// * data_input_layers: type [Vec<InputLayerData<F>>], which contains all
+    /// * data_input_layers: type [Vec<InputLayerNodeData<F>>], which contains all
     ///     of the data needed in order to populate the circuit description.
     /// * transcript_writer: type implements [ProverTranscript<F>], which is
     ///     primarily used for [FiatShamirChallenge] in order to grab the
@@ -280,7 +280,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
     fn populate_circuit(
         &mut self,
         gkr_circuit_description: &GKRCircuitDescription<F>,
-        data_input_layers: Vec<InputLayerData<F>>,
+        data_input_layers: Vec<InputLayerNodeData<F>>,
         transcript_writer: &mut impl ProverTranscript<F>,
         input_layer_to_node_map: InputNodeMap,
     ) -> (InstantiatedCircuit<F>, LayerMap<F>) {
@@ -294,7 +294,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         // Create a map that maps the input layer's node ID to the input layer
         // data that corresponds input layer node by doing a forward pass of
         // `data_input_layers`.
-        let mut input_id_data_map = HashMap::<NodeId, &InputLayerData<F>>::new();
+        let mut input_id_data_map = HashMap::<NodeId, &InputLayerNodeData<F>>::new();
         data_input_layers.iter().for_each(|input_layer_data| {
             input_id_data_map.insert(
                 input_layer_data.corresponding_input_node_id,
@@ -469,7 +469,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         let (component, input_layer_data) = (self.witness_builder)(&ctx);
         // TODO(vishady): ADD CIRCUIT DESCRIPTION TO TRANSCRIPT (maybe not
         // here...)
-        let (circuit_description, input_node_map) =
+        let (circuit_description, input_node_map, _) =
             generate_circuit_description(component.yield_nodes()).unwrap();
 
         let (instantiated_circuit, layer_map) = self.populate_circuit(

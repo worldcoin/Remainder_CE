@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::digits::components::{
     BitsAreBinary, ComplementaryRecompChecker, DigitsConcatenator, UnsignedRecomposition,
 };
+use crate::layer::LayerId;
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::{Component, ComponentSet};
 use crate::layouter::layouting::InputNodeMap;
@@ -226,7 +227,7 @@ pub fn build_circuit_description<
     reroutings: Vec<(usize, usize)>,
 ) -> (
         GKRCircuitDescription<F>,
-        impl Fn(MultilinearExtension<F>, MultilinearExtension<F>, FlatMles<F, NUM_DIGITS>, MultilinearExtension<F>, MultilinearExtension<F>, MultilinearExtension<F>) -> HashMap<NodeId, MultilinearExtension<F>>
+        impl Fn(MultilinearExtension<F>, MultilinearExtension<F>, FlatMles<F, NUM_DIGITS>, MultilinearExtension<F>, MultilinearExtension<F>, MultilinearExtension<F>) -> HashMap<LayerId, MultilinearExtension<F>>
     ) {
     assert!(BASE.is_power_of_two());
     let log_base = BASE.ilog2() as usize;
@@ -320,17 +321,17 @@ pub fn build_circuit_description<
 
     // Collect all the nodes, starting with the input nodes
     let mut all_nodes: Vec<NodeEnum<F>> = vec![
-        public_input_layer.into(),
+        public_input_layer.clone().into(),
         private_input_layer.clone().into(),
-        fiat_shamir_challenge_node.into(),
-        to_reroute.into(),
-        rh_matmult_multiplicand.into(),
-        sign_bits.into(),
-        to_sub_from_matmult.into(),
-        digit_multiplicities.into(),
-        lookup_table_values.into(),
+        fiat_shamir_challenge_node.clone().into(),
+        to_reroute.clone().into(),
+        rh_matmult_multiplicand.clone().into(),
+        sign_bits.clone().into(),
+        to_sub_from_matmult.clone().into(),
+        digit_multiplicities.clone().into(),
+        lookup_table_values.clone().into(),
     ];
-    all_nodes.extend(digits_input_shreds.into_iter().map(|node| node.into()));
+    all_nodes.extend(digits_input_shreds.iter().map(|node| node.clone().into()));
 
     // Add the identity gate node
     all_nodes.push(rerouted_image.into());
