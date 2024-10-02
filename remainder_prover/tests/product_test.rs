@@ -2,7 +2,7 @@ use remainder::expression::abstract_expr::AbstractExpr;
 use remainder::expression::generic_expr::Expression;
 use remainder::layouter::compiling::LayouterCircuit;
 use remainder::layouter::component::{Component, ComponentSet};
-use remainder::layouter::nodes::circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType};
+use remainder::layouter::nodes::circuit_inputs::{InputLayerNodeData, InputLayerNode, InputLayerType};
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::sector::Sector;
@@ -71,7 +71,7 @@ fn test_product_checker() {
             get_input_shred_and_data(factor2.clone(), ctx, &input_layer);
         let (product_shred, product_shred_data) =
             get_input_shred_and_data(product.clone(), ctx, &input_layer);
-        let input_data = InputLayerData::new(
+        let input_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![factor1_shred_data, factor2_shred_data, product_shred_data],
             None,

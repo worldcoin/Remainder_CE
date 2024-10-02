@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+
 use crate::digits::components::{
     BitsAreBinary, ComplementaryRecompChecker, DigitsConcatenator, UnsignedRecomposition,
 };
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::{Component, ComponentSet};
 use crate::layouter::layouting::InputNodeMap;
-use crate::layouter::nodes::circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType, InputShred};
+use crate::layouter::nodes::circuit_inputs::{InputLayerNodeData, InputLayerNode, InputLayerType, InputShred};
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::fiat_shamir_challenge::FiatShamirChallengeNode;
 use crate::layouter::nodes::identity_gate::IdentityGateNode;
@@ -12,7 +14,8 @@ use crate::layouter::nodes::lookup::{LookupConstraint, LookupTable};
 use crate::layouter::nodes::matmult::MatMultNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, Context, NodeId};
-use crate::mle::bundled_input_mle::BundledInputMle;
+use crate::mle::bundled_input_mle::{BundledInputMle, FlatMles};
+use crate::mle::evals::MultilinearExtension;
 use crate::prover::{generate_circuit_description, GKRCircuitDescription};
 use crate::utils::get_input_shred_and_data;
 use crate::worldcoin::components::Subtractor;
@@ -64,7 +67,7 @@ pub fn build_circuit<
 ) -> LayouterCircuit<
     F,
     ComponentSet<NodeEnum<F>>,
-    impl FnMut(&Context) -> (ComponentSet<NodeEnum<F>>, Vec<InputLayerData<F>>),
+    impl FnMut(&Context) -> (ComponentSet<NodeEnum<F>>, Vec<InputLayerNodeData<F>>),
 > {
     LayouterCircuit::new(move |ctx| {
         let CircuitData {
@@ -167,7 +170,7 @@ pub fn build_circuit<
             lookup_table_values_data,
         ];
         input_data_shreds.extend(digits_input_shreds_data);
-        let input_layer_data = InputLayerData::new(input_layer.id(), input_data_shreds, None);
+        let input_layer_data = InputLayerNodeData::new(input_layer.id(), input_data_shreds, None);
 
         // Collect all the nodes, starting with the input nodes
         let mut all_nodes: Vec<NodeEnum<F>> = vec![
@@ -221,7 +224,10 @@ pub fn build_circuit_description<
     const NUM_DIGITS: usize,
 >(
     reroutings: Vec<(usize, usize)>,
-) -> (GKRCircuitDescription<F>, InputNodeMap, NodeId, NodeId) {
+) -> (
+        GKRCircuitDescription<F>,
+        impl Fn(MultilinearExtension<F>, MultilinearExtension<F>, FlatMles<F, NUM_DIGITS>, MultilinearExtension<F>, MultilinearExtension<F>, MultilinearExtension<F>) -> HashMap<NodeId, MultilinearExtension<F>>
+    ) {
     assert!(BASE.is_power_of_two());
     let log_base = BASE.ilog2() as usize;
     let mut output_nodes = vec![];
@@ -230,7 +236,6 @@ pub fn build_circuit_description<
     // Private inputs
     // FIXME(Ben) this will be fine once we get rid of InputLayerType, but it does look funny for now
     let private_input_layer = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
-    let private_input_layer_node_id = private_input_layer.id();
     let to_reroute = InputShred::new(&ctx, TO_REROUTE_NUM_VARS, &private_input_layer);
     println!("{:?} = Image to_reroute input", to_reroute.id());
 
@@ -251,7 +256,6 @@ pub fn build_circuit_description<
     
     // Public inputs
     let public_input_layer = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
-    let public_input_layer_node_id = public_input_layer.id();
     println!("{:?} = Input layer", public_input_layer.id());
 
     let to_sub_from_matmult = InputShred::new(&ctx, MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS, &public_input_layer);
@@ -348,7 +352,30 @@ pub fn build_circuit_description<
     // Add output nodes
     all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));
 
-    let (circ_desc, input_node_map) = generate_circuit_description(all_nodes).unwrap();
+    let (circ_desc, input_node_map, input_builder_from_shred_map) = generate_circuit_description(all_nodes).unwrap();
 
-    (circ_desc, input_node_map, public_input_layer_node_id, private_input_layer_node_id)
+    let input_builder = move |
+        to_reroute_mle: MultilinearExtension<F>,
+        rh_matmult_multiplicand_mle: MultilinearExtension<F>,
+        digits_mles: FlatMles<F, NUM_DIGITS>,
+        sign_bits_mles: MultilinearExtension<F>,
+        digit_multiplicities_mle: MultilinearExtension<F>,
+        to_sub_from_matmult_mle: MultilinearExtension<F>,
+        | {
+        let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<F>> = HashMap::new();
+        input_shred_id_to_data.insert(to_reroute.id(), to_reroute_mle);
+        input_shred_id_to_data.insert(rh_matmult_multiplicand.id(), rh_matmult_multiplicand_mle);
+        digits_mles.get_mles().into_iter().zip(digits_input_shreds.iter()).for_each(|(mle, shred)| {
+            input_shred_id_to_data.insert(shred.id(), mle);
+        });
+        input_shred_id_to_data.insert(sign_bits.id(), sign_bits_mles);
+        input_shred_id_to_data.insert(to_sub_from_matmult.id(), to_sub_from_matmult_mle);
+        input_shred_id_to_data.insert(digit_multiplicities.id(),digit_multiplicities_mle);
+        input_shred_id_to_data.insert(lookup_table_values.id(), MultilinearExtension::new((0..BASE).map(F::from).collect()));
+
+        input_builder_from_shred_map(input_shred_id_to_data)
+    };
+
+
+    (circ_desc, input_builder)
 }

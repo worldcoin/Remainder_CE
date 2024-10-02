@@ -6,7 +6,7 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerNodeData, InputLayerNode, InputLayerType},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
@@ -142,7 +142,7 @@ fn test_batching_wraparound_newmainder() {
             ctx,
             &input_layer,
         );
-        let input_data = InputLayerData::new(
+        let input_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![input_shred_1_data, input_shred_2_data, input_shred_3_data],
             None,

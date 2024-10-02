@@ -4,7 +4,7 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerNodeData, InputLayerNode, InputLayerType},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
@@ -174,7 +174,7 @@ fn test_dataparallel_recombination_newmainder() {
             get_input_shred_and_data_from_vec(vecs_vec[3].clone(), ctx, &input_layer);
         let (dataparallel_shred, dataparallel_shred_data) =
             get_input_shred_and_data_from_vec(combined_mle_vec.to_vec(), ctx, &input_layer);
-        let input_data = InputLayerData::new(
+        let input_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![
                 input_shred_1_data,

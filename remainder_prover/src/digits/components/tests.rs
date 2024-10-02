@@ -5,7 +5,7 @@ use crate::layer::LayerId;
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::ComponentSet;
 use crate::layouter::nodes::circuit_inputs::{
-    InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+    InputLayerNodeData, InputLayerNode, InputLayerType, InputShred, InputShredData,
 };
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
@@ -65,7 +65,7 @@ fn test_complementary_recomposition_vertical() {
 
         let mut input_shred_data = vec![values_input_shred_data, bits_input_shred_data];
         input_shred_data.extend(digits_input_shreds_data);
-        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
+        let input_layer_data = InputLayerNodeData::new(input_layer.id(), input_shred_data, None);
         let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
             values_input_shred.into(),
@@ -133,7 +133,7 @@ fn test_unsigned_recomposition() {
 
         let mut input_shred_data = vec![expected_input_shred_data];
         input_shred_data.extend(digits_input_shreds_data);
-        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
+        let input_layer_data = InputLayerNodeData::new(input_layer.id(), input_shred_data, None);
 
         let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
@@ -225,7 +225,7 @@ fn test_complementary_recomposition() {
 
         let mut input_shred_data = vec![bits_input_shred_data, expected_input_shred_data];
         input_shred_data.extend(digits_input_shreds_data);
-        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
+        let input_layer_data = InputLayerNodeData::new(input_layer.id(), input_shred_data, None);
 
         let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
@@ -257,7 +257,7 @@ fn test_bits_are_binary_soundness() {
         let component = BitsAreBinary::new(ctx, &shred);
         let output = OutputNode::new_zero(ctx, &component.sector);
         let input_shred_data = vec![shred_data];
-        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
+        let input_layer_data = InputLayerNodeData::new(input_layer.id(), input_shred_data, None);
         let all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
             shred.into(),
@@ -286,7 +286,7 @@ fn test_bits_are_binary() {
         let component = BitsAreBinary::new(ctx, &shred);
         let output = OutputNode::new_zero(ctx, &component.sector);
         let input_shred_data = vec![shred_data];
-        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
+        let input_layer_data = InputLayerNodeData::new(input_layer.id(), input_shred_data, None);
         let all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
             shred.into(),

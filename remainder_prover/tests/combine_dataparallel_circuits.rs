@@ -6,7 +6,7 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerNodeData, InputLayerNode, InputLayerType},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
@@ -233,7 +233,7 @@ fn test_combined_dataparallel_circuit_alt_newmainder() {
             get_input_shred_and_data_from_vec(mle_1_vec_raw.to_vec(), ctx, &input_layer);
         let (dataparallel_input_mle_2, dataparallel_input_mle_2_data) =
             get_input_shred_and_data_from_vec(mle_2_vec_raw.to_vec(), ctx, &input_layer);
-        let input_data = InputLayerData::new(
+        let input_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![dataparallel_input_mle_1_data, dataparallel_input_mle_2_data],
             None,

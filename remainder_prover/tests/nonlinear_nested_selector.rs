@@ -6,7 +6,7 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerNodeData, InputLayerNode, InputLayerType},
             node_enum::NodeEnum,
             sector::Sector,
             CircuitNode, Context,
@@ -133,7 +133,7 @@ fn test_nonlinear_nested_sel_circuit_newmainder() {
             &right_sum_mle_2,
         );
         let component_2 = DifferenceBuilderComponent::new(ctx, &component_1.get_output_sector());
-        let input_data = InputLayerData::new(
+        let input_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![
                 left_inner_sel_mle_data,

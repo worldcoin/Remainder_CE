@@ -139,7 +139,7 @@ mod test {
             component::ComponentSet,
             nodes::{
                 circuit_inputs::{
-                    InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+                    InputLayerNodeData, InputLayerNode, InputLayerType, InputShred, InputShredData,
                 },
                 circuit_outputs::OutputNode,
                 gate::GateNode,
@@ -182,7 +182,7 @@ mod test {
             let input_shred_pos_data = InputShredData::new(input_shred_pos.id(), mle);
             let input_shred_neg = InputShred::new(ctx, neg_mle.num_vars(), &input_layer);
             let input_shred_neg_data = InputShredData::new(input_shred_neg.id(), neg_mle);
-            let input_data = InputLayerData::new(
+            let input_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![input_shred_pos_data, input_shred_neg_data],
                 None,
@@ -247,7 +247,7 @@ mod test {
             let input_shred_pos_data = InputShredData::new(input_shred_pos.id(), mle);
             let input_shred_neg = InputShred::new(ctx, neg_mle.num_vars(), &input_layer);
             let input_shred_neg_data = InputShredData::new(input_shred_neg.id(), neg_mle);
-            let input_data = InputLayerData::new(
+            let input_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![input_shred_pos_data, input_shred_neg_data],
                 None,

@@ -65,6 +65,23 @@ pub struct FlatMles<F: Field, const N: usize> {
     mles: [DenseMle<F>; N],
 }
 
+impl<F: Field, const N: usize> FlatMles<F, N> {
+    pub fn get_mles(&self) -> [MultilinearExtension<F>; N] {
+        self.mles
+            .iter()
+            .map(|mle| {
+                MultilinearExtension::new_from_evals(Evaluations::<F>::new(
+                    mle.num_free_vars(),
+                    mle.get_padded_evaluations(),
+                ))
+            })
+            .collect_vec()
+            .try_into()
+            .unwrap()
+    }
+}
+
+// Does BundledInputMle need to exist?
 impl<F: Field, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
     fn get_mle_refs(&self) -> &[DenseMle<F>; N] {
         &self.mles

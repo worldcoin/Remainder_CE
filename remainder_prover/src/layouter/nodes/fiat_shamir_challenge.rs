@@ -81,7 +81,7 @@ mod test {
             component::ComponentSet,
             nodes::{
                 circuit_inputs::{
-                    InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+                    InputLayerNodeData, InputLayerNode, InputLayerType, InputShred, InputShredData,
                 },
                 circuit_outputs::OutputNode,
                 node_enum::NodeEnum,
@@ -114,7 +114,7 @@ mod test {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let input_a = InputShred::new(ctx, mle_vec_a.num_vars(), &input_layer);
             let input_a_data = InputShredData::new(input_a.id(), mle_vec_a);
-            let input_data = InputLayerData::new(input_layer.id(), vec![input_a_data], None);
+            let input_data = InputLayerNodeData::new(input_layer.id(), vec![input_a_data], None);
 
             let product_sector =
                 Sector::new(ctx, &[&input_a, &verifier_challenge_node], |inputs| {

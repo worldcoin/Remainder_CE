@@ -6,7 +6,7 @@ use crate::{
         component::ComponentSet,
         nodes::{
             circuit_inputs::{
-                InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+                InputLayerNodeData, InputLayerNode, InputLayerType, InputShred, InputShredData,
             },
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
@@ -70,7 +70,7 @@ fn test_basic_circuit() {
             )),
         );
 
-        let input_layer_data = InputLayerData::new(
+        let input_layer_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![input_shred_1_data, input_shred_2_data, output_input_data],
             None,

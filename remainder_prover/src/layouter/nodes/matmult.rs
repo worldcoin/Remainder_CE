@@ -121,7 +121,7 @@ mod test {
             component::ComponentSet,
             nodes::{
                 circuit_inputs::{
-                    InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+                    InputLayerNodeData, InputLayerNode, InputLayerType, InputShred, InputShredData,
                 },
                 circuit_outputs::OutputNode,
                 node_enum::NodeEnum,
@@ -172,7 +172,7 @@ mod test {
             let input_matrix_product_data =
                 InputShredData::new(input_matrix_product.id(), exp_product);
 
-            let input_layer_data = InputLayerData::new(
+            let input_layer_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![
                     input_matrix_a_data,

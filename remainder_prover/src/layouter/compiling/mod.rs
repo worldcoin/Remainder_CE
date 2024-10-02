@@ -87,6 +87,172 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
     }
 }
 
+
+/// Returns an [InstantiatedCircuit] by populating the
+/// [GKRCircuitDescription] with data.
+///
+/// # Arguments:
+/// * gkr_circuit_description: type [GKRCircuitDescription], which is the
+///     circuit description of the circuit we wish to populate
+/// * input_data: a [HashMap] mapping layer ids to the MLEs.
+/// * challenge_sampler: a closure that takes a string and a usize and returns that many field
+///    elements; should be a wrapper of an instance method of the appropriate transcript.
+pub fn instantiate<F: Field>(
+    gkr_circuit_description: &GKRCircuitDescription<F>, // FIXME(Ben) will be self
+    input_data: HashMap<LayerId, MultilinearExtension<F>>,
+    challenge_sampler: &mut impl FnMut(&str, usize) -> Vec<F>,
+) -> (InstantiatedCircuit<F>, LayerMap<F>) {
+    let GKRCircuitDescription {
+        input_layers: input_layer_descriptions,
+        fiat_shamir_challenges: fiat_shamir_challenge_descriptions,
+        intermediate_layers: intermediate_layer_descriptions,
+        output_layers: output_layer_descriptions,
+    } = gkr_circuit_description;
+
+    // Create a map that maps layer ID to a set of MLE descriptions that are
+    // expected to be compiled from its output. For example, if we have a
+    // layer whose first "half" (when MSB is 0) is used in a future layer,
+    // and its second half is also used in a future layer, we would expect
+    // both of these to be represented as MLE descriptions in the HashSet
+    // associated with this layer with the appropriate prefix bits.
+    let mut mle_claim_map = HashMap::<LayerId, HashSet<&MleDescription<F>>>::new();
+    // Do a forward pass through all of the intermediate layer descriptions
+    // and look into the "future" to see which parts of each layer are
+    // required for future layers.
+    intermediate_layer_descriptions
+        .iter()
+        .for_each(|intermediate_layer| {
+            let layer_source_circuit_mles = intermediate_layer.get_circuit_mles();
+            layer_source_circuit_mles
+                .into_iter()
+                .for_each(|circuit_mle| {
+                    let layer_id = circuit_mle.layer_id();
+                    if let Entry::Vacant(e) = mle_claim_map.entry(layer_id) {
+                        e.insert(HashSet::from([circuit_mle]));
+                    } else {
+                        mle_claim_map
+                            .get_mut(&layer_id)
+                            .unwrap()
+                            .insert(circuit_mle);
+                    }
+                })
+        });
+
+    // Do a forward pass through all of the intermediate layer descriptions
+    // and look into the "future" to see which parts of each layer are
+    // required for output layers.
+    output_layer_descriptions.iter().for_each(|output_layer| {
+        let layer_source_mle = &output_layer.mle;
+        let layer_id = layer_source_mle.layer_id();
+        if let Entry::Vacant(e) = mle_claim_map.entry(layer_id) {
+            e.insert(HashSet::from([&output_layer.mle]));
+        } else {
+            mle_claim_map
+                .get_mut(&layer_id)
+                .unwrap()
+                .insert(&output_layer.mle);
+        }
+    });
+
+    // Step 1: populate the circuit map with all of the data necessary in
+    // order to instantiate the circuit.
+    let mut circuit_map = CircuitMap::new();
+    let mut prover_input_layers: Vec<InputLayerEnum<F>> = Vec::new();
+    let mut fiat_shamir_challenges = Vec::new();
+    // Step 1a: populate the circuit map by compiling the necessary data
+    // outputs for each of the input layers, while writing the commitments
+    // to them into the transcript.
+    input_layer_descriptions
+        .iter()
+        .for_each(|input_layer_description| {
+            let input_layer_id = input_layer_description.layer_id();
+            let combined_mle = input_data.get(&input_layer_id).unwrap();
+            let mle_outputs_necessary = mle_claim_map.get(&input_layer_id).unwrap();
+            // Compute all data outputs necessary for future layers for each
+            // input layer.
+            mle_outputs_necessary.iter().for_each(|mle_output| {
+                let prefix_bits = mle_output.prefix_bits();
+                let output = filter_bookkeeping_table(&combined_mle, &prefix_bits);
+                circuit_map.add_node(CircuitLocation::new(input_layer_id, prefix_bits), output);
+            });
+            // Compute the concretized input layer since we have the
+            // layerwise bookkeeping table.
+            // FIXME(Ben) precommits are none of its business here.  We can fix this after we remove the different layer types.
+            let mut prover_input_layer = input_layer_description
+                .convert_into_prover_input_layer(
+                    combined_mle.clone(),
+                    &corresponding_input_data.precommit,
+                );
+            prover_input_layers.push(prover_input_layer);
+        });
+    // Step 1b: for each of the fiat shamir challenges, use the transcript
+    // in order to get the challenges and fill the layer.
+    fiat_shamir_challenge_descriptions
+        .iter()
+        .for_each(|fiat_shamir_challenge_description| {
+            let fiat_shamir_challenge_mle =
+                MultilinearExtension::new(challenge_sampler(
+                    "Verifier challenges",
+                    1 << fiat_shamir_challenge_description.num_bits,
+                ));
+            circuit_map.add_node(
+                CircuitLocation::new(fiat_shamir_challenge_description.layer_id(), vec![]),
+                fiat_shamir_challenge_mle.clone(),
+            );
+            fiat_shamir_challenges.push(FiatShamirChallenge::new(
+                fiat_shamir_challenge_mle,
+                fiat_shamir_challenge_description.layer_id(),
+            ));
+        });
+
+    // Step 1c: Compute the data outputs, using the map from Layer ID to
+    // which Circuit MLEs are necessary to compile for this layer, for each
+    // of the intermediate layers.
+    intermediate_layer_descriptions
+        .iter()
+        .for_each(|intermediate_layer_description| {
+            let mle_outputs_necessary = mle_claim_map
+                .get(&intermediate_layer_description.layer_id())
+                .unwrap();
+            intermediate_layer_description
+                .compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
+        });
+
+    // Step 2: Using the fully populated circuit map, convert each of the
+    // layer descriptions into concretized layers. Step 2a: Concretize the
+    // intermediate layer descriptions.
+    let mut prover_intermediate_layers: Vec<LayerEnum<F>> =
+        Vec::with_capacity(intermediate_layer_descriptions.len());
+    intermediate_layer_descriptions
+        .iter()
+        .for_each(|intermediate_layer_description| {
+            let prover_intermediate_layer =
+                intermediate_layer_description.convert_into_prover_layer(&circuit_map);
+            prover_intermediate_layers.push(prover_intermediate_layer)
+        });
+
+    // Step 2b: Concretize the output layer descriptions.
+    let mut prover_output_layers: Vec<MleOutputLayer<F>> = Vec::new();
+    output_layer_descriptions
+        .iter()
+        .for_each(|output_layer_description| {
+            let prover_output_layer =
+                output_layer_description.into_prover_output_layer(&circuit_map);
+            prover_output_layers.push(prover_output_layer)
+        });
+    let instantiated_circuit = InstantiatedCircuit {
+        input_layers: prover_input_layers,
+        fiat_shamir_challenges,
+        layers: Layers::new_with_layers(prover_intermediate_layers),
+        output_layers: prover_output_layers,
+    };
+
+    let layer_map = circuit_map.convert_to_layer_map();
+
+    (instantiated_circuit, layer_map)
+}
+
+
 impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>)>
     LayouterCircuit<F, C, Fn>
 {

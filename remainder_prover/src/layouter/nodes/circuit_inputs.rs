@@ -14,8 +14,8 @@ use super::{CircuitNode, Context, NodeId};
 /// A struct that represents input data that will be used to populate a
 /// [GKRCircuitDescription] in order to generate a full circuit.
 #[derive(Debug, Clone)]
-pub struct InputLayerData<F: Field> {
-    /// The input node ID in the circuit building process that corresponds to
+pub struct InputLayerNodeData<F: Field> {
+    /// The [InputLayerNode] ID in the circuit building process that corresponds to
     /// this data.
     pub corresponding_input_node_id: NodeId,
     /// The vector of data that goes in this input layer, as [InputShredData].
@@ -25,7 +25,7 @@ pub struct InputLayerData<F: Field> {
     pub precommit: Option<CommitmentEnum<F>>,
 }
 
-impl<F: Field> InputLayerData<F> {
+impl<F: Field> InputLayerNodeData<F> {
     /// Constructor for [InputLayerData], using the corresponding fields as
     /// parameters.
     pub fn new(

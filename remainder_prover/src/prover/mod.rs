@@ -10,6 +10,8 @@ pub mod proof_system;
 pub mod layers;
 
 
+use std::collections::HashMap;
+
 use self::layers::Layers;
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::input_layer::enum_input_layer::{
@@ -22,8 +24,11 @@ use crate::input_layer::InputLayerDescription;
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::LayerDescription;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputNodeMap};
+use crate::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
+use crate::layouter::nodes::circuit_inputs::InputShredData;
 use crate::layouter::nodes::node_enum::NodeEnum;
-use crate::layouter::nodes::CircuitNode;
+use crate::layouter::nodes::{CircuitNode, NodeId};
+use crate::mle::evals::MultilinearExtension;
 use crate::output_layer::mle_output_layer::{MleOutputLayer, MleOutputLayerDescription};
 use crate::output_layer::OutputLayerDescription;
 use crate::{
@@ -315,7 +320,7 @@ impl<F: Field> GKRCircuitDescription<F> {
 /// their corresponding input layer id (this is a 1:1 correspondence).
 pub fn generate_circuit_description<F: Field>(
     nodes: Vec<NodeEnum<F>>,
-) -> Result<(GKRCircuitDescription<F>, InputNodeMap), GKRError> {
+) -> Result<(GKRCircuitDescription<F>, InputNodeMap, impl Fn(HashMap<NodeId, MultilinearExtension<F>>) -> HashMap<LayerId, MultilinearExtension<F>>), GKRError> {
     // FIXME(Ben) consider inlining the layout function, if this is the only place we'll ever call it?  doesn't seem well factored.  or instead pass in the return values of layout() as arguments to this function?
     let (input_layer_nodes, fiat_shamir_challenge_nodes, intermediate_nodes, lookup_nodes, output_nodes) =
         layout(nodes).unwrap();
@@ -328,8 +333,11 @@ pub fn generate_circuit_description<F: Field>(
     let mut intermediate_layers = Vec::<LayerDescriptionEnum<F>>::new();
     let mut output_layers = Vec::<MleOutputLayerDescription<F>>::new();
     let mut circuit_description_map = CircuitDescriptionMap::new();
+    //FIXME(Ben) not needed anymore, we hope
     let mut input_layer_node_to_layer_map = InputNodeMap::new();
 
+    let mut input_layer_id_to_input_shred_ids = HashMap::new();
+    let mut input_layer_id_to_input_node_ids = HashMap::new();
     let input_layers = input_layer_nodes
         .iter()
         .map(|input_layer_node| {
@@ -341,9 +349,33 @@ pub fn generate_circuit_description<F: Field>(
                 .unwrap();
             input_layer_node_to_layer_map
                 .add_node_layer_id(input_layer_description.layer_id(), input_layer_node.id());
+            input_layer_id_to_input_node_ids.insert(
+                input_layer_description.layer_id(),
+                input_layer_node.id(),
+            );
+            input_layer_id_to_input_shred_ids.insert(
+                input_layer_description.layer_id(),
+                input_layer_node.subnodes().unwrap()
+            );
             input_layer_description
         })
         .collect_vec();
+
+    // TODO(Ben) add the option to pass in input _layer_ node data as well
+    let input_builder = move |input_node_data: HashMap<NodeId, MultilinearExtension<F>>| {
+        let mut input_layer_data = HashMap::new();
+        for (input_layer_id, input_shred_ids) in input_layer_id_to_input_shred_ids.iter() {
+            let shred_mles = input_shred_ids
+                .iter()
+                .map(|input_shred_id| {
+                    input_node_data.get(input_shred_id).unwrap()
+                })
+                .collect_vec();
+            let combined_mle = combine_input_mles(&shred_mles);
+            input_layer_data.insert(*input_layer_id, combined_mle);
+        }
+        input_layer_data
+    };
 
     let fiat_shamir_challenges = fiat_shamir_challenge_nodes
         .iter()
@@ -394,5 +426,5 @@ pub fn generate_circuit_description<F: Field>(
     };
 
     // FIXME(Ben) this should return a function that builds the inputs from the input node data.  @vishady has some ideas
-    Ok((circuit_description, input_layer_node_to_layer_map))
+    Ok((circuit_description, input_layer_node_to_layer_map, input_builder))
 }

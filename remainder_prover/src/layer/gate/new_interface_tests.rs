@@ -37,7 +37,7 @@ mod tests {
             component::{Component, ComponentSet},
             nodes::{
                 circuit_inputs::{
-                    InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+                    InputLayerNodeData, InputLayerNode, InputLayerType, InputShred, InputShredData,
                 },
                 circuit_outputs::OutputNode,
                 gate::GateNode,
@@ -112,7 +112,7 @@ mod tests {
                 MultilinearExtension::new(neg_mle.mle.get_evals_vector().to_vec()),
             );
 
-            let input_layer_data = InputLayerData::new(
+            let input_layer_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![mle_input_shred_data, neg_mle_input_shred_data],
                 None,
@@ -200,7 +200,7 @@ mod tests {
                     ctx,
                     &input_layer,
                 );
-            let input_layer_data = InputLayerData::new(
+            let input_layer_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![
                     dataparallel_mle_input_shred_data,
@@ -276,7 +276,7 @@ mod tests {
                 ctx,
                 &input_layer,
             );
-            let input_layer_data = InputLayerData::new(
+            let input_layer_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![mle_input_shred_data, neg_mle_input_shred_data],
                 None,
@@ -345,7 +345,7 @@ mod tests {
                 &input_layer,
             );
 
-            let input_layer_data = InputLayerData::new(
+            let input_layer_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![
                     mle_1_input_shred_data,
@@ -458,7 +458,7 @@ mod tests {
                     &input_layer,
                 );
 
-            let input_layer_data = InputLayerData::new(
+            let input_layer_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![
                     dataparallel_mle_input_shred_data,
@@ -543,7 +543,7 @@ mod tests {
                     &input_layer,
                 );
 
-            let input_layer_data = InputLayerData::new(
+            let input_layer_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![
                     dataparallel_mle_1_input_shred_data,

@@ -3,7 +3,7 @@ use remainder::{
         compiling::LayouterCircuit,
         component::ComponentSet,
         nodes::{
-            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerNodeData, InputLayerNode, InputLayerType},
             fiat_shamir_challenge::FiatShamirChallengeNode,
             lookup::{LookupConstraint, LookupTable},
             node_enum::NodeEnum,
@@ -45,7 +45,7 @@ pub fn single_shred_test() {
             ctx,
             &input_layer,
         );
-        let input_data = InputLayerData::new(
+        let input_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![table_data, constrained_data, multiplicities_data],
             None,
@@ -155,7 +155,7 @@ pub fn multi_shred_test() {
         let lookup_constraint_3 =
             LookupConstraint::new::<Fr>(ctx, &lookup_table, &constrained_3, &multiplicities_3);
 
-        let input_data = InputLayerData::new(
+        let input_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![
                 table_data,
@@ -227,7 +227,7 @@ pub fn test_not_satisfied() {
         );
         let lookup_constraint =
             LookupConstraint::new::<Fr>(ctx, &lookup_table, &constrained, &multiplicities);
-        let input_layer_data = InputLayerData::new(
+        let input_layer_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![table_data, constrained_data, multiplicities_data],
             None,

@@ -6,7 +6,7 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerNodeData, InputLayerNode, InputLayerType},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
@@ -203,7 +203,7 @@ fn test_combined_nondataparallel_circuit_newmainder() {
             get_dummy_input_shred_and_data(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
         let (input_mle_2, input_mle_2_data) =
             get_dummy_input_shred_and_data(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
-        let input_data = InputLayerData::new(
+        let input_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![input_mle_1_data, input_mle_2_data],
             None,
