@@ -291,15 +291,16 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         (instantiated_circuit, layer_map)
     }
 
-    /// This function is hacky and should be re-done correctly AFTER
-    /// we fix the `self.witness_builder` function!! However, this is
+    /// This function simply calls the [LayouterCircuit]'s `witness_builder`
+    /// function and generates the corresponding circuit description from it.
+    ///
+    /// TODO(ryancao): This function is hacky and should be re-done correctly
+    /// AFTER we fix the `self.witness_builder` function!! However, this is
     /// the most direct way to just grab the circuit description for
-    /// now...
+    /// now.
     pub fn get_circuit_description(&mut self) -> GKRCircuitDescription<F> {
         let ctx = Context::new();
         let (component, _input_layer_data) = (self.witness_builder)(&ctx);
-        // TODO(vishady): ADD CIRCUIT DESCRIPTION TO TRANSCRIPT (maybe not
-        // here...)
         let (circuit_description, _input_node_map) =
             generate_circuit_description(component, ctx).unwrap();
         circuit_description
