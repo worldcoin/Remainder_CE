@@ -1,6 +1,6 @@
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::Component;
-use crate::layouter::nodes::circuit_inputs::InputLayerData;
+use crate::layouter::nodes::circuit_inputs::InputLayerNodeData;
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::Context;
 use ark_std::{end_timer, start_timer};
@@ -17,7 +17,7 @@ use std::path::Path;
 pub fn test_circuit<
     F: Field,
     C: Component<NodeEnum<F>>,
-    Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>),
+    Fn: FnMut(&Context) -> (C, Vec<InputLayerNodeData<F>>),
 >(
     mut circuit: LayouterCircuit<F, C, Fn>,
     path: Option<&Path>,
