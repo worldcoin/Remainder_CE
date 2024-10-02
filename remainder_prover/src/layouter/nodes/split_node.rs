@@ -144,7 +144,7 @@ mod test {
             ]);
             // the mle_out = [1*5, 2*6, 3*7, 4*8], the product between the two split nodes
             let mle_out = MultilinearExtension::new(vec![
-                Fr::from(1 * 5),
+                Fr::from(5),
                 Fr::from(2 * 6),
                 Fr::from(3 * 7),
                 Fr::from(4 * 8),

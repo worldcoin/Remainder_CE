@@ -4,7 +4,7 @@ use itertools::Itertools;
 use remainder_shared_types::Field;
 use tracing::{debug, info};
 
-use crate::{claims::ClaimError, mle::mle_enum::MleEnum};
+use crate::claims::ClaimError;
 
 use super::ClaimMle;
 
@@ -137,18 +137,6 @@ impl<F: Field> ClaimGroup<F> {
     /// Returns a reference to a vector of claims contained in this group.
     pub fn get_claims(&self) -> &[ClaimMle<F>] {
         &self.claims
-    }
-
-    /// Temporary hacky fix -- claims store their respective (unmodified)
-    /// MleRefs instead of the layer itself. This simply looks at the list
-    /// of all claims within a single ClaimGroup and grabs the associated
-    /// MleRefs from there.
-    pub fn get_claim_mle_refs(&self) -> Vec<MleEnum<F>> {
-        self.claims
-            .clone()
-            .into_iter()
-            .map(|claim| claim.mle_ref.unwrap())
-            .collect_vec()
     }
 }
 

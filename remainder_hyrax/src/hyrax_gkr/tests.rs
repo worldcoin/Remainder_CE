@@ -30,7 +30,6 @@ use remainder::layouter::nodes::sector::Sector;
 use remainder::layouter::nodes::{CircuitNode, Context};
 use remainder::mle::dense::DenseMle;
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
-use remainder::mle::mle_enum::MleEnum;
 use remainder::mle::{Mle, MleIndex};
 use remainder_shared_types::transcript::ec_transcript::{
     ECProverTranscript, ECTranscriptReader, ECTranscriptWriter, ECVerifierTranscript,
@@ -129,7 +128,6 @@ fn degree_one_regular_hyrax_layer_test() {
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Input(0),
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(mle_producing_claim.clone())),
         evaluation: commitment_to_eval,
     }];
 
@@ -140,6 +138,7 @@ fn degree_one_regular_hyrax_layer_test() {
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
+        &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -218,7 +217,6 @@ fn identity_gate_hyrax_layer_test() {
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(mle_producing_claim)),
         evaluation: commitment_to_eval,
     }];
 
@@ -229,6 +227,7 @@ fn identity_gate_hyrax_layer_test() {
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
+        &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -319,7 +318,6 @@ fn matmult_hyrax_layer_test() {
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(mle_producing_claim)),
         evaluation: commitment_to_eval,
     }];
 
@@ -330,6 +328,7 @@ fn matmult_hyrax_layer_test() {
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
+        &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -407,14 +406,13 @@ fn product_of_mles_regular_layer_test() {
         LayerId::Input(0),
     );
     let claim_point = vec![Fr::from(3), Fr::from(5)];
-    let mle_ref = mle_producing_claim;
+    let mle = mle_producing_claim;
     let blinding = Fr::from(blinding_rng.next_u64());
     let commitment_to_eval =
-        committer.committed_scalar(&evaluate_mle(&mle_ref, &claim_point), &blinding);
+        committer.committed_scalar(&evaluate_mle(&mle, &claim_point), &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Input(0),
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(mle_ref.clone())),
         evaluation: commitment_to_eval,
     }];
 
@@ -425,6 +423,7 @@ fn product_of_mles_regular_layer_test() {
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
+        &vec![mle],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -522,7 +521,6 @@ fn selector_only_test() {
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Input(0),
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(mle_producing_claim.clone())),
         evaluation: commitment_to_eval,
     }];
 
@@ -533,6 +531,7 @@ fn selector_only_test() {
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
+        &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -637,7 +636,6 @@ fn degree_two_selector_regular_hyrax_layer_test() {
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Input(0),
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(mle_producing_claim.clone())),
         evaluation: commitment_to_eval,
     }];
 
@@ -648,6 +646,7 @@ fn degree_two_selector_regular_hyrax_layer_test() {
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
+        &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -720,7 +719,6 @@ fn hyrax_input_layer_proof_test() {
     let claim = HyraxClaim {
         to_layer_id: layer_id,
         point: claim_point,
-        mle_enum: Some(MleEnum::Dense(input_dense_mle.clone())),
         evaluation: commitment_to_eval,
     };
 
@@ -753,7 +751,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -761,7 +759,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -831,7 +829,7 @@ fn small_regular_circuit_public_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -839,7 +837,7 @@ fn small_regular_circuit_public_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -909,7 +907,7 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -917,7 +915,7 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -995,7 +993,7 @@ fn medium_regular_circuit_public_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -1003,7 +1001,7 @@ fn medium_regular_circuit_public_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -1081,7 +1079,7 @@ fn matmult_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -1089,7 +1087,7 @@ fn matmult_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -1154,7 +1152,7 @@ fn regular_identity_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -1162,7 +1160,7 @@ fn regular_identity_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,
@@ -1237,7 +1235,7 @@ fn regular_identity_matmult_hyrax_input_layer_test() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("Test small regular circuit");
     let blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -1245,7 +1243,7 @@ fn regular_identity_matmult_hyrax_input_layer_test() {
         None,
     );
     let mut hyrax_prover: HyraxProver<Bn256Point, _, ThreadRng> =
-        HyraxProver::new(&committer, blinding_rng, &mut converter);
+        HyraxProver::new(&committer, blinding_rng, converter);
 
     let mut circuit_function: &mut dyn FnMut(
         &Context,

@@ -1,7 +1,7 @@
 #[cfg(test)]
 pub mod tests;
 
-mod helpers;
+pub(crate) mod helpers;
 
 /// The module which performs claim aggregation algorithms.
 pub mod claim_group;
@@ -17,7 +17,7 @@ use crate::claims::ClaimError;
 use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::InputLayer;
 use crate::layer::layer_enum::LayerEnum;
-use crate::mle::mle_enum::MleEnum;
+use crate::mle::dense::DenseMle;
 
 use crate::prover::GKRError;
 use crate::sumcheck::*;
@@ -91,19 +91,21 @@ impl<
     fn prover_aggregate_claims(
         &self,
         layer: &LayerEnum<F>,
+        output_mles_from_layer: &[DenseMle<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError> {
         let layer_id = layer.layer_id();
-        self.prover_aggregate_claims(layer, layer_id, transcript_writer)
+        self.prover_aggregate_claims(layer, output_mles_from_layer, layer_id, transcript_writer)
     }
 
     fn prover_aggregate_claims_input(
         &self,
         layer: &InputLayerEnum<F>,
+        output_mles_from_layer: &[DenseMle<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError> {
         let layer_id = layer.layer_id();
-        self.prover_aggregate_claims(layer, layer_id, transcript_writer)
+        self.prover_aggregate_claims(layer, output_mles_from_layer, layer_id, transcript_writer)
     }
 
     fn verifier_aggregate_claims(
@@ -143,6 +145,7 @@ impl<
     fn prover_aggregate_claims(
         &self,
         layer: &impl YieldWLXEvals<F>,
+        output_mles_from_layer: &[DenseMle<F>],
         layer_id: LayerId,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError> {
@@ -155,13 +158,12 @@ impl<
         let claim_group = ClaimGroup::new(claims.to_vec()).unwrap();
         debug!("Found Layer claims:\n{:#?}", claims);
 
-        // // --- Add the claimed values to the FS transcript ---
-        // for claim in claims {
-        //     transcript_writer.append_elements("Claimed bits to be aggregated", claim.get_point());
-        //     transcript_writer.append("Claimed value to be aggregated", claim.get_result());
-        // }
-
-        prover_aggregate_claims_helper(&claim_group, layer, transcript_writer)
+        prover_aggregate_claims_helper(
+            &claim_group,
+            layer,
+            output_mles_from_layer,
+            transcript_writer,
+        )
     }
 }
 
@@ -172,7 +174,7 @@ pub trait YieldWLXEvals<F: Field> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        claimed_mles: Vec<MleEnum<F>>,
+        claimed_mles: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError>;
@@ -194,9 +196,6 @@ pub struct ClaimMle<F: Field> {
     /// The layer ID of the layer containing the MLE this claim refers to (if
     /// present); destination layer.
     pub to_layer_id: Option<LayerId>,
-
-    /// The mle ref associated with the claim.
-    pub mle_ref: Option<MleEnum<F>>,
 }
 
 impl<F: Field> ClaimMle<F> {
@@ -207,7 +206,6 @@ impl<F: Field> ClaimMle<F> {
             claim: Claim::new(point, result),
             from_layer_id: None,
             to_layer_id: None,
-            mle_ref: None,
         }
     }
 
@@ -217,13 +215,11 @@ impl<F: Field> ClaimMle<F> {
         result: F,
         from_layer_id: Option<LayerId>,
         to_layer_id: Option<LayerId>,
-        mle_ref: Option<MleEnum<F>>,
     ) -> Self {
         Self {
             claim: Claim::new(point, result),
             from_layer_id,
             to_layer_id,
-            mle_ref,
         }
     }
 
@@ -265,7 +261,6 @@ impl<F: fmt::Debug + Field> fmt::Debug for ClaimMle<F> {
             .field("result", &self.claim.get_result())
             .field("from_layer_id", &self.from_layer_id)
             .field("to_layer_id", &self.to_layer_id)
-            .field("mle_ref", &self.mle_ref)
             .finish()
     }
 }

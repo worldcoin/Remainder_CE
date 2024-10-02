@@ -15,10 +15,7 @@ use crate::{
     expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{gate::gate_helpers::bind_round_identity, LayerError, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{
-        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum,
-        Mle, MleIndex,
-    },
+    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
     sumcheck::*,
 };
 use remainder_shared_types::{
@@ -311,14 +308,12 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
-    ) -> bool {
+    ) {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
-        let maybe_source_mle_data = circuit_map.get_data_from_circuit_mle(&self.source_mle);
-        if maybe_source_mle_data.is_err() {
-            return false;
-        }
-        let source_mle_data = maybe_source_mle_data.unwrap();
+        let source_mle_data = circuit_map
+            .get_data_from_circuit_mle(&self.source_mle)
+            .unwrap();
 
         let max_gate_val = self
             .wiring
@@ -349,7 +344,6 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
-        true
     }
 }
 
@@ -624,7 +618,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for IdentityGate<F> {
                 val,
                 Some(self.layer_id()),
                 Some(mle_ref.layer_id()),
-                Some(MleEnum::Dense(mle_ref.clone())),
             );
             claims.push(claim);
         } else {
@@ -640,7 +633,7 @@ impl<F: Field> YieldWLXEvals<F> for IdentityGate<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        _claimed_mles: Vec<MleEnum<F>>,
+        _claimed_mles: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
@@ -705,15 +698,11 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierIdentityGateLayer<F> {
             .collect_vec();
         let source_val = self.source_mle.value();
 
-        // WARNING: DO NOT TRUST THIS MLE! IT IS INCORRECT
-        let dummy_source_mle = DenseMle::new_from_raw(vec![source_val], self.layer_id());
-
         let source_claim: ClaimMle<F> = ClaimMle::new(
             source_point,
             source_val,
             Some(self.layer_id()),
             Some(self.source_mle.layer_id()),
-            Some(MleEnum::Dense(dummy_source_mle)),
         );
 
         Ok(vec![source_claim])

@@ -26,7 +26,7 @@ use crate::{
     expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::VerificationError,
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum, Mle, MleIndex},
+    mle::{dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
     sumcheck::evaluate_at_a_point,
 };
 
@@ -403,20 +403,16 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
-    ) -> bool {
+    ) {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
 
-        let maybe_matrix_a_data = circuit_map.get_data_from_circuit_mle(&self.matrix_a.mle);
-        if maybe_matrix_a_data.is_err() {
-            return false;
-        }
-        let matrix_a_data = maybe_matrix_a_data.unwrap();
-        let maybe_matrix_b_data = circuit_map.get_data_from_circuit_mle(&self.matrix_b.mle);
-        if maybe_matrix_b_data.is_err() {
-            return false;
-        }
-        let matrix_b_data = maybe_matrix_b_data.unwrap();
+        let matrix_a_data = circuit_map
+            .get_data_from_circuit_mle(&self.matrix_a.mle)
+            .unwrap();
+        let matrix_b_data = circuit_map
+            .get_data_from_circuit_mle(&self.matrix_b.mle)
+            .unwrap();
         let product = product_two_matrices_from_flattened_vectors(
             matrix_a_data.get_evals_vector(),
             matrix_b_data.get_evals_vector(),
@@ -433,7 +429,6 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
-        true
     }
 
     fn convert_into_verifier_layer(
@@ -646,22 +641,13 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
                     })
                     .collect_vec();
 
-                let mle_layer_id = matrix.mle.layer_id();
                 let matrix_claimed_val = matrix.mle.value();
-
-                // Dummy MLE ref.
-                // TODO(ryancao): Fix things so that we don't need to pass this around... This is not right
-                let mle_ref = MleEnum::Dense(DenseMle::new_from_raw(
-                    vec![matrix_claimed_val],
-                    mle_layer_id,
-                ));
 
                 let claim: ClaimMle<F> = ClaimMle::new(
                     matrix_fixed_indices,
                     matrix_claimed_val,
                     Some(self.layer_id),
                     Some(matrix.mle.layer_id()),
-                    Some(mle_ref),
                 );
                 claim
             })
@@ -694,7 +680,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for MatMult<F> {
                     matrix_val,
                     Some(self.layer_id),
                     Some(matrix_mle.layer_id),
-                    Some(MleEnum::Dense(matrix_mle.clone())),
                 );
                 claim
             })
@@ -709,7 +694,7 @@ impl<F: Field> YieldWLXEvals<F> for MatMult<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        claim_mles: Vec<MleEnum<F>>,
+        claim_mles: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
@@ -785,7 +770,7 @@ pub fn gen_transpose_matrix<F: Field>(matrix: &Matrix<F>) -> Matrix<F> {
     matrix.mle.bookkeeping_table();
     for i in 0..num_cols {
         for j in 0..num_rows {
-            matrix_transp_vec.push(matrix.mle.current_mle[j * num_cols + i]);
+            matrix_transp_vec.push(matrix.mle.mle[j * num_cols + i]);
         }
     }
 
@@ -888,12 +873,12 @@ mod test {
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
         let exp_product = vec![
-            Fr::from(1 * 3 + 2 * 9),
-            Fr::from(1 * 5 + 2 * 6),
+            Fr::from(3 + 2 * 9),
+            Fr::from(5 + 2 * 6),
             Fr::from(9 * 3 + 10 * 9),
             Fr::from(9 * 5 + 10 * 6),
-            Fr::from(13 * 3 + 1 * 9),
-            Fr::from(13 * 5 + 1 * 6),
+            Fr::from(13 * 3 + 9),
+            Fr::from(13 * 5 + 6),
             Fr::from(3 * 3 + 10 * 9),
             Fr::from(3 * 5 + 10 * 6),
         ];

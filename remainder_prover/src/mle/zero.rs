@@ -15,7 +15,6 @@ use super::{mle_enum::MleEnum, MleIndex};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ZeroMle<F> {
     pub(crate) mle_indices: Vec<MleIndex<F>>,
-    pub(crate) original_mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck).
     pub(crate) num_vars: usize,
@@ -35,8 +34,7 @@ impl<F: Field> ZeroMle<F> {
             .collect_vec();
 
         Self {
-            mle_indices: mle_indices.clone(),
-            original_mle_indices: mle_indices,
+            mle_indices,
             num_vars,
             layer_id,
             zero: [F::ZERO],
@@ -54,19 +52,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         &self.mle_indices
     }
 
-    fn original_mle_indices(&self) -> &Vec<MleIndex<F>> {
-        &self.original_mle_indices
-    }
-
-    fn original_bookkeeping_table(&self) -> &[F] {
-        &self.zero
-    }
-
     fn num_free_vars(&self) -> usize {
-        self.num_vars
-    }
-
-    fn original_num_vars(&self) -> usize {
         self.num_vars
     }
 
@@ -153,7 +139,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for ZeroMle<F> {
             F::ZERO,
             None,
             Some(self.layer_id),
-            Some(self.clone().get_enum()),
         )])
     }
 }

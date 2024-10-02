@@ -106,7 +106,6 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
         let agg_claim = HyraxClaim {
             to_layer_id: layer_id,
             point: agg_claim_point,
-            mle_enum: None,
             evaluation: agg_claim_eval,
         };
 
@@ -210,7 +209,6 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
         HyraxClaim {
             to_layer_id: layer_id,
             point: agg_claim_point,
-            mle_enum: None,
             evaluation: agg_claim_eval,
         }
     }

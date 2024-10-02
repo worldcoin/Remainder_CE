@@ -29,31 +29,21 @@ pub struct DenseMle<F> {
     /// below are fields originally belonging to DenseMle
 
     /// A representation of the MLE on its current state.
-    pub current_mle: MultilinearExtension<F>,
+    pub mle: MultilinearExtension<F>,
     /// The MleIndices `current_mle`.
     pub mle_indices: Vec<MleIndex<F>>,
-
-    /// The original MLE (that does not get destructively modified
-    /// when fixing a variable).
-    // TODO(Makis): Need to find a way to skip only the `evals` field inside the
-    // original MLE.
-    // #[serde(skip)]
-    // #[serde(default = "MultilinearExtension::new_zero")]
-    pub original_mle: MultilinearExtension<F>,
-    /// The original mle indices (not modified during fix var)
-    pub original_mle_indices: Vec<MleIndex<F>>,
 }
 
 impl<F: Field> Mle<F> for DenseMle<F> {
     fn num_free_vars(&self) -> usize {
-        self.current_mle.num_vars()
+        self.mle.num_vars()
     }
 
     fn get_padded_evaluations(&self) -> Vec<F> {
-        let size: usize = 1 << self.current_mle.num_vars();
-        let padding = size - self.current_mle.get_evals().len();
+        let size: usize = 1 << self.mle.num_vars();
+        let padding = size - self.mle.get_evals().len();
 
-        self.current_mle
+        self.mle
             .get_evals_vector()
             .iter()
             .cloned()
@@ -64,7 +54,6 @@ impl<F: Field> Mle<F> for DenseMle<F> {
     fn add_prefix_bits(&mut self, mut new_bits: Vec<MleIndex<F>>) {
         new_bits.extend(self.mle_indices.clone());
         self.mle_indices.clone_from(&new_bits);
-        self.original_mle_indices = new_bits;
     }
 
     fn layer_id(&self) -> LayerId {
@@ -72,23 +61,11 @@ impl<F: Field> Mle<F> for DenseMle<F> {
     }
 
     fn bookkeeping_table(&self) -> &[F] {
-        self.current_mle.get_evals_vector()
-    }
-
-    fn original_bookkeeping_table(&self) -> &[F] {
-        self.original_mle.get_evals_vector()
+        self.mle.get_evals_vector()
     }
 
     fn mle_indices(&self) -> &[MleIndex<F>] {
         &self.mle_indices
-    }
-
-    fn original_mle_indices(&self) -> &Vec<MleIndex<F>> {
-        &self.original_mle_indices
-    }
-
-    fn original_num_vars(&self) -> usize {
-        self.original_mle.num_vars()
     }
 
     fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<Claim<F>> {
@@ -131,7 +108,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         assert!(index_found);
         debug_assert!(1 <= bit_count && bit_count <= self.num_free_vars());
 
-        self.current_mle.fix_variable_at_index(bit_count - 1, point);
+        self.mle.fix_variable_at_index(bit_count - 1, point);
 
         if self.num_free_vars() == 0 {
             let fixed_claim_return = Claim::new(
@@ -139,7 +116,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
                     .iter()
                     .map(|index| index.val().unwrap())
                     .collect_vec(),
-                self.current_mle.value(),
+                self.mle.value(),
             );
             Some(fixed_claim_return)
         } else {
@@ -147,17 +124,17 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         }
     }
 
-    /// Ryan's note -- I assume this function updates the bookkeeping tables as
-    /// described by [Tha13].
-    fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<Claim<F>> {
-        // --- Bind the current indexed bit to the challenge value ---
+    /// Bind the bit `index` to the value `binding`.
+    /// If this was the last unbound variable, then return a Claim object giving the fully specified
+    /// evaluation point and the (single) value of the bookkeeping table.  Otherwise, return None.
+    fn fix_variable(&mut self, index: usize, binding: F) -> Option<Claim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
-            if *mle_index == MleIndex::Indexed(round_index) {
-                mle_index.bind_index(challenge);
+            if *mle_index == MleIndex::Indexed(index) {
+                mle_index.bind_index(binding);
             }
         }
-
-        self.current_mle.fix_variable(challenge);
+        // Update the bookkeeping table.
+        self.mle.fix_variable(binding);
 
         if self.num_free_vars() == 0 {
             let fixed_claim_return = Claim::new(
@@ -165,7 +142,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
                     .iter()
                     .map(|index| index.val().unwrap())
                     .collect_vec(),
-                self.current_mle.value(),
+                self.mle.value(),
             );
             Some(fixed_claim_return)
         } else {
@@ -211,7 +188,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for DenseMle<F> {
             claim_value,
             None,
             Some(self.layer_id),
-            Some(self.clone().get_enum()),
         )])
     }
 }
@@ -233,10 +209,8 @@ impl<F: Field> DenseMle<F> {
             .collect();
         Self {
             layer_id,
-            current_mle: data.clone(),
-            mle_indices: mle_indices.clone(),
-            original_mle: data,
-            original_mle_indices: mle_indices,
+            mle: data,
+            mle_indices,
         }
     }
 
@@ -256,7 +230,6 @@ impl<F: Field> DenseMle<F> {
         });
         assert!(all_indices_free_or_fixed);
 
-        mle.original_mle_indices = mle_indices.to_vec();
         mle.mle_indices = mle_indices.to_vec();
         mle
     }
@@ -278,16 +251,12 @@ impl<F: Field> DenseMle<F> {
 
         let mle_indices: Vec<MleIndex<F>> = ((0..num_free_vars).map(|_| MleIndex::Free)).collect();
 
-        let current_mle = MultilinearExtension::new_from_evals(Evaluations::<F>::new(
-            num_free_vars,
-            items.clone(),
-        ));
+        let current_mle =
+            MultilinearExtension::new_from_evals(Evaluations::<F>::new(num_free_vars, items));
         Self {
             layer_id,
-            current_mle: current_mle.clone(),
-            mle_indices: mle_indices.clone(),
-            original_mle: current_mle,
-            original_mle_indices: mle_indices,
+            mle: current_mle,
+            mle_indices,
         }
     }
 
@@ -312,10 +281,8 @@ impl<F: Field> DenseMle<F> {
 
         Self {
             layer_id,
-            current_mle: current_mle.clone(),
-            mle_indices: mle_indices.clone(),
-            original_mle: current_mle,
-            original_mle_indices: mle_indices,
+            mle: current_mle,
+            mle_indices,
         }
     }
 
@@ -386,7 +353,7 @@ impl<F: Field> IntoIterator for DenseMle<F> {
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.current_mle.get_evals_vector().clone().into_iter()
+        self.mle.get_evals_vector().clone().into_iter()
     }
 }
 
@@ -423,14 +390,9 @@ pub fn get_padded_evaluations_for_list<F: Field, const L: usize>(items: &[Vec<F>
 impl<F: Field> DenseMle<F> {
     /// Splits the MLE into a new MLE with a tuple of size 2 as its element.
     pub fn split(self) -> [DenseMle<F>; 2] {
-        let first_iter = self
-            .current_mle
-            .get_evals_vector()
-            .clone()
-            .into_iter()
-            .step_by(2);
+        let first_iter = self.mle.get_evals_vector().clone().into_iter().step_by(2);
         let second_iter = self
-            .current_mle
+            .mle
             .get_evals_vector()
             .clone()
             .into_iter()

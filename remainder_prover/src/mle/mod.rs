@@ -67,17 +67,6 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     /// Get the indicies of the `Mle` that this `MleRef` represents.
     fn mle_indices(&self) -> &[MleIndex<F>];
 
-    /// Gets the original, unmutated MLE indices associated with an MLE
-    /// when it was first created (before any variable binding occured).
-    fn original_mle_indices(&self) -> &Vec<MleIndex<F>>;
-
-    /// Gets the original, unmutated MLE bookkeeping table associated with an MLE
-    /// when it was first created (before any variable binding occured).
-    fn original_bookkeeping_table(&self) -> &[F];
-
-    /// Number of original variables, not mutated.
-    fn original_num_vars(&self) -> usize;
-
     /// Fix the variable at `round_index` at a given `challenge` point. Mutates
     /// `self` to be the bookeeping table for the new MLE.
     ///

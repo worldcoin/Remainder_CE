@@ -8,20 +8,20 @@ use super::{
     circuit_inputs::{InputLayerNode, InputShred},
     circuit_outputs::OutputNode,
     debug::DebugNode,
+    fiat_shamir_challenge::FiatShamirChallengeNode,
     gate::GateNode,
     identity_gate::IdentityGateNode,
     lookup::{LookupConstraint, LookupTable},
     matmult::MatMultNode,
     sector::{Sector, SectorGroup},
     split_node::SplitNode,
-    verifier_challenge::VerifierChallengeNode,
     NodeGroup, YieldNode,
 };
 
 node_enum!(NodeEnum: Field,
     (InputShred: InputShred),
     (InputLayer: InputLayerNode),
-    (VerifierChallengeNode: VerifierChallengeNode),
+    (FiatShamirChallengeNode: FiatShamirChallengeNode),
     (Output: OutputNode),
     (Debug: DebugNode),
     (Sector: Sector<F>),
@@ -38,7 +38,7 @@ node_enum!(NodeEnum: Field,
 pub struct NodeEnumGroup<F: Field> {
     input_shreds: Option<Vec<InputShred>>,
     input_layers: Option<Vec<InputLayerNode>>,
-    verifier_challenge_nodes: Option<Vec<VerifierChallengeNode>>,
+    fiat_shamir_challenge_nodes: Option<Vec<FiatShamirChallengeNode>>,
     output: Option<Vec<OutputNode>>,
     debugs: Option<Vec<DebugNode>>,
     sectors: Option<Vec<Sector<F>>>,
@@ -58,7 +58,7 @@ impl<F: Field> NodeGroup for NodeEnumGroup<F> {
         let mut out = Self {
             input_shreds: Some(vec![]),
             input_layers: Some(vec![]),
-            verifier_challenge_nodes: Some(vec![]),
+            fiat_shamir_challenge_nodes: Some(vec![]),
             output: Some(vec![]),
             debugs: Some(vec![]),
             sectors: Some(vec![]),
@@ -75,8 +75,8 @@ impl<F: Field> NodeGroup for NodeEnumGroup<F> {
             match node {
                 NodeEnum::InputShred(node) => out.input_shreds.as_mut().unwrap().push(node),
                 NodeEnum::InputLayer(node) => out.input_layers.as_mut().unwrap().push(node),
-                NodeEnum::VerifierChallengeNode(node) => {
-                    out.verifier_challenge_nodes.as_mut().unwrap().push(node)
+                NodeEnum::FiatShamirChallengeNode(node) => {
+                    out.fiat_shamir_challenge_nodes.as_mut().unwrap().push(node)
                 }
                 NodeEnum::Output(node) => out.output.as_mut().unwrap().push(node),
                 NodeEnum::Debug(node) => out.debugs.as_mut().unwrap().push(node),
@@ -110,9 +110,9 @@ impl<F: Field> YieldNode<InputLayerNode> for NodeEnumGroup<F> {
     }
 }
 
-impl<F: Field> YieldNode<VerifierChallengeNode> for NodeEnumGroup<F> {
-    fn get_nodes(&mut self) -> Vec<VerifierChallengeNode> {
-        self.verifier_challenge_nodes.take().unwrap_or_default()
+impl<F: Field> YieldNode<FiatShamirChallengeNode> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<FiatShamirChallengeNode> {
+        self.fiat_shamir_challenge_nodes.take().unwrap_or_default()
     }
 }
 

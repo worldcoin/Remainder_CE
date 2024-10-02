@@ -20,7 +20,7 @@ use crate::{
     claims::wlx_eval::YieldWLXEvals,
     input_layer::CommitmentEnum,
     layer::LayerId,
-    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
+    mle::{dense::DenseMle, evals::MultilinearExtension},
 };
 
 use super::{
@@ -244,7 +244,7 @@ impl<F: Field> YieldWLXEvals<F> for LigeroInputLayer<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        claimed_mles: Vec<MleEnum<F>>,
+        claimed_mles: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
@@ -279,7 +279,7 @@ mod tests {
         let ratio = 1.;
 
         // MLE on 2 variables.
-        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(|i| Fr::from(i)).collect();
+        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(Fr::from).collect();
         let dense_mle = DenseMle::new_from_raw(evals.clone(), layer_id);
 
         let claim_point = vec![Fr::ONE, Fr::ZERO];
@@ -292,7 +292,7 @@ mod tests {
         let verifier_ligero_input_layer =
             LigeroInputLayerDescription::new(layer_id, dense_mle.num_free_vars(), aux);
         let mut ligero_input_layer = LigeroInputLayer::new(
-            dense_mle.original_mle,
+            dense_mle.mle,
             layer_id,
             Some(pre_commitment),
             rho_inv,
@@ -347,7 +347,7 @@ mod tests {
         let ratio = 1.;
 
         // MLE on 2 variables.
-        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(|i| Fr::from(i)).collect();
+        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(Fr::from).collect();
         let dense_mle = DenseMle::new_from_raw(evals.clone(), layer_id);
 
         let claim_point = vec![Fr::ONE, Fr::ZERO];
@@ -360,7 +360,7 @@ mod tests {
             LigeroAuxInfo::new(evals.len(), rho_inv, ratio, None),
         );
         let mut ligero_input_layer =
-            LigeroInputLayer::new(dense_mle.original_mle, layer_id, None, rho_inv, ratio);
+            LigeroInputLayer::new(dense_mle.mle, layer_id, None, rho_inv, ratio);
 
         // Transcript writer with test sponge that always returns `1`.
         let mut transcript_writer: TranscriptWriter<Fr, CountingSponge<Fr>> =
