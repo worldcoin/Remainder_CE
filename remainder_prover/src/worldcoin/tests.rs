@@ -1,10 +1,14 @@
+use crate::mle::evals::MultilinearExtension;
 use crate::prover::helpers::test_circuit;
+use crate::prover::prove_circuit;
 use crate::worldcoin::circuits::{build_circuit, build_circuit_description};
 use crate::worldcoin::data::{
     load_worldcoin_data_v2, load_worldcoin_data_v3, wirings_to_reroutings, CircuitData
 };
 use crate::worldcoin::parameters::decode_wirings;
 use ndarray::Array2;
+use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+use remainder_shared_types::transcript::{ProverTranscript, TranscriptWriter};
 use remainder_shared_types::Fr;
 use std::path::Path;
 
@@ -21,9 +25,27 @@ fn test_trivial_wiring_2x2_circuit_data() {
     );
     dbg!(&data);
     let (circuit_desc, input_builder) = build_circuit_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
-    //FIXME(Ben) complete
-    // let circuit = todo!();
-    // test_circuit(circuit, None);
+    let transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
+    let inputs = input_builder(data);
+    let input_layer_claims = prove_circuit(circuit_desc, inputs, transcript_writer);
+    // FIXME(Ben) complete with a check of the input layer claims
+}
+
+// FIXME(Ben) remove this once we no longer use build_circuit
+#[test]
+fn test_trivial_wiring_2x2_circuit_data_old_style() {
+    // rewirings for the 2x2 identity matrix
+    let wirings = &vec![(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
+    let reroutings = wirings_to_reroutings(wirings, 2, 2);
+    let data: CircuitData<Fr, 1, 1, 1, 16, 2> = CircuitData::build_worldcoin_circuit_data(
+        Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
+        &vec![1, 0, 6, -1],
+        &vec![1, 0, 1, 0],
+        wirings,
+    );
+    dbg!(&data);
+    let circuit = build_circuit(data, reroutings);
+    test_circuit(circuit, None);
 }
 
 //FIXME(Ben)

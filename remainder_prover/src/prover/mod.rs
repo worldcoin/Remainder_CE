@@ -10,27 +10,31 @@ pub mod proof_system;
 pub mod layers;
 
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Entry;
 
 use self::layers::Layers;
 use crate::claims::wlx_eval::WLXAggregator;
+use crate::claims::Claim;
+use crate::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
 use crate::input_layer::enum_input_layer::{
     InputLayerDescriptionEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
 };
 use crate::input_layer::fiat_shamir_challenge::{
     FiatShamirChallenge, FiatShamirChallengeDescription,
 };
-use crate::input_layer::InputLayerDescription;
+use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
-use crate::layer::LayerDescription;
-use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputNodeMap};
+use crate::layer::{Layer, LayerDescription};
+use crate::layouter::layouting::{layout, CircuitDescriptionMap, CircuitLocation, CircuitMap, InputNodeMap, LayerMap};
 use crate::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
 use crate::layouter::nodes::circuit_inputs::InputShredData;
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, NodeId};
+use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::output_layer::mle_output_layer::{MleOutputLayer, MleOutputLayerDescription};
-use crate::output_layer::OutputLayerDescription;
+use crate::output_layer::{OutputLayer, OutputLayerDescription};
 use crate::{
     claims::ClaimAggregator,
     input_layer::InputLayerError,
@@ -38,7 +42,8 @@ use crate::{
 };
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
-use remainder_shared_types::transcript::TranscriptReaderError;
+use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+use remainder_shared_types::transcript::{ProverTranscript, TranscriptReaderError, TranscriptWriter};
 use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
@@ -106,6 +111,136 @@ pub struct InstantiatedCircuit<F: Field> {
     pub input_layers: Vec<InputLayerEnum<F>>,
     /// The verifier challenges
     pub fiat_shamir_challenges: Vec<FiatShamirChallenge<F>>,
+    /// FIXME(vishady) what actually is this :)
+    pub layer_map: HashMap<LayerId, Vec<DenseMle<F>>>
+}
+
+/// Assumes that the inputs have already been added to the transcript (if necessary).
+/// Returns the vector of claims on the input layers.
+pub fn prove_circuit<F: Field>(circuit_description: GKRCircuitDescription<F>, inputs: HashMap<LayerId, MultilinearExtension<F>>, mut transcript_writer: TranscriptWriter<F, PoseidonSponge<F>>)
+    -> Result<Vec<Claim<F>>, GKRError> {
+    // Note: no need to return the Transcript, since it is already in the TranscriptWriter!
+    // Note(Ben): this can't be an instance method, because it consumes the intermediate layers!
+    // Note(Ben): this is a GKR specific method.  So it makes sense for IT to define the challenge sampler, so that the circuit can be instantiated (rather than leaving this complexity to the calling context).
+
+    let mut challenge_sampler = |size| {
+        transcript_writer.get_challenges("Verifier challenges", size)
+    };
+    let instantiated_circuit = circuit_description.instantiate(&inputs, &mut challenge_sampler);
+
+    let InstantiatedCircuit {
+            input_layers,
+            mut output_layers,
+            layers,
+            fiat_shamir_challenges: _fiat_shamir_challenges,
+            layer_map,
+        } = instantiated_circuit;
+
+
+    // Claim aggregator to keep track of GKR-style claims across all layers.
+    let mut aggregator = WLXAggregator::<F, LayerEnum<F>, InputLayerEnum<F>>::new();
+
+    // --------- STAGE 1: Output Claim Generation ---------
+    let claims_timer = start_timer!(|| "Output claims generation");
+    let output_claims_span = span!(Level::DEBUG, "output_claims_span").entered();
+
+    // Go through circuit output layers and grab claims on each.
+    for output in output_layers.iter_mut() {
+        let layer_id = output.layer_id();
+        info!("Output Layer: {:?}", layer_id);
+
+        output.append_mle_to_transcript(&mut transcript_writer);
+
+        output
+            .fix_layer(&mut transcript_writer)
+            .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
+
+        // Add the claim to either the set of current claims we're proving
+        // or the global set of claims we need to eventually prove.
+        aggregator
+            .extract_claims(output)
+            .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
+    }
+
+    end_timer!(claims_timer);
+    output_claims_span.exit();
+
+    // --------- STAGE 2: Prove Intermediate Layers ---------
+    let intermediate_layers_timer = start_timer!(|| "ALL intermediate layers proof generation");
+    let all_layers_sumcheck_proving_span =
+        span!(Level::DEBUG, "all_layers_sumcheck_proving_span").entered();
+
+    // Collects all the prover messages for sumchecking over each layer, as
+    // well as all the prover messages for claim aggregation at the
+    // beginning of proving each layer.
+    for mut layer in layers.layers.into_iter().rev() {
+        let layer_id = layer.layer_id();
+        let layer_timer = start_timer!(|| format!("Generating proof for layer {:?}", layer_id));
+        info!("Proving Intermediate Layer: {:?}", layer_id);
+
+        info!("Starting claim aggregation...");
+        let claim_aggr_timer =
+            start_timer!(|| format!("Claim aggregation for layer {:?}", layer_id));
+
+        let output_mles_from_layer = layer_map.get(&layer_id).unwrap();
+        let layer_claim = aggregator.prover_aggregate_claims(
+            &layer,
+            output_mles_from_layer,
+            &mut transcript_writer,
+        )?;
+
+        end_timer!(claim_aggr_timer);
+
+        info!("Prove sumcheck message");
+        let sumcheck_msg_timer = start_timer!(|| format!(
+            "Compute sumcheck message for layer {:?}",
+            layer.layer_id()
+        ));
+
+        // Compute all sumcheck messages across this particular layer.
+        layer
+            .prove_rounds(layer_claim, &mut transcript_writer)
+            .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
+
+        end_timer!(sumcheck_msg_timer);
+
+        aggregator
+            .extract_claims(&layer)
+            .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
+
+        end_timer!(layer_timer);
+    }
+
+    end_timer!(intermediate_layers_timer);
+    all_layers_sumcheck_proving_span.exit();
+
+    // --------- STAGE 3: Prove Input Layers ---------
+    let input_layers_timer = start_timer!(|| "INPUT layers claim aggregation");
+    let input_layer_proving_span = span!(Level::DEBUG, "input_layer_claim_aggregation").entered();
+
+    let mut input_layer_claims = Vec::new();
+    for input_layer in input_layers {
+        let layer_id = input_layer.layer_id();
+
+        let claim_aggr_timer = start_timer!(|| format!(
+            "claim aggregation for INPUT layer {:?}",
+            input_layer.layer_id()
+        ));
+
+        let output_mles_from_layer = layer_map.get(&layer_id).unwrap();
+        let layer_claim = aggregator.prover_aggregate_claims_input(
+            &input_layer,
+            output_mles_from_layer,
+            &mut transcript_writer,
+        )?;
+        input_layer_claims.push(layer_claim);
+        end_timer!(claim_aggr_timer);
+    }
+
+    end_timer!(input_layers_timer);
+    input_layer_proving_span.exit();
+
+    Ok(input_layer_claims)
 }
 
 /// Controls claim aggregation behavior.
@@ -143,6 +278,166 @@ impl<F: Field> GKRCircuitDescription<F> {
         output_layers.iter_mut().for_each(|output_layer| {
             output_layer.index_mle_indices(start_index);
         })
+    }
+
+    /// Returns an [InstantiatedCircuit] by populating the
+    /// [GKRCircuitDescription] with data.
+    ///
+    /// # Arguments:
+    /// * `input_data`: a [HashMap] mapping layer ids to the MLEs.
+    /// * `challenge_sampler`: a closure that takes a string and a usize and returns that many field
+    ///    elements; should be a wrapper of an instance method of the appropriate transcript.
+    pub fn instantiate(
+        &self,
+        input_data: &HashMap<LayerId, MultilinearExtension<F>>,
+        challenge_sampler: &mut impl FnMut(usize) -> Vec<F>,
+    ) -> InstantiatedCircuit<F> {
+        let GKRCircuitDescription {
+            input_layers: input_layer_descriptions,
+            fiat_shamir_challenges: fiat_shamir_challenge_descriptions,
+            intermediate_layers: intermediate_layer_descriptions,
+            output_layers: output_layer_descriptions,
+        } = self;
+
+        // Create a map that maps layer ID to a set of MLE descriptions that are
+        // expected to be compiled from its output. For example, if we have a
+        // layer whose first "half" (when MSB is 0) is used in a future layer,
+        // and its second half is also used in a future layer, we would expect
+        // both of these to be represented as MLE descriptions in the HashSet
+        // associated with this layer with the appropriate prefix bits.
+        let mut mle_claim_map = HashMap::<LayerId, HashSet<&MleDescription<F>>>::new();
+        // Do a forward pass through all of the intermediate layer descriptions
+        // and look into the "future" to see which parts of each layer are
+        // required for future layers.
+        intermediate_layer_descriptions
+            .iter()
+            .for_each(|intermediate_layer| {
+                let layer_source_circuit_mles = intermediate_layer.get_circuit_mles();
+                layer_source_circuit_mles
+                    .into_iter()
+                    .for_each(|circuit_mle| {
+                        let layer_id = circuit_mle.layer_id();
+                        if let Entry::Vacant(e) = mle_claim_map.entry(layer_id) {
+                            e.insert(HashSet::from([circuit_mle]));
+                        } else {
+                            mle_claim_map
+                                .get_mut(&layer_id)
+                                .unwrap()
+                                .insert(circuit_mle);
+                        }
+                    })
+            });
+
+        // Do a forward pass through all of the intermediate layer descriptions
+        // and look into the "future" to see which parts of each layer are
+        // required for output layers.
+        output_layer_descriptions.iter().for_each(|output_layer| {
+            let layer_source_mle = &output_layer.mle;
+            let layer_id = layer_source_mle.layer_id();
+            if let Entry::Vacant(e) = mle_claim_map.entry(layer_id) {
+                e.insert(HashSet::from([&output_layer.mle]));
+            } else {
+                mle_claim_map
+                    .get_mut(&layer_id)
+                    .unwrap()
+                    .insert(&output_layer.mle);
+            }
+        });
+
+        // Step 1: populate the circuit map with all of the data necessary in
+        // order to instantiate the circuit.
+        let mut circuit_map = CircuitMap::new();
+        let mut prover_input_layers: Vec<InputLayerEnum<F>> = Vec::new();
+        let mut fiat_shamir_challenges = Vec::new();
+        // Step 1a: populate the circuit map by compiling the necessary data
+        // outputs for each of the input layers, while writing the commitments
+        // to them into the transcript.
+        input_layer_descriptions
+            .iter()
+            .for_each(|input_layer_description| {
+                let input_layer_id = input_layer_description.layer_id();
+                let combined_mle = input_data.get(&input_layer_id).unwrap();
+                let mle_outputs_necessary = mle_claim_map.get(&input_layer_id).unwrap();
+                // Compute all data outputs necessary for future layers for each
+                // input layer.
+                mle_outputs_necessary.iter().for_each(|mle_output| {
+                    let prefix_bits = mle_output.prefix_bits();
+                    let output = filter_bookkeeping_table(&combined_mle, &prefix_bits);
+                    circuit_map.add_node(CircuitLocation::new(input_layer_id, prefix_bits), output);
+                });
+                // Compute the concretized input layer since we have the
+                // layerwise bookkeeping table.
+                // FIXME(Ben) precommits are none of its business here.  We can fix this after we remove the different layer types.
+                let prover_input_layer = input_layer_description
+                    .convert_into_prover_input_layer(
+                        combined_mle.clone(),
+                        &None,
+                    );
+                prover_input_layers.push(prover_input_layer);
+            });
+        // Step 1b: for each of the fiat shamir challenges, use the transcript
+        // in order to get the challenges and fill the layer.
+        fiat_shamir_challenge_descriptions
+            .iter()
+            .for_each(|fiat_shamir_challenge_description| {
+                let fiat_shamir_challenge_mle =
+                    MultilinearExtension::new(challenge_sampler(
+                        1 << fiat_shamir_challenge_description.num_bits,
+                    ));
+                circuit_map.add_node(
+                    CircuitLocation::new(fiat_shamir_challenge_description.layer_id(), vec![]),
+                    fiat_shamir_challenge_mle.clone(),
+                );
+                fiat_shamir_challenges.push(FiatShamirChallenge::new(
+                    fiat_shamir_challenge_mle,
+                    fiat_shamir_challenge_description.layer_id(),
+                ));
+            });
+
+        // Step 1c: Compute the data outputs, using the map from Layer ID to
+        // which Circuit MLEs are necessary to compile for this layer, for each
+        // of the intermediate layers.
+        intermediate_layer_descriptions
+            .iter()
+            .for_each(|intermediate_layer_description| {
+                let mle_outputs_necessary = mle_claim_map
+                    .get(&intermediate_layer_description.layer_id())
+                    .unwrap();
+                intermediate_layer_description
+                    .compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
+            });
+
+        // Step 2: Using the fully populated circuit map, convert each of the
+        // layer descriptions into concretized layers. Step 2a: Concretize the
+        // intermediate layer descriptions.
+        let mut prover_intermediate_layers: Vec<LayerEnum<F>> =
+            Vec::with_capacity(intermediate_layer_descriptions.len());
+        intermediate_layer_descriptions
+            .iter()
+            .for_each(|intermediate_layer_description| {
+                let prover_intermediate_layer =
+                    intermediate_layer_description.convert_into_prover_layer(&circuit_map);
+                prover_intermediate_layers.push(prover_intermediate_layer)
+            });
+
+        // Step 2b: Concretize the output layer descriptions.
+        let mut prover_output_layers: Vec<MleOutputLayer<F>> = Vec::new();
+        output_layer_descriptions
+            .iter()
+            .for_each(|output_layer_description| {
+                let prover_output_layer =
+                    output_layer_description.into_prover_output_layer(&circuit_map);
+                prover_output_layers.push(prover_output_layer)
+            });
+        let instantiated_circuit = InstantiatedCircuit {
+            input_layers: prover_input_layers,
+            fiat_shamir_challenges,
+            layers: Layers::new_with_layers(prover_intermediate_layers),
+            output_layers: prover_output_layers,
+            layer_map: circuit_map.convert_to_layer_map(),
+        };
+
+        instantiated_circuit
     }
 
     /// Verifies a GKR proof produced by the `prove` method.
