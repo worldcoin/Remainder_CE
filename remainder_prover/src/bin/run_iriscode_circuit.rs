@@ -3,7 +3,7 @@ use std::path::Path;
 use clap::Parser;
 use remainder::{
     prover::helpers::test_circuit,
-    worldcoin::{circuits::build_circuit, data::{load_worldcoin_data_v2, load_worldcoin_data_v3}},
+    worldcoin::{circuits::build_circuit, data::{load_worldcoin_data_v2, load_worldcoin_data_v3, wirings_to_reroutings}, parameters::decode_wirings},
 };
 use remainder_shared_types::Fr;
 
@@ -30,7 +30,7 @@ fn main() {
     if args.version == 2 {
         use remainder::worldcoin::parameters_v2::{
             BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
-            NUM_DIGITS,
+            NUM_DIGITS, WIRINGS, IM_NUM_COLS,
         };
         let data = load_worldcoin_data_v2::<
             Fr,
@@ -40,12 +40,13 @@ fn main() {
             BASE,
             NUM_DIGITS,
         >(image_path, args.is_mask);
-        let circuit = build_circuit(data);
+        let reroutings = wirings_to_reroutings(&decode_wirings(WIRINGS), IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+        let circuit = build_circuit(data, reroutings);
         test_circuit(circuit, None);
     } else if args.version == 3 {
         use remainder::worldcoin::parameters_v3::{
             BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
-            NUM_DIGITS,
+            NUM_DIGITS, WIRINGS, IM_NUM_COLS,
         };
         let data = load_worldcoin_data_v3::<
             Fr,
@@ -55,7 +56,8 @@ fn main() {
             BASE,
             NUM_DIGITS,
         >(image_path, args.is_mask);
-        let circuit = build_circuit(data);
+        let reroutings = wirings_to_reroutings(&decode_wirings(WIRINGS), IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+        let circuit = build_circuit(data, reroutings);
         test_circuit(circuit, None);
     } else {
         panic!();
