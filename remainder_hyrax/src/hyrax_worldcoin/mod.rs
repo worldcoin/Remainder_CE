@@ -6,7 +6,7 @@ use remainder::{
     layouter::{
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{HyraxInputDType, InputLayerNode, InputLayerType},
+            circuit_inputs::{HyraxInputDType, InputLayerNode, InputLayerType, InputShred, InputShredData},
             circuit_outputs::OutputNode,
             fiat_shamir_challenge::FiatShamirChallengeNode,
             identity_gate::IdentityGateNode,
@@ -16,8 +16,8 @@ use remainder::{
             CircuitNode, Context,
         },
     },
-    mle::bundled_input_mle::BundledInputMle,
-    utils::get_input_shred_and_data,
+    mle::{bundled_input_mle::BundledInputMle, evals::MultilinearExtension},
+    utils::{build_input_shred_and_data, get_input_shred_and_data},
     worldcoin::{components::Subtractor, data::CircuitData},
 };
 use remainder_shared_types::curves::PrimeOrderCurve;
@@ -65,11 +65,6 @@ pub fn build_hyrax_circuit_public_input_layer<
 >(
     data: CircuitData<
         C::Scalar,
-        MATMULT_ROWS_NUM_VARS,
-        MATMULT_COLS_NUM_VARS,
-        MATMULT_INTERNAL_DIM_NUM_VARS,
-        BASE,
-        NUM_DIGITS,
     >,
     reroutings: Vec<(usize, usize)>,
 ) -> impl FnMut(
@@ -79,6 +74,8 @@ pub fn build_hyrax_circuit_public_input_layer<
     Vec<HyraxInputLayerData<C>>,
 ) {
     move |ctx| {
+        assert!(BASE.is_power_of_two());
+        let log_base = BASE.ilog2() as usize;
         let CircuitData {
             to_reroute,
             rh_matmult_multiplicand,
@@ -93,16 +90,16 @@ pub fn build_hyrax_circuit_public_input_layer<
         println!("{:?} = Input layer", input_layer.id());
         // TODO shouldn't have to clone here, but need to change library functions
         let (to_reroute, to_reroute_data) =
-            get_input_shred_and_data(to_reroute.clone(), ctx, &input_layer);
+            build_input_shred_and_data(to_reroute.clone(), ctx, &input_layer);
         println!("{:?} = Image to_reroute input", to_reroute.id());
         let (to_sub_from_matmult, to_sub_from_matmult_data) =
-            get_input_shred_and_data(to_sub_from_matmult.clone(), ctx, &input_layer);
+            build_input_shred_and_data(to_sub_from_matmult.clone(), ctx, &input_layer);
         println!("{:?} = input to sub from matmult", to_sub_from_matmult.id());
         let rerouted_image = IdentityGateNode::new(ctx, &to_reroute, reroutings.clone());
         println!("{:?} = Identity gate", rerouted_image.id());
 
         let (rh_matmult_multiplicand, rh_matmult_multiplicand_data) =
-            get_input_shred_and_data(rh_matmult_multiplicand.clone(), ctx, &input_layer);
+            build_input_shred_and_data(rh_matmult_multiplicand.clone(), ctx, &input_layer);
         println!(
             "{:?} = Kernel values (RH multiplicand of matmult) input",
             rh_matmult_multiplicand.id()
@@ -118,12 +115,23 @@ pub fn build_hyrax_circuit_public_input_layer<
         println!("{:?} = Matmult", matmult.id());
 
         let subtractor = Subtractor::new(ctx, &matmult, &to_sub_from_matmult);
-
-        let (digits_input_shreds, digits_input_shreds_data) =
-            digits.make_input_shred_and_data(ctx, &input_layer);
-        for (i, shred) in digits_input_shreds.iter().enumerate() {
+        let digits_input_shreds: Vec<_> = (0..NUM_DIGITS)
+        .into_iter()
+        .map(|i| {
+            let shred = InputShred::new(&ctx, log_base, &input_layer);
             println!("{:?} = {}th digit input", shred.id(), i);
-        }
+            shred
+        })
+        .collect();
+
+    let digits_input_shreds_data = digits_input_shreds
+        .iter()
+        .zip(digits.iter())
+        .map(|(shred, digit_values)| {
+            InputShredData::new(shred.id(), digit_values.clone())
+        })
+        .collect_vec();
+
         let digits_refs = digits_input_shreds
             .iter()
             .map(|shred| shred as &dyn CircuitNode)
@@ -134,7 +142,9 @@ pub fn build_hyrax_circuit_public_input_layer<
 
         // Use a lookup to range check the digits to the range 0..BASE
         let (lookup_table_values, lookup_table_values_data) =
-            get_input_shred_and_data((0..BASE).map(C::Scalar::from).collect(), ctx, &input_layer);
+            build_input_shred_and_data(
+                MultilinearExtension::new((0..BASE).map(C::Scalar::from).collect()),
+                ctx, &input_layer);
         println!("{:?} = Digit range check input", lookup_table_values.id());
 
         let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(ctx, 1);
@@ -142,7 +152,7 @@ pub fn build_hyrax_circuit_public_input_layer<
             LookupTable::new::<C::Scalar>(ctx, &lookup_table_values, &fiat_shamir_challenge_node);
         println!("{:?} = Lookup table", lookup_table.id());
         let (digit_multiplicities, digit_multiplicities_data) =
-            get_input_shred_and_data(digit_multiplicities.clone(), ctx, &input_layer);
+            build_input_shred_and_data(digit_multiplicities.clone(), ctx, &input_layer);
         println!("{:?} = Digit multiplicities", digit_multiplicities.id());
         let lookup_constraint = LookupConstraint::new::<C::Scalar>(
             ctx,
@@ -155,7 +165,7 @@ pub fn build_hyrax_circuit_public_input_layer<
         let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE);
 
         let (sign_bits, sign_bits_data) =
-            get_input_shred_and_data(sign_bits.clone(), ctx, &input_layer);
+            build_input_shred_and_data(sign_bits.clone(), ctx, &input_layer);
         println!("{:?} = Sign bits (iris code) input", sign_bits.id());
         let complementary_checker = ComplementaryRecompChecker::new(
             ctx,
@@ -258,11 +268,6 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
 >(
     data: CircuitData<
         C::Scalar,
-        MATMULT_ROWS_NUM_VARS,
-        MATMULT_COLS_NUM_VARS,
-        MATMULT_INTERNAL_DIM_NUM_VARS,
-        BASE,
-        NUM_DIGITS,
     >,
     reroutings: Vec<(usize, usize)>,
     maybe_input_to_be_rerouted_raw_precommit: Option<(Vec<C>, Vec<C::Scalar>)>,
@@ -275,6 +280,8 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
     let maybe_input_to_be_rerouted_precommit = maybe_input_to_be_rerouted_raw_precommit
         .map(|raw_precommit| HyraxProverCommitmentEnum::HyraxCommitment(raw_precommit));
     move |ctx| {
+        assert!(BASE.is_power_of_two());
+        let log_base = BASE.ilog2() as usize;
         let CircuitData {
             to_reroute,
             rh_matmult_multiplicand,
@@ -301,16 +308,16 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         );
         // TODO shouldn't have to clone here, but need to change library functions
         let (to_reroute, to_reroute_data) =
-            get_input_shred_and_data(to_reroute.clone(), ctx, &hyrax_input_layer_for_reroute);
+            build_input_shred_and_data(to_reroute.clone(), ctx, &hyrax_input_layer_for_reroute);
         println!("{:?} = Image to_reroute input", to_reroute.id());
         let (to_sub_from_matmult, to_sub_from_matmult_data) =
-            get_input_shred_and_data(to_sub_from_matmult.clone(), ctx, &public_input_layer);
+            build_input_shred_and_data(to_sub_from_matmult.clone(), ctx, &public_input_layer);
         println!("{:?} = input to sub from matmult", to_sub_from_matmult.id());
         let rerouted_image = IdentityGateNode::new(ctx, &to_reroute, reroutings.clone());
         println!("{:?} = Identity gate", rerouted_image.id());
 
         let (rh_matmult_multiplicand, rh_matmult_multiplicand_data) =
-            get_input_shred_and_data(rh_matmult_multiplicand.clone(), ctx, &public_input_layer);
+            build_input_shred_and_data(rh_matmult_multiplicand.clone(), ctx, &public_input_layer);
         println!(
             "{:?} = Kernel values (RH multiplicand of matmult) input",
             rh_matmult_multiplicand.id()
@@ -327,11 +334,23 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
 
         let subtractor = Subtractor::new(ctx, &matmult, &to_sub_from_matmult);
 
-        let (digits_input_shreds, digits_input_shreds_data) =
-            digits.make_input_shred_and_data(ctx, &hyrax_input_layer_for_digits_and_multiplicities);
-        for (i, shred) in digits_input_shreds.iter().enumerate() {
-            println!("{:?} = {}th digit input", shred.id(), i);
-        }
+        let digits_input_shreds: Vec<_> = (0..NUM_DIGITS)
+            .into_iter()
+            .map(|i| {
+                let shred = InputShred::new(&ctx, log_base, &hyrax_input_layer_for_digits_and_multiplicities);
+                println!("{:?} = {}th digit input", shred.id(), i);
+                shred
+            })
+            .collect();
+
+        let digits_input_shreds_data = digits_input_shreds
+            .iter()
+            .zip(digits.iter())
+            .map(|(shred, digit_values)| {
+                InputShredData::new(shred.id(), digit_values.clone())
+            })
+            .collect_vec();
+
         let digits_refs = digits_input_shreds
             .iter()
             .map(|shred| shred as &dyn CircuitNode)
@@ -352,7 +371,7 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         let lookup_table =
             LookupTable::new::<C::Scalar>(ctx, &lookup_table_values, &fiat_shamir_challenge_node);
         println!("{:?} = Lookup table", lookup_table.id());
-        let (digit_multiplicities, digit_multiplicities_data) = get_input_shred_and_data(
+        let (digit_multiplicities, digit_multiplicities_data) = build_input_shred_and_data(
             digit_multiplicities.clone(),
             ctx,
             &hyrax_input_layer_for_digits_and_multiplicities,
@@ -371,7 +390,7 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE);
 
         let (sign_bits, sign_bits_data) =
-            get_input_shred_and_data(sign_bits.clone(), ctx, &public_input_layer);
+            build_input_shred_and_data(sign_bits.clone(), ctx, &public_input_layer);
         println!("{:?} = Sign bits (iris code) input", sign_bits.id());
         let complementary_checker = ComplementaryRecompChecker::new(
             ctx,

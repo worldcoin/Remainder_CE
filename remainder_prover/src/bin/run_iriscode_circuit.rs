@@ -41,7 +41,13 @@ fn main() {
             NUM_DIGITS,
         >(image_path, args.is_mask);
         let reroutings = wirings_to_reroutings(&decode_wirings(WIRINGS), IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
-        let circuit = build_circuit(data, reroutings);
+        let circuit = build_circuit::<
+            Fr,
+            MATMULT_ROWS_NUM_VARS,
+            MATMULT_COLS_NUM_VARS,
+            MATMULT_INTERNAL_DIM_NUM_VARS,
+            BASE,
+            NUM_DIGITS> (data, reroutings);
         test_circuit(circuit, None);
     } else if args.version == 3 {
         use remainder::worldcoin::parameters_v3::{
@@ -57,7 +63,13 @@ fn main() {
             NUM_DIGITS,
         >(image_path, args.is_mask);
         let reroutings = wirings_to_reroutings(&decode_wirings(WIRINGS), IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
-        let circuit = build_circuit(data, reroutings);
+        let circuit = build_circuit::<
+            Fr,
+            MATMULT_ROWS_NUM_VARS,
+            MATMULT_COLS_NUM_VARS,
+            MATMULT_INTERNAL_DIM_NUM_VARS,
+            BASE,
+            NUM_DIGITS> (data, reroutings);
         test_circuit(circuit, None);
     } else {
         panic!();

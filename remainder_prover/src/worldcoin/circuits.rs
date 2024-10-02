@@ -58,11 +58,6 @@ pub fn build_circuit<
 >(
     data: CircuitData<
         F,
-        MATMULT_ROWS_NUM_VARS,
-        MATMULT_COLS_NUM_VARS,
-        MATMULT_INTERNAL_DIM_NUM_VARS,
-        BASE,
-        NUM_DIGITS,
     >,
     reroutings: Vec<(usize, usize)>,
 ) -> LayouterCircuit<
@@ -111,8 +106,8 @@ pub fn build_circuit<
 
         let subtractor = Subtractor::new(ctx, &matmult, &to_sub_from_matmult);
 
-        let (digits_input_shreds, digits_input_shreds_data) =
-            (*digits).make_input_shred_and_data(ctx, &input_layer);
+        let (digits_input_shreds, digits_input_shreds_data): (Vec<_>, Vec<_>) =
+        digits.into_iter().map(|digit_values| build_input_shred_and_data(digit_values.clone(), ctx, &input_layer)).unzip();
         for (i, shred) in digits_input_shreds.iter().enumerate() {
             println!("{:?} = {}th digit input", shred.id(), i);
         }
@@ -227,7 +222,7 @@ pub fn build_circuit_description<
     reroutings: Vec<(usize, usize)>,
 ) -> (
         GKRCircuitDescription<F>,
-        impl Fn(CircuitData<F, MATMULT_ROWS_NUM_VARS, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, BASE, NUM_DIGITS>) -> HashMap<LayerId, MultilinearExtension<F>>
+        impl Fn(CircuitData<F>) -> HashMap<LayerId, MultilinearExtension<F>>
     ) {
     assert!(BASE.is_power_of_two());
     let log_base = BASE.ilog2() as usize;
@@ -355,11 +350,11 @@ pub fn build_circuit_description<
 
     let (circ_desc, input_node_map, input_builder_from_shred_map) = generate_circuit_description(all_nodes).unwrap();
 
-    let input_builder = move |data: CircuitData<F, MATMULT_ROWS_NUM_VARS, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, BASE, NUM_DIGITS>| {
+    let input_builder = move |data: CircuitData<F>| {
         let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<F>> = HashMap::new();
         input_shred_id_to_data.insert(to_reroute.id(), data.to_reroute);
         input_shred_id_to_data.insert(rh_matmult_multiplicand.id(), data.rh_matmult_multiplicand);
-        data.digits.get_mles().into_iter().zip(digits_input_shreds.iter()).for_each(|(mle, shred)| {
+        data.digits.into_iter().zip(digits_input_shreds.iter()).for_each(|(mle, shred)| {
             input_shred_id_to_data.insert(shred.id(), mle);
         });
         input_shred_id_to_data.insert(sign_bits.id(), data.sign_bits);
