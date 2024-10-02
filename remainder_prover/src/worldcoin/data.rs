@@ -14,33 +14,6 @@ use crate::utils::mle::pad_with;
 use crate::worldcoin::parameters::decode_i32_array;
 use super::parameters::{decode_wirings, decode_i64_array};
 
-/// Generate toy data for the worldcoin circuit.
-/// Image is 2x2, and there are two 2x1 kernels (1, 0).T and (6, -1).T
-/// The rewirings are trivial: the image _is_ the LH multiplicand of matmult.
-pub fn trivial_wiring_2x2_circuit_data<F: Field>() -> CircuitData<F, 1, 1, 1, 16, 2> {
-    CircuitData::build_worldcoin_circuit_data(
-        Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
-        &vec![1, 0, 6, -1],
-        &vec![1, 0, 1, 0],
-        // rewirings for the 2x2 identity matrix
-        &vec![(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)]
-    )
-}
-
-/// Generate toy data for the worldcoin circuit.
-/// Image is 2x2, and there are two 3x1 kernels.
-/// The rewirings are trivial: the image _is_ the LH multiplicand of matmult.
-pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: Field>() -> CircuitData<F, 1, 1, 2, 16, 2>
-{
-    CircuitData::build_worldcoin_circuit_data(
-        Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
-        &vec![1, 0, -4, 6, -1, 3, 0, 0],
-        &vec![1, 0, 1, 0],
-        // rewirings for the 2x2 identity matrix
-        &vec![(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)]
-    )
-}
-
 #[derive(Debug, Clone)]
 /// Used for instantiating the circuit.
 /// + `BASE` and `NUM_DIGITS` are powers of two.
@@ -58,9 +31,6 @@ pub struct CircuitData<
     /// The values to be re-routed to form the LH multiplicand of the matrix multiplication.
     /// Length is a power of two.
     pub to_reroute: Vec<F>,
-    /// The reroutings from `to_reroute` to the MLE representing the LH multiplicand of the matrix
-    /// multiplication, as pairs of gate labels.
-    pub reroutings: Vec<(usize, usize)>,
     /// The MLE of the RH multiplicand of the matrix multiplication.
     /// Length is `1 << (MATMULT_INTERNAL_DIM_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
     pub rh_matmult_multiplicand: Vec<F>,
@@ -79,6 +49,29 @@ pub struct CircuitData<
     /// Values to be subtracted from the result of the matrix multiplication.
     /// Length is `1 << (MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
     pub to_sub_from_matmult: Vec<F>,
+}
+
+
+/// Wirings are a Vec of 4-tuples of u16s; each tuple maps a coordinate of image to a coordinate of
+/// the LH multiplicand of the matmult. This function returns the corresponding Vec of 2-tuples of
+/// usize, which are the re-routings of the 1d MLEs.
+/// Input order is `(src_row_idx, src_col_idx, dest_row_idx, dest_col_idx)`.
+/// Output order is `(dest_idx, src_idx)` (to match IdentityGate).
+pub fn wirings_to_reroutings(wirings: &[(u16, u16, u16, u16)], src_arr_num_cols: usize, dest_arr_num_cols: usize) -> Vec<(usize, usize)> {
+    wirings
+        .iter()
+        .map(|row| {
+            let (src_row_idx, src_col_idx, dest_row_idx, dest_col_idx) = (
+                row.0 as usize,
+                row.1 as usize,
+                row.2 as usize,
+                row.3 as usize,
+            );
+            let src_idx = src_row_idx * src_arr_num_cols + src_col_idx;
+            let dest_idx = dest_row_idx * dest_arr_num_cols + dest_col_idx;
+            (dest_idx, src_idx)
+        })
+        .collect_vec()
 }
 
 impl<
@@ -123,11 +116,9 @@ impl<
     ) -> Self {
         assert!(BASE.is_power_of_two());
         assert!(NUM_DIGITS.is_power_of_two());
-        let (_, im_num_cols) = image.dim();
 
         // Derive the re-routings from the wirings (this is what is needed for identity gate)
         // And calculate the left-hand side of the matrix multiplication
-        let mut reroutings = Vec::new();
         let mut rerouted_matrix: Array2<i64> = Array::zeros((
             (1 << MATMULT_ROWS_NUM_VARS),
             (1 << MATMULT_INTERNAL_DIM_NUM_VARS),
@@ -139,9 +130,6 @@ impl<
                 row.2 as usize,
                 row.3 as usize,
             );
-            let a_gate_label = a_row * (1 << MATMULT_INTERNAL_DIM_NUM_VARS) + a_col;
-            let im_gate_label = im_row * im_num_cols + im_col;
-            reroutings.push((a_gate_label, im_gate_label));
             rerouted_matrix[[a_row, a_col]] = image[[im_row, im_col]] as i64;
         });
 
@@ -226,7 +214,6 @@ impl<
 
         CircuitData {
             to_reroute: image_matrix_mle,
-            reroutings,
             rh_matmult_multiplicand,
             digits,
             sign_bits: code,

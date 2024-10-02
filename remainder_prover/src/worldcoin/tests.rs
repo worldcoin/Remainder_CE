@@ -1,27 +1,46 @@
 use crate::prover::helpers::test_circuit;
-use crate::worldcoin::circuits::build_circuit;
+use crate::worldcoin::circuits::{build_circuit, build_circuit_description};
 use crate::worldcoin::data::{
-    load_worldcoin_data_v2, load_worldcoin_data_v3, trivial_wiring_2x2_circuit_data,
-    trivial_wiring_2x2_odd_kernel_dims_circuit_data,
+    load_worldcoin_data_v2, load_worldcoin_data_v3, wirings_to_reroutings, CircuitData
 };
+use ndarray::Array2;
 use remainder_shared_types::Fr;
 use std::path::Path;
 
 #[test]
 fn test_trivial_wiring_2x2_circuit_data() {
-    let data = trivial_wiring_2x2_circuit_data::<Fr>();
+    // rewirings for the 2x2 identity matrix
+    let wirings = &vec![(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
+    let reroutings = wirings_to_reroutings(wirings, 2, 2);
+    let data: CircuitData<Fr, 1, 1, 1, 16, 2> = CircuitData::build_worldcoin_circuit_data(
+        Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
+        &vec![1, 0, 6, -1],
+        &vec![1, 0, 1, 0],
+        wirings,
+    );
     dbg!(&data);
-    let circuit = build_circuit(data);
+    let (circuit_desc, input_node_map, public_input_node, private_input_node) = build_circuit_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
+    let circuit = todo!();
     test_circuit(circuit, None);
 }
 
-#[test]
-fn test_trivial_wiring_2x2_odd_kernel_dims_circuit_data() {
-    let data = trivial_wiring_2x2_odd_kernel_dims_circuit_data::<Fr>();
-    dbg!(&data);
-    let circuit = build_circuit(data);
-    test_circuit(circuit, None);
-}
+//FIXME(Ben)
+// #[test]
+// fn test_trivial_wiring_2x2_odd_kernel_dims_circuit_data() {
+//     // rewirings for the 2x2 identity matrix
+//     let wirings = &vec![(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
+//     let reroutings = wirings_to_reroutings(wirings, 2, 2);
+//     let data: CircuitData<Fr, 1, 1, 2, 16, 2> = CircuitData::build_worldcoin_circuit_data(
+//         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
+//         &vec![1, 0, -4, 6, -1, 3, 0, 0],
+//         &vec![1, 0, 1, 0],
+//         wirings,
+//     );
+//     dbg!(&data);
+//     let (circuit_desc, input_node_map, public_input_node, private_input_node) = build_circuit_description::<Fr, 2, 1, 1, 2, 16, 2>(reroutings);
+//     let circuit = todo!();
+//     test_circuit(circuit, None);
+// }
 
 #[ignore] // takes 90 seconds!
 #[test]

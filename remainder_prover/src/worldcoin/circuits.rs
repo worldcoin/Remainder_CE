@@ -11,7 +11,7 @@ use crate::layouter::nodes::identity_gate::IdentityGateNode;
 use crate::layouter::nodes::lookup::{LookupConstraint, LookupTable};
 use crate::layouter::nodes::matmult::MatMultNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
-use crate::layouter::nodes::{CircuitNode, Context};
+use crate::layouter::nodes::{CircuitNode, Context, NodeId};
 use crate::mle::bundled_input_mle::BundledInputMle;
 use crate::prover::{generate_circuit_description, GKRCircuitDescription};
 use crate::utils::get_input_shred_and_data;
@@ -60,6 +60,7 @@ pub fn build_circuit<
         BASE,
         NUM_DIGITS,
     >,
+    reroutings: Vec<(usize, usize)>,
 ) -> LayouterCircuit<
     F,
     ComponentSet<NodeEnum<F>>,
@@ -68,7 +69,6 @@ pub fn build_circuit<
     LayouterCircuit::new(move |ctx| {
         let CircuitData {
             to_reroute,
-            reroutings,
             rh_matmult_multiplicand,
             digits,
             sign_bits,
@@ -209,7 +209,8 @@ pub fn build_circuit<
     })
 }
 
-/// Builds the iriscode circuit description.
+/// Builds the iriscode circuit, return the circuit description, the input node map and the node ids
+/// of the public and the private input layers.
 pub fn build_circuit_description<
     F: Field,
     const TO_REROUTE_NUM_VARS: usize,
@@ -220,17 +221,16 @@ pub fn build_circuit_description<
     const NUM_DIGITS: usize,
 >(
     reroutings: Vec<(usize, usize)>,
-    // FIXME ctx is only necessary because we are passing in the private input layer and we don't
-    // want collisons - we can remove this if we create a separate inputlayer for each input inside
-    // the function
-    ctx: &mut Context,
-    private_input_layer: &InputLayerNode,
-) -> (GKRCircuitDescription<F>, InputNodeMap) {
+) -> (GKRCircuitDescription<F>, InputNodeMap, NodeId, NodeId) {
     assert!(BASE.is_power_of_two());
     let log_base = BASE.ilog2() as usize;
     let mut output_nodes = vec![];
+    let ctx = Context::new();
 
     // Private inputs
+    // FIXME(Ben) this will be fine once we get rid of InputLayerType, but it does look funny for now
+    let private_input_layer = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+    let private_input_layer_node_id = private_input_layer.id();
     let to_reroute = InputShred::new(&ctx, TO_REROUTE_NUM_VARS, &private_input_layer);
     println!("{:?} = Image to_reroute input", to_reroute.id());
 
@@ -251,6 +251,7 @@ pub fn build_circuit_description<
     
     // Public inputs
     let public_input_layer = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+    let public_input_layer_node_id = public_input_layer.id();
     println!("{:?} = Input layer", public_input_layer.id());
 
     let to_sub_from_matmult = InputShred::new(&ctx, MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS, &public_input_layer);
@@ -347,5 +348,7 @@ pub fn build_circuit_description<
     // Add output nodes
     all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));
 
-    generate_circuit_description(all_nodes).unwrap()
+    let (circ_desc, input_node_map) = generate_circuit_description(all_nodes).unwrap();
+
+    (circ_desc, input_node_map, public_input_layer_node_id, private_input_layer_node_id)
 }

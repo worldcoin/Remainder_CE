@@ -136,7 +136,7 @@ impl CircuitDescriptionMap {
 }
 
 #[derive(Debug)]
-/// A HashMap that maps layer ID to node ID, used specifically to associate
+/// A HashMap that maps input layer ID to input layer node ID, used specifically to associate
 /// input layer nodes to input layer IDs for circuit creation.
 pub struct InputNodeMap(pub(crate) HashMap<LayerId, NodeId>);
 
