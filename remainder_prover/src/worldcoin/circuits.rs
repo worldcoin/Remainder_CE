@@ -18,7 +18,7 @@ use crate::layouter::nodes::{CircuitNode, Context, NodeId};
 use crate::mle::bundled_input_mle::{BundledInputMle, FlatMles};
 use crate::mle::evals::MultilinearExtension;
 use crate::prover::{generate_circuit_description, GKRCircuitDescription};
-use crate::utils::get_input_shred_and_data;
+use crate::utils::{build_input_shred_and_data, get_input_shred_and_data};
 use crate::worldcoin::components::Subtractor;
 
 use itertools::Itertools;
@@ -85,16 +85,16 @@ pub fn build_circuit<
         println!("{:?} = Input layer", input_layer.id());
         // TODO shouldn't have to clone here, but need to change library functions
         let (to_reroute, to_reroute_data) =
-            get_input_shred_and_data(to_reroute.clone(), ctx, &input_layer);
+            build_input_shred_and_data(to_reroute.clone(), ctx, &input_layer);
         println!("{:?} = Image to_reroute input", to_reroute.id());
         let (to_sub_from_matmult, to_sub_from_matmult_data) =
-            get_input_shred_and_data(to_sub_from_matmult.clone(), ctx, &input_layer);
+            build_input_shred_and_data(to_sub_from_matmult.clone(), ctx, &input_layer);
         println!("{:?} = input to sub from matmult", to_sub_from_matmult.id());
         let rerouted_image = IdentityGateNode::new(ctx, &to_reroute, reroutings.clone());
         println!("{:?} = Identity gate", rerouted_image.id());
 
         let (rh_matmult_multiplicand, rh_matmult_multiplicand_data) =
-            get_input_shred_and_data(rh_matmult_multiplicand.clone(), ctx, &input_layer);
+            build_input_shred_and_data(rh_matmult_multiplicand.clone(), ctx, &input_layer);
         println!(
             "{:?} = Kernel values (RH multiplicand of matmult) input",
             rh_matmult_multiplicand.id()
@@ -134,7 +134,7 @@ pub fn build_circuit<
             LookupTable::new::<F>(ctx, &lookup_table_values, &fiat_shamir_challenge_node);
         println!("{:?} = Lookup table", lookup_table.id());
         let (digit_multiplicities, digit_multiplicities_data) =
-            get_input_shred_and_data(digit_multiplicities.clone(), ctx, &input_layer);
+            build_input_shred_and_data(digit_multiplicities.clone(), ctx, &input_layer);
         println!("{:?} = Digit multiplicities", digit_multiplicities.id());
         let lookup_constraint = LookupConstraint::new::<F>(
             ctx,
@@ -147,7 +147,7 @@ pub fn build_circuit<
         let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE);
 
         let (sign_bits, sign_bits_data) =
-            get_input_shred_and_data(sign_bits.clone(), ctx, &input_layer);
+            build_input_shred_and_data(sign_bits.clone(), ctx, &input_layer);
         println!("{:?} = Sign bits (iris code) input", sign_bits.id());
         let complementary_checker = ComplementaryRecompChecker::new(
             ctx,
@@ -227,7 +227,7 @@ pub fn build_circuit_description<
     reroutings: Vec<(usize, usize)>,
 ) -> (
         GKRCircuitDescription<F>,
-        impl Fn(MultilinearExtension<F>, MultilinearExtension<F>, FlatMles<F, NUM_DIGITS>, MultilinearExtension<F>, MultilinearExtension<F>, MultilinearExtension<F>) -> HashMap<LayerId, MultilinearExtension<F>>
+        impl Fn(CircuitData<F, MATMULT_ROWS_NUM_VARS, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, BASE, NUM_DIGITS>) -> HashMap<LayerId, MultilinearExtension<F>>
     ) {
     assert!(BASE.is_power_of_two());
     let log_base = BASE.ilog2() as usize;
@@ -355,28 +355,19 @@ pub fn build_circuit_description<
 
     let (circ_desc, input_node_map, input_builder_from_shred_map) = generate_circuit_description(all_nodes).unwrap();
 
-    let input_builder = move |
-        to_reroute_mle: MultilinearExtension<F>,
-        rh_matmult_multiplicand_mle: MultilinearExtension<F>,
-        digits_mles: FlatMles<F, NUM_DIGITS>,
-        sign_bits_mles: MultilinearExtension<F>,
-        digit_multiplicities_mle: MultilinearExtension<F>,
-        to_sub_from_matmult_mle: MultilinearExtension<F>,
-        | {
+    let input_builder = move |data: CircuitData<F, MATMULT_ROWS_NUM_VARS, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, BASE, NUM_DIGITS>| {
         let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<F>> = HashMap::new();
-        input_shred_id_to_data.insert(to_reroute.id(), to_reroute_mle);
-        input_shred_id_to_data.insert(rh_matmult_multiplicand.id(), rh_matmult_multiplicand_mle);
-        digits_mles.get_mles().into_iter().zip(digits_input_shreds.iter()).for_each(|(mle, shred)| {
+        input_shred_id_to_data.insert(to_reroute.id(), data.to_reroute);
+        input_shred_id_to_data.insert(rh_matmult_multiplicand.id(), data.rh_matmult_multiplicand);
+        data.digits.get_mles().into_iter().zip(digits_input_shreds.iter()).for_each(|(mle, shred)| {
             input_shred_id_to_data.insert(shred.id(), mle);
         });
-        input_shred_id_to_data.insert(sign_bits.id(), sign_bits_mles);
-        input_shred_id_to_data.insert(to_sub_from_matmult.id(), to_sub_from_matmult_mle);
-        input_shred_id_to_data.insert(digit_multiplicities.id(),digit_multiplicities_mle);
+        input_shred_id_to_data.insert(sign_bits.id(), data.sign_bits);
+        input_shred_id_to_data.insert(to_sub_from_matmult.id(), data.to_sub_from_matmult);
+        input_shred_id_to_data.insert(digit_multiplicities.id(), data.digit_multiplicities);
         input_shred_id_to_data.insert(lookup_table_values.id(), MultilinearExtension::new((0..BASE).map(F::from).collect()));
-
         input_builder_from_shred_map(input_shred_id_to_data)
     };
-
 
     (circ_desc, input_builder)
 }

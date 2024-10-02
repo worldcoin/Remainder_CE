@@ -2,12 +2,14 @@ use itertools::Itertools;
 use ndarray::{Array, Array2};
 use ndarray_npy::read_npy;
 use remainder_shared_types::Field;
+use std::ops::Mul;
 use std::path::PathBuf;
 
 use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::layer::LayerId;
 use crate::mle::bundled_input_mle::BundledInputMle;
 use crate::mle::bundled_input_mle::{to_slice_of_vectors, FlatMles};
+use crate::mle::evals::MultilinearExtension;
 use crate::mle::Mle;
 use crate::utils::arithmetic::i64_to_field;
 use crate::utils::mle::pad_with;
@@ -30,10 +32,10 @@ pub struct CircuitData<
 > {
     /// The values to be re-routed to form the LH multiplicand of the matrix multiplication.
     /// Length is a power of two.
-    pub to_reroute: Vec<F>,
+    pub to_reroute: MultilinearExtension<F>,
     /// The MLE of the RH multiplicand of the matrix multiplication.
     /// Length is `1 << (MATMULT_INTERNAL_DIM_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
-    pub rh_matmult_multiplicand: Vec<F>,
+    pub rh_matmult_multiplicand: MultilinearExtension<F>,
     /// The digits of the complementary digital decompositions (base BASE) of matmult minus `to_sub_from_matmult`.
     /// Length of each MLE is `1 << (MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
     pub digits: FlatMles<F, NUM_DIGITS>,
@@ -41,14 +43,14 @@ pub struct CircuitData<
     ///     matmult - to_sub_from_matmult.
     /// (This is the iris code (if processing the iris image) or the mask code (if processing the mask).)
     /// Length is `1 << (MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
-    pub sign_bits: Vec<F>,
+    pub sign_bits: MultilinearExtension<F>,
     /// The number of times each digit 0 .. BASE - 1 occurs in the complementary digital decompositions of
     /// response - threshold.
     /// Length is `BASE`.
-    pub digit_multiplicities: Vec<F>,
+    pub digit_multiplicities: MultilinearExtension<F>,
     /// Values to be subtracted from the result of the matrix multiplication.
     /// Length is `1 << (MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
-    pub to_sub_from_matmult: Vec<F>,
+    pub to_sub_from_matmult: MultilinearExtension<F>,
 }
 
 
@@ -213,12 +215,12 @@ impl<
         );
 
         CircuitData {
-            to_reroute: image_matrix_mle,
-            rh_matmult_multiplicand,
+            to_reroute: MultilinearExtension::new(image_matrix_mle),
+            rh_matmult_multiplicand: MultilinearExtension::new(rh_matmult_multiplicand),
             digits,
-            sign_bits: code,
-            digit_multiplicities,
-            to_sub_from_matmult: thresholds_matrix,
+            sign_bits: MultilinearExtension::new(code),
+            digit_multiplicities: MultilinearExtension::new(digit_multiplicities),
+            to_sub_from_matmult: MultilinearExtension::new(thresholds_matrix),
         }
     }
 
@@ -226,10 +228,9 @@ impl<
     pub fn ensure_guarantees(&self) {
         assert!(BASE.is_power_of_two());
         assert!(NUM_DIGITS.is_power_of_two());
-        assert!(self.to_reroute.len().is_power_of_two());
         assert_eq!(
-            self.rh_matmult_multiplicand.len(),
-            (1 << MATMULT_INTERNAL_DIM_NUM_VARS) * (1 << MATMULT_COLS_NUM_VARS)
+            self.rh_matmult_multiplicand.num_vars(),
+            MATMULT_INTERNAL_DIM_NUM_VARS + MATMULT_COLS_NUM_VARS
         );
         self.digits.get_mle_refs().iter().for_each(|mle| {
             assert_eq!(
@@ -238,13 +239,13 @@ impl<
             );
         });
         assert_eq!(
-            self.sign_bits.len(),
-            (1 << MATMULT_ROWS_NUM_VARS) * (1 << MATMULT_COLS_NUM_VARS)
+            self.sign_bits.num_vars(),
+            MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS
         );
-        assert_eq!(self.digit_multiplicities.len(), BASE as usize);
+        assert_eq!(self.digit_multiplicities.num_vars(), BASE as usize);
         assert_eq!(
-            self.to_sub_from_matmult.len(),
-            (1 << MATMULT_ROWS_NUM_VARS) * (1 << MATMULT_COLS_NUM_VARS)
+            self.to_sub_from_matmult.num_vars(),
+            MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS
         );
     }
 }
