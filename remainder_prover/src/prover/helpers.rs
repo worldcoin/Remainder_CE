@@ -20,15 +20,21 @@ use std::path::Path;
 /// ON THE CIRCUIT AND THUS CANNOT BE USED IN TANDEM WITH [test_circuit()]!!!
 /// INSTEAD, CREATE A NEW INSTANCE OF THE CIRCUIT IF YOU ARE TO USE
 /// [test_circuit()] AS WELL!!!
+///
+/// ## Arguments
+/// * `circuit_to_be_built` - The [LayouterCircuit] whose circuit description
+///     will be generated.
+/// * `circuit_description_path` - The filepath to which the JSON description
+///     will be saved.
 pub fn write_circuit_description_to_file<
     F: Field,
     C: Component<NodeEnum<F>>,
     Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>),
 >(
-    mut circuit: LayouterCircuit<F, C, Fn>,
+    mut circuit_to_be_built: LayouterCircuit<F, C, Fn>,
     circuit_description_path: &Path,
 ) {
-    let circuit_description = circuit.get_circuit_description();
+    let circuit_description = circuit_to_be_built.get_circuit_description();
     let f = File::create(circuit_description_path).unwrap();
     let writer = BufWriter::new(f);
     serde_json::to_writer(writer, &circuit_description).unwrap();
