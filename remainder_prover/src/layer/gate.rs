@@ -24,10 +24,7 @@ use crate::{
     expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{
-        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum,
-        Mle, MleIndex,
-    },
+    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
     prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
@@ -499,8 +496,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
-    ) -> bool {
-        // dbg!(&mle_outputs_necessary);
+    ) {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
 
@@ -515,17 +511,12 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         let res_table_num_entries =
             ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
 
-        let maybe_lhs_data = circuit_map.get_data_from_circuit_mle(&self.lhs_mle);
-        if maybe_lhs_data.is_err() {
-            return false;
-        }
-        let lhs_data = maybe_lhs_data.unwrap();
-
-        let maybe_rhs_data = circuit_map.get_data_from_circuit_mle(&self.rhs_mle);
-        if maybe_rhs_data.is_err() {
-            return false;
-        }
-        let rhs_data = maybe_rhs_data.unwrap();
+        let lhs_data = circuit_map
+            .get_data_from_circuit_mle(&self.lhs_mle)
+            .unwrap();
+        let rhs_data = circuit_map
+            .get_data_from_circuit_mle(&self.rhs_mle)
+            .unwrap();
 
         let mut res_table = vec![F::ZERO; res_table_num_entries];
         (0..num_dataparallel_vals).for_each(|idx| {
@@ -551,7 +542,6 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
-        true
     }
 }
 
@@ -673,7 +663,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for GateLayer<F> {
             val,
             Some(self.layer_id()),
             Some(self.lhs.layer_id()),
-            Some(MleEnum::Dense(lhs_reduced)),
         );
         claims.push(claim);
 
@@ -692,7 +681,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for GateLayer<F> {
             val,
             Some(self.layer_id()),
             Some(self.rhs.layer_id()),
-            Some(MleEnum::Dense(rhs_reduced)),
         );
         claims.push(claim);
 
@@ -721,15 +709,11 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
             .collect_vec();
         let lhs_val = self.lhs_mle.value();
 
-        // WARNING: DO NOT TRUST THIS MLE! IT IS INCORRECT
-        let dummy_lhs_mle = DenseMle::new_from_raw(vec![lhs_val], self.layer_id());
-
         let lhs_claim: ClaimMle<F> = ClaimMle::new(
             lhs_point,
             lhs_val,
             Some(self.layer_id()),
             Some(self.lhs_mle.layer_id()),
-            Some(MleEnum::Dense(dummy_lhs_mle)),
         );
 
         // Grab the claim on the right side.
@@ -751,15 +735,11 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
             .collect_vec();
         let rhs_val = self.rhs_mle.value();
 
-        // WARNING: DO NOT TRUST THIS MLE! IT IS INCORRECT
-        let dummy_rhs_mle = DenseMle::new_from_raw(vec![rhs_val], self.layer_id());
-
         let rhs_claim: ClaimMle<F> = ClaimMle::new(
             rhs_point,
             rhs_val,
             Some(self.layer_id()),
             Some(self.rhs_mle.layer_id()),
-            Some(MleEnum::Dense(dummy_rhs_mle)),
         );
 
         Ok(vec![lhs_claim, rhs_claim])
@@ -771,7 +751,7 @@ impl<F: Field> YieldWLXEvals<F> for GateLayer<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        _claimed_mles: Vec<MleEnum<F>>,
+        _claimed_mles: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {

@@ -19,8 +19,8 @@ fn test_completeness() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("testing proof of equality - prover");
 
-    let commit0 = committer.committed_scalar(&Fr::from(23 as u64), &Fr::from(2 as u64));
-    let commit1 = committer.committed_scalar(&Fr::from(23 as u64), &Fr::from(3 as u64));
+    let commit0 = committer.committed_scalar(&Fr::from(23_u64), &Fr::from(2_u64));
+    let commit1 = committer.committed_scalar(&Fr::from(23_u64), &Fr::from(3_u64));
     let proof = ProofOfEquality::prove(
         &commit0,
         &commit1,
@@ -50,8 +50,8 @@ fn test_soundness() {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptWriter::new("testing proof of equality (soundness) - prover");
 
-    let commit0 = committer.committed_scalar(&Fr::from(23 as u64), &Fr::from(2 as u64));
-    let commit1 = committer.committed_scalar(&Fr::from(41 as u64), &Fr::from(3 as u64));
+    let commit0 = committer.committed_scalar(&Fr::from(23_u64), &Fr::from(2_u64));
+    let commit1 = committer.committed_scalar(&Fr::from(41_u64), &Fr::from(3_u64));
     let proof = ProofOfEquality::prove(
         &commit0,
         &commit1,

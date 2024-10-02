@@ -2,7 +2,6 @@ use std::marker::PhantomData;
 
 use itertools::Itertools;
 use rand::Rng;
-use remainder::mle::dense::DenseMle;
 use remainder::mle::mle_enum::MleEnum;
 use remainder::mle::{Mle, MleIndex};
 use remainder::output_layer::mle_output_layer::MleOutputLayerDescription;
@@ -64,13 +63,8 @@ impl<C: PrimeOrderCurve> HyraxOutputLayer<C> {
         let claim_commit = scalar_committer
             .committed_scalar(&self.underlying_mle.bookkeeping_table()[0], blinding_factor);
 
-        let underlying_mle = DenseMle::new_from_raw(
-            self.underlying_mle.bookkeeping_table().to_vec(),
-            self.underlying_mle.layer_id(),
-        );
         HyraxClaim {
             point: claim_chal,
-            mle_enum: Some(MleEnum::Dense(underlying_mle)),
             to_layer_id: layer_id,
             evaluation: claim_commit,
         }
@@ -140,7 +134,6 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
 
         HyraxClaim {
             point: bindings,
-            mle_enum: None,
             to_layer_id: layer_desc.mle.layer_id(),
             evaluation: proof.claim_commitment,
         }

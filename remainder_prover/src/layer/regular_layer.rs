@@ -248,9 +248,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
-    ) -> bool {
-        let mut all_populatable = true;
-
+    ) {
         let mut expression_nodes_to_compile =
             HashMap::<&ExpressionNode<F, ExprDescription>, Vec<(Vec<bool>, Vec<bool>)>>::new();
 
@@ -291,27 +289,22 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         expression_nodes_to_compile
             .iter()
             .for_each(|(expression_node, prefix_bit_vec)| {
-                let maybe_full_bookkeeping_table =
-                    expression_node.compute_bookkeeping_table(circuit_map);
-                if let Some(full_bookkeeping_table) = &maybe_full_bookkeeping_table {
-                    prefix_bit_vec
-                        .iter()
-                        .for_each(|(unfiltered_prefix_bits, prefix_bits)| {
-                            let filtered_table = filter_bookkeeping_table(
-                                full_bookkeeping_table,
-                                unfiltered_prefix_bits,
-                            );
-                            circuit_map.add_node(
-                                CircuitLocation::new(self.layer_id(), prefix_bits.clone()),
-                                filtered_table,
-                            );
-                        });
-                } else {
-                    all_populatable = false;
-                }
+                let full_bookkeeping_table = expression_node
+                    .compute_bookkeeping_table(circuit_map)
+                    .unwrap();
+                prefix_bit_vec
+                    .iter()
+                    .for_each(|(unfiltered_prefix_bits, prefix_bits)| {
+                        let filtered_table = filter_bookkeeping_table(
+                            &full_bookkeeping_table,
+                            unfiltered_prefix_bits,
+                        );
+                        circuit_map.add_node(
+                            CircuitLocation::new(self.layer_id(), prefix_bits.clone()),
+                            filtered_table,
+                        );
+                    });
             });
-
-        all_populatable
     }
 
     fn verify_rounds(
@@ -622,14 +615,14 @@ impl<F: Field> RegularLayer<F> {
             match expr_node {
                 ExpressionNode::Mle(mle_vec_index) => {
                     let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
-                    let val = mle.current_mle.value();
+                    let val = mle.mle.value();
                     transcript_writer.append("Leaf MLE value", val);
                     Ok(())
                 }
                 ExpressionNode::Product(mle_vec_indices) => {
                     for mle_vec_index in mle_vec_indices {
                         let mle = &mle_vec[mle_vec_index.index()];
-                        let eval = mle.current_mle.value();
+                        let eval = mle.mle.value();
                         transcript_writer.append("Product MLE value", eval);
                     }
                     Ok(())

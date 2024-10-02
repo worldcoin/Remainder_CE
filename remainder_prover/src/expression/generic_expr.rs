@@ -33,7 +33,7 @@ pub trait ExpressionType<F: Field>: Serialize + for<'de> Deserialize<'de> {
 /// * [ExpressionNode::Sum], i.e. \widetilde{V}_{j_1 > i}(b_1, ..., b_{m_1 \leq n}) + \widetilde{V}_{j_2 > i}(b_1, ..., b_{m_2 \leq n})
 /// * [ExpressionNode::Negated], i.e. -1 * Expr(b_1, ..., b_{m \leq n})
 /// * [ExpressionNode::Scaled], i.e. c * Expr(b_1, ..., b_{m \leq n}) for c \in mathbb{F}
-#[derive(Serialize, Deserialize, Clone, Eq, Hash, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Hash, Eq)]
 #[serde(bound = "F: Field")]
 pub enum ExpressionNode<F: Field, E: ExpressionType<F>> {
     /// See documentation for [ExpressionNode]. Note that

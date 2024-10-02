@@ -7,12 +7,12 @@ use serde::{Deserialize, Serialize};
 use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
 use crate::claims::YieldClaim;
 use crate::layer_enum;
+use crate::mle::dense::DenseMle;
 
 use super::gate::{GateLayer, GateLayerDescription, VerifierGateLayer};
 use super::identity_gate::{IdentityGate, IdentityGateLayerDescription, VerifierIdentityGateLayer};
 use super::matmult::{MatMult, MatMultLayerDescription, VerifierMatMultLayer};
 use super::regular_layer::{RegularLayer, RegularLayerDescription, VerifierRegularLayer};
-use crate::mle::mle_enum::MleEnum;
 
 use super::LayerError;
 
@@ -79,7 +79,7 @@ impl<F: Field> YieldWLXEvals<F> for LayerEnum<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        claimed_mles: Vec<MleEnum<F>>,
+        claimed_mles: Vec<DenseMle<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
