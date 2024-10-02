@@ -123,7 +123,7 @@ mod tests {
         );
 
         let half_mle = DenseMle::new_from_iter(
-            mle.current_mle.get_evals_vector()[..size / 2]
+            mle.mle.get_evals_vector()[..size / 2]
                 .into_iter()
                 .map(|elem| *elem),
             LayerId::Input(0),
@@ -131,17 +131,16 @@ mod tests {
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let mle_input_shred =
-                InputShred::new(ctx, mle.current_mle.clone().num_vars(), &input_layer);
+            let mle_input_shred = InputShred::new(ctx, mle.mle.clone().num_vars(), &input_layer);
             let mle_input_shred_data = InputShredData::new(
                 mle_input_shred.id(),
-                MultilinearExtension::new(mle.current_mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle.mle.get_evals_vector().to_vec()),
             );
             let half_mle_input_shred =
-                InputShred::new(ctx, half_mle.current_mle.clone().num_vars(), &input_layer);
+                InputShred::new(ctx, half_mle.mle.clone().num_vars(), &input_layer);
             let half_mle_input_shred_data = InputShredData::new(
                 half_mle_input_shred.id(),
-                MultilinearExtension::new(half_mle.current_mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(half_mle.mle.get_evals_vector().to_vec()),
             );
 
             let input_layer_data = InputLayerData::new(
@@ -204,20 +203,16 @@ mod tests {
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let mle_input_shred =
-                InputShred::new(ctx, mle.current_mle.clone().num_vars(), &input_layer);
+            let mle_input_shred = InputShred::new(ctx, mle.mle.clone().num_vars(), &input_layer);
             let mle_input_shred_data = InputShredData::new(
                 mle_input_shred.id(),
-                MultilinearExtension::new(mle.current_mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle.mle.get_evals_vector().to_vec()),
             );
-            let mle_one_element_input_shred = InputShred::new(
-                ctx,
-                mle_one_element.current_mle.clone().num_vars(),
-                &input_layer,
-            );
+            let mle_one_element_input_shred =
+                InputShred::new(ctx, mle_one_element.mle.clone().num_vars(), &input_layer);
             let mle_one_element_input_shred_data = InputShredData::new(
                 mle_one_element_input_shred.id(),
-                MultilinearExtension::new(mle_one_element.current_mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle_one_element.mle.get_evals_vector().to_vec()),
             );
 
             let input_layer_data = InputLayerData::new(
@@ -281,7 +276,7 @@ mod tests {
         // so the (individual first halves of batched mles) batched
         // is just the first half of the bookkeeping table of the batched mles
         let half_mle = DenseMle::new_from_iter(
-            mle.current_mle.get_evals_vector()[..size / 2]
+            mle.mle.get_evals_vector()[..size / 2]
                 .into_iter()
                 .map(|elem| *elem),
             LayerId::Input(0),
@@ -289,17 +284,16 @@ mod tests {
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let mle_input_shred =
-                InputShred::new(ctx, mle.current_mle.clone().num_vars(), &input_layer);
+            let mle_input_shred = InputShred::new(ctx, mle.mle.clone().num_vars(), &input_layer);
             let mle_input_shred_data = InputShredData::new(
                 mle_input_shred.id(),
-                MultilinearExtension::new(mle.current_mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle.mle.get_evals_vector().to_vec()),
             );
             let half_mle_input_shred =
-                InputShred::new(ctx, half_mle.current_mle.clone().num_vars(), &input_layer);
+                InputShred::new(ctx, half_mle.mle.clone().num_vars(), &input_layer);
             let half_mle_input_shred_data = InputShredData::new(
                 half_mle_input_shred.id(),
-                MultilinearExtension::new(half_mle.current_mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(half_mle.mle.get_evals_vector().to_vec()),
             );
 
             let input_layer_data = InputLayerData::new(
@@ -360,27 +354,23 @@ mod tests {
 
         let mle_one_element = DenseMle::new_from_iter(
             (0..1 << NUM_DATAPARALLEL_BITS)
-                .map(|idx| mle.current_mle.get_evals_vector()[idx + (1 << NUM_DATAPARALLEL_BITS)])
+                .map(|idx| mle.mle.get_evals_vector()[idx + (1 << NUM_DATAPARALLEL_BITS)])
                 .clone(),
             LayerId::Input(0),
         );
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let mle_input_shred =
-                InputShred::new(ctx, mle.current_mle.clone().num_vars(), &input_layer);
+            let mle_input_shred = InputShred::new(ctx, mle.mle.clone().num_vars(), &input_layer);
             let mle_input_shred_data = InputShredData::new(
                 mle_input_shred.id(),
-                MultilinearExtension::new(mle.current_mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle.mle.get_evals_vector().to_vec()),
             );
-            let mle_one_element_input_shred = InputShred::new(
-                ctx,
-                mle_one_element.current_mle.clone().num_vars(),
-                &input_layer,
-            );
+            let mle_one_element_input_shred =
+                InputShred::new(ctx, mle_one_element.mle.clone().num_vars(), &input_layer);
             let mle_one_element_input_shred_data = InputShredData::new(
                 mle_one_element_input_shred.id(),
-                MultilinearExtension::new(mle_one_element.current_mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle_one_element.mle.get_evals_vector().to_vec()),
             );
 
             let input_layer_data = InputLayerData::new(
