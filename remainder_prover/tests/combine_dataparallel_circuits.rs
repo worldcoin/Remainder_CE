@@ -14,7 +14,7 @@ use remainder::{
         },
     },
     mle::{dense::DenseMle, Mle},
-    prover::helpers::test_circuit,
+    prover::helpers::test_circuit, utils::mle::get_random_mle,
 };
 use remainder_shared_types::{Field, Fr};
 use utils::{
@@ -22,7 +22,7 @@ use utils::{
     ProductSumBuilderComponent,
 };
 
-use crate::utils::{get_dummy_random_mle, get_input_shred_and_data_from_vec};
+use crate::utils::get_input_shred_and_data_from_vec;
 pub mod utils;
 
 struct DataParallelConstantScaledCircuitAltComponent<F: Field> {
@@ -202,10 +202,10 @@ fn test_combined_dataparallel_circuit_alt_newmainder() {
     // `batch_mles()` --> `bookkeeping_table` is just to emulate what
     // batching *would* look like
     let mle_1_vec = (0..1 << NUM_DATAPARALLEL_BITS)
-        .map(|_| get_dummy_random_mle(VARS_MLE_1_2, &mut rng))
+        .map(|_| get_random_mle(VARS_MLE_1_2, &mut rng))
         .collect_vec();
     let mle_2_vec = (0..1 << NUM_DATAPARALLEL_BITS)
-        .map(|_| get_dummy_random_mle(VARS_MLE_1_2, &mut rng))
+        .map(|_| get_random_mle(VARS_MLE_1_2, &mut rng))
         .collect_vec();
 
     let mle_1_vec_batched = DenseMle::batch_mles(mle_1_vec.clone());
