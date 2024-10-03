@@ -18,19 +18,16 @@ use crate::{claims::Claim, layer::LayerId};
 
 /// An enum which represents which type of input layer we are working with.
 pub mod enum_input_layer;
+/// An input layer in order to generate random challenges for Fiat-Shamir.
+pub mod fiat_shamir_challenge;
 /// The circuit description struct for the input layer where the data is committed to using the Hyrax PCS.
 pub mod hyrax_input_layer;
 /// An input layer in which the input data is committed to using the Ligero PCS.
 pub mod ligero_input_layer;
 /// An input layer which requires no commitment and is openly evaluated at the random point.
 pub mod public_input_layer;
-/// An input layer in order to generate random challenges for Fiat-Shamir.
-pub mod verifier_challenge_input_layer;
 
-use crate::{
-    claims::wlx_eval::get_num_wlx_evaluations, mle::mle_enum::MleEnum,
-    sumcheck::evaluate_at_a_point,
-};
+use crate::{claims::wlx_eval::get_num_wlx_evaluations, sumcheck::evaluate_at_a_point};
 
 use ark_std::{end_timer, start_timer};
 #[cfg(feature = "parallel")]
@@ -45,8 +42,6 @@ pub enum CommitmentEnum<F: Field> {
     LigeroCommitment(LigeroCommit<PoseidonSpongeHasher<F>, F>),
     /// The commitment for a [PublicInputLayer]
     PublicCommitment(Vec<F>),
-    /// The challenges for a [VerifierChallengeInputLayer]
-    VerifierChallenges(Vec<F>),
 }
 
 #[derive(Error, Clone, Debug)]
@@ -60,10 +55,6 @@ pub enum InputLayerError {
     /// does not equal the claimed value.
     #[error("failed to verify public input layer")]
     PublicInputVerificationFailed,
-    /// This is when the random input layer evaluated at a random point does not
-    /// equal the claimed value.
-    #[error("failed to verify random input layer")]
-    RandomInputVerificationFailed,
     /// This is when there is an error when trying to squeeze or add elements to the transcript.
     #[error("Error during interaction with the transcript.")]
     TranscriptError(#[from] TranscriptReaderError),
@@ -113,7 +104,7 @@ pub trait InputLayer<F: Field> {
 }
 
 /// The trait representing methods necessary for the circuit description of an input layer.
-pub trait CircuitInputLayer<F: Field> {
+pub trait InputLayerDescription<F: Field> {
     /// The struct that contains the commitment to the contents of the input_layer.
     type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
 
@@ -148,7 +139,7 @@ fn get_wlx_evaluations_helper<F: Field>(
     mut mle_ref: MultilinearExtension<F>,
     claim_vecs: &[Vec<F>],
     claimed_vals: &[F],
-    _claimed_mles: Vec<MleEnum<F>>,
+    _claimed_mles: Vec<DenseMle<F>>,
     num_claims: usize,
     num_idx: usize,
 ) -> Result<Vec<F>, crate::claims::ClaimError> {

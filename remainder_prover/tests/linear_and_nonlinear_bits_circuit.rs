@@ -39,7 +39,7 @@ impl<F: Field> LastBitLinearBuilderComponent<F> {
             let sel_mle = input_nodes[0];
             let prod_mle = input_nodes[1];
 
-            let lhs_sum_expr = sel_mle.expr().concat_expr(sel_mle.expr());
+            let lhs_sum_expr = sel_mle.expr().select(sel_mle.expr());
             let rhs_sum_expr = ExprBuilder::<F>::products(vec![prod_mle, prod_mle]);
             lhs_sum_expr + rhs_sum_expr
         });
@@ -80,9 +80,7 @@ impl<F: Field> FirstBitLinearBuilderComponent<F> {
             assert_eq!(input_nodes.len(), 1);
             let sel_mle = input_nodes[0];
 
-            sel_mle
-                .expr()
-                .concat_expr(ExprBuilder::<F>::products(vec![sel_mle, sel_mle]))
+            ExprBuilder::<F>::products(vec![sel_mle, sel_mle]).select(sel_mle.expr())
         });
 
         Self {

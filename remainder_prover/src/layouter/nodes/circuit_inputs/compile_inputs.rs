@@ -5,8 +5,9 @@ use remainder_shared_types::Field;
 
 use crate::{
     input_layer::{
-        enum_input_layer::CircuitInputLayerEnum, hyrax_input_layer::CircuitHyraxInputLayer,
-        ligero_input_layer::CircuitLigeroInputLayer, public_input_layer::CircuitPublicInputLayer,
+        enum_input_layer::InputLayerDescriptionEnum, hyrax_input_layer::HyraxInputLayerDescription,
+        ligero_input_layer::LigeroInputLayerDescription,
+        public_input_layer::PublicInputLayerDescription,
     },
     layer::LayerId,
     layouter::{
@@ -19,14 +20,14 @@ use crate::{
 
 use super::{InputLayerNode, InputLayerType};
 
-/// Function which returns a vector of `MleIndex::Fixed` for prefix bits according to which
-/// position we are in the range from 0 to `total_num_bits` - `num_iterated_bits`.
+/// Function which returns a vector of [MleIndex::Fixed] for prefix bits according to which
+/// position we are in the range from 0 to `total_num_bits` - `num_free_bits`.
 fn get_prefix_bits_from_capacity(
     capacity: u32,
     total_num_bits: usize,
-    num_iterated_bits: usize,
+    num_free_bits: usize,
 ) -> Vec<bool> {
-    (0..total_num_bits - num_iterated_bits)
+    (0..total_num_bits - num_free_bits)
         .map(|bit_position| {
             // Divide capacity by 2**(total_num_bits - bit_position - 1) and see whether the last bit is 1
             let bit_val = (capacity >> (total_num_bits - bit_position - 1)) & 1;
@@ -151,22 +152,22 @@ impl InputLayerNode {
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-    ) -> Result<CircuitInputLayerEnum<F>, DAGError> {
+    ) -> Result<InputLayerDescriptionEnum<F>, DAGError> {
         let input_layer_id = layer_id.get_and_inc();
         let Self {
             id: _,
-            children,
+            input_shreds,
             input_layer_type,
         } = &self;
 
-        let input_mle_num_vars = children
+        let input_mle_num_vars = input_shreds
             .iter()
             .map(|node| node.get_num_vars())
             .collect_vec();
 
         let (prefix_bits, input_shred_indices, num_vars_combined_mle) =
             index_input_mles(&input_mle_num_vars);
-        debug_assert_eq!(input_shred_indices.len(), children.len());
+        debug_assert_eq!(input_shred_indices.len(), input_shreds.len());
 
         let out = match input_layer_type {
             InputLayerType::LigeroInputLayer((rho_inv, ratio)) => {
@@ -176,23 +177,27 @@ impl InputLayerNode {
                     *ratio,
                     None,
                 );
-                let ligero_input_layer_description: CircuitLigeroInputLayer<F> =
-                    CircuitLigeroInputLayer::new(
+                let ligero_input_layer_description: LigeroInputLayerDescription<F> =
+                    LigeroInputLayerDescription::new(
                         input_layer_id.to_owned(),
                         num_vars_combined_mle,
                         aux,
                     );
-                CircuitInputLayerEnum::LigeroInputLayer(ligero_input_layer_description)
+                InputLayerDescriptionEnum::LigeroInputLayer(ligero_input_layer_description)
             }
             InputLayerType::PublicInputLayer => {
-                let public_input_layer_description =
-                    CircuitPublicInputLayer::new(input_layer_id.to_owned(), num_vars_combined_mle);
-                CircuitInputLayerEnum::PublicInputLayer(public_input_layer_description)
+                let public_input_layer_description = PublicInputLayerDescription::new(
+                    input_layer_id.to_owned(),
+                    num_vars_combined_mle,
+                );
+                InputLayerDescriptionEnum::PublicInputLayer(public_input_layer_description)
             }
             InputLayerType::HyraxInputLayer => {
-                let hyrax_input_layer_description =
-                    CircuitHyraxInputLayer::new(input_layer_id.to_owned(), num_vars_combined_mle);
-                CircuitInputLayerEnum::HyraxInputLayer(hyrax_input_layer_description)
+                let hyrax_input_layer_description = HyraxInputLayerDescription::new(
+                    input_layer_id.to_owned(),
+                    num_vars_combined_mle,
+                );
+                InputLayerDescriptionEnum::HyraxInputLayer(hyrax_input_layer_description)
             }
         };
 
@@ -200,7 +205,7 @@ impl InputLayerNode {
             .iter()
             .zip(prefix_bits)
             .for_each(|(input_shred_index, prefix_bits)| {
-                let input_shred = &children[*input_shred_index];
+                let input_shred = &input_shreds[*input_shred_index];
                 circuit_description_map.add_node_id_and_location_num_vars(
                     input_shred.id,
                     (

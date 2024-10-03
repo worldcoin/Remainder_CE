@@ -92,17 +92,17 @@ where
 
 #[test]
 fn test_batching_wraparound_newmainder() {
-    const ITERATED_VARS_SMALLER: usize = 1;
-    const ITERATED_VARS_BIGGER: usize = 2;
+    const FREE_VARS_SMALLER: usize = 1;
+    const FREE_VARS_BIGGER: usize = 2;
     const DATAPARALLEL_VARS: usize = 2;
     let mut rng = test_rng();
 
     let smaller_mles_vec: Vec<DenseMle<Fr>> = (0..(1 << DATAPARALLEL_VARS))
-        .map(|_| get_dummy_random_mle(ITERATED_VARS_SMALLER, &mut rng))
+        .map(|_| get_dummy_random_mle(FREE_VARS_SMALLER, &mut rng))
         .collect_vec();
 
     let bigger_mles_vec: Vec<DenseMle<Fr>> = (0..(1 << DATAPARALLEL_VARS))
-        .map(|_| get_dummy_random_mle(ITERATED_VARS_BIGGER, &mut rng))
+        .map(|_| get_dummy_random_mle(FREE_VARS_BIGGER, &mut rng))
         .collect_vec();
 
     let prod_mles = smaller_mles_vec

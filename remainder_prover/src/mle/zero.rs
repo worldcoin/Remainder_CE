@@ -15,7 +15,6 @@ use super::{mle_enum::MleEnum, MleIndex};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ZeroMle<F> {
     pub(crate) mle_indices: Vec<MleIndex<F>>,
-    pub(crate) original_mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck).
     pub(crate) num_vars: usize,
@@ -31,12 +30,11 @@ impl<F: Field> ZeroMle<F> {
         let mle_indices = prefix_bits
             .into_iter()
             .flatten()
-            .chain(repeat_n(MleIndex::Iterated, num_vars))
+            .chain(repeat_n(MleIndex::Free, num_vars))
             .collect_vec();
 
         Self {
-            mle_indices: mle_indices.clone(),
-            original_mle_indices: mle_indices,
+            mle_indices,
             num_vars,
             layer_id,
             zero: [F::ZERO],
@@ -54,30 +52,18 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         &self.mle_indices
     }
 
-    fn original_mle_indices(&self) -> &Vec<MleIndex<F>> {
-        &self.original_mle_indices
-    }
-
-    fn original_bookkeeping_table(&self) -> &[F] {
-        &self.zero
-    }
-
-    fn num_iterated_vars(&self) -> usize {
-        self.num_vars
-    }
-
-    fn original_num_vars(&self) -> usize {
+    fn num_free_vars(&self) -> usize {
         self.num_vars
     }
 
     fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<Claim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
-            if *mle_index == MleIndex::IndexedBit(round_index) {
+            if *mle_index == MleIndex::Indexed(round_index) {
                 mle_index.bind_index(challenge);
             }
         }
 
-        // --- One fewer iterated bit to sumcheck through ---
+        // --- One fewer free variable to sumcheck through ---
         self.num_vars -= 1;
 
         if self.num_vars == 0 {
@@ -101,8 +87,8 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
     fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         let mut new_indices = 0;
         for mle_index in self.mle_indices.iter_mut() {
-            if *mle_index == MleIndex::Iterated {
-                *mle_index = MleIndex::IndexedBit(curr_index + new_indices);
+            if *mle_index == MleIndex::Free {
+                *mle_index = MleIndex::Indexed(curr_index + new_indices);
                 new_indices += 1;
             }
         }
@@ -110,7 +96,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         curr_index + new_indices
     }
 
-    fn get_layer_id(&self) -> LayerId {
+    fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 
@@ -128,11 +114,6 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
     #[doc = " are working with dataparallel circuits and new bits need to be added."]
     fn add_prefix_bits(&mut self, _new_bits: Vec<MleIndex<F>>) {
         todo!()
-    }
-
-    #[doc = " Get the layer ID of the associated MLE."]
-    fn layer_id(&self) -> LayerId {
-        self.layer_id
     }
 }
 
@@ -158,7 +139,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for ZeroMle<F> {
             F::ZERO,
             None,
             Some(self.layer_id),
-            Some(self.clone().get_enum()),
         )])
     }
 }

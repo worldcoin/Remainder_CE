@@ -4,7 +4,7 @@ use itertools::{repeat_n, Itertools};
 use remainder_shared_types::Field;
 
 use crate::{
-    layer::{layer_enum::CircuitLayerEnum, LayerId},
+    layer::{layer_enum::LayerDescriptionEnum, LayerId},
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
 };
 
@@ -60,7 +60,7 @@ impl<F: Field> CompilableNode<F> for SplitNode {
         &self,
         _layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-    ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError> {
+    ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError> {
         let (source_location, _) =
             circuit_description_map.get_location_num_vars_from_node_id(&self.source)?;
 
@@ -144,7 +144,7 @@ mod test {
             ]);
             // the mle_out = [1*5, 2*6, 3*7, 4*8], the product between the two split nodes
             let mle_out = MultilinearExtension::new(vec![
-                Fr::from(1 * 5),
+                Fr::from(5),
                 Fr::from(2 * 6),
                 Fr::from(3 * 7),
                 Fr::from(4 * 8),

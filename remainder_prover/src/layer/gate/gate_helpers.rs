@@ -55,10 +55,10 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
     independent_variable: bool,
     degree: usize,
 ) -> Result<SumcheckEvals<F>, MleError> {
-    // --- Gets the total number of iterated variables across all MLEs within this product ---
+    // --- Gets the total number of free variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
-        .map(|mle_ref| mle_ref.num_iterated_vars())
+        .map(|mle_ref| mle_ref.num_free_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
@@ -78,14 +78,14 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
                     .iter()
                     .map(|mle_ref| {
                         let zero = F::ZERO;
-                        let index = if mle_ref.num_iterated_vars() < max_num_vars {
-                            let max = 1 << mle_ref.num_iterated_vars();
+                        let index = if mle_ref.num_free_vars() < max_num_vars {
+                            let max = 1 << mle_ref.num_free_vars();
                             (index * 2) % max
                         } else {
                             index * 2
                         };
                         let first = *mle_ref.bookkeeping_table().get(index).unwrap_or(&zero);
-                        let second = if mle_ref.num_iterated_vars() != 0 {
+                        let second = if mle_ref.num_free_vars() != 0 {
                             *mle_ref.bookkeeping_table().get(index + 1).unwrap_or(&zero)
                         } else {
                             first
@@ -134,8 +134,8 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
                     .iter()
                     // Result of this `map()`: A list of evaluations of the MLEs at `index`
                     .map(|mle_ref| {
-                        let index = if mle_ref.num_iterated_vars() < max_num_vars {
-                            let max = 1 << mle_ref.num_iterated_vars();
+                        let index = if mle_ref.num_free_vars() < max_num_vars {
+                            let max = 1 << mle_ref.num_free_vars();
                             index % max
                         } else {
                             index
@@ -264,7 +264,7 @@ pub fn compute_sumcheck_message_identity<F: Field>(
         .map(|mle_ref| {
             mle_ref
                 .mle_indices()
-                .contains(&MleIndex::IndexedBit(round_index))
+                .contains(&MleIndex::Indexed(round_index))
         })
         .reduce(|acc, item| acc | item)
         .ok_or(GateError::EmptyMleList)?;
@@ -368,7 +368,7 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
         .map(|mle_ref| {
             mle_ref
                 .mle_indices()
-                .contains(&MleIndex::IndexedBit(round_index))
+                .contains(&MleIndex::Indexed(round_index))
         })
         .reduce(|acc, item| acc | item)
         .ok_or(GateError::EmptyMleList)?;
@@ -441,7 +441,7 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
             // Compute the beta successors the same way it's done for each mle. Do it outside the loop
             // because it only needs to be done once per product of mles.
             let first = *beta_g2.bookkeeping_table().get(p2_idx * 2).unwrap();
-            let second = if beta_g2.num_iterated_vars() != 0 {
+            let second = if beta_g2.num_free_vars() != 0 {
                 *beta_g2.bookkeeping_table().get(p2_idx * 2 + 1).unwrap()
             } else {
                 first
@@ -459,7 +459,7 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                 .iter()
                 .copied()
                 .map(|(z, x, y)| {
-                    let g1_z = beta_g1.current_mle[z];
+                    let g1_z = beta_g1.mle[z];
                     let g1_z_successors = std::iter::successors(Some(g1_z), move |_| Some(g1_z));
 
                     // --- Compute f_2((A, p_2), x) ---
@@ -468,7 +468,7 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                         .bookkeeping_table()
                         .get((p2_idx * 2) + x * num_dataparallel_entries)
                         .unwrap();
-                    let f2_1_p2_x = if f2_p2_x.num_iterated_vars() != 0 {
+                    let f2_1_p2_x = if f2_p2_x.num_free_vars() != 0 {
                         *f2_p2_x
                             .bookkeeping_table()
                             .get((p2_idx * 2 + 1) + x * num_dataparallel_entries)
@@ -490,7 +490,7 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                         .bookkeeping_table()
                         .get((p2_idx * 2) + y * num_dataparallel_entries)
                         .unwrap();
-                    let f3_1_p2_y = if f3_p2_y.num_iterated_vars() != 0 {
+                    let f3_1_p2_y = if f3_p2_y.num_free_vars() != 0 {
                         *f3_p2_y
                             .bookkeeping_table()
                             .get((p2_idx * 2 + 1) + y * num_dataparallel_entries)

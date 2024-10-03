@@ -122,12 +122,12 @@ fn test_short_messages() {
 
     // test message can be shorter than the generators
     let committer = PedersenCommitter::new_with_generators(vec![g0, g1], g0, None);
-    let _commit = committer.vector_commit(&vec![Fr::from(5u64)], &blinding_factor);
+    let _commit = committer.vector_commit(&[Fr::from(5u64)], &blinding_factor);
     // worked!
 
     // test degenerate case of message length 0
     let committer = PedersenCommitter::new_with_generators(vec![], g0, None);
-    let commit = committer.vector_commit(&vec![], &blinding_factor);
+    let commit = committer.vector_commit(&[], &blinding_factor);
     assert_eq!(commit, g0 * blinding_factor);
 }
 
@@ -172,7 +172,7 @@ fn test_generator_extraction() {
     // test that a one-hot message returns the corresponding generator (when blinding factor is zero)
     let committer = PedersenCommitter::new_with_generators(vec![g0, g1], h, None);
     // for vectors
-    let commit = committer.vector_commit(&vec![Fr::zero(), Fr::one()], &Fr::zero());
+    let commit = committer.vector_commit(&[Fr::zero(), Fr::one()], &Fr::zero());
     assert_eq!(commit, g1);
     // for scalars
     let commit = committer.scalar_commit(&Fr::one(), &Fr::zero());
@@ -180,7 +180,7 @@ fn test_generator_extraction() {
 
     // test that zero message with blinding factor one returns the blinding generator
     // for vectors
-    let commit = committer.vector_commit(&vec![Fr::zero(), Fr::zero()], &Fr::one());
+    let commit = committer.vector_commit(&[Fr::zero(), Fr::zero()], &Fr::one());
     assert_eq!(commit, h);
     // for scalars
     let commit = committer.scalar_commit(&Fr::zero(), &Fr::one());
@@ -263,8 +263,7 @@ fn test_against_orb_serialized_generators() {
     let generator_bytes_from_file = read_bytes_from_file(SERIALIZED_GENERATORS_FILENAME);
     let deserialized_generators_from_file = generator_bytes_from_file
         .chunks(34)
-        .into_iter()
-        .map(|byte_chunk| <Bn256 as PrimeOrderCurve>::from_bytes_compressed(byte_chunk))
+        .map(<Bn256 as PrimeOrderCurve>::from_bytes_compressed)
         .collect_vec();
 
     // --- These are stolen directly from the `remainder-hyrax-tfh` ---
