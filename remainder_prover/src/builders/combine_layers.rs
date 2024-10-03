@@ -255,14 +255,14 @@ fn combine_expressions<F: Field>(
 ) -> Expression<F, ProverExpr> {
     let _floor_size = exprs
         .iter()
-        .map(|expr| expr.get_expression_size(0))
+        .map(|expr| expr.get_expression_size())
         .min()
         .unwrap();
 
     exprs.sort_by(|first, second| {
         first
-            .get_expression_size(0)
-            .cmp(&second.get_expression_size(0))
+            .get_expression_size()
+            .cmp(&second.get_expression_size())
     });
 
     let mut exprs = exprs.into_iter().enumerate().collect_vec();
@@ -275,15 +275,15 @@ fn combine_expressions<F: Field>(
         exprs.sort_by(|first, second| {
             first
                 .1
-                .get_expression_size(0)
-                .cmp(&second.1.get_expression_size(0))
+                .get_expression_size()
+                .cmp(&second.1.get_expression_size())
         });
 
         let (first_index, first) = exprs.remove(0);
-        let _first_size = first.get_expression_size(0);
+        let _first_size = first.get_expression_size();
         let (second_index, second) = exprs.remove(0);
 
-        let diff = second.get_expression_size(0) - first.get_expression_size(0);
+        let diff = second.get_expression_size() - first.get_expression_size();
 
         let first = add_padding(first, diff);
 
