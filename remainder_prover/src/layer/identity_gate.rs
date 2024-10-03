@@ -60,9 +60,9 @@ pub struct IdentityGateLayerDescription<F: Field> {
     /// variables.
     source_mle: MleDescription<F>,
 
-    /// The number of bits representing the number of "dataparallel" copies of
+    /// The number of vars representing the number of "dataparallel" copies of
     /// the circuit.
-    num_dataparallel_bits: usize,
+    num_dataparallel_vars: usize,
 }
 
 impl<F: Field> IdentityGateLayerDescription<F> {
@@ -72,19 +72,19 @@ impl<F: Field> IdentityGateLayerDescription<F> {
         id: LayerId,
         wiring: Vec<(usize, usize)>,
         source_mle: MleDescription<F>,
-        num_dataparallel_bits: Option<usize>,
+        num_dataparallel_vars: Option<usize>,
     ) -> Self {
         Self {
             id,
             wiring,
             source_mle,
-            num_dataparallel_bits: num_dataparallel_bits.unwrap_or(0),
+            num_dataparallel_vars: num_dataparallel_vars.unwrap_or(0),
         }
     }
 }
 
 /// Degree of independent variable is always quadratic!
-/// (regardless of if there's data parralel or not)
+/// (regardless of if there's dataparallel or not)
 /// V_i(g_2, g_1) = \sum_{p_2} \sum_{x} \beta(g_2, p_2) f_1(g_1, x) (V_{i + 1}(p_2, x))
 const ID_NUM_EVALS: usize = 3;
 
@@ -110,7 +110,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
         // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
         // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
-        // --- BITS ---
+        // --- vars ---
         let num_u = self
             .source_mle
             .mle_indices()
@@ -121,7 +121,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
                     _ => 1,
                 }
             })
-            - self.num_dataparallel_bits;
+            - self.num_dataparallel_vars;
 
         // --- Grab the first round prover sumcheck message g_1(x) ---
         let mut sumcheck_messages: Vec<Vec<F>> = vec![];
@@ -136,7 +136,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             return Err(VerificationError::SumcheckStartFailed);
         }
 
-        for _sumcheck_round_idx in 1..self.num_dataparallel_bits + num_u {
+        for _sumcheck_round_idx in 1..self.num_dataparallel_vars + num_u {
             // --- Read challenge r_{i - 1} from transcript ---
             let challenge = transcript_reader
                 .get_challenge("Sumcheck challenge")
@@ -197,9 +197,9 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
                     _ => 1,
                 }
             })
-            - self.num_dataparallel_bits;
+            - self.num_dataparallel_vars;
 
-        (0..num_u + self.num_dataparallel_bits).collect_vec()
+        (0..num_u + self.num_dataparallel_vars).collect_vec()
     }
 
     fn convert_into_verifier_layer(
@@ -210,7 +210,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
     ) -> Result<Self::VerifierLayer, VerificationError> {
         // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
         // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
-        // --- BITS ---
+        // --- vars ---
         let num_u = self
             .source_mle
             .mle_indices()
@@ -221,17 +221,17 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
                     _ => 1,
                 }
             })
-            - self.num_dataparallel_bits;
+            - self.num_dataparallel_vars;
 
-        // We want to separate the challenges into which ones are from the dataparallel bits,
+        // We want to separate the challenges into which ones are from the dataparallel vars,
         // which ones and are for binding x (phase 1)
         let mut sumcheck_bindings_vec = sumcheck_challenges.to_vec();
-        let first_u_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_bits);
+        let first_u_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_vars);
         let dataparallel_sumcheck_challenges = sumcheck_bindings_vec;
 
         assert_eq!(first_u_challenges.len(), num_u);
 
-        // Since the original mles are dataparallel, the challenges are the concat of the copy bits and the variable bound bits.
+        // Since the original mles are dataparallel, the challenges are the concat of the copy vars and the variable bound vars.
         let src_verifier_mle = self
             .source_mle
             .into_verifier_mle(sumcheck_challenges, transcript_reader)
@@ -244,7 +244,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             wiring: self.wiring.clone(),
             source_mle: src_verifier_mle,
             first_u_challenges,
-            num_dataparallel_rounds: self.num_dataparallel_bits,
+            num_dataparallel_rounds: self.num_dataparallel_vars,
             dataparallel_sumcheck_challenges,
         };
 
@@ -286,16 +286,16 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
     fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
         let source_mle = self.source_mle.into_dense_mle(circuit_map);
-        let num_dataparallel_bits = if self.num_dataparallel_bits == 0 {
+        let num_dataparallel_vars = if self.num_dataparallel_vars == 0 {
             None
         } else {
-            Some(self.num_dataparallel_bits)
+            Some(self.num_dataparallel_vars)
         };
         let id_gate_layer = IdentityGate::new(
             self.layer_id(),
             self.wiring.clone(),
             source_mle,
-            num_dataparallel_bits,
+            num_dataparallel_vars,
         );
         id_gate_layer.into()
     }
@@ -320,9 +320,9 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             .iter()
             .fold(&0, |acc, (z, _)| std::cmp::max(acc, z));
 
-        // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
-        // evaluating over all values in the boolean hypercube which includes dataparallel bits
-        let num_dataparallel_vals = 1 << (self.num_dataparallel_bits);
+        // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel vars, as we are
+        // evaluating over all values in the boolean hypercube which includes dataparallel vars
+        let num_dataparallel_vals = 1 << (self.num_dataparallel_vars);
         let res_table_num_entries =
             ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
 
@@ -423,7 +423,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
         // We perform the dataparallel initialization only if there is at least one variable
         // representing which copy we are in.
-        if self.num_dataparallel_bits > 0 {
+        if self.num_dataparallel_vars > 0 {
             beta_g2_fully_bound = self
                 .perform_dataparallel_phase(&mut beta_g1, &mut beta_g2, transcript_writer)
                 .unwrap();
@@ -431,7 +431,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
         // initialization, get the first sumcheck message
         let first_message = self
-            .init_phase_1(claim.get_point()[self.num_dataparallel_bits..].to_vec())
+            .init_phase_1(claim.get_point()[self.num_dataparallel_vars..].to_vec())
             .expect("could not evaluate original lhs and rhs")
             .into_iter()
             .map(|eval| eval * beta_g2_fully_bound)
@@ -452,15 +452,15 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             .chain((1..num_rounds).map(|round| {
                 let challenge = transcript_writer.get_challenge("Sumcheck challenge");
                 challenges.push(challenge);
-                // if there are copy bits, we want to start at that index
+                // if there are copy vars, we want to start at that index
                 bind_round_identity(
-                    round + self.num_dataparallel_bits,
+                    round + self.num_dataparallel_vars,
                     challenge,
                     phase_1_mle_refs,
                 );
                 let phase_1_mle_references: Vec<&DenseMle<F>> = phase_1_mle_refs.iter().collect();
                 let eval = compute_sumcheck_message_identity(
-                    round + self.num_dataparallel_bits,
+                    round + self.num_dataparallel_vars,
                     &phase_1_mle_references,
                 )
                 .unwrap()
@@ -477,7 +477,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         challenges.push(final_chal);
 
         phase_1_mle_refs.iter_mut().for_each(|mle| {
-            mle.fix_variable(num_rounds - 1 + self.num_dataparallel_bits, final_chal);
+            mle.fix_variable(num_rounds - 1 + self.num_dataparallel_vars, final_chal);
         });
 
         // --- Finally, send the claimed values for each of the bound MLE to the verifier ---
@@ -663,7 +663,7 @@ impl<F: Field> YieldWLXEvals<F> for IdentityGate<F> {
                     new_chal,
                     &mut self.mle_ref.clone(),
                     &self.nonzero_gates,
-                    self.num_dataparallel_bits,
+                    self.num_dataparallel_vars,
                 )
             })
             .collect();
@@ -727,8 +727,8 @@ pub struct IdentityGate<F: Field> {
     /// the mles that are created from the initial phase, where we automatically
     /// filter through the nonzero gates using the libra trick
     pub phase_1_mles: Option<[DenseMle<F>; 2]>,
-    /// The number of bits representing the number of "dataparallel" copies of the circuit.
-    pub num_dataparallel_bits: usize,
+    /// The number of vars representing the number of "dataparallel" copies of the circuit.
+    pub num_dataparallel_vars: usize,
 }
 
 impl<F: Field> IdentityGate<F> {
@@ -737,7 +737,7 @@ impl<F: Field> IdentityGate<F> {
         layer_id: LayerId,
         nonzero_gates: Vec<(usize, usize)>,
         mle_ref: DenseMle<F>,
-        num_dataparallel_bits: Option<usize>,
+        num_dataparallel_vars: Option<usize>,
     ) -> IdentityGate<F> {
         IdentityGate {
             layer_id,
@@ -745,7 +745,7 @@ impl<F: Field> IdentityGate<F> {
             mle_ref,
             beta_g: None,
             phase_1_mles: None,
-            num_dataparallel_bits: num_dataparallel_bits.unwrap_or(0),
+            num_dataparallel_vars: num_dataparallel_vars.unwrap_or(0),
         }
     }
 
@@ -757,7 +757,7 @@ impl<F: Field> IdentityGate<F> {
             .iter()
             .enumerate()
             .for_each(|(bit_idx, challenge)| {
-                if bit_idx < self.num_dataparallel_bits {
+                if bit_idx < self.num_dataparallel_vars {
                     g2_challenges.push(*challenge);
                 } else {
                     g1_challenges.push(*challenge);
@@ -773,8 +773,8 @@ impl<F: Field> IdentityGate<F> {
     }
 
     /// Initialize the dataparallel phase: construct the necessary mles and return the first sumcheck message.
-    /// This will then set the necessary fields of the [Gate] struct so that the dataparallel bits can be
-    /// correctly bound during the first `num_dataparallel_bits` rounds of sumcheck.
+    /// This will then set the necessary fields of the [Gate] struct so that the dataparallel vars can be
+    /// correctly bound during the first `num_dataparallel_vars` rounds of sumcheck.
     fn init_dataparallel_phase(
         &mut self,
         beta_g1: &mut DenseMle<F>,
@@ -790,12 +790,12 @@ impl<F: Field> IdentityGate<F> {
             beta_g2,
             beta_g1,
             &self.nonzero_gates,
-            self.num_dataparallel_bits,
+            self.num_dataparallel_vars,
         )
     }
 
     // Once the initialization of the dataparallel phase is done, we can perform the dataparallel phase.
-    // This means that we are binding all bits that represent which copy of the circuit we are in.
+    // This means that we are binding all vars that represent which copy of the circuit we are in.
     fn perform_dataparallel_phase(
         &mut self,
         beta_g1: &mut DenseMle<F>,
@@ -813,9 +813,9 @@ impl<F: Field> IdentityGate<F> {
 
         transcript_writer
             .append_elements("Initial Sumcheck evaluations DATAPARALLEL", &first_message);
-        let num_rounds_copy_phase = self.num_dataparallel_bits;
+        let num_rounds_copy_phase = self.num_dataparallel_vars;
 
-        // Do the first dataparallel bits number sumcheck rounds using libra giraffe.
+        // Do the first dataparallel vars number sumcheck rounds using libra giraffe.
         let _sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
             .chain((1..num_rounds_copy_phase).map(|round| {
                 let challenge = transcript_writer.get_challenge("Sumcheck challenge DATAPARALLEL");
@@ -827,7 +827,7 @@ impl<F: Field> IdentityGate<F> {
                     round,
                     challenge,
                     &self.nonzero_gates,
-                    self.num_dataparallel_bits - round,
+                    self.num_dataparallel_vars - round,
                 )
                 .unwrap();
                 transcript_writer.append_elements("Sumcheck evaluations DATAPARALLEL", &eval);
@@ -890,7 +890,7 @@ impl<F: Field> IdentityGate<F> {
             self.mle_ref.clone(),
         ];
 
-        index_mle_indices_gate(&mut phase_1, self.num_dataparallel_bits);
+        index_mle_indices_gate(&mut phase_1, self.num_dataparallel_vars);
         self.set_phase_1(phase_1.clone());
 
         let independent_variable = phase_1
@@ -898,7 +898,7 @@ impl<F: Field> IdentityGate<F> {
             .map(|mle_ref| {
                 mle_ref
                     .mle_indices()
-                    .contains(&MleIndex::Indexed(self.num_dataparallel_bits))
+                    .contains(&MleIndex::Indexed(self.num_dataparallel_vars))
             })
             .reduce(|acc, item| acc | item)
             .ok_or(GateError::EmptyMleList)?;

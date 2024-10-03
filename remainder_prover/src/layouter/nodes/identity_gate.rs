@@ -54,7 +54,7 @@ impl IdentityGateNode {
         // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
         // evaluating over all values in the boolean hypercube which includes dataparallel bits
         let num_dataparallel_vals = 1 << (num_dataparallel_bits.unwrap_or(0));
-        let remap_table_len = (max_gate_val + 1) * num_dataparallel_vals;
+        let remap_table_len = (max_gate_val + 1).next_power_of_two() * num_dataparallel_vals;
 
         let num_vars = log2(remap_table_len) as usize;
 
