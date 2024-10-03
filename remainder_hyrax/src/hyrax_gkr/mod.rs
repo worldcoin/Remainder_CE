@@ -581,7 +581,7 @@ impl<
         proof: &HyraxProof<C>,
         circuit_description: &GKRCircuitDescription<C::Scalar>,
         committer: &PedersenCommitter<C>,
-        public_inputs: &Vec<(LayerId, Vec<C::Scalar>)>,
+        _public_inputs: &Vec<(LayerId, Vec<C::Scalar>)>,
         hyrax_input_commitments: Vec<(&LayerId, &Vec<C>)>,
         fiat_shamir_challenges: Vec<FiatShamirChallenge<C::Scalar>>,
         transcript: &mut impl ECVerifierTranscript<C>,

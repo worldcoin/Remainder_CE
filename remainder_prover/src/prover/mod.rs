@@ -26,9 +26,7 @@ use crate::input_layer::fiat_shamir_challenge::{
 use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{Layer, LayerDescription};
-use crate::layouter::layouting::{layout, CircuitDescriptionMap, CircuitLocation, CircuitMap, InputNodeMap, LayerMap};
-use crate::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
-use crate::layouter::nodes::circuit_inputs::InputShredData;
+use crate::layouter::layouting::{layout, CircuitDescriptionMap, CircuitLocation, CircuitMap, InputNodeMap};
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, NodeId};
 use crate::mle::dense::DenseMle;

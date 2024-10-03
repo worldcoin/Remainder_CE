@@ -16,9 +16,9 @@ use remainder::{
             CircuitNode, Context,
         },
     },
-    mle::{bundled_input_mle::BundledInputMle, evals::MultilinearExtension},
+    mle::evals::MultilinearExtension,
     utils::{build_input_shred_and_data, get_input_shred_and_data},
-    worldcoin::{components::Subtractor, data::CircuitData},
+    worldcoin::{components::Subtractor, data::IriscodeCircuitData},
 };
 use remainder_shared_types::curves::PrimeOrderCurve;
 
@@ -63,7 +63,7 @@ pub fn build_hyrax_circuit_public_input_layer<
     const BASE: u64,
     const NUM_DIGITS: usize,
 >(
-    data: CircuitData<
+    data: IriscodeCircuitData<
         C::Scalar,
     >,
     reroutings: Vec<(usize, usize)>,
@@ -76,7 +76,7 @@ pub fn build_hyrax_circuit_public_input_layer<
     move |ctx| {
         assert!(BASE.is_power_of_two());
         let log_base = BASE.ilog2() as usize;
-        let CircuitData {
+        let IriscodeCircuitData {
             to_reroute,
             rh_matmult_multiplicand,
             digits,
@@ -266,7 +266,7 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
     const BASE: u64,
     const NUM_DIGITS: usize,
 >(
-    data: CircuitData<
+    data: IriscodeCircuitData<
         C::Scalar,
     >,
     reroutings: Vec<(usize, usize)>,
@@ -282,7 +282,7 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
     move |ctx| {
         assert!(BASE.is_power_of_two());
         let log_base = BASE.ilog2() as usize;
-        let CircuitData {
+        let IriscodeCircuitData {
             to_reroute,
             rh_matmult_multiplicand,
             digits,

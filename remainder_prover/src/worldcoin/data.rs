@@ -2,22 +2,19 @@ use itertools::Itertools;
 use ndarray::{Array, Array2};
 use ndarray_npy::read_npy;
 use remainder_shared_types::Field;
-use std::ops::Mul;
 use std::path::PathBuf;
 
 use crate::digits::{complementary_decomposition, digits_to_field};
-use crate::layer::LayerId;
-use crate::mle::bundled_input_mle::BundledInputMle;
-use crate::mle::bundled_input_mle::{to_slice_of_vectors, FlatMles};
+use crate::mle::bundled_input_mle::to_slice_of_vectors;
 use crate::mle::evals::MultilinearExtension;
-use crate::mle::Mle;
 use crate::utils::arithmetic::i64_to_field;
 use crate::utils::mle::pad_with;
 use crate::worldcoin::parameters::decode_i32_array;
 use super::parameters::{decode_wirings, decode_i64_array};
 
+/// Input data for the Worldcoin iriscode circuit.
 #[derive(Debug, Clone)]
-pub struct CircuitData<F: Field> {
+pub struct IriscodeCircuitData<F: Field> {
     /// The values to be re-routed to form the LH multiplicand of the matrix multiplication.
     /// Length is a power of two.
     pub to_reroute: MultilinearExtension<F>,
@@ -64,7 +61,9 @@ pub fn wirings_to_reroutings(wirings: &[(u16, u16, u16, u16)], src_arr_num_cols:
         .collect_vec()
 }
 
-pub fn build_worldcoin_circuit_data<
+/// Build an instance of [IriscodeCircuitData] from the given image, RH multiplicand, thresholds and
+/// wiring data, by deriving the iris code.
+pub fn build_iriscode_circuit_data<
     F: Field,
     const MATMULT_ROWS_NUM_VARS: usize,
     const MATMULT_COLS_NUM_VARS: usize,
@@ -77,7 +76,7 @@ pub fn build_worldcoin_circuit_data<
     rh_multiplicand: &[i32],
     thresholds_matrix: &[i64],
     wirings: &[(u16, u16, u16, u16)],
-) -> CircuitData<F> {
+) -> IriscodeCircuitData<F> {
     assert!(BASE.is_power_of_two());
     assert!(NUM_DIGITS.is_power_of_two());
 
@@ -176,7 +175,7 @@ pub fn build_worldcoin_circuit_data<
         .map(|digit_values| MultilinearExtension::new(digit_values.clone()))
         .collect_vec();
 
-    CircuitData {
+    IriscodeCircuitData {
         to_reroute: MultilinearExtension::new(image_matrix_mle),
         rh_matmult_multiplicand: MultilinearExtension::new(rh_matmult_multiplicand),
         digits,
@@ -202,14 +201,14 @@ pub fn load_worldcoin_data_v2<
 >(
     image_path: PathBuf,
     is_mask: bool,
-) -> CircuitData<
+) -> IriscodeCircuitData<
     F,
 > {
     let image: Array2<u8> = read_npy(image_path).unwrap();
 
     use super::parameters_v2::{WIRINGS, IRIS_THRESHOLDS, MASK_THRESHOLDS, IRIS_RH_MULTIPLICAND, MASK_RH_MULTIPLICAND};
     if is_mask {
-        build_worldcoin_circuit_data::<
+        build_iriscode_circuit_data::<
             F,
             MATMULT_ROWS_NUM_VARS,
             MATMULT_COLS_NUM_VARS,
@@ -223,7 +222,7 @@ pub fn load_worldcoin_data_v2<
             &decode_wirings(WIRINGS)
         )
     } else {
-        build_worldcoin_circuit_data::<
+        build_iriscode_circuit_data::<
             F,
             MATMULT_ROWS_NUM_VARS,
             MATMULT_COLS_NUM_VARS,
@@ -255,14 +254,14 @@ pub fn load_worldcoin_data_v3<
 >(
     image_path: PathBuf,
     is_mask: bool,
-) -> CircuitData<
+) -> IriscodeCircuitData<
     F,
 > {
     let image: Array2<u8> = read_npy(image_path).unwrap();
 
     use super::parameters_v3::{WIRINGS, IRIS_THRESHOLDS, MASK_THRESHOLDS, IRIS_RH_MULTIPLICAND, MASK_RH_MULTIPLICAND};
     if is_mask {
-        build_worldcoin_circuit_data::<
+        build_iriscode_circuit_data::<
             F,
             MATMULT_ROWS_NUM_VARS,
             MATMULT_COLS_NUM_VARS,
@@ -276,7 +275,7 @@ pub fn load_worldcoin_data_v3<
             &decode_wirings(WIRINGS)
         )
     } else {
-        build_worldcoin_circuit_data::<
+        build_iriscode_circuit_data::<
             F,
             MATMULT_ROWS_NUM_VARS,
             MATMULT_COLS_NUM_VARS,

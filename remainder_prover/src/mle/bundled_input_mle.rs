@@ -66,6 +66,7 @@ pub struct FlatMles<F: Field, const N: usize> {
 }
 
 impl<F: Field, const N: usize> FlatMles<F, N> {
+    /// Returns copies of the underlying [MultilinearExtension]s.
     pub fn get_mles(&self) -> [MultilinearExtension<F>; N] {
         self.mles
             .iter()

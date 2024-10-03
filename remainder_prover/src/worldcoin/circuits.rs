@@ -6,7 +6,6 @@ use crate::digits::components::{
 use crate::layer::LayerId;
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::{Component, ComponentSet};
-use crate::layouter::layouting::InputNodeMap;
 use crate::layouter::nodes::circuit_inputs::{InputLayerNodeData, InputLayerNode, InputLayerType, InputShred};
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::fiat_shamir_challenge::FiatShamirChallengeNode;
@@ -15,7 +14,6 @@ use crate::layouter::nodes::lookup::{LookupConstraint, LookupTable};
 use crate::layouter::nodes::matmult::MatMultNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, Context, NodeId};
-use crate::mle::bundled_input_mle::{BundledInputMle, FlatMles};
 use crate::mle::evals::MultilinearExtension;
 use crate::prover::{generate_circuit_description, GKRCircuitDescription};
 use crate::utils::{build_input_shred_and_data, get_input_shred_and_data};
@@ -24,7 +22,7 @@ use crate::worldcoin::components::Subtractor;
 use itertools::Itertools;
 use remainder_shared_types::Field;
 
-use super::data::CircuitData;
+use super::data::IriscodeCircuitData;
 
 /// Builds the iriscode circuit.
 ///
@@ -56,7 +54,7 @@ pub fn build_circuit<
     const BASE: u64,
     const NUM_DIGITS: usize,
 >(
-    data: CircuitData<
+    data: IriscodeCircuitData<
         F,
     >,
     reroutings: Vec<(usize, usize)>,
@@ -66,7 +64,7 @@ pub fn build_circuit<
     impl FnMut(&Context) -> (ComponentSet<NodeEnum<F>>, Vec<InputLayerNodeData<F>>),
 > {
     LayouterCircuit::new(move |ctx| {
-        let CircuitData {
+        let IriscodeCircuitData {
             to_reroute,
             rh_matmult_multiplicand,
             digits,
@@ -223,7 +221,7 @@ pub fn build_circuit_description<
     reroutings: Vec<(usize, usize)>,
 ) -> (
         GKRCircuitDescription<F>,
-        impl Fn(CircuitData<F>) -> HashMap<LayerId, MultilinearExtension<F>>
+        impl Fn(IriscodeCircuitData<F>) -> HashMap<LayerId, MultilinearExtension<F>>
     ) {
     assert!(BASE.is_power_of_two());
     let log_base = BASE.ilog2() as usize;
@@ -350,9 +348,9 @@ pub fn build_circuit_description<
     // Add output nodes
     all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));
 
-    let (circ_desc, input_node_map, input_builder_from_shred_map) = generate_circuit_description(all_nodes).unwrap();
+    let (circ_desc, _, input_builder_from_shred_map) = generate_circuit_description(all_nodes).unwrap();
 
-    let input_builder = move |data: CircuitData<F>| {
+    let input_builder = move |data: IriscodeCircuitData<F>| {
         let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<F>> = HashMap::new();
         input_shred_id_to_data.insert(to_reroute.id(), data.to_reroute);
         input_shred_id_to_data.insert(rh_matmult_multiplicand.id(), data.rh_matmult_multiplicand);

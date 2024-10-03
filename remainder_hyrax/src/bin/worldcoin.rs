@@ -1,20 +1,20 @@
-use std::path::Path;
+// use std::path::Path;
 
-use remainder::worldcoin::{data::{load_worldcoin_data_v2, wirings_to_reroutings, CircuitData}, parameters::decode_wirings};
-use remainder_shared_types::{
-    halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
-    transcript::{
-        ec_transcript::{ECTranscriptReader, ECTranscriptWriter},
-        poseidon_transcript::PoseidonSponge,
-    },
-};
+// use remainder::worldcoin::{data::{load_worldcoin_data_v2, wirings_to_reroutings, IriscodeCircuitData}, parameters::decode_wirings};
+// use remainder_shared_types::{
+//     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
+//     transcript::{
+//         ec_transcript::{ECTranscriptReader, ECTranscriptWriter},
+//         poseidon_transcript::PoseidonSponge,
+//     },
+// };
 
-use remainder_hyrax::{
-    hyrax_gkr::HyraxProver, hyrax_worldcoin::build_hyrax_circuit_hyrax_input_layer,
-    pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
-};
-type Scalar = <Bn256Point as Group>::Scalar;
-type Base = <Bn256Point as CurveExt>::Base;
+// use remainder_hyrax::{
+//     hyrax_gkr::HyraxProver, hyrax_worldcoin::build_hyrax_circuit_hyrax_input_layer,
+//     pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
+// };
+// type Scalar = <Bn256Point as Group>::Scalar;
+// type Base = <Bn256Point as CurveExt>::Base;
 
 // use remainder_hyrax::hyrax_worldcoin::test_worldcoin::{test_hyrax_worldcoin_public_input_layer, test_hyrax_worldcoin_hyrax_input_layer};
 

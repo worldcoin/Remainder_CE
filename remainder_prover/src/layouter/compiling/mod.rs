@@ -19,37 +19,26 @@
 mod tests;
 
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
-use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
-use std::marker::PhantomData;
 use tracing::{instrument, span, Level};
+use std::collections::HashMap;
+use std::marker::PhantomData;
 
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::claims::ClaimAggregator;
-use crate::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
 use crate::input_layer::enum_input_layer::InputLayerEnum;
-use crate::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
 use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::LayerEnum;
-use crate::layer::LayerId;
-use crate::layer::{Layer, LayerDescription};
-use crate::layouter::layouting::CircuitMap;
-use crate::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
+use crate::layer::Layer;
 use crate::mle::evals::MultilinearExtension;
-use crate::output_layer::mle_output_layer::MleOutputLayer;
 use crate::output_layer::OutputLayer;
-use crate::prover::layers::Layers;
 use crate::prover::{
     generate_circuit_description, GKRCircuitDescription, GKRError, InstantiatedCircuit,
 };
 use ark_std::{end_timer, start_timer};
-use itertools::Itertools;
 use log::info;
 use remainder_shared_types::transcript::{ProverTranscript, Transcript, TranscriptWriter};
 use remainder_shared_types::Field;
 
-use super::layouting::{CircuitLocation, InputNodeMap, LayerMap};
 use super::nodes::circuit_inputs::InputLayerNodeData;
 use super::nodes::NodeId;
 use super::{
@@ -114,7 +103,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             });
         });
 
-        let (circuit_description, input_node_map, input_builder) =
+        let (circuit_description, _, input_builder) =
             generate_circuit_description(component.yield_nodes()).unwrap();
 
         let inputs = input_builder(shred_id_to_data).unwrap();
