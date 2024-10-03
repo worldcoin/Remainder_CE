@@ -23,7 +23,6 @@ fn test_trivial_wiring_2x2_circuit_data() {
         &vec![1, 0, 1, 0],
         wirings,
     );
-    dbg!(&data);
     let (circuit_desc, input_builder) = build_circuit_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
     let transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
     let inputs = input_builder(data);
@@ -43,7 +42,6 @@ fn test_trivial_wiring_2x2_circuit_data_old_style() {
         &vec![1, 0, 1, 0],
         wirings,
     );
-    dbg!(&data);
     let circuit = build_circuit::<Fr, 1, 1, 1, 16, 2>(data, reroutings);
     test_circuit(circuit, None);
 }

@@ -284,8 +284,8 @@ impl<F: Field> GKRCircuitDescription<F> {
         })
     }
 
-    /// Returns an [InstantiatedCircuit] by populating the
-    /// [GKRCircuitDescription] with data.
+    /// Returns an [InstantiatedCircuit] by populating the [GKRCircuitDescription] with data.
+    /// Assumes that the input data has already been added to the transcript.
     ///
     /// # Arguments:
     /// * `input_data`: a [HashMap] mapping layer ids to the MLEs.
