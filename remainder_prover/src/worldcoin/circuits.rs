@@ -105,7 +105,7 @@ pub fn build_circuit<
         let subtractor = Subtractor::new(ctx, &matmult, &to_sub_from_matmult);
 
         let (digits_input_shreds, digits_input_shreds_data): (Vec<_>, Vec<_>) = digits
-            .into_iter()
+            .iter()
             .map(|digit_values| build_input_shred_and_data(digit_values.clone(), ctx, &input_layer))
             .unzip();
         for (i, shred) in digits_input_shreds.iter().enumerate() {
@@ -241,7 +241,6 @@ pub fn build_circuit_description<
     println!("{:?} = Image to_reroute input", to_reroute.id());
 
     let digits_input_shreds: Vec<_> = (0..NUM_DIGITS)
-        .into_iter()
         .map(|i| {
             let shred = InputShred::new(
                 &ctx,

@@ -138,7 +138,7 @@ fn degree_one_regular_hyrax_layer_test() {
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
-        &vec![mle_producing_claim],
+        &[mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -223,7 +223,7 @@ fn identity_gate_hyrax_layer_test() {
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
-        &vec![mle_producing_claim],
+        &[mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -324,7 +324,7 @@ fn matmult_hyrax_layer_test() {
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
-        &vec![mle_producing_claim],
+        &[mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -419,7 +419,7 @@ fn product_of_mles_regular_layer_test() {
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
-        &vec![mle],
+        &[mle],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -527,7 +527,7 @@ fn selector_only_test() {
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
-        &vec![mle_producing_claim],
+        &[mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -642,7 +642,7 @@ fn degree_two_selector_regular_hyrax_layer_test() {
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
         &claims,
-        &vec![mle_producing_claim],
+        &[mle_producing_claim],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -721,7 +721,7 @@ fn hyrax_input_layer_proof_test() {
     let proof = HyraxInputLayerProof::prove(
         &input_layer,
         &hyrax_commitment,
-        &vec![claim.clone()],
+        &[claim.clone()],
         &committer,
         &mut blinding_rng,
         &mut prover_transcript,
@@ -736,7 +736,7 @@ fn hyrax_input_layer_proof_test() {
         .consume_ec_points("Hyrax PCS commit", hyrax_commitment.len())
         .unwrap();
     proof.verify(
-        &vec![claim.to_claim_commitment()],
+        &[claim.to_claim_commitment()],
         &committer,
         &mut verifier_transcript,
     )

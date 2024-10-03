@@ -648,7 +648,7 @@ impl<
         // Verify the hyrax input layer proofs
         hyrax_input_proofs
             .iter()
-            .zip(hyrax_input_commitments.into_iter())
+            .zip(hyrax_input_commitments)
             .for_each(|(hyrax_input_proof, (layer_id, hyrax_input_commit))| {
                 // Check that the commitment given also matches with the commitment in the proof
                 assert_eq!(layer_id, &hyrax_input_proof.layer_id);
@@ -660,11 +660,11 @@ impl<
 
         // Check the claims on the public input layers
         public_inputs.iter().for_each(|(layer_id, values)| {
-            let claims_as_commitments = claim_tracker.remove(&layer_id).unwrap();
+            let claims_as_commitments = claim_tracker.remove(layer_id).unwrap();
             let plaintext_claims =
                 Self::match_claims(&claims_as_commitments, claims_on_public_values, committer);
             plaintext_claims.into_iter().for_each(|claim| {
-                verify_claim::<C::Scalar>(&values, claim.get_claim());
+                verify_claim::<C::Scalar>(values, claim.get_claim());
             });
         });
 

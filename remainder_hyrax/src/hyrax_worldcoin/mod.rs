@@ -116,9 +116,8 @@ pub fn build_hyrax_circuit_public_input_layer<
 
         let subtractor = Subtractor::new(ctx, &matmult, &to_sub_from_matmult);
         let digits_input_shreds: Vec<_> = (0..NUM_DIGITS)
-            .into_iter()
             .map(|i| {
-                let shred = InputShred::new(&ctx, log_base, &input_layer);
+                let shred = InputShred::new(ctx, log_base, &input_layer);
                 println!("{:?} = {}th digit input", shred.id(), i);
                 shred
             })
@@ -332,10 +331,9 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         let subtractor = Subtractor::new(ctx, &matmult, &to_sub_from_matmult);
 
         let digits_input_shreds: Vec<_> = (0..NUM_DIGITS)
-            .into_iter()
             .map(|i| {
                 let shred = InputShred::new(
-                    &ctx,
+                    ctx,
                     log_base,
                     &hyrax_input_layer_for_digits_and_multiplicities,
                 );

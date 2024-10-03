@@ -366,7 +366,7 @@ impl<F: Field> GKRCircuitDescription<F> {
                 // input layer.
                 mle_outputs_necessary.iter().for_each(|mle_output| {
                     let prefix_bits = mle_output.prefix_bits();
-                    let output = filter_bookkeeping_table(&combined_mle, &prefix_bits);
+                    let output = filter_bookkeeping_table(combined_mle, &prefix_bits);
                     circuit_map.add_node(CircuitLocation::new(input_layer_id, prefix_bits), output);
                 });
                 // Compute the concretized input layer since we have the
@@ -429,15 +429,15 @@ impl<F: Field> GKRCircuitDescription<F> {
                     output_layer_description.into_prover_output_layer(&circuit_map);
                 prover_output_layers.push(prover_output_layer)
             });
-        let instantiated_circuit = InstantiatedCircuit {
+        
+
+        InstantiatedCircuit {
             input_layers: prover_input_layers,
             fiat_shamir_challenges,
             layers: Layers::new_with_layers(prover_intermediate_layers),
             output_layers: prover_output_layers,
             layer_map: circuit_map.convert_to_layer_map(),
-        };
-
-        instantiated_circuit
+        }
     }
 
     /// Verifies a GKR proof produced by the `prove` method.
@@ -724,7 +724,7 @@ pub fn generate_circuit_description<F: Field>(
                     circuit_description_map.0.get(input_shred_id).unwrap();
                 if *num_vars != mle.num_vars() {
                     return Err(GKRError::InputShredLengthMismatch(
-                        input_shred_id.clone(),
+                        *input_shred_id,
                         *num_vars,
                         mle.num_vars(),
                     ));
