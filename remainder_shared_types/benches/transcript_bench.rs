@@ -9,9 +9,6 @@
 
 use ark_std::test_rng;
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
-type Bn256Scalar = <Bn256Point as PrimeOrderCurve>::Scalar;
-type Bn256Base = <Bn256Point as PrimeOrderCurve>::Base;
-use halo2curves::bn256::G1 as Bn256Point;
 use rand::Rng;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::transcript::ec_transcript::ECProverTranscript;
@@ -22,6 +19,10 @@ use remainder_shared_types::{
     },
     Field,
 };
+
+use halo2curves::bn256::G1 as Bn256Point;
+type Bn256Scalar = <Bn256Point as PrimeOrderCurve>::Scalar;
+type Bn256Base = <Bn256Point as PrimeOrderCurve>::Base;
 
 // =========== Helper functions ===========
 
