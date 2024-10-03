@@ -10,10 +10,9 @@ use remainder_shared_types::Field;
 use thiserror::Error;
 
 use crate::{
-    expression::circuit_expr::MleDescription,
     layer::LayerId,
     layouter::nodes::sector::{Sector, SectorGroup},
-    mle::{dense::DenseMle, evals::MultilinearExtension},
+    mle::{dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription},
 };
 
 use super::nodes::{

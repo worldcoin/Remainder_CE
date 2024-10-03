@@ -27,13 +27,6 @@ pub fn get_dummy_random_mle(num_vars: usize, rng: &mut impl Rng) -> DenseMle<Fr>
     DenseMle::new_from_raw(mle_vec, LayerId::Input(0))
 }
 
-/// Returns a vector with random elements generated from u64 for testing according to the number of variables.
-pub fn get_dummy_random_vec(num_vars: usize, rng: &mut impl Rng) -> Vec<Fr> {
-    (0..(1 << num_vars))
-        .map(|_| Fr::from(rng.gen::<u64>()))
-        .collect_vec()
-}
-
 /// Returns an [InputShred] with the appropriate [MultilinearExtension] as the data generated from random u64
 pub fn get_dummy_input_shred_and_data(
     num_vars: usize,
@@ -62,23 +55,6 @@ pub fn get_input_shred_and_data_from_vec(
     let input_shred = InputShred::new(ctx, data.num_vars(), input_node);
     let input_shred_data = InputShredData::new(input_shred.id(), data);
     (input_shred, input_shred_data)
-}
-
-/// Returns a vector of MLEs for dataparallel testing according to the number of variables and
-/// number of dataparallel bits.
-pub fn get_dummy_random_mle_vec(
-    num_vars: usize,
-    num_dataparallel_bits: usize,
-    rng: &mut impl Rng,
-) -> Vec<DenseMle<Fr>> {
-    (0..(1 << num_dataparallel_bits))
-        .map(|_| {
-            let mle_vec = (0..(1 << num_vars))
-                .map(|_| Fr::from(rng.gen::<u64>()))
-                .collect_vec();
-            DenseMle::new_from_raw(mle_vec, LayerId::Input(0))
-        })
-        .collect_vec()
 }
 
 /// Returns the total MLE indices given a Vec<bool>

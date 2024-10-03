@@ -4,9 +4,9 @@
 use remainder_shared_types::Field;
 
 use super::LayerId;
-use crate::expression::circuit_expr::MleDescription;
 use crate::expression::verifier_expr::VerifierMle;
 use crate::mle::dense::DenseMle;
+use crate::mle::mle_description::MleDescription;
 use crate::mle::Mle;
 
 /// Represents a normal form for a layer expression in which the layer is represented as a linear
