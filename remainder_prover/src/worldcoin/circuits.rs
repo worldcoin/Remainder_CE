@@ -231,27 +231,27 @@ pub fn build_circuit_description<
 
     // Private inputs
     // FIXME(Ben) this will be fine once we get rid of InputLayerType, but it does look funny for now
-    let private_input_layer = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
-    let to_reroute = InputShred::new(&ctx, TO_REROUTE_NUM_VARS, &private_input_layer);
+    let public_input_layer = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+    let to_reroute = InputShred::new(&ctx, TO_REROUTE_NUM_VARS, &public_input_layer);
     println!("{:?} = Image to_reroute input", to_reroute.id());
 
     let digits_input_shreds: Vec<_> = (0..NUM_DIGITS)
         .into_iter()
         .map(|i| {
-            let shred = InputShred::new(&ctx, log_base, &private_input_layer);
+            let shred = InputShred::new(&ctx, MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS, &public_input_layer);
             println!("{:?} = {}th digit input", shred.id(), i);
             shred
         })
         .collect();
 
-    let digit_multiplicities = InputShred::new(&ctx, log_base, &private_input_layer);
+    let digit_multiplicities = InputShred::new(&ctx, log_base, &public_input_layer);
     println!("{:?} = Digit multiplicities", digit_multiplicities.id());
 
-    let sign_bits = InputShred::new(&ctx, MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS, &private_input_layer);
+    let sign_bits = InputShred::new(&ctx, MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS, &public_input_layer);
     println!("{:?} = Sign bits (iris code) input", sign_bits.id());
     
     // Public inputs
-    let public_input_layer = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+    // FIXME (Ben) let public_input_layer = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
     println!("{:?} = Input layer", public_input_layer.id());
 
     let to_sub_from_matmult = InputShred::new(&ctx, MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS, &public_input_layer);
@@ -317,7 +317,6 @@ pub fn build_circuit_description<
     // Collect all the nodes, starting with the input nodes
     let mut all_nodes: Vec<NodeEnum<F>> = vec![
         public_input_layer.clone().into(),
-        private_input_layer.clone().into(),
         fiat_shamir_challenge_node.clone().into(),
         to_reroute.clone().into(),
         rh_matmult_multiplicand.clone().into(),

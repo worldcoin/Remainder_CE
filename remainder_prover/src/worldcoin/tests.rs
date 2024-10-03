@@ -27,9 +27,6 @@ fn test_trivial_wiring_2x2_circuit_data() {
     let (circuit_desc, input_builder) = build_circuit_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
     let transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
     let inputs = input_builder(data);
-    for (k, v) in inputs.iter() {
-        dbg!(k, v);
-    }
     let input_layer_claims = prove_circuit(circuit_desc, inputs, transcript_writer);
     // FIXME(Ben) complete with a check of the input layer claims
 }
