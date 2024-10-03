@@ -344,13 +344,13 @@ pub fn compute_full_gate_identity<F: Field>(
     challenges: Vec<F>,
     mle_ref: &mut DenseMle<F>,
     nonzero_gates: &[(usize, usize)],
-    copy_bits: usize,
+    num_dataparallel_vars: usize,
 ) -> F {
     // Split the challenges into which ones are for batched bits, which ones are for others.
     let mut copy_chals: Vec<F> = vec![];
     let mut z_chals: Vec<F> = vec![];
     challenges.into_iter().enumerate().for_each(|(idx, chal)| {
-        if (0..copy_bits).contains(&idx) {
+        if (0..num_dataparallel_vars).contains(&idx) {
             copy_chals.push(chal);
         } else {
             z_chals.push(chal);
@@ -361,18 +361,18 @@ pub fn compute_full_gate_identity<F: Field>(
     let beta_g = BetaValues::new_beta_equality_mle(z_chals);
     let zero = F::ZERO;
 
-    if copy_bits == 0 {
+    if num_dataparallel_vars == 0 {
         nonzero_gates.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
             let gz = *beta_g.bookkeeping_table().get(*z_ind).unwrap_or(&F::ZERO);
             let ux = mle_ref.bookkeeping_table().get(*x_ind).unwrap_or(&zero);
             acc + gz * (*ux)
         })
     } else {
-        let num_copy_idx = 1 << copy_bits;
-        // If the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is the beta table for the challenges on p2.
+        let num_copy_idx = 1 << num_dataparallel_vars;
+        // If the gate looks like f1(z, x)f2(p2, x) then this is the beta table for the challenges on p2.
         let beta_g2 = BetaValues::new_beta_equality_mle(copy_chals);
         {
-            // Sum over everything else, outer sum being over p2, inner sum over (x, y).
+            // Sum over everything else, outer sum being over p2, inner sum over x.
             (0..(1 << num_copy_idx)).fold(F::ZERO, |acc_outer, idx| {
                 let g2 = *beta_g2.bookkeeping_table().get(idx).unwrap_or(&F::ZERO);
                 let inner_sum =
@@ -416,7 +416,7 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
     Ok(evaluations)
 }
 
-/// Does all the necessary updates when proving a round for batched gate mles.
+/// Does all the necessary updates when proving a round for data parallel gate mles.
 #[allow(clippy::too_many_arguments)]
 pub fn prove_round_dataparallel_phase<F: Field>(
     lhs: &mut DenseMle<F>,
@@ -594,7 +594,7 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
 /// Does all the necessary updates when proving a round for batched gate mles.
 #[allow(clippy::too_many_arguments)]
 pub fn prove_round_identity_gate_dataparallel_phase<F: Field>(
-    mle_ref: &mut DenseMle<F>,
+    src_mle: &mut DenseMle<F>,
     beta_g1: &DenseMle<F>,
     beta_g2: &mut DenseMle<F>,
     round_index: usize,
@@ -604,9 +604,9 @@ pub fn prove_round_identity_gate_dataparallel_phase<F: Field>(
 ) -> Result<Vec<F>, GateError> {
     beta_g2.fix_variable(round_index - 1, challenge);
     // Need to separately update these because the phase_lhs and phase_rhs has no version of them.
-    mle_ref.fix_variable(round_index - 1, challenge);
+    src_mle.fix_variable(round_index - 1, challenge);
     compute_sumcheck_messages_data_parallel_identity_gate(
-        mle_ref,
+        src_mle,
         beta_g2,
         beta_g1,
         nonzero_gates,
