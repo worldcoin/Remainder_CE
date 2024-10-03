@@ -812,11 +812,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(prover_transcript.get_transcript());
 
-    hyrax_prover.verify_gkr_circuit(
-        &proof,
-        &mut circuit_description,
-        &mut verifier_transcript,
-    );
+    hyrax_prover.verify_gkr_circuit(&proof, &mut circuit_description, &mut verifier_transcript);
 }
 
 #[test]
@@ -889,11 +885,7 @@ fn small_regular_circuit_public_input_layer_test() {
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(prover_transcript.get_transcript());
 
-    hyrax_prover.verify_gkr_circuit(
-        &proof,
-        &mut circuit_description,
-        &mut verifier_transcript,
-    );
+    hyrax_prover.verify_gkr_circuit(&proof, &mut circuit_description, &mut verifier_transcript);
 }
 
 #[test]
@@ -974,11 +966,7 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(prover_transcript.get_transcript());
 
-    hyrax_prover.verify_gkr_circuit(
-        &proof,
-        &mut circuit_description,
-        &mut verifier_transcript,
-    );
+    hyrax_prover.verify_gkr_circuit(&proof, &mut circuit_description, &mut verifier_transcript);
 }
 
 #[test]
@@ -1059,11 +1047,7 @@ fn medium_regular_circuit_public_input_layer_test() {
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(prover_transcript.get_transcript());
 
-    hyrax_prover.verify_gkr_circuit(
-        &proof,
-        &mut circuit_description,
-        &mut verifier_transcript,
-    );
+    hyrax_prover.verify_gkr_circuit(&proof, &mut circuit_description, &mut verifier_transcript);
 }
 
 #[test]
@@ -1131,11 +1115,7 @@ fn matmult_hyrax_input_layer_test() {
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(prover_transcript.get_transcript());
 
-    hyrax_prover.verify_gkr_circuit(
-        &proof,
-        &mut circuit_description,
-        &mut verifier_transcript,
-    );
+    hyrax_prover.verify_gkr_circuit(&proof, &mut circuit_description, &mut verifier_transcript);
 }
 
 #[test]
@@ -1213,11 +1193,7 @@ fn regular_identity_hyrax_input_layer_test() {
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(prover_transcript.get_transcript());
 
-    hyrax_prover.verify_gkr_circuit(
-        &proof,
-        &mut circuit_description,
-        &mut verifier_transcript,
-    );
+    hyrax_prover.verify_gkr_circuit(&proof, &mut circuit_description, &mut verifier_transcript);
 }
 
 #[test]
@@ -1304,9 +1280,5 @@ fn regular_identity_matmult_hyrax_input_layer_test() {
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(prover_transcript.get_transcript());
 
-    hyrax_prover.verify_gkr_circuit(
-        &proof,
-        &mut circuit_description,
-        &mut verifier_transcript,
-    );
+    hyrax_prover.verify_gkr_circuit(&proof, &mut circuit_description, &mut verifier_transcript);
 }

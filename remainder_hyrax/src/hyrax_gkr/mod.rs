@@ -8,7 +8,7 @@ use ark_std::{end_timer, start_timer};
 use hyrax_circuit_inputs::HyraxInputLayerData;
 use hyrax_input_layer::{
     verify_claim, HyraxInputLayer, HyraxInputLayerEnum, HyraxInputLayerProof,
-    HyraxProverCommitmentEnum
+    HyraxProverCommitmentEnum,
 };
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
@@ -147,10 +147,7 @@ impl<
         data_input_layers: Vec<HyraxInputLayerData<C>>,
         transcript_writer: &mut impl ECProverTranscript<C>,
         input_layer_to_node_map: InputNodeMap,
-    ) -> (
-        HyraxInstantiatedCircuit<C>,
-        LayerMap<C::Scalar>,
-    ) {
+    ) -> (HyraxInstantiatedCircuit<C>, LayerMap<C::Scalar>) {
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
             fiat_shamir_challenges: fiat_shamir_challenge_descriptions,
@@ -351,10 +348,7 @@ impl<
         &mut self,
         witness_function: Fn,
         transcript_writer: &mut impl ECProverTranscript<C>,
-    ) -> (
-        GKRCircuitDescription<C::Scalar>,
-        HyraxProof<C>,
-    ) {
+    ) -> (GKRCircuitDescription<C::Scalar>, HyraxProof<C>) {
         let ((circuit_description, input_layer_to_node_map), input_data) =
             Self::generate_circuit_description(witness_function);
         let (mut instantiated_circuit, mut layer_map) = self.populate_hyrax_circuit(
@@ -471,7 +465,7 @@ impl<
         // by the verifier, without aggregation, so there is almost nothing to do here.  However,
         // the verifier received the prover's claims as committed form (this is just how we
         // implemented layer proof) and so we provide here the CommittedScalar forms in order for V
-        // to be able to actually verify the claims. 
+        // to be able to actually verify the claims.
         let claims_on_public_values = input_layers
             .iter()
             .filter_map(|input_layer| {
@@ -483,9 +477,17 @@ impl<
                 }
             })
             .flatten()
-            .chain(fiat_shamir_challenges.iter().flat_map(|fiat_shamir_challenge| {
-                claim_tracker.get(&fiat_shamir_challenge.layer_id()).unwrap()
-            })).cloned().collect_vec();
+            .chain(
+                fiat_shamir_challenges
+                    .iter()
+                    .flat_map(|fiat_shamir_challenge| {
+                        claim_tracker
+                            .get(&fiat_shamir_challenge.layer_id())
+                            .unwrap()
+                    }),
+            )
+            .cloned()
+            .collect_vec();
 
         // Collect the values of the public inputs
         let public_inputs = input_layers
@@ -527,14 +529,17 @@ impl<
                 .unwrap();
             assert_eq!(&transcript_hyrax_commit, hyrax_commit);
         });
-        
+
         // Append the public inputs to the transcript
-        proof.public_inputs.iter().for_each(|(_layer_id, public_input)| {
-            let transcript_values = verifier_transcript
-                .consume_scalar_points("public values", public_input.len())
-                .unwrap();
-            assert_eq!(&transcript_values, public_input);
-        });
+        proof
+            .public_inputs
+            .iter()
+            .for_each(|(_layer_id, public_input)| {
+                let transcript_values = verifier_transcript
+                    .consume_scalar_points("public values", public_input.len())
+                    .unwrap();
+                assert_eq!(&transcript_values, public_input);
+            });
 
         // Get the verifier challenges from the transcript.
         let fiat_shamir_challenges: Vec<FiatShamirChallenge<C::Scalar>> = circuit_description
@@ -554,11 +559,10 @@ impl<
         // Get the commitments for hyrax input layers
         // FIXME(Ben) in the next refactor the HyraxVerifierCommitmentEnum will be removed, so will
         // the following transformation.
-        let hyrax_input_commitments = proof.hyrax_input_proofs
+        let hyrax_input_commitments = proof
+            .hyrax_input_proofs
             .iter()
-            .map(|input_proof| {
-                (&input_proof.layer_id, &input_proof.input_commitment)
-            })
+            .map(|input_proof| (&input_proof.layer_id, &input_proof.input_commitment))
             .collect_vec();
 
         let verify_timer = start_timer!(|| "verify hyrax circuit");
@@ -645,34 +649,24 @@ impl<
         hyrax_input_proofs
             .iter()
             .zip(hyrax_input_commitments.into_iter())
-            .for_each(
-                |(hyrax_input_proof, (layer_id, hyrax_input_commit))| {
-                    // Check that the commitment given also matches with the commitment in the proof
-                    assert_eq!(layer_id, &hyrax_input_proof.layer_id);
-                    assert_eq!(&hyrax_input_proof.input_commitment, hyrax_input_commit);
-                    let layer_id = hyrax_input_proof.layer_id;
-                    let layer_claims_vec = claim_tracker.remove(&layer_id).unwrap().clone();
-                    hyrax_input_proof.verify(&layer_claims_vec, committer, transcript);
-                }
-            );
+            .for_each(|(hyrax_input_proof, (layer_id, hyrax_input_commit))| {
+                // Check that the commitment given also matches with the commitment in the proof
+                assert_eq!(layer_id, &hyrax_input_proof.layer_id);
+                assert_eq!(&hyrax_input_proof.input_commitment, hyrax_input_commit);
+                let layer_id = hyrax_input_proof.layer_id;
+                let layer_claims_vec = claim_tracker.remove(&layer_id).unwrap().clone();
+                hyrax_input_proof.verify(&layer_claims_vec, committer, transcript);
+            });
 
         // Check the claims on the public input layers
-        public_inputs
-            .iter()
-            .for_each(|(layer_id, values)| {
-                let claims_as_commitments = claim_tracker.remove(&layer_id).unwrap();
-                let plaintext_claims = Self::match_claims(
-                    &claims_as_commitments,
-                    claims_on_public_values,
-                    committer,
-                );
-                plaintext_claims.into_iter().for_each(|claim| {
-                    verify_claim::<C::Scalar>(
-                        &values,
-                        claim.get_claim(),
-                    );
-                });
+        public_inputs.iter().for_each(|(layer_id, values)| {
+            let claims_as_commitments = claim_tracker.remove(&layer_id).unwrap();
+            let plaintext_claims =
+                Self::match_claims(&claims_as_commitments, claims_on_public_values, committer);
+            plaintext_claims.into_iter().for_each(|claim| {
+                verify_claim::<C::Scalar>(&values, claim.get_claim());
             });
+        });
 
         // Check the claims on the verifier challenges
         fiat_shamir_challenges

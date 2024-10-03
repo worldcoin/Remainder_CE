@@ -2,7 +2,7 @@ use crate::prover::helpers::test_circuit;
 use crate::prover::prove_circuit;
 use crate::worldcoin::circuits::{build_circuit, build_circuit_description};
 use crate::worldcoin::data::{
-    build_iriscode_circuit_data, load_worldcoin_data_v2, wirings_to_reroutings
+    build_iriscode_circuit_data, load_worldcoin_data_v2, wirings_to_reroutings,
 };
 use crate::worldcoin::parameters::decode_wirings;
 use ndarray::Array2;
@@ -22,8 +22,10 @@ fn test_trivial_wiring_2x2_circuit_data() {
         &vec![1, 0, 1, 0],
         wirings,
     );
-    let (circuit_desc, input_builder) = build_circuit_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
-    let transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
+    let (circuit_desc, input_builder) =
+        build_circuit_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
+    let transcript_writer =
+        TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
     let inputs = input_builder(data);
     let _input_layer_claims = prove_circuit(circuit_desc, inputs, transcript_writer);
     // FIXME(Ben) complete with a check of the input layer claims
@@ -67,8 +69,8 @@ fn test_trivial_wiring_2x2_circuit_data_old_style() {
 #[test]
 fn test_worldcoin_circuit_iris_v2() {
     use super::parameters_v2::{
-        BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
-        MATMULT_ROWS_NUM_VARS, NUM_DIGITS, WIRINGS,
+        BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
+        NUM_DIGITS, WIRINGS,
     };
     let image_path = Path::new("src/worldcoin/constants/v2/iris/test_image.npy").to_path_buf();
     let data = load_worldcoin_data_v2::<
@@ -111,7 +113,6 @@ fn test_worldcoin_circuit_iris_v2() {
 //     let circuit = build_circuit(data);
 //     test_circuit(circuit, None);
 // }
-
 
 // #[ignore] // takes 90 seconds!
 // #[test]

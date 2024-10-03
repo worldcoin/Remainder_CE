@@ -19,9 +19,9 @@
 mod tests;
 
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
-use tracing::{instrument, span, Level};
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use tracing::{instrument, span, Level};
 
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::claims::ClaimAggregator;
@@ -59,8 +59,11 @@ pub struct LayouterCircuit<
     _marker: PhantomData<F>,
 }
 
-impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLayerNodeData<F>>)>
-    LayouterCircuit<F, C, Fn>
+impl<
+        F: Field,
+        C: Component<NodeEnum<F>>,
+        Fn: FnMut(&Context) -> (C, Vec<InputLayerNodeData<F>>),
+    > LayouterCircuit<F, C, Fn>
 {
     /// Constructs a `LayouterCircuit` by taking in a closure whose parameter is
     /// a [Context], which determines the ID of each individual part of the
@@ -77,30 +80,33 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
     }
 }
 
-impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLayerNodeData<F>>)>
-    LayouterCircuit<F, C, Fn>
+impl<
+        F: Field,
+        C: Component<NodeEnum<F>>,
+        Fn: FnMut(&Context) -> (C, Vec<InputLayerNodeData<F>>),
+    > LayouterCircuit<F, C, Fn>
 {
     fn synthesize_and_commit(
         &mut self,
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> (
-        InstantiatedCircuit<F>,
-        GKRCircuitDescription<F>,
-    ) {
+    ) -> (InstantiatedCircuit<F>, GKRCircuitDescription<F>) {
         let ctx = Context::new();
         let (component, input_layer_data) = (self.witness_builder)(&ctx);
-        
+
         // Convert the input layer data into a map that maps the input shred ID
         // i.e. adapt witness builder output to the instantate() function.
         // This can be removed once witness builders are removed.
         let mut shred_id_to_data = HashMap::<NodeId, MultilinearExtension<F>>::new();
         input_layer_data.into_iter().for_each(|input_layer_data| {
-            input_layer_data.data.into_iter().for_each(|input_shred_data| {
-                shred_id_to_data.insert(
-                    input_shred_data.corresponding_input_shred_id,
-                    input_shred_data.data,
-                );
-            });
+            input_layer_data
+                .data
+                .into_iter()
+                .for_each(|input_shred_data| {
+                    shred_id_to_data.insert(
+                        input_shred_data.corresponding_input_shred_id,
+                        input_shred_data.data,
+                    );
+                });
         });
 
         let (circuit_description, _, input_builder) =
@@ -110,14 +116,16 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
 
         // Add the inputs to transcript.
         // In the future flow, the inputs will be added to the transcript in the calling context.
-        circuit_description.input_layers.iter().for_each(|input_layer| {
-            let mle = inputs.get(&input_layer.layer_id()).unwrap();
-            transcript_writer.append_elements("Input values", mle.get_evals_vector());
-        });
+        circuit_description
+            .input_layers
+            .iter()
+            .for_each(|input_layer| {
+                let mle = inputs.get(&input_layer.layer_id()).unwrap();
+                transcript_writer.append_elements("Input values", mle.get_evals_vector());
+            });
 
-        let mut challenge_sampler = |size| {
-            transcript_writer.get_challenges("Verifier challenges", size)
-        };
+        let mut challenge_sampler =
+            |size| transcript_writer.get_challenges("Verifier challenges", size);
         let instantiated_circuit = circuit_description.instantiate(&inputs, &mut challenge_sampler);
 
         (instantiated_circuit, circuit_description)

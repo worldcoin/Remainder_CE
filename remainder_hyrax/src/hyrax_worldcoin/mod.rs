@@ -6,7 +6,9 @@ use remainder::{
     layouter::{
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{HyraxInputDType, InputLayerNode, InputLayerType, InputShred, InputShredData},
+            circuit_inputs::{
+                HyraxInputDType, InputLayerNode, InputLayerType, InputShred, InputShredData,
+            },
             circuit_outputs::OutputNode,
             fiat_shamir_challenge::FiatShamirChallengeNode,
             identity_gate::IdentityGateNode,
@@ -63,9 +65,7 @@ pub fn build_hyrax_circuit_public_input_layer<
     const BASE: u64,
     const NUM_DIGITS: usize,
 >(
-    data: IriscodeCircuitData<
-        C::Scalar,
-    >,
+    data: IriscodeCircuitData<C::Scalar>,
     reroutings: Vec<(usize, usize)>,
 ) -> impl FnMut(
     &Context,
@@ -116,21 +116,19 @@ pub fn build_hyrax_circuit_public_input_layer<
 
         let subtractor = Subtractor::new(ctx, &matmult, &to_sub_from_matmult);
         let digits_input_shreds: Vec<_> = (0..NUM_DIGITS)
-        .into_iter()
-        .map(|i| {
-            let shred = InputShred::new(&ctx, log_base, &input_layer);
-            println!("{:?} = {}th digit input", shred.id(), i);
-            shred
-        })
-        .collect();
+            .into_iter()
+            .map(|i| {
+                let shred = InputShred::new(&ctx, log_base, &input_layer);
+                println!("{:?} = {}th digit input", shred.id(), i);
+                shred
+            })
+            .collect();
 
-    let digits_input_shreds_data = digits_input_shreds
-        .iter()
-        .zip(digits.iter())
-        .map(|(shred, digit_values)| {
-            InputShredData::new(shred.id(), digit_values.clone())
-        })
-        .collect_vec();
+        let digits_input_shreds_data = digits_input_shreds
+            .iter()
+            .zip(digits.iter())
+            .map(|(shred, digit_values)| InputShredData::new(shred.id(), digit_values.clone()))
+            .collect_vec();
 
         let digits_refs = digits_input_shreds
             .iter()
@@ -141,10 +139,11 @@ pub fn build_hyrax_circuit_public_input_layer<
         let digits_concatenator = DigitsConcatenator::new(ctx, &digits_refs);
 
         // Use a lookup to range check the digits to the range 0..BASE
-        let (lookup_table_values, lookup_table_values_data) =
-            build_input_shred_and_data(
-                MultilinearExtension::new((0..BASE).map(C::Scalar::from).collect()),
-                ctx, &input_layer);
+        let (lookup_table_values, lookup_table_values_data) = build_input_shred_and_data(
+            MultilinearExtension::new((0..BASE).map(C::Scalar::from).collect()),
+            ctx,
+            &input_layer,
+        );
         println!("{:?} = Digit range check input", lookup_table_values.id());
 
         let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(ctx, 1);
@@ -266,9 +265,7 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
     const BASE: u64,
     const NUM_DIGITS: usize,
 >(
-    data: IriscodeCircuitData<
-        C::Scalar,
-    >,
+    data: IriscodeCircuitData<C::Scalar>,
     reroutings: Vec<(usize, usize)>,
     maybe_input_to_be_rerouted_raw_precommit: Option<(Vec<C>, Vec<C::Scalar>)>,
 ) -> impl FnMut(
@@ -337,7 +334,11 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         let digits_input_shreds: Vec<_> = (0..NUM_DIGITS)
             .into_iter()
             .map(|i| {
-                let shred = InputShred::new(&ctx, log_base, &hyrax_input_layer_for_digits_and_multiplicities);
+                let shred = InputShred::new(
+                    &ctx,
+                    log_base,
+                    &hyrax_input_layer_for_digits_and_multiplicities,
+                );
                 println!("{:?} = {}th digit input", shred.id(), i);
                 shred
             })
@@ -346,9 +347,7 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
         let digits_input_shreds_data = digits_input_shreds
             .iter()
             .zip(digits.iter())
-            .map(|(shred, digit_values)| {
-                InputShredData::new(shred.id(), digit_values.clone())
-            })
+            .map(|(shred, digit_values)| InputShredData::new(shred.id(), digit_values.clone()))
             .collect_vec();
 
         let digits_refs = digits_input_shreds

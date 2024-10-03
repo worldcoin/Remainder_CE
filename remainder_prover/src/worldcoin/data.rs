@@ -4,13 +4,13 @@ use ndarray_npy::read_npy;
 use remainder_shared_types::Field;
 use std::path::PathBuf;
 
+use super::parameters::{decode_i64_array, decode_wirings};
 use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::mle::bundled_input_mle::to_slice_of_vectors;
 use crate::mle::evals::MultilinearExtension;
 use crate::utils::arithmetic::i64_to_field;
 use crate::utils::mle::pad_with;
 use crate::worldcoin::parameters::decode_i32_array;
-use super::parameters::{decode_wirings, decode_i64_array};
 
 /// Input data for the Worldcoin iriscode circuit.
 #[derive(Debug, Clone)]
@@ -38,13 +38,16 @@ pub struct IriscodeCircuitData<F: Field> {
     pub to_sub_from_matmult: MultilinearExtension<F>,
 }
 
-
 /// Wirings are a Vec of 4-tuples of u16s; each tuple maps a coordinate of image to a coordinate of
 /// the LH multiplicand of the matmult. This function returns the corresponding Vec of 2-tuples of
 /// usize, which are the re-routings of the 1d MLEs.
 /// Input order is `(src_row_idx, src_col_idx, dest_row_idx, dest_col_idx)`.
 /// Output order is `(dest_idx, src_idx)` (to match IdentityGate).
-pub fn wirings_to_reroutings(wirings: &[(u16, u16, u16, u16)], src_arr_num_cols: usize, dest_arr_num_cols: usize) -> Vec<(usize, usize)> {
+pub fn wirings_to_reroutings(
+    wirings: &[(u16, u16, u16, u16)],
+    src_arr_num_cols: usize,
+    dest_arr_num_cols: usize,
+) -> Vec<(usize, usize)> {
     wirings
         .iter()
         .map(|row| {
@@ -70,8 +73,7 @@ pub fn build_iriscode_circuit_data<
     const MATMULT_INTERNAL_DIM_NUM_VARS: usize,
     const BASE: u64,
     const NUM_DIGITS: usize,
->
-(
+>(
     image: Array2<u8>, // FIXME(Ben) this should be serialized, too
     rh_multiplicand: &[i32],
     thresholds_matrix: &[i64],
@@ -101,15 +103,20 @@ pub fn build_iriscode_circuit_data<
     dbg!(MATMULT_ROWS_NUM_VARS);
     dbg!(MATMULT_COLS_NUM_VARS);
     let rh_multiplicand = Array2::from_shape_vec(
-        (1 << MATMULT_INTERNAL_DIM_NUM_VARS, 1 << MATMULT_COLS_NUM_VARS),
+        (
+            1 << MATMULT_INTERNAL_DIM_NUM_VARS,
+            1 << MATMULT_COLS_NUM_VARS,
+        ),
         rh_multiplicand.iter().map(|&x| x as i64).collect_vec(),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Build the thresholds matrix from the 1d serialization.
     let thresholds_matrix = Array2::from_shape_vec(
         (1 << MATMULT_ROWS_NUM_VARS, 1 << MATMULT_COLS_NUM_VARS),
         thresholds_matrix.to_vec(),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Calculate the matrix product. Has dimensions (1 << MATMULT_ROWS_NUM_VARS, 1 << MATMULT_COLS_NUM_VARS).
     let responses = rerouted_matrix.dot(&rh_multiplicand);
@@ -152,7 +159,8 @@ pub fn build_iriscode_circuit_data<
         .collect_vec();
 
     // Flatten the kernel values, convert to field.  (Already padded)
-    let rh_matmult_multiplicand: Vec<F> = rh_multiplicand.into_iter().map(i64_to_field).collect_vec();
+    let rh_matmult_multiplicand: Vec<F> =
+        rh_multiplicand.into_iter().map(i64_to_field).collect_vec();
 
     // Flatten the thresholds matrix, convert to field and pad.
     let thresholds_matrix: Vec<F> = pad_with(
@@ -170,10 +178,11 @@ pub fn build_iriscode_circuit_data<
         .collect_vec();
 
     // FIXME(Ben) perform this in a more succinct way
-    let digits: Vec<MultilinearExtension<F>> = to_slice_of_vectors(digits.iter().map(digits_to_field).collect_vec())
-        .iter()
-        .map(|digit_values| MultilinearExtension::new(digit_values.clone()))
-        .collect_vec();
+    let digits: Vec<MultilinearExtension<F>> =
+        to_slice_of_vectors(digits.iter().map(digits_to_field).collect_vec())
+            .iter()
+            .map(|digit_values| MultilinearExtension::new(digit_values.clone()))
+            .collect_vec();
 
     IriscodeCircuitData {
         to_reroute: MultilinearExtension::new(image_matrix_mle),
@@ -201,12 +210,12 @@ pub fn load_worldcoin_data_v2<
 >(
     image_path: PathBuf,
     is_mask: bool,
-) -> IriscodeCircuitData<
-    F,
-> {
+) -> IriscodeCircuitData<F> {
     let image: Array2<u8> = read_npy(image_path).unwrap();
 
-    use super::parameters_v2::{WIRINGS, IRIS_THRESHOLDS, MASK_THRESHOLDS, IRIS_RH_MULTIPLICAND, MASK_RH_MULTIPLICAND};
+    use super::parameters_v2::{
+        IRIS_RH_MULTIPLICAND, IRIS_THRESHOLDS, MASK_RH_MULTIPLICAND, MASK_THRESHOLDS, WIRINGS,
+    };
     if is_mask {
         build_iriscode_circuit_data::<
             F,
@@ -219,7 +228,7 @@ pub fn load_worldcoin_data_v2<
             image,
             &decode_i32_array(MASK_RH_MULTIPLICAND),
             &decode_i64_array(MASK_THRESHOLDS),
-            &decode_wirings(WIRINGS)
+            &decode_wirings(WIRINGS),
         )
     } else {
         build_iriscode_circuit_data::<
@@ -233,7 +242,7 @@ pub fn load_worldcoin_data_v2<
             image,
             &decode_i32_array(IRIS_RH_MULTIPLICAND),
             &decode_i64_array(IRIS_THRESHOLDS),
-            &decode_wirings(WIRINGS)
+            &decode_wirings(WIRINGS),
         )
     }
 }
@@ -254,12 +263,12 @@ pub fn load_worldcoin_data_v3<
 >(
     image_path: PathBuf,
     is_mask: bool,
-) -> IriscodeCircuitData<
-    F,
-> {
+) -> IriscodeCircuitData<F> {
     let image: Array2<u8> = read_npy(image_path).unwrap();
 
-    use super::parameters_v3::{WIRINGS, IRIS_THRESHOLDS, MASK_THRESHOLDS, IRIS_RH_MULTIPLICAND, MASK_RH_MULTIPLICAND};
+    use super::parameters_v3::{
+        IRIS_RH_MULTIPLICAND, IRIS_THRESHOLDS, MASK_RH_MULTIPLICAND, MASK_THRESHOLDS, WIRINGS,
+    };
     if is_mask {
         build_iriscode_circuit_data::<
             F,
@@ -272,7 +281,7 @@ pub fn load_worldcoin_data_v3<
             image,
             &decode_i32_array(MASK_RH_MULTIPLICAND),
             &decode_i64_array(MASK_THRESHOLDS),
-            &decode_wirings(WIRINGS)
+            &decode_wirings(WIRINGS),
         )
     } else {
         build_iriscode_circuit_data::<
@@ -286,7 +295,7 @@ pub fn load_worldcoin_data_v3<
             image,
             &decode_i32_array(IRIS_RH_MULTIPLICAND),
             &decode_i64_array(IRIS_THRESHOLDS),
-            &decode_wirings(WIRINGS)
+            &decode_wirings(WIRINGS),
         )
     }
 }

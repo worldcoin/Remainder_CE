@@ -17,11 +17,11 @@ use remainder::{
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     sumcheck::evaluate_at_a_point,
 };
-use remainder_shared_types::{ff_field, Field};
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
 };
+use remainder_shared_types::{ff_field, Field};
 
 use crate::{
     hyrax_pcs::{HyraxPCSProof, MleCoefficientsVector},
@@ -376,10 +376,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
 
 // FIXME(Ben) make this a helper, and use it also for FS challenge (what about error handling?)
 /// Verifies a claim by evaluating the MLE at the challenge point and checking that the result.
-pub fn verify_claim<F: Field>(
-    mle_vec: &[F],
-    claim: &Claim<F>,
-) {
+pub fn verify_claim<F: Field>(mle_vec: &[F], claim: &Claim<F>) {
     let mut mle = DenseMle::new_from_raw(mle_vec.to_vec(), LayerId::Input(0));
     mle.index_mle_indices(0);
 

@@ -6,7 +6,9 @@ use crate::digits::components::{
 use crate::layer::LayerId;
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::{Component, ComponentSet};
-use crate::layouter::nodes::circuit_inputs::{InputLayerNodeData, InputLayerNode, InputLayerType, InputShred};
+use crate::layouter::nodes::circuit_inputs::{
+    InputLayerNode, InputLayerNodeData, InputLayerType, InputShred,
+};
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::fiat_shamir_challenge::FiatShamirChallengeNode;
 use crate::layouter::nodes::identity_gate::IdentityGateNode;
@@ -54,9 +56,7 @@ pub fn build_circuit<
     const BASE: u64,
     const NUM_DIGITS: usize,
 >(
-    data: IriscodeCircuitData<
-        F,
-    >,
+    data: IriscodeCircuitData<F>,
     reroutings: Vec<(usize, usize)>,
 ) -> LayouterCircuit<
     F,
@@ -104,8 +104,10 @@ pub fn build_circuit<
 
         let subtractor = Subtractor::new(ctx, &matmult, &to_sub_from_matmult);
 
-        let (digits_input_shreds, digits_input_shreds_data): (Vec<_>, Vec<_>) =
-        digits.into_iter().map(|digit_values| build_input_shred_and_data(digit_values.clone(), ctx, &input_layer)).unzip();
+        let (digits_input_shreds, digits_input_shreds_data): (Vec<_>, Vec<_>) = digits
+            .into_iter()
+            .map(|digit_values| build_input_shred_and_data(digit_values.clone(), ctx, &input_layer))
+            .unzip();
         for (i, shred) in digits_input_shreds.iter().enumerate() {
             println!("{:?} = {}th digit input", shred.id(), i);
         }
@@ -220,9 +222,9 @@ pub fn build_circuit_description<
 >(
     reroutings: Vec<(usize, usize)>,
 ) -> (
-        GKRCircuitDescription<F>,
-        impl Fn(IriscodeCircuitData<F>) -> HashMap<LayerId, MultilinearExtension<F>>
-    ) {
+    GKRCircuitDescription<F>,
+    impl Fn(IriscodeCircuitData<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
+) {
     assert!(BASE.is_power_of_two());
     let log_base = BASE.ilog2() as usize;
     let mut output_nodes = vec![];
@@ -231,14 +233,21 @@ pub fn build_circuit_description<
     // Private inputs
     // FIXME(Ben) this will be fine once we get rid of InputLayerType, but it does look funny for now
     let private_input_layer = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
-    println!("{:?} = Input layer for private values", private_input_layer.id());
+    println!(
+        "{:?} = Input layer for private values",
+        private_input_layer.id()
+    );
     let to_reroute = InputShred::new(&ctx, TO_REROUTE_NUM_VARS, &private_input_layer);
     println!("{:?} = Image to_reroute input", to_reroute.id());
 
     let digits_input_shreds: Vec<_> = (0..NUM_DIGITS)
         .into_iter()
         .map(|i| {
-            let shred = InputShred::new(&ctx, MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS, &private_input_layer);
+            let shred = InputShred::new(
+                &ctx,
+                MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS,
+                &private_input_layer,
+            );
             println!("{:?} = {}th digit input", shred.id(), i);
             shred
         })
@@ -247,21 +256,42 @@ pub fn build_circuit_description<
     let digit_multiplicities = InputShred::new(&ctx, log_base, &private_input_layer);
     println!("{:?} = Digit multiplicities", digit_multiplicities.id());
 
-    let sign_bits = InputShred::new(&ctx, MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS, &private_input_layer);
+    let sign_bits = InputShred::new(
+        &ctx,
+        MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS,
+        &private_input_layer,
+    );
     println!("{:?} = Sign bits (iris code) input", sign_bits.id());
-    
+
     // Public inputs
     let public_input_layer = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
-    println!("{:?} = Input layer for public values", public_input_layer.id());
+    println!(
+        "{:?} = Input layer for public values",
+        public_input_layer.id()
+    );
 
-    let to_sub_from_matmult = InputShred::new(&ctx, MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS, &public_input_layer);
+    let to_sub_from_matmult = InputShred::new(
+        &ctx,
+        MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS,
+        &public_input_layer,
+    );
     println!("{:?} = input to sub from matmult", to_sub_from_matmult.id());
 
-    let rh_matmult_multiplicand = InputShred::new(&ctx, MATMULT_INTERNAL_DIM_NUM_VARS + MATMULT_COLS_NUM_VARS, &public_input_layer);
-    println!("{:?} = RH multiplicand of matmult (input)", rh_matmult_multiplicand.id());
+    let rh_matmult_multiplicand = InputShred::new(
+        &ctx,
+        MATMULT_INTERNAL_DIM_NUM_VARS + MATMULT_COLS_NUM_VARS,
+        &public_input_layer,
+    );
+    println!(
+        "{:?} = RH multiplicand of matmult (input)",
+        rh_matmult_multiplicand.id()
+    );
 
     let lookup_table_values = InputShred::new(&ctx, log_base, &public_input_layer);
-    println!("{:?} = Lookup table values for digit range check (input)", lookup_table_values.id());
+    println!(
+        "{:?} = Lookup table values for digit range check (input)",
+        lookup_table_values.id()
+    );
 
     // Intermediate layers
     let rerouted_image = IdentityGateNode::new(&ctx, &to_reroute, reroutings);
@@ -348,19 +378,26 @@ pub fn build_circuit_description<
     // Add output nodes
     all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));
 
-    let (circ_desc, _, input_builder_from_shred_map) = generate_circuit_description(all_nodes).unwrap();
+    let (circ_desc, _, input_builder_from_shred_map) =
+        generate_circuit_description(all_nodes).unwrap();
 
     let input_builder = move |data: IriscodeCircuitData<F>| {
         let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<F>> = HashMap::new();
         input_shred_id_to_data.insert(to_reroute.id(), data.to_reroute);
         input_shred_id_to_data.insert(rh_matmult_multiplicand.id(), data.rh_matmult_multiplicand);
-        data.digits.into_iter().zip(digits_input_shreds.iter()).for_each(|(mle, shred)| {
-            input_shred_id_to_data.insert(shred.id(), mle);
-        });
+        data.digits
+            .into_iter()
+            .zip(digits_input_shreds.iter())
+            .for_each(|(mle, shred)| {
+                input_shred_id_to_data.insert(shred.id(), mle);
+            });
         input_shred_id_to_data.insert(sign_bits.id(), data.sign_bits);
         input_shred_id_to_data.insert(to_sub_from_matmult.id(), data.to_sub_from_matmult);
         input_shred_id_to_data.insert(digit_multiplicities.id(), data.digit_multiplicities);
-        input_shred_id_to_data.insert(lookup_table_values.id(), MultilinearExtension::new((0..BASE).map(F::from).collect()));
+        input_shred_id_to_data.insert(
+            lookup_table_values.id(),
+            MultilinearExtension::new((0..BASE).map(F::from).collect()),
+        );
         input_builder_from_shred_map(input_shred_id_to_data).unwrap()
     };
 
