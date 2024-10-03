@@ -139,8 +139,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
         // --- Finally, send the claimed values for each of the bound MLEs to the verifier ---
         // First, send the claimed value of V_{i + 1}(g_2, u)
-        let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
-        let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
+        let lhs_reduced = &self.phase_1_mles.as_ref().unwrap()[0][1];
+        let rhs_reduced = &self.phase_2_mles.as_ref().unwrap()[0][1];
         debug_assert!(lhs_reduced.bookkeeping_table().len() == 1);
         transcript_writer.append(
             "Evaluation of V_{i + 1}(g_2, u)",
@@ -153,8 +153,6 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             rhs_reduced.bookkeeping_table()[0],
         );
 
-        // The concatenation of all of these rounds is the proof resulting from a gate layer.
-        //Ok(sumcheck_rounds.into())
         Ok(())
     }
 
