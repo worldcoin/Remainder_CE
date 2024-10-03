@@ -14,10 +14,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::{wlx_eval::ClaimMle, ClaimError, YieldClaim},
-    expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
+    expression::verifier_expr::VerifierMle,
     layer::{LayerError, LayerId},
     layouter::layouting::CircuitMap,
-    mle::{dense::DenseMle, mle_enum::MleEnum, zero::ZeroMle, Mle, MleIndex},
+    mle::{
+        dense::DenseMle, mle_description::MleDescription, mle_enum::MleEnum, zero::ZeroMle, Mle,
+        MleIndex,
+    },
 };
 
 use super::{
@@ -209,7 +212,7 @@ impl<F: Field> OutputLayerDescription<F> for MleOutputLayerDescription<F> {
         debug_assert_eq!(mle.num_free_vars(), 0);
 
         let verifier_output_layer =
-            VerifierMleOutputLayer::new_zero(self.mle.layer_id(), mle.mle_indices(), F::ZERO);
+            VerifierMleOutputLayer::new_zero(self.mle.layer_id(), mle.var_indices(), F::ZERO);
 
         Ok(verifier_output_layer)
     }

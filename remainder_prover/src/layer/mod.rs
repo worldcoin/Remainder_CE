@@ -17,8 +17,9 @@ use thiserror::Error;
 
 use crate::{
     claims::{Claim, ClaimError},
-    expression::{circuit_expr::MleDescription, expr_errors::ExpressionError},
+    expression::expr_errors::ExpressionError,
     layouter::layouting::CircuitMap,
+    mle::mle_description::MleDescription,
     sumcheck::InterpError,
 };
 use remainder_shared_types::{

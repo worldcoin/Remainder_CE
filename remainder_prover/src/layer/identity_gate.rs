@@ -12,10 +12,13 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
+    expression::verifier_expr::VerifierMle,
     layer::{gate::gate_helpers::bind_round_identity, LayerError, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
+    mle::{
+        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
+        mle_description::MleDescription, Mle, MleIndex,
+    },
     sumcheck::*,
 };
 use remainder_shared_types::{
@@ -165,7 +168,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         // --- OF SUMCHECK ROUNDS IS GOING TO BE THE NUMBER OF NON-FIXED BITS
         let num_sumcheck_rounds = self
             .source_mle
-            .mle_indices()
+            .var_indices()
             .iter()
             .fold(0_usize, |acc, idx| {
                 acc + match idx {
@@ -268,7 +271,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         let output_data = MultilinearExtension::new(remap_table);
         assert_eq!(
             output_data.num_vars(),
-            mle_output_necessary.mle_indices().len()
+            mle_output_necessary.var_indices().len()
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);

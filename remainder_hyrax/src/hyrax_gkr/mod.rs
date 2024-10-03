@@ -14,7 +14,7 @@ use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
 use rand::Rng;
-use remainder::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
+use remainder::expression::circuit_expr::filter_bookkeeping_table;
 use remainder::input_layer::enum_input_layer::{
     InputLayerDescriptionEnum, InputLayerEnumVerifierCommitment,
 };
@@ -28,6 +28,7 @@ use remainder::layouter::nodes::circuit_inputs::compile_inputs::combine_input_ml
 use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::{Context, NodeId};
 use remainder::mle::evals::MultilinearExtension;
+use remainder::mle::mle_description::MleDescription;
 use remainder::mle::Mle;
 use remainder::prover::{generate_circuit_description, GKRCircuitDescription};
 use remainder::{claims::wlx_eval::ClaimMle, layer::LayerId};
@@ -585,7 +586,7 @@ impl<
         proof: &HyraxProof<C>,
         circuit_description: &GKRCircuitDescription<C::Scalar>,
         committer: &PedersenCommitter<C>,
-        _public_inputs: &Vec<(LayerId, Vec<C::Scalar>)>,
+        _public_inputs: &[(LayerId, Vec<C::Scalar>)],
         hyrax_input_commitments: Vec<(&LayerId, &Vec<C>)>,
         fiat_shamir_challenges: Vec<FiatShamirChallenge<C::Scalar>>,
         transcript: &mut impl ECVerifierTranscript<C>,

@@ -3,13 +3,13 @@
 use remainder_shared_types::Field;
 
 use crate::{
-    expression::circuit_expr::MleDescription,
     layer::{
         layer_enum::LayerDescriptionEnum,
         matmult::{MatMultLayerDescription, MatrixDescription},
         LayerId,
     },
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
+    mle::mle_description::MleDescription,
     utils::mle::get_total_mle_indices,
 };
 

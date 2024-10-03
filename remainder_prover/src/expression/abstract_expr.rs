@@ -35,12 +35,12 @@ use crate::{
         layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
         nodes::NodeId,
     },
-    mle::MleIndex,
+    mle::{mle_description::MleDescription, MleIndex},
     utils::mle::get_total_mle_indices,
 };
 
 use super::{
-    circuit_expr::{ExprDescription, MleDescription},
+    circuit_expr::ExprDescription,
     generic_expr::{Expression, ExpressionNode, ExpressionType},
 };
 
