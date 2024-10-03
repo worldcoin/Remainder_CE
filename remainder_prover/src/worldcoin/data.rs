@@ -170,7 +170,11 @@ pub fn build_worldcoin_circuit_data<
         .map(|x| F::from(x as u64))
         .collect_vec();
 
-    let digits = digits.iter().map(|digit_values| MultilinearExtension::new(digit_values.iter().map(|&x| F::from(x as u64)).collect_vec())).collect_vec();
+    // FIXME(Ben) perform this in a more succinct way
+    let digits: Vec<MultilinearExtension<F>> = to_slice_of_vectors(digits.iter().map(digits_to_field).collect_vec())
+        .iter()
+        .map(|digit_values| MultilinearExtension::new(digit_values.clone()))
+        .collect_vec();
 
     CircuitData {
         to_reroute: MultilinearExtension::new(image_matrix_mle),
