@@ -416,7 +416,10 @@ impl<C: PrimeOrderCurve, T: Default> ECTranscriptReader<C, T> {
         let (operation_idx, element_idx) = self.next_element;
 
         match self.transcript.transcript_operations.get(operation_idx) {
-            None => Err(TranscriptReaderError::InternalIndicesError),
+            None => {
+                // `advance_indices` should never be called in an already inconsistent state.
+                panic!("Internal TranscriptReader Error: attempt to advance indices in an already inconsistent state!");
+            }
             Some(Operation::Append(_, v)) => {
                 if element_idx + 1 >= v.len() {
                     self.next_element = (operation_idx + 1, 0);
@@ -448,10 +451,6 @@ impl<
     /// The operation can fail with:
     /// * `TranscriptReaderError::ConsumeError`: if there are no more elements
     ///   to consume or if a squeeze was expected.
-    /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
-    ///   is invalid. This is an internal error which should never appear under
-    ///   normal circumstances.
-    ///   TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
     /// by the `TranscriptWriter` for the corresponding operation. If the labels
@@ -470,7 +469,11 @@ impl<
                     warn!("Label mismatch on TranscriptReader consume_element. Expected \"{}\" but instead got \"{}\".", expected_label, label);
                 }
                 match v.get(element_idx) {
-                    None => Err(TranscriptReaderError::InternalIndicesError),
+                    None => {
+                        // This should never happen if `self.advance_indices()` maintains its
+                        // invariants. Panicking because we reached an inconsistent state.
+                        panic!("Internal TranscriptReader Error: indices are in an inconsistent state!");
+                    }
                     Some(&element) => {
                         let element = F::from_repr(element).unwrap();
                         self.advance_indices()?;
@@ -490,10 +493,6 @@ impl<
     ///   elements remain in the transcript or if a squeeze operation was
     ///   expected to occur at any point before the consumption of
     ///   `num_elements` elements.
-    /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
-    ///   is invalid. This is an internal error which should never appear under
-    ///   normal circumstances.
-    ///   TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
     /// by the `TranscriptWriter` for the corresponding operations. In
@@ -519,10 +518,6 @@ impl<
     /// * `TranscriptReaderError::SqueezeError`: if a squeeze is requested at a
     ///   time when either a consume operation was expected or no more
     ///   operations were expected.
-    /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
-    ///   is invalid. This is an internal error which should never appear under
-    ///   normal circumstances.
-    ///   TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
     /// by the `TranscriptWriter` for the corresponding operation. If the labels
@@ -554,10 +549,6 @@ impl<
     /// * `TranscriptReaderError::SqueezeError`: if any of the squeeze
     ///   operations requested does not correspond to a squeeze operation
     ///   performed by the `TranscriptWriter` that produced the transcript.
-    /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
-    ///   is invalid. This is an internal error which should never appear under
-    ///   normal circumstances.
-    ///   TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
     /// by the `TranscriptWriter` for the corresponding operations. In
