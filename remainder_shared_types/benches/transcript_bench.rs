@@ -5,33 +5,7 @@
 //! To run all the benchmarks in this file which match a regular expression
 //! REGEX, use the following command:
 //!
-//!  > cargo bench --bench fix_variable -- 'REGEX'
-//!
-//! Examples:
-//! * To benchmark different implementations of `fix_variable_at_index` for MLEs
-//!   of size 20, edit the code in `src/mle/evals.rs` by uncommenting the
-//!   desired implementation and run the command bellow. Each time the command
-//!   is run, criterion will report the percentage improvement/regression
-//!   compared to the previously run benchmark:
-//!  > cargo bench --bench fix_variable -- '^fix_var_at_index_20/first$'
-//!
-//! * To compare `fix_variable` with `fix_variable_at_index` for MLEs of size
-//!   2^20, we need to choose the benchmarks with IDs "fix_var_20" and
-//!   "fix_var_at_index_20/first". We can pick those using the regular
-//!   expression in the following command:
-//!  > cargo bench --bench fix_variable -- '^fix_var(_at_index)?_20(/first)?$'
-//!
-//! * To benchmark `fix_variable_at_index` for MLE of size 2^20 and compare the
-//!   time to fix the first, middle and last element run:
-//!
-//!  > cargo bench --bench fix_variable -- '^fix_var_at_index_20'
-//!
-//! * ONLY ON PIKNIKS: To benchmark the effects of Rayon parallelism on
-//!   `fix_variable` on MLEs of size 2^15, we may want to run benchmarks with
-//!   varying number of threads available. The following command runs benchmarks
-//!   for 1, 2, 4, 8, 16, 32, 64 and 128 threads:
-//!
-//!  > cargo bench --bench fix_variable -- `^rayon_fix_var_vars_15`
+//!  > cargo bench --bench transcript_bench -- 'REGEX'
 
 use ark_std::test_rng;
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
