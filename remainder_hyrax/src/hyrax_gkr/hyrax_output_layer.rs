@@ -4,7 +4,7 @@ use itertools::Itertools;
 use rand::Rng;
 use remainder::mle::mle_enum::MleEnum;
 use remainder::mle::{Mle, MleIndex};
-use remainder::output_layer::mle_output_layer::MleOutputLayerDescription;
+use remainder::output_layer::mle_output_layer::{MleOutputLayer, MleOutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
@@ -13,6 +13,7 @@ use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
 use super::hyrax_layer::HyraxClaim;
 
+//FIXME remove
 /// This is a wrapper around the existing [MleEnum], but suited in order
 /// to produce Zero Knowledge evaluations using Hyrax.
 pub struct HyraxOutputLayer<C: PrimeOrderCurve> {
@@ -83,12 +84,16 @@ pub struct HyraxOutputLayerProof<C: PrimeOrderCurve> {
 impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     /// Returns a HyraxOutputLayerProof and the claim that the output layer is making.
     pub fn prove(
-        output_layer: &mut HyraxOutputLayer<C>,
+        output_layer: &mut MleOutputLayer<C::Scalar>,
         transcript: &mut impl ECProverTranscript<C>,
         blinding_rng: &mut impl Rng,
         scalar_committer: &PedersenCommitter<C>,
     ) -> (Self, HyraxClaim<C::Scalar, CommittedScalar<C>>) {
         // Fix variable on the output layer in order to generate the claim on the previous layer
+        let challenge: Vec<C::Scalar> = (0..output_layer.get_mle().num_free_vars())
+            .map(|_idx| transcript.get_scalar_field_challenge("output claim point"))
+            .collect_vec();
+
         output_layer.fix_variable_on_challenge(transcript);
         let committed_claim = output_layer.get_claim(blinding_rng, scalar_committer);
         let commitment = committed_claim.to_claim_commitment().evaluation;

@@ -15,7 +15,7 @@ use crate::claims::wlx_eval::helpers::{
 
 use crate::claims::ClaimError;
 use crate::input_layer::enum_input_layer::InputLayerEnum;
-use crate::input_layer::InputLayer;
+use crate::input_layer::InputLayerTrait;
 use crate::layer::layer_enum::LayerEnum;
 use crate::mle::dense::DenseMle;
 
@@ -52,7 +52,7 @@ pub struct WLXAggregator<F: Field, L, LI> {
 impl<
         F: Field,
         L: Layer<F> + YieldWLXEvals<F> + YieldClaim<ClaimMle<F>>,
-        LI: InputLayer<F> + YieldWLXEvals<F>,
+        LI: InputLayerTrait<F> + YieldWLXEvals<F>,
     > ClaimAggregator<F> for WLXAggregator<F, L, LI>
 {
     type Claim = ClaimMle<F>;
@@ -139,7 +139,7 @@ impl<
 impl<
         F: Field,
         L: Layer<F> + YieldWLXEvals<F> + YieldClaim<ClaimMle<F>>,
-        LI: InputLayer<F> + YieldWLXEvals<F>,
+        LI: InputLayerTrait<F> + YieldWLXEvals<F>,
     > WLXAggregator<F, L, LI>
 {
     fn prover_aggregate_claims(

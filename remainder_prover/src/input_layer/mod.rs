@@ -7,6 +7,7 @@ use remainder_ligero::ligero_structs::LigeroCommit;
 use remainder_ligero::poseidon_ligero::PoseidonSpongeHasher;
 use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 
+use crate::claims::wlx_eval::YieldWLXEvals;
 use crate::layer::regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION;
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
@@ -26,6 +27,43 @@ pub mod hyrax_input_layer;
 pub mod ligero_input_layer;
 /// An input layer which requires no commitment and is openly evaluated at the random point.
 pub mod public_input_layer;
+
+/// The prover's view of an input layer during circuit proving (undifferentiated as to type).
+/// Note that, being undifferentiated, no functions for adding values or commitments to the transcript are provided.
+#[derive(Debug, Clone)]
+pub struct InputLayer<F: Field> {
+    pub mle: MultilinearExtension<F>,
+    pub layer_id: LayerId,
+}
+
+impl<F: Field> YieldWLXEvals<F> for InputLayer<F> {
+    /// Computes the V_d(l(x)) evaluations for the input layer V_d.
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: &[Vec<F>],
+        claimed_vals: &[F],
+        claimed_mles: Vec<DenseMle<F>>,
+        num_claims: usize,
+        num_idx: usize,
+    ) -> Result<Vec<F>, crate::claims::ClaimError> {
+        get_wlx_evaluations_helper(
+            self.mle.clone(),
+            claim_vecs,
+            claimed_vals,
+            claimed_mles,
+            num_claims,
+            num_idx,
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+/// The verifier's view of an input layer during circuit proving, containing
+/// the shape information of this input layer.
+pub struct InputLayerDescription {
+    pub layer_id: LayerId,
+    pub num_vars: usize,
+}
 
 use crate::{claims::wlx_eval::get_num_wlx_evaluations, sumcheck::evaluate_at_a_point};
 
@@ -67,7 +105,7 @@ pub enum InputLayerError {
 use log::{debug, info};
 /// The InputLayer trait in which the evaluation proof, commitment, and proof/verification
 /// process takes place for input layers.
-pub trait InputLayer<F: Field> {
+pub trait InputLayerTrait<F: Field> {
     /// The struct that contains the commitment to the contents of the input_layer in the prover's view.
     type ProverCommitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
 
@@ -104,7 +142,7 @@ pub trait InputLayer<F: Field> {
 }
 
 /// The trait representing methods necessary for the circuit description of an input layer.
-pub trait InputLayerDescription<F: Field> {
+pub trait InputLayerDescriptionTrait<F: Field> {
     /// The struct that contains the commitment to the contents of the input_layer.
     type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
 

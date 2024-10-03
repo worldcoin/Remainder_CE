@@ -30,7 +30,7 @@ use crate::claims::ClaimAggregator;
 use crate::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
 use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
-use crate::input_layer::{InputLayer, InputLayerDescription};
+use crate::input_layer::{InputLayerTrait, InputLayerDescriptionTrait};
 use crate::layer::layer_enum::LayerEnum;
 use crate::layer::LayerId;
 use crate::layer::{Layer, LayerDescription};
@@ -38,7 +38,7 @@ use crate::layouter::layouting::CircuitMap;
 use crate::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
 use crate::mle::evals::MultilinearExtension;
 use crate::output_layer::mle_output_layer::MleOutputLayer;
-use crate::output_layer::OutputLayer;
+use crate::output_layer::OutputLayerTrait;
 use crate::prover::layers::Layers;
 use crate::prover::{
     generate_circuit_description, GKRCircuitDescription, GKRError, InstantiatedCircuit,
@@ -122,7 +122,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         // Add the inputs to transcript.
         // In the future flow, the inputs will be added to the transcript in the calling context.
         circuit_description.input_layers.iter().for_each(|input_layer| {
-            let mle = inputs.get(&input_layer.layer_id()).unwrap();
+            let mle = inputs.get(&input_layer.layer_id).unwrap();
             transcript_writer.append_elements("Input values", mle.get_evals_vector());
         });
 
@@ -245,48 +245,49 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         end_timer!(intermediate_layers_timer);
         all_layers_sumcheck_proving_span.exit();
 
-        // --------- STAGE 3: Prove Input Layers ---------
-        let input_layers_timer = start_timer!(|| "INPUT layers proof generation");
-        let input_layer_proving_span = span!(Level::DEBUG, "input_layer_proving_span").entered();
+        // FIXME(Ben) move to calling context
+        // // --------- STAGE 3: Prove Input Layers ---------
+        // let input_layers_timer = start_timer!(|| "INPUT layers proof generation");
+        // let input_layer_proving_span = span!(Level::DEBUG, "input_layer_proving_span").entered();
 
-        for input_layer in input_layers {
-            let layer_id = input_layer.layer_id();
+        // for input_layer in input_layers {
+        //     let layer_id = input_layer.layer_id();
 
-            info!("New Input Layer: {:?}", layer_id);
-            let layer_timer =
-                start_timer!(|| format!("proof generation for INPUT layer {:?}", layer_id));
+        //     info!("New Input Layer: {:?}", layer_id);
+        //     let layer_timer =
+        //         start_timer!(|| format!("proof generation for INPUT layer {:?}", layer_id));
 
-            let claim_aggr_timer = start_timer!(|| format!(
-                "claim aggregation for INPUT layer {:?}",
-                input_layer.layer_id()
-            ));
+        //     let claim_aggr_timer = start_timer!(|| format!(
+        //         "claim aggregation for INPUT layer {:?}",
+        //         input_layer.layer_id()
+        //     ));
 
-            let output_mles_from_layer = layer_map.get(&layer_id).unwrap();
-            let layer_claim = aggregator.prover_aggregate_claims_input(
-                &input_layer,
-                output_mles_from_layer,
-                &mut transcript_writer,
-            )?;
+        //     let output_mles_from_layer = layer_map.get(&layer_id).unwrap();
+        //     let layer_claim = aggregator.prover_aggregate_claims_input(
+        //         &input_layer,
+        //         output_mles_from_layer,
+        //         &mut transcript_writer,
+        //     )?;
 
-            end_timer!(claim_aggr_timer);
+        //     end_timer!(claim_aggr_timer);
 
-            let eval_proof_timer =
-                start_timer!(|| format!("evaluation proof for INPUT layer {:?}", layer_id));
+        //     let eval_proof_timer =
+        //         start_timer!(|| format!("evaluation proof for INPUT layer {:?}", layer_id));
 
-            input_layer
-                .open(&mut transcript_writer, layer_claim)
-                .map_err(GKRError::InputLayerError)?;
+        //     input_layer
+        //         .open(&mut transcript_writer, layer_claim)
+        //         .map_err(GKRError::InputLayerError)?;
 
-            end_timer!(eval_proof_timer);
+        //     end_timer!(eval_proof_timer);
 
-            end_timer!(layer_timer);
-        }
+        //     end_timer!(layer_timer);
+        // }
 
-        // TODO(Makis): What do we do with the input commitments? Put them into
-        // transcript?
+        // // TODO(Makis): What do we do with the input commitments? Put them into
+        // // transcript?
 
-        end_timer!(input_layers_timer);
-        input_layer_proving_span.exit();
+        // end_timer!(input_layers_timer);
+        // input_layer_proving_span.exit();
 
         // --------- STAGE 4: Verifier Challenges --------- There is nothing to
         // be done here, since the claims on verifier challenges are checked

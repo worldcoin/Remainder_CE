@@ -19,7 +19,7 @@ use remainder::input_layer::enum_input_layer::{
     InputLayerDescriptionEnum, InputLayerEnumVerifierCommitment,
 };
 use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
-use remainder::input_layer::{InputLayer, InputLayerDescription};
+use remainder::input_layer::{InputLayerTrait, InputLayerDescriptionTrait};
 use remainder::layer::layer_enum::LayerEnum;
 use remainder::layer::{Layer, LayerDescription};
 use remainder::layouter::component::{Component, ComponentSet};
@@ -29,7 +29,7 @@ use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::{Context, NodeId};
 use remainder::mle::evals::MultilinearExtension;
 use remainder::mle::Mle;
-use remainder::prover::{generate_circuit_description, GKRCircuitDescription};
+use remainder::prover::{generate_circuit_description, GKRCircuitDescription, InstantiatedCircuit};
 use remainder::{claims::wlx_eval::ClaimMle, layer::LayerId};
 
 use remainder_shared_types::{
@@ -73,6 +73,7 @@ pub struct FiatShamirChallengeProof<C: PrimeOrderCurve> {
     pub claims: Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
 }
 
+// FIXME(Ben) remove
 pub struct HyraxInstantiatedCircuit<C: PrimeOrderCurve> {
     pub input_layers: Vec<HyraxInputLayerEnum<C>>,
     /// The verifier challenges
@@ -124,21 +125,6 @@ impl<
             converter,
             _marker: PhantomData,
         }
-    }
-
-    pub fn generate_circuit_description(
-        mut witness_function: Fn,
-    ) -> (
-        CircuitDescriptionAndAux<C::Scalar>,
-        Vec<HyraxInputLayerData<C>>,
-    ) {
-        let ctx = Context::new();
-        let (component, input_layer_data) = (witness_function)(&ctx);
-        let circuit_description_timer = start_timer!(|| "generating circuit description");
-        let circ_desc = generate_circuit_description(component.yield_nodes()).unwrap();
-        let result = ((circ_desc.0, circ_desc.1), input_layer_data);
-        end_timer!(circuit_description_timer);
-        result
     }
 
     pub fn populate_hyrax_circuit(
@@ -349,22 +335,46 @@ impl<
 
     pub fn prove_gkr_circuit(
         &mut self,
-        witness_function: Fn,
+        mut witness_function: Fn,
         transcript_writer: &mut impl ECProverTranscript<C>,
     ) -> (
         GKRCircuitDescription<C::Scalar>,
         HyraxProof<C>,
     ) {
-        let ((circuit_description, input_layer_to_node_map), input_data) =
-            Self::generate_circuit_description(witness_function);
-        let (mut instantiated_circuit, mut layer_map) = self.populate_hyrax_circuit(
-            &circuit_description,
-            input_data,
-            transcript_writer,
-            input_layer_to_node_map,
-        );
+        let ctx = Context::new();
+        let (component, input_layer_data) = (witness_function)(&ctx);
+
+        // Convert the input layer data into a map that maps the input shred ID
+        // i.e. adapt witness builder output to the instantate() function.
+        // This can be removed once witness builders are removed.
+        let mut shred_id_to_data = HashMap::<NodeId, MultilinearExtension<F>>::new();
+        input_layer_data.into_iter().for_each(|input_layer_data| {
+            input_layer_data.data.into_iter().for_each(|input_shred_data| {
+                shred_id_to_data.insert(
+                    input_shred_data.corresponding_input_shred_id,
+                    input_shred_data.data,
+                );
+            });
+        });
+
+        let (circuit_description, input_node_map, input_builder) =
+            generate_circuit_description(component.yield_nodes()).unwrap();
+
+        let inputs = input_builder(shred_id_to_data).unwrap();
+
+        // Add the inputs to transcript.
+        // In the future flow, the inputs will be added to the transcript in the calling context.
+        circuit_description.input_layers.iter().for_each(|input_layer| {
+            // FIXME do this
+        });
+
+        let mut challenge_sampler = |size| {
+            transcript_writer.get_scalar_field_challenges("Verifier challenges", size)
+        };
+        let instantiated_circuit = circuit_description.instantiate(&inputs, &mut challenge_sampler);
+
         let prove_timer = start_timer!(|| "prove hyrax circuit");
-        let proof = self.prove(&mut instantiated_circuit, &mut layer_map, transcript_writer);
+        let proof = self.prove(&mut instantiated_circuit, transcript_writer);
         end_timer!(prove_timer);
         (circuit_description, proof)
     }
@@ -379,18 +389,18 @@ impl<
     /// unless already added further upstream).
     pub fn prove(
         &mut self,
-        instantiated_circuit: &mut HyraxInstantiatedCircuit<C>,
-        layer_map: &mut LayerMap<C::Scalar>,
+        instantiated_circuit: &mut InstantiatedCircuit<C::Scalar>,
         transcript: &mut impl ECProverTranscript<C>,
     ) -> HyraxProof<C> {
         let committer = self.committer;
         let mut blinding_rng = &mut self.blinding_rng;
         let converter = &mut self.converter;
-        let HyraxInstantiatedCircuit {
+        let InstantiatedCircuit {
             input_layers,
             fiat_shamir_challenges,
             layers,
             output_layers,
+            layer_map,
         } = instantiated_circuit;
 
         // HashMap to keep track of all claims made on each layer
@@ -408,7 +418,7 @@ impl<
                     committer,
                 );
                 // Add the output claim to the claims table
-                let output_layer_id = output_layer.underlying_mle.layer_id();
+                let output_layer_id = output_layer.get_mle().layer_id();
                 claim_tracker.insert(output_layer_id, vec![committed_output_claim]);
                 output_layer_proof
             })

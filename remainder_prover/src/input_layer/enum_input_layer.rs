@@ -14,7 +14,7 @@ use super::{
     hyrax_input_layer::HyraxInputLayerDescription,
     ligero_input_layer::{LigeroInputLayer, LigeroInputLayerDescription},
     public_input_layer::{PublicInputLayer, PublicInputLayerDescription},
-    CommitmentEnum, InputLayer, InputLayerDescription, InputLayerError,
+    CommitmentEnum, InputLayerTrait, InputLayerDescriptionTrait, InputLayerError,
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -30,7 +30,7 @@ pub enum InputLayerDescriptionEnum<F: Field> {
     HyraxInputLayer(HyraxInputLayerDescription<F>),
 }
 
-impl<F: Field> InputLayerDescription<F> for InputLayerDescriptionEnum<F> {
+impl<F: Field> InputLayerDescriptionTrait<F> for InputLayerDescriptionEnum<F> {
     type Commitment = InputLayerEnumVerifierCommitment<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -133,16 +133,6 @@ input_layer_enum!(
     (LigeroInputLayer: LigeroInputLayer<F>),
     (PublicInputLayer: PublicInputLayer<F>)
 );
-
-impl<F: Field> InputLayerEnum<F> {
-    /// This function sets the layer ID of the corresponding input layer.
-    pub fn set_layer_id(&mut self, layer_id: LayerId) {
-        match self {
-            InputLayerEnum::LigeroInputLayer(layer) => layer.layer_id = layer_id,
-            InputLayerEnum::PublicInputLayer(layer) => layer.layer_id = layer_id,
-        }
-    }
-}
 
 impl<F: Field> YieldWLXEvals<F> for InputLayerEnum<F> {
     /// Get the evaluations of the bookkeeping table of this layer over enumerated points

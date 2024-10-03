@@ -258,7 +258,7 @@ macro_rules! input_layer_enum {
             pub enum [<$type_name ProverCommitment>]<F: Field> {
                 $(
                     #[doc = "Remainder generated Commitment variant"]
-                    $var_name(<$variant as InputLayer<F>>::ProverCommitment),
+                    $var_name(<$variant as InputLayerTrait<F>>::ProverCommitment),
                 )*
             }
 
@@ -268,12 +268,12 @@ macro_rules! input_layer_enum {
             pub enum [<$type_name VerifierCommitment>]<F: Field> {
                 $(
                     #[doc = "Remainder generated Commitment variant"]
-                    $var_name(<$variant as InputLayer<F>>::VerifierCommitment),
+                    $var_name(<$variant as InputLayerTrait<F>>::VerifierCommitment),
                 )*
             }
         }
 
-        impl<F: Field> $crate::input_layer::InputLayer<F> for $type_name<F> {
+        impl<F: Field> $crate::input_layer::InputLayerTrait<F> for $type_name<F> {
             paste::paste! {
                 type ProverCommitment = [<$type_name ProverCommitment>]<F>;
                 type VerifierCommitment = [<$type_name VerifierCommitment>]<F>;
@@ -295,7 +295,7 @@ macro_rules! input_layer_enum {
             ) {
                 match commitment {
                     $(
-                        Self::VerifierCommitment::$var_name(commitment) => <$variant as InputLayer<F>>::append_commitment_to_transcript(commitment, transcript_writer),
+                        Self::VerifierCommitment::$var_name(commitment) => <$variant as InputLayerTrait<F>>::append_commitment_to_transcript(commitment, transcript_writer),
                     )*
                 }
             }

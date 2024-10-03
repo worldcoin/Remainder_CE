@@ -40,7 +40,7 @@ pub enum VerifierOutputLayerError {
 /// Output layers are "virtual layers" in the sense that they are not assigned a
 /// separate [LayerId]. Instead they are associated with the ID of an existing
 /// intermediate/input layer on which they generate claims for.
-pub trait OutputLayer<F: Field> {
+pub trait OutputLayerTrait<F: Field> {
     /// Returns the [LayerId] of the intermediate/input layer that this output
     /// layer is associated with.
     fn layer_id(&self) -> LayerId;
@@ -50,14 +50,18 @@ pub trait OutputLayer<F: Field> {
 
     /// Fix the variables of this output layer to random challenges sampled
     /// from the transcript.
+    /// Expects `self.num_free_vars()` challenges.
     fn fix_layer(
         &mut self,
-        transcript_writer: &mut impl ProverTranscript<F>,
+        challenges: &[F],
     ) -> Result<(), LayerError>;
+
+    /// Number of free variables.
+    fn num_free_vars(&self) -> usize;
 }
 
 /// The interface for the circuit description counterpart of an Output Layer.
-pub trait OutputLayerDescription<F: Field> {
+pub trait OutputLayerDescriptionTrait<F: Field> {
     /// The associated type used by the verifier for manipulating an Ouput
     /// Layer.
     type VerifierOutputLayer: VerifierOutputLayer<F> + Serialize + for<'a> Deserialize<'a>;

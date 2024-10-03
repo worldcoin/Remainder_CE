@@ -18,7 +18,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    input_layer::InputLayer,
+    input_layer::InputLayerTrait,
     layer::{Layer, LayerId},
 };
 
@@ -113,7 +113,7 @@ pub trait ClaimAggregator<F: Field> {
     type Layer: Layer<F>;
 
     /// The `InputLayer` this claim aggregator aggregates claims for.
-    type InputLayer: InputLayer<F>;
+    type InputLayer: InputLayerTrait<F>;
 
     /// Creates an empty [ClaimAggregator], ready to track claims.
     fn new() -> Self;

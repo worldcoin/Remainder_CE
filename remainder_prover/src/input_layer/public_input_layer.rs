@@ -15,8 +15,8 @@ use crate::{
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CommitmentEnum, InputLayer,
-    InputLayerDescription, InputLayerError,
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CommitmentEnum, InputLayerTrait,
+    InputLayerDescriptionTrait, InputLayerError,
 };
 use crate::mle::Mle;
 
@@ -58,7 +58,7 @@ impl<F: Field> PublicInputLayer<F> {
     }
 }
 
-impl<F: Field> InputLayer<F> for PublicInputLayer<F> {
+impl<F: Field> InputLayerTrait<F> for PublicInputLayer<F> {
     type ProverCommitment = Vec<F>;
     type VerifierCommitment = Vec<F>;
 
@@ -104,7 +104,7 @@ impl<F: Field> PublicInputLayer<F> {
     }
 }
 
-impl<F: Field> InputLayerDescription<F> for PublicInputLayerDescription<F> {
+impl<F: Field> InputLayerDescriptionTrait<F> for PublicInputLayerDescription<F> {
     type Commitment = Vec<F>;
 
     fn layer_id(&self) -> LayerId {

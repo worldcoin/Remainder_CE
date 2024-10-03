@@ -7,7 +7,7 @@ use crate::{
     input_layer::{
         enum_input_layer::InputLayerDescriptionEnum, hyrax_input_layer::HyraxInputLayerDescription,
         ligero_input_layer::LigeroInputLayerDescription,
-        public_input_layer::PublicInputLayerDescription,
+        public_input_layer::PublicInputLayerDescription, InputLayerDescription,
     },
     layer::LayerId,
     layouter::{
@@ -152,12 +152,12 @@ impl InputLayerNode {
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-    ) -> Result<InputLayerDescriptionEnum<F>, DAGError> {
+    ) -> Result<InputLayerDescription, DAGError> {
         let input_layer_id = layer_id.get_and_inc();
         let Self {
             id: _,
             input_shreds,
-            input_layer_type,
+            input_layer_type: _,
         } = &self;
 
         let input_mle_num_vars = input_shreds
@@ -169,38 +169,12 @@ impl InputLayerNode {
             index_input_mles(&input_mle_num_vars);
         debug_assert_eq!(input_shred_indices.len(), input_shreds.len());
 
-        let out = match input_layer_type {
-            InputLayerType::LigeroInputLayer((rho_inv, ratio)) => {
-                let aux = LigeroAuxInfo::new(
-                    (1 << num_vars_combined_mle) as usize,
-                    *rho_inv,
-                    *ratio,
-                    None,
-                );
-                let ligero_input_layer_description: LigeroInputLayerDescription<F> =
-                    LigeroInputLayerDescription::new(
-                        input_layer_id.to_owned(),
-                        num_vars_combined_mle,
-                        aux,
-                    );
-                InputLayerDescriptionEnum::LigeroInputLayer(ligero_input_layer_description)
-            }
-            InputLayerType::PublicInputLayer => {
-                let public_input_layer_description = PublicInputLayerDescription::new(
-                    input_layer_id.to_owned(),
-                    num_vars_combined_mle,
-                );
-                InputLayerDescriptionEnum::PublicInputLayer(public_input_layer_description)
-            }
-            InputLayerType::HyraxInputLayer => {
-                let hyrax_input_layer_description = HyraxInputLayerDescription::new(
-                    input_layer_id.to_owned(),
-                    num_vars_combined_mle,
-                );
-                InputLayerDescriptionEnum::HyraxInputLayer(hyrax_input_layer_description)
-            }
+        let input_layer_description = InputLayerDescription {
+            layer_id: input_layer_id.to_owned(),
+            num_vars: num_vars_combined_mle,
         };
 
+        // FIXME(Ben) this should probably be in a separate function.
         input_shred_indices
             .iter()
             .zip(prefix_bits)
@@ -214,6 +188,7 @@ impl InputLayerNode {
                     ),
                 );
             });
-        Ok(out)
+
+        Ok(input_layer_description)
     }
 }

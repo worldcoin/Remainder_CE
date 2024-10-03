@@ -24,8 +24,8 @@ use crate::{
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, InputLayer,
-    InputLayerDescription, InputLayerError,
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, InputLayerTrait,
+    InputLayerDescriptionTrait, InputLayerError,
 };
 
 /// An input layer in which `mle` will be committed to using the Ligero polynomial
@@ -93,7 +93,7 @@ impl<F: Field> LigeroInputLayerDescription<F> {
     }
 }
 
-impl<F: Field> InputLayer<F> for LigeroInputLayer<F> {
+impl<F: Field> InputLayerTrait<F> for LigeroInputLayer<F> {
     type ProverCommitment = LigeroCommitment<F>;
     type VerifierCommitment = LigeroRoot<F>;
 
@@ -152,7 +152,7 @@ impl<F: Field> InputLayer<F> for LigeroInputLayer<F> {
     }
 }
 
-impl<F: Field> InputLayerDescription<F> for LigeroInputLayerDescription<F> {
+impl<F: Field> InputLayerDescriptionTrait<F> for LigeroInputLayerDescription<F> {
     type Commitment = LigeroRoot<F>;
 
     fn layer_id(&self) -> LayerId {

@@ -23,7 +23,7 @@ use crate::input_layer::enum_input_layer::{
 use crate::input_layer::fiat_shamir_challenge::{
     FiatShamirChallenge, FiatShamirChallengeDescription,
 };
-use crate::input_layer::{InputLayer, InputLayerDescription};
+use crate::input_layer::{InputLayer, InputLayerDescription, InputLayerDescriptionTrait, InputLayerTrait};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{Layer, LayerDescription};
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, CircuitLocation, CircuitMap, InputNodeMap, LayerMap};
@@ -34,7 +34,7 @@ use crate::layouter::nodes::{CircuitNode, NodeId};
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::output_layer::mle_output_layer::{MleOutputLayer, MleOutputLayerDescription};
-use crate::output_layer::{OutputLayer, OutputLayerDescription};
+use crate::output_layer::{OutputLayerTrait, OutputLayerDescription};
 use crate::utils::mle::build_composite_mle;
 use crate::{
     claims::ClaimAggregator,
@@ -112,7 +112,7 @@ pub struct InstantiatedCircuit<F: Field> {
     /// The output layers of the circuit
     pub output_layers: Vec<MleOutputLayer<F>>,
     /// The input layers of the circuit
-    pub input_layers: Vec<InputLayerEnum<F>>,
+    pub input_layers: Vec<InputLayer<F>>,
     /// The verifier challenges
     pub fiat_shamir_challenges: Vec<FiatShamirChallenge<F>>,
     /// FIXME(vishady) what actually is this :)
@@ -155,8 +155,9 @@ pub fn prove_circuit<F: Field>(circuit_description: GKRCircuitDescription<F>, in
 
         output.append_mle_to_transcript(&mut transcript_writer);
 
+        let challenges = transcript_writer.get_challenges("output layer binding", output.num_free_vars());
         output
-            .fix_layer(&mut transcript_writer)
+            .fix_layer(&challenges)
             .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
         // Add the claim to either the set of current claims we're proving
@@ -218,31 +219,9 @@ pub fn prove_circuit<F: Field>(circuit_description: GKRCircuitDescription<F>, in
     end_timer!(intermediate_layers_timer);
     all_layers_sumcheck_proving_span.exit();
 
-    // --------- STAGE 3: Prove Input Layers ---------
-    let input_layers_timer = start_timer!(|| "INPUT layers claim aggregation");
-    let input_layer_proving_span = span!(Level::DEBUG, "input_layer_claim_aggregation").entered();
-
-    let mut input_layer_claims = Vec::new();
-    for input_layer in input_layers {
-        let layer_id = input_layer.layer_id();
-
-        let claim_aggr_timer = start_timer!(|| format!(
-            "claim aggregation for INPUT layer {:?}",
-            input_layer.layer_id()
-        ));
-
-        let output_mles_from_layer = layer_map.get(&layer_id).unwrap();
-        let layer_claim = aggregator.prover_aggregate_claims_input(
-            &input_layer,
-            output_mles_from_layer,
-            &mut transcript_writer,
-        )?;
-        input_layer_claims.push(layer_claim);
-        end_timer!(claim_aggr_timer);
-    }
-
-    end_timer!(input_layers_timer);
-    input_layer_proving_span.exit();
+    // FIXME(Ben) add back claim agg for input layers
+    // (Wait until Makis has finished his YieldClaims refactor).
+    let input_layer_claims = input_layers.iter().filter_map(|input_layer| aggregator.get_claims(input_layer.layer_id)).flatten().map(|claim_mle| claim_mle.get_claim().clone()).collect_vec();
 
     Ok(input_layer_claims)
 }
@@ -255,7 +234,7 @@ pub const ENABLE_OPTIMIZATION: bool = true;
 #[derive(Debug)]
 pub struct GKRCircuitDescription<F: Field> {
     /// The circuit descriptions of the input layers.
-    pub input_layers: Vec<InputLayerDescriptionEnum<F>>,
+    pub input_layers: Vec<InputLayerDescription>,
     /// The circuit descriptions of the verifier challengs
     pub fiat_shamir_challenges: Vec<FiatShamirChallengeDescription<F>>,
     /// The circuit descriptions of the intermediate layers.
@@ -351,7 +330,7 @@ impl<F: Field> GKRCircuitDescription<F> {
         // Step 1: populate the circuit map with all of the data necessary in
         // order to instantiate the circuit.
         let mut circuit_map = CircuitMap::new();
-        let mut prover_input_layers: Vec<InputLayerEnum<F>> = Vec::new();
+        let mut prover_input_layers: Vec<InputLayer<F>> = Vec::new();
         let mut fiat_shamir_challenges = Vec::new();
         // Step 1a: populate the circuit map by compiling the necessary data
         // outputs for each of the input layers, while writing the commitments
@@ -359,7 +338,7 @@ impl<F: Field> GKRCircuitDescription<F> {
         input_layer_descriptions
             .iter()
             .for_each(|input_layer_description| {
-                let input_layer_id = input_layer_description.layer_id();
+                let input_layer_id = input_layer_description.layer_id;
                 let combined_mle = input_data.get(&input_layer_id).unwrap();
                 let mle_outputs_necessary = mle_claim_map.get(&input_layer_id).unwrap();
                 // Compute all data outputs necessary for future layers for each
@@ -369,14 +348,10 @@ impl<F: Field> GKRCircuitDescription<F> {
                     let output = filter_bookkeeping_table(&combined_mle, &prefix_bits);
                     circuit_map.add_node(CircuitLocation::new(input_layer_id, prefix_bits), output);
                 });
-                // Compute the concretized input layer since we have the
-                // layerwise bookkeeping table.
-                // FIXME(Ben) precommits are none of its business here.  We can fix this after we remove the different layer types.
-                let prover_input_layer = input_layer_description
-                    .convert_into_prover_input_layer(
-                        combined_mle.clone(),
-                        &None,
-                    );
+                let prover_input_layer = InputLayer {
+                    mle: combined_mle.clone(),
+                    layer_id: input_layer_id,
+                };
                 prover_input_layers.push(prover_input_layer);
             });
         // Step 1b: for each of the fiat shamir challenges, use the transcript
@@ -445,6 +420,7 @@ impl<F: Field> GKRCircuitDescription<F> {
     }
 
     /// Verifies a GKR proof produced by the `prove` method.
+    /// Assumes that all inputs and input commitments have already been added to transcript.
     /// # Arguments
     /// * `transcript_reader`: servers as the proof.
     #[instrument(skip_all, err)]
@@ -462,20 +438,6 @@ impl<F: Field> GKRCircuitDescription<F> {
         }
         */
         self.index_mle_indices(0);
-        let input_layer_commitments_timer = start_timer!(|| "Retrieve Input Layer Commitments");
-
-        let input_layer_commitments: Vec<InputLayerEnumVerifierCommitment<F>> = self
-            .input_layers
-            .iter()
-            .map(|input_layer| {
-                input_layer
-                    .get_commitment_from_transcript(transcript_reader)
-                    .unwrap()
-            })
-            //.collect::<Result<Vec<Commitment>, GKRError>>()?;
-            .collect();
-
-        end_timer!(input_layer_commitments_timer);
 
         // Get the verifier challenges from the transcript.
         let fiat_shamir_challenges: Vec<FiatShamirChallenge<F>> = self
@@ -556,46 +518,18 @@ impl<F: Field> GKRCircuitDescription<F> {
 
         end_timer!(intermediate_layers_timer);
 
+        // FIXME(Ben) move to calling context
         // --------- STAGE 3: Verify Input Layers ---------
-        let input_layers_timer = start_timer!(|| "INPUT layers proof verification");
+        // for (input_layer, commitment) in
+        //     self.input_layers.iter().zip(input_layer_commitments.iter())
+        // {
+        //     let input_layer_claim =
+        //         aggregator.verifier_aggregate_claims(input_layer_id, transcript_reader)?;
 
-        for (input_layer, commitment) in
-            self.input_layers.iter().zip(input_layer_commitments.iter())
-        {
-            let layer_timer = start_timer!(|| format!(
-                "proof generation for INPUT layer {:?}",
-                input_layer.layer_id()
-            ));
-
-            let input_layer_id = input_layer.layer_id();
-            info!("--- Input Layer: {:?} ---", input_layer_id);
-
-            let claim_aggr_timer = start_timer!(|| format!(
-                "verify aggregated claim for INPUT layer {:?}",
-                input_layer.layer_id()
-            ));
-
-            let input_layer_claim =
-                aggregator.verifier_aggregate_claims(input_layer_id, transcript_reader)?;
-
-            debug!("Input layer claim: {:#?}", input_layer_claim);
-            end_timer!(claim_aggr_timer);
-
-            let sumcheck_msg_timer = start_timer!(|| format!(
-                "verify sumcheck message for INPUT layer {:?}",
-                input_layer.layer_id()
-            ));
-
-            input_layer
-                .verify(commitment, input_layer_claim, transcript_reader)
-                .map_err(GKRError::InputLayerError)?;
-
-            end_timer!(sumcheck_msg_timer);
-
-            end_timer!(layer_timer);
-        }
-
-        end_timer!(input_layers_timer);
+        //     input_layer
+        //         .verify(commitment, input_layer_claim, transcript_reader)
+        //         .map_err(GKRError::InputLayerError)?;
+        // }
 
         // --------- STAGE 4: Verify claims on the verifier challenges ---------
         let fiat_shamir_challenges_timer = start_timer!(|| "Verifier challenges proof generation");
@@ -641,19 +575,19 @@ pub fn generate_circuit_description<F: Field>(
         .iter()
         .map(|input_layer_node| {
             let input_layer_description = input_layer_node
-                .generate_input_layer_description(
+                .generate_input_layer_description::<F>(
                     &mut input_layer_id,
                     &mut circuit_description_map,
                 )
                 .unwrap();
             input_layer_node_to_layer_map
-                .add_node_layer_id(input_layer_description.layer_id(), input_layer_node.id());
+                .add_node_layer_id(input_layer_description.layer_id, input_layer_node.id());
             input_layer_id_to_input_node_ids.insert(
-                input_layer_description.layer_id(),
+                input_layer_description.layer_id,
                 input_layer_node.id(),
             );
             input_layer_id_to_input_shred_ids.insert(
-                input_layer_description.layer_id(),
+                input_layer_description.layer_id,
                 input_layer_node.subnodes().unwrap()
             );
             input_layer_description

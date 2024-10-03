@@ -21,7 +21,7 @@ use crate::{
 };
 
 use super::{
-    OutputLayer, OutputLayerDescription, OutputLayerError, VerifierOutputLayer,
+    OutputLayerTrait, OutputLayerDescriptionTrait, OutputLayerError, VerifierOutputLayer,
     VerifierOutputLayerError,
 };
 
@@ -85,25 +85,25 @@ impl<F: Field> MleOutputLayer<F> {
     }
 }
 
-impl<F: Field> OutputLayer<F> for MleOutputLayer<F> {
+impl<F: Field> OutputLayerTrait<F> for MleOutputLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.mle.layer_id()
     }
 
+    fn num_free_vars(&self) -> usize {
+        self.mle.num_free_vars()
+    }
+
     fn fix_layer(
         &mut self,
-        transcript_writer: &mut impl ProverTranscript<F>,
+        challenges: &[F],
     ) -> Result<(), crate::layer::LayerError> {
         let bits = self.mle.index_mle_indices(0);
-
-        // Evaluate each output MLE at a random challenge point.
-        for bit in 0..bits {
-            let challenge = transcript_writer.get_challenge("Setting Output Layer Claim");
-            self.mle.fix_variable(bit, challenge);
-        }
-
-        debug_assert_eq!(self.mle.num_free_vars(), 0);
-
+        assert_eq!(bits, challenges.len());
+        (0..bits).into_iter().zip(challenges.iter()).for_each(|(bit, challenge)| {
+            self.mle.fix_variable(bit, *challenge);
+        });
+        debug_assert_eq!(self.num_free_vars(), 0);
         Ok(())
     }
 
@@ -174,7 +174,7 @@ impl<F: Field> MleOutputLayerDescription<F> {
     }
 }
 
-impl<F: Field> OutputLayerDescription<F> for MleOutputLayerDescription<F> {
+impl<F: Field> OutputLayerDescriptionTrait<F> for MleOutputLayerDescription<F> {
     type VerifierOutputLayer = VerifierMleOutputLayer<F>;
 
     fn layer_id(&self) -> LayerId {
