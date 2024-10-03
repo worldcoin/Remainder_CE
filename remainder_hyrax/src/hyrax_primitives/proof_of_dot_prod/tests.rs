@@ -17,7 +17,7 @@ fn sanity_check_test_honest_prover() {
         "sanity checksanity checksanity checksanity check",
         None,
     );
-    let x = committer.committed_vector(&vec![Fr::one(), Fr::one()], &Fr::one());
+    let x = committer.committed_vector(&[Fr::one(), Fr::one()], &Fr::one());
     let y = committer.committed_scalar(&(Fr::one() + Fr::one()), &Fr::one());
     let a = (0..2).map(|_| Fr::one()).collect_vec();
     let prover_random_generator = &mut rand::thread_rng();

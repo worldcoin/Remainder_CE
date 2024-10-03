@@ -20,7 +20,7 @@ use crate::{
     builders::layer_builder::LayerBuilder,
     claims::Claim,
     expression::{
-        circuit_expr::{filter_bookkeeping_table, CircuitExpr, CircuitMle},
+        circuit_expr::{filter_bookkeeping_table, ExprDescription, MleDescription},
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
         verifier_expr::VerifierExpr,
@@ -36,7 +36,7 @@ use super::{
     product::PostSumcheckLayer,
 };
 
-use super::{CircuitLayer, VerifierLayer};
+use super::{LayerDescription, VerifierLayer};
 
 /// The most common implementation of [crate::layer::Layer].
 ///
@@ -65,20 +65,20 @@ pub struct RegularLayer<F: Field> {
 /// The circuit description counterpart of a [RegularLayer].
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: Field")]
-pub struct CircuitRegularLayer<F: Field> {
+pub struct RegularLayerDescription<F: Field> {
     /// This layer's ID.
     id: LayerId,
 
     /// A structural description of the polynomial expression defining this
     /// layer. Leaves of the expression describe the MLE characteristics without
     /// storing any values.
-    expression: Expression<F, CircuitExpr>,
+    expression: Expression<F, ExprDescription>,
 }
 
-impl<F: Field> CircuitRegularLayer<F> {
+impl<F: Field> RegularLayerDescription<F> {
     /// To be used internally only!
-    /// Generates a new [CircuitRegularLayer] given raw data.
-    pub fn new_raw(id: LayerId, expression: Expression<F, CircuitExpr>) -> Self {
+    /// Generates a new [RegularLayerDescription] given raw data.
+    pub fn new_raw(id: LayerId, expression: Expression<F, ExprDescription>) -> Self {
         Self { id, expression }
     }
 }
@@ -237,7 +237,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
     }
 }
 
-impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
+impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
     type VerifierLayer = VerifierRegularLayer<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -246,13 +246,11 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
 
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &HashSet<&CircuitMle<F>>,
+        mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
-    ) -> bool {
-        let mut all_populatable = true;
-
+    ) {
         let mut expression_nodes_to_compile =
-            HashMap::<&ExpressionNode<F, CircuitExpr>, Vec<(Vec<bool>, Vec<bool>)>>::new();
+            HashMap::<&ExpressionNode<F, ExprDescription>, Vec<(Vec<bool>, Vec<bool>)>>::new();
 
         mle_outputs_necessary
             .iter()
@@ -291,27 +289,22 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
         expression_nodes_to_compile
             .iter()
             .for_each(|(expression_node, prefix_bit_vec)| {
-                let maybe_full_bookkeeping_table =
-                    expression_node.compute_bookkeeping_table(circuit_map);
-                if let Some(full_bookkeeping_table) = &maybe_full_bookkeeping_table {
-                    prefix_bit_vec
-                        .iter()
-                        .for_each(|(unfiltered_prefix_bits, prefix_bits)| {
-                            let filtered_table = filter_bookkeeping_table(
-                                full_bookkeeping_table,
-                                unfiltered_prefix_bits,
-                            );
-                            circuit_map.add_node(
-                                CircuitLocation::new(self.layer_id(), prefix_bits.clone()),
-                                filtered_table,
-                            );
-                        });
-                } else {
-                    all_populatable = false;
-                }
+                let full_bookkeeping_table = expression_node
+                    .compute_bookkeeping_table(circuit_map)
+                    .unwrap();
+                prefix_bit_vec
+                    .iter()
+                    .for_each(|(unfiltered_prefix_bits, prefix_bits)| {
+                        let filtered_table = filter_bookkeeping_table(
+                            &full_bookkeeping_table,
+                            unfiltered_prefix_bits,
+                        );
+                        circuit_map.add_node(
+                            CircuitLocation::new(self.layer_id(), prefix_bits.clone()),
+                            filtered_table,
+                        );
+                    });
             });
-
-        all_populatable
     }
 
     fn verify_rounds(
@@ -456,7 +449,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
         Ok(verifier_layer)
     }
 
-    /// Get the [PostSumcheckLayer] for a [CircuitRegularLayer], which represents the description of a fully bound expression.
+    /// Get the [PostSumcheckLayer] for a [RegularLayerDescription], which represents the description of a fully bound expression.
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     fn get_post_sumcheck_layer(
         &self,
@@ -507,7 +500,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
         self.expression.get_max_degree() + 1
     }
 
-    fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
+    fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
         self.expression.get_circuit_mles()
     }
 
@@ -518,7 +511,7 @@ impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
     }
 
     fn index_mle_indices(&mut self, start_index: usize) {
-        self.expression.index_mle_indices(start_index);
+        self.expression.index_mle_vars(start_index);
     }
 }
 
@@ -622,14 +615,14 @@ impl<F: Field> RegularLayer<F> {
             match expr_node {
                 ExpressionNode::Mle(mle_vec_index) => {
                     let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
-                    let val = mle.current_mle.value();
+                    let val = mle.mle.value();
                     transcript_writer.append("Leaf MLE value", val);
                     Ok(())
                 }
                 ExpressionNode::Product(mle_vec_indices) => {
                     for mle_vec_index in mle_vec_indices {
                         let mle = &mle_vec[mle_vec_index.index()];
-                        let eval = mle.current_mle.value();
+                        let eval = mle.mle.value();
                         transcript_writer.append("Product MLE value", eval);
                     }
                     Ok(())
