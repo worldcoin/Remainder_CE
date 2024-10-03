@@ -20,14 +20,14 @@ use crate::{
     builders::layer_builder::LayerBuilder,
     claims::Claim,
     expression::{
-        circuit_expr::{filter_bookkeeping_table, ExprDescription, MleDescription},
+        circuit_expr::{filter_bookkeeping_table, ExprDescription},
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
         verifier_expr::VerifierExpr,
     },
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{betavalues::BetaValues, dense::DenseMle},
+    mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription},
     sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
 };
 
