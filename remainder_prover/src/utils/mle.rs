@@ -190,7 +190,7 @@ pub fn get_total_mle_indices<F: Field>(
 /// use remainder_shared_types::Fr;
 /// let mle1 = MultilinearExtension::new(vec![Fr::from(2)]);
 /// let mle2 = MultilinearExtension::new(vec![Fr::from(1), Fr::from(3)]);
-/// let result = build_composite_mle(&[(mle1, vec![false, true]), (mle2, vec![true])]);
+/// let result = build_composite_mle(&[(&mle1, &vec![false, true]), (&mle2, &vec![true])]);
 /// assert_eq!(result.get_evals_vector(), &vec![Fr::from(0), Fr::from(1), Fr::from(2), Fr::from(3)]);
 /// ```
 pub fn build_composite_mle<F: Field>(
