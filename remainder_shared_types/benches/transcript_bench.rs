@@ -36,7 +36,7 @@ fn create_random_field_vec<F: Field>(num_items: usize, mut rng: impl Rng) -> Vec
 ///  * `bn254_scalar_field_transcript_absorb_{1, 10, 100, 1000, 10000}`
 ///
 /// Benchmarks the [TranscriptWriter::append_elements()] functionality for
-/// a Poseidon sponge over the scalar field of BN-254
+/// a Poseidon sponge over the scalar field of BN-254.
 fn bench_bn254_scalar_field_transcript_absorb(c: &mut Criterion) {
     for num_elems in [1, 10, 100, 1000, 10000] {
         c.bench_function(
@@ -66,7 +66,7 @@ fn bench_bn254_scalar_field_transcript_absorb(c: &mut Criterion) {
 ///  * `bn254_scalar_field_transcript_squeeze_{1, 10, 100, 1000, 10000}`
 ///
 /// Benchmarks the [TranscriptWriter::get_challenges()] functionality for
-/// a Poseidon sponge over the scalar field of BN-254
+/// a Poseidon sponge over the scalar field of BN-254.
 fn bench_bn254_scalar_field_transcript_squeeze(c: &mut Criterion) {
     for num_elems in [1, 10, 100, 1000, 10000] {
         c.bench_function(
@@ -93,7 +93,7 @@ fn bench_bn254_scalar_field_transcript_squeeze(c: &mut Criterion) {
 ///
 /// Benchmarks the [ECTranscriptWriter::append_scalar_points()] functionality for
 /// a Poseidon sponge over the base field of BN-254 absorbing scalar field
-/// elements of BN-254
+/// elements of BN-254.
 fn bench_bn254_base_field_transcript_absorb_scalar(c: &mut Criterion) {
     for num_elems in [1, 10, 100, 1000, 10000] {
         c.bench_function(
@@ -131,7 +131,8 @@ fn bench_bn254_base_field_transcript_absorb_scalar(c: &mut Criterion) {
 ///  * `bn254_base_field_transcript_squeeze_scalar_{1, 10, 100, 1000, 10000}`
 ///
 /// Benchmarks the [TranscriptWriter::get_scalar_field_challenges()] functionality for
-/// a Poseidon sponge over the scalar field of BN-254
+/// a Poseidon sponge over the base field of BN-254 squeezing scalar field
+/// verifier challenges.
 fn bench_bn254_base_field_transcript_squeeze_scalar(c: &mut Criterion) {
     for num_elems in [1, 10, 100, 1000, 10000] {
         c.bench_function(
