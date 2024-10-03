@@ -10,7 +10,7 @@ use remainder::{
     input_layer::{
         enum_input_layer::{InputLayerDescriptionEnum, InputLayerEnum},
         public_input_layer::PublicInputLayer,
-        InputLayer, InputLayerDescription,
+        InputLayerTrait, InputLayerDescriptionTrait,
     },
     layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
     layouter::nodes::circuit_inputs::HyraxInputDType,

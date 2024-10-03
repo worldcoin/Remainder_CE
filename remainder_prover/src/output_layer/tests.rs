@@ -4,6 +4,7 @@ use itertools::{repeat_n, Itertools};
 use pretty_assertions::assert_eq;
 
 use remainder_shared_types::ff_field;
+use remainder_shared_types::transcript::ProverTranscript;
 use remainder_shared_types::{
     transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
     Fr,
@@ -13,10 +14,10 @@ use crate::{
     claims::{wlx_eval::ClaimMle, YieldClaim},
     layer::LayerId,
     mle::{zero::ZeroMle, MleIndex},
-    output_layer::{mle_output_layer::MleOutputLayerDescription, OutputLayerDescription},
+    output_layer::{mle_output_layer::MleOutputLayerDescription, OutputLayerDescriptionTrait},
 };
 
-use super::{mle_output_layer::MleOutputLayer, OutputLayer};
+use super::{mle_output_layer::MleOutputLayer, OutputLayerTrait};
 
 #[test]
 fn test_fix_layer() {
@@ -27,12 +28,9 @@ fn test_fix_layer() {
 
     let mut output_layer = MleOutputLayer::new_zero(mle);
 
-    // Use a `TestSponge` which always returns `1`.
-    let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
-        TranscriptWriter::new("Test Transcript Writer");
-
+    let challenges = vec![Fr::ONE, Fr::ONE];
     // Fix `x_1 = 1` and `x_2 = 1`.
-    output_layer.fix_layer(&mut transcript_writer).unwrap();
+    output_layer.fix_layer(&challenges).unwrap();
 
     // Expect the output layer to be fully bound and evaluating to
     // `f(1, 1)` which is equal to `0`.
@@ -61,7 +59,9 @@ fn test_output_layer_get_claims() {
         TranscriptWriter::new("Test Transcript Writer");
 
     output_layer.append_mle_to_transcript(&mut transcript_writer);
-    output_layer.fix_layer(&mut transcript_writer).unwrap();
+    let challenges = transcript_writer.get_challenges("la la", 2);
+    // Fix `x_1 = 1` and `x_2 = 1`.
+    output_layer.fix_layer(&challenges).unwrap();
     let claims = output_layer.get_claims().unwrap();
 
     let expected_point = vec![Fr::ONE, Fr::ONE];
@@ -114,7 +114,8 @@ fn test_output_layer_get_claims_with_prefix_bits() {
         TranscriptWriter::new("Test Transcript Writer");
 
     output_layer.append_mle_to_transcript(&mut transcript_writer);
-    output_layer.fix_layer(&mut transcript_writer).unwrap();
+    let challenges = transcript_writer.get_challenges("la la", output_layer.num_free_vars());
+    output_layer.fix_layer(&challenges).unwrap();
     let claims = output_layer.get_claims().unwrap();
 
     let expected_point = vec![Fr::ONE, Fr::ZERO, Fr::ONE, Fr::ONE];
