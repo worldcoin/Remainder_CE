@@ -171,13 +171,14 @@ pub fn build_circuit<
         // Collect all the nodes, starting with the input nodes
         let mut all_nodes: Vec<NodeEnum<F>> = vec![
             input_layer.into(),
+            // FIXME restore old order
+            lookup_table_values.into(),
             fiat_shamir_challenge_node.into(),
             to_reroute.into(),
             rh_matmult_multiplicand.into(),
             sign_bits.into(),
             to_sub_from_matmult.into(),
             digit_multiplicities.into(),
-            lookup_table_values.into(),
         ];
         all_nodes.extend(digits_input_shreds.into_iter().map(|node| node.into()));
 
@@ -360,7 +361,7 @@ pub fn build_circuit_description<
         input_shred_id_to_data.insert(to_sub_from_matmult.id(), data.to_sub_from_matmult);
         input_shred_id_to_data.insert(digit_multiplicities.id(), data.digit_multiplicities);
         input_shred_id_to_data.insert(lookup_table_values.id(), MultilinearExtension::new((0..BASE).map(F::from).collect()));
-        input_builder_from_shred_map(input_shred_id_to_data)
+        input_builder_from_shred_map(input_shred_id_to_data).unwrap()
     };
 
     (circ_desc, input_builder)

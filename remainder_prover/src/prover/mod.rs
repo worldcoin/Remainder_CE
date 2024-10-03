@@ -35,6 +35,7 @@ use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::output_layer::mle_output_layer::{MleOutputLayer, MleOutputLayerDescription};
 use crate::output_layer::{OutputLayer, OutputLayerDescription};
+use crate::utils::mle::build_composite_mle;
 use crate::{
     claims::ClaimAggregator,
     input_layer::InputLayerError,
@@ -77,6 +78,9 @@ pub enum GKRError {
     #[error("Error when verifying output layer")]
     /// Error when verifying output layer
     ErrorWhenVerifyingOutputLayer,
+    /// InputShred length mismatch
+    #[error("InputShred with NodeId {0} should have {1} variables, but has {2}")]
+    InputShredLengthMismatch(NodeId, usize, usize),
     /// Error for input layer commitment
     #[error("Error when commiting to InputLayer {0}")]
     InputLayerError(InputLayerError),
@@ -615,8 +619,8 @@ impl<F: Field> GKRCircuitDescription<F> {
 /// their corresponding input layer id (this is a 1:1 correspondence).
 pub fn generate_circuit_description<F: Field>(
     nodes: Vec<NodeEnum<F>>,
-) -> Result<(GKRCircuitDescription<F>, InputNodeMap, impl Fn(HashMap<NodeId, MultilinearExtension<F>>) -> HashMap<LayerId, MultilinearExtension<F>>), GKRError> {
-    // FIXME(Ben) consider inlining the layout function, if this is the only place we'll ever call it?  doesn't seem well factored.  or instead pass in the return values of layout() as arguments to this function?
+) -> Result<(GKRCircuitDescription<F>, InputNodeMap, impl Fn(HashMap<NodeId, MultilinearExtension<F>>) -> Result<HashMap<LayerId, MultilinearExtension<F>>, GKRError>), GKRError> {
+    // FIXME(Ben) This doesn't seem well factored.  Pass in the return values of layout() as arguments to this function?  Inline layout here?
     let (input_layer_nodes, fiat_shamir_challenge_nodes, intermediate_nodes, lookup_nodes, output_nodes) =
         layout(nodes).unwrap();
 
@@ -655,22 +659,6 @@ pub fn generate_circuit_description<F: Field>(
             input_layer_description
         })
         .collect_vec();
-
-    // TODO(Ben) add the option to pass in input _layer_ node data as well
-    let input_builder = move |input_node_data: HashMap<NodeId, MultilinearExtension<F>>| {
-        let mut input_layer_data = HashMap::new();
-        for (input_layer_id, input_shred_ids) in input_layer_id_to_input_shred_ids.iter() {
-            let shred_mles = input_shred_ids
-                .iter()
-                .map(|input_shred_id| {
-                    input_node_data.get(input_shred_id).unwrap()
-                })
-                .collect_vec();
-            let combined_mle = combine_input_mles(&shred_mles);
-            input_layer_data.insert(*input_layer_id, combined_mle);
-        }
-        input_layer_data
-    };
 
     let fiat_shamir_challenges = fiat_shamir_challenge_nodes
         .iter()
@@ -720,6 +708,24 @@ pub fn generate_circuit_description<F: Field>(
         output_layers,
     };
 
-    // FIXME(Ben) this should return a function that builds the inputs from the input node data.  @vishady has some ideas
+    // TODO(Ben) add the option to pass in input _layer_ node data as well
+    let input_builder = move |input_node_data: HashMap<NodeId, MultilinearExtension<F>>| {
+        let mut input_layer_data = HashMap::new();
+        for (input_layer_id, input_shred_ids) in input_layer_id_to_input_shred_ids.iter() {
+            let mut shred_mles_and_prefix_bits = vec![];
+            for input_shred_id in input_shred_ids {
+                let mle = input_node_data.get(input_shred_id).unwrap();
+                let (circuit_location, num_vars) = circuit_description_map.0.get(input_shred_id).unwrap();
+                if *num_vars != mle.num_vars() {
+                    return Err(GKRError::InputShredLengthMismatch(input_shred_id.clone(), *num_vars, mle.num_vars()));
+                }
+                shred_mles_and_prefix_bits.push((mle, &circuit_location.prefix_bits))
+            }
+            let combined_mle = build_composite_mle(&shred_mles_and_prefix_bits);
+            input_layer_data.insert(*input_layer_id, combined_mle);
+        }
+        Ok(input_layer_data)
+    };
+
     Ok((circuit_description, input_layer_node_to_layer_map, input_builder))
 }
