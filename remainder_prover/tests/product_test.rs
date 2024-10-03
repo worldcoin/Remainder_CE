@@ -2,7 +2,9 @@ use remainder::expression::abstract_expr::AbstractExpr;
 use remainder::expression::generic_expr::Expression;
 use remainder::layouter::compiling::LayouterCircuit;
 use remainder::layouter::component::{Component, ComponentSet};
-use remainder::layouter::nodes::circuit_inputs::{InputLayerNodeData, InputLayerNode, InputLayerType};
+use remainder::layouter::nodes::circuit_inputs::{
+    InputLayerNode, InputLayerNodeData, InputLayerType,
+};
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::sector::Sector;

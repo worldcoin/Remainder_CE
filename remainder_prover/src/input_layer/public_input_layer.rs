@@ -54,7 +54,7 @@ impl<F: Field> PublicInputLayerDescription<F> {
 impl<F: Field> PublicInputLayer<F> {
     /// FIXME(Ben) document or remove - could make self.mle public instead?
     pub fn get_evaluations_as_vec(&self) -> &Vec<F> {
-        &self.mle.get_evals_vector()
+        self.mle.get_evals_vector()
     }
 }
 

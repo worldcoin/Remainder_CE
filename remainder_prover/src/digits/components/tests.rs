@@ -5,7 +5,7 @@ use crate::layer::LayerId;
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::ComponentSet;
 use crate::layouter::nodes::circuit_inputs::{
-    InputLayerNodeData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+    InputLayerNode, InputLayerNodeData, InputLayerType, InputShred, InputShredData,
 };
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::node_enum::NodeEnum;

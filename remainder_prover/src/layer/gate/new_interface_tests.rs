@@ -37,7 +37,7 @@ mod tests {
             component::{Component, ComponentSet},
             nodes::{
                 circuit_inputs::{
-                    InputLayerNodeData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+                    InputLayerNode, InputLayerNodeData, InputLayerType, InputShred, InputShredData,
                 },
                 circuit_outputs::OutputNode,
                 gate::GateNode,

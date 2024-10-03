@@ -99,7 +99,7 @@ fn test_completeness() {
     assert_eq!(f20 + r2 * f21, mle_eval); // f2(r2) = mle_eval
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
         &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(
-            &vec![mle_ref.clone()],
+            &[mle_ref.clone()],
             Fr::one(),
         )]),
         &committer,
@@ -214,7 +214,7 @@ fn test_example_with_regular_layer() {
     let _mle_eval = mle_ref.bookkeeping_table()[0] * equality_mle.bookkeeping_table()[0];
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
         &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(
-            &vec![mle_ref.clone()],
+            &[mle_ref.clone()],
             equality_mle.bookkeeping_table()[0],
         )]),
         &committer,
@@ -274,7 +274,7 @@ fn test_soundness() {
     mle_ref.fix_variable(2, bindings[1]);
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
         &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(
-            &vec![mle_ref.clone()],
+            &[mle_ref.clone()],
             Fr::one(),
         )]),
         &committer,

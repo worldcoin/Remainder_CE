@@ -1,14 +1,13 @@
-use crate::mle::evals::MultilinearExtension;
 use crate::prover::helpers::test_circuit;
 use crate::prover::prove_circuit;
 use crate::worldcoin::circuits::{build_circuit, build_circuit_description};
 use crate::worldcoin::data::{
-    build_worldcoin_circuit_data, load_worldcoin_data_v2, load_worldcoin_data_v3, wirings_to_reroutings, CircuitData
+    build_iriscode_circuit_data, load_worldcoin_data_v2, wirings_to_reroutings,
 };
 use crate::worldcoin::parameters::decode_wirings;
 use ndarray::Array2;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
-use remainder_shared_types::transcript::{ProverTranscript, TranscriptWriter};
+use remainder_shared_types::transcript::TranscriptWriter;
 use remainder_shared_types::Fr;
 use std::path::Path;
 
@@ -17,7 +16,7 @@ fn test_trivial_wiring_2x2_circuit_data() {
     // rewirings for the 2x2 identity matrix
     let wirings = &vec![(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
     let reroutings = wirings_to_reroutings(wirings, 2, 2);
-    let data = build_worldcoin_circuit_data::<Fr, 1, 1, 1, 16, 2>(
+    let data = build_iriscode_circuit_data::<Fr, 1, 1, 1, 16, 2>(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
         &vec![1, 0, 6, -1],
         &vec![1, 0, 1, 0],
@@ -40,7 +39,7 @@ fn test_trivial_wiring_2x2_circuit_data_old_style() {
     // rewirings for the 2x2 identity matrix
     let wirings = &vec![(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
     let reroutings = wirings_to_reroutings(wirings, 2, 2);
-    let data = build_worldcoin_circuit_data::<Fr, 1, 1, 1, 16, 2>(
+    let data = build_iriscode_circuit_data::<Fr, 1, 1, 1, 16, 2>(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
         &vec![1, 0, 6, -1],
         &vec![1, 0, 1, 0],
@@ -72,8 +71,8 @@ fn test_trivial_wiring_2x2_circuit_data_old_style() {
 #[test]
 fn test_worldcoin_circuit_iris_v2() {
     use super::parameters_v2::{
-        BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
-        MATMULT_ROWS_NUM_VARS, NUM_DIGITS, WIRINGS,
+        BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
+        NUM_DIGITS, WIRINGS,
     };
     let image_path = Path::new("src/worldcoin/constants/v2/iris/test_image.npy").to_path_buf();
     let data = load_worldcoin_data_v2::<
@@ -116,7 +115,6 @@ fn test_worldcoin_circuit_iris_v2() {
 //     let circuit = build_circuit(data);
 //     test_circuit(circuit, None);
 // }
-
 
 // #[ignore] // takes 90 seconds!
 // #[test]

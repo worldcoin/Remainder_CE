@@ -3,7 +3,7 @@ use remainder::{
         compiling::LayouterCircuit,
         component::ComponentSet,
         nodes::{
-            circuit_inputs::{InputLayerNodeData, InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerNode, InputLayerNodeData, InputLayerType},
             fiat_shamir_challenge::FiatShamirChallengeNode,
             lookup::{LookupConstraint, LookupTable},
             node_enum::NodeEnum,

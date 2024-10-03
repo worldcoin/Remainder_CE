@@ -9,9 +9,8 @@ pub mod proof_system;
 /// Struct for representing a list of layers
 pub mod layers;
 
-
-use std::collections::{HashMap, HashSet};
 use std::collections::hash_map::Entry;
+use std::collections::{HashMap, HashSet};
 
 use self::layers::Layers;
 use crate::claims::wlx_eval::WLXAggregator;
@@ -26,9 +25,9 @@ use crate::input_layer::fiat_shamir_challenge::{
 use crate::input_layer::{InputLayer, InputLayerDescription, InputLayerDescriptionTrait, InputLayerTrait};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{Layer, LayerDescription};
-use crate::layouter::layouting::{layout, CircuitDescriptionMap, CircuitLocation, CircuitMap, InputNodeMap, LayerMap};
-use crate::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
-use crate::layouter::nodes::circuit_inputs::InputShredData;
+use crate::layouter::layouting::{
+    layout, CircuitDescriptionMap, CircuitLocation, CircuitMap, InputNodeMap,
+};
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, NodeId};
 use crate::mle::dense::DenseMle;
@@ -44,8 +43,10 @@ use crate::{
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
-use remainder_shared_types::transcript::{ProverTranscript, TranscriptReaderError, TranscriptWriter};
 use remainder_shared_types::transcript::VerifierTranscript;
+use remainder_shared_types::transcript::{
+    ProverTranscript, TranscriptReaderError, TranscriptWriter,
+};
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -116,30 +117,31 @@ pub struct InstantiatedCircuit<F: Field> {
     /// The verifier challenges
     pub fiat_shamir_challenges: Vec<FiatShamirChallenge<F>>,
     /// FIXME(vishady) what actually is this :)
-    pub layer_map: HashMap<LayerId, Vec<DenseMle<F>>>
+    pub layer_map: HashMap<LayerId, Vec<DenseMle<F>>>,
 }
 
 /// Assumes that the inputs have already been added to the transcript (if necessary).
 /// Returns the vector of claims on the input layers.
-pub fn prove_circuit<F: Field>(circuit_description: GKRCircuitDescription<F>, inputs: HashMap<LayerId, MultilinearExtension<F>>, mut transcript_writer: TranscriptWriter<F, PoseidonSponge<F>>)
-    -> Result<Vec<Claim<F>>, GKRError> {
+pub fn prove_circuit<F: Field>(
+    circuit_description: GKRCircuitDescription<F>,
+    inputs: HashMap<LayerId, MultilinearExtension<F>>,
+    mut transcript_writer: TranscriptWriter<F, PoseidonSponge<F>>,
+) -> Result<Vec<Claim<F>>, GKRError> {
     // Note: no need to return the Transcript, since it is already in the TranscriptWriter!
     // Note(Ben): this can't be an instance method, because it consumes the intermediate layers!
     // Note(Ben): this is a GKR specific method.  So it makes sense for IT to define the challenge sampler, so that the circuit can be instantiated (rather than leaving this complexity to the calling context).
 
-    let mut challenge_sampler = |size| {
-        transcript_writer.get_challenges("Verifier challenges", size)
-    };
+    let mut challenge_sampler =
+        |size| transcript_writer.get_challenges("Verifier challenges", size);
     let instantiated_circuit = circuit_description.instantiate(&inputs, &mut challenge_sampler);
 
     let InstantiatedCircuit {
-            input_layers,
-            mut output_layers,
-            layers,
-            fiat_shamir_challenges: _fiat_shamir_challenges,
-            layer_map,
-        } = instantiated_circuit;
-
+        input_layers,
+        mut output_layers,
+        layers,
+        fiat_shamir_challenges: _fiat_shamir_challenges,
+        layer_map,
+    } = instantiated_circuit;
 
     // Claim aggregator to keep track of GKR-style claims across all layers.
     let mut aggregator = WLXAggregator::<F, LayerEnum<F>, InputLayerEnum<F>>::new();
@@ -197,10 +199,8 @@ pub fn prove_circuit<F: Field>(circuit_description: GKRCircuitDescription<F>, in
         end_timer!(claim_aggr_timer);
 
         info!("Prove sumcheck message");
-        let sumcheck_msg_timer = start_timer!(|| format!(
-            "Compute sumcheck message for layer {:?}",
-            layer.layer_id()
-        ));
+        let sumcheck_msg_timer =
+            start_timer!(|| format!("Compute sumcheck message for layer {:?}", layer.layer_id()));
 
         // Compute all sumcheck messages across this particular layer.
         layer
@@ -345,7 +345,7 @@ impl<F: Field> GKRCircuitDescription<F> {
                 // input layer.
                 mle_outputs_necessary.iter().for_each(|mle_output| {
                     let prefix_bits = mle_output.prefix_bits();
-                    let output = filter_bookkeeping_table(&combined_mle, &prefix_bits);
+                    let output = filter_bookkeeping_table(combined_mle, &prefix_bits);
                     circuit_map.add_node(CircuitLocation::new(input_layer_id, prefix_bits), output);
                 });
                 let prover_input_layer = InputLayer {
@@ -359,10 +359,9 @@ impl<F: Field> GKRCircuitDescription<F> {
         fiat_shamir_challenge_descriptions
             .iter()
             .for_each(|fiat_shamir_challenge_description| {
-                let fiat_shamir_challenge_mle =
-                    MultilinearExtension::new(challenge_sampler(
-                        1 << fiat_shamir_challenge_description.num_bits,
-                    ));
+                let fiat_shamir_challenge_mle = MultilinearExtension::new(challenge_sampler(
+                    1 << fiat_shamir_challenge_description.num_bits,
+                ));
                 circuit_map.add_node(
                     CircuitLocation::new(fiat_shamir_challenge_description.layer_id(), vec![]),
                     fiat_shamir_challenge_mle.clone(),
@@ -408,15 +407,15 @@ impl<F: Field> GKRCircuitDescription<F> {
                     output_layer_description.into_prover_output_layer(&circuit_map);
                 prover_output_layers.push(prover_output_layer)
             });
-        let instantiated_circuit = InstantiatedCircuit {
+        
+
+        InstantiatedCircuit {
             input_layers: prover_input_layers,
             fiat_shamir_challenges,
             layers: Layers::new_with_layers(prover_intermediate_layers),
             output_layers: prover_output_layers,
             layer_map: circuit_map.convert_to_layer_map(),
-        };
-
-        instantiated_circuit
+        }
     }
 
     /// Verifies a GKR proof produced by the `prove` method.
@@ -553,10 +552,24 @@ impl<F: Field> GKRCircuitDescription<F> {
 /// their corresponding input layer id (this is a 1:1 correspondence).
 pub fn generate_circuit_description<F: Field>(
     nodes: Vec<NodeEnum<F>>,
-) -> Result<(GKRCircuitDescription<F>, InputNodeMap, impl Fn(HashMap<NodeId, MultilinearExtension<F>>) -> Result<HashMap<LayerId, MultilinearExtension<F>>, GKRError>), GKRError> {
+) -> Result<
+    (
+        GKRCircuitDescription<F>,
+        InputNodeMap,
+        impl Fn(
+            HashMap<NodeId, MultilinearExtension<F>>,
+        ) -> Result<HashMap<LayerId, MultilinearExtension<F>>, GKRError>,
+    ),
+    GKRError,
+> {
     // FIXME(Ben) This doesn't seem well factored.  Pass in the return values of layout() as arguments to this function?  Inline layout here?
-    let (input_layer_nodes, fiat_shamir_challenge_nodes, intermediate_nodes, lookup_nodes, output_nodes) =
-        layout(nodes).unwrap();
+    let (
+        input_layer_nodes,
+        fiat_shamir_challenge_nodes,
+        intermediate_nodes,
+        lookup_nodes,
+        output_nodes,
+    ) = layout(nodes).unwrap();
 
     // Define counters for the layer ids
     let mut input_layer_id = LayerId::Input(0);
@@ -582,10 +595,8 @@ pub fn generate_circuit_description<F: Field>(
                 .unwrap();
             input_layer_node_to_layer_map
                 .add_node_layer_id(input_layer_description.layer_id, input_layer_node.id());
-            input_layer_id_to_input_node_ids.insert(
-                input_layer_description.layer_id,
-                input_layer_node.id(),
-            );
+            input_layer_id_to_input_node_ids
+                .insert(input_layer_description.layer_id(), input_layer_node.id());
             input_layer_id_to_input_shred_ids.insert(
                 input_layer_description.layer_id,
                 input_layer_node.subnodes().unwrap()
@@ -649,9 +660,14 @@ pub fn generate_circuit_description<F: Field>(
             let mut shred_mles_and_prefix_bits = vec![];
             for input_shred_id in input_shred_ids {
                 let mle = input_node_data.get(input_shred_id).unwrap();
-                let (circuit_location, num_vars) = circuit_description_map.0.get(input_shred_id).unwrap();
+                let (circuit_location, num_vars) =
+                    circuit_description_map.0.get(input_shred_id).unwrap();
                 if *num_vars != mle.num_vars() {
-                    return Err(GKRError::InputShredLengthMismatch(input_shred_id.clone(), *num_vars, mle.num_vars()));
+                    return Err(GKRError::InputShredLengthMismatch(
+                        *input_shred_id,
+                        *num_vars,
+                        mle.num_vars(),
+                    ));
                 }
                 shred_mles_and_prefix_bits.push((mle, &circuit_location.prefix_bits))
             }
@@ -661,5 +677,9 @@ pub fn generate_circuit_description<F: Field>(
         Ok(input_layer_data)
     };
 
-    Ok((circuit_description, input_layer_node_to_layer_map, input_builder))
+    Ok((
+        circuit_description,
+        input_layer_node_to_layer_map,
+        input_builder,
+    ))
 }

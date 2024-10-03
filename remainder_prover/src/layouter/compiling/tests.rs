@@ -6,7 +6,7 @@ use crate::{
         component::ComponentSet,
         nodes::{
             circuit_inputs::{
-                InputLayerNodeData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+                InputLayerNode, InputLayerNodeData, InputLayerType, InputShred, InputShredData,
             },
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,

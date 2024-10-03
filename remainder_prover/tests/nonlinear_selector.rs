@@ -6,7 +6,7 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerNodeData, InputLayerNode, InputLayerType},
+            circuit_inputs::{InputLayerNode, InputLayerNodeData, InputLayerType},
             node_enum::NodeEnum,
             sector::Sector,
             CircuitNode, Context,

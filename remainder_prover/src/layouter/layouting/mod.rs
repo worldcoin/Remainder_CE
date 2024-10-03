@@ -341,9 +341,7 @@ type LayouterNodes<F> = (
 /// specific layer size / its constituent nodes's numvars, etc.
 /// Returns a vector of [CompilableNode] in which inputs are first, then intermediates
 /// (topologically sorted), then lookups, then outputs.
-pub fn layout<F: Field>(
-    nodes: Vec<NodeEnum<F>>,
-) -> Result<LayouterNodes<F>, DAGError> {
+pub fn layout<F: Field>(nodes: Vec<NodeEnum<F>>) -> Result<LayouterNodes<F>, DAGError> {
     let ctx = Context::new();
     let mut dag = NodeEnumGroup::new(nodes);
 
