@@ -44,6 +44,7 @@ derive_more = "0.99.17"
 enum_dispatch = "0.3.13"
 base64 = "0.22.0"
 ark-serialize = { version = "0.4", features = ["derive"] } # For serialization
+sha3 = "0.10.8"
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"
