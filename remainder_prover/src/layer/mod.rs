@@ -51,6 +51,9 @@ pub enum LayerError {
     #[error("Transcript Error: {0}")]
     /// Transcript Error
     TranscriptError(#[from] TranscriptReaderError),
+    /// Incorrect number of variable bindings
+    #[error("Layer {0} requires {1} variable bindings, but {2} were provided")]
+    NumVarsMitmatch(LayerId, usize, usize),
 }
 
 /// Errors to do with verifying a layer while working with a type implementing
@@ -217,6 +220,18 @@ pub enum LayerId {
     /// A layer representing values sampled from the verifier via Fiat-Shamir
     FiatShamirChallengeLayer(usize),
 }
+
+/// Implement Display for LayerId, so that we can use it in error messages
+impl std::fmt::Display for LayerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LayerId::Input(id) => write!(f, "Input Layer {}", id),
+            LayerId::Layer(id) => write!(f, "Layer {}", id),
+            LayerId::FiatShamirChallengeLayer(id) => write!(f, "Fiat-Shamir Challenge Layer {}", id),
+        }
+    }
+}
+
 
 impl LayerId {
     /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number
