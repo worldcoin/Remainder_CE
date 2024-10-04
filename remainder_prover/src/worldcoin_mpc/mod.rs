@@ -9,6 +9,9 @@ pub mod components;
 /// Data loading and witness generation
 pub mod data;
 
+/// Parameters for the mpc circuit
+pub mod parameters;
+
 /// Tests
 #[cfg(test)]
 pub mod tests;
