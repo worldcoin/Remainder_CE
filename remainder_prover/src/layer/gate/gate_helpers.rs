@@ -368,12 +368,12 @@ pub fn compute_full_gate_identity<F: Field>(
             acc + gz * (*ux)
         })
     } else {
-        let num_copy_idx = 1 << num_dataparallel_vars;
+        let num_dataparallel_index = 1 << num_dataparallel_vars;
         // If the gate looks like f1(z, x)f2(p2, x) then this is the beta table for the challenges on p2.
         let beta_g2 = BetaValues::new_beta_equality_mle(copy_chals);
         {
             // Sum over everything else, outer sum being over p2, inner sum over x.
-            (0..(1 << num_copy_idx)).fold(F::ZERO, |acc_outer, idx| {
+            (0..(1 << num_dataparallel_index)).fold(F::ZERO, |acc_outer, idx| {
                 let g2 = *beta_g2.bookkeeping_table().get(idx).unwrap_or(&F::ZERO);
                 let inner_sum =
                     nonzero_gates
@@ -383,7 +383,7 @@ pub fn compute_full_gate_identity<F: Field>(
                             let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
                             let ux = mle_ref
                                 .bookkeeping_table()
-                                .get(idx + (x_ind * num_copy_idx))
+                                .get(idx + (x_ind * num_dataparallel_index))
                                 .unwrap_or(&zero);
                             acc + gz * (*ux)
                         });
