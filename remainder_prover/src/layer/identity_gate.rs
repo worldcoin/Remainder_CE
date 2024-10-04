@@ -12,7 +12,7 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    layer::{gate::gate_helpers::bind_round_identity, LayerError, VerificationError},
+    layer::{LayerError, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
@@ -24,8 +24,6 @@ use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
-
-use crate::layer::gate::gate_helpers::compute_sumcheck_message_identity;
 
 use thiserror::Error;
 
@@ -334,48 +332,26 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         claim: Claim<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError> {
-        // initialization, get the first sumcheck message
-        let first_message = self
-            .init_phase_1(claim)
-            .expect("could not evaluate original lhs and rhs");
+        // Initialize the necessary bookkeeping tables needed to compute sumcheck messages.
+        self.init_phase_1(claim).unwrap();
 
-        let phase_1_mle_refs = self
-            .phase_1_mles
-            .as_mut()
-            .ok_or(GateError::Phase1InitError)
-            .unwrap();
-
-        let mut challenges: Vec<F> = vec![];
-        transcript_writer.append_elements("Initial Sumcheck evaluations", &first_message);
         let num_rounds = self.mle_ref.num_free_vars();
 
-        // sumcheck rounds (binding x)
-        let _sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
-            .chain((1..num_rounds).map(|round| {
-                let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-                challenges.push(challenge);
-                // if there are copy bits, we want to start at that index
-                bind_round_identity(round, challenge, phase_1_mle_refs);
-                let phase_1_mle_references: Vec<&DenseMle<F>> = phase_1_mle_refs.iter().collect();
-                let eval =
-                    compute_sumcheck_message_identity(round, &phase_1_mle_references).unwrap();
-                transcript_writer.append_elements("Sumcheck evaluations", &eval);
-                Ok::<_, LayerError>(eval)
-            }))
-            .try_collect()?;
-
-        // final challenge after binding x (left side of the sum)
-        let final_chal = transcript_writer.get_challenge("Final Sumcheck challenge for binding x");
-        challenges.push(final_chal);
-
-        phase_1_mle_refs.iter_mut().for_each(|mle| {
-            mle.fix_variable(num_rounds - 1, final_chal);
-        });
+        for round in 0..num_rounds {
+            // Compute the round's sumcheck message.
+            let message = self.compute_round_sumcheck_message(round)?;
+            // Add to transcript.
+            transcript_writer.append_elements("Sumcheck evaluations", &message);
+            // Sample the challenge to bind the round's MatMult expression to.
+            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            // Bind the Matrix MLEs to this variable.
+            self.bind_round_variable(round, challenge)?;
+        }
 
         // --- Finally, send the claimed values for each of the bound MLE to the verifier ---
         // First, send the claimed value of V_{i + 1}(u)
         let source_mle_reduced = self.phase_1_mles.clone().unwrap()[1].clone();
-        debug_assert!(source_mle_reduced.bookkeeping_table().len() == 1);
+        assert_eq!(source_mle_reduced.num_free_vars(), 0);
         transcript_writer.append(
             "Evaluation of V_{i + 1}(g_2, u)",
             source_mle_reduced.bookkeeping_table()[0],
@@ -636,7 +612,7 @@ impl<F: Field> IdentityGate<F> {
     }
 
     /// initialize necessary bookkeeping tables by traversing the nonzero gates
-    pub fn init_phase_1(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
+    pub fn init_phase_1(&mut self, claim: Claim<F>) -> Result<(), GateError> {
         let beta_g = BetaValues::new_beta_equality_mle(claim.get_point().clone());
         self.set_beta_g(beta_g);
 
@@ -667,21 +643,7 @@ impl<F: Field> IdentityGate<F> {
         index_mle_indices_gate(&mut phase_1, 0);
         self.set_phase_1(phase_1.clone());
 
-        let independent_variable = phase_1
-            .iter()
-            .map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::Indexed(0)))
-            .reduce(|acc, item| acc | item)
-            .ok_or(GateError::EmptyMleList)?;
-        let phase_1_mle_references: Vec<&DenseMle<F>> = phase_1.iter().collect();
-        let evals = evaluate_mle_ref_product_no_beta_table(
-            &phase_1_mle_references,
-            independent_variable,
-            phase_1.len(),
-        )
-        .unwrap();
-
-        let SumcheckEvals(evaluations) = evals;
-        Ok(evaluations)
+        Ok(())
     }
 }
 

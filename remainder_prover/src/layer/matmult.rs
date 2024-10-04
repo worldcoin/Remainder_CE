@@ -196,22 +196,23 @@ impl<F: Field> Layer<F> for MatMult<F> {
         let claim_a = claim_b.split_off(self.matrix_b.cols_num_vars);
         self.pre_processing_step(claim_a, claim_b);
 
-        let mut challenges: Vec<F> = vec![];
         let num_vars_middle = self.num_vars_middle_ab.unwrap(); // TODO: raise error if not
 
         for round in 0..num_vars_middle {
-            let message = compute_sumcheck_message_no_beta_table(
-                &[&self.matrix_a.mle, &self.matrix_b.mle],
-                round,
-                2,
-            )
-            .unwrap();
+            // Compute the round's sumcheck message.
+            let message = self.compute_round_sumcheck_message(round)?;
+            // Add to transcript.
             transcript_writer.append_elements("Sumcheck evaluations", &message);
+            // Sample the challenge to bind the round's MatMult expression to.
             let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-            challenges.push(challenge);
-            self.matrix_a.mle.fix_variable(round, challenge);
-            self.matrix_b.mle.fix_variable(round, challenge);
+            // Bind the Matrix MLEs to this variable.
+            self.bind_round_variable(round, challenge)?;
         }
+
+        // Assert that the MLEs have been fully bound.
+        assert_eq!(self.matrix_a.mle.num_free_vars(), 0);
+        assert_eq!(self.matrix_b.mle.num_free_vars(), 0);
+
         self.append_leaf_mles_to_transcript(transcript_writer);
         Ok(())
     }
