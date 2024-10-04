@@ -5,14 +5,13 @@ use itertools::{repeat_n, Itertools};
 use remainder_shared_types::Field;
 
 use crate::{
-    expression::circuit_expr::MleDescription,
     layer::{
         gate::{BinaryOperation, GateLayerDescription},
         layer_enum::LayerDescriptionEnum,
         LayerId,
     },
     layouter::layouting::{CircuitLocation, DAGError},
-    mle::MleIndex,
+    mle::{mle_description::MleDescription, MleIndex},
 };
 
 use super::{CircuitNode, CompilableNode, Context, NodeId};

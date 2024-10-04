@@ -1,11 +1,12 @@
 //! Nodes that implement LogUp.
 
 use crate::expression::abstract_expr::AbstractExpr;
-use crate::expression::circuit_expr::{ExprDescription, MleDescription};
+use crate::expression::circuit_expr::ExprDescription;
 use crate::layer::layer_enum::LayerDescriptionEnum;
 use crate::layer::regular_layer::RegularLayerDescription;
 use crate::layer::LayerId;
 use crate::layouter::layouting::{CircuitDescriptionMap, DAGError};
+use crate::mle::mle_description::MleDescription;
 use crate::mle::MleIndex;
 use crate::output_layer::mle_output_layer::MleOutputLayerDescription;
 use crate::utils::mle::get_total_mle_indices;
@@ -160,7 +161,7 @@ impl LookupTable {
                 .collect(),
         );
         let expr = CE::sum(
-            fiat_shamir_challenge_mle.expression(),
+            CE::from_mle_desc(fiat_shamir_challenge_mle),
             CE::negated(constrained_expr.build_circuit_expr(circuit_description_map)?),
         );
         let expr_num_vars = expr.num_vars();
@@ -209,7 +210,7 @@ impl LookupTable {
         if self.constraints.len() > 1 {
             // Insert an extra layer that aggregates the multiplicities
             let expr = self.constraints.iter().skip(1).fold(
-                rhs_numerator_desc.expression(),
+                CE::from_mle_desc(rhs_numerator_desc),
                 |acc, constraint| {
                     let (multiplicities_location, multiplicities_num_vars) =
                         &circuit_description_map.0[&constraint.multiplicities_node_id];
@@ -220,7 +221,7 @@ impl LookupTable {
                             *multiplicities_num_vars,
                         ),
                     );
-                    acc + mult_constraint_mle_desc.expression()
+                    acc + CE::from_mle_desc(mult_constraint_mle_desc)
                 },
             );
             let layer_id = intermediate_layer_id.get_and_inc();
@@ -263,7 +264,8 @@ impl LookupTable {
             &get_total_mle_indices(&table_loc.prefix_bits, table_num_vars),
         );
 
-        let expr = fiat_shamir_challenge_circuit_mle.expression() - table_circuit_mle.expression();
+        let expr = CE::from_mle_desc(fiat_shamir_challenge_circuit_mle)
+            - CE::from_mle_desc(table_circuit_mle);
         let r_minus_table_num_vars = expr.num_vars();
         let layer_id = intermediate_layer_id.get_and_inc();
         let layer = RegularLayerDescription::new_raw(layer_id, expr);
@@ -350,7 +352,7 @@ impl CircuitNode for LookupTable {
 fn extract_prefix_num_free_bits<F: Field>(mle: &MleDescription<F>) -> (Vec<MleIndex<F>>, usize) {
     let mut num_free_bits = 0;
     let prefix_bits = mle
-        .mle_indices()
+        .var_indices()
         .iter()
         .filter_map(|mle_index| match mle_index {
             MleIndex::Fixed(_) => Some(mle_index.clone()),
@@ -428,7 +430,7 @@ fn build_fractional_sum<F: Field>(
                 + CE::products(vec![numerators.1.clone(), denominators.0.clone()])
         } else {
             // If there is no numerator CircuitMLE,
-            denominators.1.clone().expression() + denominators.0.clone().expression()
+            CE::from_mle_desc(denominators.1.clone()) + CE::from_mle_desc(denominators.0.clone())
         };
 
         // Calculate the new denominator

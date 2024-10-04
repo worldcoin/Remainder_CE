@@ -14,14 +14,13 @@ use remainder::{
         },
     },
     mle::{dense::DenseMle, Mle},
-    prover::helpers::test_circuit,
+    prover::helpers::test_circuit, utils::mle::get_dummy_random_mle_vec,
 };
 use remainder_shared_types::{Field, Fr};
 use utils::{
     get_input_shred_and_data_from_vec, DifferenceBuilderComponent, ProductScaledBuilderComponent,
 };
 
-use crate::utils::get_dummy_random_mle_vec;
 pub mod utils;
 
 /// A circuit which does the following:

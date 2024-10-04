@@ -18,7 +18,7 @@
 //!   MLE with the prover-claimed value for the evaluation of that MLE at the
 //!   bound sumcheck challenge points.
 
-use crate::{layer::LayerId, mle::MleIndex};
+use crate::mle::{verifier_mle::VerifierMle, MleIndex};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -31,71 +31,6 @@ use super::{
     expr_errors::ExpressionError,
     generic_expr::{Expression, ExpressionNode, ExpressionType},
 };
-
-/// A version of [crate::mle::dense::DenseMle] used by the Verifier.
-/// A [VerifierMle] stores a fully bound MLE along with its evaluation.
-/// It is used to represent the leaves of an `Expression<F, VerifierExpr>`.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(bound = "F: Field")]
-pub struct VerifierMle<F: Field> {
-    /// Layer whose data this MLE is a subset of.
-    layer_id: LayerId,
-
-    /// A list of bound indices.
-    var_indices: Vec<MleIndex<F>>,
-
-    /// The evaluation of this MLE when variables are bound according
-    /// `var_indices`.
-    eval: F,
-}
-
-impl<F: Field> VerifierMle<F> {
-    /// Constructor for the [VerifierMle] using layer_id and the
-    /// MLE indices that will go into this MLE. Additionally includes
-    /// the eval, which is the evaluation of the fully bound MLE.
-    pub fn new(layer_id: LayerId, var_indices: Vec<MleIndex<F>>, eval: F) -> Self {
-        Self {
-            layer_id,
-            var_indices,
-            eval,
-        }
-    }
-
-    /// Returns the layer_id of this MLE.
-    pub fn layer_id(&self) -> LayerId {
-        self.layer_id
-    }
-
-    /// Returns the num_vars of this MLE.
-    pub fn num_vars(&self) -> usize {
-        self.var_indices.len()
-    }
-
-    /// Returns the MLE indices of this MLE.
-    pub fn mle_indices(&self) -> &[MleIndex<F>] {
-        &self.var_indices
-    }
-
-    /// Returns the fully bound value of this MLE.
-    pub fn value(&self) -> F {
-        self.eval
-    }
-
-    /// Returns the evaluation challenges for a fully-bound MLE.
-    ///
-    /// Note that this function panics if a particular challenge is neither
-    /// fixed nor bound!
-    pub fn get_bound_point(&self) -> Vec<F> {
-        self.mle_indices()
-            .iter()
-            .map(|index| match index {
-                MleIndex::Bound(chal, _) => *chal,
-                MleIndex::Fixed(chal) => F::from(*chal as u64),
-                _ => panic!("MLE index not bound"),
-            })
-            .collect()
-    }
-}
 
 /// Placeholder type for defining `Expression<F, VerifierExpr>`, the type used
 /// for representing expressions for the Verifier.
@@ -135,15 +70,16 @@ impl<F: Field> Expression<F, VerifierExpr> {
             }
             Err(ExpressionError::SelectorBitNotBoundError)
         };
-        let mle_eval =
-            |verifier_mle: &VerifierMle<F>| -> Result<F, ExpressionError> { Ok(verifier_mle.eval) };
+        let mle_eval = |verifier_mle: &VerifierMle<F>| -> Result<F, ExpressionError> {
+            Ok(verifier_mle.value())
+        };
         let negated = |val: Result<F, ExpressionError>| Ok((val?).neg());
         let sum =
             |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
         let product = |verifier_mles: &[VerifierMle<F>]| -> Result<F, ExpressionError> {
             verifier_mles
                 .iter()
-                .try_fold(F::ONE, |acc, verifier_mle| Ok(acc * verifier_mle.eval))
+                .try_fold(F::ONE, |acc, verifier_mle| Ok(acc * verifier_mle.value()))
         };
         let scaled = |val: Result<F, ExpressionError>, scalar: F| Ok(val? * scalar);
 
@@ -273,7 +209,7 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
                     let mut product_indices_counts: HashMap<MleIndex<F>, usize> = HashMap::new();
 
                     verifier_mles.iter().for_each(|verifier_mle| {
-                        verifier_mle.var_indices.iter().for_each(|mle_index| {
+                        verifier_mle.var_indices().iter().for_each(|mle_index| {
                             let curr_count = {
                                 if product_indices_counts.contains_key(mle_index) {
                                     product_indices_counts.get(mle_index).unwrap()

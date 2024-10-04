@@ -197,7 +197,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierRegularLayer<F> {
             match exp {
                 ExpressionNode::Mle(verifier_mle) => {
                     let fixed_mle_indices = verifier_mle
-                        .mle_indices()
+                        .var_indices()
                         .iter()
                         .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
                         .collect::<Result<Vec<_>, _>>()?;
@@ -222,7 +222,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierRegularLayer<F> {
                 ExpressionNode::Product(verifier_mle_vec) => {
                     for verifier_mle in verifier_mle_vec {
                         let fixed_mle_indices = verifier_mle
-                            .mle_indices()
+                            .var_indices()
                             .iter()
                             .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
                             .collect::<Result<Vec<_>, _>>()?;

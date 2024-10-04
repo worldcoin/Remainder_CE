@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 use self::layers::Layers;
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::claims::Claim;
-use crate::expression::circuit_expr::{filter_bookkeeping_table, MleDescription};
+use crate::expression::circuit_expr::filter_bookkeeping_table;
 use crate::input_layer::enum_input_layer::{
     InputLayerDescriptionEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
 };
@@ -32,6 +32,7 @@ use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, NodeId};
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
+use crate::mle::mle_description::MleDescription;
 use crate::output_layer::mle_output_layer::{MleOutputLayer, MleOutputLayerDescription};
 use crate::output_layer::{OutputLayerTrait, OutputLayerDescription};
 use crate::utils::mle::build_composite_mle;
@@ -407,7 +408,6 @@ impl<F: Field> GKRCircuitDescription<F> {
                     output_layer_description.into_prover_output_layer(&circuit_map);
                 prover_output_layers.push(prover_output_layer)
             });
-        
 
         InstantiatedCircuit {
             input_layers: prover_input_layers,

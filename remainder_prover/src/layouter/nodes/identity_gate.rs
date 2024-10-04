@@ -4,11 +4,11 @@ use ark_std::log2;
 use remainder_shared_types::Field;
 
 use crate::{
-    expression::circuit_expr::MleDescription,
     layer::{
         identity_gate::IdentityGateLayerDescription, layer_enum::LayerDescriptionEnum, LayerId,
     },
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
+    mle::mle_description::MleDescription,
     utils::mle::get_total_mle_indices,
 };
 

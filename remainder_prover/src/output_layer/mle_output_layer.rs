@@ -14,10 +14,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::{wlx_eval::ClaimMle, ClaimError, YieldClaim},
-    expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{LayerError, LayerId},
     layouter::layouting::CircuitMap,
-    mle::{dense::DenseMle, mle_enum::MleEnum, zero::ZeroMle, Mle, MleIndex},
+    mle::{
+        dense::DenseMle, mle_description::MleDescription, mle_enum::MleEnum,
+        verifier_mle::VerifierMle, zero::ZeroMle, Mle, MleIndex,
+    },
 };
 
 use super::{
@@ -209,7 +211,7 @@ impl<F: Field> OutputLayerDescriptionTrait<F> for MleOutputLayerDescription<F> {
         debug_assert_eq!(mle.num_free_vars(), 0);
 
         let verifier_output_layer =
-            VerifierMleOutputLayer::new_zero(self.mle.layer_id(), mle.mle_indices(), F::ZERO);
+            VerifierMleOutputLayer::new_zero(self.mle.layer_id(), mle.var_indices(), F::ZERO);
 
         Ok(verifier_output_layer)
     }
@@ -299,7 +301,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
 
         let prefix_bits: Vec<MleIndex<F>> = self
             .mle
-            .mle_indices()
+            .var_indices()
             .iter()
             .filter(|index| matches!(index, MleIndex::Fixed(_bit)))
             .cloned()
@@ -307,7 +309,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
 
         let claim_point: Vec<F> = self
             .mle
-            .mle_indices()
+            .var_indices()
             .iter()
             .map(|index| {
                 index
@@ -327,7 +329,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
         let mut claim_mle = MleEnum::Zero(ZeroMle::new(num_free_vars, Some(prefix_bits), layer_id));
         claim_mle.index_mle_indices(0);
 
-        for mle_index in self.mle.mle_indices().iter() {
+        for mle_index in self.mle.var_indices().iter() {
             if let MleIndex::Bound(val, idx) = mle_index {
                 claim_mle.fix_variable(*idx, *val);
             }

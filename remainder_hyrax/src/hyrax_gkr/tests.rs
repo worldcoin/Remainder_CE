@@ -10,7 +10,7 @@ use itertools::{repeat_n, Itertools};
 use rand::rngs::ThreadRng;
 use rand::RngCore;
 use remainder::expression::abstract_expr::ExprBuilder;
-use remainder::expression::circuit_expr::{ExprDescription, MleDescription};
+use remainder::expression::circuit_expr::ExprDescription;
 use remainder::expression::generic_expr::Expression;
 use remainder::expression::prover_expr::ProverExpr;
 use remainder::layer::identity_gate::{IdentityGate, IdentityGateLayerDescription};
@@ -30,6 +30,7 @@ use remainder::layouter::nodes::sector::Sector;
 use remainder::layouter::nodes::{CircuitNode, Context};
 use remainder::mle::dense::DenseMle;
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
+use remainder::mle::mle_description::MleDescription;
 use remainder::mle::{Mle, MleIndex};
 use remainder_shared_types::transcript::ec_transcript::{
     ECProverTranscript, ECTranscriptReader, ECTranscriptWriter, ECVerifierTranscript,
@@ -92,7 +93,7 @@ fn degree_one_regular_hyrax_layer_test() {
         LayerId::Input(0),
         &repeat_n(MleIndex::Free, NUM_VARS).collect_vec(),
     );
-    let circuit_expr = circuit_mle_1.expression();
+    let circuit_expr = Expression::from_mle_desc(circuit_mle_1);
     let mut circuit_layer_enum = LayerDescriptionEnum::Regular(RegularLayerDescription::new_raw(
         LayerId::Layer(0),
         circuit_expr,
@@ -473,8 +474,8 @@ fn selector_only_test() {
         LayerId::Input(0),
         &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
-    let circuit_expression_left = circuit_mle_left.expression();
-    let circuit_expression_right = circuit_mle_right.expression();
+    let circuit_expression_left = Expression::from_mle_desc(circuit_mle_left);
+    let circuit_expression_right = Expression::from_mle_desc(circuit_mle_right);
     let selector_circuit_expression = circuit_expression_left.select(circuit_expression_right);
     let expression_left = mle_left.expression();
     let expression_right = mle_right.expression();
@@ -589,7 +590,7 @@ fn degree_two_selector_regular_hyrax_layer_test() {
         &repeat_n(MleIndex::Free, 2).collect_vec(),
     );
     let expression_left = mle_left.expression();
-    let circuit_expression_left = circuit_mle_left.expression();
+    let circuit_expression_left = Expression::from_mle_desc(circuit_mle_left);
     let expression_right = Expression::<Fr, ProverExpr>::products(vec![mle_right_1, mle_right_2]);
     let circuit_expression_right =
         Expression::<Fr, ExprDescription>::products(vec![circuit_mle_right_1, circuit_mle_right_2]);
