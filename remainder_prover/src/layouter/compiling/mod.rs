@@ -115,15 +115,16 @@ impl<
 
         let inputs = input_builder(shred_id_to_data).unwrap();
 
-        // Add the inputs to transcript.
-        // In the future flow, the inputs will be added to the transcript in the calling context.
-        circuit_description
-            .input_layers
-            .iter()
-            .for_each(|input_layer| {
-                let mle = inputs.get(&input_layer.layer_id).unwrap();
-                transcript_writer.append_elements("Input values", mle.get_evals_vector());
-            });
+        // FIXME(Ben)
+        // // Add the inputs to transcript.
+        // // In the future flow, the inputs will be added to the transcript in the calling context.
+        // circuit_description
+        //     .input_layers
+        //     .iter()
+        //     .for_each(|input_layer| {
+        //         let mle = inputs.get(&input_layer.layer_id).unwrap();
+        //         transcript_writer.append_elements("Input values", mle.get_evals_vector());
+        //     });
 
         let mut challenge_sampler =
             |size| transcript_writer.get_challenges("Verifier challenges", size);
