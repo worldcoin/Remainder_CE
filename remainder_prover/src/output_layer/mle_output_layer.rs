@@ -23,20 +23,22 @@ use crate::{
 };
 
 use super::{
-    OutputLayerTrait, OutputLayerDescriptionTrait, OutputLayerError, VerifierOutputLayer,
+    OutputLayerDescriptionTrait, OutputLayerError, VerifierOutputLayer,
     VerifierOutputLayerError,
 };
 
-/// The Prover's default type of an [crate::output_layer::OutputLayer].
+/// Output layers are "virtual layers" in the sense that they are not assigned a
+/// separate [LayerId]. Instead they are associated with the ID of an existing
+/// intermediate/input layer on which they generate claims for.
 /// Contains an [MleEnum] which can be either a [DenseMle] or a [ZeroMle].
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(bound = "F: Field")]
-pub struct MleOutputLayer<F: Field> {
+pub struct OutputLayer<F: Field> {
     mle: MleEnum<F>,
 }
 
 /// Required for output layer shenanigans within `layout`
-impl<F: Field> From<DenseMle<F>> for MleOutputLayer<F> {
+impl<F: Field> From<DenseMle<F>> for OutputLayer<F> {
     fn from(value: DenseMle<F>) -> Self {
         Self {
             mle: MleEnum::Dense(value),
@@ -44,7 +46,7 @@ impl<F: Field> From<DenseMle<F>> for MleOutputLayer<F> {
     }
 }
 
-impl<F: Field> From<ZeroMle<F>> for MleOutputLayer<F> {
+impl<F: Field> From<ZeroMle<F>> for OutputLayer<F> {
     fn from(value: ZeroMle<F>) -> Self {
         Self {
             mle: MleEnum::Zero(value),
@@ -52,19 +54,13 @@ impl<F: Field> From<ZeroMle<F>> for MleOutputLayer<F> {
     }
 }
 
-impl<F: Field> MleOutputLayer<F> {
-    /// Returns the MLE contained within. For PROVER use only!
+impl<F: Field> OutputLayer<F> {
+    /// Returns the MLE contained within.
     pub fn get_mle(&self) -> &MleEnum<F> {
         &self.mle
     }
 
-    /// Generate a new [MleOutputLayer] from a [DenseMle].
-    pub fn new_dense(_dense_mle: DenseMle<F>) -> Self {
-        // We do not currently allow `DenseMle`s in the output.
-        unimplemented!();
-    }
-
-    /// Generate a new [MleOutputLayer] from a [ZeroMle].
+    /// Generate a new [OutputLayer] from a [ZeroMle].
     pub fn new_zero(zero_mle: ZeroMle<F>) -> Self {
         Self {
             mle: MleEnum::Zero(zero_mle),
@@ -85,23 +81,29 @@ impl<F: Field> MleOutputLayer<F> {
             }
         }
     }
-}
 
-impl<F: Field> OutputLayerTrait<F> for MleOutputLayer<F> {
-    fn layer_id(&self) -> LayerId {
+    /// Returns the [LayerId] of the intermediate/input layer that this output
+    /// layer is associated with.
+    pub fn layer_id(&self) -> LayerId {
         self.mle.layer_id()
     }
 
-    fn num_free_vars(&self) -> usize {
+    /// Number of free variables.
+    pub fn num_free_vars(&self) -> usize {
         self.mle.num_free_vars()
     }
 
-    fn fix_layer(
+    /// Fix the variables of this output layer to random challenges sampled
+    /// from the transcript.
+    /// Expects `self.num_free_vars()` challenges.
+    pub fn fix_layer(
         &mut self,
         challenges: &[F],
     ) -> Result<(), crate::layer::LayerError> {
         let bits = self.mle.index_mle_indices(0);
-        assert_eq!(bits, challenges.len());
+        if bits != challenges.len() {
+            return Err(LayerError::NumVarsMitmatch(self.mle.layer_id(), bits, challenges.len()));
+        }
         (0..bits).into_iter().zip(challenges.iter()).for_each(|(bit, challenge)| {
             self.mle.fix_variable(bit, *challenge);
         });
@@ -109,9 +111,36 @@ impl<F: Field> OutputLayerTrait<F> for MleOutputLayer<F> {
         Ok(())
     }
 
-    fn append_mle_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
-        transcript_writer.append_elements("Output Layer MLE evals", self.mle.bookkeeping_table());
+    // FIXME(Ben) surely this function could just return a zero claim?
+    /// Extract a claim on this output layer by extracting the bindings from the fixed variables.
+    pub fn get_claim(
+        &mut self,
+    ) -> Result<ClaimMle<F>, crate::layer::LayerError> {
+        if self.mle.bookkeeping_table().len() != 1 {
+            return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
+        }
+
+        let mle_indices: Result<Vec<F>, _> = self
+            .mle
+            .mle_indices()
+            .iter()
+            .map(|index| {
+                index
+                    .val()
+                    .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
+            })
+            .collect();
+
+        let claim_value = self.mle.bookkeeping_table()[0];
+
+        Ok(ClaimMle::new(
+            mle_indices?,
+            claim_value,
+            None,
+            Some(self.mle.layer_id()),
+        ))
     }
+
 }
 
 /// The circuit description type for the defaul Output Layer consisting of an
@@ -155,7 +184,7 @@ impl<F: Field> MleOutputLayerDescription<F> {
     }
 
     /// Convert this into the prover view of an output layer, using the [CircuitMap].
-    pub fn into_prover_output_layer(&self, circuit_map: &CircuitMap<F>) -> MleOutputLayer<F> {
+    pub fn into_prover_output_layer(&self, circuit_map: &CircuitMap<F>) -> OutputLayer<F> {
         let output_mle = circuit_map.get_data_from_circuit_mle(&self.mle).unwrap();
         let prefix_bits = self.mle.prefix_bits();
         let prefix_bits_mle_index = prefix_bits
@@ -264,7 +293,7 @@ impl<F: Field> VerifierOutputLayer<F> for VerifierMleOutputLayer<F> {
     }
 }
 
-impl<F: Field> YieldClaim<ClaimMle<F>> for MleOutputLayer<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for OutputLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.mle.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));

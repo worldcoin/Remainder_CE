@@ -30,7 +30,8 @@ use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::LayerEnum;
 use crate::layer::Layer;
 use crate::mle::evals::MultilinearExtension;
-use crate::output_layer::OutputLayer;
+use crate::mle::mle_enum::MleEnum;
+use crate::mle::Mle;
 use crate::prover::{
     generate_circuit_description, GKRCircuitDescription, GKRError, InstantiatedCircuit,
 };
@@ -120,7 +121,7 @@ impl<
             .input_layers
             .iter()
             .for_each(|input_layer| {
-                let mle = inputs.get(&input_layer.layer_id()).unwrap();
+                let mle = inputs.get(&input_layer.layer_id).unwrap();
                 transcript_writer.append_elements("Input values", mle.get_evals_vector());
             });
 
@@ -168,10 +169,12 @@ impl<
             let layer_id = output.layer_id();
             info!("Output Layer: {:?}", layer_id);
 
-            output.append_mle_to_transcript(&mut transcript_writer);
+            // FIXME(Ben) we shouldn't need to append output values to transcript if they are always zero
+            transcript_writer.append_elements("Output values", output.get_mle().bookkeeping_table());
 
+            let challenges = transcript_writer.get_challenges("output layer binding", output.num_free_vars());
             output
-                .fix_layer(&mut transcript_writer)
+                .fix_layer(&challenges)
                 .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
             // Add the claim to either the set of current claims we're proving

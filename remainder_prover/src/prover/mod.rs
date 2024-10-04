@@ -33,8 +33,9 @@ use crate::layouter::nodes::{CircuitNode, NodeId};
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
-use crate::output_layer::mle_output_layer::{MleOutputLayer, MleOutputLayerDescription};
-use crate::output_layer::{OutputLayerTrait, OutputLayerDescription};
+use crate::mle::Mle;
+use crate::output_layer::mle_output_layer::{OutputLayer, MleOutputLayerDescription};
+use crate::output_layer::OutputLayerDescriptionTrait;
 use crate::utils::mle::build_composite_mle;
 use crate::{
     claims::ClaimAggregator,
@@ -112,12 +113,12 @@ pub struct InstantiatedCircuit<F: Field> {
     /// The intermediate layers of the circuit
     pub layers: Layers<F, LayerEnum<F>>,
     /// The output layers of the circuit
-    pub output_layers: Vec<MleOutputLayer<F>>,
+    pub output_layers: Vec<OutputLayer<F>>,
     /// The input layers of the circuit
     pub input_layers: Vec<InputLayer<F>>,
     /// The verifier challenges
     pub fiat_shamir_challenges: Vec<FiatShamirChallenge<F>>,
-    /// FIXME(vishady) what actually is this :)
+    /// Maps LayerId to the MLE of its values
     pub layer_map: HashMap<LayerId, Vec<DenseMle<F>>>,
 }
 
@@ -156,7 +157,7 @@ pub fn prove_circuit<F: Field>(
         let layer_id = output.layer_id();
         info!("Output Layer: {:?}", layer_id);
 
-        output.append_mle_to_transcript(&mut transcript_writer);
+        transcript_writer.append_elements("output layer", output.get_mle().bookkeeping_table());
 
         let challenges = transcript_writer.get_challenges("output layer binding", output.num_free_vars());
         output
@@ -400,7 +401,7 @@ impl<F: Field> GKRCircuitDescription<F> {
             });
 
         // Step 2b: Concretize the output layer descriptions.
-        let mut prover_output_layers: Vec<MleOutputLayer<F>> = Vec::new();
+        let mut prover_output_layers: Vec<OutputLayer<F>> = Vec::new();
         output_layer_descriptions
             .iter()
             .for_each(|output_layer_description| {
@@ -596,7 +597,7 @@ pub fn generate_circuit_description<F: Field>(
             input_layer_node_to_layer_map
                 .add_node_layer_id(input_layer_description.layer_id, input_layer_node.id());
             input_layer_id_to_input_node_ids
-                .insert(input_layer_description.layer_id(), input_layer_node.id());
+                .insert(input_layer_description.layer_id, input_layer_node.id());
             input_layer_id_to_input_shred_ids.insert(
                 input_layer_description.layer_id,
                 input_layer_node.subnodes().unwrap()
