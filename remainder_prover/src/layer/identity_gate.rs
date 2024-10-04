@@ -12,12 +12,11 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    expression::verifier_expr::VerifierMle,
     layer::{gate::gate_helpers::bind_round_identity, LayerError, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
-        mle_description::MleDescription, Mle, MleIndex,
+        mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
     },
     sumcheck::*,
 };
@@ -563,7 +562,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierIdentityGateLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         // Grab the claim on the left side.
         // TODO!(ryancao): Do error handling here!
-        let source_vars = self.source_mle.mle_indices();
+        let source_vars = self.source_mle.var_indices();
         let source_point = source_vars
             .iter()
             .map(|idx| match idx {

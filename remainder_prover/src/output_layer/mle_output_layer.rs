@@ -14,12 +14,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::{wlx_eval::ClaimMle, ClaimError, YieldClaim},
-    expression::verifier_expr::VerifierMle,
     layer::{LayerError, LayerId},
     layouter::layouting::CircuitMap,
     mle::{
-        dense::DenseMle, mle_description::MleDescription, mle_enum::MleEnum, zero::ZeroMle, Mle,
-        MleIndex,
+        dense::DenseMle, mle_description::MleDescription, mle_enum::MleEnum,
+        verifier_mle::VerifierMle, zero::ZeroMle, Mle, MleIndex,
     },
 };
 
@@ -302,7 +301,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
 
         let prefix_bits: Vec<MleIndex<F>> = self
             .mle
-            .mle_indices()
+            .var_indices()
             .iter()
             .filter(|index| matches!(index, MleIndex::Fixed(_bit)))
             .cloned()
@@ -310,7 +309,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
 
         let claim_point: Vec<F> = self
             .mle
-            .mle_indices()
+            .var_indices()
             .iter()
             .map(|index| {
                 index
@@ -330,7 +329,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
         let mut claim_mle = MleEnum::Zero(ZeroMle::new(num_free_vars, Some(prefix_bits), layer_id));
         claim_mle.index_mle_indices(0);
 
-        for mle_index in self.mle.mle_indices().iter() {
+        for mle_index in self.mle.var_indices().iter() {
             if let MleIndex::Bound(val, idx) = mle_index {
                 claim_mle.fix_variable(*idx, *val);
             }

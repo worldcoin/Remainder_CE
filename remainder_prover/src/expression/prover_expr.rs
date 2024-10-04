@@ -10,9 +10,12 @@
 use super::{
     expr_errors::ExpressionError,
     generic_expr::{Expression, ExpressionNode, ExpressionType},
-    verifier_expr::{VerifierExpr, VerifierMle},
+    verifier_expr::VerifierExpr,
 };
-use crate::{layer::product::PostSumcheckLayer, mle::Mle};
+use crate::{
+    layer::product::PostSumcheckLayer,
+    mle::{verifier_mle::VerifierMle, Mle},
+};
 use crate::{
     layer::product::Product,
     mle::{betavalues::BetaValues, dense::DenseMle, MleIndex},

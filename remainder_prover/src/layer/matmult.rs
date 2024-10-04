@@ -23,12 +23,11 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    expression::verifier_expr::VerifierMle,
     layer::VerificationError,
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
-        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, Mle,
-        MleIndex,
+        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription,
+        verifier_mle::VerifierMle, Mle, MleIndex,
     },
     sumcheck::evaluate_at_a_point,
 };
@@ -634,7 +633,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
             .map(|matrix| {
                 let matrix_fixed_indices = matrix
                     .mle
-                    .mle_indices()
+                    .var_indices()
                     .iter()
                     .map(|index| {
                         index

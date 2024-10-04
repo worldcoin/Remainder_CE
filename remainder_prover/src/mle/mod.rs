@@ -36,6 +36,10 @@ pub mod bundled_input_mle;
 /// "free vars" but not the actual evaluations of the function over the hypercube.
 pub mod mle_description;
 
+/// Defines [VerifierMle], i.e. the verifier's view of a "fully-bound" MLE with
+/// a prover-claimed value.
+pub mod verifier_mle;
+
 // TODO!(Maybe this type needs PartialEq, could be easily implemented with a
 // random id...).
 /// The trait that defines how a semantic Type (T) and a MultiLinearEvaluation

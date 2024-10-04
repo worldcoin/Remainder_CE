@@ -21,12 +21,11 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    expression::verifier_expr::VerifierMle,
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
-        mle_description::MleDescription, Mle, MleIndex,
+        mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
     },
     prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
@@ -695,7 +694,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         // Grab the claim on the left side.
         // TODO!(ryancao): Do error handling here!
-        let lhs_vars = self.lhs_mle.mle_indices();
+        let lhs_vars = self.lhs_mle.var_indices();
         let lhs_point = lhs_vars
             .iter()
             .map(|idx| match idx {
@@ -721,7 +720,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
 
         // Grab the claim on the right side.
         // TODO!(ryancao): Do error handling here!
-        let rhs_vars: &[MleIndex<F>] = self.rhs_mle.mle_indices();
+        let rhs_vars: &[MleIndex<F>] = self.rhs_mle.var_indices();
         let rhs_point = rhs_vars
             .iter()
             .map(|idx| match idx {

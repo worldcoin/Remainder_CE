@@ -8,7 +8,10 @@ use crate::{
         product::{PostSumcheckLayer, Product},
     },
     layouter::layouting::CircuitMap,
-    mle::{evals::MultilinearExtension, mle_description::MleDescription, MleIndex},
+    mle::{
+        evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle,
+        MleIndex,
+    },
 };
 use ark_std::log2;
 use itertools::Itertools;
@@ -26,7 +29,7 @@ use super::{
     expr_errors::ExpressionError,
     generic_expr::{Expression, ExpressionNode, ExpressionType},
     prover_expr::ProverExpr,
-    verifier_expr::{VerifierExpr, VerifierMle},
+    verifier_expr::VerifierExpr,
 };
 
 /// Type for defining [Expression<F, ExprDescription>], the type used
