@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use rand::Rng;
 use remainder::mle::{Mle, MleIndex};
-use remainder::output_layer::mle_output_layer::{OutputLayer, MleOutputLayerDescription};
+use remainder::output_layer::mle_output_layer::{OutputLayer, OutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
@@ -62,7 +62,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     /// challenges that it ITSELF draws from the transcript.
     pub fn verify(
         proof: &HyraxOutputLayerProof<C>,
-        layer_desc: &MleOutputLayerDescription<C::Scalar>,
+        layer_desc: &OutputLayerDescription<C::Scalar>,
         transcript: &mut impl ECVerifierTranscript<C>,
     ) -> HyraxClaim<C::Scalar, C> {
         // Get the first set of challenges needed for the output layer.
