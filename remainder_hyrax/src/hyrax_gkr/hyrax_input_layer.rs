@@ -1,4 +1,4 @@
-use ark_std::{cfg_into_iter, log2};
+use ark_std::{cfg_into_iter, end_timer, log2, start_timer};
 use itertools::Itertools;
 use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -294,8 +294,10 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
 
         let blinding_factor_eval = C::Scalar::random(&mut prng);
 
+        let mle_coeffs_vec = Self::to_mle_coeffs_vec(mle, maybe_hyrax_input_dtype);
+
         Self {
-            mle: Self::to_mle_coeffs_vec(mle, maybe_hyrax_input_dtype),
+            mle: mle_coeffs_vec,
             layer_id,
             log_num_cols,
             committer: committer.clone(),

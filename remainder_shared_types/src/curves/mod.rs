@@ -150,7 +150,6 @@ impl PrimeOrderCurve for Bn256 {
     }
 
     fn projective_coordinates(&self) -> (Self::Base, Self::Base, Self::Base) {
-        // See NB in affine_coordinates
         if let Some((x, y)) = self.affine_coordinates() {
             let z = Self::Base::one();
             (x, y, z)
@@ -161,11 +160,6 @@ impl PrimeOrderCurve for Bn256 {
     }
 
     fn affine_coordinates(&self) -> Option<(Self::Base, Self::Base)> {
-        // NB: In version v2023_04_06 of halo2curves that Remainder is currently using,
-        // the x,y,z members of the Bn256 struct are JACOBIAN coordinates, c.f.
-        // [formulae for Jacobian coords](https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html).
-        // In more recent versions, the x,y,z are PROJECTIVE coordinates.  So when we upgrade to a more
-        // recent version of halo2curves, we will need to change this implementation.
         if self.z == Self::Base::zero() {
             None
         } else {

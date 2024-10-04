@@ -128,6 +128,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
     ) -> Vec<C> {
         // checking that the matrix row size and the matrix column size are both powers of two! otherwise hyrax does not work
         assert!(data.len().is_power_of_two());
+        dbg!(&log_n_cols);
 
         // this appropriately computes the commitments to the coefficients matrix based on its internal type. if it is a u8
         // or an i8, we can use precomputed bit decompositions in order to speed up the pedersen commitments!!
