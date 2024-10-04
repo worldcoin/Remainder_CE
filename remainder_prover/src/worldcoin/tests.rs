@@ -34,6 +34,7 @@ fn test_trivial_wiring_2x2_circuit_data() {
 }
 
 // FIXME(Ben) remove this once we no longer use build_circuit
+// this is basically now just a test of LayouterCircuit!
 #[test]
 fn test_trivial_wiring_2x2_circuit_data_old_style() {
     // rewirings for the 2x2 identity matrix

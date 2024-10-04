@@ -110,7 +110,7 @@ impl<
                 });
         });
 
-        let (circuit_description, _, input_builder) =
+        let (circuit_description, input_builder) =
             generate_circuit_description(component.yield_nodes()).unwrap();
 
         let inputs = input_builder(shred_id_to_data).unwrap();

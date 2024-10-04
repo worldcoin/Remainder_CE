@@ -1,35 +1,22 @@
-use std::collections::hash_map::Entry;
-use std::collections::HashSet;
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
 use ark_std::{end_timer, start_timer};
 use hyrax_circuit_inputs::HyraxInputLayerData;
-use hyrax_input_layer::{
-    verify_claim, HyraxInputLayer, HyraxInputLayerEnum, HyraxInputLayerProof,
-    HyraxProverCommitmentEnum,
-};
+use hyrax_input_layer::
+    HyraxInputLayerProof
+;
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
 use rand::Rng;
-use remainder::claims;
-use remainder::expression::circuit_expr::filter_bookkeeping_table;
-use remainder::input_layer::enum_input_layer::{
-    InputLayerDescriptionEnum, InputLayerEnumVerifierCommitment,
-};
 use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
-use remainder::input_layer::{InputLayerTrait, InputLayerDescriptionTrait};
-use remainder::layer::layer_enum::LayerEnum;
 use remainder::layer::{Layer, LayerDescription};
 use remainder::layouter::component::{Component, ComponentSet};
-use remainder::layouter::layouting::{CircuitLocation, CircuitMap, InputNodeMap, LayerMap};
-use remainder::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
 use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::{Context, NodeId};
 use remainder::mle::evals::MultilinearExtension;
-use remainder::mle::mle_description::MleDescription;
 use remainder::mle::Mle;
 use remainder::prover::{generate_circuit_description, GKRCircuitDescription, InstantiatedCircuit};
 use remainder::{claims::wlx_eval::ClaimMle, layer::LayerId};
@@ -83,8 +70,6 @@ pub struct FiatShamirChallengeProof<C: PrimeOrderCurve> {
     pub layer: FiatShamirChallenge<C::Scalar>,
     pub claims: Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
 }
-
-type CircuitDescriptionAndAux<F> = (GKRCircuitDescription<F>, InputNodeMap);
 
 /// The struct that holds all the necessary information to describe a circuit.
 pub struct HyraxProver<
@@ -153,7 +138,7 @@ impl<
             });
         });
 
-        let (circuit_description, input_node_map, input_builder) =
+        let (circuit_description, input_builder) =
             generate_circuit_description(component.yield_nodes()).unwrap();
 
         let inputs = input_builder(shred_id_to_data).unwrap();

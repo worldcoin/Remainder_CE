@@ -134,26 +134,6 @@ impl CircuitDescriptionMap {
     }
 }
 
-#[derive(Debug)]
-/// A HashMap that maps input layer ID to input layer node ID, used specifically to associate
-/// input layer nodes to input layer IDs for circuit creation.
-pub struct InputNodeMap(pub(crate) HashMap<LayerId, NodeId>);
-
-impl InputNodeMap {
-    pub(crate) fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    /// Get the node ID from a layer ID.
-    pub fn get_node_id(&self, layer_id: LayerId) -> Option<&NodeId> {
-        self.0.get(&layer_id)
-    }
-
-    /// Add a layer ID, node ID correspondence to the map.
-    pub fn add_node_layer_id(&mut self, layer_id: LayerId, node_id: NodeId) {
-        self.0.insert(layer_id, node_id);
-    }
-}
 
 /// The location of a Node in the circuit
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

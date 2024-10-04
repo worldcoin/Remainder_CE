@@ -13,7 +13,7 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
 use self::layers::Layers;
-use crate::claims::wlx_eval::WLXAggregator;
+use crate::claims::wlx_eval::{ClaimMle, WLXAggregator};
 use crate::claims::Claim;
 use crate::expression::circuit_expr::filter_bookkeeping_table;
 use crate::input_layer::enum_input_layer::InputLayerEnum;
@@ -24,7 +24,7 @@ use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{Layer, LayerDescription};
 use crate::layouter::layouting::{
-    layout, CircuitDescriptionMap, CircuitLocation, CircuitMap, InputNodeMap,
+    layout, CircuitDescriptionMap, CircuitLocation, CircuitMap
 };
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, NodeId};
@@ -228,6 +228,29 @@ pub fn prove_circuit<F: Field>(
 /// Controls claim aggregation behavior.
 pub const ENABLE_OPTIMIZATION: bool = true;
 
+
+/*GKRProof
+    public_input_layers
+    ligero_input_layers
+    circuit
+    .verify(transcript)
+ */
+pub struct GKRProof<F: Field> {
+    pub public_input_layers: Vec<InputLayerDescription>,
+    pub ligero_input_layers: Vec<InputLayerDescription>,
+    pub circuit: GKRCircuitDescription<F>,
+}
+
+impl<F: Field> GKRProof<F> {
+    pub fn verify(
+        &mut self,
+        transcript: &mut impl VerifierTranscript<F>,
+    ) -> Result<(), GKRError> {
+        let input_layer_claims = self.circuit.verify(transcript);
+        Ok(())
+    }
+}
+
 /// The Verifier Key associated with a GKR proof of a [ProofSystem].
 /// It consists of consice GKR Circuit description to be use by the Verifier.
 #[derive(Debug)]
@@ -416,26 +439,16 @@ impl<F: Field> GKRCircuitDescription<F> {
         }
     }
 
-    /// Verifies a GKR proof produced by the `prove` method.
-    /// Assumes that all inputs and input commitments have already been added to transcript.
+    /// Verifies a GKR circuit proof produced by the `prove` method.
+    /// Assumes that the circuit description, all inputs and input commitments have already been added to transcript.
     /// # Arguments
     /// * `transcript_reader`: servers as the proof.
+    /// Returns claims on the input layers.
     #[instrument(skip_all, err)]
     fn verify(
-        &mut self,
+        &self,
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), GKRError> {
-        // TODO(Makis): Add circuit hash to Transcript.
-        /*
-        if let Some(circuit_hash) = maybe_circuit_hash {
-            let transcript_circuit_hash = transcript_reader
-                .consume_element("Circuit Hash")
-                .map_err(GKRError::ErrorWhenVerifyingCircuitHash)?;
-            assert_eq!(transcript_circuit_hash, circuit_hash);
-        }
-        */
-        self.index_mle_indices(0);
-
+    ) -> Result<Vec<ClaimMle<F>>, GKRError> {
         // Get the verifier challenges from the transcript.
         let fiat_shamir_challenges: Vec<FiatShamirChallenge<F>> = self
             .fiat_shamir_challenges
@@ -451,7 +464,7 @@ impl<F: Field> GKRCircuitDescription<F> {
         // Claim aggregator to keep track of GKR-style claims across all layers.
         let mut aggregator = WLXAggregator::<F, LayerEnum<F>, InputLayerEnum<F>>::new();
 
-        // --------- STAGE 1: Output Claim Generation ---------
+        // --------- Output Claim Generation ---------
         let claims_timer = start_timer!(|| "Output claims generation");
         let verifier_output_claims_span =
             span!(Level::DEBUG, "verifier_output_claims_span").entered();
@@ -469,12 +482,10 @@ impl<F: Field> GKRCircuitDescription<F> {
                 .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
         }
 
-        // dbg!(&aggregator);
-
         end_timer!(claims_timer);
         verifier_output_claims_span.exit();
 
-        // --------- STAGE 2: Verify Intermediate Layers ---------
+        // --------- Verify Intermediate Layers ---------
         let intermediate_layers_timer =
             start_timer!(|| "ALL intermediate layers proof verification");
 
@@ -515,7 +526,7 @@ impl<F: Field> GKRCircuitDescription<F> {
 
         end_timer!(intermediate_layers_timer);
 
-        // FIXME(Ben) move to calling context
+        // FIXME(Ben) move to outer prover
         // --------- STAGE 3: Verify Input Layers ---------
         // for (input_layer, commitment) in
         //     self.input_layers.iter().zip(input_layer_commitments.iter())
@@ -528,7 +539,7 @@ impl<F: Field> GKRCircuitDescription<F> {
         //         .map_err(GKRError::InputLayerError)?;
         // }
 
-        // --------- STAGE 4: Verify claims on the verifier challenges ---------
+        // --------- Verify claims on the verifier challenges ---------
         let fiat_shamir_challenges_timer = start_timer!(|| "Verifier challenges proof generation");
         for fiat_shamir_challenge in fiat_shamir_challenges {
             if let Some(claims) = aggregator.get_claims(fiat_shamir_challenge.layer_id()) {
@@ -541,19 +552,29 @@ impl<F: Field> GKRCircuitDescription<F> {
         }
         end_timer!(fiat_shamir_challenges_timer);
 
-        Ok(())
+        let input_layer_claims = self
+            .input_layers
+            .iter()
+            .flat_map(|input_layer| {
+                aggregator.get_claims(input_layer.layer_id).unwrap()
+            })
+            .cloned()
+            .collect_vec();
+    
+        // FIXME (Ben) Verifier should check that there are no claims left in the aggregator! Wait until after Makis has finished his YieldClaims refactor.
+
+        Ok(input_layer_claims)
     }
 }
 
-/// Generate the circuit description given a set of nodes.
-/// Returns a [GKRCircuitDescription] and a [InputNodeMap] that maps the ids of [InputLayerNode] to
-/// their corresponding input layer id (this is a 1:1 correspondence).
+/// Generate the circuit description given a set of [NodeEnum]s.
+/// Returns a [GKRCircuitDescription] and a function that takes a map of input shred data and returns a map of input layer data.
+/// Circuit description already has indices assigned to the MLEs.
 pub fn generate_circuit_description<F: Field>(
     nodes: Vec<NodeEnum<F>>,
 ) -> Result<
     (
         GKRCircuitDescription<F>,
-        InputNodeMap,
         impl Fn(
             HashMap<NodeId, MultilinearExtension<F>>,
         ) -> Result<HashMap<LayerId, MultilinearExtension<F>>, GKRError>,
@@ -577,8 +598,6 @@ pub fn generate_circuit_description<F: Field>(
     let mut intermediate_layers = Vec::<LayerDescriptionEnum<F>>::new();
     let mut output_layers = Vec::<OutputLayerDescription<F>>::new();
     let mut circuit_description_map = CircuitDescriptionMap::new();
-    //FIXME(Ben) not needed anymore, we hope
-    let mut input_layer_node_to_layer_map = InputNodeMap::new();
 
     let mut input_layer_id_to_input_shred_ids = HashMap::new();
     let mut input_layer_id_to_input_node_ids = HashMap::new();
@@ -591,8 +610,6 @@ pub fn generate_circuit_description<F: Field>(
                     &mut circuit_description_map,
                 )
                 .unwrap();
-            input_layer_node_to_layer_map
-                .add_node_layer_id(input_layer_description.layer_id, input_layer_node.id());
             input_layer_id_to_input_node_ids
                 .insert(input_layer_description.layer_id, input_layer_node.id());
             input_layer_id_to_input_shred_ids.insert(
@@ -644,12 +661,13 @@ pub fn generate_circuit_description<F: Field>(
             output_layer_acc
         });
 
-    let circuit_description = GKRCircuitDescription {
+    let mut circuit_description = GKRCircuitDescription {
         input_layers,
         fiat_shamir_challenges,
         intermediate_layers,
         output_layers,
     };
+    circuit_description.index_mle_indices(0);
 
     // TODO(Ben) add the option to pass in input _layer_ node data as well
     let input_builder = move |input_node_data: HashMap<NodeId, MultilinearExtension<F>>| {
@@ -677,7 +695,6 @@ pub fn generate_circuit_description<F: Field>(
 
     Ok((
         circuit_description,
-        input_layer_node_to_layer_map,
         input_builder,
     ))
 }

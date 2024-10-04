@@ -377,7 +377,7 @@ pub fn build_circuit_description<
     // Add output nodes
     all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));
 
-    let (circ_desc, _, input_builder_from_shred_map) =
+    let (circ_desc, input_builder_from_shred_map) =
         generate_circuit_description(all_nodes).unwrap();
 
     let input_builder = move |data: IriscodeCircuitData<F>| {
