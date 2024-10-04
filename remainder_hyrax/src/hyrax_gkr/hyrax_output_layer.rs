@@ -1,10 +1,7 @@
-use std::marker::PhantomData;
-
 use itertools::Itertools;
 use rand::Rng;
-use remainder::mle::mle_enum::MleEnum;
 use remainder::mle::{Mle, MleIndex};
-use remainder::output_layer::mle_output_layer::{MleOutputLayer, MleOutputLayerDescription};
+use remainder::output_layer::mle_output_layer::{OutputLayer, MleOutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
@@ -12,65 +9,6 @@ use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVe
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
 use super::hyrax_layer::HyraxClaim;
-
-//FIXME remove
-/// This is a wrapper around the existing [MleEnum], but suited in order
-/// to produce Zero Knowledge evaluations using Hyrax.
-pub struct HyraxOutputLayer<C: PrimeOrderCurve> {
-    /// This is the MLE that this is a wrapper over. The output layer is always just an MLE.
-    pub underlying_mle: MleEnum<C::Scalar>,
-    pub _marker: PhantomData<C>,
-}
-
-impl<C: PrimeOrderCurve> HyraxOutputLayer<C> {
-    /// This function will evaluate the output layer at a random point, which is the challenge.
-    /// It will get these challenges from the transcript.
-    pub fn fix_variable_on_challenge(
-        &mut self,
-        prover_transcript: &mut impl ECProverTranscript<C>,
-    ) {
-        let challenge: Vec<C::Scalar> = (0..self.underlying_mle.num_free_vars())
-            .map(|_idx| prover_transcript.get_scalar_field_challenge("output claim point"))
-            .collect_vec();
-        self.underlying_mle.index_mle_indices(0);
-        challenge
-            .into_iter()
-            .enumerate()
-            .for_each(|(idx, chal_point)| {
-                self.underlying_mle.fix_variable(idx, chal_point);
-            })
-    }
-
-    /// This function will traverse the MLE in order to see which point it has been bound to, and
-    /// return the point and the value it evaluates to in the form of a [Claim].
-    pub fn get_claim(
-        &mut self,
-        blinding_rng: &mut impl Rng,
-        scalar_committer: &PedersenCommitter<C>,
-    ) -> HyraxClaim<C::Scalar, CommittedScalar<C>> {
-        assert_eq!(self.underlying_mle.bookkeeping_table().len(), 1);
-
-        let layer_id = self.underlying_mle.layer_id();
-        let claim_chal = if !self.underlying_mle.mle_indices().is_empty() {
-            self.underlying_mle
-                .mle_indices()
-                .iter()
-                .map(|index| index.val().unwrap())
-                .collect_vec()
-        } else {
-            vec![]
-        };
-        let blinding_factor = &C::Scalar::random(blinding_rng);
-        let claim_commit = scalar_committer
-            .committed_scalar(&self.underlying_mle.bookkeeping_table()[0], blinding_factor);
-
-        HyraxClaim {
-            point: claim_chal,
-            to_layer_id: layer_id,
-            evaluation: claim_commit,
-        }
-    }
-}
 
 /// The proof structure for the proof of a [HyraxOutputLayer], which
 /// doesn't need anything other than whether the challenges the
@@ -84,7 +22,7 @@ pub struct HyraxOutputLayerProof<C: PrimeOrderCurve> {
 impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     /// Returns a HyraxOutputLayerProof and the claim that the output layer is making.
     pub fn prove(
-        output_layer: &mut MleOutputLayer<C::Scalar>,
+        output_layer: &mut OutputLayer<C::Scalar>,
         transcript: &mut impl ECProverTranscript<C>,
         blinding_rng: &mut impl Rng,
         scalar_committer: &PedersenCommitter<C>,
@@ -94,8 +32,19 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
             .map(|_idx| transcript.get_scalar_field_challenge("output claim point"))
             .collect_vec();
 
-        output_layer.fix_variable_on_challenge(transcript);
-        let committed_claim = output_layer.get_claim(blinding_rng, scalar_committer);
+        let challenges = transcript.get_scalar_field_challenges("output layer bindings", output_layer.num_free_vars());
+        output_layer.fix_layer(&challenges).unwrap();
+        let claim = output_layer.get_claim().unwrap();
+        // Convert to a CommittedScalar claim
+        // FIXME(Ben) write a helper for this.
+        let blinding_factor = &C::Scalar::random(blinding_rng);
+        let claim_commit = scalar_committer
+            .committed_scalar(&claim.get_claim().get_result(), blinding_factor);
+        let committed_claim = HyraxClaim {
+            point: claim.get_claim().get_point().clone(),
+            to_layer_id: claim.get_to_layer_id().unwrap(),
+            evaluation: claim_commit,
+        };
         let commitment = committed_claim.to_claim_commitment().evaluation;
         // Add the commitment to the transcript
         transcript.append_ec_point("output layer commit", commitment);
