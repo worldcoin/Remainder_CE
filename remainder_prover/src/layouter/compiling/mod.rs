@@ -12,7 +12,7 @@
 //! different MLEs that make up a layer).
 //!
 //! Then, using this circuit description along with the data inputs, the
-//! `populate_circuit` function will create an [InstantiatedCircuit], where now
+//! `instantiate()` function will create an [InstantiatedCircuit], where now
 //! the circuit description is "filled in" with its associated data.
 
 #[cfg(test)]

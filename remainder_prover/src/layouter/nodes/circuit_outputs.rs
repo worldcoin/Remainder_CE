@@ -6,7 +6,7 @@ use remainder_shared_types::Field;
 use crate::{
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation},
     mle::MleIndex,
-    output_layer::mle_output_layer::MleOutputLayerDescription,
+    output_layer::mle_output_layer::OutputLayerDescription,
 };
 
 use super::{CircuitNode, Context, NodeId};
@@ -57,7 +57,7 @@ impl OutputNode {
     pub fn generate_circuit_description<F: Field>(
         &self,
         circuit_map: &mut CircuitDescriptionMap,
-    ) -> Result<MleOutputLayerDescription<F>, crate::layouter::layouting::DAGError> {
+    ) -> Result<OutputLayerDescription<F>, crate::layouter::layouting::DAGError> {
         let (circuit_location, num_vars) =
             circuit_map.get_location_num_vars_from_node_id(&self.source)?;
 
@@ -72,7 +72,7 @@ impl OutputNode {
             .chain(repeat_n(MleIndex::Free, *num_vars))
             .collect_vec();
 
-        let out = MleOutputLayerDescription::new_zero(*layer_id, &total_indices);
+        let out = OutputLayerDescription::new_zero(*layer_id, &total_indices);
 
         Ok(out)
     }

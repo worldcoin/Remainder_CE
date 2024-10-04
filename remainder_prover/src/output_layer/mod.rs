@@ -33,40 +33,5 @@ pub enum VerifierOutputLayerError {
 
     /// Transcript Reader Error during verification.
     #[error("Transcript Reader Error: {:0}", _0)]
-    TranscripError(#[from] TranscriptReaderError),
-}
-
-/// The interface for the circuit description counterpart of an Output Layer.
-pub trait OutputLayerDescriptionTrait<F: Field> {
-    /// The associated type used by the verifier for manipulating an Ouput
-    /// Layer.
-    type VerifierOutputLayer: VerifierOutputLayer<F> + Serialize + for<'a> Deserialize<'a>;
-
-    /// Returns the [LayerId] of the intermediate/input layer that his output
-    /// layer is associated with.
-    fn layer_id(&self) -> LayerId;
-
-    /*
-    /// Retrieve the original MLE representation from the transcript.
-    fn retrieve_mle_from_transcript(
-        &mut self,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), VerifierOutputLayerError>;
-    */
-
-    /// Retrieve the MLE evaluations from the transcript and fix the variables
-    /// of this output layer to random challenges sampled from the transcript.
-    /// Returns a description of the layer ready to be used by the verifier.
-    fn retrieve_mle_from_transcript_and_fix_layer(
-        &self,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::VerifierOutputLayer, VerifierOutputLayerError>;
-}
-
-/// The interface for the verifier's counterpart of an Output Layer.
-/// This trait should be able to yield claims!
-pub trait VerifierOutputLayer<F: Field> {
-    /// Returns the [LayerId] of the intermediate/input layer that his output
-    /// layer is associated with.
-    fn layer_id(&self) -> LayerId;
+    TranscriptError(#[from] TranscriptReaderError),
 }

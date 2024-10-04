@@ -23,7 +23,7 @@ use crate::{
 };
 
 use super::{
-    OutputLayerDescriptionTrait, OutputLayerError, VerifierOutputLayer,
+    OutputLayerError,
     VerifierOutputLayerError,
 };
 
@@ -147,7 +147,7 @@ impl<F: Field> OutputLayer<F> {
 /// MLE.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(bound = "F: Field")]
-pub struct MleOutputLayerDescription<F: Field> {
+pub struct OutputLayerDescription<F: Field> {
     /// The metadata of this MLE: indices and associated layer.
     pub mle: MleDescription<F>,
 
@@ -155,7 +155,7 @@ pub struct MleOutputLayerDescription<F: Field> {
     is_zero: bool,
 }
 
-impl<F: Field> MleOutputLayerDescription<F> {
+impl<F: Field> OutputLayerDescription<F> {
     /// Generate an output layer containing a verifier equivalent of a
     /// [DenseMle], with a given `layer_id` and `mle_indices`.
     pub fn new_dense(_layer_id: LayerId, _mle_indices: &[MleIndex<F>]) -> Self {
@@ -205,17 +205,20 @@ impl<F: Field> MleOutputLayerDescription<F> {
     }
 }
 
-impl<F: Field> OutputLayerDescriptionTrait<F> for MleOutputLayerDescription<F> {
-    type VerifierOutputLayer = VerifierMleOutputLayer<F>;
-
-    fn layer_id(&self) -> LayerId {
+impl<F: Field> OutputLayerDescription<F> {
+    /// Returns the [LayerId] of the intermediate/input layer that his output
+    /// layer is associated with.
+    pub fn layer_id(&self) -> LayerId {
         self.mle.layer_id()
     }
 
-    fn retrieve_mle_from_transcript_and_fix_layer(
+    /// Retrieve the MLE evaluations from the transcript and fix the variables
+    /// of this output layer to random challenges sampled from the transcript.
+    /// Returns a description of the layer ready to be used by the verifier.
+    pub fn retrieve_mle_from_transcript_and_fix_layer(
         &self,
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::VerifierOutputLayer, VerifierOutputLayerError> {
+    ) -> Result<VerifierOutputLayer<F>, VerifierOutputLayerError> {
         // We do not yet handle DenseMle.
         assert!(self.is_zero());
 
@@ -240,7 +243,7 @@ impl<F: Field> OutputLayerDescriptionTrait<F> for MleOutputLayerDescription<F> {
         debug_assert_eq!(mle.num_free_vars(), 0);
 
         let verifier_output_layer =
-            VerifierMleOutputLayer::new_zero(self.mle.layer_id(), mle.var_indices(), F::ZERO);
+            VerifierOutputLayer::new_zero(self.mle.layer_id(), mle.var_indices(), F::ZERO);
 
         Ok(verifier_output_layer)
     }
@@ -250,7 +253,7 @@ impl<F: Field> OutputLayerDescriptionTrait<F> for MleOutputLayerDescription<F> {
 /// MLE.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(bound = "F: Field")]
-pub struct VerifierMleOutputLayer<F: Field> {
+pub struct VerifierOutputLayer<F: Field> {
     /// A description of this layer's fully-bound MLE.
     mle: VerifierMle<F>,
 
@@ -258,7 +261,7 @@ pub struct VerifierMleOutputLayer<F: Field> {
     is_zero: bool,
 }
 
-impl<F: Field> VerifierMleOutputLayer<F> {
+impl<F: Field> VerifierOutputLayer<F> {
     /// Generate an output layer containing a verifier equivalent of a
     /// [DenseMle], with a given `layer_id` and `mle_indices`.
     pub fn new_dense(_layer_id: LayerId, _mle_indices: &[MleIndex<F>]) -> Self {
@@ -287,8 +290,10 @@ impl<F: Field> VerifierMleOutputLayer<F> {
     }
 }
 
-impl<F: Field> VerifierOutputLayer<F> for VerifierMleOutputLayer<F> {
-    fn layer_id(&self) -> LayerId {
+impl<F: Field> VerifierOutputLayer<F> {
+    /// Returns the [LayerId] of the intermediate/input layer that this output
+    /// layer is associated with.
+    pub fn layer_id(&self) -> LayerId {
         self.mle.layer_id()
     }
 }
@@ -321,7 +326,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for OutputLayer<F> {
     }
 }
 
-impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierOutputLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         // We do not support non-zero MLEs on Output Layers at this point!
         assert!(self.is_zero());

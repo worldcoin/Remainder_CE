@@ -8,7 +8,7 @@ use crate::layer::LayerId;
 use crate::layouter::layouting::{CircuitDescriptionMap, DAGError};
 use crate::mle::mle_description::MleDescription;
 use crate::mle::MleIndex;
-use crate::output_layer::mle_output_layer::MleOutputLayerDescription;
+use crate::output_layer::mle_output_layer::OutputLayerDescription;
 use crate::utils::mle::get_total_mle_indices;
 
 use itertools::{repeat_n, Itertools};
@@ -73,7 +73,7 @@ impl CircuitNode for LookupConstraint {
     }
 }
 
-type LookupCircuitDescription<F> = (Vec<LayerDescriptionEnum<F>>, MleOutputLayerDescription<F>);
+type LookupCircuitDescription<F> = (Vec<LayerDescriptionEnum<F>>, OutputLayerDescription<F>);
 /// Represents a table of data that can be looked up into, e.g. for a range check.
 /// Implements "Improving logarithmic derivative lookups using GKR" (2023) by Papini & Haböck. Note
 /// that (as is usual e.g. in permutation checks) we do not check that the product of the
@@ -309,7 +309,7 @@ impl LookupTable {
         );
 
         // Add an output layer that checks that the result is zero
-        let output_layer = MleOutputLayerDescription::new_zero(layer_id, &[]);
+        let output_layer = OutputLayerDescription::new_zero(layer_id, &[]);
 
         Ok((intermediate_layers, output_layer))
     }

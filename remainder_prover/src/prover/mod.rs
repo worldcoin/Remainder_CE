@@ -34,8 +34,7 @@ use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
 use crate::mle::Mle;
-use crate::output_layer::mle_output_layer::{OutputLayer, MleOutputLayerDescription};
-use crate::output_layer::OutputLayerDescriptionTrait;
+use crate::output_layer::mle_output_layer::{OutputLayer, OutputLayerDescription};
 use crate::utils::mle::build_composite_mle;
 use crate::{
     claims::ClaimAggregator,
@@ -242,7 +241,7 @@ pub struct GKRCircuitDescription<F: Field> {
     /// The circuit descriptions of the intermediate layers.
     pub intermediate_layers: Vec<LayerDescriptionEnum<F>>,
     /// The circuit desriptions of the output layers.
-    pub output_layers: Vec<MleOutputLayerDescription<F>>,
+    pub output_layers: Vec<OutputLayerDescription<F>>,
 }
 
 impl<F: Field> GKRCircuitDescription<F> {
@@ -578,7 +577,7 @@ pub fn generate_circuit_description<F: Field>(
     let mut fiat_shamir_challenge_layer_id = LayerId::FiatShamirChallengeLayer(0);
 
     let mut intermediate_layers = Vec::<LayerDescriptionEnum<F>>::new();
-    let mut output_layers = Vec::<MleOutputLayerDescription<F>>::new();
+    let mut output_layers = Vec::<OutputLayerDescription<F>>::new();
     let mut circuit_description_map = CircuitDescriptionMap::new();
     //FIXME(Ben) not needed anymore, we hope
     let mut input_layer_node_to_layer_map = InputNodeMap::new();
