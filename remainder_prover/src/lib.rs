@@ -62,3 +62,6 @@ pub use remainder_shared_types;
 
 // module for worldcoin circuits
 pub mod worldcoin;
+
+// module for worldcoin mpc circuits
+pub mod worldcoin_mpc;
