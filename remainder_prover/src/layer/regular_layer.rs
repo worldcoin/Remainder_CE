@@ -131,7 +131,6 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         }
 
         // By now, `self.expression` should be fully bound.
-        dbg!(&self.expression);
         assert_eq!(self.expression.get_expression_num_free_variables(), 0);
 
         // Append the values of the leaf MLEs to the transcript.
