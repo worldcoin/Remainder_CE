@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use rand::Rng;
 use remainder::mle::{Mle, MleIndex};
-use remainder::output_layer::mle_output_layer::{OutputLayer, OutputLayerDescription};
+use remainder::output_layer::{OutputLayer, OutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
