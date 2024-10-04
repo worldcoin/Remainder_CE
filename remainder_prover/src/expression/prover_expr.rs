@@ -367,9 +367,15 @@ impl<F: Field> Expression<F, ProverExpr> {
 
     /// not tested
     /// Gets the size of an expression in terms of the number of rounds of sumcheck
-    pub fn get_expression_size(&self, curr_size: usize) -> usize {
+    pub fn get_expression_size(&self) -> usize {
         self.expression_node
-            .get_expression_size_node(curr_size, &self.mle_vec)
+            .get_expression_size_node(0, &self.mle_vec)
+    }
+
+    /// Gets the number of free variables in an expression.
+    pub fn get_expression_num_free_variables(&self) -> usize {
+        self.expression_node
+            .get_expression_num_free_variables_node(0, &self.mle_vec)
     }
 
     /// Get the [PostSumcheckLayer] for this expression, which represents the fully bound values of the expression.
@@ -939,9 +945,21 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
     ) -> usize {
         match self {
-            ExpressionNode::Selector(_mle_index, a, b) => {
-                let a_bits = a.get_expression_size_node(curr_size + 1, mle_vec);
-                let b_bits = b.get_expression_size_node(curr_size + 1, mle_vec);
+            ExpressionNode::Selector(mle_index, a, b) => {
+                let (a_bits, b_bits) = if matches!(
+                    mle_index,
+                    &MleIndex::Free | &MleIndex::Indexed(_) | &MleIndex::Bound(_, _)
+                ) {
+                    (
+                        a.get_expression_num_free_variables_node(curr_size + 1, mle_vec),
+                        b.get_expression_num_free_variables_node(curr_size + 1, mle_vec),
+                    )
+                } else {
+                    (
+                        a.get_expression_num_free_variables_node(curr_size, mle_vec),
+                        b.get_expression_num_free_variables_node(curr_size, mle_vec),
+                    )
+                };
                 max(a_bits, b_bits)
             }
             ExpressionNode::Mle(mle_vec_idx) => {
@@ -994,6 +1012,74 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Scaled(a, _) => a.get_expression_size_node(curr_size, mle_vec),
             ExpressionNode::Negated(a) => a.get_expression_size_node(curr_size, mle_vec),
+            ExpressionNode::Constant(_) => curr_size,
+        }
+    }
+
+    /// Gets the number of free variables in an expression.
+    pub fn get_expression_num_free_variables_node(
+        &self,
+        curr_size: usize,
+        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+    ) -> usize {
+        match self {
+            ExpressionNode::Selector(mle_index, a, b) => {
+                let (a_bits, b_bits) = if matches!(mle_index, &MleIndex::Free) {
+                    (
+                        a.get_expression_num_free_variables_node(curr_size + 1, mle_vec),
+                        b.get_expression_num_free_variables_node(curr_size + 1, mle_vec),
+                    )
+                } else {
+                    (
+                        a.get_expression_num_free_variables_node(curr_size, mle_vec),
+                        b.get_expression_num_free_variables_node(curr_size, mle_vec),
+                    )
+                };
+
+                max(a_bits, b_bits)
+            }
+            ExpressionNode::Mle(mle_vec_idx) => {
+                let mle_ref = mle_vec_idx.get_mle(mle_vec);
+
+                mle_ref
+                    .mle_indices()
+                    .iter()
+                    .filter(|item| matches!(item, &&MleIndex::Free))
+                    .collect_vec()
+                    .len()
+                    + curr_size
+            }
+            ExpressionNode::Sum(a, b) => {
+                let a_bits = a.get_expression_num_free_variables_node(curr_size, mle_vec);
+                let b_bits = b.get_expression_num_free_variables_node(curr_size, mle_vec);
+                max(a_bits, b_bits)
+            }
+            ExpressionNode::Product(mle_vec_indices) => {
+                let mle_refs = mle_vec_indices
+                    .iter()
+                    .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
+                    .collect_vec();
+
+                mle_refs
+                    .iter()
+                    .map(|mle_ref| {
+                        mle_ref
+                            .mle_indices()
+                            .iter()
+                            .filter(|item| matches!(item, &&MleIndex::Free))
+                            .collect_vec()
+                            .len()
+                    })
+                    .max()
+                    .unwrap_or(0)
+                    + curr_size
+            }
+            ExpressionNode::Scaled(a, _) => {
+                a.get_expression_num_free_variables_node(curr_size, mle_vec)
+            }
+            ExpressionNode::Negated(a) => {
+                a.get_expression_num_free_variables_node(curr_size, mle_vec)
+            }
             ExpressionNode::Constant(_) => curr_size,
         }
     }

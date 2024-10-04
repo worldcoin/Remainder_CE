@@ -120,12 +120,18 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         let nonlinear_rounds = self.nonlinear_rounds.take().unwrap();
 
         for round_index in &nonlinear_rounds {
-            self.prove_nonlinear_round(transcript_writer, *round_index)?;
-            // TODO(Makis): Add debug assertion that g_i(0) + g_i(1) == g_{i-1}(r_i).
+            // First compute the appropriate number of univariate evaluations for this round.
+            let prover_sumcheck_message = self.compute_round_sumcheck_message(*round_index)?;
+            // Append the evaluations to the transcript.
+            transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
+            // Sample the challenge
+            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            // "Bind" the challenge to the expression at this point.
+            self.bind_round_variable(*round_index, challenge)?;
         }
 
         // By now, `self.expression` should be fully bound.
-        // TODO(Makis): Add assertion for that.
+        assert_eq!(self.expression.get_expression_num_free_variables(), 0);
 
         // Append the values of the leaf MLEs to the transcript.
         self.append_leaf_mles_to_transcript(transcript_writer)?;
@@ -565,40 +571,6 @@ impl<F: Field> RegularLayer<F> {
         // Store the nonlinear rounds of the expression within the layer so
         // that we know these are the rounds we perform sumcheck over.
         self.nonlinear_rounds = Some(expression_nonlinear_indices);
-
-        Ok(())
-    }
-
-    /// Performs a round of the sumcheck protocol on this Layer.
-    fn prove_nonlinear_round(
-        &mut self,
-        transcript_writer: &mut impl ProverTranscript<F>,
-        round_index: usize,
-    ) -> Result<(), LayerError> {
-        println!("Proving round: {round_index}");
-
-        // Grabs the degree of univariate polynomial we are sending over.
-        let degree = get_round_degree(&self.expression, round_index);
-
-        // Compute the sumcheck message for this round.
-        let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
-            &self.expression,
-            round_index,
-            degree,
-            self.beta_vals.as_ref().unwrap(),
-        )?
-        .0;
-
-        transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
-
-        let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-
-        self.expression.fix_variable(round_index, challenge);
-
-        self.beta_vals
-            .as_mut()
-            .unwrap()
-            .beta_update(round_index, challenge);
 
         Ok(())
     }

@@ -57,7 +57,7 @@ impl<F: Field> LayerEnum<F> {
             LayerEnum::MatMult(_) => unimplemented!(),
         };
 
-        expression.get_expression_size(0)
+        expression.get_expression_size()
     }
 
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> Box<dyn std::fmt::Display + 'a> {
