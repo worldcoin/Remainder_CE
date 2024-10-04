@@ -120,7 +120,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
 
         let bindings = layer_desc
             .mle
-            .mle_indices()
+            .var_indices()
             .iter()
             .map(|mle_index| match mle_index {
                 MleIndex::Fixed(val) => C::Scalar::from(*val as u64),

@@ -7,12 +7,10 @@ use remainder_shared_types::{
 use crate::{
     claims::Claim,
     expression::{
-        circuit_expr::{ExprDescription, MleDescription},
-        generic_expr::Expression,
-        prover_expr::ProverExpr,
+        circuit_expr::ExprDescription, generic_expr::Expression, prover_expr::ProverExpr,
     },
     layer::{Layer, LayerDescription, LayerId},
-    mle::{dense::DenseMle, Mle},
+    mle::{dense::DenseMle, mle_description::MleDescription, Mle},
 };
 
 use super::{RegularLayer, RegularLayerDescription};
@@ -72,8 +70,8 @@ fn regular_layer_test_prove_verify_sum() {
     let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_ref_1.mle_indices());
     let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_ref_2.mle_indices());
     let mut circuit_expression = Expression::<Fr, ExprDescription>::sum(
-        circuit_mle_1.expression(),
-        circuit_mle_2.expression(),
+        Expression::from_mle_desc(circuit_mle_1),
+        Expression::from_mle_desc(circuit_mle_2),
     );
     circuit_expression.index_mle_vars(0);
 
@@ -118,8 +116,8 @@ fn regular_layer_test_prove_verify_selector() {
     let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_ref_1.mle_indices());
     let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_ref_2.mle_indices());
     let mut circuit_expression = Expression::<Fr, ExprDescription>::selectors(vec![
-        circuit_mle_1.expression(),
-        circuit_mle_2.expression(),
+        Expression::from_mle_desc(circuit_mle_1),
+        Expression::from_mle_desc(circuit_mle_2),
     ]);
     circuit_expression.index_mle_vars(0);
 
@@ -170,7 +168,7 @@ fn regular_layer_test_prove_verify_complex() {
             circuit_mle_1.clone(),
             circuit_mle_2.clone(),
         ]),
-        circuit_mle_2.expression() + circuit_mle_1.expression(),
+        Expression::from_mle_desc(circuit_mle_2) + Expression::from_mle_desc(circuit_mle_1),
     ]);
     circuit_expression.index_mle_vars(0);
     let sum = Expression::<Fr, ProverExpr>::sum(leaf_mle_2, leaf_mle_1);

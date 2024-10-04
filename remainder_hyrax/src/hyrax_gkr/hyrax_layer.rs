@@ -354,6 +354,7 @@ pub fn evaluate_committed_scalar<C: PrimeOrderCurve>(
 }
 
 /// Turn all the CommittedScalars into commitments i.e. Cs.
+/// (This can't be a From implementation, since PostSumcheckLayer is not from this crate).
 pub fn committed_scalar_psl_as_commitments<C: PrimeOrderCurve>(
     post_sumcheck_layer: &PostSumcheckLayer<C::Scalar, CommittedScalar<C>>,
 ) -> PostSumcheckLayer<C::Scalar, C> {
