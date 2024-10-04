@@ -72,7 +72,7 @@ fn test_trivial_wiring_2x2_circuit_data_old_style() {
 fn test_worldcoin_circuit_iris_v2() {
     use super::parameters_v2::{
         BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
-        NUM_DIGITS, WIRINGS,
+        NUM_DIGITS, WIRINGS, IM_NUM_COLS
     };
     let image_path = Path::new("src/worldcoin/constants/v2/iris/test_image.npy").to_path_buf();
     let data = load_worldcoin_data_v2::<
@@ -84,7 +84,7 @@ fn test_worldcoin_circuit_iris_v2() {
         NUM_DIGITS,
     >(image_path, false);
     let wirings = &decode_wirings(WIRINGS);
-    let reroutings = wirings_to_reroutings(wirings, 2, 2);
+    let reroutings = wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
     let circuit = build_circuit::<
         Fr,
         MATMULT_ROWS_NUM_VARS,
