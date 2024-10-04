@@ -8,7 +8,7 @@ use crate::layer::LayerId;
 use crate::layouter::layouting::{CircuitDescriptionMap, DAGError};
 use crate::mle::mle_description::MleDescription;
 use crate::mle::MleIndex;
-use crate::output_layer::mle_output_layer::OutputLayerDescription;
+use crate::output_layer::OutputLayerDescription;
 use crate::utils::mle::get_total_mle_indices;
 
 use itertools::{repeat_n, Itertools};

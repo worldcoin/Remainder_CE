@@ -32,7 +32,9 @@ pub mod public_input_layer;
 /// Note that, being undifferentiated, no functions for adding values or commitments to the transcript are provided.
 #[derive(Debug, Clone)]
 pub struct InputLayer<F: Field> {
+    /// The MLE for the input layer.
     pub mle: MultilinearExtension<F>,
+    /// The layer ID of the input layer.
     pub layer_id: LayerId,
 }
 
@@ -61,7 +63,9 @@ impl<F: Field> YieldWLXEvals<F> for InputLayer<F> {
 /// The verifier's view of an input layer during circuit proving, containing
 /// the shape information of this input layer.
 pub struct InputLayerDescription {
+    /// The layer ID of the input layer.
     pub layer_id: LayerId,
+    /// The number of variables in the input layer.
     pub num_vars: usize,
 }
 

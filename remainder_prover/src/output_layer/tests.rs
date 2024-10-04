@@ -1,4 +1,4 @@
-//! Unit tests for [crate::output_layer::mle_output_layer].
+//! Unit tests for [crate::output_layer].
 
 use itertools::{repeat_n, Itertools};
 use pretty_assertions::assert_eq;
@@ -15,10 +15,10 @@ use crate::{
     claims::{wlx_eval::ClaimMle, YieldClaim},
     layer::LayerId,
     mle::{zero::ZeroMle, MleIndex},
-    output_layer::mle_output_layer::OutputLayerDescription,
+    output_layer::OutputLayerDescription,
 };
 
-use super::mle_output_layer::OutputLayer;
+use super::OutputLayer;
 
 #[test]
 fn test_fix_layer() {

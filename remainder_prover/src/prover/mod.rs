@@ -16,13 +16,11 @@ use self::layers::Layers;
 use crate::claims::wlx_eval::WLXAggregator;
 use crate::claims::Claim;
 use crate::expression::circuit_expr::filter_bookkeeping_table;
-use crate::input_layer::enum_input_layer::{
-    InputLayerDescriptionEnum, InputLayerEnum, InputLayerEnumVerifierCommitment,
-};
+use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::fiat_shamir_challenge::{
     FiatShamirChallenge, FiatShamirChallengeDescription,
 };
-use crate::input_layer::{InputLayer, InputLayerDescription, InputLayerDescriptionTrait, InputLayerTrait};
+use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{Layer, LayerDescription};
 use crate::layouter::layouting::{
@@ -34,7 +32,7 @@ use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
 use crate::mle::Mle;
-use crate::output_layer::mle_output_layer::{OutputLayer, OutputLayerDescription};
+use crate::output_layer::{OutputLayer, OutputLayerDescription};
 use crate::utils::mle::build_composite_mle;
 use crate::{
     claims::ClaimAggregator,

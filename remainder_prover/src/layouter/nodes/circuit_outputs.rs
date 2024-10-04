@@ -6,7 +6,7 @@ use remainder_shared_types::Field;
 use crate::{
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation},
     mle::MleIndex,
-    output_layer::mle_output_layer::OutputLayerDescription,
+    output_layer::OutputLayerDescription,
 };
 
 use super::{CircuitNode, Context, NodeId};
