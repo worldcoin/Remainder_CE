@@ -209,3 +209,22 @@ fn test_hyrax_worldcoin_v2_iris_hyrax_input_layer() {
     >(path.clone(), image_path, false);
     test_hyrax_worldcoin_hyrax_input_layer(data, 512);
 }
+
+#[test]
+fn bench_test_hyrax_worldcoin_v2_iris_hyrax_input_layer_1() {
+    use remainder::worldcoin::parameters_v2::{
+        BASE, CONSTANT_DATA_FOLDER, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS,
+    };
+    let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
+    let image_path = path.join("iris/test_image.npy");
+    let data = load_worldcoin_data::<
+        Scalar,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
+        BASE,
+        NUM_DIGITS,
+    >(path.clone(), image_path, false);
+    test_hyrax_worldcoin_hyrax_input_layer(data, 512);
+}
