@@ -41,11 +41,12 @@ use super::{
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-/// Controls whether the `beta_g` optimiation should be enabled.  When enabled,
-/// all functions in this module that use a `beta_g` MLE, will compute its value
-/// lazily using [BetaValues::compute_beta_over_challenge_and_index] instead of
-/// pre-computing and storing the entire `beta_g` bookkeeping table.
-const LAZY_BETA_G_EVALUATION: bool = false;
+/// Controls whether the `beta` optimiation should be enabled. When enabled, all
+/// functions in this module that compute the value of a `beta` function at a
+/// given index, will compute its value lazily using
+/// [BetaValues::compute_beta_over_challenge_and_index] instead of pre-computing
+/// and storing the entire bookkeeping table.
+const LAZY_BETA_EVALUATION: bool = false;
 
 /// The circuit Description for an [IdentityGate].
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -210,7 +211,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
-        let beta_ug = if !LAZY_BETA_G_EVALUATION {
+        let beta_ug = if !LAZY_BETA_EVALUATION {
             Some((
                 BetaValues::new_beta_equality_mle(round_challenges.to_vec()),
                 BetaValues::new_beta_equality_mle(claim_challenges.to_vec()),
@@ -301,7 +302,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 impl<F: Field> VerifierIdentityGateLayer<F> {
     /// Computes the oracle query's value for a given [IdentityGateVerifierLayer].
     pub fn evaluate(&self, claim: &Claim<F>) -> F {
-        let beta_ug = if LAZY_BETA_G_EVALUATION {
+        let beta_ug = if LAZY_BETA_EVALUATION {
             Some((
                 BetaValues::new_beta_equality_mle(self.first_u_challenges.clone()),
                 BetaValues::new_beta_equality_mle(claim.get_point().clone()),
@@ -426,7 +427,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
     }
 
     fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
-        if !LAZY_BETA_G_EVALUATION {
+        if !LAZY_BETA_EVALUATION {
             let beta_g = BetaValues::new_beta_equality_mle(claim_point.to_vec());
             self.set_beta_g(beta_g);
         }
@@ -440,7 +441,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind)| {
-                let beta_g_at_z = if LAZY_BETA_G_EVALUATION {
+                let beta_g_at_z = if LAZY_BETA_EVALUATION {
                     BetaValues::compute_beta_over_challenge_and_index(claim_point, z_ind)
                 } else {
                     *self
@@ -505,7 +506,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F> {
         let [_, mle_ref] = self.phase_1_mles.as_ref().unwrap();
-        let beta_u = if !LAZY_BETA_G_EVALUATION {
+        let beta_u = if !LAZY_BETA_EVALUATION {
             Some(BetaValues::new_beta_equality_mle(round_challenges.to_vec()))
         } else {
             None
@@ -696,7 +697,7 @@ impl<F: Field> IdentityGate<F> {
 
     /// initialize necessary bookkeeping tables by traversing the nonzero gates
     pub fn init_phase_1(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
-        if !LAZY_BETA_G_EVALUATION {
+        if !LAZY_BETA_EVALUATION {
             let beta_g = BetaValues::new_beta_equality_mle(claim.get_point().clone());
             self.set_beta_g(beta_g);
         }
@@ -710,7 +711,7 @@ impl<F: Field> IdentityGate<F> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind)| {
-                let beta_g_at_z = if LAZY_BETA_G_EVALUATION {
+                let beta_g_at_z = if LAZY_BETA_EVALUATION {
                     BetaValues::compute_beta_over_challenge_and_index(claim.get_point(), z_ind)
                 } else {
                     *self
