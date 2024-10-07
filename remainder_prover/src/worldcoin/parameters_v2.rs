@@ -18,6 +18,8 @@ pub const IM_NUM_ROWS: usize = 100;
 /// The number of columns in the image
 pub const IM_NUM_COLS: usize = 400;
 
+pub const TO_REROUTE_NUM_VARS: usize = 7 + 9;
+
 /// The wirings from the image (2d) to the LH matrix multiplicand (2d), first a flattened u16 array,
 /// then serialized as bytes
 pub static WIRINGS: &[u8] = include_bytes!("constants/v2/wirings.bin");

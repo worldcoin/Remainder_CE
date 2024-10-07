@@ -33,6 +33,39 @@ fn test_trivial_wiring_2x2_circuit_data_all_public() {
     verify(&inputs, &vec![], &circuit_desc, &mut transcript_reader).unwrap();
 }
 
+#[test]
+fn test_worldcoin_circuit_iris_v2_new_flow() {
+    use super::parameters_v2::{
+        BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
+        NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_COLS
+    };
+    let image_path = Path::new("src/worldcoin/constants/v2/iris/test_image.npy").to_path_buf();
+    let data = load_worldcoin_data_v2::<
+        Fr,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
+        BASE,
+        NUM_DIGITS,
+    >(image_path, false);
+    let wirings = &decode_wirings(WIRINGS);
+    let reroutings = wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+    let (circuit_desc, input_builder, private_input_layer_id) = build_circuit_description::<
+        Fr,
+        TO_REROUTE_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS,
+        MATMULT_COLS_NUM_VARS,
+        MATMULT_INTERNAL_DIM_NUM_VARS,
+        BASE,
+        NUM_DIGITS,
+    >(reroutings);
+    let mut transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
+    let inputs = input_builder(data);
+    prove(&inputs, &HashMap::new(), &circuit_desc, &mut transcript_writer).unwrap();
+    let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript_writer.get_transcript());
+    verify(&inputs, &vec![], &circuit_desc, &mut transcript_reader).unwrap();
+}
+
 // FIXME(Ben) remove this once we no longer use build_circuit
 // this is basically now just a test of LayouterCircuit!
 #[test]
