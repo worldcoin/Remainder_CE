@@ -147,12 +147,7 @@ pub fn prove<F: Field>(
     inputs
         .keys()
         .filter(|layer_id| !ligero_input_layers.contains_key(layer_id))
-        .sorted_by_key(|layer_id| { 
-            match layer_id {
-                LayerId::Input(id) => id,
-                _ => panic!("Expected LayerId::Input, found {:?}", layer_id),
-            }
-        })
+        .sorted_by_key(|layer_id| layer_id.get_input_layer_id())
         .for_each(|layer_id| {
             let mle = inputs.get(layer_id).unwrap();
             transcript_writer.append_elements("input layer", mle.get_evals_vector());
@@ -163,12 +158,7 @@ pub fn prove<F: Field>(
     let mut ligero_input_commitments = HashMap::<LayerId, LigeroCommitment<F>>::new();
     ligero_input_layers
         .keys()
-        .sorted_by_key(|layer_id| {
-            match layer_id {
-                LayerId::Input(id) => id,
-                _ => panic!("Expected LayerId::Input, found {:?}", layer_id),
-            }
-        })
+        .sorted_by_key(|layer_id| layer_id.get_input_layer_id())
         .for_each(|layer_id| {
             // Commit to the Ligero input layer, if it is not already committed to.
             let (desc, maybe_commitment) = ligero_input_layers.get(layer_id).unwrap();
@@ -230,12 +220,7 @@ pub fn verify<F: Field>(
     // Read and check public input values to transcript in order of layer id.
     public_inputs
         .keys()
-        .sorted_by_key(|layer_id| { 
-            match layer_id {
-                LayerId::Input(id) => id,
-                _ => panic!("Expected LayerId::Input, found {:?}", layer_id),
-            }
-        })
+        .sorted_by_key(|layer_id| layer_id.get_input_layer_id())
         .map(|layer_id| {
             let expected_mle = public_inputs.get(layer_id).unwrap();
             let transcript_mle = transcript.consume_elements("input layer", 1 << expected_mle.num_vars()).unwrap();
@@ -251,12 +236,7 @@ pub fn verify<F: Field>(
     let mut ligero_commitments = HashMap::<LayerId, F>::new();
     ligero_inputs
         .iter()
-        .sorted_by_key(|desc| {
-            match desc.layer_id() {
-                LayerId::Input(id) => id,
-                _ => panic!("Expected LayerId::Input, found {:?}", desc.layer_id()),
-            }
-        })
+        .sorted_by_key(|desc| desc.layer_id().get_input_layer_id())
         .for_each(|desc| {
             let commitment = transcript.consume_element("ligero input layer root").unwrap();
             ligero_commitments.insert(desc.layer_id(), commitment);
@@ -290,9 +270,6 @@ pub fn verify<F: Field>(
     }
 
     // Check the claims on Ligero input layers via their evaluation proofs.
-
-    // use ligero_commitments to verify the claims
-    // remainder_ligero_verify passing the transcript
     for claim in ligero_input_layer_claims.iter() {
         let layer_id = claim.to_layer_id.unwrap();
         let commitment = ligero_commitments.get(&layer_id).unwrap();
@@ -693,19 +670,6 @@ impl<F: Field> GKRCircuitDescription<F> {
         }
 
         end_timer!(intermediate_layers_timer);
-
-        // FIXME(Ben) move to outer prover
-        // --------- STAGE 3: Verify Input Layers ---------
-        // for (input_layer, commitment) in
-        //     self.input_layers.iter().zip(input_layer_commitments.iter())
-        // {
-        //     let input_layer_claim =
-        //         aggregator.verifier_aggregate_claims(input_layer_id, transcript_reader)?;
-
-        //     input_layer
-        //         .verify(commitment, input_layer_claim, transcript_reader)
-        //         .map_err(GKRError::InputLayerError)?;
-        // }
 
         // --------- Verify claims on the verifier challenges ---------
         let fiat_shamir_challenges_timer = start_timer!(|| "Verifier challenges proof generation");

@@ -234,6 +234,15 @@ impl std::fmt::Display for LayerId {
 
 
 impl LayerId {
+
+    /// Returns the underlying usize if self is a variant of type Input, otherwise panics.
+    pub fn get_input_layer_id(&self) -> usize {
+        match self {
+            LayerId::Input(id) => *id,
+            _ => panic!("Expected LayerId::Input, found {:?}", self),
+        }
+    }    
+
     /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number
     pub fn next(&self) -> LayerId {
         match self {
