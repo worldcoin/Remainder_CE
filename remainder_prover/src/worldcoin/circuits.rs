@@ -209,8 +209,8 @@ pub fn build_circuit<
     })
 }
 
-/// Builds the iriscode circuit, return the circuit description, the input node map and the node ids
-/// of the public and the private input layers.
+/// Builds the iriscode circuit, return the circuit description, the input node map and the input
+/// layer ids of the input layers for the public and private inputs.
 pub fn build_circuit_description<
     F: Field,
     const TO_REROUTE_NUM_VARS: usize,
@@ -224,6 +224,7 @@ pub fn build_circuit_description<
 ) -> (
     GKRCircuitDescription<F>,
     impl Fn(IriscodeCircuitData<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
+    LayerId
 ) {
     assert!(BASE.is_power_of_two());
     let log_base = BASE.ilog2() as usize;
@@ -377,7 +378,7 @@ pub fn build_circuit_description<
     // Add output nodes
     all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));
 
-    let (circ_desc, input_builder_from_shred_map) =
+    let (circ_desc, input_builder_from_shred_map, input_node_id_to_layer_id) =
         generate_circuit_description(all_nodes).unwrap();
 
     let input_builder = move |data: IriscodeCircuitData<F>| {
@@ -400,5 +401,10 @@ pub fn build_circuit_description<
         input_builder_from_shred_map(input_shred_id_to_data).unwrap()
     };
 
-    (circ_desc, input_builder)
+    let private_input_layer_id = input_node_id_to_layer_id.get(&public_input_layer.id()).unwrap().clone();
+    (
+        circ_desc,
+        input_builder,
+        private_input_layer_id,
+    )
 }

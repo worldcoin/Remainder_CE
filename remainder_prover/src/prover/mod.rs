@@ -134,10 +134,10 @@ pub struct InstantiatedCircuit<F: Field> {
 /// * `ligero_input_layers` - a vector of [LigeroInputLayerDescription]s, optionally paired with pre-computed commitments to their values (if provided, this are not checked, but simply used as is).
 /// * `circuit_description` - the [GKRCircuitDescription] of the circuit to be proven.
 pub fn prove<F: Field>(
-    inputs: HashMap<LayerId, MultilinearExtension<F>>,
-    ligero_input_layers: HashMap<LayerId, (LigeroInputLayerDescription<F>, Option<LigeroCommitment<F>>)>,
-    circuit_description: GKRCircuitDescription<F>,
-    mut transcript_writer: TranscriptWriter<F, PoseidonSponge<F>>,
+    inputs: &HashMap<LayerId, MultilinearExtension<F>>,
+    ligero_input_layers: &HashMap<LayerId, (LigeroInputLayerDescription<F>, Option<LigeroCommitment<F>>)>,
+    circuit_description: &GKRCircuitDescription<F>,
+    transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
 ) -> Result<(), GKRError> {
     // TODO(Ben) Add the circuit description to transcript
 
@@ -186,7 +186,7 @@ pub fn prove<F: Field>(
             ligero_input_commitments.insert(layer_id.clone(), commitment);
         });
 
-    let input_layer_claims = prove_circuit(circuit_description, &inputs, &mut transcript_writer).unwrap();
+    let input_layer_claims = prove_circuit(circuit_description, &inputs, transcript_writer).unwrap();
 
     // If in debug mode, then check the claims on all input layers.
     if !cfg!(debug_assertions) {
@@ -208,7 +208,7 @@ pub fn prove<F: Field>(
             remainder_ligero_eval_prove(
                 mle.get_evals_vector(),
                 claim.get_claim().get_point(),
-                &mut transcript_writer,
+                transcript_writer,
                 &desc.aux(),
                 commitment,
             ).unwrap();
@@ -220,9 +220,9 @@ pub fn prove<F: Field>(
 
 /// Verify a GKR proof from a transcript.
 pub fn verify<F: Field>(
-    public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
-    ligero_inputs: Vec<LigeroInputLayerDescription<F>>,
-    circuit_description: GKRCircuitDescription<F>,
+    public_inputs: &HashMap<LayerId, MultilinearExtension<F>>,
+    ligero_inputs: &Vec<LigeroInputLayerDescription<F>>,
+    circuit_description: &GKRCircuitDescription<F>,
     transcript: &mut impl VerifierTranscript<F>,
 ) -> Result<(), GKRError> {
     // TODO(Ben) Add the circuit description to transcript
@@ -313,7 +313,7 @@ pub fn verify<F: Field>(
 /// Assumes that the inputs have already been added to the transcript (if necessary).
 /// Returns the vector of claims on the input layers.
 pub fn prove_circuit<F: Field>(
-    circuit_description: GKRCircuitDescription<F>,
+    circuit_description: &GKRCircuitDescription<F>,
     inputs: &HashMap<LayerId, MultilinearExtension<F>>,
     transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
 ) -> Result<Vec<ClaimMle<F>>, GKRError> {
@@ -736,7 +736,8 @@ impl<F: Field> GKRCircuitDescription<F> {
 }
 
 /// Generate the circuit description given a set of [NodeEnum]s.
-/// Returns a [GKRCircuitDescription] and a function that takes a map of input shred data and returns a map of input layer data.
+/// Returns a [GKRCircuitDescription], a function that takes a map of input shred data and returns a
+/// map of input layer data, and a 1:1 mapping of input layer node ids to input layer ids.
 /// Circuit description already has indices assigned to the MLEs.
 pub fn generate_circuit_description<F: Field>(
     nodes: Vec<NodeEnum<F>>,
@@ -746,6 +747,7 @@ pub fn generate_circuit_description<F: Field>(
         impl Fn(
             HashMap<NodeId, MultilinearExtension<F>>,
         ) -> Result<HashMap<LayerId, MultilinearExtension<F>>, GKRError>,
+        HashMap<NodeId, LayerId>
     ),
     GKRError,
 > {
@@ -768,7 +770,7 @@ pub fn generate_circuit_description<F: Field>(
     let mut circuit_description_map = CircuitDescriptionMap::new();
 
     let mut input_layer_id_to_input_shred_ids = HashMap::new();
-    let mut input_layer_id_to_input_node_ids = HashMap::new();
+    let mut input_node_id_to_layer_id = HashMap::new();
     let input_layers = input_layer_nodes
         .iter()
         .map(|input_layer_node| {
@@ -778,8 +780,8 @@ pub fn generate_circuit_description<F: Field>(
                     &mut circuit_description_map,
                 )
                 .unwrap();
-            input_layer_id_to_input_node_ids
-                .insert(input_layer_description.layer_id, input_layer_node.id());
+            input_node_id_to_layer_id
+                .insert(input_layer_node.id(), input_layer_description.layer_id);
             input_layer_id_to_input_shred_ids.insert(
                 input_layer_description.layer_id,
                 input_layer_node.subnodes().unwrap()
@@ -864,5 +866,6 @@ pub fn generate_circuit_description<F: Field>(
     Ok((
         circuit_description,
         input_builder,
+        input_node_id_to_layer_id
     ))
 }

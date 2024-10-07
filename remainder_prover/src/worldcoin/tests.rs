@@ -1,18 +1,21 @@
 use crate::prover::helpers::test_circuit;
-use crate::prover::prove_circuit;
+use crate::prover::{prove, prove_circuit, verify};
 use crate::worldcoin::circuits::{build_circuit, build_circuit_description};
 use crate::worldcoin::data::{
     build_iriscode_circuit_data, load_worldcoin_data_v2, wirings_to_reroutings,
 };
 use crate::worldcoin::parameters::decode_wirings;
 use ndarray::Array2;
+use rayon::vec;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
-use remainder_shared_types::transcript::TranscriptWriter;
+use remainder_shared_types::transcript::{TranscriptReader, TranscriptWriter};
 use remainder_shared_types::Fr;
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::path::Path;
 
 #[test]
-fn test_trivial_wiring_2x2_circuit_data() {
+fn test_trivial_wiring_2x2_circuit_data_all_public() {
     // rewirings for the 2x2 identity matrix
     let wirings = &vec![(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
     let reroutings = wirings_to_reroutings(wirings, 2, 2);
@@ -22,16 +25,12 @@ fn test_trivial_wiring_2x2_circuit_data() {
         &vec![1, 0, 1, 0],
         wirings,
     );
-    // The following should return two input layer ids, one for the public inputs and one for the (potentially) private inputs
-    let (circuit_desc, input_builder) = build_circuit_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
+    let (circuit_desc, input_builder, private_input_layer_id) = build_circuit_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
     let mut transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
-    // add circuit description to the transcript
     let inputs = input_builder(data);
-    // add inputs to the transcript.  it is here (i.e. in HolisticProver) that we know which layers are private and which are public (the circuit description doesn't know this)
-    // So do we have a different HolisticProver style struct for each circuit?  Or can it be genericized?
-    // Write a mock one first
-    let input_layer_claims = prove_circuit(circuit_desc, &inputs, &mut transcript_writer);
-    // FIXME(Ben) complete with a check of the input layer claims
+    prove(&inputs, &HashMap::new(), &circuit_desc, &mut transcript_writer).unwrap();
+    let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript_writer.get_transcript());
+    verify(&inputs, &vec![], &circuit_desc, &mut transcript_reader).unwrap();
 }
 
 // FIXME(Ben) remove this once we no longer use build_circuit
