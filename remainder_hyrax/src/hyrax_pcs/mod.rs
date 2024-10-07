@@ -2,7 +2,7 @@ use crate::{
     hyrax_primitives::proof_of_dot_prod::ProofOfDotProduct,
     pedersen::{CommittedScalar, PedersenCommitter},
 };
-use ark_std::cfg_into_iter;
+use ark_std::{cfg_into_iter, log2};
 use itertools::Itertools;
 use ndarray::Array2;
 use rand::Rng;
@@ -169,6 +169,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
                     .collect_vec()
             }
         };
+        dbg!(&log2(commits.len()));
         commits
     }
 
