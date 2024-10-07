@@ -2,16 +2,14 @@
 
 use std::ops::{Add, Mul};
 
+use ff::Field;
 use num::PrimInt;
 use serde::{Deserialize, Serialize};
 use sha3::digest::ExtendableOutput;
 use sha3::digest::Update;
 use sha3::Shake256;
 
-use crate::{
-    curves::{PrimeOrderCurve, Sha3XofReaderWrapper},
-    ec::CurveExt,
-};
+use crate::curves::{PrimeOrderCurve, Sha3XofReaderWrapper};
 
 /// For committing to vectors of integers and scalars using the Pedersen commitment scheme.
 #[derive(Serialize, Deserialize, Clone)]

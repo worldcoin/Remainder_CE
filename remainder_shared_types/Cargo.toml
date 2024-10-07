@@ -29,3 +29,7 @@ ff = "0.13.0"
 [[bench]]
 name = "transcript_bench"
 harness = false
+
+[[bench]]
+name = "pedersen_commitment_bench"
+harness = false
