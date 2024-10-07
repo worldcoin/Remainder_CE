@@ -22,14 +22,15 @@ fn test_trivial_wiring_2x2_circuit_data() {
         &vec![1, 0, 1, 0],
         wirings,
     );
+    // The following should return two input layer ids, one for the public inputs and one for the (potentially) private inputs
     let (circuit_desc, input_builder) = build_circuit_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
-    let transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
+    let mut transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
     // add circuit description to the transcript
     let inputs = input_builder(data);
     // add inputs to the transcript.  it is here (i.e. in HolisticProver) that we know which layers are private and which are public (the circuit description doesn't know this)
     // So do we have a different HolisticProver style struct for each circuit?  Or can it be genericized?
     // Write a mock one first
-    let input_layer_claims = prove_circuit(circuit_desc, inputs, transcript_writer);
+    let input_layer_claims = prove_circuit(circuit_desc, &inputs, &mut transcript_writer);
     // FIXME(Ben) complete with a check of the input layer claims
 }
 

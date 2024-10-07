@@ -215,10 +215,10 @@ pub trait VerifierLayer<F: Field> {
 pub enum LayerId {
     /// An Mle located in the input layer
     Input(usize),
-    /// A layer between the output layer and input layers
-    Layer(usize),
     /// A layer representing values sampled from the verifier via Fiat-Shamir
     FiatShamirChallengeLayer(usize),
+    /// A layer between the output layer and input layers
+    Layer(usize),
 }
 
 /// Implement Display for LayerId, so that we can use it in error messages

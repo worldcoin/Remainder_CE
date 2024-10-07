@@ -44,16 +44,13 @@ pub struct LigeroInputLayer<F: Field> {
     aux: LigeroAuxInfo<F>,
 }
 
+// FIXME(Ben) not used currently
 /// The Ligero evaluation proof that the prover needs to send to the verifier.
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub struct LigeroInputProof<F: Field> {
     /// The auxiliary information required to generate a Ligero proof.
     pub aux: LigeroAuxInfo<F>,
-
-    /// Whether this is a pre-committed (true) or live-committed Ligero input
-    /// layer.
-    pub is_precommit: bool,
 }
 
 /// The Ligero commitment the prover sees, which contains more information than the verifier should see.
@@ -61,6 +58,7 @@ pub type LigeroCommitment<F> = LcCommit<PoseidonSpongeHasher<F>, LigeroAuxInfo<F
 /// The Ligero commitment the prover sends the verifier (adds to transcript) which is the commitment to the root.
 pub type LigeroRoot<F> = LcRoot<LigeroAuxInfo<F>, F>;
 
+// FIXME(Ben) this won't be needed, I don't think
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: Field")]
 /// The circuit description of a [LigeroInputLayer]. Stores the shape information of this layer.
@@ -90,6 +88,11 @@ impl<F: Field> LigeroInputLayerDescription<F> {
             aux,
             _marker: PhantomData,
         }
+    }
+
+    /// Return the [LigeroAuxInfo] for this layer.
+    pub fn aux(&self) -> &LigeroAuxInfo<F> {
+        &self.aux
     }
 }
 
@@ -137,7 +140,7 @@ impl<F: Field> InputLayerTrait<F> for LigeroInputLayer<F> {
             claim.get_point(),
             transcript_writer,
             &self.aux,
-            comm,
+            &comm,
         );
 
         Ok(())
@@ -177,7 +180,7 @@ impl<F: Field> InputLayerDescriptionTrait<F> for LigeroInputLayerDescription<F> 
         // let num_coeffs = 2_usize.pow(claim.get_num_vars() as u32);
         let ligero_aux = &self.aux;
         remainder_ligero_verify::<F>(
-            commitment.root,
+            &commitment.root,
             ligero_aux,
             transcript_reader,
             claim.get_point(),

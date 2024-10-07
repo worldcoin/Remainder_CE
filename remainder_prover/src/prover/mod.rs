@@ -20,7 +20,8 @@ use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::fiat_shamir_challenge::{
     FiatShamirChallenge, FiatShamirChallengeDescription,
 };
-use crate::input_layer::{InputLayer, InputLayerDescription};
+use crate::input_layer::ligero_input_layer::{LigeroCommitment, LigeroInputLayerDescription, LigeroRoot};
+use crate::input_layer::{self, public_input_layer, InputLayer, InputLayerDescription, InputLayerDescriptionTrait};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{Layer, LayerDescription};
 use crate::layouter::layouting::{
@@ -41,8 +42,10 @@ use crate::{
 };
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
+use remainder_ligero::ligero_commit::{remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify};
+use remainder_ligero::LcRoot;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
-use remainder_shared_types::transcript::VerifierTranscript;
+use remainder_shared_types::transcript::{Transcript, VerifierTranscript};
 use remainder_shared_types::transcript::{
     ProverTranscript, TranscriptReaderError, TranscriptWriter,
 };
@@ -70,7 +73,12 @@ pub enum GKRError {
     #[error("Error when verifying layer {0:?}: {1}")]
     /// Error when verifying layer
     ErrorWhenVerifyingLayer(LayerId, LayerError),
-
+    /// The evaluation of the input layer doesn't match the value of the claim from the layer
+    #[error("Evaluation of input layer {0:?} doesn't match value of a claim originating from layer {0:?}.")]
+    EvaluationMismatch(LayerId, LayerId),
+    /// The public input layer values were not as expected by the verifier
+    #[error("Values for public input layer {0:?} were not as expected by the verifier.")]
+    PublicInputLayerValuesMismatch(LayerId),
     /// Error when verifying input layer
     #[error("Error when verifying input layer {0:?}: {1}")]
     ErrorWhenVerifyingInputLayer(LayerId, InputLayerError),
@@ -119,13 +127,196 @@ pub struct InstantiatedCircuit<F: Field> {
     pub layer_map: HashMap<LayerId, Vec<DenseMle<F>>>,
 }
 
+/// Write the GKR proof to transcript.
+/// Appends inputs and Ligero input layer commitments to the transcript: public inputs first, then Ligero input layers, ordering by layer id in both cases.
+/// Arguments:
+/// * `inputs` - a map from input layer ID to the MLE of its values (in the clear) for _all_ input layers.
+/// * `ligero_input_layers` - a vector of [LigeroInputLayerDescription]s, optionally paired with pre-computed commitments to their values (if provided, this are not checked, but simply used as is).
+/// * `circuit_description` - the [GKRCircuitDescription] of the circuit to be proven.
+pub fn prove<F: Field>(
+    inputs: HashMap<LayerId, MultilinearExtension<F>>,
+    ligero_input_layers: HashMap<LayerId, (LigeroInputLayerDescription<F>, Option<LigeroCommitment<F>>)>,
+    circuit_description: GKRCircuitDescription<F>,
+    mut transcript_writer: TranscriptWriter<F, PoseidonSponge<F>>,
+) -> Result<(), GKRError> {
+    // TODO(Ben) Add the circuit description to transcript
+
+    // Add the input values of any public (i.e. non-ligero) input layers to transcript.
+    // Select the public input layers from the input layers, and sort them by layer id, and append
+    // their input values to the transcript.
+    inputs
+        .keys()
+        .filter(|layer_id| !ligero_input_layers.contains_key(layer_id))
+        .sorted_by_key(|layer_id| { 
+            match layer_id {
+                LayerId::Input(id) => id,
+                _ => panic!("Expected LayerId::Input, found {:?}", layer_id),
+            }
+        })
+        .for_each(|layer_id| {
+            let mle = inputs.get(layer_id).unwrap();
+            transcript_writer.append_elements("input layer", mle.get_evals_vector());
+        });
+
+    // For each Ligero input layer, calculate commitments if not already provided, and then add each
+    // commitment to the transcript.
+    let mut ligero_input_commitments = HashMap::<LayerId, LigeroCommitment<F>>::new();
+    ligero_input_layers
+        .keys()
+        .sorted_by_key(|layer_id| {
+            match layer_id {
+                LayerId::Input(id) => id,
+                _ => panic!("Expected LayerId::Input, found {:?}", layer_id),
+            }
+        })
+        .for_each(|layer_id| {
+            // Commit to the Ligero input layer, if it is not already committed to.
+            let (desc, maybe_commitment) = ligero_input_layers.get(layer_id).unwrap();
+            let commitment = if let Some(commitment) = maybe_commitment {
+                commitment.clone()
+            } else {
+                let input_mle = inputs.get(layer_id).unwrap();
+                let (commitment, _) = remainder_ligero_commit(input_mle.get_evals_vector(), &desc.aux());
+                commitment
+            };
+            // Add the root of the commitment to the transcript.
+            let root = commitment.get_root();
+            transcript_writer.append("ligero input layer root", root.into_raw());
+            // Store the commitment for later use.
+            ligero_input_commitments.insert(layer_id.clone(), commitment);
+        });
+
+    let input_layer_claims = prove_circuit(circuit_description, &inputs, &mut transcript_writer).unwrap();
+
+    // If in debug mode, then check the claims on all input layers.
+    if !cfg!(debug_assertions) {
+        for claim in input_layer_claims.iter() {
+            let input_mle = inputs.get(&claim.to_layer_id.unwrap()).unwrap();
+            let evaluation = input_mle.evaluate_at_point(claim.get_claim().get_point());
+            if evaluation != claim.get_claim().get_result() {
+                return Err(GKRError::EvaluationMismatch(claim.to_layer_id.unwrap(), claim.to_layer_id.unwrap()));
+            }
+        }
+    }
+
+    // Create a Ligero evaluation proof for each claim on a Ligero input layer, writing it to transcript.
+    for claim in input_layer_claims.iter() {
+        let layer_id = claim.to_layer_id.unwrap();
+        if let Some((desc, _)) = ligero_input_layers.get(&layer_id) {
+            let mle = inputs.get(&layer_id).unwrap();
+            let commitment = ligero_input_commitments.get(&layer_id).unwrap();
+            remainder_ligero_eval_prove(
+                mle.get_evals_vector(),
+                claim.get_claim().get_point(),
+                &mut transcript_writer,
+                &desc.aux(),
+                commitment,
+            ).unwrap();
+        }
+    }
+
+    Ok(())
+}
+
+/// Verify a GKR proof from a transcript.
+pub fn verify<F: Field>(
+    public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
+    ligero_inputs: Vec<LigeroInputLayerDescription<F>>,
+    circuit_description: GKRCircuitDescription<F>,
+    transcript: &mut impl VerifierTranscript<F>,
+) -> Result<(), GKRError> {
+    // TODO(Ben) Add the circuit description to transcript
+
+    // Read and check public input values to transcript in order of layer id.
+    public_inputs
+        .keys()
+        .sorted_by_key(|layer_id| { 
+            match layer_id {
+                LayerId::Input(id) => id,
+                _ => panic!("Expected LayerId::Input, found {:?}", layer_id),
+            }
+        })
+        .map(|layer_id| {
+            let expected_mle = public_inputs.get(layer_id).unwrap();
+            let transcript_mle = transcript.consume_elements("input layer", 1 << expected_mle.num_vars()).unwrap();
+            if expected_mle.get_evals_vector() != &transcript_mle {
+                return Err(GKRError::PublicInputLayerValuesMismatch(layer_id.clone()));
+            } else {
+                return Ok(());
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Read the Ligero input layer commitments from transcript in order of layer id.
+    let mut ligero_commitments = HashMap::<LayerId, F>::new();
+    ligero_inputs
+        .iter()
+        .sorted_by_key(|desc| {
+            match desc.layer_id() {
+                LayerId::Input(id) => id,
+                _ => panic!("Expected LayerId::Input, found {:?}", desc.layer_id()),
+            }
+        })
+        .for_each(|desc| {
+            let commitment = transcript.consume_element("ligero input layer root").unwrap();
+            ligero_commitments.insert(desc.layer_id(), commitment);
+        });
+
+    let input_layer_claims = circuit_description.verify(transcript).unwrap();
+
+    // Every input layer claim is either for a public- or Ligero- input layer.
+    let mut public_input_layer_claims = vec![];
+    let mut ligero_input_layer_claims = vec![];
+    input_layer_claims.into_iter().for_each(|claim| {
+        let layer_id = claim.to_layer_id.unwrap();
+        if public_inputs.contains_key(&layer_id) {
+            public_input_layer_claims.push(claim);
+        } else if ligero_commitments.contains_key(&layer_id) {
+            ligero_input_layer_claims.push(claim);
+        } else {
+            // This can only be a programming error on our part (since there was sufficient input
+            // data to verify the proof of the circuit).
+            panic!("Input layer {:?} has a claim but is not a public input layer nor a Ligero input layer.", layer_id);
+        }
+    });
+
+    // Check the claims on public input layers via explicit evaluation.
+    for claim in public_input_layer_claims.iter() {
+        let input_mle = public_inputs.get(&claim.to_layer_id.unwrap()).unwrap();
+        let evaluation = input_mle.evaluate_at_point(claim.get_claim().get_point());
+        if evaluation != claim.get_claim().get_result() {
+            return Err(GKRError::EvaluationMismatch(claim.to_layer_id.unwrap(), claim.from_layer_id.unwrap()));
+        }
+    }
+
+    // Check the claims on Ligero input layers via their evaluation proofs.
+
+    // use ligero_commitments to verify the claims
+    // remainder_ligero_verify passing the transcript
+    for claim in ligero_input_layer_claims.iter() {
+        let layer_id = claim.to_layer_id.unwrap();
+        let commitment = ligero_commitments.get(&layer_id).unwrap();
+        let desc = ligero_inputs.iter().find(|desc| desc.layer_id() == layer_id).unwrap();
+        remainder_ligero_verify::<F>(
+            commitment,
+            &desc.aux(),
+            transcript,
+            &claim.get_claim().get_point(),
+            claim.get_claim().get_result(),
+        );
+    }
+
+    Ok(())
+}
+
+// FIXME(Ben) Ensure that the claims are returned in a defined order (important for the Ligero evaluation proofs) (can't just order by id, since there is no claim agg for input layers ATM) (how did claim agg order the claims?) (same for verify).
 /// Assumes that the inputs have already been added to the transcript (if necessary).
 /// Returns the vector of claims on the input layers.
 pub fn prove_circuit<F: Field>(
     circuit_description: GKRCircuitDescription<F>,
-    inputs: HashMap<LayerId, MultilinearExtension<F>>,
-    mut transcript_writer: TranscriptWriter<F, PoseidonSponge<F>>,
-) -> Result<Vec<Claim<F>>, GKRError> {
+    inputs: &HashMap<LayerId, MultilinearExtension<F>>,
+    transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
+) -> Result<Vec<ClaimMle<F>>, GKRError> {
     // Note: no need to return the Transcript, since it is already in the TranscriptWriter!
     // Note(Ben): this can't be an instance method, because it consumes the intermediate layers!
     // Note(Ben): this is a GKR specific method.  So it makes sense for IT to define the challenge sampler, so that the circuit can be instantiated (rather than leaving this complexity to the calling context).
@@ -192,7 +383,7 @@ pub fn prove_circuit<F: Field>(
         let layer_claim = aggregator.prover_aggregate_claims(
             &layer,
             output_mles_from_layer,
-            &mut transcript_writer,
+            transcript_writer,
         )?;
 
         end_timer!(claim_aggr_timer);
@@ -203,7 +394,7 @@ pub fn prove_circuit<F: Field>(
 
         // Compute all sumcheck messages across this particular layer.
         layer
-            .prove_rounds(layer_claim, &mut transcript_writer)
+            .prove_rounds(layer_claim, transcript_writer)
             .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
         end_timer!(sumcheck_msg_timer);
@@ -220,36 +411,13 @@ pub fn prove_circuit<F: Field>(
 
     // FIXME(Ben) add back claim agg for input layers
     // (Wait until Makis has finished his YieldClaims refactor).
-    let input_layer_claims = input_layers.iter().filter_map(|input_layer| aggregator.get_claims(input_layer.layer_id)).flatten().map(|claim_mle| claim_mle.get_claim().clone()).collect_vec();
+    let input_layer_claims = input_layers.iter().filter_map(|input_layer| aggregator.get_claims(input_layer.layer_id)).flatten().cloned().collect_vec();
 
     Ok(input_layer_claims)
 }
 
 /// Controls claim aggregation behavior.
 pub const ENABLE_OPTIMIZATION: bool = true;
-
-
-/*GKRProof
-    public_input_layers
-    ligero_input_layers
-    circuit
-    .verify(transcript)
- */
-pub struct GKRProof<F: Field> {
-    pub public_input_layers: Vec<InputLayerDescription>,
-    pub ligero_input_layers: Vec<InputLayerDescription>,
-    pub circuit: GKRCircuitDescription<F>,
-}
-
-impl<F: Field> GKRProof<F> {
-    pub fn verify(
-        &mut self,
-        transcript: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), GKRError> {
-        let input_layer_claims = self.circuit.verify(transcript);
-        Ok(())
-    }
-}
 
 /// The Verifier Key associated with a GKR proof of a [ProofSystem].
 /// It consists of consice GKR Circuit description to be use by the Verifier.
