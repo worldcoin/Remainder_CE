@@ -12,7 +12,7 @@ fn create_random_field_vec<F: Field>(num_items: usize, mut rng: impl Rng) -> Vec
 }
 
 fn bench_vector_commitment(c: &mut Criterion) {
-    for log_num_elems in [1, 2, 3, 4, 5] {
+    for log_num_elems in [6, 7, 8] {
         c.bench_function(
             &format!("pedersen_vector_commit_bench_log_{log_num_elems}"),
             |b| {
