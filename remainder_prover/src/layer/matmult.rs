@@ -108,47 +108,13 @@ impl<F: Field> MatMult<F> {
             panic!("Matrix dimensions do not match")
         }
 
-        let matrix_a_transp = gen_transpose_matrix(&self.matrix_a);
-
-        let mut matrix_a_transp = matrix_a_transp.mle;
-
-        matrix_a_transp.index_mle_indices(0);
+        matrix_a_mle.index_mle_indices(0);
         matrix_b_mle.index_mle_indices(0);
 
         // bind the row indices of matrix a to relevant claim point
         claim_a.into_iter().enumerate().for_each(|(idx, chal)| {
-            matrix_a_transp.fix_variable(idx, chal);
+            matrix_a_mle.fix_variable_at_index(idx + self.matrix_a.cols_num_vars, chal);
         });
-        let mut bound_indices_a = vec![];
-
-        let new_a_indices = matrix_a_transp
-            .mle_indices
-            .clone()
-            .into_iter()
-            .filter_map(|index: MleIndex<F>| {
-                if let MleIndex::Indexed(_) = index {
-                    Some(MleIndex::Free)
-                } else if let MleIndex::Bound(..) = index {
-                    bound_indices_a.push(index);
-                    None
-                } else {
-                    Some(index)
-                }
-            })
-            .collect_vec();
-
-        let mut mle_a = DenseMle::new_from_raw(
-            matrix_a_transp.bookkeeping_table().to_vec(),
-            matrix_a_transp.layer_id,
-        );
-
-        mle_a.mle_indices = new_a_indices
-            .into_iter()
-            .chain(bound_indices_a)
-            .collect_vec();
-        mle_a.index_mle_indices(0);
-
-        self.matrix_a.mle = mle_a;
 
         // bind the column indices of matrix b to relevant claim point
         claim_b.into_iter().enumerate().for_each(|(idx, chal)| {
@@ -759,58 +725,6 @@ impl<F: std::fmt::Debug + Field> MatMult<F> {
     }
 }
 
-/// Generate the transpose of a matrix, uses Array2 from ndarray
-pub fn gen_transpose_matrix<F: Field>(matrix: &Matrix<F>) -> Matrix<F> {
-    let num_rows = 1 << matrix.rows_num_vars;
-    let num_cols = 1 << matrix.cols_num_vars;
-
-    // Memory-efficient, sequential implementation.
-    let mut matrix_transp_vec = Vec::with_capacity(num_cols * num_rows);
-
-    matrix.mle.bookkeeping_table();
-    for i in 0..num_cols {
-        for j in 0..num_rows {
-            matrix_transp_vec.push(matrix.mle.mle[j * num_cols + i]);
-        }
-    }
-
-    let mle = DenseMle::new_with_indices(
-        &matrix_transp_vec,
-        matrix.mle.layer_id,
-        &matrix.mle.mle_indices,
-    );
-
-    Matrix::new(mle, matrix.cols_num_vars, matrix.rows_num_vars)
-}
-
-/// Multiply two matrices together, with a transposed matrix_b
-pub fn product_two_matrices<F: Field>(matrix_a: &Matrix<F>, matrix_b: &Matrix<F>) -> Vec<F> {
-    let num_middle_ab = 1 << matrix_a.cols_num_vars;
-
-    let matrix_b_transpose = gen_transpose_matrix(matrix_b);
-
-    let product_matrix = matrix_a
-        .mle
-        .bookkeeping_table()
-        .chunks(num_middle_ab)
-        .flat_map(|chunk_a| {
-            matrix_b_transpose
-                .mle
-                .bookkeeping_table()
-                .chunks(num_middle_ab)
-                .map(|chunk_b| {
-                    chunk_a
-                        .iter()
-                        .zip(chunk_b.iter())
-                        .fold(F::ZERO, |acc, (&a, &b)| acc + (a * b))
-                })
-                .collect_vec()
-        })
-        .collect_vec();
-
-    product_matrix
-}
-
 /// Compute the product of two matrices given flattened vectors rather than
 /// matrices.
 pub fn product_two_matrices_from_flattened_vectors<F: Field>(
@@ -845,13 +759,7 @@ mod test {
 
     use remainder_shared_types::Fr;
 
-    use crate::{
-        layer::{
-            matmult::{product_two_matrices, Matrix},
-            LayerId,
-        },
-        mle::dense::DenseMle,
-    };
+    use crate::layer::matmult::product_two_matrices_from_flattened_vectors;
 
     #[test]
     fn test_product_two_matrices() {
@@ -867,10 +775,8 @@ mod test {
         ];
         let mle_vec_b = vec![Fr::from(3), Fr::from(5), Fr::from(9), Fr::from(6)];
 
-        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 2, 1);
-        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 1, 1);
-
-        let res_product = product_two_matrices(&matrix_a, &matrix_b);
+        let res_product =
+            product_two_matrices_from_flattened_vectors(&mle_vec_a, &mle_vec_b, 4, 2, 2, 2);
 
         let exp_product = vec![
             Fr::from(3 + 2 * 9),
@@ -933,10 +839,8 @@ mod test {
             Fr::from(4),
         ];
 
-        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 3, 2);
-        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 2, 1);
-
-        let res_product = product_two_matrices(&matrix_a, &matrix_b);
+        let res_product =
+            product_two_matrices_from_flattened_vectors(&mle_vec_a, &mle_vec_b, 8, 4, 4, 2);
 
         let exp_product = vec![
             Fr::from(58),
