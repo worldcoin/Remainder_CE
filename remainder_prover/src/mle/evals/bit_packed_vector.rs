@@ -1,4 +1,5 @@
-//! TODO: Module comment.
+//! Implements [BitPackedVector], a version of an immutable vector optimized for
+//! storing field elements compactly.
 
 use ::serde::{Deserialize, Serialize};
 use ark_std::cfg_into_iter;
@@ -10,11 +11,11 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use itertools::FoldWhile::{Continue, Done};
 
-/// Controls whether bit-packing is actually enabled. If set to `false`,
-/// the [BitPackedVector] will default to storing each field element
-/// using the type `F`, effectively behaving like a regular `Vec<F>`.
-/// This is needed because bit-packing incurs a noticable runtime slowdown,
-/// and we needed an easy way to turn it off and trade memory for speed.
+/// Controls whether bit-packing is actually enabled. If set to `false`, the
+/// [BitPackedVector] will default to storing each field element using the type
+/// `F`, effectively behaving like a regular (immutable) `Vec<F>`. This is
+/// needed because bit-packing incurs a noticable runtime slowdown, and we need
+/// an easy way to turn it off if trading memory for speed is desirable.
 const ENABLE_BIT_PACKING: bool = true;
 
 // -------------- Helper Functions -----------------
@@ -133,7 +134,7 @@ impl<F: Field> BitPackedVector<F> {
                 naive_buf: data.to_vec(),
                 num_elements: data.len(),
                 offset: F::ZERO,
-                bits_per_element: 4 * size_of::<u64>() * 8,
+                bits_per_element: 4 * (u64::BITS as usize),
             };
         }
 

@@ -478,15 +478,10 @@ impl<F: Field> MultilinearExtension<F> {
 
     /// Set the MLE as an ndarray.
     pub fn get_mle_as_ndarray(&mut self) -> Result<ArrayView<F, IxDyn>, Box<dyn Error>> {
-        unimplemented!()
-
-        // if let Some(dim_info) = self.dim_info() {
-        //     let ndarray: ArrayView<F, IxDyn> =
-        //         ArrayView::from_shape(dim_info.dims.clone(), self.get_evals_vector())?;
-        //     Ok(ndarray)
-        // } else {
-        //     Err(DimensionError::NoDimensionInfoError().into())
-        // }
+        // This is currently unimplemeted because `ArrayView` requires a valid
+        // reference to an array slice, but with the `BitPackedVector`
+        // implementation we no longer maintain such a representation.
+        unimplemented!();
     }
 
     /// Get the names of the axes of the MLE (multi-dimensional).
