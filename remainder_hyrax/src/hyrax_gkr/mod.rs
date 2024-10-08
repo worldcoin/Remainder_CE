@@ -329,6 +329,7 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
 
         let output_layer_proofs = output_layers
             .iter_mut()
+            .sorted_by_key(|output_layer| output_layer.layer_id().get_layer_id())
             .map(|output_layer| {
                 // Create the HyraxOutputLayerProof
                 let (output_layer_proof, committed_output_claim) = HyraxOutputLayerProof::prove(
@@ -428,6 +429,7 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
         // Output layer verification
         output_layer_proofs
             .iter()
+            .sorted_by_key(|output_layer_proof| output_layer_proof.layer_id.get_layer_id())
             .zip(circuit_description.output_layers.iter())
             .for_each(|(output_layer_proof, output_layer_desc)| {
                 let output_layer_claim = HyraxOutputLayerProof::verify(

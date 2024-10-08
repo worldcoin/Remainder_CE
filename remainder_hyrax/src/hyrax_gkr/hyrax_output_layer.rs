@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use rand::Rng;
+use remainder::layer::{Layer, LayerId};
 use remainder::mle::{Mle, MleIndex};
 use remainder::output_layer::{OutputLayer, OutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
@@ -15,6 +16,8 @@ use super::hyrax_layer::HyraxClaim;
 /// output layer was evaluated on, so that the verifier can check
 /// whether these match the transcript.
 pub struct HyraxOutputLayerProof<C: PrimeOrderCurve> {
+    /// The layer id
+    pub layer_id: LayerId,
     /// The commitment to the claim that the output layer is making
     pub claim_commitment: C,
 }
@@ -51,6 +54,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
 
         (
             Self {
+                layer_id: output_layer.get_mle().layer_id(),
                 claim_commitment: commitment,
             },
             committed_claim,

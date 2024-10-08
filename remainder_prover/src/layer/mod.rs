@@ -243,6 +243,14 @@ impl LayerId {
         }
     }    
 
+    /// Returns the underlying usize if self is a variant of type Input, otherwise panics.
+    pub fn get_layer_id(&self) -> usize {
+        match self {
+            LayerId::Layer(id) => *id,
+            _ => panic!("Expected LayerId::Layer, found {:?}", self),
+        }
+    }    
+
     /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number
     pub fn next(&self) -> LayerId {
         match self {
