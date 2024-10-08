@@ -10,6 +10,13 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use itertools::FoldWhile::{Continue, Done};
 
+/// Controls whether bit-packing is actually enabled. If set to `false`,
+/// the [BitPackedVector] will default to storing each field element
+/// using the type `F`, effectively behaving like a regular `Vec<F>`.
+/// This is needed because bit-packing incurs a noticable runtime slowdown,
+/// and we needed an easy way to turn it off and trade memory for speed.
+const ENABLE_BIT_PACKING: bool = true;
+
 // -------------- Helper Functions -----------------
 
 /// Returns `floor(log(n)) + 1` as a usize, aka the number of bits needed to
@@ -61,32 +68,33 @@ pub fn num_bits<F: Field>(n: F) -> usize {
 /// range `[0, p-1]` and tries to encode each with fewer bits than the default
 /// of `sizeof::<F>() * 8` bits.
 ///
-/// In particular, it computes the smallest interval `[a, b]`, with `a < b`,
-/// such that all elements `v[i]` in the input vector (interpreted as integers)
-/// belong to `[a, b]`, and then instead of storing `v[i]`, it stores the value
-/// `(v[i] - a) \in [0, b - a]`. If `b - a` is a small integer, representing
-/// `v[i] - a` can be done using `ceil(log_2(b - a + 1))` bits.
+/// In particular, when a new bitpacked vector is created, the
+/// [BitPackedVector::new] method computes the smallest interval `[a, b]`, with
+/// `a < b`, such that all elements `v[i]` in the input vector (interpreted as
+/// integers) belong to `[a, b]`, and then instead of storing `v[i]`, it stores
+/// the value `(v[i] - a) \in [0, b - a]`. If `b - a` is a small integer,
+/// representing `v[i] - a` can be done using `ceil(log_2(b - a + 1))` bits.
 ///
 /// It then stores the encoded values compactly by packing together the
 /// representation of many consecutive elements into a single machine word (when
-/// possible) to achieve a total size of `n * ceil(log_2(b - a + 1)) * 64 bits`
-/// for a 64-bit machine.
+/// possible). This encoding can store `n` elements using a total size of `(n *
+/// ceil(log_2(b - a + 1)) * word_width) bits`.
 ///
 /// # Notes
-/// 1. Currently the implementation uses more storage than what is mentioned
-/// above. This is because:
-///   a. If `ceil(log_2(b - a + 1)) > 64`, we resort to the standard
-///   representation of using `sizeof::<F>()` bytes. This is because for our
-///   use-case, there are not many instances of vectors needing `c \in [65,
-///   256]` bits to encode each value.
-///   b. We round `ceil(log_2(b - a + 1))` up to the nearest divisor of 64. This
-///   is to simplify the implementation by avoiding the situation where the
-///   encoding of an element spans multiple words.
+/// 1. Currently the implementation uses more storage than the theoretically
+///    optimal mentioned above. This is because:
+///    a. If `ceil(log_2(b - a + 1)) > 64`, we resort to the standard
+///       representation of using `sizeof::<F>()` bytes. This is because for our
+///       use-case, there are not many instances of vectors needing `c \in [65,
+///       256]` bits to encode each value.
+///    b. We round `ceil(log_2(b - a + 1))` up to the nearest divisor of 64.
+///       This is to simplify the implementation by avoiding the situation where
+///       the encoding of an element spans multiple words.
 /// 2. For optimal performance, the buffer used to store the encoded values
-/// should be using machine words (e.g. `buf: Vec<usize>`) instead of always
-/// defaulting to 64-bit entries (`buf: Vec<u64>`) Here we always assume a
-/// 64-bit architecture for the simplicity of the implementation.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
+///    should be using machine words (e.g. `buf: Vec<usize>`) instead of always
+///    defaulting to 64-bit entries (`buf: Vec<u64>`) Here we always assume a
+///    64-bit architecture for the simplicity of the implementation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub(in crate::mle::evals) struct BitPackedVector<F: Field> {
     /// The buffer for storing the bit-packed representation.
@@ -119,6 +127,16 @@ pub(in crate::mle::evals) struct BitPackedVector<F: Field> {
 impl<F: Field> BitPackedVector<F> {
     /// Generates a bit-packed vector initialized with `data`.
     pub fn new(data: &[F]) -> Self {
+        if !ENABLE_BIT_PACKING {
+            return Self {
+                buf: vec![],
+                naive_buf: data.to_vec(),
+                num_elements: data.len(),
+                offset: F::ZERO,
+                bits_per_element: 4 * size_of::<u64>() * 8,
+            };
+        }
+
         // Handle empty vectors separately.
         if data.is_empty() {
             return Self {
@@ -152,7 +170,7 @@ impl<F: Field> BitPackedVector<F> {
         let bits_per_element = num_bits(range);
 
         // Bits available per buffer entry.
-        let entry_width = size_of::<u64>() * 8;
+        let entry_width = u64::BITS as usize;
         // println!("Buffer entry width: {entry_width}");
 
         // To simplify the implementation, for now we only support bit-packing
@@ -193,7 +211,7 @@ impl<F: Field> BitPackedVector<F> {
             let mut buf = vec![0_u64; buf_len];
 
             for (i, x) in data.iter().enumerate() {
-                let encoded_x = *(*x - min_val).to_u64s_le().get(0).unwrap();
+                let encoded_x = *(*x - min_val).to_u64s_le().first().unwrap();
                 // println!("Encoded value of {:?}: {encoded_x}", x);
 
                 let buffer_idx = i * bits_per_element / entry_width;
@@ -240,7 +258,7 @@ impl<F: Field> BitPackedVector<F> {
         }
 
         // Bits per buffer entry.
-        let entry_width = size_of::<u64>() * 8;
+        let entry_width = u64::BITS as usize;
 
         if self.bits_per_element > entry_width {
             Some(self.naive_buf[index])
@@ -273,7 +291,7 @@ impl<F: Field> BitPackedVector<F> {
 
     pub fn iter(&self) -> BitPackedIterator<F> {
         BitPackedIterator {
-            vec: &self,
+            vec: self,
             current_index: 0,
         }
     }

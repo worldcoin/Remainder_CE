@@ -65,6 +65,11 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     /// Returns the length of the current bookkeeping table.
     fn len(&self) -> usize;
 
+    /// Returns `true` if the Mle is of length zero.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Returns an iterator over the evaluations of the current MLE.
     fn iter(&self) -> EvaluationsIterator<F>;
 
