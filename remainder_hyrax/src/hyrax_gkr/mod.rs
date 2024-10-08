@@ -45,7 +45,8 @@ pub mod tests;
 /// The struct that holds all the respective proofs that the verifier needs in order
 /// to verify a Hyrax proof, i.e. the circuit proof along with the proofs for each input layer.
 pub struct HyraxProof<C: PrimeOrderCurve> {
-    /// The MLEs of the public inputs, along with their layer ids
+    /// The MLEs of the public inputs, along with their layer ids.
+    /// To be appended to transcript in order of LayerId ascending.
     pub public_inputs: Vec<(LayerId, MultilinearExtension<C::Scalar>)>,
     /// The proof for the circuit proper, i.e. the intermediate layers and output layers.
     pub circuit_proof: HyraxCircuitProof<C>,
@@ -57,10 +58,12 @@ pub struct HyraxProof<C: PrimeOrderCurve> {
 }
 
 impl<C: PrimeOrderCurve> HyraxProof<C> {
-    // FIXME(Ben) document
-    // Hyrax commitments are appended to transcript in order of LayerId ascending.
-    // this is also the ordering of `HyraxProof.hyrax_input_proofs`.
-    // Pre: circuit_description.index_mle_indices(0); has been called
+    /// Create a [HyraxProof].
+    /// Values of public input layers are appended to transcript in order of LayerId ascending.
+    /// Hyrax commitments are appended to transcript in order of LayerId ascending.
+    /// this is also the ordering of `HyraxProof.hyrax_input_proofs`.
+    /// # Requires:
+    ///   * circuit_description.index_mle_indices(0); has been called
     pub fn prove(
         inputs: &HashMap<LayerId, MultilinearExtension<C::Scalar>>,
         hyrax_input_layers: &HashMap<LayerId, (HyraxInputLayerDescription, Option<HyraxInputCommitment<C>>)>,
@@ -192,8 +195,11 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         }
     }
 
-    // Pre: circuit_description.index_mle_indices(0); has been called
-    // FIXME(Ben) document
+    /// Verify this [HyraxProof] instance, matching it against the provided circuit description and
+    /// descriptions of the hyrax input layers.
+    /// Panics if verification fails.
+    /// # Requires:
+    ///   * circuit_description.index_mle_indices(0); has been called
     pub fn verify(
         &self,
         hyrax_input_layers: &HashMap<LayerId, HyraxInputLayerDescription>,
@@ -207,6 +213,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         self
             .public_inputs
             .iter()
+            .sorted_by_key(|(layer_id, _)| layer_id.get_input_layer_id())
             .for_each(|(_layer_id, public_input)| {
                 let public_input = public_input.get_evals_vector();
                 let transcript_values = transcript
@@ -241,21 +248,21 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
             .collect();
 
         // Verify the circuit proof, and obtain the claims on the input layers
-        let mut input_layer_claims: HashMap<LayerId, Vec<HyraxClaim<C::Scalar, C>>> = HashMap::new();
-        self.circuit_proof.verify(
+        let input_layer_claims_vec = self.circuit_proof.verify(
             circuit_description,
             committer,
             fiat_shamir_challenges,
             transcript,
-        )
-        .into_iter()
-        .for_each(|claim| {
-            if input_layer_claims.contains_key(&claim.to_layer_id) {
-                input_layer_claims.get_mut(&claim.to_layer_id).unwrap().push(claim);
-            } else {
-                input_layer_claims.insert(claim.to_layer_id, vec![claim]);
-            }
-        });
+        );
+        let mut input_layer_claims: HashMap<LayerId, Vec<HyraxClaim<C::Scalar, C>>> = HashMap::new();
+        input_layer_claims_vec.into_iter()
+            .for_each(|claim| {
+                if input_layer_claims.contains_key(&claim.to_layer_id) {
+                    input_layer_claims.get_mut(&claim.to_layer_id).unwrap().push(claim);
+                } else {
+                    input_layer_claims.insert(claim.to_layer_id, vec![claim]);
+                }
+            });
 
         // For each public input layer, pop the claims, match them up with the corresponding claims
         // on public values provided by the prover, and verify them directly.
