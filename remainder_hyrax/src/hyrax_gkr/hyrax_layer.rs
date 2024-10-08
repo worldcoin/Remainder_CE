@@ -16,7 +16,7 @@ use remainder::layer::LayerId;
 use remainder::{claims::wlx_eval::claim_group::ClaimGroup, mle::dense::DenseMle};
 use remainder::{claims::wlx_eval::ClaimMle, layer::LayerDescription};
 use remainder::{claims::wlx_eval::YieldWLXEvals, layer::layer_enum::LayerEnum};
-use remainder_shared_types::curves::PrimeOrderCurve;
+use remainder_shared_types::{curves::PrimeOrderCurve, transcript::ec_transcript::ECTranscriptTrait};
 use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
 use remainder_shared_types::Field;
@@ -87,7 +87,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         output_mles_from_layer: &[DenseMle<C::Scalar>],
         committer: &PedersenCommitter<C>,
         mut blinding_rng: &mut impl Rng,
-        transcript: &mut impl ECProverTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
         converter: &mut VandermondeInverse<C::Scalar>,
     ) -> (Self, Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>) {
         let interpolant_coeffs = if claims.len() > 1 {
@@ -233,7 +233,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // commitments to the unaggregated claims
         claim_commitments: &[HyraxClaim<C::Scalar, C>],
         committer: &PedersenCommitter<C>,
-        transcript: &mut impl ECVerifierTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) -> Vec<HyraxClaim<C::Scalar, C>> {
         let HyraxLayerProof {
             proof_of_claim_agg,
@@ -253,16 +253,9 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         let _sumcheck_round_indices = layer_desc.sumcheck_round_indices();
 
         // Verify the proof of sumcheck
-        // Add first sumcheck message to transcript, which is the proported sum.
+        // Append first sumcheck message to transcript, which is the proported sum.
         if num_sumcheck_rounds_expected > 0 {
-            let transcript_first_sumcheck_message = transcript
-                .consume_ec_point("sumcheck message commitment")
-                .unwrap();
-
-            assert_eq!(
-                transcript_first_sumcheck_message,
-                proof_of_sumcheck.messages[0]
-            );
+            transcript.append_ec_point("sumcheck message commitment", proof_of_sumcheck.messages[0]);
         }
 
         // Collect the "bindings" for each of the sumcheck rounds. Add sumcheck messages to transcript.
@@ -273,21 +266,15 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             .skip(1)
             .for_each(|message| {
                 let challenge = transcript
-                    .get_scalar_field_challenge("sumcheck round challenge")
-                    .unwrap();
+                    .get_scalar_field_challenge("sumcheck round challenge");
                 bindings.push(challenge);
 
-                let transcript_sumcheck_message_commit = transcript
-                    .consume_ec_point("sumcheck message commitment")
-                    .unwrap();
-                assert_eq!(&transcript_sumcheck_message_commit, message);
+                transcript.append_ec_point("sumcheck message commitment", *message);
             });
 
         // Final challenge in sumcheck -- needed for "oracle query".
         if num_sumcheck_rounds_expected > 0 {
-            let final_chal = transcript
-                .get_scalar_field_challenge("sumcheck round challenge")
-                .unwrap();
+            let final_chal = transcript.get_scalar_field_challenge("sumcheck round challenge");
             bindings.push(final_chal);
         }
 
@@ -295,10 +282,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         assert_eq!(bindings.len(), num_sumcheck_rounds_expected);
 
         // Add the commitments made by the prover to the transcript
-        let transcript_commitments: Vec<C> = transcript
-            .consume_ec_points("commitment to product input/outputs", commitments.len())
-            .unwrap();
-        assert_eq!(&transcript_commitments, commitments);
+        transcript.append_ec_points("commitment to product input/outputs", &commitments);
 
         let post_sumcheck_layer_desc =
             layer_desc.get_post_sumcheck_layer(&bindings, &agg_claim.point);

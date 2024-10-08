@@ -5,8 +5,7 @@ use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
 /// Tests for the Pedersen commitment scheme using the BN254 (aka BN256) curve and its scalar field (Fr).
 use remainder_shared_types::halo2curves::group::Group;
 use remainder_shared_types::halo2curves::CurveExt;
-use remainder_shared_types::transcript::ec_transcript::ECTranscriptReader;
-use remainder_shared_types::transcript::ec_transcript::ECTranscriptWriter;
+use remainder_shared_types::transcript::ec_transcript::ECTranscript;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 
 use crate::hyrax_pcs::HyraxPCSProof;
@@ -35,9 +34,8 @@ fn sanity_check_test_honest_prover_small_identity() {
     let mle_evaluation_at_challenge = Scalar::one();
     let log_split_point = 1;
     let prover_random_generator = &mut rand::thread_rng();
-    let mut prover_transcript = ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new(
-        "testing proof of dot product - prover",
-    );
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let blinding_factors_matrix_rows = (0..2).map(|_| Scalar::one()).collect_vec();
 
@@ -60,19 +58,18 @@ fn sanity_check_test_honest_prover_small_identity() {
         &mle_evaluation_at_challenge,
         &committer_copy,
         prover_random_generator,
-        &mut prover_transcript,
+        &mut transcript,
         &blinding_factors_matrix_rows,
     );
 
-    let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
-        prover_transcript.get_transcript(),
-    );
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     hyrax_eval_proof.verify(
         log_split_point,
         &committer,
         &comm_to_matrix,
         &challenge_coordinates,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -96,9 +93,8 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
 
     let log_split_point = 1;
     let prover_random_generator = &mut rand::thread_rng();
-    let mut prover_transcript = ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new(
-        "testing proof of dot product - prover",
-    );
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let blinding_factors_matrix_rows = (0..4).map(|_| Scalar::one()).collect_vec();
 
@@ -116,19 +112,18 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
         &mle_evaluation_at_challenge,
         &committer_copy,
         prover_random_generator,
-        &mut prover_transcript,
+        &mut transcript,
         &blinding_factors_matrix_rows,
     );
 
-    let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
-        prover_transcript.get_transcript(),
-    );
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     hyrax_eval_proof.verify(
         log_split_point,
         &committer,
         &comm_to_matrix,
         &challenge_coordinates,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -174,9 +169,8 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         });
     let log_split_point = 1;
     let prover_random_generator = &mut rand::thread_rng();
-    let mut prover_transcript = ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new(
-        "testing proof of dot product - prover",
-    );
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let blinding_factors_matrix_rows = (0..4)
         .map(|_| Scalar::from(rand::random::<u64>()))
@@ -196,19 +190,18 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         &mle_evaluation_at_challenge,
         &committer_copy,
         prover_random_generator,
-        &mut prover_transcript,
+        &mut transcript,
         &blinding_factors_matrix_rows,
     );
 
-    let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
-        prover_transcript.get_transcript(),
-    );
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     hyrax_eval_proof.verify(
         log_split_point,
         &committer,
         &comm_to_matrix,
         &challenge_coordinates,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -246,9 +239,8 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         });
     let log_split_point = 9;
     let prover_random_generator = &mut rand::thread_rng();
-    let mut prover_transcript = ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new(
-        "testing proof of dot product - prover",
-    );
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let blinding_factors_matrix_rows = (0..(1 << 9))
         .map(|_| Scalar::from(rand::random::<u64>()))
@@ -268,18 +260,17 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         &mle_evaluation_at_challenge,
         &committer_copy,
         prover_random_generator,
-        &mut prover_transcript,
+        &mut transcript,
         &blinding_factors_matrix_rows,
     );
 
-    let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
-        prover_transcript.get_transcript(),
-    );
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     hyrax_eval_proof.verify(
         log_split_point,
         &committer,
         &comm_to_matrix,
         &challenge_coordinates,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
