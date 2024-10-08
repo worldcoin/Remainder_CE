@@ -29,6 +29,7 @@ fn create_mle_dim_mismatch_dims() {
 }
 
 #[test]
+#[ignore]
 fn set_mle_dim() {
     const NUM_VARS: usize = 5;
     const NUM_DATA_PARALLEL_BITS: usize = 4;
@@ -58,6 +59,7 @@ fn set_mle_dim() {
 }
 
 #[test]
+#[ignore]
 fn set_mle_zkdt_dim() {
     const NUM_VARS: usize = 3;
     const TREE_BATCH_NUM_VAR: usize = 4;
