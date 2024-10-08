@@ -43,7 +43,6 @@ use crate::{
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use remainder_ligero::ligero_commit::{remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify};
-use remainder_ligero::LcRoot;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::transcript::{Transcript, VerifierTranscript};
 use remainder_shared_types::transcript::{
@@ -139,8 +138,6 @@ pub fn prove<F: Field>(
     circuit_description: &GKRCircuitDescription<F>,
     transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
 ) -> Result<(), GKRError> {
-    // TODO(Ben) Add the circuit description to transcript
-
     // Add the input values of any public (i.e. non-ligero) input layers to transcript.
     // Select the public input layers from the input layers, and sort them by layer id, and append
     // their input values to the transcript.
@@ -215,8 +212,6 @@ pub fn verify<F: Field>(
     circuit_description: &GKRCircuitDescription<F>,
     transcript: &mut impl VerifierTranscript<F>,
 ) -> Result<(), GKRError> {
-    // TODO(Ben) Add the circuit description to transcript
-
     // Read and check public input values to transcript in order of layer id.
     public_inputs
         .keys()

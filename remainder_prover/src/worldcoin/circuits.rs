@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::digits::components::{
     BitsAreBinary, ComplementaryRecompChecker, DigitsConcatenator, UnsignedRecomposition,
 };
+use crate::input_layer::InputLayerDescription;
 use crate::layer::LayerId;
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::{Component, ComponentSet};
@@ -211,7 +212,7 @@ pub fn build_circuit<
 
 /// Builds the iriscode circuit, return the circuit description, the input node map and the input
 /// layer ids of the input layers for the public and private inputs.
-pub fn build_circuit_description<
+pub fn build_iriscode_circuit_description<
     F: Field,
     const TO_REROUTE_NUM_VARS: usize,
     const MATMULT_ROWS_NUM_VARS: usize,
@@ -224,7 +225,7 @@ pub fn build_circuit_description<
 ) -> (
     GKRCircuitDescription<F>,
     impl Fn(IriscodeCircuitData<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
-    LayerId
+    InputLayerDescription
 ) {
     assert!(BASE.is_power_of_two());
     let log_base = BASE.ilog2() as usize;
@@ -401,10 +402,11 @@ pub fn build_circuit_description<
         input_builder_from_shred_map(input_shred_id_to_data).unwrap()
     };
 
-    let private_input_layer_id = input_node_id_to_layer_id.get(&public_input_layer.id()).unwrap().clone();
+    let private_input_layer_id = input_node_id_to_layer_id.get(&private_input_layer.id()).unwrap().clone();
+    let private_input_layer = circ_desc.input_layers.iter().find(|il| il.layer_id == private_input_layer_id).unwrap().clone();
     (
         circ_desc,
         input_builder,
-        private_input_layer_id,
+        private_input_layer,
     )
 }
