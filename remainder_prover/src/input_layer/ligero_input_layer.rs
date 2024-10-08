@@ -58,7 +58,6 @@ pub type LigeroCommitment<F> = LcCommit<PoseidonSpongeHasher<F>, LigeroAuxInfo<F
 /// The Ligero commitment the prover sends the verifier (adds to transcript) which is the commitment to the root.
 pub type LigeroRoot<F> = LcRoot<LigeroAuxInfo<F>, F>;
 
-// FIXME(Ben) this won't be needed, I don't think
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: Field")]
 /// The circuit description of a [LigeroInputLayer]. Stores the shape information of this layer.
@@ -71,8 +70,6 @@ pub struct LigeroInputLayerDescription<F: Field> {
 
     /// The auxiliary information needed to verify the proof.
     aux: LigeroAuxInfo<F>,
-
-    _marker: PhantomData<F>,
 }
 
 impl<F: Field> LigeroInputLayerDescription<F> {
@@ -86,7 +83,6 @@ impl<F: Field> LigeroInputLayerDescription<F> {
             layer_id,
             num_bits,
             aux,
-            _marker: PhantomData,
         }
     }
 
