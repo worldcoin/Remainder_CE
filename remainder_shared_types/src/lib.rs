@@ -1,4 +1,5 @@
 pub mod curves;
+pub mod pedersen;
 pub mod transcript;
 
 use std::hash::Hash;
