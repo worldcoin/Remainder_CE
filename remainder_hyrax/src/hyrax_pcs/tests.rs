@@ -40,7 +40,6 @@ fn sanity_check_test_honest_prover_small_identity() {
     );
 
     let blinding_factors_matrix_rows = (0..2).map(|_| Scalar::one()).collect_vec();
-    let blinding_factor_evaluation = Scalar::one();
 
     let mut seed_matrix = [0u8; 32];
     OsRng.fill_bytes(&mut seed_matrix);
@@ -102,7 +101,6 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
     );
 
     let blinding_factors_matrix_rows = (0..4).map(|_| Scalar::one()).collect_vec();
-    let blinding_factor_evaluation = Scalar::one();
 
     let comm_to_matrix = HyraxPCSProof::compute_matrix_commitments(
         log_split_point,
@@ -117,7 +115,6 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
         &challenge_coordinates,
         &mle_evaluation_at_challenge,
         &committer_copy,
-        blinding_factor_evaluation,
         prover_random_generator,
         &mut prover_transcript,
         &blinding_factors_matrix_rows,
@@ -184,7 +181,6 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
     let blinding_factors_matrix_rows = (0..4)
         .map(|_| Scalar::from(rand::random::<u64>()))
         .collect_vec();
-    let blinding_factor_evaluation = Scalar::from(rand::random::<u64>());
 
     let comm_to_matrix = HyraxPCSProof::compute_matrix_commitments(
         log_split_point,
@@ -199,7 +195,6 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         &challenge_coordinates,
         &mle_evaluation_at_challenge,
         &committer_copy,
-        blinding_factor_evaluation,
         prover_random_generator,
         &mut prover_transcript,
         &blinding_factors_matrix_rows,
@@ -258,7 +253,6 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
     let blinding_factors_matrix_rows = (0..(1 << 9))
         .map(|_| Scalar::from(rand::random::<u64>()))
         .collect_vec();
-    let blinding_factor_evaluation = Scalar::from(rand::random::<u64>());
 
     let comm_to_matrix = HyraxPCSProof::compute_matrix_commitments(
         log_split_point,
@@ -273,7 +267,6 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         &challenge_coordinates,
         &mle_evaluation_at_challenge,
         &committer_copy,
-        blinding_factor_evaluation,
         prover_random_generator,
         &mut prover_transcript,
         &blinding_factors_matrix_rows,
