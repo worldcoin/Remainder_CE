@@ -22,5 +22,4 @@ pub mod parameters_v2;
 pub mod parameters_v3;
 
 /// Tests
-#[cfg(test)]
 pub mod tests;

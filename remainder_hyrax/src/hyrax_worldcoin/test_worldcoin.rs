@@ -1,23 +1,56 @@
-// FIXME(Ben)
-// use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
-// use remainder::worldcoin::{data::{load_worldcoin_data_v2, load_worldcoin_data_v3, wirings_to_reroutings, CircuitData}, parameters::decode_wirings, parameters_v2::IM_NUM_ROWS};
-// use remainder_shared_types::{
-//     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
-//     transcript::{
-//         ec_transcript::{ECTranscriptReader, ECTranscriptWriter},
-//         poseidon_transcript::PoseidonSponge,
-//     },
-// };
+use remainder::worldcoin::{data::{load_worldcoin_data_v2, load_worldcoin_data_v3, wirings_to_reroutings, IriscodeCircuitData}, parameters::decode_wirings};
+use remainder_shared_types::{
+    halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
+    transcript::{
+        ec_transcript::{ECTranscriptReader, ECTranscriptWriter},
+        poseidon_transcript::PoseidonSponge,
+    },
+};
 
-// use crate::{
-//     hyrax_gkr::HyraxProver, hyrax_worldcoin::build_hyrax_circuit_hyrax_input_layer,
-//     pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
-// };
+use crate::{
+    hyrax_gkr::{HyraxProof, HyraxProver}, hyrax_worldcoin::build_hyrax_circuit_hyrax_input_layer,
+    pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
+};
 
 // use super::build_hyrax_circuit_public_input_layer;
-// type Scalar = <Bn256Point as Group>::Scalar;
-// type Base = <Bn256Point as CurveExt>::Base;
+type Scalar = <Bn256Point as Group>::Scalar;
+type Base = <Bn256Point as CurveExt>::Base;
+
+use remainder::worldcoin::tests::small_circuit_description_and_inputs;
+
+#[test]
+fn test_small_circuit_both_layers_public() {
+    let (circuit_desc, _, inputs) = small_circuit_description_and_inputs();
+    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptWriter::new("");
+    let blinding_rng = &mut rand::thread_rng();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let num_generators = 100;
+    let committer = PedersenCommitter::<Bn256Point>::new(
+        num_generators + 1,
+        "modulus modulus modulus modulus modulus",
+        None,
+    );
+    let proof = HyraxProof::prove(
+        &inputs,
+        &HashMap::new(),
+        &circuit_desc,
+        &committer,
+        blinding_rng,
+        converter,
+        &mut prover_transcript,
+    );
+    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptReader::new(prover_transcript.get_transcript());
+    proof.verify(
+        &HashMap::new(),
+        &circuit_desc,
+        &committer,
+        &mut verifier_transcript,
+    );
+}
 
 // /// Helper function that runs the Hyrax Worldcoin test against a given data set
 // /// with public input layers.

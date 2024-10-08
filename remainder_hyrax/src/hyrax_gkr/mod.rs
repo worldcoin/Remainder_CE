@@ -1,10 +1,11 @@
+use std::hash::Hash;
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
 use ark_std::{end_timer, start_timer};
 use hyrax_circuit_inputs::HyraxInputLayerData;
-use hyrax_input_layer::{commit_to_input_values, HyraxInputCommitment, HyraxInputLayerDescription, HyraxInputLayerProof}
+use hyrax_input_layer::{commit_to_input_values, verify_claim, HyraxInputCommitment, HyraxInputLayerDescription, HyraxInputLayerProof}
 ;
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
@@ -56,6 +57,10 @@ pub struct HyraxProof<C: PrimeOrderCurve> {
 }
 
 impl<C: PrimeOrderCurve> HyraxProof<C> {
+    // FIXME(Ben) document
+    // Hyrax commitments are appended to transcript in order of LayerId ascending.
+    // this is also the ordering of `HyraxProof.hyrax_input_proofs`.
+    // Pre: circuit_description.index_mle_indices(0); has been called
     pub fn prove(
         inputs: &HashMap<LayerId, MultilinearExtension<C::Scalar>>,
         hyrax_input_layers: &HashMap<LayerId, (HyraxInputLayerDescription, Option<HyraxInputCommitment<C>>)>,
@@ -65,6 +70,8 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         converter: &mut VandermondeInverse<C::Scalar>,
         transcript: &mut impl ECProverTranscript<C>,
     ) -> HyraxProof<C> {
+        // TODO(Ben) add circuit description to transcript
+
         // Add the input values of any public (i.e. non-hyrax) input layers to transcript.
         // Select the public input layers from the input layers, and sort them by layer id, and append
         // their input values to the transcript.
@@ -102,6 +109,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
                 hyrax_input_commitments.insert(layer_id.clone(), prover_commitment);
             });
 
+        // Get the verifier challenges from the transcript.
         let mut challenge_sampler = |size| {
             transcript.get_scalar_field_challenges("Verifier challenges", size)
         };
@@ -182,6 +190,96 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
             claims_on_public_values,
             hyrax_input_proofs,
         }
+    }
+
+    // Pre: circuit_description.index_mle_indices(0); has been called
+    // FIXME(Ben) document
+    pub fn verify(
+        &self,
+        hyrax_input_layers: &HashMap<LayerId, HyraxInputLayerDescription>,
+        circuit_description: &GKRCircuitDescription<C::Scalar>,
+        committer: &PedersenCommitter<C>,
+        transcript: &mut impl ECVerifierTranscript<C>,
+    ) {
+        // TODO(Ben) add circuit description to transcript
+
+        // Append the public inputs to the transcript
+        self
+            .public_inputs
+            .iter()
+            .for_each(|(_layer_id, public_input)| {
+                let public_input = public_input.get_evals_vector();
+                let transcript_values = transcript
+                    .consume_scalar_points("public values", public_input.len())
+                    .unwrap();
+                assert_eq!(&transcript_values, public_input);
+            });
+
+        // For each Hyrax input layer commitment (in order of LayerId), consume elements from the transcript and check they match the commitments contained in the HyraxInputLayerProof.
+        self.hyrax_input_proofs
+            .iter()
+            .sorted_by_key(|input_proof| input_proof.layer_id.get_input_layer_id())
+            .for_each(|input_proof| {
+                let hyrax_commit = &input_proof.input_commitment;
+                let transcript_hyrax_commit = transcript
+                    .consume_ec_points("hyrax pcs commitment", hyrax_commit.len())
+                    .unwrap();
+                assert_eq!(&transcript_hyrax_commit, hyrax_commit);
+            });
+
+        // Get the verifier challenges from the transcript.
+        let fiat_shamir_challenges: Vec<FiatShamirChallenge<C::Scalar>> = circuit_description
+            .fiat_shamir_challenges
+            .iter()
+            .map(|fs_desc| {
+                let num_evals = 1 << fs_desc.num_bits;
+                let values = transcript
+                    .get_scalar_field_challenges("Verifier challenges", num_evals)
+                    .unwrap();
+                fs_desc.instantiate(values)
+            })
+            .collect();
+
+        // Verify the circuit proof, and obtain the claims on the input layers
+        let mut input_layer_claims: HashMap<LayerId, Vec<HyraxClaim<C::Scalar, C>>> = HashMap::new();
+        self.circuit_proof.verify(
+            circuit_description,
+            committer,
+            fiat_shamir_challenges,
+            transcript,
+        )
+        .into_iter()
+        .for_each(|claim| {
+            if input_layer_claims.contains_key(&claim.to_layer_id) {
+                input_layer_claims.get_mut(&claim.to_layer_id).unwrap().push(claim);
+            } else {
+                input_layer_claims.insert(claim.to_layer_id, vec![claim]);
+            }
+        });
+
+        // For each public input layer, pop the claims, match them up with the corresponding claims
+        // on public values provided by the prover, and verify them directly.
+        self.public_inputs.iter().for_each(|(layer_id, values)| {
+            let claims_as_commitments = input_layer_claims.remove(layer_id).unwrap();
+            let plaintext_claims =
+                match_claims(&claims_as_commitments, &self.claims_on_public_values, committer);
+            plaintext_claims.into_iter().for_each(|claim| {
+                verify_claim::<C::Scalar>(values.get_evals_vector(), claim.get_claim());
+            });
+        });
+
+        // Verify the hyrax input layer proofs.
+        self.hyrax_input_proofs
+            .iter()
+            .for_each(|hyrax_input_proof| {
+                let layer_id = &hyrax_input_proof.layer_id;
+                let desc = hyrax_input_layers.get(layer_id).unwrap();
+                let layer_claims_vec = input_layer_claims.remove(layer_id).unwrap();
+                hyrax_input_proof.verify(desc, &layer_claims_vec, committer, transcript);
+            });
+
+        // Check that there are no claims left in the input layer claims table.
+        assert!(input_layer_claims.is_empty());
     }
 }
 

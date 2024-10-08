@@ -18,7 +18,7 @@ use std::path::Path;
 
 /// Return the circuit description, "private" input layer description and inputs for a trivial 2x2
 /// identity matrix circuit.
-fn small_circuit_description_and_inputs() -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
+pub fn small_circuit_description_and_inputs() -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
     // rewirings for the 2x2 identity matrix
     let wirings = &vec![(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
     let reroutings = wirings_to_reroutings(wirings, 2, 2);
