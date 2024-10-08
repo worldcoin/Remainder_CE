@@ -5,7 +5,7 @@ use remainder_shared_types::Field;
 
 use crate::{
     input_layer::{
-        enum_input_layer::InputLayerDescriptionEnum, hyrax_input_layer::HyraxInputLayerDescription,
+        enum_input_layer::InputLayerDescriptionEnum,
         ligero_input_layer::LigeroInputLayerDescription,
         public_input_layer::PublicInputLayerDescription, InputLayerDescription,
     },

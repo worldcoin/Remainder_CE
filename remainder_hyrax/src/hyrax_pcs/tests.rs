@@ -60,7 +60,6 @@ fn sanity_check_test_honest_prover_small_identity() {
         &challenge_coordinates,
         &mle_evaluation_at_challenge,
         &committer_copy,
-        blinding_factor_evaluation,
         prover_random_generator,
         &mut prover_transcript,
         &blinding_factors_matrix_rows,
@@ -69,7 +68,7 @@ fn sanity_check_test_honest_prover_small_identity() {
     let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
         prover_transcript.get_transcript(),
     );
-    hyrax_eval_proof.verify_hyrax_evaluation_proof(
+    hyrax_eval_proof.verify(
         log_split_point,
         &committer,
         &comm_to_matrix,
@@ -127,7 +126,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
     let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
         prover_transcript.get_transcript(),
     );
-    hyrax_eval_proof.verify_hyrax_evaluation_proof(
+    hyrax_eval_proof.verify(
         log_split_point,
         &committer,
         &comm_to_matrix,
@@ -209,7 +208,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
     let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
         prover_transcript.get_transcript(),
     );
-    hyrax_eval_proof.verify_hyrax_evaluation_proof(
+    hyrax_eval_proof.verify(
         log_split_point,
         &committer,
         &comm_to_matrix,
@@ -283,7 +282,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
     let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
         prover_transcript.get_transcript(),
     );
-    hyrax_eval_proof.verify_hyrax_evaluation_proof(
+    hyrax_eval_proof.verify(
         log_split_point,
         &committer,
         &comm_to_matrix,

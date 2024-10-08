@@ -32,6 +32,7 @@ use remainder::mle::dense::DenseMle;
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
 use remainder::mle::mle_description::MleDescription;
 use remainder::mle::{Mle, MleIndex};
+use remainder::prover;
 use remainder_shared_types::transcript::ec_transcript::{
     ECProverTranscript, ECTranscriptReader, ECTranscriptWriter, ECVerifierTranscript,
 };
@@ -42,7 +43,7 @@ use remainder_shared_types::{
     Field,
 };
 
-use super::hyrax_input_layer::HyraxInputLayer;
+use super::hyrax_input_layer::{commit_to_input_values, HyraxInputLayer};
 use super::hyrax_layer::HyraxLayerProof;
 type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
@@ -702,15 +703,18 @@ fn hyrax_input_layer_proof_test() {
         layer_id,
     );
 
-    // --- Create input layer and generate commitment, then add to transcript ---
-    let mut input_layer: HyraxInputLayer<Bn256Point> =
-        HyraxInputLayer::new_with_committer(input_mle, layer_id, &committer, &None);
-    let hyrax_commitment = input_layer.commit();
-    prover_transcript.append_ec_points("Hyrax PCS commit", &hyrax_commitment);
+    let input_layer_desc = HyraxInputLayerDescription::new(input_layer.id(), input_mle.num_vars());
+    let prover_commitment = commit_to_input_values(
+        input_layer_desc,
+        input_mle,
+        blinding_rng);
 
+    prover_transcript.append_ec_points("Hyrax PCS commit", &prover_commitment.commitment);
+
+    let blinding_factor_eval = Scalar::from(blinding_rng);
     let commitment_to_eval = committer.committed_scalar(
         &evaluate_mle(&input_dense_mle, &claim_point),
-        &input_layer.blinding_factor_eval,
+        &blinding_factor_eval,
     );
 
     let claim = HyraxClaim {
@@ -720,8 +724,8 @@ fn hyrax_input_layer_proof_test() {
     };
 
     let proof = HyraxInputLayerProof::prove(
-        &input_layer,
-        &hyrax_commitment,
+        &input_layer_desc,
+        &commitment,
         &[claim.clone()],
         &committer,
         &mut blinding_rng,
@@ -737,6 +741,7 @@ fn hyrax_input_layer_proof_test() {
         .consume_ec_points("Hyrax PCS commit", hyrax_commitment.len())
         .unwrap();
     proof.verify(
+        input_layer_desc,
         &[claim.to_claim_commitment()],
         &committer,
         &mut verifier_transcript,
