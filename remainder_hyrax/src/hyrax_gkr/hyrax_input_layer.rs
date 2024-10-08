@@ -159,7 +159,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             &aggregated_claim.point,
             &aggregated_claim.evaluation.value,
             committer,
-            input_layer.blinding_factor_eval,
             blinding_rng,
             transcript,
             &input_layer.blinding_factors_matrix,
@@ -216,6 +215,14 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
     }
 }
 
+/// The prover's view of the commitment to the input layer, which includes the blinding factors.
+pub struct HyraxInputCommitment<C: PrimeOrderCurve> {
+    /// The verifier's view of the commitment
+    pub commitment: Vec<C>,
+    /// The blinding factors used in the commitment
+    pub blinding_factors_matrix: Vec<C::Scalar>,
+}
+
 pub struct HyraxInputLayer<C: PrimeOrderCurve> {
     pub mle: MleCoefficientsVector<C>,
     pub log_num_cols: usize,
@@ -224,7 +231,6 @@ pub struct HyraxInputLayer<C: PrimeOrderCurve> {
     // by a trait.
     pub committer: PedersenCommitter<C>,
     pub blinding_factors_matrix: Vec<C::Scalar>,
-    pub blinding_factor_eval: C::Scalar,
     pub(crate) layer_id: LayerId,
     pub comm: Option<Vec<C>>,
 }
@@ -279,11 +285,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         let blinding_factors_matrix = (0..num_rows)
             .map(|_| C::Scalar::random(&mut prng))
             .collect_vec();
-        let mut seed_eval = [0u8; 32];
-        OsRng.fill_bytes(&mut seed_eval);
-        let mut prng = ChaCha20Rng::from_seed(seed_matrix);
-
-        let blinding_factor_eval = C::Scalar::random(&mut prng);
 
         Self {
             mle: Self::to_mle_coeffs_vec(mle, maybe_hyrax_input_dtype),
@@ -291,7 +292,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
             log_num_cols,
             committer: committer.clone(),
             blinding_factors_matrix,
-            blinding_factor_eval,
             comm: None,
         }
     }
@@ -310,7 +310,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         OsRng.fill_bytes(&mut seed_eval);
         OsRng.fill_bytes(&mut seed_eval);
         let mut prng = ChaCha20Rng::from_seed(seed_eval);
-        let blinding_factor_eval = C::Scalar::random(&mut prng);
 
         Self {
             mle: Self::to_mle_coeffs_vec(mle, maybe_hyrax_input_dtype),
@@ -318,7 +317,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
             log_num_cols,
             committer: committer.clone(),
             blinding_factors_matrix,
-            blinding_factor_eval,
             comm: Some(commitment),
         }
     }
