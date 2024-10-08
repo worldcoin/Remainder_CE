@@ -1,10 +1,8 @@
 use rand::Rng;
 use remainder::layer::product::PostSumcheckLayer;
 use remainder_shared_types::ff_field;
-use remainder_shared_types::{
-    curves::PrimeOrderCurve,
-    transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
-};
+use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
+use remainder_shared_types::curves::PrimeOrderCurve;
 use std::ops::Neg;
 
 use crate::{
@@ -44,7 +42,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
         committer: &PedersenCommitter<C>,
         mut rng: &mut impl Rng,
         // the transcript AFTER having sampled the verifier bindings
-        transcript: &mut impl ECProverTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) -> Self {
         // the number of sumcheck rounds
         let n = messages.len();
@@ -125,7 +123,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
         bindings: &[C::Scalar],
         committer: &PedersenCommitter<C>,
         // the transcript AFTER having sampled the verifier bindings
-        transcript: &mut impl ECVerifierTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) {
         // Verify that the purported sum is correct
         assert_eq!(self.sum, *sum);
@@ -140,7 +138,6 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
                 let label = format!("rho[{}]", i);
                 transcript
                     .get_scalar_field_challenge(Box::leak(label.into_boxed_str()))
-                    .unwrap()
             })
             .collect();
         assert_eq!(rhos.len(), n + 1);
@@ -152,7 +149,6 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
                 let label = format!("gamma[{}]", i);
                 transcript
                     .get_scalar_field_challenge(Box::leak(label.into_boxed_str()))
-                    .unwrap()
             })
             .collect();
         debug_assert_eq!(gammas.len(), n);

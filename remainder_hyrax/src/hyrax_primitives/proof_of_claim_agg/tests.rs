@@ -7,8 +7,7 @@ use remainder::layer::LayerId;
 use remainder_shared_types::halo2curves::bn256::Fr;
 use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
 use remainder_shared_types::halo2curves::CurveExt;
-use remainder_shared_types::transcript::ec_transcript::ECTranscriptReader;
-use remainder_shared_types::transcript::ec_transcript::ECTranscriptWriter;
+use remainder_shared_types::transcript::ec_transcript::ECTranscript;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 
 type Base = <Bn256Point as CurveExt>::Base;
@@ -27,8 +26,8 @@ pub fn test_barycentric_weights() {
 #[test]
 pub fn test_completeness() {
     let committer = PedersenCommitter::<Bn256Point>::new(1, INIT_STR, None);
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test completeness transcript");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     let claims = vec![
         HyraxClaim {
             to_layer_id: LayerId::Layer(0),
@@ -55,18 +54,17 @@ pub fn test_completeness() {
         &coeffs,
         &committer,
         &mut rand::thread_rng(),
-        &mut prover_transcript,
+        &mut transcript,
     );
 
-    let transcript = prover_transcript.get_transcript();
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(transcript);
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let claim_commitments: Vec<_> = claims
         .iter()
         .map(|claim| claim.to_claim_commitment())
         .collect();
-    let agg_claim_verifier = proof.verify(&claim_commitments, &committer, &mut verifier_transcript);
+    let agg_claim_verifier = proof.verify(&claim_commitments, &committer, &mut transcript);
     assert_eq!(agg_claim_prover.point, agg_claim_verifier.point);
     assert_eq!(
         agg_claim_prover.evaluation.commitment,
@@ -77,8 +75,8 @@ pub fn test_completeness() {
 #[test]
 pub fn test_agg_one_claim() {
     let committer = PedersenCommitter::<Bn256Point>::new(1, INIT_STR, None);
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test claim agg transcript");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     let claims = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
         point: vec![Fr::from(23), Fr::from(6)],
@@ -90,18 +88,17 @@ pub fn test_agg_one_claim() {
         &coeffs,
         &committer,
         &mut rand::thread_rng(),
-        &mut prover_transcript,
+        &mut transcript,
     );
 
-    let transcript = prover_transcript.get_transcript();
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(transcript);
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let claim_commitments: Vec<_> = claims
         .iter()
         .map(|claim| claim.to_claim_commitment())
         .collect();
-    let agg_claim_verifier = proof.verify(&claim_commitments, &committer, &mut verifier_transcript);
+    let agg_claim_verifier = proof.verify(&claim_commitments, &committer, &mut transcript);
     assert_eq!(agg_claim_prover.point, agg_claim_verifier.point);
     assert_eq!(
         agg_claim_prover.evaluation.commitment,
@@ -114,8 +111,8 @@ pub fn test_agg_one_claim() {
 pub fn test_soundness() {
     // use a false interpolating polynomial (but still of the correct degree) - should fail.
     let committer = PedersenCommitter::<Bn256Point>::new(1, INIT_STR, None);
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test soundness transcript");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     let claims = vec![
         HyraxClaim {
             to_layer_id: LayerId::Layer(0),
@@ -134,16 +131,15 @@ pub fn test_soundness() {
         &coeffs,
         &committer,
         &mut rand::thread_rng(),
-        &mut prover_transcript,
+        &mut transcript,
     );
 
-    let transcript = prover_transcript.get_transcript();
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(transcript);
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let claim_commitments: Vec<_> = claims
         .iter()
         .map(|claim| claim.to_claim_commitment())
         .collect();
-    proof.verify(&claim_commitments, &committer, &mut verifier_transcript);
+    proof.verify(&claim_commitments, &committer, &mut transcript);
 }

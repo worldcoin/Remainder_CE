@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use ark_std::{cfg_into_iter, log2};
 use itertools::Itertools;
 use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
@@ -16,7 +18,7 @@ use remainder::{
     sumcheck::evaluate_at_a_point,
 };
 use remainder_shared_types::{
-    curves::PrimeOrderCurve, halo2curves::serde, transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript}
+    curves::PrimeOrderCurve, halo2curves::serde, transcript::ec_transcript::{ECProverTranscript, ECTranscript, ECTranscriptSponge, ECTranscriptTrait, ECVerifierTranscript}
 };
 use remainder_shared_types::{ff_field, Field};
 
@@ -99,6 +101,7 @@ pub enum HyraxVerifierCommitmentEnum<C: PrimeOrderCurve> {
 /// the [ProofOfClaimAggregation], and the appropriate opening proof for opening
 /// the polynomial commitment at a random evaluation point.
 
+        
 pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
     /// The ID of the layer that this is a proof for
     pub layer_id: LayerId,
@@ -120,7 +123,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         committed_claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],
         committer: &PedersenCommitter<C>,
         blinding_rng: &mut impl Rng,
-        transcript: &mut impl ECProverTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
         converter: &mut VandermondeInverse<C::Scalar>,
     ) -> Self {
         // Calculate the coefficients of the polynomial that interpolates the claims
@@ -182,7 +185,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         input_layer_desc: &HyraxInputLayerDescription,
         claim_commitments: &[HyraxClaim<C::Scalar, C>],
         committer: &PedersenCommitter<C>,
-        transcript: &mut impl ECVerifierTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) {
         // Verify the proof of claim aggregation
         let agg_claim = self.claim_agg_proof.verify(

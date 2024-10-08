@@ -5,7 +5,7 @@ use remainder::mle::{Mle, MleIndex};
 use remainder::output_layer::{OutputLayer, OutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
-use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
+use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECTranscriptTrait, ECVerifierTranscript};
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
@@ -26,7 +26,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     /// Returns a HyraxOutputLayerProof and the claim that the output layer is making.
     pub fn prove(
         output_layer: &mut OutputLayer<C::Scalar>,
-        transcript: &mut impl ECProverTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
         blinding_rng: &mut impl Rng,
         scalar_committer: &PedersenCommitter<C>,
     ) -> (Self, HyraxClaim<C::Scalar, CommittedScalar<C>>) {
@@ -67,7 +67,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     pub fn verify(
         proof: &HyraxOutputLayerProof<C>,
         layer_desc: &OutputLayerDescription<C::Scalar>,
-        transcript: &mut impl ECVerifierTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) -> HyraxClaim<C::Scalar, C> {
         // Get the first set of challenges needed for the output layer.
 
@@ -78,8 +78,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
             .map(|mle_index| match mle_index {
                 MleIndex::Fixed(val) => C::Scalar::from(*val as u64),
                 MleIndex::Indexed(_) => transcript
-                    .get_scalar_field_challenge("output claim point")
-                    .unwrap(),
+                    .get_scalar_field_challenge("output claim point"),
 
                 _ => {
                     panic!("should not have bound or free variables here!")
@@ -87,8 +86,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
             })
             .collect_vec();
 
-        let transcript_claim_commit = transcript.consume_ec_point("output layer commit").unwrap();
-        assert_eq!(proof.claim_commitment, transcript_claim_commit);
+        transcript.append_ec_point("output layer commit", proof.claim_commitment);
 
         HyraxClaim {
             point: bindings,

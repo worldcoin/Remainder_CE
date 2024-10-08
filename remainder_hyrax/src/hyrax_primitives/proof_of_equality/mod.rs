@@ -1,9 +1,7 @@
 use rand::Rng;
 use remainder_shared_types::ff_field;
-use remainder_shared_types::{
-    curves::PrimeOrderCurve,
-    transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
-};
+use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
+use remainder_shared_types::curves::PrimeOrderCurve;
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
@@ -30,7 +28,7 @@ impl<C: PrimeOrderCurve> ProofOfEquality<C> {
         // TODO(vishady) riad audit comments: probably try to mark this as a "cryptographic rng" CryptoRng?,
         // try to allow different trait bound in testing
         rng: &mut impl Rng,
-        transcript: &mut impl ECProverTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) -> Self {
         // From its random tape, P samples $r$ from the scalar field.
         let r = C::Scalar::random(rng);
@@ -57,17 +55,15 @@ impl<C: PrimeOrderCurve> ProofOfEquality<C> {
         commit0: C,
         commit1: C,
         committer: &PedersenCommitter<C>,
-        transcript: &mut impl ECVerifierTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) {
         // EC group element $\alpha$ is added to the transcript.
-        let transcript_alpha = transcript.consume_ec_point("PoE alpha").unwrap();
-        assert_eq!(self.alpha, transcript_alpha);
+        transcript.append_ec_point("PoE alpha", self.alpha);
 
         // A scalar field element $c$ is sampled from the transcript.
-        let c = transcript.get_scalar_field_challenge("PoE c").unwrap();
+        let c = transcript.get_scalar_field_challenge("PoE c");
 
-        let z = transcript.consume_scalar_point("Po z").unwrap();
-        assert_eq!(z, self.z);
+        transcript.append_scalar_point("PoE z", self.z);
 
         // Check: $h^z \overset{?}{=} (c_0 \cdot (c_1)^{-1})^c\cdot \alpha$
         let h = committer.blinding_generator;

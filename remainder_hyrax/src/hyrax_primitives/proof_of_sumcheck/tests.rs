@@ -13,10 +13,8 @@ use remainder_shared_types::halo2curves::bn256::Fr;
 use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
 use remainder_shared_types::halo2curves::group::Group;
 use remainder_shared_types::halo2curves::CurveExt;
-use remainder_shared_types::transcript::ec_transcript::ECTranscriptReader;
-use remainder_shared_types::transcript::ec_transcript::ECTranscriptWriter;
+use remainder_shared_types::transcript::ec_transcript::ECTranscript;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
-/// Tests for the Pedersen commitment scheme using the BN254 (aka BN256) curve and its scalar field (Fr).
 
 type Base = <Bn256Point as CurveExt>::Base;
 
@@ -63,9 +61,8 @@ fn test_calculate_j_star() {
 fn test_completeness() {
     let committer = PedersenCommitter::<Bn256Point>::new(5, INIT_STR, None);
 
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("testing proof of sumcheck (completeness) - prover");
-
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     // the mle
     let v00 = Fr::from(7);
     let v10 = Fr::from(28);
@@ -113,13 +110,11 @@ fn test_completeness() {
         &bindings,
         &committer,
         &mut rand::thread_rng(),
-        &mut prover_transcript,
+        &mut transcript,
     );
 
-    let transcript = prover_transcript.get_transcript();
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(transcript);
-
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     let psl_as_commits = committed_scalar_psl_as_commitments(&post_sumcheck_layer);
 
     proof.verify(
@@ -128,7 +123,7 @@ fn test_completeness() {
         &psl_as_commits,
         &bindings,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -148,8 +143,8 @@ fn test_example_with_regular_layer() {
         None,
     );
 
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("testing proof of sumcheck for regular layer - prover");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     // the mle
     let v00 = Fr::from(1);
@@ -228,13 +223,11 @@ fn test_example_with_regular_layer() {
         &bindings,
         &committer,
         &mut constant_rng,
-        &mut prover_transcript,
+        &mut transcript,
     );
 
-    let transcript = prover_transcript.get_transcript();
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(transcript);
-
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     let committed_psl = committed_scalar_psl_as_commitments(&post_sumcheck_layer);
 
     proof.verify(
@@ -243,7 +236,7 @@ fn test_example_with_regular_layer() {
         &committed_psl,
         &bindings,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -254,8 +247,8 @@ fn test_soundness() {
     // something random.  Also, cheat in the choice of padding.
     let committer = PedersenCommitter::<Bn256Point>::new(5, INIT_STR, None);
 
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("testing proof of sumcheck (soundness) - prover");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let sum_commit = committer.committed_scalar(&Fr::from(2), &Fr::from(2));
     let f1_padded = vec![Fr::from(123), Fr::from(123), Fr::from(123), Fr::from(333)];
@@ -288,12 +281,11 @@ fn test_soundness() {
         &bindings,
         &committer,
         &mut rand::thread_rng(),
-        &mut prover_transcript,
+        &mut transcript,
     );
 
-    let transcript = prover_transcript.get_transcript();
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(transcript);
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let committed_psl = committed_scalar_psl_as_commitments(&post_sumcheck_layer);
     proof.verify(
@@ -302,6 +294,6 @@ fn test_soundness() {
         &committed_psl,
         &bindings,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }

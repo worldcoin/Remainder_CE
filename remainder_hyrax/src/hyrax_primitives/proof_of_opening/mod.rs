@@ -1,9 +1,7 @@
 use rand::Rng;
 use remainder_shared_types::ff_field;
-use remainder_shared_types::{
-    curves::PrimeOrderCurve,
-    transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
-};
+use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
+use remainder_shared_types::curves::PrimeOrderCurve;
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
@@ -32,7 +30,7 @@ impl<C: PrimeOrderCurve> ProofOfOpening<C> {
         x: &CommittedScalar<C>,
         committer: &PedersenCommitter<C>,
         mut rng: &mut impl Rng,
-        transcript: &mut impl ECProverTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) -> Self {
         // Sample $t_1, t_2$ from the random tape.
         let t_1 = C::Scalar::random(&mut rng);
@@ -45,7 +43,7 @@ impl<C: PrimeOrderCurve> ProofOfOpening<C> {
         transcript.append_ec_point("PoO alpha", alpha);
 
         // A scalar field element $c$ is sampled from the transcript.
-        let c: <C as PrimeOrderCurve>::Scalar = transcript.get_scalar_field_challenge("PoO c");
+        let c = transcript.get_scalar_field_challenge("PoO c");
 
         // Compute $z_1 = x\cdot c + t_1$ and $z_2 = r \cdot c + t_2$.
         let z1 = x.value * c + t_1;
@@ -63,19 +61,16 @@ impl<C: PrimeOrderCurve> ProofOfOpening<C> {
         &self,
         x: C,
         committer: &PedersenCommitter<C>,
-        transcript: &mut impl ECVerifierTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) {
         // EC group element $\alpha$ is added to the transcript
-        let transcript_alpha = transcript.consume_ec_point("PoO alpha").unwrap();
-        assert_eq!(transcript_alpha, self.alpha);
+        transcript.append_ec_point("PoO alpha", self.alpha);
 
         // A scalar field element $c$ is sampled from the transcript.
-        let c = transcript.get_scalar_field_challenge("PoO c").unwrap();
+        let c = transcript.get_scalar_field_challenge("PoO c");
 
-        let z1 = transcript.consume_scalar_point("PoO z1").unwrap();
-        assert_eq!(z1, self.z1);
-        let z2 = transcript.consume_scalar_point("PoO z2").unwrap();
-        assert_eq!(z2, self.z2);
+        transcript.append_scalar_point("PoO z1", self.z1);
+        transcript.append_scalar_point("PoO z2", self.z2);
 
         // Check: $g^{z_1} \cdot h^{z_2} \overset{?}{=} C_0^c \cdot \alpha$.
         assert_eq!(

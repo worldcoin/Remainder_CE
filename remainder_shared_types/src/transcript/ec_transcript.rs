@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{curves, HasByteRepresentation};
 use ff::PrimeField;
 use itertools::Itertools;
@@ -37,6 +39,25 @@ where
         });
     }
 }
+pub trait ECTranscriptTrait<C: PrimeOrderCurve>: Display {
+    fn append_ec_point(&mut self, label: &str, elem: C);
+
+    fn append_ec_points(&mut self, label: &str, elements: &[C]);
+
+    fn append_scalar_point(&mut self, label: &str, elem: C::Scalar);
+
+    fn append_scalar_points(&mut self, label: &str, elements: &[C::Scalar]);
+
+    fn get_scalar_field_challenge(&mut self, label: &str) -> C::Scalar;
+
+    fn get_scalar_field_challenges(&mut self, label: &str, num_elements: usize) -> Vec<C::Scalar>;
+
+    fn get_ec_challenge(&mut self, label: &str) -> C;
+
+    fn get_ec_challenges(&mut self, label: &str, num_elements: usize) -> Vec<C>;
+}
+
+    
 
 /// A transcript that operates over the base field of a prime-order curve, while also allowing for
 /// the absorption and sampling of scalar field elements (and of course, EC points).
@@ -64,25 +85,27 @@ impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscript<C, Tr
             transcript: Transcript::new(label),
         }
     }
+}
 
-    pub fn append_ec_point(&mut self, label: &str, elem: C) {
+impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscriptTrait<C> for ECTranscript<C, Tr> {
+    fn append_ec_point(&mut self, label: &str, elem: C) {
         let (x_coord, y_coord) = elem.affine_coordinates().unwrap();
         self.append_elements(label, &[x_coord, y_coord]);
     }
 
-    pub fn append_ec_points(&mut self, label: &str, elements: &[C]) {
+    fn append_ec_points(&mut self, label: &str, elements: &[C]) {
         elements.iter().for_each(|elem| {
             let (x_coord, y_coord) = elem.affine_coordinates().unwrap();
             self.append_elements(label, &[x_coord, y_coord]);
         });
     }
 
-    pub fn append_scalar_point(&mut self, label: &str, elem: C::Scalar) {
+    fn append_scalar_point(&mut self, label: &str, elem: C::Scalar) {
         let base_elem = C::Base::from_bytes_le(elem.to_bytes_le());
         self.append(label, base_elem);
     }
 
-    pub fn append_scalar_points(&mut self, label: &str, elements: &[C::Scalar]) {
+    fn append_scalar_points(&mut self, label: &str, elements: &[C::Scalar]) {
         elements.iter().for_each(|elem| {
             let base_elem = C::Base::from_bytes_le(elem.to_bytes_le());
             self.append(label, base_elem);
@@ -92,12 +115,12 @@ impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscript<C, Tr
     /// Literally takes the byte representation of the base field element and
     /// dumps it (TODO: in an unsafe manner! Make this return an error rather
     /// than just panicking) into a scalar field element's representation.
-    pub fn get_scalar_field_challenge(&mut self, label: &str) -> <C as PrimeOrderCurve>::Scalar {
+    fn get_scalar_field_challenge(&mut self, label: &str) -> <C as PrimeOrderCurve>::Scalar {
         let base_field_challenge = self.get_challenge(label);
         C::Scalar::from_bytes_le(base_field_challenge.to_bytes_le())
     }
 
-    pub fn get_scalar_field_challenges(
+    fn get_scalar_field_challenges(
         &mut self,
         label: &str,
         num_elements: usize,
@@ -123,7 +146,7 @@ impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscript<C, Tr
     /// [Self::get_ec_challenges] FUNCTION GENERATES (x, y) ELEMENTS BY FIRST
     /// GENERATING ALL x-coordinates AND THEN GENERATING ALL ELEMENTS DETERMINING
     /// THE PARITY OF THE CORRESPONDING y-coordinates.
-    pub fn get_ec_challenge(&mut self, label: &str) -> C {
+    fn get_ec_challenge(&mut self, label: &str) -> C {
         let x_coord_label = label.to_string() + ": x-coord";
         let x_coord = self.get_challenge(&x_coord_label);
 
@@ -140,7 +163,7 @@ impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscript<C, Tr
     /// y-coord.
     ///
     /// WARNING/TODO(ryancao): SEE WARNING FOR [Self::get_ec_challenge]!!!
-    pub fn get_ec_challenges(&mut self, label: &str, num_elements: usize) -> Vec<C> {
+    fn get_ec_challenges(&mut self, label: &str, num_elements: usize) -> Vec<C> {
         let x_coord_label = label.to_string() + ": x-coords";
         let y_coord_sign_elem_label = label.to_string() + ": y-coord sign elems";
 

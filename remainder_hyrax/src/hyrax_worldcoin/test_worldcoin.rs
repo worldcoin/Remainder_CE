@@ -4,7 +4,7 @@ use remainder::worldcoin::{data::{load_worldcoin_data_v2, load_worldcoin_data_v3
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
     transcript::{
-        ec_transcript::{ECTranscriptReader, ECTranscriptWriter},
+        ec_transcript::ECTranscript,
         poseidon_transcript::PoseidonSponge,
     },
 };
@@ -23,8 +23,8 @@ use remainder::worldcoin::tests::small_circuit_description_and_inputs;
 #[test]
 fn test_small_circuit_both_layers_public() {
     let (circuit_desc, _, inputs) = small_circuit_description_and_inputs();
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     let blinding_rng = &mut rand::thread_rng();
     let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     let num_generators = 100;
@@ -40,15 +40,15 @@ fn test_small_circuit_both_layers_public() {
         &committer,
         blinding_rng,
         converter,
-        &mut prover_transcript,
+        &mut transcript,
     );
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(prover_transcript.get_transcript());
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     proof.verify(
         &HashMap::new(),
         &circuit_desc,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 

@@ -11,8 +11,7 @@ use rayon::iter::IntoParallelIterator;
 #[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 use remainder::layouter::nodes::circuit_inputs::HyraxInputDType;
-use remainder_shared_types::ff_field;
-use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
+use remainder_shared_types::{ff_field, transcript::ec_transcript::ECTranscriptTrait};
 use remainder_shared_types::{curves::PrimeOrderCurve, HasByteRepresentation};
 use serde::{Deserialize, Serialize};
 
@@ -280,7 +279,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         // the random generator that the prover needs for proof of dot product
         mut rng: &mut impl Rng,
         // transcript that the prover needs for proof of dot product
-        prover_transcript: &mut impl ECProverTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
         // the blinding factors to commit to each of the rows of the MLE coefficient matrix
         blinding_factors_matrix: &[C::Scalar],
     ) -> Self {
@@ -314,12 +313,12 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
 
         // commit to t_prime_vector and add to the transcript
         let t_prime_commit = committer.committed_vector(&t_prime, &blinding_factor_t_prime);
-        prover_transcript.append_ec_point("commitment to x", t_prime_commit.commitment);
+        transcript.append_ec_point("commitment to x", t_prime_commit.commitment);
 
         // commit to the dot product, add this to the transcript
         let mle_eval_commit =
             committer.committed_scalar(mle_evaluation_at_challenge, &blinding_factor_evaluation);
-        prover_transcript.append_ec_point("commitment to y", mle_eval_commit.commitment);
+        transcript.append_ec_point("commitment to y", mle_eval_commit.commitment);
 
         // now that we have a commitment to T', we can do a proof of dot product which claims that the dot product of
         // T' and R is indeed the MLE evaluation point. this evaluation proof is what the hyrax verifier uses to verify
@@ -330,7 +329,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
             &r_vector,
             committer,
             &mut rng,
-            prover_transcript,
+            transcript,
         );
 
         // return the hyrax evaluation proof which comprises of the PoDP evaluation proof along with the commitments
@@ -347,7 +346,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         committer: &PedersenCommitter<C>,
         commitment_to_coeff_matrix: &[C],
         challenge_coordinates: &[C::Scalar],
-        verifier_transcript: &mut impl ECVerifierTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) {
         let Self {
             podp_evaluation_proof,
@@ -371,18 +370,9 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         };
 
         // add PoDP commitments to the transcript
-        let transcript_t_prime_commit = verifier_transcript
-            .consume_ec_point("commitment to x")
-            .unwrap();
-        assert_eq!(t_prime_commit_from_t_commit, transcript_t_prime_commit);
+        transcript.append_ec_point("commitment to x", t_prime_commit_from_t_commit);
 
-        let transcript_commitment_to_evaluation = verifier_transcript
-            .consume_ec_point("commitment to y")
-            .unwrap();
-        assert_eq!(
-            commitment_to_evaluation.commitment,
-            transcript_commitment_to_evaluation
-        );
+        transcript.append_ec_point("commitment to y", commitment_to_evaluation.commitment);
 
         // using this commitment, the verifier can then do a proof of dot product verification given the evaluation proof
         // and the prover's claimed commitment to the evaluation of the MLE.
@@ -391,7 +381,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
             &commitment_to_evaluation.commitment,
             &r_vector,
             committer,
-            verifier_transcript,
+            transcript,
         )
     }
 }

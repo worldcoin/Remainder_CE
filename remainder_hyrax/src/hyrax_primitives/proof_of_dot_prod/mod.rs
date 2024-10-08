@@ -2,7 +2,7 @@ use itertools::Itertools;
 use rand::Rng;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
-use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
+use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use serde::{Deserialize, Serialize};
 
 use crate::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
@@ -46,7 +46,7 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
         mut rng: &mut impl Rng,
         // transcript for Fiat-Shamir in order to generate the challenge c that should be "sent" by the verifier
         // in the interactive version
-        transcript: &mut impl ECProverTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) -> Self {
         // the prover randomly samples the d vector
         let d_vec: Vec<C::Scalar> = (0..x.value.len())
@@ -111,7 +111,7 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
         // generators needed in order to produce commitments
         committer: &PedersenCommitter<C>,
         // transcript in order to generate the challenge c that would normally be produced interactively.
-        transcript: &mut impl ECVerifierTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) {
         let Self {
             commit_d,
@@ -123,33 +123,16 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
 
         // --- Read transcript-generated prover messages and compare against proof-supplied messages ---
         // Messages for d and <d, a>
-        let transcript_commit_d = transcript.consume_ec_point("commitment to d").unwrap();
-        let transcript_commit_d_dot_a = transcript
-            .consume_ec_point("commitment to d dot a")
-            .unwrap();
-        assert_eq!(*commit_d, transcript_commit_d);
-        assert_eq!(*commit_d_dot_a, transcript_commit_d_dot_a);
+        transcript.append_ec_point("commitment to d", *commit_d);
+        transcript.append_ec_point("commitment to d dot a", *commit_d_dot_a);
 
         // now the verifier can sample the same random challenge. once again, this is in the base field so we
         // truncate in order to convert it into the scalar field.
-        let c = transcript
-            .get_scalar_field_challenge("challenge c")
-            .unwrap();
+        let c = transcript.get_scalar_field_challenge("challenge c");
 
-        assert_eq!(
-            &transcript
-                .consume_scalar_points("PoDP z_vector", z_vector.len())
-                .unwrap(),
-            z_vector
-        );
-        assert_eq!(
-            &transcript.consume_scalar_point("PoDP z_delta").unwrap(),
-            z_delta
-        );
-        assert_eq!(
-            &transcript.consume_scalar_point("PoDP z_beta").unwrap(),
-            z_beta
-        );
+        transcript.append_scalar_points("PoDP z_vector", &z_vector);
+        transcript.append_scalar_point("PoDP z_delta", *z_delta);
+        transcript.append_scalar_point("PoDP z_beta", *z_beta);
 
         // we compute <z, a> and then commitments to z and <z, a> based off of the blinding factors and values in
         // the evaluation proof.
