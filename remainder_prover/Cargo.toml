@@ -52,6 +52,14 @@ pretty_assertions = "1.4.0"
 [features]
 parallel = []
 
+[[bench]]
+name = "fix_variable"
+harness = false
+
+[[bench]]
+name = "regular_layer"
+harness = false
+
 [[bin]]
 name = "run_iriscode_circuit"
 path = "src/bin/run_iriscode_circuit.rs"
