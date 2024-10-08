@@ -39,8 +39,6 @@ pub struct HyraxPCSProof<C: PrimeOrderCurve> {
     /// this is the commitment to what the prover claims the evaluation of the MLE at the random
     /// challenge point is.
     pub commitment_to_evaluation: CommittedScalar<C>,
-    /// this is the auxiliary information needed by the input layer in order to verify the opening proof
-    pub aux: HyraxAuxInfo<C>,
 }
 
 /// an enum representing how the user can specify their MLE coefficients. at least for our pedersen
@@ -293,7 +291,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         // to compute T' = L \times T
         let t_prime = HyraxPCSProof::<C>::vector_matrix_product(&l_vector, data, log_n_cols);
 
-        let blinding_factor_evaluation = C::Scalar::random(&mut prng);
+        let blinding_factor_evaluation = C::Scalar::random(prover_random_generator);
 
         // FIXME we could make this nicer by using the CommittedVector for each row
         // the blinding factor for the commitment to the T' vector is a combination of the blinding factors of the commitments
@@ -335,21 +333,15 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
             prover_transcript,
         );
 
-        let aux = HyraxAuxInfo {
-            log_n_cols,
-            committer: committer.clone(),
-        };
-
         // return the hyrax evaluation proof which comprises of the PoDP evaluation proof along with the commitments
         // to the rows of the matrix and the evaluation of the matrix at the random challenge.
         Self {
             podp_evaluation_proof,
             commitment_to_evaluation: mle_eval_commit,
-            aux,
         }
     }
 
-    pub fn verify_hyrax_evaluation_proof(
+    pub fn verify(
         &self,
         log_n_cols: usize,
         committer: &PedersenCommitter<C>,
@@ -360,7 +352,6 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         let Self {
             podp_evaluation_proof,
             commitment_to_evaluation,
-            aux: _,
         } = &self;
         let (l_vector, r_vector) =
             HyraxPCSProof::<C>::compute_l_r_from_log_n_cols(log_n_cols, challenge_coordinates);
