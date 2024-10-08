@@ -20,6 +20,7 @@ use crate::input_layer::fiat_shamir_challenge::{
 use crate::input_layer::InputLayerDescription;
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::LayerDescription;
+use crate::layouter::compiling::CircuitHashType;
 use crate::layouter::component::Component;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, InputNodeMap};
 use crate::layouter::nodes::node_enum::NodeEnum;
@@ -32,6 +33,7 @@ use crate::{
     layer::{layer_enum::LayerEnum, LayerError, LayerId},
 };
 use ark_std::{end_timer, start_timer};
+use helpers::get_circuit_description_hash_as_field_elems;
 use itertools::Itertools;
 use remainder_shared_types::transcript::TranscriptReaderError;
 use remainder_shared_types::transcript::VerifierTranscript;
@@ -108,7 +110,8 @@ pub const ENABLE_OPTIMIZATION: bool = true;
 
 /// The Verifier Key associated with a GKR proof of a [ProofSystem].
 /// It consists of consice GKR Circuit description to be use by the Verifier.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Hash)]
+#[serde(bound = "F: Field")]
 pub struct GKRCircuitDescription<F: Field> {
     /// The circuit descriptions of the input layers.
     pub input_layers: Vec<InputLayerDescriptionEnum<F>>,
@@ -147,16 +150,19 @@ impl<F: Field> GKRCircuitDescription<F> {
     fn verify(
         &mut self,
         transcript_reader: &mut impl VerifierTranscript<F>,
+        circuit_description_hash_type: CircuitHashType,
     ) -> Result<(), GKRError> {
-        // TODO(Makis): Add circuit hash to Transcript.
-        /*
-        if let Some(circuit_hash) = maybe_circuit_hash {
-            let transcript_circuit_hash = transcript_reader
-                .consume_element("Circuit Hash")
-                .map_err(GKRError::ErrorWhenVerifyingCircuitHash)?;
-            assert_eq!(transcript_circuit_hash, circuit_hash);
-        }
-        */
+        // --- Generate circuit description hash and check against prover-provided circuit description hash ---
+        let hash_value_as_field_elems =
+            get_circuit_description_hash_as_field_elems(self, circuit_description_hash_type);
+        let prover_supplied_circuit_description_hash = transcript_reader
+            .consume_elements("Circuit description hash", hash_value_as_field_elems.len())
+            .unwrap();
+        assert_eq!(
+            prover_supplied_circuit_description_hash,
+            hash_value_as_field_elems
+        );
+
         self.index_mle_indices(0);
         let input_layer_commitments_timer = start_timer!(|| "Retrieve Input Layer Commitments");
 
