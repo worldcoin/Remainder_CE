@@ -278,7 +278,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         // and for the proof of dot product
         committer: &PedersenCommitter<C>,
         // the random generator that the prover needs for proof of dot product
-        prover_random_generator: &mut impl Rng,
+        mut rng: &mut impl Rng,
         // transcript that the prover needs for proof of dot product
         prover_transcript: &mut impl ECProverTranscript<C>,
         // the blinding factors to commit to each of the rows of the MLE coefficient matrix
@@ -291,7 +291,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         // to compute T' = L \times T
         let t_prime = HyraxPCSProof::<C>::vector_matrix_product(&l_vector, data, log_n_cols);
 
-        let blinding_factor_evaluation = C::Scalar::random(prover_random_generator);
+        let blinding_factor_evaluation = C::Scalar::random(&mut rng);
 
         // FIXME we could make this nicer by using the CommittedVector for each row
         // the blinding factor for the commitment to the T' vector is a combination of the blinding factors of the commitments
@@ -329,7 +329,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
             &mle_eval_commit,
             &r_vector,
             committer,
-            prover_random_generator,
+            &mut rng,
             prover_transcript,
         );
 

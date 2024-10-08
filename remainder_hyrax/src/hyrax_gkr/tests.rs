@@ -43,7 +43,7 @@ use remainder_shared_types::{
     Field,
 };
 
-use super::hyrax_input_layer::{commit_to_input_values, HyraxInputLayer};
+use super::hyrax_input_layer::{commit_to_input_values, HyraxInputLayer, HyraxInputLayerDescription};
 use super::hyrax_layer::HyraxLayerProof;
 type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
@@ -703,15 +703,16 @@ fn hyrax_input_layer_proof_test() {
         layer_id,
     );
 
-    let input_layer_desc = HyraxInputLayerDescription::new(input_layer.id(), input_mle.num_vars());
+    let input_layer_desc = HyraxInputLayerDescription::new(layer_id, input_mle.num_vars());
     let prover_commitment = commit_to_input_values(
-        input_layer_desc,
-        input_mle,
+        &input_layer_desc,
+        &input_mle,
+        &committer,
         blinding_rng);
 
     prover_transcript.append_ec_points("Hyrax PCS commit", &prover_commitment.commitment);
 
-    let blinding_factor_eval = Scalar::from(blinding_rng);
+    let blinding_factor_eval = Scalar::from(blinding_rng.next_u64());
     let commitment_to_eval = committer.committed_scalar(
         &evaluate_mle(&input_dense_mle, &claim_point),
         &blinding_factor_eval,
@@ -725,7 +726,7 @@ fn hyrax_input_layer_proof_test() {
 
     let proof = HyraxInputLayerProof::prove(
         &input_layer_desc,
-        &commitment,
+        &prover_commitment,
         &[claim.clone()],
         &committer,
         &mut blinding_rng,
@@ -737,11 +738,12 @@ fn hyrax_input_layer_proof_test() {
         ECTranscriptReader::new(prover_transcript.get_transcript());
 
     // Consume the commitment from the verifier transcript.
+    let verifier_commitment = prover_commitment.commitment;
     let _hyrax_commitment: Vec<Bn256Point> = verifier_transcript
-        .consume_ec_points("Hyrax PCS commit", hyrax_commitment.len())
+        .consume_ec_points("Hyrax PCS commit", verifier_commitment.len())
         .unwrap();
     proof.verify(
-        input_layer_desc,
+        &input_layer_desc,
         &[claim.to_claim_commitment()],
         &committer,
         &mut verifier_transcript,

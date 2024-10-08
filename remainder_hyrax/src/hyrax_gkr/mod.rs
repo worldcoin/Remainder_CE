@@ -4,14 +4,13 @@ use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
 use ark_std::{end_timer, start_timer};
 use hyrax_circuit_inputs::HyraxInputLayerData;
-use hyrax_input_layer::{commit_to_input_values, HyraxInputCommitment, HyraxInputLayerProof}
+use hyrax_input_layer::{commit_to_input_values, HyraxInputCommitment, HyraxInputLayerDescription, HyraxInputLayerProof}
 ;
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
 use rand::Rng;
 use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
-use remainder::input_layer::hyrax_input_layer::HyraxInputLayerDescription;
 use remainder::layer::{Layer, LayerDescription};
 use remainder::layouter::component::{Component, ComponentSet};
 use remainder::layouter::nodes::node_enum::NodeEnum;
@@ -59,10 +58,10 @@ pub struct HyraxProof<C: PrimeOrderCurve> {
 impl<C: PrimeOrderCurve> HyraxProof<C> {
     pub fn prove(
         inputs: &HashMap<LayerId, MultilinearExtension<C::Scalar>>,
-        hyrax_input_layers: &HashMap<LayerId, (HyraxInputLayerDescription<C::Scalar>, Option<HyraxInputCommitment<C>>)>,
+        hyrax_input_layers: &HashMap<LayerId, (HyraxInputLayerDescription, Option<HyraxInputCommitment<C>>)>,
         circuit_description: &GKRCircuitDescription<C::Scalar>,
         committer: &PedersenCommitter<C>,
-        blinding_rng: &mut impl Rng,
+        mut rng: &mut impl Rng,
         converter: &mut VandermondeInverse<C::Scalar>,
         transcript: &mut impl ECProverTranscript<C>,
     ) -> HyraxProof<C> {
@@ -87,20 +86,20 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
             .for_each(|layer_id| {
                 // Commit to the Hyrax input layer, if it is not already committed to.
                 let (desc, maybe_commitment) = hyrax_input_layers.get(layer_id).unwrap();
-                let prover_commitment = if let Some(prover_commitment) = maybe_commitment {
+                let prover_commitment: HyraxInputCommitment<C> = if let Some(prover_commitment) = maybe_commitment {
                     // Use the commitment provided by the calling context
-                    prover_commitment.clone()
+                    (*prover_commitment).clone()
                 } else {
                     // Commit to the values of the input layer
                     let input_mle = inputs.get(layer_id).unwrap();
-                    commit_to_input_values(desc, input_mle, blinding_rng)
+                    commit_to_input_values(desc, input_mle, &committer, &mut rng)
                 };
 
                 // Add the verifier's view of the commitment to transcript
                 transcript.append_ec_points("Hyrax input layer values", &prover_commitment.commitment);
 
                 // Store the prover's view for later use in the evaluation proofs.
-                hyrax_input_commitments.insert(layer_id.clone(), prover_commitment.clone());
+                hyrax_input_commitments.insert(layer_id.clone(), prover_commitment);
             });
 
         let mut challenge_sampler = |size| {
@@ -111,7 +110,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         let (circuit_proof, claims_on_input_layers) = HyraxCircuitProof::prove(
             &mut instantiated_circuit,
             &committer,
-            blinding_rng,
+            &mut rng,
             converter,
             transcript,
         );
@@ -166,7 +165,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
                     commitment,
                     committed_claims,
                     committer,
-                    &mut blinding_rng,
+                    &mut rng,
                     transcript,
                     converter,
                 );

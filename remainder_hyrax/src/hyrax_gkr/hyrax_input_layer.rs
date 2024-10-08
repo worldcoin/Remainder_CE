@@ -8,7 +8,7 @@ use remainder::{
         Claim,
     },
     input_layer::{
-        enum_input_layer::{InputLayerDescriptionEnum, InputLayerEnum}, hyrax_input_layer::HyraxInputLayerDescription, public_input_layer::PublicInputLayer, InputLayerDescriptionTrait, InputLayerTrait
+        enum_input_layer::{InputLayerDescriptionEnum, InputLayerEnum}, public_input_layer::PublicInputLayer, InputLayerDescriptionTrait, InputLayerTrait
     },
     layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
     layouter::nodes::circuit_inputs::HyraxInputDType,
@@ -16,8 +16,7 @@ use remainder::{
     sumcheck::evaluate_at_a_point,
 };
 use remainder_shared_types::{
-    curves::PrimeOrderCurve,
-    transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
+    curves::PrimeOrderCurve, halo2curves::serde, transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript}
 };
 use remainder_shared_types::{ff_field, Field};
 
@@ -57,9 +56,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayerEnum<C> {
                 let input_layer_enum = circuit_public_input_layer
                     .convert_into_prover_input_layer(input_layer_mle, &None);
                 Self::from_input_layer_enum(input_layer_enum)
-            }
-            InputLayerDescriptionEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
-                unimplemented!("We handle the hyrax case separately")
             }
         }
     }
@@ -119,7 +115,7 @@ pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
 
 impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
     pub fn prove(
-        input_layer_desc: &HyraxInputLayerDescription<C::Scalar>,
+        input_layer_desc: &HyraxInputLayerDescription,
         commitment: &HyraxInputCommitment<C>,
         committed_claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],
         committer: &PedersenCommitter<C>,
@@ -183,7 +179,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
     /// and then verifying the opening proof by checking the claim.
     pub fn verify(
         &self,
-        input_layer_desc: &HyraxInputLayerDescription<C::Scalar>,
+        input_layer_desc: &HyraxInputLayerDescription,
         claim_commitments: &[HyraxClaim<C::Scalar, C>],
         committer: &PedersenCommitter<C>,
         transcript: &mut impl ECVerifierTranscript<C>,
@@ -214,12 +210,11 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(bound = "F: Field")]
+#[derive(Clone, Debug, PartialEq)]
 /// The circuit description of a [HyraxInputLayer]. Stores the shape information of this layer.
 /// All of the functionality of Hyrax input layers are taken care of in `remainder_hyrax/`, so
 /// this is meant just to generate a circuit description.
-pub struct HyraxInputLayerDescription<F: Field> {
+pub struct HyraxInputLayerDescription {
     /// The input layer ID.
     pub layer_id: LayerId,
     /// The number of variables this Hyrax Input Layer is on.
@@ -227,10 +222,9 @@ pub struct HyraxInputLayerDescription<F: Field> {
     /// The log number of columns in the matrix form of the data that
     /// will be committed to in this input layer.
     pub log_num_cols: usize,
-    _marker: PhantomData<F>,
 }
 
-impl<F: Field> HyraxInputLayerDescription<F> {
+impl HyraxInputLayerDescription {
     /// Constructor for the [HyraxInputLayerDescription].
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         let log_num_cols = num_bits / 2;
@@ -238,7 +232,6 @@ impl<F: Field> HyraxInputLayerDescription<F> {
             layer_id,
             num_bits,
             log_num_cols,
-            _marker: PhantomData,
         }
     }
 }
@@ -246,32 +239,33 @@ impl<F: Field> HyraxInputLayerDescription<F> {
 /// Given a [HyraxInputLayerDescription] and values for its MLE, compute the [HyraxInputCommitment]
 /// for the input layer.
 pub fn commit_to_input_values<C: PrimeOrderCurve>(
-    input_layer_desc: &HyraxInputLayerDescription<C::Scalar>,
-    mle: MultilinearExtension<C::Scalar>, 
-    blinding_rng: &mut impl Rng,
+    input_layer_desc: &HyraxInputLayerDescription,
+    input_mle: &MultilinearExtension<C::Scalar>, 
+    committer: &PedersenCommitter<C>,
+    mut rng: &mut impl Rng,
 ) -> HyraxInputCommitment<C> {
     let num_rows = 1 << (input_layer_desc.num_bits - input_layer_desc.log_num_cols);
     // Sample the blinding factors
-    let blinding_factors_matrix = (0..num_rows)
-        .map(|_| C::Scalar::random(&mut blinding_rng))
-        .collect_vec();
+    let mut blinding_factors_matrix = vec![C::Scalar::ZERO; num_rows];
+    for i in 0..num_rows {
+        blinding_factors_matrix[i] = C::Scalar::random(&mut rng);
+    }
+    let mle_coeffs_vec = MleCoefficientsVector::ScalarFieldVector(input_mle.get_evals_vector().clone()); 
     let commitment_values = HyraxPCSProof::compute_matrix_commitments(
-        desc.log_num_cols,
-        &input_mle,
+        input_layer_desc.log_num_cols,
+        &mle_coeffs_vec,
         &committer,
         &blinding_factors_matrix,
     );
     HyraxInputCommitment {
-        mle: MleCoefficientsVector::convert_from_scalar_field(
-            input_mle.get_evals_vector(),
-            &HyraxInputDType::FieldElement,
-        ),
+        mle: mle_coeffs_vec,
         commitment: commitment_values,
         blinding_factors_matrix,
     }
 }
 
 /// The prover's view of the commitment to the input layer, which includes the blinding factors and the plaintext values.
+#[derive(Clone)]
 pub struct HyraxInputCommitment<C: PrimeOrderCurve> {
     /// The plaintext values
     pub mle: MleCoefficientsVector<C>,

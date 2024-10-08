@@ -11,7 +11,6 @@ use crate::{
 };
 
 use super::{
-    hyrax_input_layer::HyraxInputLayerDescription,
     ligero_input_layer::{LigeroInputLayer, LigeroInputLayerDescription},
     public_input_layer::{PublicInputLayer, PublicInputLayerDescription},
     CommitmentEnum, InputLayerTrait, InputLayerDescriptionTrait, InputLayerError,
@@ -26,8 +25,6 @@ pub enum InputLayerDescriptionEnum<F: Field> {
     PublicInputLayer(PublicInputLayerDescription<F>),
     /// The circuit description for a ligero input layer.
     LigeroInputLayer(LigeroInputLayerDescription<F>),
-    /// The circuit description for a hyrax input layer.
-    HyraxInputLayer(HyraxInputLayerDescription<F>),
 }
 
 impl<F: Field> InputLayerDescriptionTrait<F> for InputLayerDescriptionEnum<F> {
@@ -40,9 +37,6 @@ impl<F: Field> InputLayerDescriptionTrait<F> for InputLayerDescriptionEnum<F> {
             }
             InputLayerDescriptionEnum::LigeroInputLayer(circuit_ligero_input_layer) => {
                 circuit_ligero_input_layer.layer_id()
-            }
-            InputLayerDescriptionEnum::HyraxInputLayer(circuit_hyrax_input_layer) => {
-                circuit_hyrax_input_layer.layer_id
             }
         }
     }
@@ -66,9 +60,6 @@ impl<F: Field> InputLayerDescriptionTrait<F> for InputLayerDescriptionEnum<F> {
                         .unwrap(),
                 ))
             }
-            InputLayerDescriptionEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
-                panic!("The circuit input layer trait is not implemented for hyrax input layers!")
-            }
         }
     }
 
@@ -83,9 +74,6 @@ impl<F: Field> InputLayerDescriptionTrait<F> for InputLayerDescriptionEnum<F> {
             }
             InputLayerDescriptionEnum::LigeroInputLayer(circuit_ligero_input_layer) => {
                 circuit_ligero_input_layer.convert_into_prover_input_layer(mle, precommit)
-            }
-            InputLayerDescriptionEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
-                panic!("The circuit input layer trait is not implemented for hyrax input layers!")
             }
         }
     }
@@ -120,9 +108,6 @@ impl<F: Field> InputLayerDescriptionTrait<F> for InputLayerDescriptionEnum<F> {
                     }
                     _ => panic!("wrong commitment type for input layer description!"),
                 }
-            }
-            InputLayerDescriptionEnum::HyraxInputLayer(_circuit_hyrax_input_layer) => {
-                panic!("Hyrax input layer is not supported by this trait!")
             }
         }
     }
