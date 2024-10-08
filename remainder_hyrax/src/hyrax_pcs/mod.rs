@@ -39,10 +39,6 @@ pub struct HyraxPCSProof<C: PrimeOrderCurve> {
     /// this is the commitment to what the prover claims the evaluation of the MLE at the random
     /// challenge point is.
     pub commitment_to_evaluation: CommittedScalar<C>,
-    /// this is the blinding factor that is used to compute `commitment_to_evaluation` above.
-    /// TODO(vishady) NOTE: this needs to be removed once Hyrax IP is implemented as we shouldn't be revealing
-    /// the actual evaluation at that point.
-    pub blinding_factor_evaluation: C::Scalar,
     /// this is the auxiliary information needed by the input layer in order to verify the opening proof
     pub aux: HyraxAuxInfo<C>,
 }
@@ -350,7 +346,6 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
             podp_evaluation_proof,
             commitment_to_evaluation: mle_eval_commit,
             aux,
-            blinding_factor_evaluation,
         }
     }
 
@@ -366,7 +361,6 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
             podp_evaluation_proof,
             commitment_to_evaluation,
             aux: _,
-            blinding_factor_evaluation: _,
         } = &self;
         let (l_vector, r_vector) =
             HyraxPCSProof::<C>::compute_l_r_from_log_n_cols(log_n_cols, challenge_coordinates);
