@@ -1,6 +1,8 @@
 //! Types for modeling and interacting with a transcript sponge when applying the
 //! Fiat-Shamir transformation on a an interactive protocol.
 
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::warn;
@@ -59,7 +61,7 @@ pub struct Transcript<T> {
 
     /// The content of the transcript represented as a sequence of operations
     /// used to generate it.
-    transcript_operations: Vec<Operation<T>>,
+    operations: Vec<Operation<T>>,
 }
 
 impl<F: Clone> Transcript<F> {
@@ -67,7 +69,7 @@ impl<F: Clone> Transcript<F> {
     pub fn new(label: &str) -> Self {
         Self {
             label: String::from(label),
-            transcript_operations: vec![],
+            operations: vec![],
         }
     }
 
@@ -75,7 +77,7 @@ impl<F: Clone> Transcript<F> {
     /// `label` is an identifier for this operation that can be used for sanity
     /// checking by the verifier.
     pub fn append_elements(&mut self, label: &str, elements: &[F]) {
-        self.transcript_operations
+        self.operations
             .push(Operation::Append(String::from(label), elements.to_vec()));
     }
 
@@ -83,8 +85,24 @@ impl<F: Clone> Transcript<F> {
     /// `label` is an identifier for this operation that can be used for sanity
     /// checking by the verifier.
     pub fn squeeze_elements(&mut self, label: &str, num_elements: usize) {
-        self.transcript_operations
+        self.operations
             .push(Operation::Squeeze(String::from(label), num_elements));
+    }
+}
+
+impl<F> Display for Transcript<F> {
+
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.operations.iter().try_for_each(|op| {
+            match op {
+                Operation::Append(label, elements) => {
+                    write!(f, "Append: \"{}\" with {} elements\n", label, elements.len())
+                }
+                Operation::Squeeze(label, num_elements) => {
+                    write!(f, "Squeeze: \"{}\" with {} elements\n", label, num_elements)
+                }
+            }
+        })
     }
 }
 
@@ -201,8 +219,7 @@ pub enum TranscriptReaderError {
     SqueezeError,
 }
 
-/// The verifier-side interface for interacting with a transcript sponge. A
-/// `TranscriptReader` is typically created using a `Transcript` produced by a
+/// A `TranscriptReader` is typically created using a `Transcript` produced by a
 /// `TranscriptWriter`.
 ///
 /// Its operation is similar to that of the writer, except that instead of an
@@ -244,7 +261,7 @@ impl<F: Field, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReade
     fn consume_element(&mut self, label: &'static str) -> Result<F, TranscriptReaderError> {
         let (operation_idx, element_idx) = self.next_element;
 
-        match self.transcript.transcript_operations.get(operation_idx) {
+        match self.transcript.operations.get(operation_idx) {
             None => Err(TranscriptReaderError::ConsumeError),
             Some(Operation::Squeeze(_, _)) => Err(TranscriptReaderError::ConsumeError),
             Some(Operation::Append(expected_label, v)) => {
@@ -308,7 +325,7 @@ impl<F: Field, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReade
     fn get_challenge(&mut self, label: &'static str) -> Result<F, TranscriptReaderError> {
         let (operation_idx, element_idx) = self.next_element;
 
-        match self.transcript.transcript_operations.get(operation_idx) {
+        match self.transcript.operations.get(operation_idx) {
             None => Err(TranscriptReaderError::SqueezeError),
             Some(Operation::Append(_, _)) => Err(TranscriptReaderError::SqueezeError),
             Some(Operation::Squeeze(expected_label, num_elements)) => {
@@ -367,7 +384,7 @@ impl<F: std::fmt::Debug, T: Default> TranscriptReader<F, T> {
     fn advance_indices(&mut self) -> Result<(), TranscriptReaderError> {
         let (operation_idx, element_idx) = self.next_element;
 
-        match self.transcript.transcript_operations.get(operation_idx) {
+        match self.transcript.operations.get(operation_idx) {
             None => {
                 // `advance_indices` should never be called in an already inconsistent state.
                 panic!("Internal TranscriptReader Error: attempt to advance indices in an already inconsistent state!");
@@ -440,7 +457,7 @@ mod tests {
 
         let expected_transcript = Transcript::<Fr> {
             label: String::from("New tw"),
-            transcript_operations: appended_elements,
+            operations: appended_elements,
         };
 
         assert_eq!(transcript, expected_transcript);
