@@ -20,13 +20,6 @@ pub mod tests;
 
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "C: PrimeOrderCurve")]
-pub struct HyraxAuxInfo<C: PrimeOrderCurve> {
-    pub log_n_cols: usize,
-    pub committer: PedersenCommitter<C>,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "C: PrimeOrderCurve")]
 /// struct that contains all the information needed in a hyrax evaluation proof. the verifier
 /// uses the information in this struct in order to verify that the prover indeed knows the
 /// evaluation of an MLE at a random challenge point.
