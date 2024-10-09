@@ -204,11 +204,14 @@ pub fn load_worldcoin_data_v2<
     const MATMULT_INTERNAL_DIM_NUM_VARS: usize,
     const BASE: u64,
     const NUM_DIGITS: usize,
+    const IM_NUM_ROWS: usize,
+    const IM_NUM_COLS: usize,
 >(
     image_path: PathBuf,
     is_mask: bool,
 ) -> IriscodeCircuitData<F> {
     let image: Array2<u8> = read_npy(image_path).unwrap();
+    assert_eq!(image.shape(), [IM_NUM_ROWS, IM_NUM_COLS]);
 
     use super::parameters_v2::{
         IRIS_RH_MULTIPLICAND, IRIS_THRESHOLDS, MASK_RH_MULTIPLICAND, MASK_THRESHOLDS, WIRINGS,
@@ -257,11 +260,14 @@ pub fn load_worldcoin_data_v3<
     const MATMULT_INTERNAL_DIM_NUM_VARS: usize,
     const BASE: u64,
     const NUM_DIGITS: usize,
+    const IM_NUM_ROWS: usize,
+    const IM_NUM_COLS: usize,
 >(
     image_path: PathBuf,
     is_mask: bool,
 ) -> IriscodeCircuitData<F> {
     let image: Array2<u8> = read_npy(image_path).unwrap();
+    assert_eq!(image.shape(), [IM_NUM_ROWS, IM_NUM_COLS]);
 
     use super::parameters_v3::{
         IRIS_RH_MULTIPLICAND, IRIS_THRESHOLDS, MASK_RH_MULTIPLICAND, MASK_THRESHOLDS, WIRINGS,

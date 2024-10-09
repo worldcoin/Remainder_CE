@@ -33,8 +33,8 @@ fn main() {
     let image_path = Path::new(&args.image_filepath).to_path_buf();
     if args.version == 2 {
         use remainder::worldcoin::parameters_v2::{
-            BASE, IM_NUM_COLS, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
-            MATMULT_ROWS_NUM_VARS, NUM_DIGITS, WIRINGS,
+            BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+            MATMULT_ROWS_NUM_VARS, NUM_DIGITS, WIRINGS, IM_NUM_ROWS, IM_NUM_COLS,
         };
         let data = load_worldcoin_data_v2::<
             Fr,
@@ -43,6 +43,8 @@ fn main() {
             MATMULT_INTERNAL_DIM_NUM_VARS,
             BASE,
             NUM_DIGITS,
+            IM_NUM_ROWS,
+            IM_NUM_COLS,
         >(image_path, args.is_mask);
         let reroutings = wirings_to_reroutings(
             &decode_wirings(WIRINGS),
@@ -60,8 +62,8 @@ fn main() {
         test_circuit(circuit, None);
     } else if args.version == 3 {
         use remainder::worldcoin::parameters_v3::{
-            BASE, IM_NUM_COLS, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
-            MATMULT_ROWS_NUM_VARS, NUM_DIGITS, WIRINGS,
+            BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+            MATMULT_ROWS_NUM_VARS, NUM_DIGITS, WIRINGS, IM_NUM_ROWS, IM_NUM_COLS,
         };
         let data = load_worldcoin_data_v3::<
             Fr,
@@ -70,6 +72,8 @@ fn main() {
             MATMULT_INTERNAL_DIM_NUM_VARS,
             BASE,
             NUM_DIGITS,
+            IM_NUM_ROWS,
+            IM_NUM_COLS,
         >(image_path, args.is_mask);
         let reroutings = wirings_to_reroutings(
             &decode_wirings(WIRINGS),

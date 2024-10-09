@@ -73,10 +73,15 @@ fn test_small_circuit_with_a_ligero_layer() {
 
 /// Return the circuit description, "private" input layer description and inputs for the v2 iris
 /// code circuit, in either the mask (true) or iris (false) case.
+/// # Example:
+/// ```
+/// use remainder::worldcoin::tests::v2_circuit_description_and_inputs;
+/// let (circuit_desc, _, inputs) = v2_circuit_description_and_inputs(false);
+/// ```
 pub fn v2_circuit_description_and_inputs(mask: bool) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
     use super::parameters_v2::{
         BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
-        NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_COLS
+        NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_ROWS, IM_NUM_COLS
     };
     let image_path = if mask {
         Path::new("src/worldcoin/constants/v2/mask/test_image.npy").to_path_buf()
@@ -90,6 +95,8 @@ pub fn v2_circuit_description_and_inputs(mask: bool) -> (GKRCircuitDescription<F
         MATMULT_INTERNAL_DIM_NUM_VARS,
         BASE,
         NUM_DIGITS,
+        IM_NUM_ROWS,
+        IM_NUM_COLS,
     >(image_path, mask);
     let wirings = &decode_wirings(WIRINGS);
     let reroutings = wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
@@ -108,10 +115,15 @@ pub fn v2_circuit_description_and_inputs(mask: bool) -> (GKRCircuitDescription<F
 
 /// Return the circuit description, "private" input layer description and inputs for the v3 iris
 /// code circuit, in either the mask (true) or iris (false) case.
+/// # Example:
+/// ```
+/// use remainder::worldcoin::tests::v3_circuit_description_and_inputs;
+/// let (circuit_desc, _, inputs) = v3_circuit_description_and_inputs(false);
+/// ```
 pub fn v3_circuit_description_and_inputs(mask: bool) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
     use super::parameters_v3::{
         BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
-        NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_COLS
+        NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_ROWS, IM_NUM_COLS
     };
     let image_path = if mask {
         Path::new("src/worldcoin/constants/v3/mask/test_image.npy").to_path_buf()
@@ -125,6 +137,8 @@ pub fn v3_circuit_description_and_inputs(mask: bool) -> (GKRCircuitDescription<F
         MATMULT_INTERNAL_DIM_NUM_VARS,
         BASE,
         NUM_DIGITS,
+        IM_NUM_ROWS,
+        IM_NUM_COLS,
     >(image_path, mask);
     let wirings = &decode_wirings(WIRINGS);
     let reroutings = wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
