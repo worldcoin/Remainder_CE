@@ -23,7 +23,7 @@ use remainder_shared_types::{
 use remainder_shared_types::{ff_field, Field};
 
 use crate::{
-    hyrax_pcs::{HyraxPCSProof, MleCoefficientsVector},
+    hyrax_pcs::{HyraxPCSEvaluationProof, MleCoefficientsVector},
     hyrax_primitives::{
         proof_of_claim_agg::ProofOfClaimAggregation, proof_of_equality::ProofOfEquality,
     },
@@ -110,7 +110,7 @@ pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
     /// The commitment to the input polynomial
     pub input_commitment: Vec<C>,
     /// The evaluation proof for the polynomial evaluated at a random point
-    pub evaluation_proof: HyraxPCSProof<C>,
+    pub evaluation_proof: HyraxPCSEvaluationProof<C>,
     /// The proof of equality that the aggregated claim point and the
     /// commitment in the evaluation proof are indeed to the same value
     pub proof_of_equality: ProofOfEquality<C>,
@@ -150,7 +150,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             transcript,
         );
 
-        let evaluation_proof = HyraxPCSProof::prove(
+        let evaluation_proof = HyraxPCSEvaluationProof::prove(
             input_layer_desc.log_num_cols,
             &commitment.mle,
             &aggregated_claim.point,
@@ -262,7 +262,7 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
         blinding_factors_matrix[i] = C::Scalar::random(&mut rng);
     }
     let mle_coeffs_vec = MleCoefficientsVector::ScalarFieldVector(input_mle.get_evals_vector().clone()); 
-    let commitment_values = HyraxPCSProof::compute_matrix_commitments(
+    let commitment_values = HyraxPCSEvaluationProof::compute_matrix_commitments(
         input_layer_desc.log_num_cols,
         &mle_coeffs_vec,
         &committer,
@@ -305,7 +305,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
             self.comm.is_none(),
             "should not be committing if there is already a precommit!"
         );
-        let comm = HyraxPCSProof::compute_matrix_commitments(
+        let comm = HyraxPCSEvaluationProof::compute_matrix_commitments(
             self.log_num_cols,
             &self.mle,
             &self.committer,
