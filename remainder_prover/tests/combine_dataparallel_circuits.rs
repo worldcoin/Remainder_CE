@@ -236,7 +236,6 @@ fn test_combined_dataparallel_circuit_alt_newmainder() {
         let input_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![dataparallel_input_mle_1_data, dataparallel_input_mle_2_data],
-            None,
         );
 
         let component_1 = DataParallelProductScaledSumCircuitAltComponent::new(

@@ -75,17 +75,6 @@ use ark_std::{end_timer, start_timer};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(bound = "F: Field")]
-/// An enum for representing the different types of commitments for each type
-/// of input layer.
-pub enum CommitmentEnum<F: Field> {
-    /// The commitment for a [LigeroInputLayer].
-    LigeroCommitment(LigeroCommit<PoseidonSpongeHasher<F>, F>),
-    /// The commitment for a [PublicInputLayer]
-    PublicCommitment(Vec<F>),
-}
-
 #[derive(Error, Clone, Debug)]
 /// The errors which can be encountered when constructing an input layer.
 pub enum InputLayerError {
@@ -158,13 +147,6 @@ pub trait InputLayerDescriptionTrait<F: Field> {
         &self,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::Commitment, InputLayerError>;
-
-    /// Convert a circuit input layer into a prover input layer.
-    fn convert_into_prover_input_layer(
-        &self,
-        mle: MultilinearExtension<F>,
-        precommit: &Option<CommitmentEnum<F>>,
-    ) -> InputLayerEnum<F>;
 
     /// Verifies the evaluation at the point in the `Claim` relative to the
     /// polynomial commitment using the opening proof in the transcript.

@@ -183,7 +183,6 @@ fn test_dataparallel_recombination_newmainder() {
                 input_shred_4_data,
                 dataparallel_shred_data,
             ],
-            None,
         );
 
         // Stack currently fails at layer 0, because expr and witgen for the first component is inconsistent.

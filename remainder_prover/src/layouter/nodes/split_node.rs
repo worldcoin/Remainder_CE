@@ -158,7 +158,6 @@ mod test {
             let input_layer_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![input_shred_data, input_shred_out_data],
-                None,
             );
 
             let split_sectors = SplitNode::new(ctx, &input_shred, 1);

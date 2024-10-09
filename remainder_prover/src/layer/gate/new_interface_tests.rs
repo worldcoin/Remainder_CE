@@ -115,7 +115,6 @@ mod tests {
             let input_layer_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![mle_input_shred_data, neg_mle_input_shred_data],
-                None,
             );
             let mut nonzero_gates = vec![];
             let total_num_elems = 1 << mle_input_shred.get_num_vars();
@@ -206,7 +205,6 @@ mod tests {
                     dataparallel_mle_input_shred_data,
                     dataparallel_neg_mle_input_shred_data,
                 ],
-                None,
             );
 
             let mut nonzero_gates = vec![];
@@ -279,7 +277,6 @@ mod tests {
             let input_layer_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![mle_input_shred_data, neg_mle_input_shred_data],
-                None,
             );
 
             let nonzero_gates = vec![(0, 0, 0)];
@@ -352,7 +349,6 @@ mod tests {
                     mle_2_input_shred_data,
                     neg_mle_2_input_shred_data,
                 ],
-                None,
             );
 
             let mut nonzero_gates = vec![];
@@ -464,7 +460,6 @@ mod tests {
                     dataparallel_mle_input_shred_data,
                     dataparallel_neg_mle_input_shred_data,
                 ],
-                None,
             );
             let nonzero_gates = vec![(0, 0, 0)];
 
@@ -550,7 +545,6 @@ mod tests {
                     dataparallel_mle_2_input_shred_data,
                     dataparallel_neg_mle_2_input_shred_data,
                 ],
-                None,
             );
 
             let mut nonzero_gates = vec![];

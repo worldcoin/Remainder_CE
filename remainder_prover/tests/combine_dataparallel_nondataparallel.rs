@@ -243,7 +243,6 @@ fn test_combined_dataparallel_nondataparallel_circuit_newmainder() {
                 input_shred_5_data,
                 input_shred_6_data,
             ],
-            None,
         );
 
         let component_1 = DataParallelComponent::new(ctx, &input_shred_1, &input_shred_2);

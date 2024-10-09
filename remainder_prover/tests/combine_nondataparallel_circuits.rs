@@ -206,7 +206,6 @@ fn test_combined_nondataparallel_circuit_newmainder() {
         let input_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![input_mle_1_data, input_mle_2_data],
-            None,
         );
 
         let component_1 = ProductScaledSumCircuitComponent::new(ctx, &input_mle_1, &input_mle_2);

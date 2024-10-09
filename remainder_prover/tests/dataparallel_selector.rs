@@ -161,7 +161,6 @@ fn test_dataparallel_selector_alt_newmainder() {
                 dataparallel_input_mle_3_data,
                 dataparallel_input_mle_4_data,
             ],
-            None,
         );
 
         let component_1 = ProductScaledBuilderComponent::new(

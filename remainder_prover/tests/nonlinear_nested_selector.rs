@@ -142,7 +142,6 @@ fn test_nonlinear_nested_sel_circuit_newmainder() {
                 right_sum_mle_1_data,
                 right_sum_mle_2_data,
             ],
-            None,
         );
 
         let mut all_nodes: Vec<NodeEnum<Fr>> = vec![

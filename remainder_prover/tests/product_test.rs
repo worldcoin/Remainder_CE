@@ -76,7 +76,6 @@ fn test_product_checker() {
         let input_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![factor1_shred_data, factor2_shred_data, product_shred_data],
-            None,
         );
 
         let checker =

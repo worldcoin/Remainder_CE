@@ -184,7 +184,6 @@ mod test {
             let input_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![input_shred_pos_data, input_shred_neg_data],
-                None,
             );
 
             let gate_sector = GateNode::new(
@@ -249,7 +248,6 @@ mod test {
             let input_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![input_shred_pos_data, input_shred_neg_data],
-                None,
             );
 
             let gate_sector = GateNode::new(

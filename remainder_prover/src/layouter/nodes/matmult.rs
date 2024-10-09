@@ -179,7 +179,6 @@ mod test {
                     input_matrix_b_data,
                     input_matrix_product_data,
                 ],
-                None,
             );
 
             let matmult_sector =

@@ -73,7 +73,6 @@ fn test_basic_circuit() {
         let input_layer_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![input_shred_1_data, input_shred_2_data, output_input_data],
-            None,
         );
 
         let final_sector = Sector::new(ctx, &[&&out_sector, &output_input], |inputs| {

@@ -48,7 +48,6 @@ pub fn single_shred_test() {
         let input_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![table_data, constrained_data, multiplicities_data],
-            None,
         );
         let lookup_constraint =
             LookupConstraint::new::<Fr>(ctx, &lookup_table, &constrained, &multiplicities);
@@ -168,7 +167,6 @@ pub fn multi_shred_test() {
                 constrained_3_data,
                 multiplicities_3_data,
             ],
-            None,
         );
 
         let nodes: Vec<NodeEnum<Fr>> = vec![
@@ -230,7 +228,6 @@ pub fn test_not_satisfied() {
         let input_layer_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![table_data, constrained_data, multiplicities_data],
-            None,
         );
 
         let nodes: Vec<NodeEnum<Fr>> = vec![

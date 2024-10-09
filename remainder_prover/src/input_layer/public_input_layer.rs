@@ -15,7 +15,7 @@ use crate::{
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CommitmentEnum, InputLayerTrait,
+    get_wlx_evaluations_helper, InputLayerTrait,
     InputLayerDescriptionTrait, InputLayerError,
 };
 use crate::mle::Mle;
@@ -147,20 +147,6 @@ impl<F: Field> InputLayerDescriptionTrait<F> for PublicInputLayerDescription<F> 
         } else {
             Err(InputLayerError::PublicInputVerificationFailed)
         }
-    }
-
-    fn convert_into_prover_input_layer(
-        &self,
-        combined_mle: MultilinearExtension<F>,
-        precommit: &Option<CommitmentEnum<F>>,
-    ) -> InputLayerEnum<F> {
-        assert!(
-            precommit.is_none(),
-            "Public input layer does not support precommit!"
-        );
-
-        let prover_public_input_layer = PublicInputLayer::new(combined_mle, self.layer_id());
-        prover_public_input_layer.into()
     }
 }
 

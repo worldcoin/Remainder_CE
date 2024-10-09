@@ -167,7 +167,7 @@ pub fn build_circuit<
             lookup_table_values_data,
         ];
         input_data_shreds.extend(digits_input_shreds_data);
-        let input_layer_data = InputLayerNodeData::new(input_layer.id(), input_data_shreds, None);
+        let input_layer_data = InputLayerNodeData::new(input_layer.id(), input_data_shreds);
 
         // Collect all the nodes, starting with the input nodes
         let mut all_nodes: Vec<NodeEnum<F>> = vec![

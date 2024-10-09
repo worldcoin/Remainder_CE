@@ -150,7 +150,6 @@ mod test {
             let input_data = InputLayerNodeData::new(
                 input_layer.id(),
                 vec![input_shred_pre_routed_data, input_shred_expected_data],
-                None,
             );
 
             let gate_sector = IdentityGateNode::new(ctx, &input_shred_pre_routed, nonzero_gates);

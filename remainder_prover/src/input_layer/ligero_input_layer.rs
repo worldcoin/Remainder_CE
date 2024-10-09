@@ -18,7 +18,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::wlx_eval::YieldWLXEvals,
-    input_layer::CommitmentEnum,
     layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension},
 };
@@ -183,36 +182,6 @@ impl<F: Field> InputLayerDescriptionTrait<F> for LigeroInputLayerDescription<F> 
             claim.get_result(),
         );
         Ok(())
-    }
-
-    fn convert_into_prover_input_layer(
-        &self,
-        combined_mle: MultilinearExtension<F>,
-        precommit: &Option<CommitmentEnum<F>>,
-    ) -> InputLayerEnum<F> {
-        let prover_ligero_layer = if let Some(CommitmentEnum::LigeroCommitment(ligero_commit)) =
-            &precommit
-        {
-            LigeroInputLayer::new(
-                combined_mle,
-                self.layer_id,
-                Some(ligero_commit.clone()),
-                self.aux.rho_inv,
-                (self.aux.orig_num_cols as f64) / (self.aux.num_rows as f64),
-            )
-        } else if precommit.is_none() {
-            LigeroInputLayer::new(
-                combined_mle,
-                self.layer_id,
-                None,
-                self.aux.rho_inv,
-                (self.aux.orig_num_cols as f64) / (self.aux.num_rows as f64),
-            )
-        } else {
-            panic!("The commitment type needs to be a LigeroCommitment for a Ligero Input Layer!")
-        };
-
-        prover_ligero_layer.into()
     }
 }
 

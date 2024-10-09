@@ -127,7 +127,6 @@ fn test_linear_and_nonlinear_bits_circuit_newmainder() {
         let input_data = InputLayerNodeData::new(
             input_layer.id(),
             vec![sel_input_data, prod_input_data],
-            None,
         );
 
         let component_1 = LastBitLinearBuilderComponent::new(ctx, &sel_input, &prod_input);

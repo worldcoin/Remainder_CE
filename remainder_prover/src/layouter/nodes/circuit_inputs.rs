@@ -7,7 +7,7 @@ pub mod compile_inputs;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
-use crate::{input_layer::CommitmentEnum, mle::evals::MultilinearExtension};
+use crate::mle::evals::MultilinearExtension;
 
 use super::{CircuitNode, Context, NodeId};
 
@@ -20,9 +20,6 @@ pub struct InputLayerNodeData<F: Field> {
     pub corresponding_input_node_id: NodeId,
     /// The vector of data that goes in this input layer, as [InputShredData].
     pub data: Vec<InputShredData<F>>,
-    /// An option that is None if this layer has no precommit, but otherwise
-    /// the precommit of this input layer.
-    pub precommit: Option<CommitmentEnum<F>>,
 }
 
 impl<F: Field> InputLayerNodeData<F> {
@@ -31,12 +28,10 @@ impl<F: Field> InputLayerNodeData<F> {
     pub fn new(
         corresponding_input_node_id: NodeId,
         data: Vec<InputShredData<F>>,
-        precommit: Option<CommitmentEnum<F>>,
     ) -> Self {
         Self {
             corresponding_input_node_id,
             data,
-            precommit,
         }
     }
 }
