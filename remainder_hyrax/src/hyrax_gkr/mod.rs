@@ -287,7 +287,7 @@ pub struct HyraxCircuitProof<C: PrimeOrderCurve> {
     /// The [HyraxLayerProof] for each of the intermediate layers in this circuit.
     pub layer_proofs: Vec<(LayerId, HyraxLayerProof<C>)>,
     /// A commitment to the output of the circuit, i.e. what the final value of the output layer is.
-    pub output_layer_proofs: Vec<HyraxOutputLayerProof<C>>,
+    pub output_layer_proofs: Vec<(LayerId, HyraxOutputLayerProof<C>)>,
     /// The prover's claims on verifier challenges, in CommittedScalar form,
     /// i.e. including the blinding factors (since the verifier needs to check these itself).
     pub fiat_shamir_claims: Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
@@ -333,7 +333,7 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
                 // Add the output claim to the claims table
                 let output_layer_id = output_layer.get_mle().layer_id();
                 claim_tracker.insert(output_layer_id, vec![committed_output_claim]);
-                output_layer_proof
+                (output_layer_id, output_layer_proof)
             })
             .collect_vec();
 
@@ -421,10 +421,10 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
         // Output layer verification
         output_layer_proofs
             .iter()
-            .sorted_by_key(|output_layer_proof| output_layer_proof.layer_id.get_layer_id())
-            .for_each(|output_layer_proof| {
+            .sorted_by_key(|(output_layer_id, _)| output_layer_id.get_layer_id())
+            .for_each(|(output_layer_id, output_layer_proof)| {
                 let output_layer_desc = circuit_description.output_layers.iter().find(|output_layer_desc| {
-                    output_layer_desc.layer_id() == output_layer_proof.layer_id
+                    output_layer_desc.layer_id() == *output_layer_id
                 }).unwrap();
                 let output_layer_claim = HyraxOutputLayerProof::verify(
                     output_layer_proof,

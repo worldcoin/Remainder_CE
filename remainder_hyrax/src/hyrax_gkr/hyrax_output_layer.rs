@@ -16,8 +16,6 @@ use super::hyrax_layer::HyraxClaim;
 /// output layer was evaluated on, so that the verifier can check
 /// whether these match the transcript.
 pub struct HyraxOutputLayerProof<C: PrimeOrderCurve> {
-    /// The layer id
-    pub layer_id: LayerId,
     /// The commitment to the claim that the output layer is making
     pub claim_commitment: C,
 }
@@ -52,7 +50,6 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
 
         (
             Self {
-                layer_id: output_layer.get_mle().layer_id(),
                 claim_commitment: commitment,
             },
             committed_claim,
