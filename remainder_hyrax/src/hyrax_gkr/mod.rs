@@ -488,10 +488,9 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
             .input_layers
             .iter()
             .filter_map(|input_layer| {
-                claim_tracker.get(&input_layer.layer_id)
+                claim_tracker.remove(&input_layer.layer_id)
             })
             .flatten()
-            .cloned()
             .collect_vec();
 
         // Check that there aren't any claims left in our claim tracking table!
