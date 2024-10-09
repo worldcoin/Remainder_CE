@@ -35,7 +35,6 @@ use crate::output_layer::{OutputLayer, OutputLayerDescription};
 use crate::utils::mle::build_composite_mle;
 use crate::{
     claims::ClaimAggregator,
-    input_layer::InputLayerError,
     layer::{layer_enum::LayerEnum, LayerError, LayerId},
 };
 use ark_std::{end_timer, start_timer};
@@ -64,9 +63,6 @@ pub enum GKRError {
     #[error("Error when proving layer {0:?}: {1}")]
     /// Error when proving layer
     ErrorWhenProvingLayer(LayerId, LayerError),
-    #[error("Error when proving input layer {0:?}: {1}")]
-    /// Error when proving input layer
-    ErrorWhenProvingInputLayer(LayerId, InputLayerError),
     #[error("Error when verifying layer {0:?}: {1}")]
     /// Error when verifying layer
     ErrorWhenVerifyingLayer(LayerId, LayerError),
@@ -76,9 +72,6 @@ pub enum GKRError {
     /// The public input layer values were not as expected by the verifier
     #[error("Values for public input layer {0:?} were not as expected by the verifier.")]
     PublicInputLayerValuesMismatch(LayerId),
-    /// Error when verifying input layer
-    #[error("Error when verifying input layer {0:?}: {1}")]
-    ErrorWhenVerifyingInputLayer(LayerId, InputLayerError),
 
     #[error("Error when verifying output layer")]
     /// Error when verifying output layer
@@ -86,9 +79,6 @@ pub enum GKRError {
     /// InputShred length mismatch
     #[error("InputShred with NodeId {0} should have {1} variables, but has {2}")]
     InputShredLengthMismatch(NodeId, usize, usize),
-    /// Error for input layer commitment
-    #[error("Error when commiting to InputLayer {0}")]
-    InputLayerError(InputLayerError),
     #[error("Error when verifying circuit hash.")]
     /// Error when verifying circuit hash
     ErrorWhenVerifyingCircuitHash(TranscriptReaderError),
