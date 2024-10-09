@@ -226,7 +226,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
 }
 
 /// The circuit description counterpart of a [Matrix].
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
 #[serde(bound = "F: Field")]
 pub struct MatrixDescription<F: Field> {
     mle: MleDescription<F>,
@@ -259,7 +259,7 @@ impl<F: Field> MatrixDescription<F> {
     }
 }
 /// The circuit description counterpart of a [MatMult] layer.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
 #[serde(bound = "F: Field")]
 pub struct MatMultLayerDescription<F: Field> {
     /// The layer id associated with this matmult layer.

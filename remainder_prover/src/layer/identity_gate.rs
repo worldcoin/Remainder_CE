@@ -42,7 +42,7 @@ use super::{
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// The circuit Description for an [IdentityGate].
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
 #[serde(bound = "F: Field")]
 pub struct IdentityGateLayerDescription<F: Field> {
     /// The layer id associated with this gate layer.

@@ -38,6 +38,7 @@ use crate::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
 use crate::mle::evals::MultilinearExtension;
 use crate::output_layer::mle_output_layer::MleOutputLayer;
 use crate::output_layer::OutputLayer;
+use crate::prover::helpers::get_circuit_description_hash_as_field_elems;
 use crate::prover::layers::Layers;
 use crate::prover::{
     generate_circuit_description, GKRCircuitDescription, GKRError, InstantiatedCircuit,
@@ -55,6 +56,23 @@ use super::{
     component::Component,
     nodes::{node_enum::NodeEnum, Context},
 };
+
+/// Defines the type of hash used when adding a circuit description's hash
+/// into the transcript.
+pub enum CircuitHashType {
+    /// This uses Rust's [DefaultHasher] implementation and uses the
+    /// #[derive(Hash)] implementation. The hash function implemented
+    /// underneath is not cryptographically secure, and thus this option
+    /// is generally not recommended.
+    DefaultRustHash,
+    /// This converts the circuit description into a JSON string via
+    /// [serde::Serialize] and hashes the bytes using [Sha3_256].
+    Sha3_256,
+    /// This converts the circuit description into a JSON string via
+    /// [serde::Serialize] and hashes the bytes in chunks of 16, converting
+    /// them first to field elements.
+    Poseidon,
+}
 
 /// The struct used in order to aid with proving, which contains the function
 /// used in order to generate the circuit description itself, called the
@@ -291,9 +309,25 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
         (instantiated_circuit, layer_map)
     }
 
+    /// This function simply calls the [LayouterCircuit]'s `witness_builder`
+    /// function and generates the corresponding circuit description from it.
+    ///
+    /// TODO(ryancao): This function is hacky and should be re-done correctly
+    /// AFTER we fix the `self.witness_builder` function!! However, this is
+    /// the most direct way to just grab the circuit description for
+    /// now.
+    pub fn get_circuit_description(&mut self) -> GKRCircuitDescription<F> {
+        let ctx = Context::new();
+        let (component, _input_layer_data) = (self.witness_builder)(&ctx);
+        let (circuit_description, _input_node_map) =
+            generate_circuit_description(component, ctx).unwrap();
+        circuit_description
+    }
+
     fn synthesize_and_commit(
         &mut self,
         transcript_writer: &mut impl ProverTranscript<F>,
+        circuit_description_hash_type: CircuitHashType,
     ) -> (
         InstantiatedCircuit<F>,
         LayerMap<F>,
@@ -301,10 +335,16 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
     ) {
         let ctx = Context::new();
         let (component, input_layer_data) = (self.witness_builder)(&ctx);
-        // TODO(vishady): ADD CIRCUIT DESCRIPTION TO TRANSCRIPT (maybe not
-        // here...)
+
         let (circuit_description, input_node_map) =
             generate_circuit_description(component, ctx).unwrap();
+
+        // --- Generate circuit description hash and add to transcript ---
+        let hash_value_as_field_elems = get_circuit_description_hash_as_field_elems(
+            &circuit_description,
+            circuit_description_hash_type,
+        );
+        transcript_writer.append_elements("Circuit description hash", &hash_value_as_field_elems);
 
         let (instantiated_circuit, layer_map) = self.populate_circuit(
             &circuit_description,
@@ -323,6 +363,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
     pub fn prove(
         &mut self,
         mut transcript_writer: TranscriptWriter<F, PoseidonSponge<F>>,
+        circuit_description_hash_type: CircuitHashType,
     ) -> Result<(Transcript<F>, GKRCircuitDescription<F>), GKRError> {
         let synthesize_commit_timer = start_timer!(|| "Circuit synthesize and commit");
         info!("Synethesizing circuit...");
@@ -336,7 +377,7 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             },
             layer_map,
             circuit_description,
-        ) = self.synthesize_and_commit(&mut transcript_writer);
+        ) = self.synthesize_and_commit(&mut transcript_writer, circuit_description_hash_type);
 
         info!("Circuit synthesized and witness generated.");
         end_timer!(synthesize_commit_timer);
