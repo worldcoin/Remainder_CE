@@ -33,7 +33,7 @@ pub fn small_circuit_description_and_inputs() -> (GKRCircuitDescription<Fr>, Inp
 /// code circuit, in either the mask (true) or iris (false) case.
 /// # Example:
 /// ```
-/// use remainder::worldcoin::tests::v2_circuit_description_and_inputs;
+/// use remainder::worldcoin::test_helpers::v2_circuit_description_and_inputs;
 /// let (circuit_desc, _, inputs) = v2_circuit_description_and_inputs(false);
 /// ```
 pub fn v2_circuit_description_and_inputs(mask: bool) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
@@ -75,7 +75,7 @@ pub fn v2_circuit_description_and_inputs(mask: bool) -> (GKRCircuitDescription<F
 /// code circuit, in either the mask (true) or iris (false) case.
 /// # Example:
 /// ```
-/// use remainder::worldcoin::tests::v3_circuit_description_and_inputs;
+/// use remainder::worldcoin::test_helpers::v3_circuit_description_and_inputs;
 /// let (circuit_desc, _, inputs) = v3_circuit_description_and_inputs(false);
 /// ```
 pub fn v3_circuit_description_and_inputs(mask: bool) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
