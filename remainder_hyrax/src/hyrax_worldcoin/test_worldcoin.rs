@@ -23,6 +23,7 @@ use remainder::worldcoin::tests::small_circuit_description_and_inputs;
 #[test]
 fn test_small_circuit_both_layers_public() {
     let (circuit_desc, _, inputs) = small_circuit_description_and_inputs();
+    dbg!(&circuit_desc);
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
     let blinding_rng = &mut rand::thread_rng();
