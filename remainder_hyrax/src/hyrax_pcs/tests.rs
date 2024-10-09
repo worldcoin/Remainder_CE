@@ -8,7 +8,7 @@ use remainder_shared_types::halo2curves::CurveExt;
 use remainder_shared_types::transcript::ec_transcript::ECTranscript;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 
-use crate::hyrax_pcs::HyraxPCSProof;
+use crate::hyrax_pcs::HyraxPCSEvaluationProof;
 use crate::hyrax_pcs::MleCoefficientsVector;
 use crate::pedersen::PedersenCommitter;
 
@@ -44,14 +44,14 @@ fn sanity_check_test_honest_prover_small_identity() {
     let mut seed_eval = [0u8; 32];
     OsRng.fill_bytes(&mut seed_eval);
 
-    let comm_to_matrix = HyraxPCSProof::compute_matrix_commitments(
+    let comm_to_matrix = HyraxPCSEvaluationProof::compute_matrix_commitments(
         log_split_point,
         &input_layer_mle_coeff,
         &committer,
         &blinding_factors_matrix_rows,
     );
 
-    let hyrax_eval_proof = HyraxPCSProof::prove(
+    let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
         log_split_point,
         &input_layer_mle_coeff,
         &challenge_coordinates,
@@ -98,14 +98,14 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
 
     let blinding_factors_matrix_rows = (0..4).map(|_| Scalar::one()).collect_vec();
 
-    let comm_to_matrix = HyraxPCSProof::compute_matrix_commitments(
+    let comm_to_matrix = HyraxPCSEvaluationProof::compute_matrix_commitments(
         log_split_point,
         &input_layer_mle_coeff,
         &committer,
         &blinding_factors_matrix_rows,
     );
 
-    let hyrax_eval_proof = HyraxPCSProof::prove(
+    let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
         log_split_point,
         &input_layer_mle_coeff,
         &challenge_coordinates,
@@ -176,14 +176,14 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         .map(|_| Scalar::from(rand::random::<u64>()))
         .collect_vec();
 
-    let comm_to_matrix = HyraxPCSProof::compute_matrix_commitments(
+    let comm_to_matrix = HyraxPCSEvaluationProof::compute_matrix_commitments(
         log_split_point,
         &input_layer_mle_coeff,
         &committer,
         &blinding_factors_matrix_rows,
     );
 
-    let hyrax_eval_proof = HyraxPCSProof::prove(
+    let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
         log_split_point,
         &input_layer_mle_coeff,
         &challenge_coordinates,
@@ -229,7 +229,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         .collect_vec();
 
     let (challenge_vec, _) =
-        HyraxPCSProof::<Bn256Point>::compute_l_r_from_log_n_cols(0, &challenge_coordinates);
+        HyraxPCSEvaluationProof::<Bn256Point>::compute_l_r_from_log_n_cols(0, &challenge_coordinates);
 
     let mle_evaluation_at_challenge = input_layer_mle_coeff_raw_vec
         .iter()
@@ -246,14 +246,14 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         .map(|_| Scalar::from(rand::random::<u64>()))
         .collect_vec();
 
-    let comm_to_matrix = HyraxPCSProof::compute_matrix_commitments(
+    let comm_to_matrix = HyraxPCSEvaluationProof::compute_matrix_commitments(
         log_split_point,
         &input_layer_mle_coeff,
         &committer,
         &blinding_factors_matrix_rows,
     );
 
-    let hyrax_eval_proof = HyraxPCSProof::prove(
+    let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
         log_split_point,
         &input_layer_mle_coeff,
         &challenge_coordinates,

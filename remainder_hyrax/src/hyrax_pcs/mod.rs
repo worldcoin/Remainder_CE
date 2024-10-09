@@ -30,7 +30,7 @@ pub struct HyraxAuxInfo<C: PrimeOrderCurve> {
 /// struct that contains all the information needed in a hyrax evaluation proof. the verifier
 /// uses the information in this struct in order to verify that the prover indeed knows the
 /// evaluation of an MLE at a random challenge point.
-pub struct HyraxPCSProof<C: PrimeOrderCurve> {
+pub struct HyraxPCSEvaluationProof<C: PrimeOrderCurve> {
     /// this is the proof of dot product evaluation proof from the vectors L*T, and R where T
     /// is the matrix of MLE coefficients, and L and R are the corresponding equality vectors
     /// for the random challenge points
@@ -108,7 +108,7 @@ impl<C: PrimeOrderCurve> MleCoefficientsVector<C> {
     }
 }
 
-impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
+impl<C: PrimeOrderCurve> HyraxPCSEvaluationProof<C> {
     /// this function computes the commitments to the rows of the matrix. essentially, this is the vector of
     /// commitments that the prover should be sending over to the verifier.
     pub fn compute_matrix_commitments(
@@ -210,8 +210,8 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
 
         // the L and R vectors are simply the \chi values for the challenge points provided.
         (
-            HyraxPCSProof::<C>::compute_equality_chi_values(l_challenge_coords),
-            HyraxPCSProof::<C>::compute_equality_chi_values(r_challenge_coords),
+            HyraxPCSEvaluationProof::<C>::compute_equality_chi_values(l_challenge_coords),
+            HyraxPCSEvaluationProof::<C>::compute_equality_chi_values(r_challenge_coords),
         )
     }
 
@@ -284,11 +284,11 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         blinding_factors_matrix: &[C::Scalar],
     ) -> Self {
         let (l_vector, r_vector) =
-            HyraxPCSProof::<C>::compute_l_r_from_log_n_cols(log_n_cols, challenge_coordinates);
+            HyraxPCSEvaluationProof::<C>::compute_l_r_from_log_n_cols(log_n_cols, challenge_coordinates);
 
         // since the prover knows the T matrix (matrix of MLE coefficients), the prover can simply do a vector matrix product
         // to compute T' = L \times T
-        let t_prime = HyraxPCSProof::<C>::vector_matrix_product(&l_vector, data, log_n_cols);
+        let t_prime = HyraxPCSEvaluationProof::<C>::vector_matrix_product(&l_vector, data, log_n_cols);
 
         let blinding_factor_evaluation = C::Scalar::random(&mut rng);
 
@@ -353,7 +353,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
             commitment_to_evaluation,
         } = &self;
         let (l_vector, r_vector) =
-            HyraxPCSProof::<C>::compute_l_r_from_log_n_cols(log_n_cols, challenge_coordinates);
+            HyraxPCSEvaluationProof::<C>::compute_l_r_from_log_n_cols(log_n_cols, challenge_coordinates);
 
         // the verifier uses the L vector and does a scalar multiplication to each of the matrix row commits with the
         // appropriate index of the L vector. it then adds them all together to get the commitment to T' = L \times T.
