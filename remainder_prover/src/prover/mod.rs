@@ -43,7 +43,7 @@ use remainder_ligero::ligero_commit::{remainder_ligero_commit, remainder_ligero_
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::transcript::{
-    ProverTranscript, TranscriptReaderError, TranscriptWriter,
+    ProverTranscript, TranscriptWriter,
 };
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
@@ -57,9 +57,6 @@ pub enum GKRError {
     #[error("No claims were found for layer {0:?}")]
     /// No claims were found for layer
     NoClaimsForLayer(LayerId),
-    #[error("Transcript during verifier's interaction with the transcript.")]
-    /// Errors when reading from the transcript
-    TranscriptError(TranscriptReaderError),
     #[error("Error when proving layer {0:?}: {1}")]
     /// Error when proving layer
     ErrorWhenProvingLayer(LayerId, LayerError),
@@ -79,13 +76,6 @@ pub enum GKRError {
     /// InputShred length mismatch
     #[error("InputShred with NodeId {0} should have {1} variables, but has {2}")]
     InputShredLengthMismatch(NodeId, usize, usize),
-    #[error("Error when verifying circuit hash.")]
-    /// Error when verifying circuit hash
-    ErrorWhenVerifyingCircuitHash(TranscriptReaderError),
-
-    /// Error generating the Verifier Key.
-    #[error("Error generating the Verifier Key")]
-    ErrorGeneratingVerifierKey,
 }
 
 /// A proof of the sumcheck protocol; Outer vec is rounds, inner vec is evaluations
