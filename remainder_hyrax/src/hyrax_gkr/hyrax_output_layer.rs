@@ -34,7 +34,6 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         output_layer.fix_layer(&bindings).unwrap();
         let claim = output_layer.get_claim().unwrap();
         // Convert to a CommittedScalar claim
-        // FIXME(Ben) write a helper for this.
         let blinding_factor = &C::Scalar::random(blinding_rng);
         let claim_commit = scalar_committer
             .committed_scalar(&claim.get_claim().get_result(), blinding_factor);
