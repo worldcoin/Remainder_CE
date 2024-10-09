@@ -63,7 +63,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
     /// Hyrax commitments are appended to transcript in order of LayerId ascending.
     /// this is also the ordering of `HyraxProof.hyrax_input_proofs`.
     /// # Requires:
-    ///   * circuit_description.index_mle_indices(0); has been called
+    ///   * `circuit_description.index_mle_indices(0)` has been called
     pub fn prove(
         inputs: &HashMap<LayerId, MultilinearExtension<C::Scalar>>,
         hyrax_input_layers: &HashMap<LayerId, (HyraxInputLayerDescription, Option<HyraxInputCommitment<C>>)>,
@@ -170,11 +170,11 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
             .map(|layer_id| {
                 let (desc, _) = hyrax_input_layers.get(layer_id).unwrap();
                 let commitment = hyrax_input_commitments.get(layer_id).unwrap();
-                let committed_claims = claims_on_hyrax_input_layers.get(layer_id).unwrap();
+                let committed_claims = claims_on_hyrax_input_layers.remove(layer_id).unwrap();
                 let input_proof = HyraxInputLayerProof::prove(
                     desc,
                     commitment,
-                    committed_claims,
+                    &committed_claims,
                     committer,
                     &mut rng,
                     transcript,
@@ -199,7 +199,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
     /// descriptions of the hyrax input layers.
     /// Panics if verification fails.
     /// # Requires:
-    ///   * circuit_description.index_mle_indices(0); has been called
+    ///   * `circuit_description.index_mle_indices(0)` has been called
     pub fn verify(
         &self,
         hyrax_input_layers: &HashMap<LayerId, HyraxInputLayerDescription>,

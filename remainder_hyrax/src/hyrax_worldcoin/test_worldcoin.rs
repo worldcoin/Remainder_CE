@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::Path};
 
-use remainder::worldcoin::{data::{load_worldcoin_data_v2, load_worldcoin_data_v3, wirings_to_reroutings, IriscodeCircuitData}, parameters::decode_wirings};
+use remainder::{input_layer::hyrax_input_layer, worldcoin::{data::{load_worldcoin_data_v2, load_worldcoin_data_v3, wirings_to_reroutings, IriscodeCircuitData}, parameters::decode_wirings}};
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
     transcript::{
@@ -10,7 +10,7 @@ use remainder_shared_types::{
 };
 
 use crate::{
-    hyrax_gkr::HyraxProof, hyrax_worldcoin::build_hyrax_circuit_hyrax_input_layer,
+    hyrax_gkr::{hyrax_input_layer::{HyraxInputLayer, HyraxInputLayerDescription}, HyraxProof}, hyrax_worldcoin::build_hyrax_circuit_hyrax_input_layer,
     pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
 };
 
@@ -47,6 +47,50 @@ fn test_small_circuit_both_layers_public() {
         ECTranscript::new("modulus modulus modulus modulus modulus");
     proof.verify(
         &HashMap::new(),
+        &circuit_desc,
+        &committer,
+        &mut transcript,
+    );
+}
+
+#[test]
+fn test_small_circuit_with_hyrax_layer() {
+    let (circuit_desc, private_layer_desc, inputs) = small_circuit_description_and_inputs();
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+    let blinding_rng = &mut rand::thread_rng();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let num_generators = 100;
+    let committer = PedersenCommitter::<Bn256Point>::new(
+        num_generators + 1,
+        "modulus modulus modulus modulus modulus",
+        None,
+    );
+    let mut prover_hyrax_input_layers = HashMap::new();
+    let hyrax_input_layer_desc: HyraxInputLayerDescription = private_layer_desc.into();
+    prover_hyrax_input_layers.insert(
+        hyrax_input_layer_desc.layer_id,
+        (hyrax_input_layer_desc.clone(), None),
+    );
+
+    let proof = HyraxProof::prove(
+        &inputs,
+        &prover_hyrax_input_layers,
+        &circuit_desc,
+        &committer,
+        blinding_rng,
+        converter,
+        &mut transcript,
+    );
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+    let mut verifier_hyrax_input_layers = HashMap::new();
+    verifier_hyrax_input_layers.insert(
+        hyrax_input_layer_desc.layer_id,
+        hyrax_input_layer_desc.clone(),
+    );
+    proof.verify(
+        &verifier_hyrax_input_layers,
         &circuit_desc,
         &committer,
         &mut transcript,

@@ -10,7 +10,7 @@ use remainder::{
         Claim,
     },
     input_layer::{
-        enum_input_layer::{InputLayerDescriptionEnum, InputLayerEnum}, public_input_layer::PublicInputLayer, InputLayerDescriptionTrait, InputLayerTrait
+        enum_input_layer::{InputLayerDescriptionEnum, InputLayerEnum}, public_input_layer::PublicInputLayer, InputLayerDescription, InputLayerDescriptionTrait, InputLayerTrait
     },
     layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
     layouter::nodes::circuit_inputs::HyraxInputDType,
@@ -228,7 +228,8 @@ pub struct HyraxInputLayerDescription {
 }
 
 impl HyraxInputLayerDescription {
-    /// Constructor for the [HyraxInputLayerDescription].
+    /// Create a [HyraxInputLayerDescription] specifying the use of a square matrix ("default
+    /// setup"; build the struct directly for custom setup).
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         let log_num_cols = num_bits / 2;
         Self {
@@ -236,6 +237,13 @@ impl HyraxInputLayerDescription {
             num_bits,
             log_num_cols,
         }
+    }
+}
+
+impl From<InputLayerDescription> for HyraxInputLayerDescription {
+    /// Convert an [InputLayerDescription] into a [HyraxInputLayerDescription] with a square matrix.
+    fn from(input_layer_desc: InputLayerDescription) -> Self {
+        HyraxInputLayerDescription::new(input_layer_desc.layer_id, input_layer_desc.num_vars)
     }
 }
 
