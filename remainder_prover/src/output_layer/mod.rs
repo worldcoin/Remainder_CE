@@ -102,14 +102,13 @@ impl<F: Field> OutputLayer<F> {
         if bits != challenges.len() {
             return Err(LayerError::NumVarsMitmatch(self.mle.layer_id(), bits, challenges.len()));
         }
-        (0..bits).into_iter().zip(challenges.iter()).for_each(|(bit, challenge)| {
+        (0..bits).zip(challenges.iter()).for_each(|(bit, challenge)| {
             self.mle.fix_variable(bit, *challenge);
         });
         debug_assert_eq!(self.num_free_vars(), 0);
         Ok(())
     }
 
-    // FIXME(Ben) surely this function could just return a zero claim?
     /// Extract a claim on this output layer by extracting the bindings from the fixed variables.
     pub fn get_claim(
         &mut self,

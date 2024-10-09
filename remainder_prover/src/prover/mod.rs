@@ -148,10 +148,10 @@ pub fn prove<F: Field>(
             let root = commitment.get_root();
             transcript_writer.append("ligero input layer root", root.into_raw());
             // Store the commitment for later use.
-            ligero_input_commitments.insert(layer_id.clone(), commitment);
+            ligero_input_commitments.insert(*layer_id, commitment);
         });
 
-    let input_layer_claims = prove_circuit(circuit_description, &inputs, transcript_writer).unwrap();
+    let input_layer_claims = prove_circuit(circuit_description, inputs, transcript_writer).unwrap();
 
     // If in debug mode, then check the claims on all input layers.
     if !cfg!(debug_assertions) {
@@ -186,7 +186,7 @@ pub fn prove<F: Field>(
 /// Verify a GKR proof from a transcript.
 pub fn verify<F: Field>(
     public_inputs: &HashMap<LayerId, MultilinearExtension<F>>,
-    ligero_inputs: &Vec<LigeroInputLayerDescription<F>>,
+    ligero_inputs: &[LigeroInputLayerDescription<F>],
     circuit_description: &GKRCircuitDescription<F>,
     transcript: &mut impl VerifierTranscript<F>,
 ) -> Result<(), GKRError> {
@@ -198,9 +198,9 @@ pub fn verify<F: Field>(
             let expected_mle = public_inputs.get(layer_id).unwrap();
             let transcript_mle = transcript.consume_elements("input layer", 1 << expected_mle.num_vars()).unwrap();
             if expected_mle.get_evals_vector() != &transcript_mle {
-                return Err(GKRError::PublicInputLayerValuesMismatch(layer_id.clone()));
+                Err(GKRError::PublicInputLayerValuesMismatch(*layer_id))
             } else {
-                return Ok(());
+                Ok(())
             }
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -251,7 +251,7 @@ pub fn verify<F: Field>(
             commitment,
             &desc.aux,
             transcript,
-            &claim.get_claim().get_point(),
+            claim.get_claim().get_point(),
             claim.get_claim().get_result(),
         );
     }
@@ -272,7 +272,7 @@ pub fn prove_circuit<F: Field>(
 
     let mut challenge_sampler =
         |size| transcript_writer.get_challenges("Verifier challenges", size);
-    let instantiated_circuit = circuit_description.instantiate(&inputs, &mut challenge_sampler);
+    let instantiated_circuit = circuit_description.instantiate(inputs, &mut challenge_sampler);
 
     let InstantiatedCircuit {
         input_layers,

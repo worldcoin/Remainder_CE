@@ -281,7 +281,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         assert_eq!(bindings.len(), num_sumcheck_rounds_expected);
 
         // Add the commitments made by the prover to the transcript
-        transcript.append_ec_points("commitment to product input/outputs", &commitments);
+        transcript.append_ec_points("commitment to product input/outputs", commitments);
 
         let post_sumcheck_layer_desc =
             layer_desc.get_post_sumcheck_layer(&bindings, &agg_claim.point);

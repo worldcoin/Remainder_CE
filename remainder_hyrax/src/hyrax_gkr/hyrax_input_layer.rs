@@ -120,14 +120,14 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         // Verify the proof of claim aggregation
         let agg_claim = self.claim_agg_proof.verify(
             claim_commitments,
-            &committer,
+            committer,
             transcript,
         );
 
         // Verify the actual "evaluation" polynomial committed to at the random point
         self.evaluation_proof.verify(
             input_layer_desc.log_num_cols,
-            &committer,
+            committer,
             &self.input_commitment,
             &agg_claim.point,
             transcript,
@@ -195,7 +195,7 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
     let commitment_values = HyraxPCSEvaluationProof::compute_matrix_commitments(
         input_layer_desc.log_num_cols,
         &mle_coeffs_vec,
-        &committer,
+        committer,
         &blinding_factors_matrix,
     );
     HyraxInputCommitment {
@@ -217,8 +217,8 @@ pub struct HyraxInputCommitment<C: PrimeOrderCurve> {
 }
 
 /// Computes the V_d(l(x)) evaluations for this input layer V_d for claim aggregation.
-fn compute_claim_wlx<F: Field>(mle_vec: &Vec<F>, claims: &ClaimGroup<F>) -> Vec<F> {
-    let mle = MultilinearExtension::new(mle_vec.clone());
+fn compute_claim_wlx<F: Field>(mle_vec: &[F], claims: &ClaimGroup<F>) -> Vec<F> {
+    let mle = MultilinearExtension::new(mle_vec.to_owned());
     let num_claims = claims.get_num_claims();
     let claim_vecs = claims.get_claim_points_matrix();
     let claimed_vals = claims.get_results();

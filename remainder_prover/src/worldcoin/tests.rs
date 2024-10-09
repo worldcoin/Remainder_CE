@@ -14,7 +14,7 @@ fn test_small_circuit_both_layers_public() {
     let mut transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
     prove(&inputs, &HashMap::new(), &circuit_desc, &mut transcript_writer).unwrap();
     let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript_writer.get_transcript());
-    verify(&inputs, &vec![], &circuit_desc, &mut transcript_reader).unwrap();
+    verify(&inputs, &[], &circuit_desc, &mut transcript_reader).unwrap();
 }
 
 #[test]
@@ -31,7 +31,7 @@ fn test_small_circuit_with_a_ligero_layer() {
     let ligero_layer_desc = LigeroInputLayerDescription::<Fr> {
         layer_id: private_input_layer_desc.layer_id,
         num_vars: private_input_layer_desc.num_vars,
-        aux: aux,
+        aux,
     };
     let mut ligero_layer_spec_map = HashMap::new();
     ligero_layer_spec_map.insert(private_input_layer_desc.layer_id, (ligero_layer_desc.clone(), None));
@@ -43,7 +43,7 @@ fn test_small_circuit_with_a_ligero_layer() {
     // Verify (remembering to remove the private input layer from the inputs).
     let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript_writer.get_transcript());
     inputs.remove(&private_input_layer_desc.layer_id);
-    verify(&inputs, &vec![ligero_layer_desc], &circuit_desc, &mut transcript_reader).unwrap();
+    verify(&inputs, &[ligero_layer_desc], &circuit_desc, &mut transcript_reader).unwrap();
 }
 
 #[ignore]
@@ -53,5 +53,5 @@ fn test_worldcoin_circuit_iris_v2_public_inputs() {
     let mut transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
     prove(&inputs, &HashMap::new(), &circuit_desc, &mut transcript_writer).unwrap();
     let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript_writer.get_transcript());
-    verify(&inputs, &vec![], &circuit_desc, &mut transcript_reader).unwrap();
+    verify(&inputs, &[], &circuit_desc, &mut transcript_reader).unwrap();
 }

@@ -401,8 +401,8 @@ pub fn build_iriscode_circuit_description<
         input_builder_from_shred_map(input_shred_id_to_data).unwrap()
     };
 
-    let private_input_layer_id = input_node_id_to_layer_id.get(&private_input_layer.id()).unwrap().clone();
-    let private_input_layer = circ_desc.input_layers.iter().find(|il| il.layer_id == private_input_layer_id).unwrap().clone();
+    let private_input_layer_id = input_node_id_to_layer_id.get(&private_input_layer.id()).unwrap();
+    let private_input_layer = circ_desc.input_layers.iter().find(|il| il.layer_id == *private_input_layer_id).unwrap().clone();
     (
         circ_desc,
         input_builder,

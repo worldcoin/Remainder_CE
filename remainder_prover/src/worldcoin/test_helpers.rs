@@ -16,13 +16,13 @@ use std::path::Path;
 /// identity matrix circuit.
 pub fn small_circuit_description_and_inputs() -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
     // rewirings for the 2x2 identity matrix
-    let wirings = &vec![(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
+    let wirings = &[(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
     let reroutings = wirings_to_reroutings(wirings, 2, 2);
     let (circuit_desc, input_builder, private_input_layer_desc) = build_iriscode_circuit_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
     let data = build_iriscode_circuit_data::<Fr, 1, 1, 1, 16, 2>(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
-        &vec![1, 0, 6, -1],
-        &vec![1, 0, 1, 0],
+        &[1, 0, 6, -1],
+        &[1, 0, 1, 0],
         wirings,
     );
     let inputs = input_builder(data);

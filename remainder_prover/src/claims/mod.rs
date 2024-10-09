@@ -10,7 +10,7 @@ use remainder_shared_types::{
 use thiserror::Error;
 
 use crate::{
-    layer::{combine_mle_refs::CombineMleRefError, layer_enum::LayerEnum, LayerError},
+    layer::{layer_enum::LayerEnum, LayerError},
     mle::dense::DenseMle,
     prover::GKRError,
 };
@@ -21,17 +21,9 @@ use crate::layer::{Layer, LayerId};
 /// Errors to do with aggregating and collecting claims.
 #[derive(Error, Debug, Clone)]
 pub enum ClaimError {
-    /// The Layer has not finished the sumcheck protocol.
-    #[error("The Layer has not finished the sumcheck protocol")]
-    SumCheckNotComplete,
-
     /// MLE indices must all be fixed.
     #[error("MLE indices must all be fixed")]
     ClaimMleIndexError,
-
-    /// Layer ID not assigned.
-    #[error("Layer ID not assigned")]
-    LayerMleError,
 
     /// MLE within MleRef has multiple values within it.
     #[error("MLE within MleRef has multiple values within it")]
@@ -41,10 +33,6 @@ pub enum ClaimError {
     #[error("Error aggregating claims")]
     ClaimAggroError,
 
-    /// Should be evaluating to a sum.
-    #[error("Should be evaluating to a sum")]
-    ExpressionEvalError,
-
     /// All claims in a group should agree on the number of variables.
     #[error("All claims in a group should agree on the number of variables")]
     NumVarsMismatch,
@@ -52,10 +40,6 @@ pub enum ClaimError {
     /// All claims in a group should agree the destination layer field.
     #[error("All claims in a group should agree the destination layer field")]
     LayerIdMismatch,
-
-    /// Error while combining mle refs in order to evaluate challenge point.
-    #[error("Error while combining mle refs in order to evaluate challenge point")]
-    MleRefCombineError(#[from] CombineMleRefError),
 
     /// Zero MLE refs cannot be used as intermediate values within a circuit!
     #[error("Zero MLE refs cannot be used as intermediate values within a circuit")]

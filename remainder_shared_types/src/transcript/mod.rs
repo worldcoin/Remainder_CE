@@ -97,10 +97,10 @@ impl<F> Display for Transcript<F> {
         self.operations.iter().try_for_each(|op| {
             match op {
                 Operation::Append(label, elements) => {
-                    write!(f, "Append: \"{}\" with {} elements\n", label, elements.len())
+                    writeln!(f, "Append: \"{}\" with {} elements", label, elements.len())
                 }
                 Operation::Squeeze(label, num_elements) => {
-                    write!(f, "Squeeze: \"{}\" with {} elements\n", label, num_elements)
+                    writeln!(f, "Squeeze: \"{}\" with {} elements", label, num_elements)
                 }
             }
         })

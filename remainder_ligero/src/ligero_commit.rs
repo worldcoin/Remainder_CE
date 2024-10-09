@@ -82,7 +82,7 @@ pub fn remainder_ligero_eval_prove<F: Field>(
         get_ml_inner_outer_tensors(challenge_coord, aux.num_rows, aux.orig_num_cols);
 
     // --- Compute evaluation proof and write to `transcript_writer`
-    prove(&comm, &outer_tensor[..], aux, transcript_writer)
+    prove(comm, &outer_tensor[..], aux, transcript_writer)
 }
 
 /// API for Remainder's Ligero eval proof verification.

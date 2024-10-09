@@ -46,7 +46,7 @@ type Base = <Bn256Point as CurveExt>::Base;
 
 /// Evaluates (a copy of) the MLE at a given point.
 /// Helper function for the tests.
-pub fn evaluate_mle<F: Field>(mle: &DenseMle<F>, point: &Vec<F>) -> F {
+pub fn evaluate_mle<F: Field>(mle: &DenseMle<F>, point: &[F]) -> F {
     let mut mle = mle.clone();
     mle.index_mle_indices(0);
     point.iter().enumerate().for_each(|(i, coord)| {
@@ -749,7 +749,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
     let mut blinding_rng = rand::thread_rng();
-    let mut converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
     let committer = PedersenCommitter::<Bn256Point>::new(
         NUM_GENERATORS + 1,
@@ -806,7 +806,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
         &circuit_desc,
         &committer,
         &mut blinding_rng,
-        &mut converter,
+        converter,
         &mut transcript,
     );
 
@@ -820,7 +820,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
         &mut transcript);
 }
 
-//FIXME(Ben) restore these tests by converting them as in small_regular_circuit_hyrax_input_layer_test 
+//FIXME restore these tests by converting them as in small_regular_circuit_hyrax_input_layer_test 
 
 // #[test]
 // fn small_regular_circuit_public_input_layer_test() {
