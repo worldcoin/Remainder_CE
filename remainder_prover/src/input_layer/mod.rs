@@ -1,9 +1,8 @@
-//! Trait for dealing with InputLayer
-
+//! InputLayer and InputLayerDescription structs, as well as public- and ligero- input layers and
+//! fiat-shamir challenges.
 use crate::mle::evals::MultilinearExtension;
-use remainder_shared_types::{transcript::TranscriptReaderError, Field};
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use crate::layer::LayerId;
 
 /// An input layer in order to generate random challenges for Fiat-Shamir.

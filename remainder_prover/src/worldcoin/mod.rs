@@ -22,4 +22,8 @@ pub mod parameters_v2;
 pub mod parameters_v3;
 
 /// Tests
+#[cfg(test)]
 pub mod tests;
+
+/// Test helpers (also used in Hyrax tests)
+pub mod test_helpers;

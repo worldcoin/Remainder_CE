@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use remainder::{input_layer::InputLayerDescription, layer::LayerId, mle::evals::MultilinearExtension, prover::GKRCircuitDescription, worldcoin::tests::{v2_circuit_description_and_inputs, v3_circuit_description_and_inputs}};
+use remainder::{input_layer::InputLayerDescription, layer::LayerId, mle::evals::MultilinearExtension, prover::GKRCircuitDescription, worldcoin::test_helpers::{v2_circuit_description_and_inputs, v3_circuit_description_and_inputs}};
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt}, transcript::{
         ec_transcript::ECTranscript,
@@ -17,7 +17,7 @@ type Base = <Bn256Point as CurveExt>::Base;
 
 #[test]
 fn test_small_circuit_both_layers_public() {
-    use remainder::worldcoin::tests::small_circuit_description_and_inputs;
+    use remainder::worldcoin::test_helpers::small_circuit_description_and_inputs;
     let (circuit_desc, _, inputs) = small_circuit_description_and_inputs();
     test_iriscode_circuit_with_public_layers_helper(circuit_desc, inputs);
 }
@@ -25,7 +25,7 @@ fn test_small_circuit_both_layers_public() {
 #[test]
 /// Test a small version of the iriscode circuit with a Hyrax input layer.
 fn test_small_circuit_with_hyrax_layer() {
-    use remainder::worldcoin::tests::small_circuit_description_and_inputs;
+    use remainder::worldcoin::test_helpers::small_circuit_description_and_inputs;
     let (desc, priv_layer_desc, inputs) = small_circuit_description_and_inputs();
     test_iriscode_circuit_with_hyrax_helper(desc, priv_layer_desc, inputs);
 }

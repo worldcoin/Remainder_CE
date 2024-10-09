@@ -16,9 +16,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    layer::{Layer, LayerId},
-};
+use crate::layer::{Layer, LayerId};
 
 /// Errors to do with aggregating and collecting claims.
 #[derive(Error, Debug, Clone)]
