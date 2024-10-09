@@ -184,7 +184,7 @@ impl<C: PrimeOrderCurve> PedersenCommitter<C> {
             .generators
             .iter()
             .zip(message.iter())
-            .fold(C::zero(), |acc, (gen, input)| acc + (*gen * *input));
+            .fold(C::zero(), |acc, (gen, input)| acc + gen.scalar_mult(*input));
         unblinded_commit + self.blinding_generator * *blinding
     }
 

@@ -295,7 +295,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
 }
 
 #[test]
-/// test on a 2^9 x 2^9 matrix with all zeroes to see if there is an internal optimization for this
+/// Test on a 2^9 x 2^9 matrix with all zeroes to test internal scalar mult optimization.
 fn sanity_check_test_honest_prover_iris_size_symmetric_all_zero() {
     let committer = PedersenCommitter::<Bn256Point>::new(
         (1 << 9) + 1,
@@ -321,8 +321,10 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_all_zero() {
 }
 
 #[test]
-/// test on a 2^9 x 2^9 matrix with all random to compare with above
-fn sanity_check_test_honest_prover_iris_size_symmetric_all_rand() {
+/// Test on a 2^9 x 2^9 matrix with all 64 bit field elements (as opposed to the full)
+/// 256-bit width which is the `sanity_check_test_honest_prover_iris_size_symmetric_random`
+/// test.
+fn sanity_check_test_honest_prover_iris_size_symmetric_all_64_bit_rand() {
     let committer = PedersenCommitter::<Bn256Point>::new(
         (1 << 9) + 1,
         "zerozerozerozerozerozerozerozero",
@@ -345,28 +347,5 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_all_rand() {
         &committer,
         &blinding_factors_matrix_rows,
     );
-    end_timer!(commit_timer);
-}
-
-#[test]
-/// test if running 2^9 pedersen commits of size 2^9 is same as above
-fn check_2_to_the_9_vector_commits_2_to_the_9_times() {
-    let committer = PedersenCommitter::<Bn256Point>::new(
-        (1 << 9) + 1,
-        "zerozerozerozerozerozerozerozero",
-        None,
-    );
-    let rand_vec = (0..(1 << 9))
-        .map(|_| Scalar::from(rand::random::<u64>()))
-        .collect_vec();
-    let blinding_factors_matrix_rows = (0..(1 << 9))
-        .map(|_| Scalar::from(rand::random::<u64>()))
-        .collect_vec();
-    let commit_timer = start_timer!(|| "commit time");
-    (0..(1 << 9))
-        .zip(blinding_factors_matrix_rows)
-        .for_each(|(_, blinding)| {
-            committer.vector_commit(&rand_vec, &blinding);
-        });
     end_timer!(commit_timer);
 }

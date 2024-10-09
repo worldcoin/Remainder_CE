@@ -95,6 +95,7 @@ pub trait PrimeOrderCurve:
     /// Returns the group element from x coordinate + parity of y.
     fn from_x_and_sign_y(x: Self::Base, y_sign: u8) -> Self;
 
+    /// Multiplies a group element by a scalar field element.
     fn scalar_mult(&self, scalar: Self::Scalar) -> Self;
 }
 
@@ -315,6 +316,9 @@ impl PrimeOrderCurve for Bn256 {
         }
     }
 
+    /// Simple double-and-add method for scalar multiplication,
+    /// but truncating all of the leading zeros in the big-endian
+    /// bit representation of the scalar field element.
     fn scalar_mult(&self, scalar: Self::Scalar) -> Self {
         let scalar_repr = scalar.to_bytes();
         let sig_bits = scalar_repr
