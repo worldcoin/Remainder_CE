@@ -1,4 +1,4 @@
-use ark_std::{cfg_into_iter, end_timer, log2, start_timer};
+use ark_std::{cfg_into_iter, log2};
 use itertools::Itertools;
 use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -20,6 +20,7 @@ use remainder::{
 use remainder_shared_types::ff_field;
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
+    pedersen::{CommittedScalar, PedersenCommitter},
     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
 };
 
@@ -28,7 +29,6 @@ use crate::{
     hyrax_primitives::{
         proof_of_claim_agg::ProofOfClaimAggregation, proof_of_equality::ProofOfEquality,
     },
-    pedersen::{CommittedScalar, PedersenCommitter},
     utils::vandermonde::VandermondeInverse,
 };
 
