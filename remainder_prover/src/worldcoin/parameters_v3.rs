@@ -18,6 +18,9 @@ pub const IM_NUM_ROWS: usize = 128;
 /// The number of columns in the image
 pub const IM_NUM_COLS: usize = 1024;
 
+/// The number of variables in the MLE getting rerouted (typically the image input)
+pub const TO_REROUTE_NUM_VARS: usize = 7 + 10;
+
 /// The wirings from the image (2d) to the LH matrix multiplicand (2d), first a flattened u16 array,
 /// then serialized as bytes
 pub static WIRINGS: &[u8] = include_bytes!("constants/v3/wirings.bin");
