@@ -1,10 +1,7 @@
-use std::hash::Hash;
-use std::{collections::HashMap, marker::PhantomData};
+use std::collections::HashMap;
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
-use ark_std::{end_timer, start_timer};
-use hyrax_circuit_inputs::HyraxInputLayerData;
 use hyrax_input_layer::{commit_to_input_values, verify_claim, HyraxInputCommitment, HyraxInputLayerDescription, HyraxInputLayerProof}
 ;
 use hyrax_layer::HyraxClaim;
@@ -13,22 +10,18 @@ use itertools::Itertools;
 use rand::Rng;
 use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
 use remainder::layer::{Layer, LayerDescription};
-use remainder::layouter::component::{Component, ComponentSet};
-use remainder::layouter::nodes::node_enum::NodeEnum;
-use remainder::layouter::nodes::{Context, NodeId};
 use remainder::mle::evals::MultilinearExtension;
 use remainder::mle::Mle;
-use remainder::prover::{generate_circuit_description, GKRCircuitDescription, InstantiatedCircuit};
+use remainder::prover::{GKRCircuitDescription, InstantiatedCircuit};
 use remainder::{claims::wlx_eval::ClaimMle, layer::LayerId};
 
-use remainder_shared_types::transcript::ec_transcript::{ECTranscript, ECTranscriptSponge, ECTranscriptTrait};
+use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use remainder_shared_types::
     curves::PrimeOrderCurve
 ;
 
 use self::hyrax_layer::HyraxLayerProof;
 
-pub mod hyrax_circuit_inputs;
 /// The module that contains all functions necessary to do operations on an
 /// output layer, [HyraxInputLayer]
 pub mod hyrax_input_layer;
@@ -501,54 +494,13 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
 
 }
 
+/// The struct that holds all the information that the prover sends to the verifier about the proof
+/// of a [FiatShamirChallenge].  This mainly exists since in the main prover flow, P sends V
+/// commitments to the claimed values, so V needs the prover versions of the commitments to check
+/// the claims on the Fiat-Shamir challenges.
 pub struct FiatShamirChallengeProof<C: PrimeOrderCurve> {
     pub layer: FiatShamirChallenge<C::Scalar>,
     pub claims: Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
-}
-
-//FIXME(Ben) remove
-/// The struct that holds all the necessary information to describe a circuit.
-pub struct HyraxProver<
-    'a,
-    C: PrimeOrderCurve,
-    Fn: FnMut(
-        &Context,
-    ) -> (
-        ComponentSet<NodeEnum<C::Scalar>>,
-        Vec<HyraxInputLayerData<C>>,
-    ),
-    R: Rng,
-> {
-    pub committer: &'a PedersenCommitter<C>,
-    pub blinding_rng: R,
-    pub converter: &'a mut VandermondeInverse<C::Scalar>,
-    pub _marker: PhantomData<Fn>,
-}
-
-impl<
-        'a,
-        C: PrimeOrderCurve,
-        Fn: FnMut(
-            &Context,
-        ) -> (
-            ComponentSet<NodeEnum<C::Scalar>>,
-            Vec<HyraxInputLayerData<C>>,
-        ),
-        R: Rng,
-    > HyraxProver<'a, C, Fn, R>
-{
-    pub fn new(
-        committer: &'a PedersenCommitter<C>,
-        blinding_rng: R,
-        converter: &'a mut VandermondeInverse<C::Scalar>,
-    ) -> Self {
-        Self {
-            committer,
-            blinding_rng,
-            converter,
-            _marker: PhantomData,
-        }
-    }
 }
 
 /// Match up the claims from the verifier with the claims from the prover. Used for proofs of

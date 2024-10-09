@@ -1,15 +1,13 @@
 use std::collections::HashMap;
 
-use crate::hyrax_gkr::hyrax_circuit_inputs::HyraxInputLayerData;
 use crate::hyrax_gkr::hyrax_input_layer::HyraxInputLayerProof;
 use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
 
-use crate::hyrax_gkr::{HyraxProof, HyraxProver};
+use crate::hyrax_gkr::HyraxProof;
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
 
 use itertools::{repeat_n, Itertools};
-use rand::rngs::ThreadRng;
 use rand::RngCore;
 use remainder::expression::abstract_expr::ExprBuilder;
 use remainder::expression::circuit_expr::ExprDescription;
@@ -20,14 +18,10 @@ use remainder::layer::layer_enum::{LayerDescriptionEnum, LayerEnum};
 use remainder::layer::matmult::{MatMult, MatMultLayerDescription, Matrix, MatrixDescription};
 use remainder::layer::regular_layer::{RegularLayer, RegularLayerDescription};
 use remainder::layer::{LayerDescription, LayerId};
-use remainder::layouter::component::ComponentSet;
 use remainder::layouter::nodes::circuit_inputs::{
-    InputLayerNode, InputLayerType, InputShred, InputShredData,
+    InputLayerNode, InputLayerType, InputShred
 };
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
-use remainder::layouter::nodes::identity_gate::IdentityGateNode;
-use remainder::layouter::nodes::matmult::MatMultNode;
-use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::sector::Sector;
 use remainder::layouter::nodes::{CircuitNode, Context};
 use remainder::mle::dense::DenseMle;
