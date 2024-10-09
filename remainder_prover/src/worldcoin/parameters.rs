@@ -1,4 +1,4 @@
-// FIXME(Ben) should this file go somewhere else?
+//! Serialization and deserialization of the parameters of the iriscode circuit.
 
 /// Given a byte array representing the wirings from the image (2d) to the LH matrix multiplicand
 /// (2d), first a flattened u16 array, then serialized as bytes, return the wirings as a Vec of

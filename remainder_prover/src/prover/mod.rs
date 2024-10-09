@@ -259,7 +259,6 @@ pub fn verify<F: Field>(
     Ok(())
 }
 
-// FIXME(Ben) Ensure that the claims are returned in a defined order (important for the Ligero evaluation proofs) (can't just order by id, since there is no claim agg for input layers ATM) (how did claim agg order the claims?) (same for verify).
 /// Assumes that the inputs have already been added to the transcript (if necessary).
 /// Returns the vector of claims on the input layers.
 pub fn prove_circuit<F: Field>(
@@ -359,8 +358,6 @@ pub fn prove_circuit<F: Field>(
     end_timer!(intermediate_layers_timer);
     all_layers_sumcheck_proving_span.exit();
 
-    // FIXME(Ben) add back claim agg for input layers
-    // (Wait until Makis has finished his YieldClaims refactor).
     let input_layer_claims = input_layers.iter().filter_map(|input_layer| aggregator.get_claims(input_layer.layer_id)).flatten().cloned().collect_vec();
 
     Ok(input_layer_claims)
@@ -688,7 +685,7 @@ pub fn generate_circuit_description<F: Field>(
     ),
     GKRError,
 > {
-    // FIXME(Ben) This doesn't seem well factored.  Pass in the return values of layout() as arguments to this function?  Inline layout here?
+    // FIXME This doesn't seem well factored.  Pass in the return values of layout() as arguments to this function?  Inline layout here?
     let (
         input_layer_nodes,
         fiat_shamir_challenge_nodes,
@@ -776,7 +773,6 @@ pub fn generate_circuit_description<F: Field>(
     };
     circuit_description.index_mle_indices(0);
 
-    // TODO(Ben) add the option to pass in input _layer_ node data as well
     let input_builder = move |input_node_data: HashMap<NodeId, MultilinearExtension<F>>| {
         let mut input_layer_data = HashMap::new();
         for (input_layer_id, input_shred_ids) in input_layer_id_to_input_shred_ids.iter() {

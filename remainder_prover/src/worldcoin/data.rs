@@ -74,7 +74,7 @@ pub fn build_iriscode_circuit_data<
     const BASE: u64,
     const NUM_DIGITS: usize,
 >(
-    image: Array2<u8>, // FIXME(Ben) this should be serialized, too
+    image: Array2<u8>,
     rh_multiplicand: &[i32],
     thresholds_matrix: &[i64],
     wirings: &[(u16, u16, u16, u16)],

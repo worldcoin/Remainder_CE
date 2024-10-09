@@ -141,8 +141,8 @@ fn invert_mle_bookkeeping_table<F: Field>(bookkeeping_table: Vec<F>) -> Vec<F> {
 }
 
 impl InputLayerNode {
-    /// From the circuit description map and a starting layer id,
-    /// create the circuit description of an input layer.
+    /// From the circuit description map and a starting layer id, create the circuit description of
+    /// an input layer, adding the input shreds to the circuit map.
     pub fn generate_input_layer_description<F: Field>(
         &self,
         layer_id: &mut LayerId,
@@ -168,7 +168,6 @@ impl InputLayerNode {
             num_vars: num_vars_combined_mle,
         };
 
-        // FIXME(Ben) this should probably be in a separate function.
         input_shred_indices
             .iter()
             .zip(prefix_bits)
