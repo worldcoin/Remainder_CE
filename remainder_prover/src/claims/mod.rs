@@ -10,7 +10,6 @@ use remainder_shared_types::{
 use thiserror::Error;
 
 use crate::{
-    input_layer::enum_input_layer::InputLayerEnum,
     layer::{combine_mle_refs::CombineMleRefError, layer_enum::LayerEnum, LayerError},
     mle::dense::DenseMle,
     prover::GKRError,
@@ -18,7 +17,6 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    input_layer::InputLayerTrait,
     layer::{Layer, LayerId},
 };
 
@@ -112,9 +110,6 @@ pub trait ClaimAggregator<F: Field> {
     /// claims for.
     type Layer: Layer<F>;
 
-    /// The `InputLayer` this claim aggregator aggregates claims for.
-    type InputLayer: InputLayerTrait<F>;
-
     /// Creates an empty [ClaimAggregator], ready to track claims.
     fn new() -> Self;
 
@@ -139,22 +134,6 @@ pub trait ClaimAggregator<F: Field> {
     fn prover_aggregate_claims(
         &self,
         layer: &LayerEnum<F>,
-        output_mles_from_layer: &[DenseMle<F>],
-        transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<Claim<F>, GKRError>;
-
-    /// Similar to `prover_aggregate_claims` but for an input layer.
-    ///
-    /// Aggregates all the claims made on `input_layer` and returns a single
-    /// claim.
-    ///
-    /// Should be called only after all claims for `input_layer` have been
-    /// retrieved using `extract_claims`.
-    ///
-    /// Adds any communication to the F-S Transcript as needed.
-    fn prover_aggregate_claims_input(
-        &self,
-        layer: &InputLayerEnum<F>,
         output_mles_from_layer: &[DenseMle<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError>;

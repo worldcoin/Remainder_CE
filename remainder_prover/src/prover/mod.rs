@@ -15,7 +15,6 @@ use std::collections::{HashMap, HashSet};
 use self::layers::Layers;
 use crate::claims::wlx_eval::{ClaimMle, WLXAggregator};
 use crate::expression::circuit_expr::filter_bookkeeping_table;
-use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::fiat_shamir_challenge::{
     FiatShamirChallenge, FiatShamirChallengeDescription,
 };
@@ -305,7 +304,7 @@ pub fn prove_circuit<F: Field>(
     } = instantiated_circuit;
 
     // Claim aggregator to keep track of GKR-style claims across all layers.
-    let mut aggregator = WLXAggregator::<F, LayerEnum<F>, InputLayerEnum<F>>::new();
+    let mut aggregator = WLXAggregator::<F, LayerEnum<F>>::new();
 
     // --------- STAGE 1: Output Claim Generation ---------
     let claims_timer = start_timer!(|| "Output claims generation");
@@ -601,7 +600,7 @@ impl<F: Field> GKRCircuitDescription<F> {
             .collect();
 
         // Claim aggregator to keep track of GKR-style claims across all layers.
-        let mut aggregator = WLXAggregator::<F, LayerEnum<F>, InputLayerEnum<F>>::new();
+        let mut aggregator = WLXAggregator::<F, LayerEnum<F>>::new();
 
         // --------- Output Claim Generation ---------
         let claims_timer = start_timer!(|| "Output claims generation");

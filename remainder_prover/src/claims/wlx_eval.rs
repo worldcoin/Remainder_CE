@@ -14,8 +14,6 @@ use crate::claims::wlx_eval::helpers::{
 };
 
 use crate::claims::ClaimError;
-use crate::input_layer::enum_input_layer::InputLayerEnum;
-use crate::input_layer::InputLayerTrait;
 use crate::layer::layer_enum::LayerEnum;
 use crate::mle::dense::DenseMle;
 
@@ -44,21 +42,19 @@ use super::{Claim, ClaimAggregator, YieldClaim};
 /// Collects additional information in the [ClaimMle] struct to make computation
 /// of evaluations easier, most importantly the `original_bookkeeping_table`.
 #[derive(Debug)]
-pub struct WLXAggregator<F: Field, L, LI> {
+pub struct WLXAggregator<F: Field, L> {
     claims: HashMap<LayerId, Vec<ClaimMle<F>>>,
-    _marker: std::marker::PhantomData<(L, LI)>,
+    _marker: std::marker::PhantomData<L>,
 }
 
 impl<
         F: Field,
         L: Layer<F> + YieldWLXEvals<F> + YieldClaim<ClaimMle<F>>,
-        LI: InputLayerTrait<F> + YieldWLXEvals<F>,
-    > ClaimAggregator<F> for WLXAggregator<F, L, LI>
+    > ClaimAggregator<F> for WLXAggregator<F, L>
 {
     type Claim = ClaimMle<F>;
 
     type Layer = L;
-    type InputLayer = LI;
 
     fn new() -> Self {
         Self {
@@ -98,16 +94,6 @@ impl<
         self.prover_aggregate_claims(layer, output_mles_from_layer, layer_id, transcript_writer)
     }
 
-    fn prover_aggregate_claims_input(
-        &self,
-        layer: &InputLayerEnum<F>,
-        output_mles_from_layer: &[DenseMle<F>],
-        transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<Claim<F>, GKRError> {
-        let layer_id = layer.layer_id();
-        self.prover_aggregate_claims(layer, output_mles_from_layer, layer_id, transcript_writer)
-    }
-
     fn verifier_aggregate_claims(
         &self,
         layer_id: LayerId,
@@ -139,8 +125,7 @@ impl<
 impl<
         F: Field,
         L: Layer<F> + YieldWLXEvals<F> + YieldClaim<ClaimMle<F>>,
-        LI: InputLayerTrait<F> + YieldWLXEvals<F>,
-    > WLXAggregator<F, L, LI>
+    > WLXAggregator<F, L>
 {
     fn prover_aggregate_claims(
         &self,
