@@ -68,9 +68,12 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         transcript: &mut impl ECTranscriptTrait<C>,
     ) -> HyraxClaim<C::Scalar, C> {
         // Get the first set of challenges needed for the output layer.
-        let bindings: Vec<C::Scalar> = (0..layer_desc.mle.num_free_vars())
-            .map(|_idx| transcript.get_scalar_field_challenge("output claim point"))
-            .collect_vec();
+        let bindings = layer_desc.mle.var_indices().iter().map(|idx| match idx {
+            MleIndex::Fixed(bit) => C::Scalar::from(*bit as u64),
+            MleIndex::Indexed(_) => transcript.get_scalar_field_challenge("output claim point"),
+            MleIndex::Free => panic!("MLEs should be indexed by this point"),
+            _ => panic!("Unexpected MleIndex"),
+        }).collect_vec();
         transcript.append_ec_point("output layer commit", proof.claim_commitment);
 
         HyraxClaim {
