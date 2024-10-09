@@ -1,7 +1,6 @@
-use ark_std::{cfg_into_iter, log2};
+use ark_std::cfg_into_iter;
 use itertools::Itertools;
-use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
-use rand_chacha::ChaCha20Rng;
+use rand::Rng;
 use remainder::{
     claims::{
         wlx_eval::{claim_group::ClaimGroup, get_num_wlx_evaluations},
@@ -9,7 +8,6 @@ use remainder::{
     },
     input_layer::InputLayerDescription,
     layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
-    layouter::nodes::circuit_inputs::HyraxInputDType,
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     sumcheck::evaluate_at_a_point,
 };

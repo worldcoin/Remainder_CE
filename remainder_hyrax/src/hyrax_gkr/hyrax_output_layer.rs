@@ -1,6 +1,5 @@
 use itertools::Itertools;
 use rand::Rng;
-use remainder::layer::{Layer, LayerId};
 use remainder::mle::{Mle, MleIndex};
 use remainder::output_layer::{OutputLayer, OutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
