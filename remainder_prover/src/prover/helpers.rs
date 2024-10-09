@@ -51,7 +51,7 @@ pub fn test_circuit<
             let mut transcript_reader = TranscriptReader::<F, PoseidonSponge<F>>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
-            match verify(&inputs, &vec![], &gkr_circuit_description, &mut transcript_reader) {
+            match verify(&inputs, &[], &gkr_circuit_description, &mut transcript_reader) {
                 Ok(_) => {
                     end_timer!(verifier_timer);
                 }
