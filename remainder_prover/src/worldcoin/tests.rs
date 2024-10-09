@@ -53,11 +53,11 @@ fn test_small_circuit_with_a_ligero_layer() {
         1.0, // ratio
         Some(1), // maybe_num_col_opens
     );
-    let ligero_layer_desc = LigeroInputLayerDescription::<Fr>::new(
-        private_input_layer_desc.layer_id,
-        private_input_layer_desc.num_vars,
-        aux,
-    );
+    let ligero_layer_desc = LigeroInputLayerDescription::<Fr> {
+        layer_id: private_input_layer_desc.layer_id,
+        num_vars: private_input_layer_desc.num_vars,
+        aux: aux,
+    };
     let mut ligero_layer_spec_map = HashMap::new();
     ligero_layer_spec_map.insert(private_input_layer_desc.layer_id, (ligero_layer_desc.clone(), None));
 

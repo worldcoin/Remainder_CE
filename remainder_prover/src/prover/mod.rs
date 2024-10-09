@@ -161,7 +161,7 @@ pub fn prove<F: Field>(
                 commitment.clone()
             } else {
                 let input_mle = inputs.get(layer_id).unwrap();
-                let (commitment, _) = remainder_ligero_commit(input_mle.get_evals_vector(), &desc.aux());
+                let (commitment, _) = remainder_ligero_commit(input_mle.get_evals_vector(), &desc.aux);
                 commitment
             };
             // Add the root of the commitment to the transcript.
@@ -194,7 +194,7 @@ pub fn prove<F: Field>(
                 mle.get_evals_vector(),
                 claim.get_claim().get_point(),
                 transcript_writer,
-                &desc.aux(),
+                &desc.aux,
                 commitment,
             ).unwrap();
         }
@@ -229,10 +229,10 @@ pub fn verify<F: Field>(
     let mut ligero_commitments = HashMap::<LayerId, F>::new();
     ligero_inputs
         .iter()
-        .sorted_by_key(|desc| desc.layer_id().get_input_layer_id())
+        .sorted_by_key(|desc| desc.layer_id.get_input_layer_id())
         .for_each(|desc| {
             let commitment = transcript.consume_element("ligero input layer root").unwrap();
-            ligero_commitments.insert(desc.layer_id(), commitment);
+            ligero_commitments.insert(desc.layer_id, commitment);
         });
 
     let input_layer_claims = circuit_description.verify(transcript).unwrap();
@@ -266,10 +266,10 @@ pub fn verify<F: Field>(
     for claim in ligero_input_layer_claims.iter() {
         let layer_id = claim.to_layer_id.unwrap();
         let commitment = ligero_commitments.get(&layer_id).unwrap();
-        let desc = ligero_inputs.iter().find(|desc| desc.layer_id() == layer_id).unwrap();
+        let desc = ligero_inputs.iter().find(|desc| desc.layer_id == layer_id).unwrap();
         remainder_ligero_verify::<F>(
             commitment,
-            &desc.aux(),
+            &desc.aux,
             transcript,
             &claim.get_claim().get_point(),
             claim.get_claim().get_result(),
