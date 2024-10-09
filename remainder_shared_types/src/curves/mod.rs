@@ -94,6 +94,8 @@ pub trait PrimeOrderCurve:
 
     /// Returns the group element from x coordinate + parity of y.
     fn from_x_and_sign_y(x: Self::Base, y_sign: u8) -> Self;
+
+    fn scalar_mult(&self, scalar: Self::Scalar) -> Self;
 }
 
 /// TODO(ryancao): Test these implementations!
@@ -311,6 +313,24 @@ impl PrimeOrderCurve for Bn256 {
             y: y_coord,
             z: Self::Base::one(),
         }
+    }
+
+    fn scalar_mult(&self, scalar: Self::Scalar) -> Self {
+        let scalar_repr = scalar.to_bytes();
+        let sig_bits = scalar_repr
+            .iter()
+            .rev()
+            .flat_map(|byte| (0..8).rev().map(move |i| ((byte >> i) & 1u8) != 0))
+            .skip_while(|&bit| !bit)
+            .collect_vec();
+
+        let mut acc = Self::identity();
+        for bit in sig_bits {
+            acc = PrimeOrderCurve::double(&acc);
+            acc = if bit { acc + self } else { acc };
+        }
+
+        acc
     }
 }
 

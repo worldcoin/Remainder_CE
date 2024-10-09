@@ -7,13 +7,13 @@ use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
 /// Tests for the Pedersen commitment scheme using the BN254 (aka BN256) curve and its scalar field (Fr).
 use remainder_shared_types::halo2curves::group::Group;
 use remainder_shared_types::halo2curves::CurveExt;
+use remainder_shared_types::pedersen::PedersenCommitter;
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptReader;
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptWriter;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 
 use crate::hyrax_pcs::HyraxPCSProof;
 use crate::hyrax_pcs::MleCoefficientsVector;
-use crate::pedersen::PedersenCommitter;
 
 type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;

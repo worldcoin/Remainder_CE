@@ -10,6 +10,7 @@ serde = { version = "1.0.183", features = ["derive"] }
 halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", tag = "v0.6.1", features = [
     "derive_serde",
 ] }
+subtle = "2.4"
 poseidon = { git = "https://github.com/privacy-scaling-explorations/poseidon", tag = "v2024_01_31" } # Scroll's Poseidon impl
 # poseidon-circuit = { git = "ssh://github.com/Modulus-Labs/poseidon-circuit.git", branch = "better-sponge" }
 serde_json = "1.0.105"

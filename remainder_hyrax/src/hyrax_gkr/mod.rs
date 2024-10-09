@@ -2,7 +2,6 @@ use std::collections::hash_map::Entry;
 use std::collections::HashSet;
 use std::{collections::HashMap, marker::PhantomData};
 
-use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
 use ark_std::{end_timer, log2, start_timer};
 use hyrax_circuit_inputs::HyraxInputLayerData;
@@ -34,6 +33,7 @@ use remainder::{claims::wlx_eval::ClaimMle, layer::LayerId};
 
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
+    pedersen::{CommittedScalar, PedersenCommitter},
     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
 };
 

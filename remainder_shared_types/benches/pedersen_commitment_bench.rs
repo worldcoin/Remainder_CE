@@ -11,15 +11,15 @@ fn create_random_field_vec<F: Field>(num_items: usize, mut rng: impl Rng) -> Vec
     (0..num_items).map(|_| F::random(&mut rng)).collect()
 }
 
+/// Bench how long it takes to do a Pedersen commitment for 2^`log_num_elems` provided.
 fn bench_vector_commitment(c: &mut Criterion) {
-    for log_num_elems in [6, 7, 8] {
+    for log_num_elems in [1, 2, 3, 4, 5, 6, 7, 8, 9] {
         c.bench_function(
             &format!("pedersen_vector_commit_bench_log_{log_num_elems}"),
             |b| {
                 b.iter_batched(
                     || {
                         let mut rng = test_rng();
-                        // vector commit to a random vec
                         let vec_to_commit =
                             create_random_field_vec::<Bn256Scalar>(1 << log_num_elems, &mut rng);
                         let blinding = Bn256Scalar::random(&mut rng);
