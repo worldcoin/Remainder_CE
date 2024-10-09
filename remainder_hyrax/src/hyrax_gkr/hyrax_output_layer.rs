@@ -5,7 +5,7 @@ use remainder::mle::{Mle, MleIndex};
 use remainder::output_layer::{OutputLayer, OutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
-use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECTranscriptTrait, ECVerifierTranscript};
+use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
@@ -31,9 +31,9 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         scalar_committer: &PedersenCommitter<C>,
     ) -> (Self, HyraxClaim<C::Scalar, CommittedScalar<C>>) {
         // Fix variable on the output layer in order to generate the claim on the previous layer
-        let challenge: Vec<C::Scalar> = (0..output_layer.get_mle().num_free_vars())
-            .map(|_idx| transcript.get_scalar_field_challenge("output claim point"))
-            .collect_vec();
+        // let challenge: Vec<C::Scalar> = (0..output_layer.get_mle().num_free_vars())
+        //     .map(|_idx| transcript.get_scalar_field_challenge("output claim point"))
+        //     .collect_vec();
 
         let challenges = transcript.get_scalar_field_challenges("output layer bindings", output_layer.num_free_vars());
         output_layer.fix_layer(&challenges).unwrap();
