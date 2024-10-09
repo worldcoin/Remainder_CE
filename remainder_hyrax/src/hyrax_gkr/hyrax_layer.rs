@@ -116,8 +116,6 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             vec![claims[0].evaluation.value]
         };
 
-        println!("Proving PoCA for layer {}", layer.layer_id());
-        dbg!(&claims);
         let (proof_of_claim_agg, agg_claim) = ProofOfClaimAggregation::prove(
             claims,
             &interpolant_coeffs,
@@ -244,8 +242,6 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         } = proof;
 
         // Verify the proof of claim aggregation
-        println!("Verifying PoCA for layer {}", layer_desc.layer_id());
-        dbg!(&claim_commitments);
         let agg_claim = proof_of_claim_agg.verify(claim_commitments, committer, transcript);
 
         // The number of sumcheck rounds w.r.t. to the beta table rather than just the expression.

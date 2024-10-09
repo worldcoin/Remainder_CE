@@ -34,7 +34,6 @@ fn test_small_circuit_both_layers_public() {
         "modulus modulus modulus modulus modulus",
         None,
     );
-    println!("proving");
     let proof = HyraxProof::prove(
         &inputs,
         &HashMap::new(),
@@ -46,7 +45,6 @@ fn test_small_circuit_both_layers_public() {
     );
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-    println!("verifying");
     proof.verify(
         &HashMap::new(),
         &circuit_desc,

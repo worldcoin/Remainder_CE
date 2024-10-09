@@ -102,7 +102,6 @@ impl<F: Field, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
                     Evaluations::<F>::new(mle.num_free_vars(), mle.get_padded_evaluations()),
                 );
                 let input_shred = InputShred::new(ctx, mle.num_vars(), source);
-                dbg!(&mle.num_vars());
                 let input_shred_data = InputShredData::new(input_shred.id(), mle);
                 (input_shred, input_shred_data)
             })

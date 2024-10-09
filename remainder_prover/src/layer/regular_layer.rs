@@ -421,10 +421,6 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         // `claim.get_result()` due to how we initialized `g_prev_round`.
         let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge)?;
 
-        // dbg!(&challenges, &claim_nonlinear_vals);
-        // dbg!(&g_final_r_final);
-        // dbg!(&expr_value_at_challenge_point);
-        // dbg!(&beta_fn_evaluated_at_challenge_point);
         // Final check:
         // `\sum_{b_2} \sum_{b_4} P(g_1, b_2, g_3, b_4) * \beta( (b_2, b_4), (g_2, g_4) )`.
         // P(g_1, challenge[0], g_3, challenge[0]) * \beta( challenge, (g_2, g_4) )
@@ -533,7 +529,6 @@ impl<F: Field> RegularLayer<F> {
     /// layer which are linear, and then appropriately initializing the
     /// necessary beta values over the nonlinear rounds.
     fn start_sumcheck(&mut self, claim: &Claim<F>) -> Result<(), LayerError> {
-        println!("Starting sumcheck for layer: {:?}", self.id);
         let claim_point = claim.get_point();
 
         // Grab and index the expression.

@@ -432,9 +432,6 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
                     transcript,
                 );
 
-                dbg!("Received claim from output layer", output_layer_desc.layer_id());
-                dbg!(&output_layer_claim);
-
                 // Add the output claim to the claims table
                 claim_tracker.insert(output_layer_claim.to_layer_id, vec![output_layer_claim]);
             });

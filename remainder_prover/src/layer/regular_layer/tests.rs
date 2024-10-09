@@ -80,7 +80,6 @@ fn regular_layer_test_prove_verify_sum() {
     let mut expression = Expression::<Fr, ProverExpr>::sum(lhs, rhs);
     // let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
     let claim = Claim::<Fr>::new(vec![Fr::from(2), Fr::from(3)], Fr::from(10));
-    dbg!(&claim);
 
     let mut layer = RegularLayer::new_raw(crate::layer::LayerId::Layer(0), expression.clone());
 
@@ -89,11 +88,9 @@ fn regular_layer_test_prove_verify_sum() {
     layer.prove_rounds(claim.clone(), &mut transcript).unwrap();
 
     let transcript_raw = transcript.get_transcript();
-    dbg!(&transcript_raw);
     let mut transcript = TranscriptReader::<_, PoseidonSponge<_>>::new(transcript_raw);
 
     expression.index_mle_indices(0);
-    dbg!(&circuit_expression);
     let verifier_layer = RegularLayerDescription::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
@@ -125,7 +122,6 @@ fn regular_layer_test_prove_verify_selector() {
     let rhs = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
     let mut expression = lhs.select(rhs);
     // let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
-    dbg!(&expression);
     let claim = Claim::<Fr>::new(vec![Fr::from(4), Fr::from(2), Fr::from(3)], Fr::from(33));
 
     let mut layer = RegularLayer::new_raw(crate::layer::LayerId::Layer(0), expression.clone());
@@ -135,7 +131,6 @@ fn regular_layer_test_prove_verify_selector() {
     layer.prove_rounds(claim.clone(), &mut transcript).unwrap();
 
     let transcript_raw = transcript.get_transcript();
-    dbg!(&transcript_raw);
     let mut transcript = TranscriptReader::<_, PoseidonSponge<_>>::new(transcript_raw);
 
     expression.index_mle_indices(0);
@@ -176,7 +171,6 @@ fn regular_layer_test_prove_verify_complex() {
     let prod = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_2.clone()]);
 
     let mut root = prod.select(sum);
-    dbg!(&root);
 
     let claim = Claim::<Fr>::new(vec![Fr::from(4), Fr::from(2), Fr::from(3)], Fr::from(37));
 
@@ -187,11 +181,9 @@ fn regular_layer_test_prove_verify_complex() {
     layer.prove_rounds(claim.clone(), &mut transcript).unwrap();
 
     let transcript_raw = transcript.get_transcript();
-    dbg!(&transcript_raw);
     let mut transcript = TranscriptReader::<_, PoseidonSponge<_>>::new(transcript_raw);
 
     root.index_mle_indices(0);
-    dbg!(&circuit_expression);
     let verifier_layer = RegularLayerDescription::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
