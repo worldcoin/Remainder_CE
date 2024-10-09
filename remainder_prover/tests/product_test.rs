@@ -3,7 +3,7 @@ use remainder::expression::generic_expr::Expression;
 use remainder::layouter::compiling::LayouterCircuit;
 use remainder::layouter::component::{Component, ComponentSet};
 use remainder::layouter::nodes::circuit_inputs::{
-    InputLayerNode, InputLayerNodeData, InputLayerType,
+    InputLayerNode, InputLayerNodeData,
 };
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::nodes::node_enum::NodeEnum;
@@ -66,7 +66,7 @@ fn test_product_checker() {
     // note that this test will pass if the MLEs have length only two!
 
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         let (factor1_shred, factor1_shred_data) =
             get_input_shred_and_data(factor1.clone(), ctx, &input_layer);
         let (factor2_shred, factor2_shred_data) =

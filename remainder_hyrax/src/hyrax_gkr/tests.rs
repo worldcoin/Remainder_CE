@@ -19,7 +19,7 @@ use remainder::layer::matmult::{MatMult, MatMultLayerDescription, Matrix, Matrix
 use remainder::layer::regular_layer::{RegularLayer, RegularLayerDescription};
 use remainder::layer::{LayerDescription, LayerId};
 use remainder::layouter::nodes::circuit_inputs::{
-    InputLayerNode, InputLayerType, InputShred
+    InputLayerNode, InputShred
 };
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::nodes::sector::Sector;
@@ -765,7 +765,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     ]);
 
     let ctx = Context::new();
-    let input_layer = InputLayerNode::new(&ctx, None, InputLayerType::HyraxInputLayer);
+    let input_layer = InputLayerNode::new(&ctx, None);
     let input_shred =
         InputShred::new(&ctx, input_multilinear_extension.num_vars(), &input_layer);
 
@@ -850,7 +850,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
 //             Scalar::from(94),
 //             Scalar::from(67887),
 //         ]);
-//         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+//         let input_layer = InputLayerNode::new(ctx, None);
 //         let input_shred =
 //             InputShred::new(ctx, input_multilinear_extension.num_vars(), &input_layer);
 //         let input_shred_data = InputShredData::new(input_shred.id(), input_multilinear_extension);
@@ -1004,7 +1004,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
 //             Scalar::from(94),
 //             Scalar::from(67887),
 //         ]);
-//         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+//         let input_layer = InputLayerNode::new(ctx, None);
 //         let input_shred =
 //             InputShred::new(ctx, input_multilinear_extension.num_vars(), &input_layer);
 //         let input_shred_data = InputShredData::new(input_shred.id(), input_multilinear_extension);

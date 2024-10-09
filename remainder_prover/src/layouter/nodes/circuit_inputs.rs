@@ -115,30 +115,11 @@ pub enum HyraxInputDType {
     I8,
 }
 
-/// An enum representing the different types
-/// of InputLayer an InputLayerNode can be compiled into
-#[derive(Debug, Clone)]
-pub enum InputLayerType {
-    /// An InputLayer that will be compiled into a [LigeroInputLayer], along with
-    /// the rho_inv: u8, and ratio of the matrix (num cols to num rows): f64.
-    LigeroInputLayer((u8, f64)),
-    /// An InputLayer that will be compiled into a [PublicInputLayer].
-    PublicInputLayer,
-    /// The input layer type that represents a [HyraxInputLayer], along with
-    /// the data type of the input (for commitment optimizations), None
-    /// if it is just a scalar field element.
-    HyraxInputLayer,
-}
-
 #[derive(Debug, Clone)]
 /// A node that represents an InputLayer
-///
-/// TODO! probably split this up into more node types
-/// that indicate different things to the layouter
 pub struct InputLayerNode {
     id: NodeId,
     input_shreds: Vec<InputShred>,
-    pub(in crate::layouter) input_layer_type: InputLayerType,
 }
 
 impl CircuitNode for InputLayerNode {
@@ -165,12 +146,10 @@ impl InputLayerNode {
     pub fn new(
         ctx: &Context,
         input_shreds: Option<Vec<InputShred>>,
-        input_layer_type: InputLayerType,
     ) -> Self {
         InputLayerNode {
             id: ctx.get_new_id(),
             input_shreds: input_shreds.unwrap_or_default(),
-            input_layer_type,
         }
     }
 

@@ -37,7 +37,7 @@ mod tests {
             component::{Component, ComponentSet},
             nodes::{
                 circuit_inputs::{
-                    InputLayerNode, InputLayerNodeData, InputLayerType, InputShred, InputShredData,
+                    InputLayerNode, InputLayerNodeData, InputShred, InputShredData,
                 },
                 circuit_outputs::OutputNode,
                 gate::GateNode,
@@ -99,7 +99,7 @@ mod tests {
         );
 
         let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let input_layer = InputLayerNode::new(ctx, None);
             let mle_input_shred = InputShred::new(ctx, mle.mle.clone().num_vars(), &input_layer);
             let mle_input_shred_data = InputShredData::new(
                 mle_input_shred.id(),
@@ -186,7 +186,7 @@ mod tests {
         );
 
         let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let input_layer = InputLayerNode::new(ctx, None);
             let (dataparallel_mle_input_shred, dataparallel_mle_input_shred_data) =
                 get_input_shred_and_data(
                     mle_dataparallel.mle.get_evals_vector().to_vec(),
@@ -268,7 +268,7 @@ mod tests {
             DenseMle::new_from_raw(vec![mle.bookkeeping_table()[0].neg()], LayerId::Input(0));
 
         let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let input_layer = InputLayerNode::new(ctx, None);
             let (mle_input_shred, mle_input_shred_data) =
                 get_input_shred_and_data(mle.mle.get_evals_vector().to_vec(), ctx, &input_layer);
             let (neg_mle_input_shred, neg_mle_input_shred_data) = get_input_shred_and_data(
@@ -333,7 +333,7 @@ mod tests {
         );
 
         let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let input_layer = InputLayerNode::new(ctx, None);
             let (mle_1_input_shred, mle_1_input_shred_data) =
                 get_input_shred_and_data(mle_1.mle.get_evals_vector().to_vec(), ctx, &input_layer);
 
@@ -444,7 +444,7 @@ mod tests {
         );
 
         let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let input_layer = InputLayerNode::new(ctx, None);
             let (dataparallel_mle_input_shred, dataparallel_mle_input_shred_data) =
                 get_input_shred_and_data(
                     mle_dataparallel.mle.get_evals_vector().to_vec(),
@@ -522,7 +522,7 @@ mod tests {
         );
 
         let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let input_layer = InputLayerNode::new(ctx, None);
             let (dataparallel_mle_1_input_shred, dataparallel_mle_1_input_shred_data) =
                 get_input_shred_and_data(
                     mle_1_dataparallel.mle.get_evals_vector().to_vec(),

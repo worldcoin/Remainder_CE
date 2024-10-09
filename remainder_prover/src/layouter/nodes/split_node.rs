@@ -121,7 +121,7 @@ mod test {
             component::ComponentSet,
             nodes::{
                 circuit_inputs::{
-                    InputLayerNode, InputLayerNodeData, InputLayerType, InputShred, InputShredData,
+                    InputLayerNode, InputLayerNodeData, InputShred, InputShredData,
                 },
                 circuit_outputs::OutputNode,
                 node_enum::NodeEnum,
@@ -150,7 +150,7 @@ mod test {
                 Fr::from(4 * 8),
             ]);
 
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let input_layer = InputLayerNode::new(ctx, None);
             let input_shred = InputShred::new(ctx, mle.num_vars(), &input_layer);
             let input_shred_data = InputShredData::new(input_shred.id(), mle);
             let input_shred_out = InputShred::new(ctx, mle_out.num_vars(), &input_layer);

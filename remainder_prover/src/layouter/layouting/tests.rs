@@ -13,7 +13,7 @@ use crate::layouter::nodes::CircuitNode;
 
 use super::{
     super::nodes::{
-        circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
+        circuit_inputs::{InputLayerNode, InputShred},
         circuit_outputs::OutputNode,
         debug::DebugNode,
         node_enum::NodeEnum,
@@ -41,7 +41,7 @@ fn test_topo_sort_with_cycle_include_children() {
     let ctx = Context::new();
     let dummy_data: MultilinearExtension<Fr> = MultilinearExtension::new_zero();
 
-    let input_node = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+    let input_node = InputLayerNode::new(&ctx, None);
 
     // node ids: [1, 2, 3]
     let input_shred_0 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
@@ -55,8 +55,7 @@ fn test_topo_sort_with_cycle_include_children() {
     // node id: [4]
     let input_layer_node = InputLayerNode::new(
         &ctx,
-        Some(input_shred_vec),
-        InputLayerType::PublicInputLayer,
+        Some(input_shred_vec)
     );
 
     // node ids: [5, 6]
@@ -146,7 +145,7 @@ fn test_topo_sort_with_cycle_no_children() {
     let ctx = Context::new();
     let dummy_data: MultilinearExtension<Fr> = MultilinearExtension::new_zero();
 
-    let input_node = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+    let input_node = InputLayerNode::new(&ctx, None);
 
     // node ids: [1, 2, 3]
     let input_shred_0 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
@@ -161,7 +160,6 @@ fn test_topo_sort_with_cycle_no_children() {
     let input_layer_node = InputLayerNode::new(
         &ctx,
         Some(input_shred_vec),
-        InputLayerType::PublicInputLayer,
     );
 
     // node ids: [5, 6]
@@ -254,7 +252,7 @@ fn test_topo_sort_without_cycle_no_children() {
     let ctx = Context::new();
     let dummy_data: MultilinearExtension<Fr> = MultilinearExtension::new_zero();
 
-    let input_node = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+    let input_node = InputLayerNode::new(&ctx, None);
 
     // node ids: [1, 2, 3]
     let input_shred_0 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
@@ -269,7 +267,6 @@ fn test_topo_sort_without_cycle_no_children() {
     let input_layer_node = InputLayerNode::new(
         &ctx,
         Some(input_shred_vec),
-        InputLayerType::PublicInputLayer,
     );
 
     // node ids: [5, 6]
@@ -367,7 +364,7 @@ fn test_topo_sort_without_cycle_include_children() {
     let ctx = Context::new();
     let dummy_data: MultilinearExtension<Fr> = MultilinearExtension::new_zero();
 
-    let input_node = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+    let input_node = InputLayerNode::new(&ctx, None);
 
     // node ids: [1, 2, 3]
     let input_shred_0 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
@@ -382,7 +379,6 @@ fn test_topo_sort_without_cycle_include_children() {
     let input_layer_node = InputLayerNode::new(
         &ctx,
         Some(input_shred_vec),
-        InputLayerType::PublicInputLayer,
     );
 
     // node ids: [5, 6]
@@ -489,7 +485,7 @@ impl Arbitrary for QDepGraph {
         // Start with the input nodes.
         let mut graph: Vec<NodeEnum<Fr>> = (0..num_input_shreds)
             .map(|_| {
-                let input_node = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+                let input_node = InputLayerNode::new(&ctx, None);
                 let input_shred = InputShred::new(&ctx, dummy_data.num_vars(), &input_node);
                 NodeEnum::InputShred(input_shred)
             })

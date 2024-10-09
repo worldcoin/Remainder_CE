@@ -6,7 +6,7 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerNodeData, InputLayerType},
+            circuit_inputs::{InputLayerNode, InputLayerNodeData},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
@@ -228,7 +228,7 @@ fn test_combined_dataparallel_circuit_alt_newmainder() {
     // These checks can possibly be done with the newly designed batching bits/system
 
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         let (dataparallel_input_mle_1, dataparallel_input_mle_1_data) =
             get_input_shred_and_data_from_vec(mle_1_vec_raw.to_vec(), ctx, &input_layer);
         let (dataparallel_input_mle_2, dataparallel_input_mle_2_data) =

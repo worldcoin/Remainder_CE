@@ -6,7 +6,7 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerNodeData, InputLayerType},
+            circuit_inputs::{InputLayerNode, InputLayerNodeData},
             node_enum::NodeEnum,
             sector::Sector,
             CircuitNode, Context,
@@ -119,7 +119,7 @@ fn test_linear_and_nonlinear_bits_circuit_newmainder() {
     let mut rng = test_rng();
 
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         let (sel_input, sel_input_data) =
             get_dummy_input_shred_and_data(VARS_SEL_SIDE, &mut rng, ctx, &input_layer);
         let (prod_input, prod_input_data) =

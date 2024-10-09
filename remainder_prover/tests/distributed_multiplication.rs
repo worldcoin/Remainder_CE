@@ -6,7 +6,7 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerNodeData, InputLayerType},
+            circuit_inputs::{InputLayerNode, InputLayerNodeData},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
@@ -132,7 +132,7 @@ fn test_batching_wraparound_newmainder() {
     let bigger_combined_mle_vec = bigger_combined_mle.bookkeeping_table();
 
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         let (input_shred_1, input_shred_1_data) =
             get_input_shred_and_data_from_vec(smaller_combined_mle_vec.to_vec(), ctx, &input_layer);
         let (input_shred_2, input_shred_2_data) =

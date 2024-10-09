@@ -138,7 +138,7 @@ mod test {
             component::ComponentSet,
             nodes::{
                 circuit_inputs::{
-                    InputLayerNode, InputLayerNodeData, InputLayerType, InputShred, InputShredData,
+                    InputLayerNode, InputLayerNodeData, InputShred, InputShredData,
                 },
                 circuit_outputs::OutputNode,
                 gate::GateNode,
@@ -175,7 +175,7 @@ mod test {
                 nonzero_gates.push((idx, idx, idx));
             });
 
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let input_layer = InputLayerNode::new(ctx, None);
 
             let input_shred_pos = InputShred::new(ctx, mle.num_vars(), &input_layer);
             let input_shred_pos_data = InputShredData::new(input_shred_pos.id(), mle);
@@ -240,7 +240,7 @@ mod test {
                 nonzero_gates.push((idx, idx, idx));
             });
 
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let input_layer = InputLayerNode::new(ctx, None);
 
             let input_shred_pos = InputShred::new(ctx, mle.num_vars(), &input_layer);
             let input_shred_pos_data = InputShredData::new(input_shred_pos.id(), mle);

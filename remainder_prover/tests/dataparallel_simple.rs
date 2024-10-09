@@ -6,7 +6,7 @@ use remainder::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerNodeData, InputLayerType},
+            circuit_inputs::{InputLayerNode, InputLayerNodeData},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
@@ -101,7 +101,7 @@ fn test_dataparallel_simple_newmainder() {
     let dataparallel_mle_2 = DenseMle::batch_mles(mle_2_vec);
 
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         let (dataparallel_input_mle_1, dataparallel_input_mle_1_data) =
             get_input_shred_and_data_from_vec(
                 dataparallel_mle_1.bookkeeping_table().to_vec(),

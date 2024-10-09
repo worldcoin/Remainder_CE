@@ -8,7 +8,7 @@ use crate::layer::LayerId;
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::{Component, ComponentSet};
 use crate::layouter::nodes::circuit_inputs::{
-    InputLayerNode, InputLayerNodeData, InputLayerType, InputShred,
+    InputLayerNode, InputLayerNodeData, InputShred,
 };
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::fiat_shamir_challenge::FiatShamirChallengeNode;
@@ -75,7 +75,7 @@ pub fn build_circuit<
         } = &data;
         let mut output_nodes = vec![];
 
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         println!("{:?} = Input layer", input_layer.id());
         // TODO shouldn't have to clone here, but need to change library functions
         let (to_reroute, to_reroute_data) =
@@ -233,8 +233,7 @@ pub fn build_iriscode_circuit_description<
     let ctx = Context::new();
 
     // Private inputs
-    // FIXME(Ben) this will be fine once we get rid of InputLayerType, but it does look funny for now
-    let private_input_layer = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+    let private_input_layer = InputLayerNode::new(&ctx, None);
     println!(
         "{:?} = Input layer for private values",
         private_input_layer.id()
@@ -265,7 +264,7 @@ pub fn build_iriscode_circuit_description<
     println!("{:?} = Sign bits (iris code) input", sign_bits.id());
 
     // Public inputs
-    let public_input_layer = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+    let public_input_layer = InputLayerNode::new(&ctx, None);
     println!(
         "{:?} = Input layer for public values",
         public_input_layer.id()

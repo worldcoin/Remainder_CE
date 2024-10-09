@@ -81,7 +81,7 @@ mod test {
             component::ComponentSet,
             nodes::{
                 circuit_inputs::{
-                    InputLayerNode, InputLayerNodeData, InputLayerType, InputShred, InputShredData,
+                    InputLayerNode, InputLayerNodeData, InputShred, InputShredData,
                 },
                 circuit_outputs::OutputNode,
                 node_enum::NodeEnum,
@@ -111,7 +111,7 @@ mod test {
 
             let verifier_challenge_node = FiatShamirChallengeNode::new(ctx, 8);
 
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let input_layer = InputLayerNode::new(ctx, None);
             let input_a = InputShred::new(ctx, mle_vec_a.num_vars(), &input_layer);
             let input_a_data = InputShredData::new(input_a.id(), mle_vec_a);
             let input_data = InputLayerNodeData::new(input_layer.id(), vec![input_a_data], None);

@@ -1,14 +1,9 @@
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::Field;
 
 use crate::{
-    input_layer::{
-        enum_input_layer::InputLayerDescriptionEnum,
-        ligero_input_layer::LigeroInputLayerDescription,
-        public_input_layer::PublicInputLayerDescription, InputLayerDescription,
-    },
+    input_layer::InputLayerDescription,
     layer::LayerId,
     layouter::{
         layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
@@ -18,7 +13,7 @@ use crate::{
     utils::mle::{argsort, pad_to_nearest_power_of_two},
 };
 
-use super::{InputLayerNode, InputLayerType};
+use super::InputLayerNode;
 
 /// Function which returns a vector of [MleIndex::Fixed] for prefix bits according to which
 /// position we are in the range from 0 to `total_num_bits` - `num_free_bits`.
@@ -157,7 +152,6 @@ impl InputLayerNode {
         let Self {
             id: _,
             input_shreds,
-            input_layer_type: _,
         } = &self;
 
         let input_mle_num_vars = input_shreds

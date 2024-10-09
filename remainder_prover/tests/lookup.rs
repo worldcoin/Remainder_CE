@@ -3,7 +3,7 @@ use remainder::{
         compiling::LayouterCircuit,
         component::ComponentSet,
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerNodeData, InputLayerType},
+            circuit_inputs::{InputLayerNode, InputLayerNodeData},
             fiat_shamir_challenge::FiatShamirChallengeNode,
             lookup::{LookupConstraint, LookupTable},
             node_enum::NodeEnum,
@@ -22,7 +22,7 @@ use utils::get_input_shred_and_data_from_vec;
 #[test]
 pub fn single_shred_test() {
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         let (table, table_data) = get_input_shred_and_data_from_vec(
             vec![Fr::from(0u64), Fr::from(1u64)],
             ctx,
@@ -74,7 +74,7 @@ pub fn single_shred_test() {
 #[test]
 pub fn multi_shred_test() {
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         let (table, table_data) = get_input_shred_and_data_from_vec(
             vec![Fr::from(3u64), Fr::from(4u64)],
             ctx,
@@ -202,7 +202,7 @@ pub fn multi_shred_test() {
 #[should_panic]
 pub fn test_not_satisfied() {
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         let (table, table_data) = get_input_shred_and_data_from_vec(
             vec![Fr::from(0u64), Fr::from(1u64)],
             ctx,

@@ -5,7 +5,7 @@ use crate::layer::LayerId;
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::ComponentSet;
 use crate::layouter::nodes::circuit_inputs::{
-    InputLayerNode, InputLayerNodeData, InputLayerType, InputShred, InputShredData,
+    InputLayerNode, InputLayerNodeData, InputShred, InputShredData,
 };
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
@@ -34,7 +34,7 @@ fn test_complementary_recomposition_vertical() {
     );
 
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         let (digits_input_shreds, digits_input_shreds_data) =
             digits.make_input_shred_and_data(ctx, &input_layer);
         let digits_refs = digits_input_shreds
@@ -109,7 +109,7 @@ fn test_unsigned_recomposition() {
     let expected = vec![Fr::from(19), Fr::from(2), Fr::from(33), Fr::from(48)];
 
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         let (digits_input_shreds, digits_input_shreds_data): (
             Vec<InputShred>,
             Vec<InputShredData<Fr>>,
@@ -191,7 +191,7 @@ fn test_complementary_recomposition() {
     ];
 
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         let (digits_input_shreds, digits_input_shreds_data): (
             Vec<InputShred>,
             Vec<InputShredData<Fr>>,
@@ -252,7 +252,7 @@ fn test_complementary_recomposition() {
 fn test_bits_are_binary_soundness() {
     let bits = vec![Fr::from(3u64)];
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         let (shred, shred_data) = get_input_shred_and_data(bits.clone(), ctx, &input_layer);
         let component = BitsAreBinary::new(ctx, &shred);
         let output = OutputNode::new_zero(ctx, &component.sector);
@@ -281,7 +281,7 @@ fn test_bits_are_binary() {
         Fr::from(0u64),
     ];
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
         let (shred, shred_data) = get_input_shred_and_data(bits.clone(), ctx, &input_layer);
         let component = BitsAreBinary::new(ctx, &shred);
         let output = OutputNode::new_zero(ctx, &component.sector);

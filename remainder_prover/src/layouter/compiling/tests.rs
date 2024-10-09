@@ -6,7 +6,7 @@ use crate::{
         component::ComponentSet,
         nodes::{
             circuit_inputs::{
-                InputLayerNode, InputLayerNodeData, InputLayerType, InputShred, InputShredData,
+                InputLayerNode, InputLayerNodeData, InputShred, InputShredData,
             },
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
@@ -23,7 +23,7 @@ use super::LayouterCircuit;
 #[test]
 fn test_basic_circuit() {
     let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_layer = InputLayerNode::new(ctx, None);
 
         let input_shred_1 = InputShred::new(ctx, 2, &input_layer);
         let input_shred_1_data = InputShredData::new(
