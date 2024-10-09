@@ -22,10 +22,9 @@ use remainder::prover::{generate_circuit_description, GKRCircuitDescription, Ins
 use remainder::{claims::wlx_eval::ClaimMle, layer::LayerId};
 
 use remainder_shared_types::transcript::ec_transcript::{ECTranscript, ECTranscriptSponge, ECTranscriptTrait};
-use remainder_shared_types::{
-    curves::PrimeOrderCurve,
-    transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
-};
+use remainder_shared_types::
+    curves::PrimeOrderCurve
+;
 
 use self::hyrax_layer::HyraxLayerProof;
 

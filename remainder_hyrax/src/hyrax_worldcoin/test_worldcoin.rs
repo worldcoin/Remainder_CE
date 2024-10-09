@@ -10,7 +10,7 @@ use remainder_shared_types::{
 };
 
 use crate::{
-    hyrax_gkr::{HyraxProof, HyraxProver}, hyrax_worldcoin::build_hyrax_circuit_hyrax_input_layer,
+    hyrax_gkr::HyraxProof, hyrax_worldcoin::build_hyrax_circuit_hyrax_input_layer,
     pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
 };
 

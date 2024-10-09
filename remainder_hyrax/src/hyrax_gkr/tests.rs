@@ -36,7 +36,7 @@ use remainder::mle::mle_description::MleDescription;
 use remainder::mle::{Mle, MleIndex};
 use remainder::prover::generate_circuit_description;
 use remainder_shared_types::transcript::ec_transcript::{
-    ECProverTranscript, ECTranscript
+    ECTranscript, ECTranscriptTrait
 };
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::Fr;

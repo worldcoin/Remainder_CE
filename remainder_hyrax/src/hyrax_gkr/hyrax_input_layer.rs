@@ -18,7 +18,7 @@ use remainder::{
     sumcheck::evaluate_at_a_point,
 };
 use remainder_shared_types::{
-    curves::PrimeOrderCurve, halo2curves::serde, transcript::ec_transcript::{ECProverTranscript, ECTranscript, ECTranscriptSponge, ECTranscriptTrait, ECVerifierTranscript}
+    curves::PrimeOrderCurve, transcript::ec_transcript::ECTranscriptTrait
 };
 use remainder_shared_types::{ff_field, Field};
 

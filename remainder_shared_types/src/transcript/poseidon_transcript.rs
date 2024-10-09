@@ -51,17 +51,16 @@ mod tests {
     use halo2curves::bn256::Fq as Base;
     use halo2curves::bn256::G1 as Bn256Point;
 
-    use crate::transcript::{
-        ec_transcript::{ECProverTranscript, ECTranscriptWriter},
-        ProverTranscript,
-    };
+    use crate::transcript::ec_transcript::ECTranscript;
+    use crate::transcript::ec_transcript::ECTranscriptTrait;
+    use crate::transcript::ProverTranscript;
 
     use super::PoseidonSponge;
 
     #[test]
     fn test_poseidon() {
         let mut transcript =
-            ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new("new transcript");
+            ECTranscript::<Bn256Point, PoseidonSponge<Base>>::new("new transcript");
         transcript.append("test2", Base::one());
         let one = halo2curves::bn256::G1::generator();
         transcript.append_ec_point("ec_test", one);
