@@ -3,22 +3,20 @@
 use std::marker::PhantomData;
 
 use remainder_shared_types::{
-    transcript::{ProverTranscript, VerifierTranscript},
+    transcript::ProverTranscript,
     Field,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::{wlx_eval::YieldWLXEvals, Claim},
+    claims::{wlx_eval::YieldWLXEvals},
     layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension},
 };
 
 use super::{
     get_wlx_evaluations_helper, InputLayerTrait,
-    InputLayerDescriptionTrait, InputLayerError,
 };
-use crate::mle::Mle;
 
 /// An Input Layer in which the data is sent to the verifier
 /// "in the clear" (i.e. without a commitment).
@@ -104,52 +102,6 @@ impl<F: Field> PublicInputLayer<F> {
     }
 }
 
-impl<F: Field> InputLayerDescriptionTrait<F> for PublicInputLayerDescription<F> {
-    type Commitment = Vec<F>;
-
-    fn layer_id(&self) -> LayerId {
-        self.layer_id
-    }
-
-    fn get_commitment_from_transcript(
-        &self,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::Commitment, InputLayerError> {
-        let num_evals = 1 << self.num_bits;
-        Ok(transcript_reader.consume_elements("Public Input Commitment", num_evals)?)
-    }
-
-    /// In order to verify, simply fix variable on each of the variables for the point
-    /// in `claim`. Check whether the single element left in the bookkeeping table is
-    /// equal to the claimed value in `claim`.
-    fn verify(
-        &self,
-        commitment: &Self::Commitment,
-        claim: Claim<F>,
-        _: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), super::InputLayerError> {
-        let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), self.layer_id());
-        mle_ref.index_mle_indices(0);
-
-        let eval = if mle_ref.num_free_vars() != 0 {
-            let mut eval = None;
-            for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
-                eval = mle_ref.fix_variable(curr_bit, chal);
-            }
-            debug_assert_eq!(mle_ref.bookkeeping_table().len(), 1);
-            eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
-        } else {
-            Claim::new(vec![], mle_ref.mle[0])
-        };
-
-        if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {
-            Ok(())
-        } else {
-            Err(InputLayerError::PublicInputVerificationFailed)
-        }
-    }
-}
-
 impl<F: Field> YieldWLXEvals<F> for PublicInputLayer<F> {
     /// Computes the V_d(l(x)) evaluations for the input layer V_d.
     fn get_wlx_evaluations(
@@ -168,72 +120,5 @@ impl<F: Field> YieldWLXEvals<F> for PublicInputLayer<F> {
             num_claims,
             num_idx,
         )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use remainder_shared_types::ff_field;
-    use remainder_shared_types::{
-        transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
-        Fr,
-    };
-
-    use super::*;
-
-    #[test]
-    fn test_public_input_layer() {
-        // Setup phase.
-        let layer_id = LayerId::Input(0);
-
-        // MLE on 2 variables.
-        let evals = [1, 2, 3, 4].into_iter().map(Fr::from).collect();
-        let dense_mle = DenseMle::new_from_raw(evals, layer_id);
-
-        let claim_point = vec![Fr::ONE, Fr::ZERO];
-        let claim_result = Fr::from(2);
-        let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
-        let verifier_public_input_layer =
-            PublicInputLayerDescription::new(layer_id, dense_mle.num_free_vars());
-        let mut public_input_layer = PublicInputLayer::new(dense_mle.mle, layer_id);
-
-        // Transcript writer with test sponge that always returns `1`.
-        let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
-            TranscriptWriter::new("Test Transcript Writer");
-
-        // Prover phase.
-        // 1. Commit to the input layer.
-        let commitment = public_input_layer.commit().unwrap();
-
-        // 2. Add commitment to transcript.
-        PublicInputLayer::<Fr>::append_commitment_to_transcript(
-            &commitment,
-            &mut transcript_writer,
-        );
-
-        // 3. ... [skip] proving other layers ...
-
-        // 4. Open commitment (no-op for Public Layers).
-        public_input_layer
-            .open(&mut transcript_writer, claim.clone())
-            .unwrap();
-
-        // Verifier phase.
-        // 1. Retrieve proof/transcript.
-        let transcript = transcript_writer.get_transcript();
-        let mut transcript_reader: TranscriptReader<Fr, TestSponge<Fr>> =
-            TranscriptReader::new(transcript);
-
-        // 2. Get commitment from transcript.
-        let commitment = verifier_public_input_layer
-            .get_commitment_from_transcript(&mut transcript_reader)
-            .unwrap();
-
-        // 3. ... [skip] verify other layers.
-
-        // 4. Verify this layer's commitment.
-        verifier_public_input_layer
-            .verify(&commitment, claim, &mut transcript_reader)
-            .unwrap();
     }
 }

@@ -1,17 +1,15 @@
 //! An InputLayer that will have it's claim proven with a Ligero Opening Proof.
 
-use std::marker::PhantomData;
-
 use remainder_ligero::{
     ligero_commit::{
-        remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify,
+        remainder_ligero_commit, remainder_ligero_eval_prove,
     },
     ligero_structs::LigeroAuxInfo,
     poseidon_ligero::PoseidonSpongeHasher,
     LcCommit, LcRoot,
 };
 use remainder_shared_types::{
-    transcript::{ProverTranscript, VerifierTranscript},
+    transcript::ProverTranscript,
     Field,
 };
 use serde::{Deserialize, Serialize};
@@ -23,8 +21,8 @@ use crate::{
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, InputLayerTrait,
-    InputLayerDescriptionTrait, InputLayerError,
+    get_wlx_evaluations_helper, InputLayerTrait,
+    InputLayerError,
 };
 
 /// An input layer in which `mle` will be committed to using the Ligero polynomial
@@ -41,15 +39,6 @@ pub struct LigeroInputLayer<F: Field> {
 
     /// The auxiliary information needed in order to perform an opening proof.
     aux: LigeroAuxInfo<F>,
-}
-
-// FIXME(Ben) not used currently
-/// The Ligero evaluation proof that the prover needs to send to the verifier.
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "F: Field")]
-pub struct LigeroInputProof<F: Field> {
-    /// The auxiliary information required to generate a Ligero proof.
-    pub aux: LigeroAuxInfo<F>,
 }
 
 /// The Ligero commitment the prover sees, which contains more information than the verifier should see.
@@ -150,38 +139,10 @@ impl<F: Field> InputLayerTrait<F> for LigeroInputLayer<F> {
     }
 }
 
-impl<F: Field> InputLayerDescriptionTrait<F> for LigeroInputLayerDescription<F> {
-    type Commitment = LigeroRoot<F>;
-
-    fn layer_id(&self) -> LayerId {
+impl<F: Field> LigeroInputLayerDescription<F> {
+    /// Return the layer id
+    pub fn layer_id(&self) -> LayerId {
         self.layer_id
-    }
-
-    fn get_commitment_from_transcript(
-        &self,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::Commitment, InputLayerError> {
-        let root = transcript_reader.consume_element("Ligero Merkle Commitment")?;
-        Ok(Self::Commitment::new(root))
-    }
-
-    /// Verify the evaluation proof generated from the `open()` function.
-    fn verify(
-        &self,
-        commitment: &Self::Commitment,
-        claim: crate::claims::Claim<F>,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), InputLayerError> {
-        // let num_coeffs = 2_usize.pow(claim.get_num_vars() as u32);
-        let ligero_aux = &self.aux;
-        remainder_ligero_verify::<F>(
-            &commitment.root,
-            ligero_aux,
-            transcript_reader,
-            claim.get_point(),
-            claim.get_result(),
-        );
-        Ok(())
     }
 }
 
@@ -224,149 +185,5 @@ impl<F: Field> YieldWLXEvals<F> for LigeroInputLayer<F> {
             num_claims,
             num_idx,
         )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use remainder_shared_types::{
-        transcript::{counting_transcript::CountingSponge, TranscriptReader, TranscriptWriter},
-        Fr,
-    };
-
-    use crate::{claims::Claim, mle::Mle};
-    use remainder_shared_types::ff_field;
-
-    use super::*;
-
-    #[test]
-    fn test_ligero_input_layer_with_precommit() {
-        // Setup phase.
-        let layer_id = LayerId::Input(0);
-        let rho_inv = 4;
-        let ratio = 1.;
-
-        // MLE on 2 variables.
-        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(Fr::from).collect();
-        let dense_mle = DenseMle::new_from_raw(evals.clone(), layer_id);
-
-        let claim_point = vec![Fr::ONE, Fr::ZERO];
-        let claim_result = Fr::from(2);
-        let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
-
-        let aux = LigeroAuxInfo::new(evals.len().next_power_of_two(), rho_inv, ratio, None);
-        let (pre_commitment, _root) = remainder_ligero_commit(&evals, &aux);
-
-        let verifier_ligero_input_layer =
-            LigeroInputLayerDescription::new(layer_id, dense_mle.num_free_vars(), aux);
-        let mut ligero_input_layer = LigeroInputLayer::new(
-            dense_mle.mle,
-            layer_id,
-            Some(pre_commitment),
-            rho_inv,
-            ratio,
-        );
-
-        // Transcript writer with test sponge that always returns `1`.
-        let mut transcript_writer: TranscriptWriter<Fr, CountingSponge<Fr>> =
-            TranscriptWriter::new("Test Transcript Writer");
-
-        // Prover phase.
-        // 1. Commit to the input layer.
-        let commitment = ligero_input_layer.commit().unwrap();
-
-        // 2. Add commitment to transcript.
-        LigeroInputLayer::<Fr>::append_commitment_to_transcript(
-            &commitment,
-            &mut transcript_writer,
-        );
-
-        // 3. ... [skip] proving other layers ...
-
-        // 4. Open commitment (no-op for Public Layers).
-        ligero_input_layer
-            .open(&mut transcript_writer, claim.clone())
-            .unwrap();
-
-        // Verifier phase.
-        // 1. Retrieve proof/transcript.
-        let transcript = transcript_writer.get_transcript();
-        let mut transcript_reader: TranscriptReader<Fr, CountingSponge<Fr>> =
-            TranscriptReader::new(transcript);
-
-        // 2. Get commitment from transcript.
-        let commitment = verifier_ligero_input_layer
-            .get_commitment_from_transcript(&mut transcript_reader)
-            .unwrap();
-
-        // 3. ... [skip] verify other layers.
-
-        // 4. Verify this layer's commitment.
-        verifier_ligero_input_layer
-            .verify(&commitment, claim, &mut transcript_reader)
-            .unwrap();
-    }
-
-    #[test]
-    fn test_ligero_input_layer_no_precommit() {
-        // Setup phase.
-        let layer_id = LayerId::Input(0);
-        let rho_inv = 4;
-        let ratio = 1.;
-
-        // MLE on 2 variables.
-        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(Fr::from).collect();
-        let dense_mle = DenseMle::new_from_raw(evals.clone(), layer_id);
-
-        let claim_point = vec![Fr::ONE, Fr::ZERO];
-        let claim_result = Fr::from(2);
-        let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
-
-        let verifier_ligero_input_layer = LigeroInputLayerDescription::new(
-            layer_id,
-            dense_mle.num_free_vars(),
-            LigeroAuxInfo::new(evals.len(), rho_inv, ratio, None),
-        );
-        let mut ligero_input_layer =
-            LigeroInputLayer::new(dense_mle.mle, layer_id, None, rho_inv, ratio);
-
-        // Transcript writer with test sponge that always returns `1`.
-        let mut transcript_writer: TranscriptWriter<Fr, CountingSponge<Fr>> =
-            TranscriptWriter::new("Test Transcript Writer");
-
-        // Prover phase.
-        // 1. Commit to the input layer.
-        let commitment = ligero_input_layer.commit().unwrap();
-
-        // 2. Add commitment to transcript.
-        LigeroInputLayer::<Fr>::append_commitment_to_transcript(
-            &commitment,
-            &mut transcript_writer,
-        );
-
-        // 3. ... [skip] proving other layers ...
-
-        // 4. Open commitment (no-op for Public Layers).
-        ligero_input_layer
-            .open(&mut transcript_writer, claim.clone())
-            .unwrap();
-
-        // Verifier phase.
-        // 1. Retrieve proof/transcript.
-        let transcript = transcript_writer.get_transcript();
-        let mut transcript_reader: TranscriptReader<Fr, CountingSponge<Fr>> =
-            TranscriptReader::new(transcript);
-
-        // 2. Get commitment from transcript.
-        let commitment = verifier_ligero_input_layer
-            .get_commitment_from_transcript(&mut transcript_reader)
-            .unwrap();
-
-        // 3. ... [skip] verify other layers.
-
-        // 4. Verify this layer's commitment.
-        verifier_ligero_input_layer
-            .verify(&commitment, claim, &mut transcript_reader)
-            .unwrap();
     }
 }

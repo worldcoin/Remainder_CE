@@ -1,11 +1,8 @@
 //! Trait for dealing with InputLayer
 
 use ark_std::cfg_into_iter;
-use enum_input_layer::InputLayerEnum;
 use itertools::Itertools;
-use remainder_ligero::ligero_structs::LigeroCommit;
-use remainder_ligero::poseidon_ligero::PoseidonSpongeHasher;
-use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
+use remainder_shared_types::transcript::ProverTranscript;
 
 use crate::claims::wlx_eval::YieldWLXEvals;
 use crate::layer::regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION;
@@ -21,8 +18,6 @@ use crate::{claims::Claim, layer::LayerId};
 pub mod enum_input_layer;
 /// An input layer in order to generate random challenges for Fiat-Shamir.
 pub mod fiat_shamir_challenge;
-/// The circuit description struct for the input layer where the data is committed to using the Hyrax PCS.
-pub mod hyrax_input_layer;
 /// An input layer in which the input data is committed to using the Ligero PCS.
 pub mod ligero_input_layer;
 /// An input layer which requires no commitment and is openly evaluated at the random point.
@@ -132,30 +127,6 @@ pub trait InputLayerTrait<F: Field> {
     /// Returns the contents of this `InputLayer` as an
     /// owned `DenseMle`.
     fn get_padded_mle(&self) -> DenseMle<F>;
-}
-
-/// The trait representing methods necessary for the circuit description of an input layer.
-pub trait InputLayerDescriptionTrait<F: Field> {
-    /// The struct that contains the commitment to the contents of the input_layer.
-    type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
-
-    /// Returns the `LayerId` of this layer.
-    fn layer_id(&self) -> LayerId;
-
-    /// Read the commitment off of the transcript.
-    fn get_commitment_from_transcript(
-        &self,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::Commitment, InputLayerError>;
-
-    /// Verifies the evaluation at the point in the `Claim` relative to the
-    /// polynomial commitment using the opening proof in the transcript.
-    fn verify(
-        &self,
-        commitment: &Self::Commitment,
-        claim: Claim<F>,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), InputLayerError>;
 }
 
 /// Computes the V_d(l(x)) evaluations for the input layer V_d.

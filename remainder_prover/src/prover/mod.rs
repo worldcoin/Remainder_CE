@@ -14,14 +14,13 @@ use std::collections::{HashMap, HashSet};
 
 use self::layers::Layers;
 use crate::claims::wlx_eval::{ClaimMle, WLXAggregator};
-use crate::claims::Claim;
 use crate::expression::circuit_expr::filter_bookkeeping_table;
 use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::fiat_shamir_challenge::{
     FiatShamirChallenge, FiatShamirChallengeDescription,
 };
-use crate::input_layer::ligero_input_layer::{LigeroCommitment, LigeroInputLayerDescription, LigeroRoot};
-use crate::input_layer::{self, public_input_layer, InputLayer, InputLayerDescription, InputLayerDescriptionTrait};
+use crate::input_layer::ligero_input_layer::{LigeroCommitment, LigeroInputLayerDescription};
+use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{Layer, LayerDescription};
 use crate::layouter::layouting::{
@@ -44,7 +43,7 @@ use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use remainder_ligero::ligero_commit::{remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify};
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
-use remainder_shared_types::transcript::{Transcript, VerifierTranscript};
+use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::transcript::{
     ProverTranscript, TranscriptReaderError, TranscriptWriter,
 };
