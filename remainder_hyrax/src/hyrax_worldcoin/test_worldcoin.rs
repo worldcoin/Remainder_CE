@@ -1,26 +1,23 @@
-use std::{collections::HashMap, path::Path};
-
-use remainder::{input_layer::{hyrax_input_layer, InputLayerDescription}, layer::LayerId, mle::evals::MultilinearExtension, prover::GKRCircuitDescription, worldcoin::{data::{load_worldcoin_data_v2, load_worldcoin_data_v3, wirings_to_reroutings, IriscodeCircuitData}, parameters::decode_wirings, tests::{v2_circuit_description_and_inputs, v3_circuit_description_and_inputs}}};
+use std::collections::HashMap;
+use remainder::{input_layer::InputLayerDescription, layer::LayerId, mle::evals::MultilinearExtension, prover::GKRCircuitDescription, worldcoin::tests::{v2_circuit_description_and_inputs, v3_circuit_description_and_inputs}};
 use remainder_shared_types::{
-    curves::PrimeOrderCurve, halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt}, transcript::{
+    halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt}, transcript::{
         ec_transcript::ECTranscript,
         poseidon_transcript::PoseidonSponge,
-    }, Field
+    }
 };
-
 use crate::{
-    hyrax_gkr::{hyrax_input_layer::{HyraxInputLayerDescription}, HyraxProof}, hyrax_worldcoin::build_hyrax_circuit_hyrax_input_layer,
+    hyrax_gkr::{hyrax_input_layer::HyraxInputLayerDescription, HyraxProof},
     pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
 };
 
-// use super::build_hyrax_circuit_public_input_layer;
 type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
 
-use remainder::worldcoin::tests::small_circuit_description_and_inputs;
 
 #[test]
 fn test_small_circuit_both_layers_public() {
+    use remainder::worldcoin::tests::small_circuit_description_and_inputs;
     let (circuit_desc, _, inputs) = small_circuit_description_and_inputs();
     test_iriscode_circuit_with_public_layers_helper(circuit_desc, inputs);
 }
@@ -28,6 +25,7 @@ fn test_small_circuit_both_layers_public() {
 #[test]
 /// Test a small version of the iriscode circuit with a Hyrax input layer.
 fn test_small_circuit_with_hyrax_layer() {
+    use remainder::worldcoin::tests::small_circuit_description_and_inputs;
     let (desc, priv_layer_desc, inputs) = small_circuit_description_and_inputs();
     test_iriscode_circuit_with_hyrax_helper(desc, priv_layer_desc, inputs);
 }
