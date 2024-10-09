@@ -31,12 +31,10 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         scalar_committer: &PedersenCommitter<C>,
     ) -> (Self, HyraxClaim<C::Scalar, CommittedScalar<C>>) {
         // Fix variable on the output layer in order to generate the claim on the previous layer
-        // let challenge: Vec<C::Scalar> = (0..output_layer.get_mle().num_free_vars())
-        //     .map(|_idx| transcript.get_scalar_field_challenge("output claim point"))
-        //     .collect_vec();
-
-        let challenges = transcript.get_scalar_field_challenges("output layer bindings", output_layer.num_free_vars());
-        output_layer.fix_layer(&challenges).unwrap();
+        let bindings: Vec<C::Scalar> = (0..output_layer.get_mle().num_free_vars())
+            .map(|_idx| transcript.get_scalar_field_challenge("output claim point"))
+            .collect_vec();
+        output_layer.fix_layer(&bindings).unwrap();
         let claim = output_layer.get_claim().unwrap();
         // Convert to a CommittedScalar claim
         // FIXME(Ben) write a helper for this.
@@ -70,22 +68,9 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         transcript: &mut impl ECTranscriptTrait<C>,
     ) -> HyraxClaim<C::Scalar, C> {
         // Get the first set of challenges needed for the output layer.
-
-        let bindings = layer_desc
-            .mle
-            .var_indices()
-            .iter()
-            .map(|mle_index| match mle_index {
-                MleIndex::Fixed(val) => C::Scalar::from(*val as u64),
-                MleIndex::Indexed(_) => transcript
-                    .get_scalar_field_challenge("output claim point"),
-
-                _ => {
-                    panic!("should not have bound or free variables here!")
-                }
-            })
+        let bindings: Vec<C::Scalar> = (0..layer_desc.mle.num_free_vars())
+            .map(|_idx| transcript.get_scalar_field_challenge("output claim point"))
             .collect_vec();
-
         transcript.append_ec_point("output layer commit", proof.claim_commitment);
 
         HyraxClaim {

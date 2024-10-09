@@ -7,7 +7,7 @@ use itertools::Itertools;
 use poseidon::Poseidon;
 
 /// A Poseidon implementation of a transcript sponge.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PoseidonSponge<F: Field> {
     /// The specific poseidon sponge configuration.
     sponge: Poseidon<F, 3, 2>,
@@ -32,16 +32,12 @@ impl<F: Field> TranscriptSponge<F> for PoseidonSponge<F> {
 
     fn squeeze(&mut self) -> F {
         self.sponge.squeeze()
-        // F::ONE + F::ONE + F::ONE
     }
 
     fn squeeze_elements(&mut self, num_elements: usize) -> Vec<F> {
         (0..num_elements)
             .map(|_| self.sponge.squeeze())
             .collect_vec()
-        // (0..num_elements)
-        //     .map(|_| F::ONE + F::ONE + F::ONE)
-        //     .collect_vec()
     }
 }
 

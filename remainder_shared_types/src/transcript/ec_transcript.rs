@@ -69,6 +69,9 @@ pub struct ECTranscript<C: PrimeOrderCurve, T> {
     /// A mutable transcript which keeps a record of all the append/squeeze
     /// operations.
     transcript: Transcript<<C::Base as PrimeField>::Repr>,
+
+    /// Whether to print debug information.
+    debug: bool,
 }
 
 impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscript<C, Tr> {
@@ -84,6 +87,17 @@ impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscript<C, Tr
         Self {
             sponge: Tr::default(),
             transcript: Transcript::new(label),
+            debug: false,
+        }
+    }
+
+    /// Creates an empty sponge in debug mode (i.e. with debug information printed).
+    /// `label` is an identifier used for debugging purposes.
+    pub fn new_with_debug(label: &str) -> Self {
+        Self {
+            sponge: Tr::default(),
+            transcript: Transcript::new(label),
+            debug: true,
         }
     }
 }
@@ -194,6 +208,9 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
     for ECTranscript<C, Sp>
 {
     fn append(&mut self, label: &str, elem: C::Base) {
+        if self.debug {
+            println!("Appending element (\"{}\"): {:?}", label, elem);
+        }
         self.sponge.absorb(elem);
         self.transcript.append_elements(label, &[elem.to_repr()]);
     }
@@ -201,6 +218,9 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
     fn append_elements(&mut self, label: &str, elements: &[C::Base]) {
         if !elements.is_empty() {
             let elements_repr = elements.iter().map(|elem| elem.to_repr()).collect_vec();
+            if self.debug {
+                println!("Appending {} elements (\"{}\"): [{:?}, .., ]", elements.len(), label, elements[0]);
+            }
             self.sponge.absorb_elements(elements);
             self.transcript.append_elements(label, &elements_repr);
         }
@@ -209,6 +229,9 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
     fn get_challenge(&mut self, label: &str) -> C::Base {
         let challenge = self.sponge.squeeze();
         self.transcript.squeeze_elements(label, 1);
+        if self.debug {
+            println!("Squeezing challenge (\"{}\"): {:?}", label, challenge);
+        }
         challenge
     }
 
@@ -218,6 +241,9 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
         } else {
             let challenges = self.sponge.squeeze_elements(num_elements);
             self.transcript.squeeze_elements(label, num_elements);
+            if self.debug {
+                println!("Squeezing {} challenges (\"{}\"): [{:?}, .., ]", num_elements, label, challenges[0]);
+            }
             challenges
         }
     }

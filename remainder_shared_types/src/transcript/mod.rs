@@ -8,6 +8,7 @@ use thiserror::Error;
 use tracing::warn;
 
 use crate::Field;
+use std::fmt::Debug;
 
 pub mod ec_transcript;
 pub mod keccak_transcript;
@@ -20,7 +21,7 @@ pub mod test_transcript;
 /// operating on field elements. It is typically used for representing the
 /// transcript of an interactive protocol turned non-interactive view
 /// Fiat-Shamir.
-pub trait TranscriptSponge<F>: Clone + Send + Sync + Default {
+pub trait TranscriptSponge<F>: Clone + Send + Sync + Default + Debug {
     /// Absorb a single field element `elem`.
     fn absorb(&mut self, elem: F);
 
@@ -54,7 +55,7 @@ enum Operation<F> {
 /// `TranscriptWriter`, and is then serialized and saved on disk as part of the
 /// generated proof. The verifier de-serializes the transcript and can access it
 /// through the `TranscriptReader` interface.
-#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Clone, Serialize, Deserialize, Debug)]
 pub struct Transcript<T> {
     /// A label used to identify this transcript. Used for debugging purposes.
     label: String,

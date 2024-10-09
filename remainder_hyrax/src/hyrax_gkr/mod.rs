@@ -285,7 +285,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
 /// The struct that holds all the information that the prover sends to the verifier about the circuit proof, i.e. the proof that transforms the claims on the output layers to claims on the input layers.
 pub struct HyraxCircuitProof<C: PrimeOrderCurve> {
     /// The [HyraxLayerProof] for each of the intermediate layers in this circuit.
-    pub layer_proofs: Vec<HyraxLayerProof<C>>,
+    pub layer_proofs: Vec<(LayerId, HyraxLayerProof<C>)>,
     /// A commitment to the output of the circuit, i.e. what the final value of the output layer is.
     pub output_layer_proofs: Vec<HyraxOutputLayerProof<C>>,
     /// The prover's claims on verifier challenges, in CommittedScalar form,
@@ -361,7 +361,7 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
                     }
                 }
 
-                layer_proof
+                (layer.layer_id(), layer_proof)
             })
             .collect_vec();
 
@@ -422,8 +422,10 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
         output_layer_proofs
             .iter()
             .sorted_by_key(|output_layer_proof| output_layer_proof.layer_id.get_layer_id())
-            .zip(circuit_description.output_layers.iter())
-            .for_each(|(output_layer_proof, output_layer_desc)| {
+            .for_each(|output_layer_proof| {
+                let output_layer_desc = circuit_description.output_layers.iter().find(|output_layer_desc| {
+                    output_layer_desc.layer_id() == output_layer_proof.layer_id
+                }).unwrap();
                 let output_layer_claim = HyraxOutputLayerProof::verify(
                     output_layer_proof,
                     output_layer_desc,
@@ -435,23 +437,26 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
             });
 
         // Intermediate layer verification
-        (layer_proofs
+        layer_proofs
             .iter()
-            .zip(circuit_description.intermediate_layers.iter().rev()))
-        .for_each(|(layer_proof, layer_desc)| {
-            // Get the unaggregated claims for this layer
-            // V checked that these claims had the expected form before adding them to the claim tracking table
-            let layer_claims_vec = claim_tracker
-                .remove(&layer_desc.layer_id())
-                .unwrap()
-                .clone();
-            let claim_commits_for_layer = HyraxLayerProof::verify(
-                layer_proof,
-                layer_desc,
-                &layer_claims_vec,
-                committer,
-                transcript,
-            );
+            .for_each(|(layer_id, layer_proof)| {
+                // Get the layer description
+                let layer_desc = circuit_description.intermediate_layers.iter().find(|layer_desc| {
+                    layer_desc.layer_id() == *layer_id
+                }).unwrap();
+                // Get the unaggregated claims for this layer
+                // V checked that these claims had the expected form before adding them to the claim tracking table
+                let layer_claims_vec = claim_tracker
+                    .remove(&layer_desc.layer_id())
+                    .unwrap()
+                    .clone();
+                let claim_commits_for_layer = HyraxLayerProof::verify(
+                    layer_proof,
+                    layer_desc,
+                    &layer_claims_vec,
+                    committer,
+                    transcript,
+                );
 
             for claim in claim_commits_for_layer {
                 if let Some(curr_claims) = claim_tracker.get_mut(&claim.to_layer_id) {
