@@ -20,6 +20,7 @@ use remainder::{
 use remainder_shared_types::ff_field;
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
+    pedersen::{CommittedScalar, PedersenCommitter},
     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
 };
 
@@ -28,7 +29,6 @@ use crate::{
     hyrax_primitives::{
         proof_of_claim_agg::ProofOfClaimAggregation, proof_of_equality::ProofOfEquality,
     },
-    pedersen::{CommittedScalar, PedersenCommitter},
     utils::vandermonde::VandermondeInverse,
 };
 
@@ -294,8 +294,10 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
 
         let blinding_factor_eval = C::Scalar::random(&mut prng);
 
+        let mle_coeffs_vec = Self::to_mle_coeffs_vec(mle, maybe_hyrax_input_dtype);
+
         Self {
-            mle: Self::to_mle_coeffs_vec(mle, maybe_hyrax_input_dtype),
+            mle: mle_coeffs_vec,
             layer_id,
             log_num_cols,
             committer: committer.clone(),

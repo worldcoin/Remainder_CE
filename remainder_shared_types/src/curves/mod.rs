@@ -94,6 +94,9 @@ pub trait PrimeOrderCurve:
 
     /// Returns the group element from x coordinate + parity of y.
     fn from_x_and_sign_y(x: Self::Base, y_sign: u8) -> Self;
+
+    /// Multiplies a group element by a scalar field element.
+    fn scalar_mult(&self, scalar: Self::Scalar) -> Self;
 }
 
 /// TODO(ryancao): Test these implementations!
@@ -154,7 +157,6 @@ impl PrimeOrderCurve for Bn256 {
     }
 
     fn projective_coordinates(&self) -> (Self::Base, Self::Base, Self::Base) {
-        // See NB in affine_coordinates
         if let Some((x, y)) = self.affine_coordinates() {
             let z = Self::Base::one();
             (x, y, z)
@@ -165,11 +167,6 @@ impl PrimeOrderCurve for Bn256 {
     }
 
     fn affine_coordinates(&self) -> Option<(Self::Base, Self::Base)> {
-        // NB: In version v2023_04_06 of halo2curves that Remainder is currently using,
-        // the x,y,z members of the Bn256 struct are JACOBIAN coordinates, c.f.
-        // [formulae for Jacobian coords](https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html).
-        // In more recent versions, the x,y,z are PROJECTIVE coordinates.  So when we upgrade to a more
-        // recent version of halo2curves, we will need to change this implementation.
         if self.z == Self::Base::zero() {
             None
         } else {
@@ -317,6 +314,27 @@ impl PrimeOrderCurve for Bn256 {
             y: y_coord,
             z: Self::Base::one(),
         }
+    }
+
+    /// Simple double-and-add method for scalar multiplication,
+    /// but truncating all of the leading zeros in the big-endian
+    /// bit representation of the scalar field element.
+    fn scalar_mult(&self, scalar: Self::Scalar) -> Self {
+        let scalar_repr = scalar.to_bytes();
+        let sig_bits = scalar_repr
+            .iter()
+            .rev()
+            .flat_map(|byte| (0..8).rev().map(move |i| ((byte >> i) & 1u8) != 0))
+            .skip_while(|&bit| !bit)
+            .collect_vec();
+
+        let mut acc = Self::identity();
+        for bit in sig_bits {
+            acc = PrimeOrderCurve::double(&acc);
+            acc = if bit { acc + self } else { acc };
+        }
+
+        acc
     }
 }
 

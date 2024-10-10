@@ -1,9 +1,9 @@
 use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
-use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use rand::Rng;
 use remainder::layer::LayerId;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
+use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
 use remainder_shared_types::Field;
 

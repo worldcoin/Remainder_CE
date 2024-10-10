@@ -3,14 +3,12 @@ use remainder::layer::product::PostSumcheckLayer;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
+    pedersen::{CommittedScalar, CommittedVector, PedersenCommitter},
     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
 };
 use std::ops::Neg;
 
-use crate::{
-    hyrax_gkr::hyrax_layer::{evaluate_committed_psl, evaluate_committed_scalar},
-    pedersen::{CommittedScalar, CommittedVector, PedersenCommitter},
-};
+use crate::hyrax_gkr::hyrax_layer::{evaluate_committed_psl, evaluate_committed_scalar};
 
 use super::proof_of_dot_prod::ProofOfDotProduct;
 

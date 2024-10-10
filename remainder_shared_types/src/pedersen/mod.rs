@@ -2,14 +2,19 @@
 
 use std::ops::{Add, Mul};
 
-use ff::Field;
+use crate::curves::PrimeOrderCurve;
+use crate::curves::Sha3XofReaderWrapper;
+use crate::ff_field;
+use itertools::Itertools;
 use num::PrimInt;
 use serde::{Deserialize, Serialize};
 use sha3::digest::ExtendableOutput;
 use sha3::digest::Update;
 use sha3::Shake256;
 
-use crate::curves::{PrimeOrderCurve, Sha3XofReaderWrapper};
+#[cfg(test)]
+/// The tests for pedersen commitments.
+pub mod tests;
 
 /// For committing to vectors of integers and scalars using the Pedersen commitment scheme.
 #[derive(Serialize, Deserialize, Clone)]
@@ -66,8 +71,10 @@ impl<C: PrimeOrderCurve> PedersenCommitter<C> {
     /// TODO: make seekable (block cipher)
     fn sample_generators(num_generators: usize, public_string: &str) -> Vec<C> {
         assert!(public_string.len() >= 32);
+        let mut public_string_array: [u8; 32] = [0; 32];
+        public_string_array.copy_from_slice(&public_string.as_bytes()[..32]);
         let mut shake = Shake256::default();
-        shake.update(public_string.as_bytes());
+        shake.update(&public_string_array);
         let reader = shake.finalize_xof();
         let mut reader_wrapper = Sha3XofReaderWrapper::new(reader);
         let generators: Vec<_> = (0..num_generators)
@@ -117,7 +124,7 @@ impl<C: PrimeOrderCurve> PedersenCommitter<C> {
     /// Post: same result as vector_commit, assuming ints are smaller than scalar field order.
     pub fn i8_vector_commit(&self, message: &[i8], blinding: &C::Scalar) -> C {
         debug_assert!(self.int_abs_val_bitwidth >= 8);
-        let message_is_negative_bits: Vec<bool> = message.iter().map(|x| *x < 0i8).collect();
+        let message_is_negative_bits = message.iter().map(|x| *x < 0i8).collect_vec();
         let message: Vec<u8> = message
             .iter()
             .map(|x| (*x as i16).unsigned_abs() as u8)
@@ -177,7 +184,7 @@ impl<C: PrimeOrderCurve> PedersenCommitter<C> {
             .generators
             .iter()
             .zip(message.iter())
-            .fold(C::zero(), |acc, (gen, input)| acc + (*gen * *input));
+            .fold(C::zero(), |acc, (gen, input)| acc + gen.scalar_mult(*input));
         unblinded_commit + self.blinding_generator * *blinding
     }
 
