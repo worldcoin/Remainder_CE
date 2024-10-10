@@ -2,7 +2,7 @@ use std::path::Path;
 
 use clap::Parser;
 use remainder::{
-    prover::helpers::test_circuit,
+    prover::helpers::{test_circuit, write_circuit_description_to_file},
     worldcoin::{circuits::build_circuit, data::load_worldcoin_data},
 };
 use remainder_shared_types::Fr;
@@ -21,6 +21,12 @@ struct Args {
     /// The version of the iriscode circuit to run
     #[arg(long, value_parser = clap::value_parser!(u8))]
     version: u8,
+
+    /// The file to output the circuit description to, if any.
+    /// NOTE THAT PASSING SOMETHING HERE WILL CAUSE THE BINARY TO **ONLY**
+    /// PRINT THE CIRCUIT DESCRIPTION AND TO **NOT** PROVE!!!
+    #[arg(long)]
+    circuit_description_filepath: Option<String>,
 }
 
 /// Usage: `target/release/run_iriscode_circuit --image-filepath worldcoin/v2/mask/test_image.npy --version 2 --is-mask`
@@ -42,7 +48,11 @@ fn main() {
             NUM_DIGITS,
         >(path, image_path, args.is_mask);
         let circuit = build_circuit(data);
-        test_circuit(circuit, None);
+        if let Some(circuit_description_path) = args.circuit_description_filepath {
+            write_circuit_description_to_file(circuit, Path::new(&circuit_description_path));
+        } else {
+            test_circuit(circuit, None);
+        }
     } else if args.version == 3 {
         use remainder::worldcoin::parameters_v3::{
             BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
@@ -58,7 +68,11 @@ fn main() {
             NUM_DIGITS,
         >(path, image_path, args.is_mask);
         let circuit = build_circuit(data);
-        test_circuit(circuit, None);
+        if let Some(circuit_description_path) = args.circuit_description_filepath {
+            write_circuit_description_to_file(circuit, Path::new(&circuit_description_path));
+        } else {
+            test_circuit(circuit, None);
+        }
     } else {
         panic!();
     }

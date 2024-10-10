@@ -7,9 +7,8 @@ use remainder::mle::{Mle, MleIndex};
 use remainder::output_layer::mle_output_layer::MleOutputLayerDescription;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
+use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
-
-use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
 use super::hyrax_layer::HyraxClaim;
 

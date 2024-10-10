@@ -37,7 +37,7 @@ pub struct FiatShamirChallenge<F: Field> {
 }
 
 /// Verifier's description of a [FiatShamirChallenge].
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Hash)]
 #[serde(bound = "F: Field")]
 pub struct FiatShamirChallengeDescription<F: Field> {
     /// The layer ID.

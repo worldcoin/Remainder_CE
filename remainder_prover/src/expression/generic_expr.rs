@@ -5,6 +5,7 @@
 use crate::mle::MleIndex;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
+use std::hash::Hash;
 
 /// An [ExpressionType] defines two fields -- the type of MLE representation
 /// at the leaf of the expression node tree, and the "global" unique copies
@@ -15,7 +16,7 @@ pub trait ExpressionType<F: Field>: Serialize + for<'de> Deserialize<'de> {
     /// for prover expression, it's over DenseMle
     /// for verifier expression, it's over Vec<F>
     /// for abstract expression, it's over [TBD]
-    type MLENodeRepr: Clone + Serialize + for<'de> Deserialize<'de>;
+    type MLENodeRepr: Clone + Serialize + for<'de> Deserialize<'de> + Hash;
 
     /// This is the optional data array of mle_refs
     /// that can be indexed into by the MleRefIndex defind in the ProverExpr.
@@ -63,7 +64,7 @@ pub enum ExpressionNode<F: Field, E: ExpressionType<F>> {
 /// , and contains within it a single parent [ExpressionNode] as well as an
 /// [ExpressionType::MleVec] containing the unique leaf representations for the
 /// leaves of the [ExpressionNode] tree.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Hash)]
 #[serde(bound = "F: Field")]
 pub struct Expression<F: Field, E: ExpressionType<F>> {
     /// The root of the expression "tree".

@@ -356,7 +356,6 @@ pub fn build_hyrax_circuit_hyrax_input_layer<
             ctx,
             &hyrax_input_layer_for_digits_and_multiplicities,
         );
-        dbg!(&digit_multiplicities.get_num_vars());
 
         println!("{:?} = Digit multiplicities", digit_multiplicities.id());
         let lookup_constraint = LookupConstraint::new::<C::Scalar>(

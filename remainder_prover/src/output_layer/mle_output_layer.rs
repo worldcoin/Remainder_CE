@@ -117,7 +117,7 @@ impl<F: Field> OutputLayer<F> for MleOutputLayer<F> {
 
 /// The circuit description type for the defaul Output Layer consisting of an
 /// MLE.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
 #[serde(bound = "F: Field")]
 pub struct MleOutputLayerDescription<F: Field> {
     /// The metadata of this MLE: indices and associated layer.
