@@ -3,7 +3,6 @@ use crate::hyrax_gkr::hyrax_input_layer::HyraxInputLayerProof;
 use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
 
 use crate::hyrax_gkr::HyraxProver;
-use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
 
 use itertools::{repeat_n, Itertools};
@@ -38,6 +37,7 @@ use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::Fr;
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
+    pedersen::{CommittedScalar, PedersenCommitter},
     Field,
 };
 

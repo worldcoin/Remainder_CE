@@ -3,6 +3,7 @@ use std::path::Path;
 use remainder::worldcoin::data::{load_worldcoin_data, CircuitData};
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
+    pedersen::PedersenCommitter,
     transcript::{
         ec_transcript::{ECTranscriptReader, ECTranscriptWriter},
         poseidon_transcript::PoseidonSponge,
@@ -11,7 +12,7 @@ use remainder_shared_types::{
 
 use crate::{
     hyrax_gkr::HyraxProver, hyrax_worldcoin::build_hyrax_circuit_hyrax_input_layer,
-    pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
+    utils::vandermonde::VandermondeInverse,
 };
 
 use super::build_hyrax_circuit_public_input_layer;

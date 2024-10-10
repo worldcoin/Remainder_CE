@@ -2,10 +2,9 @@ use rand::Rng;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
+    pedersen::{CommittedScalar, PedersenCommitter},
     transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
 };
-
-use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
 #[cfg(test)]
 /// Tests for proof of equality.

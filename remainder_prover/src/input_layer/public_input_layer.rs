@@ -28,7 +28,7 @@ pub struct PublicInputLayer<F: Field> {
     pub(crate) layer_id: LayerId,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
 #[serde(bound = "F: Field")]
 /// The circuit description of a [PublicInputLayer] which stores
 /// the shape information of this input layer.
