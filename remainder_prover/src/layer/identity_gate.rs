@@ -39,7 +39,14 @@ use super::{
 };
 
 #[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+
+/// Controls whether the `beta` optimiation should be enabled. When enabled, all
+/// functions in this module that compute the value of a `beta` function at a
+/// given index, will compute its value lazily using
+/// [BetaValues::compute_beta_over_challenge_and_index] instead of pre-computing
+/// and storing the entire bookkeeping table.
+const LAZY_BETA_EVALUATION: bool = true;
 
 /// The circuit Description for an [IdentityGate].
 #[derive(Serialize, Deserialize, Clone, Debug, Hash)]
@@ -204,17 +211,61 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
-        let beta_u = BetaValues::new_beta_equality_mle(round_challenges.to_vec());
-        let beta_g = BetaValues::new_beta_equality_mle(claim_challenges.to_vec());
+        let beta_ug = if !LAZY_BETA_EVALUATION {
+            Some((
+                BetaValues::new_beta_equality_mle(round_challenges.to_vec()),
+                BetaValues::new_beta_equality_mle(claim_challenges.to_vec()),
+            ))
+        } else {
+            None
+        };
+
+        #[cfg(feature = "parallel")]
         let f_1_uv = self
             .wiring
-            .clone()
-            .into_iter()
-            .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
-                acc + gz * ux
-            });
+            .par_iter()
+            .fold(
+                || F::ZERO,
+                |acc, (z_ind, x_ind)| {
+                    let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
+                        (
+                            *beta_g.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
+                            *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                        )
+                    } else {
+                        (
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                claim_challenges,
+                                *z_ind,
+                            ),
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                round_challenges,
+                                *x_ind,
+                            ),
+                        )
+                    };
+
+                    acc + gz * ux
+                },
+            )
+            .sum::<F>();
+
+        #[cfg(not(feature = "parallel"))]
+        let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
+            let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
+                (
+                    *beta_g.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
+                    *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                )
+            } else {
+                (
+                    BetaValues::compute_beta_over_challenge_and_index(claim_challenges, *z_ind),
+                    BetaValues::compute_beta_over_challenge_and_index(round_challenges, *x_ind),
+                )
+            };
+
+            acc + gz * ux
+        });
 
         PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
             &[self.source_mle.clone()],
@@ -278,20 +329,64 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 impl<F: Field> VerifierIdentityGateLayer<F> {
     /// Computes the oracle query's value for a given [IdentityGateVerifierLayer].
     pub fn evaluate(&self, claim: &Claim<F>) -> F {
-        // compute the sum over all the variables of the gate function
-        let beta_u = BetaValues::new_beta_equality_mle(self.first_u_challenges.clone());
-        let beta_g = BetaValues::new_beta_equality_mle(claim.get_point().clone());
+        let beta_ug = if LAZY_BETA_EVALUATION {
+            Some((
+                BetaValues::new_beta_equality_mle(self.first_u_challenges.clone()),
+                BetaValues::new_beta_equality_mle(claim.get_point().clone()),
+            ))
+        } else {
+            None
+        };
 
+        #[cfg(feature = "parallel")]
         let f_1_uv = self
             .wiring
-            .clone()
-            .into_iter()
-            .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+            .par_iter()
+            .fold(
+                || F::ZERO,
+                |acc, (z_ind, x_ind)| {
+                    let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
+                        (
+                            *beta_g.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
+                            *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                        )
+                    } else {
+                        (
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                claim.get_point(),
+                                *z_ind,
+                            ),
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                &self.first_u_challenges,
+                                *x_ind,
+                            ),
+                        )
+                    };
 
-                acc + gz * ux
-            });
+                    acc + gz * ux
+                },
+            )
+            .sum::<F>();
+
+        #[cfg(not(feature = "parallel"))]
+        let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
+            let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
+                (
+                    *beta_g.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
+                    *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                )
+            } else {
+                (
+                    BetaValues::compute_beta_over_challenge_and_index(claim.get_point(), *z_ind),
+                    BetaValues::compute_beta_over_challenge_and_index(
+                        &self.first_u_challenges,
+                        *x_ind,
+                    ),
+                )
+            };
+
+            acc + gz * ux
+        });
 
         // get the fully evaluated "expression"
 
@@ -386,8 +481,10 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
     }
 
     fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
-        let beta_g = BetaValues::new_beta_equality_mle(claim_point.to_vec());
-        self.set_beta_g(beta_g);
+        if !LAZY_BETA_EVALUATION {
+            let beta_g = BetaValues::new_beta_equality_mle(claim_point.to_vec());
+            self.set_beta_g(beta_g);
+        }
 
         self.mle_ref.index_mle_indices(0);
         let num_vars = self.mle_ref.num_free_vars();
@@ -398,13 +495,18 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind)| {
-                let beta_g_at_z = *self
-                    .beta_g
-                    .as_ref()
-                    .unwrap()
-                    .bookkeeping_table()
-                    .get(z_ind)
-                    .unwrap_or(&F::ZERO);
+                let beta_g_at_z = if LAZY_BETA_EVALUATION {
+                    BetaValues::compute_beta_over_challenge_and_index(claim_point, z_ind)
+                } else {
+                    *self
+                        .beta_g
+                        .as_ref()
+                        .unwrap()
+                        .mle
+                        .f
+                        .get(z_ind)
+                        .unwrap_or(&F::ZERO)
+                };
                 a_hg_mle_ref[x_ind] += beta_g_at_z;
             });
 
@@ -455,24 +557,75 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
-        _claim_challenges: &[F],
+        claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F> {
         let [_, mle_ref] = self.phase_1_mles.as_ref().unwrap();
-        let beta_u = BetaValues::new_beta_equality_mle(round_challenges.to_vec());
+        let beta_u = if !LAZY_BETA_EVALUATION {
+            Some(BetaValues::new_beta_equality_mle(round_challenges.to_vec()))
+        } else {
+            None
+        };
 
+        #[cfg(feature = "parallel")]
         let f_1_uv = self
             .nonzero_gates
-            .clone()
-            .into_iter()
+            .par_iter()
+            .fold(
+                || F::ZERO,
+                |acc, (z_ind, x_ind)| {
+                    let (gz, ux) = if let Some(beta_u) = &beta_u {
+                        (
+                            *self
+                                .beta_g
+                                .as_ref()
+                                .unwrap()
+                                .mle
+                                .f
+                                .get(*z_ind)
+                                .unwrap_or(&F::ZERO),
+                            *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                        )
+                    } else {
+                        (
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                claim_challenges,
+                                *z_ind,
+                            ),
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                round_challenges,
+                                *x_ind,
+                            ),
+                        )
+                    };
+
+                    acc + gz * ux
+                },
+            )
+            .sum::<F>();
+
+        #[cfg(not(feature = "parallel"))]
+        let f_1_uv = self
+            .nonzero_gates
+            .iter()
             .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                let gz = *self
-                    .beta_g
-                    .as_ref()
-                    .unwrap()
-                    .bookkeeping_table()
-                    .get(z_ind)
-                    .unwrap_or(&F::ZERO);
-                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+                let (gz, ux) = if let Some(beta_u) = &beta_u {
+                    (
+                        *self
+                            .beta_g
+                            .as_ref()
+                            .unwrap()
+                            .mle
+                            .f
+                            .get(*z_ind)
+                            .unwrap_or(&F::ZERO),
+                        *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                    )
+                } else {
+                    (
+                        BetaValues::compute_beta_over_challenge_and_index(claim_challenges, *z_ind),
+                        BetaValues::compute_beta_over_challenge_and_index(round_challenges, *x_ind),
+                    )
+                };
 
                 acc + gz * ux
             });
@@ -635,8 +788,10 @@ impl<F: Field> IdentityGate<F> {
 
     /// initialize necessary bookkeeping tables by traversing the nonzero gates
     pub fn init_phase_1(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
-        let beta_g = BetaValues::new_beta_equality_mle(claim.get_point().clone());
-        self.set_beta_g(beta_g);
+        if !LAZY_BETA_EVALUATION {
+            let beta_g = BetaValues::new_beta_equality_mle(claim.get_point().clone());
+            self.set_beta_g(beta_g);
+        }
 
         self.mle_ref.index_mle_indices(0);
         let num_vars = self.mle_ref.num_free_vars();
@@ -647,13 +802,18 @@ impl<F: Field> IdentityGate<F> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind)| {
-                let beta_g_at_z = *self
-                    .beta_g
-                    .as_ref()
-                    .unwrap()
-                    .bookkeeping_table()
-                    .get(z_ind)
-                    .unwrap_or(&F::ZERO);
+                let beta_g_at_z = if LAZY_BETA_EVALUATION {
+                    BetaValues::compute_beta_over_challenge_and_index(claim.get_point(), z_ind)
+                } else {
+                    *self
+                        .beta_g
+                        .as_ref()
+                        .unwrap()
+                        .bookkeeping_table()
+                        .get(z_ind)
+                        .unwrap_or(&F::ZERO)
+                };
+
                 a_hg_mle_ref[x_ind] += beta_g_at_z;
             });
 
