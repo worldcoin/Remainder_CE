@@ -39,7 +39,7 @@ use super::{
 };
 
 #[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 /// Controls whether the `beta` optimiation should be enabled. When enabled, all
 /// functions in this module that compute the value of a `beta` function at a
@@ -220,25 +220,52 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             None
         };
 
+        #[cfg(feature = "parallel")]
         let f_1_uv = self
             .wiring
-            .clone()
-            .into_iter()
-            .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
-                    (
-                        *beta_g.mle.f.get(z_ind).unwrap_or(&F::ZERO),
-                        *beta_u.mle.f.get(x_ind).unwrap_or(&F::ZERO),
-                    )
-                } else {
-                    (
-                        BetaValues::compute_beta_over_challenge_and_index(claim_challenges, z_ind),
-                        BetaValues::compute_beta_over_challenge_and_index(round_challenges, x_ind),
-                    )
-                };
+            .par_iter()
+            .fold(
+                || F::ZERO,
+                |acc, (z_ind, x_ind)| {
+                    let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
+                        (
+                            *beta_g.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
+                            *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                        )
+                    } else {
+                        (
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                claim_challenges,
+                                *z_ind,
+                            ),
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                round_challenges,
+                                *x_ind,
+                            ),
+                        )
+                    };
 
-                acc + gz * ux
-            });
+                    acc + gz * ux
+                },
+            )
+            .sum::<F>();
+
+        #[cfg(not(feature = "parallel"))]
+        let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
+            let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
+                (
+                    *beta_g.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
+                    *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                )
+            } else {
+                (
+                    BetaValues::compute_beta_over_challenge_and_index(claim_challenges, *z_ind),
+                    BetaValues::compute_beta_over_challenge_and_index(round_challenges, *x_ind),
+                )
+            };
+
+            acc + gz * ux
+        });
 
         PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
             &[self.source_mle.clone()],
@@ -311,28 +338,55 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
             None
         };
 
+        #[cfg(feature = "parallel")]
         let f_1_uv = self
             .wiring
-            .clone()
-            .into_iter()
-            .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
-                    (
-                        *beta_g.mle.f.get(z_ind).unwrap_or(&F::ZERO),
-                        *beta_u.mle.f.get(x_ind).unwrap_or(&F::ZERO),
-                    )
-                } else {
-                    (
-                        BetaValues::compute_beta_over_challenge_and_index(claim.get_point(), z_ind),
-                        BetaValues::compute_beta_over_challenge_and_index(
-                            &self.first_u_challenges,
-                            x_ind,
-                        ),
-                    )
-                };
+            .par_iter()
+            .fold(
+                || F::ZERO,
+                |acc, (z_ind, x_ind)| {
+                    let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
+                        (
+                            *beta_g.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
+                            *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                        )
+                    } else {
+                        (
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                claim.get_point(),
+                                *z_ind,
+                            ),
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                &self.first_u_challenges,
+                                *x_ind,
+                            ),
+                        )
+                    };
 
-                acc + gz * ux
-            });
+                    acc + gz * ux
+                },
+            )
+            .sum::<F>();
+
+        #[cfg(not(feature = "parallel"))]
+        let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
+            let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
+                (
+                    *beta_g.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
+                    *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                )
+            } else {
+                (
+                    BetaValues::compute_beta_over_challenge_and_index(claim.get_point(), *z_ind),
+                    BetaValues::compute_beta_over_challenge_and_index(
+                        &self.first_u_challenges,
+                        *x_ind,
+                    ),
+                )
+            };
+
+            acc + gz * ux
+        });
 
         // get the fully evaluated "expression"
 
@@ -512,10 +566,47 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             None
         };
 
+        #[cfg(feature = "parallel")]
         let f_1_uv = self
             .nonzero_gates
-            .clone()
-            .into_iter()
+            .par_iter()
+            .fold(
+                || F::ZERO,
+                |acc, (z_ind, x_ind)| {
+                    let (gz, ux) = if let Some(beta_u) = &beta_u {
+                        (
+                            *self
+                                .beta_g
+                                .as_ref()
+                                .unwrap()
+                                .mle
+                                .f
+                                .get(*z_ind)
+                                .unwrap_or(&F::ZERO),
+                            *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                        )
+                    } else {
+                        (
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                claim_challenges,
+                                *z_ind,
+                            ),
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                round_challenges,
+                                *x_ind,
+                            ),
+                        )
+                    };
+
+                    acc + gz * ux
+                },
+            )
+            .sum::<F>();
+
+        #[cfg(not(feature = "parallel"))]
+        let f_1_uv = self
+            .nonzero_gates
+            .iter()
             .fold(F::ZERO, |acc, (z_ind, x_ind)| {
                 let (gz, ux) = if let Some(beta_u) = &beta_u {
                     (
@@ -525,14 +616,14 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                             .unwrap()
                             .mle
                             .f
-                            .get(z_ind)
+                            .get(*z_ind)
                             .unwrap_or(&F::ZERO),
-                        *beta_u.mle.f.get(x_ind).unwrap_or(&F::ZERO),
+                        *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
                     )
                 } else {
                     (
-                        BetaValues::compute_beta_over_challenge_and_index(claim_challenges, z_ind),
-                        BetaValues::compute_beta_over_challenge_and_index(round_challenges, x_ind),
+                        BetaValues::compute_beta_over_challenge_and_index(claim_challenges, *z_ind),
+                        BetaValues::compute_beta_over_challenge_and_index(round_challenges, *x_ind),
                     )
                 };
 
