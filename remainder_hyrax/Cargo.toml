@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+criterion = "0.5.1"
 rand_chacha = "0.3.1"
 remainder-shared-types = { path = "../remainder_shared_types" }
 remainder = { path = "../remainder_prover" }
@@ -26,3 +27,7 @@ rayon = "1.7"
 [features]
 parallel = []
 print-trace = []
+
+[[bench]]
+name = "pcs_bench"
+harness = false
