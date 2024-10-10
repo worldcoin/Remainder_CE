@@ -1,5 +1,5 @@
 use crate::hyrax_primitives::proof_of_dot_prod::ProofOfDotProduct;
-use ark_std::{cfg_into_iter, log2};
+use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use ndarray::Array2;
 use rand::Rng;
@@ -129,7 +129,6 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
     ) -> Vec<C> {
         // checking that the matrix row size and the matrix column size are both powers of two! otherwise hyrax does not work
         assert!(data.len().is_power_of_two());
-        dbg!(&log_n_cols);
 
         // this appropriately computes the commitments to the coefficients matrix based on its internal type. if it is a u8
         // or an i8, we can use precomputed bit decompositions in order to speed up the pedersen commitments!!
@@ -170,7 +169,6 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
                     .collect_vec()
             }
         };
-        dbg!(&log2(commits.len()));
         commits
     }
 

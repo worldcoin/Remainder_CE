@@ -295,7 +295,8 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
 }
 
 #[test]
-/// Test on a 2^9 x 2^9 matrix with all zeroes to test internal scalar mult optimization.
+/// Test on a 2^9 x 2^9 matrix with all zeroes to test internal scalar mult optimization,
+/// to see if only doing double-and-add for the significant bits makes a difference.
 fn sanity_check_test_honest_prover_iris_size_symmetric_all_zero() {
     let committer = PedersenCommitter::<Bn256Point>::new(
         (1 << 9) + 1,

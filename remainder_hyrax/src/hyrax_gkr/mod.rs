@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::utils::vandermonde::VandermondeInverse;
-use ark_std::{end_timer, log2, start_timer};
+use ark_std::{end_timer, start_timer};
 use hyrax_circuit_inputs::HyraxInputLayerData;
 use hyrax_input_layer::{
     verify_public_input_layer, HyraxInputLayer, HyraxInputLayerEnum, HyraxInputLayerProof,
@@ -255,7 +255,6 @@ impl<
                             let dtype = &corresponding_input_data.input_data_type;
                             let mut hyrax_input_layer = HyraxInputLayer::new_with_committer(combined_mle, input_layer_id, self.committer, dtype);
                             let hyrax_commit_timer = start_timer!(|| format!("committing to hyrax input layer, {:?}", hyrax_input_layer.layer_id));
-                            dbg!(&log2(hyrax_input_layer.mle.len()));
                             let hyrax_commit = hyrax_input_layer.commit();
                             end_timer!(hyrax_commit_timer);
                             (hyrax_commit, hyrax_input_layer)
