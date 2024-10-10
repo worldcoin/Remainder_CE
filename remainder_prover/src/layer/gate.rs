@@ -47,6 +47,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// Operations that are currently supported by the gate. Binary because these
 /// are fan-in-two gates.
+#[derive(Hash)]
 pub enum BinaryOperation {
     /// An addition gate.
     Add,
@@ -186,7 +187,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 }
 
 /// The circuit-description counterpart of a Gate layer description.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
 #[serde(bound = "F: Field")]
 pub struct GateLayerDescription<F: Field> {
     /// The layer id associated with this gate layer.

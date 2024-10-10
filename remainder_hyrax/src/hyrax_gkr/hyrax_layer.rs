@@ -3,7 +3,6 @@ use crate::{
         proof_of_claim_agg::ProofOfClaimAggregation, proof_of_product::ProofOfProduct,
         proof_of_sumcheck::ProofOfSumcheck,
     },
-    pedersen::{CommittedScalar, CommittedVector, PedersenCommitter},
     utils::vandermonde::VandermondeInverse,
 };
 use itertools::Itertools;
@@ -18,6 +17,7 @@ use remainder::{claims::wlx_eval::ClaimMle, layer::LayerDescription};
 use remainder::{claims::wlx_eval::YieldWLXEvals, layer::layer_enum::LayerEnum};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
+use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
 use remainder_shared_types::Field;
 /// This struct represents what a proof looks like for one layer of GKR, but Hyrax version.

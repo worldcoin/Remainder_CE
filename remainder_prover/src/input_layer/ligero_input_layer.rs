@@ -61,7 +61,7 @@ pub type LigeroCommitment<F> = LcCommit<PoseidonSpongeHasher<F>, LigeroAuxInfo<F
 /// The Ligero commitment the prover sends the verifier (adds to transcript) which is the commitment to the root.
 pub type LigeroRoot<F> = LcRoot<LigeroAuxInfo<F>, F>;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Hash)]
 #[serde(bound = "F: Field")]
 /// The circuit description of a [LigeroInputLayer]. Stores the shape information of this layer.
 pub struct LigeroInputLayerDescription<F: Field> {
