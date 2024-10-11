@@ -94,25 +94,26 @@ impl<F: Field> OutputLayer<F> {
     /// Fix the variables of this output layer to random challenges sampled
     /// from the transcript.
     /// Expects `self.num_free_vars()` challenges.
-    pub fn fix_layer(
-        &mut self,
-        challenges: &[F],
-    ) -> Result<(), crate::layer::LayerError> {
+    pub fn fix_layer(&mut self, challenges: &[F]) -> Result<(), crate::layer::LayerError> {
         let bits = self.mle.index_mle_indices(0);
         if bits != challenges.len() {
-            return Err(LayerError::NumVarsMitmatch(self.mle.layer_id(), bits, challenges.len()));
+            return Err(LayerError::NumVarsMitmatch(
+                self.mle.layer_id(),
+                bits,
+                challenges.len(),
+            ));
         }
-        (0..bits).zip(challenges.iter()).for_each(|(bit, challenge)| {
-            self.mle.fix_variable(bit, *challenge);
-        });
+        (0..bits)
+            .zip(challenges.iter())
+            .for_each(|(bit, challenge)| {
+                self.mle.fix_variable(bit, *challenge);
+            });
         debug_assert_eq!(self.num_free_vars(), 0);
         Ok(())
     }
 
     /// Extract a claim on this output layer by extracting the bindings from the fixed variables.
-    pub fn get_claim(
-        &mut self,
-    ) -> Result<ClaimMle<F>, crate::layer::LayerError> {
+    pub fn get_claim(&mut self) -> Result<ClaimMle<F>, crate::layer::LayerError> {
         if self.mle.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
         }
@@ -137,12 +138,11 @@ impl<F: Field> OutputLayer<F> {
             Some(self.mle.layer_id()),
         ))
     }
-
 }
 
 /// The circuit description type for the defaul Output Layer consisting of an
 /// MLE.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
 #[serde(bound = "F: Field")]
 pub struct OutputLayerDescription<F: Field> {
     /// The metadata of this MLE: indices and associated layer.
@@ -374,7 +374,6 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierOutputLayer<F> {
         )])
     }
 }
-
 
 /// Errors to do with working with a type implementing [OutputLayer].
 #[derive(Error, Debug, Clone)]

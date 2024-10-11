@@ -1,7 +1,4 @@
-use crate::{
-    hyrax_primitives::proof_of_dot_prod::ProofOfDotProduct,
-    pedersen::{CommittedScalar, PedersenCommitter},
-};
+use crate::hyrax_primitives::proof_of_dot_prod::ProofOfDotProduct;
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use ndarray::Array2;
@@ -11,8 +8,12 @@ use rayon::iter::IntoParallelIterator;
 #[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 use remainder::layouter::nodes::circuit_inputs::HyraxInputDType;
+use remainder_shared_types::{
+    curves::PrimeOrderCurve,
+    pedersen::{CommittedScalar, PedersenCommitter},
+    HasByteRepresentation,
+};
 use remainder_shared_types::{ff_field, transcript::ec_transcript::ECTranscriptTrait};
-use remainder_shared_types::{curves::PrimeOrderCurve, HasByteRepresentation};
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
@@ -276,12 +277,15 @@ impl<C: PrimeOrderCurve> HyraxPCSEvaluationProof<C> {
         // the blinding factors to commit to each of the rows of the MLE coefficient matrix
         blinding_factors_matrix: &[C::Scalar],
     ) -> Self {
-        let (l_vector, r_vector) =
-            HyraxPCSEvaluationProof::<C>::compute_l_r_from_log_n_cols(log_n_cols, challenge_coordinates);
+        let (l_vector, r_vector) = HyraxPCSEvaluationProof::<C>::compute_l_r_from_log_n_cols(
+            log_n_cols,
+            challenge_coordinates,
+        );
 
         // since the prover knows the T matrix (matrix of MLE coefficients), the prover can simply do a vector matrix product
         // to compute T' = L \times T
-        let t_prime = HyraxPCSEvaluationProof::<C>::vector_matrix_product(&l_vector, data, log_n_cols);
+        let t_prime =
+            HyraxPCSEvaluationProof::<C>::vector_matrix_product(&l_vector, data, log_n_cols);
 
         let blinding_factor_evaluation = C::Scalar::random(&mut rng);
 
@@ -345,8 +349,10 @@ impl<C: PrimeOrderCurve> HyraxPCSEvaluationProof<C> {
             podp_evaluation_proof,
             commitment_to_evaluation,
         } = &self;
-        let (l_vector, r_vector) =
-            HyraxPCSEvaluationProof::<C>::compute_l_r_from_log_n_cols(log_n_cols, challenge_coordinates);
+        let (l_vector, r_vector) = HyraxPCSEvaluationProof::<C>::compute_l_r_from_log_n_cols(
+            log_n_cols,
+            challenge_coordinates,
+        );
 
         // the verifier uses the L vector and does a scalar multiplication to each of the matrix row commits with the
         // appropriate index of the L vector. it then adds them all together to get the commitment to T' = L \times T.

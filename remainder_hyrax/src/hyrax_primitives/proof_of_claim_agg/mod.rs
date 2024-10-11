@@ -1,9 +1,9 @@
 use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
-use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use rand::Rng;
 use remainder::layer::LayerId;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
+use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use remainder_shared_types::Field;
 
@@ -144,7 +144,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
             .enumerate()
             .for_each(|(i, commit)| {
                 let label = format!("coeff {}", i);
-                transcript .append_ec_point(Box::leak(label.into_boxed_str()), *commit);
+                transcript.append_ec_point(Box::leak(label.into_boxed_str()), *commit);
             });
 
         // Verify the proofs of opening for coefficients of the interpolating polynomial

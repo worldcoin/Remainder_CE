@@ -1,14 +1,12 @@
 use rand::Rng;
 use remainder::layer::product::PostSumcheckLayer;
-use remainder_shared_types::ff_field;
-use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use remainder_shared_types::curves::PrimeOrderCurve;
+use remainder_shared_types::ff_field;
+use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
+use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use std::ops::Neg;
 
-use crate::{
-    hyrax_gkr::hyrax_layer::{evaluate_committed_psl, evaluate_committed_scalar},
-    pedersen::{CommittedScalar, CommittedVector, PedersenCommitter},
-};
+use crate::hyrax_gkr::hyrax_layer::{evaluate_committed_psl, evaluate_committed_scalar};
 
 use super::proof_of_dot_prod::ProofOfDotProduct;
 
@@ -136,8 +134,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
         let rhos: Vec<C::Scalar> = (0..n + 1)
             .map(|i| {
                 let label = format!("rho[{}]", i);
-                transcript
-                    .get_scalar_field_challenge(Box::leak(label.into_boxed_str()))
+                transcript.get_scalar_field_challenge(Box::leak(label.into_boxed_str()))
             })
             .collect();
         assert_eq!(rhos.len(), n + 1);
@@ -147,8 +144,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
         let gammas: Vec<C::Scalar> = (0..n)
             .map(|i| {
                 let label = format!("gamma[{}]", i);
-                transcript
-                    .get_scalar_field_challenge(Box::leak(label.into_boxed_str()))
+                transcript.get_scalar_field_challenge(Box::leak(label.into_boxed_str()))
             })
             .collect();
         debug_assert_eq!(gammas.len(), n);

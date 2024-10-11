@@ -2,10 +2,9 @@ use itertools::Itertools;
 use rand::Rng;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
+use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use serde::{Deserialize, Serialize};
-
-use crate::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
 
 #[cfg(test)]
 /// Tests for the hyrax primitives.

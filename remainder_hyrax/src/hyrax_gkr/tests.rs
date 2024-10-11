@@ -4,7 +4,6 @@ use crate::hyrax_gkr::hyrax_input_layer::HyraxInputLayerProof;
 use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
 
 use crate::hyrax_gkr::HyraxProof;
-use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
 
 use itertools::{repeat_n, Itertools};
@@ -18,9 +17,7 @@ use remainder::layer::layer_enum::{LayerDescriptionEnum, LayerEnum};
 use remainder::layer::matmult::{MatMult, MatMultLayerDescription, Matrix, MatrixDescription};
 use remainder::layer::regular_layer::{RegularLayer, RegularLayerDescription};
 use remainder::layer::{LayerDescription, LayerId};
-use remainder::layouter::nodes::circuit_inputs::{
-    InputLayerNode, InputShred
-};
+use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputShred};
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::nodes::sector::Sector;
 use remainder::layouter::nodes::{CircuitNode, Context};
@@ -29,13 +26,12 @@ use remainder::mle::evals::{Evaluations, MultilinearExtension};
 use remainder::mle::mle_description::MleDescription;
 use remainder::mle::{Mle, MleIndex};
 use remainder::prover::generate_circuit_description;
-use remainder_shared_types::transcript::ec_transcript::{
-    ECTranscript, ECTranscriptTrait
-};
+use remainder_shared_types::transcript::ec_transcript::{ECTranscript, ECTranscriptTrait};
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::Fr;
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
+    pedersen::{CommittedScalar, PedersenCommitter},
     Field,
 };
 
@@ -700,11 +696,8 @@ fn hyrax_input_layer_proof_test() {
     );
 
     let input_layer_desc = HyraxInputLayerDescription::new(layer_id, input_mle.num_vars());
-    let prover_commitment = commit_to_input_values(
-        &input_layer_desc,
-        &input_mle,
-        &committer,
-        blinding_rng);
+    let prover_commitment =
+        commit_to_input_values(&input_layer_desc, &input_mle, &committer, blinding_rng);
 
     transcript.append_ec_points("Hyrax PCS commit", &prover_commitment.commitment);
 
@@ -766,8 +759,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
 
     let ctx = Context::new();
     let input_layer = InputLayerNode::new(&ctx, None);
-    let input_shred =
-        InputShred::new(&ctx, input_multilinear_extension.num_vars(), &input_layer);
+    let input_shred = InputShred::new(&ctx, input_multilinear_extension.num_vars(), &input_layer);
 
     // Middle layer 1: square the input.
     let squaring_sector = Sector::new(&ctx, &[&input_shred], |mle_vec| {
@@ -786,15 +778,14 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     // Make this an output node.
     let output_node = OutputNode::new_zero(&ctx, &subtract_sector);
 
-    let (circuit_desc, input_builder, _) = generate_circuit_description(
-        vec![
-                input_layer.into(),
-                input_shred.clone().into(),
-                squaring_sector.into(),
-                subtract_sector.into(),
-                output_node.into(),
-            ]
-    ).unwrap();
+    let (circuit_desc, input_builder, _) = generate_circuit_description(vec![
+        input_layer.into(),
+        input_shred.clone().into(),
+        squaring_sector.into(),
+        subtract_sector.into(),
+        output_node.into(),
+    ])
+    .unwrap();
 
     let mut input_nodes = HashMap::new();
     input_nodes.insert(input_shred.id(), input_multilinear_extension);
@@ -813,14 +804,10 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
 
-    proof.verify(
-        &HashMap::new(),
-        &circuit_desc,
-        &committer,
-        &mut transcript);
+    proof.verify(&HashMap::new(), &circuit_desc, &committer, &mut transcript);
 }
 
-//FIXME restore these tests by converting them as in small_regular_circuit_hyrax_input_layer_test 
+//FIXME restore these tests by converting them as in small_regular_circuit_hyrax_input_layer_test
 
 // #[test]
 // fn small_regular_circuit_public_input_layer_test() {

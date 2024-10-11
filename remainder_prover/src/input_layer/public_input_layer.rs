@@ -2,10 +2,7 @@
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    layer::LayerId,
-    mle::evals::MultilinearExtension,
-};
+use crate::{layer::LayerId, mle::evals::MultilinearExtension};
 
 /// An Input Layer in which the data is sent to the verifier
 /// "in the clear" (i.e. without a commitment).
@@ -15,7 +12,7 @@ pub struct PublicInputLayer<F: Field> {
     pub mle: MultilinearExtension<F>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
 /// The circuit description of a [PublicInputLayer] which stores
 /// the shape information of this input layer.
 pub struct PublicInputLayerDescription {

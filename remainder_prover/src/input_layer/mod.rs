@@ -1,9 +1,9 @@
 //! InputLayer and InputLayerDescription structs, as well as public- and ligero- input layers and
 //! fiat-shamir challenges.
+use crate::layer::LayerId;
 use crate::mle::evals::MultilinearExtension;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
-use crate::layer::LayerId;
 
 /// An input layer in order to generate random challenges for Fiat-Shamir.
 pub mod fiat_shamir_challenge;
@@ -22,7 +22,7 @@ pub struct InputLayer<F: Field> {
     pub layer_id: LayerId,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
 /// The verifier's view of an input layer during circuit proving, containing
 /// the shape information of this input layer.
 pub struct InputLayerDescription {

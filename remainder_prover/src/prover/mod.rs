@@ -22,9 +22,9 @@ use crate::input_layer::ligero_input_layer::{LigeroCommitment, LigeroInputLayerD
 use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{Layer, LayerDescription};
-use crate::layouter::layouting::{
-    layout, CircuitDescriptionMap, CircuitLocation, CircuitMap
-};
+use crate::layouter::compiling::CircuitHashType;
+use crate::layouter::component::Component;
+use crate::layouter::layouting::{layout, CircuitDescriptionMap, CircuitLocation, CircuitMap};
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, NodeId};
 use crate::mle::dense::DenseMle;
@@ -38,13 +38,14 @@ use crate::{
     layer::{layer_enum::LayerEnum, LayerError, LayerId},
 };
 use ark_std::{end_timer, start_timer};
+use helpers::get_circuit_description_hash_as_field_elems;
 use itertools::Itertools;
-use remainder_ligero::ligero_commit::{remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify};
+use remainder_ligero::ligero_commit::{
+    remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify,
+};
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::transcript::VerifierTranscript;
-use remainder_shared_types::transcript::{
-    ProverTranscript, TranscriptWriter,
-};
+use remainder_shared_types::transcript::{ProverTranscript, TranscriptWriter};
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -112,7 +113,10 @@ pub struct InstantiatedCircuit<F: Field> {
 /// * `circuit_description` - the [GKRCircuitDescription] of the circuit to be proven.
 pub fn prove<F: Field>(
     inputs: &HashMap<LayerId, MultilinearExtension<F>>,
-    ligero_input_layers: &HashMap<LayerId, (LigeroInputLayerDescription<F>, Option<LigeroCommitment<F>>)>,
+    ligero_input_layers: &HashMap<
+        LayerId,
+        (LigeroInputLayerDescription<F>, Option<LigeroCommitment<F>>),
+    >,
     circuit_description: &GKRCircuitDescription<F>,
     transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
 ) -> Result<(), GKRError> {
@@ -141,7 +145,8 @@ pub fn prove<F: Field>(
                 commitment.clone()
             } else {
                 let input_mle = inputs.get(layer_id).unwrap();
-                let (commitment, _) = remainder_ligero_commit(input_mle.get_evals_vector(), &desc.aux);
+                let (commitment, _) =
+                    remainder_ligero_commit(input_mle.get_evals_vector(), &desc.aux);
                 commitment
             };
             // Add the root of the commitment to the transcript.
@@ -159,7 +164,10 @@ pub fn prove<F: Field>(
             let input_mle = inputs.get(&claim.to_layer_id.unwrap()).unwrap();
             let evaluation = input_mle.evaluate_at_point(claim.get_claim().get_point());
             if evaluation != claim.get_claim().get_result() {
-                return Err(GKRError::EvaluationMismatch(claim.to_layer_id.unwrap(), claim.to_layer_id.unwrap()));
+                return Err(GKRError::EvaluationMismatch(
+                    claim.to_layer_id.unwrap(),
+                    claim.to_layer_id.unwrap(),
+                ));
             }
         }
     }
@@ -176,7 +184,8 @@ pub fn prove<F: Field>(
                 transcript_writer,
                 &desc.aux,
                 commitment,
-            ).unwrap();
+            )
+            .unwrap();
         }
     }
 
@@ -188,6 +197,7 @@ pub fn verify<F: Field>(
     public_inputs: &HashMap<LayerId, MultilinearExtension<F>>,
     ligero_inputs: &[LigeroInputLayerDescription<F>],
     circuit_description: &GKRCircuitDescription<F>,
+    circuit_description_hash_type: CircuitHashType,
     transcript: &mut impl VerifierTranscript<F>,
 ) -> Result<(), GKRError> {
     // Read and check public input values to transcript in order of layer id.
@@ -196,7 +206,9 @@ pub fn verify<F: Field>(
         .sorted_by_key(|layer_id| layer_id.get_input_layer_id())
         .map(|layer_id| {
             let expected_mle = public_inputs.get(layer_id).unwrap();
-            let transcript_mle = transcript.consume_elements("input layer", 1 << expected_mle.num_vars()).unwrap();
+            let transcript_mle = transcript
+                .consume_elements("input layer", 1 << expected_mle.num_vars())
+                .unwrap();
             if expected_mle.get_evals_vector() != &transcript_mle {
                 Err(GKRError::PublicInputLayerValuesMismatch(*layer_id))
             } else {
@@ -211,11 +223,15 @@ pub fn verify<F: Field>(
         .iter()
         .sorted_by_key(|desc| desc.layer_id.get_input_layer_id())
         .for_each(|desc| {
-            let commitment = transcript.consume_element("ligero input layer root").unwrap();
+            let commitment = transcript
+                .consume_element("ligero input layer root")
+                .unwrap();
             ligero_commitments.insert(desc.layer_id, commitment);
         });
 
-    let input_layer_claims = circuit_description.verify(transcript).unwrap();
+    let input_layer_claims = circuit_description
+        .verify(transcript, circuit_description_hash_type)
+        .unwrap();
 
     // Every input layer claim is either for a public- or Ligero- input layer.
     let mut public_input_layer_claims = vec![];
@@ -238,7 +254,10 @@ pub fn verify<F: Field>(
         let input_mle = public_inputs.get(&claim.to_layer_id.unwrap()).unwrap();
         let evaluation = input_mle.evaluate_at_point(claim.get_claim().get_point());
         if evaluation != claim.get_claim().get_result() {
-            return Err(GKRError::EvaluationMismatch(claim.to_layer_id.unwrap(), claim.from_layer_id.unwrap()));
+            return Err(GKRError::EvaluationMismatch(
+                claim.to_layer_id.unwrap(),
+                claim.from_layer_id.unwrap(),
+            ));
         }
     }
 
@@ -246,7 +265,10 @@ pub fn verify<F: Field>(
     for claim in ligero_input_layer_claims.iter() {
         let layer_id = claim.to_layer_id.unwrap();
         let commitment = ligero_commitments.get(&layer_id).unwrap();
-        let desc = ligero_inputs.iter().find(|desc| desc.layer_id == layer_id).unwrap();
+        let desc = ligero_inputs
+            .iter()
+            .find(|desc| desc.layer_id == layer_id)
+            .unwrap();
         remainder_ligero_verify::<F>(
             commitment,
             &desc.aux,
@@ -296,7 +318,8 @@ pub fn prove_circuit<F: Field>(
 
         transcript_writer.append_elements("output layer", output.get_mle().bookkeeping_table());
 
-        let challenges = transcript_writer.get_challenges("output layer binding", output.num_free_vars());
+        let challenges =
+            transcript_writer.get_challenges("output layer binding", output.num_free_vars());
         output
             .fix_layer(&challenges)
             .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
@@ -358,7 +381,12 @@ pub fn prove_circuit<F: Field>(
     end_timer!(intermediate_layers_timer);
     all_layers_sumcheck_proving_span.exit();
 
-    let input_layer_claims = input_layers.iter().filter_map(|input_layer| aggregator.get_claims(input_layer.layer_id)).flatten().cloned().collect_vec();
+    let input_layer_claims = input_layers
+        .iter()
+        .filter_map(|input_layer| aggregator.get_claims(input_layer.layer_id))
+        .flatten()
+        .cloned()
+        .collect_vec();
 
     Ok(input_layer_claims)
 }
@@ -368,7 +396,8 @@ pub const ENABLE_OPTIMIZATION: bool = true;
 
 /// The Verifier Key associated with a GKR proof of a [ProofSystem].
 /// It consists of consice GKR Circuit description to be use by the Verifier.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Hash)]
+#[serde(bound = "F: Field")]
 pub struct GKRCircuitDescription<F: Field> {
     /// The circuit descriptions of the input layers.
     pub input_layers: Vec<InputLayerDescription>,
@@ -563,7 +592,19 @@ impl<F: Field> GKRCircuitDescription<F> {
     fn verify(
         &self,
         transcript_reader: &mut impl VerifierTranscript<F>,
+        circuit_description_hash_type: CircuitHashType,
     ) -> Result<Vec<ClaimMle<F>>, GKRError> {
+        // --- Generate circuit description hash and check against prover-provided circuit description hash ---
+        // let hash_value_as_field_elems =
+        //     get_circuit_description_hash_as_field_elems(self, circuit_description_hash_type);
+        // let prover_supplied_circuit_description_hash = transcript_reader
+        //     .consume_elements("Circuit description hash", hash_value_as_field_elems.len())
+        //     .unwrap();
+        // assert_eq!(
+        //     prover_supplied_circuit_description_hash,
+        //     hash_value_as_field_elems
+        // );
+
         // Get the verifier challenges from the transcript.
         let fiat_shamir_challenges: Vec<FiatShamirChallenge<F>> = self
             .fiat_shamir_challenges
@@ -657,12 +698,10 @@ impl<F: Field> GKRCircuitDescription<F> {
         let input_layer_claims = self
             .input_layers
             .iter()
-            .flat_map(|input_layer| {
-                aggregator.get_claims(input_layer.layer_id).unwrap()
-            })
+            .flat_map(|input_layer| aggregator.get_claims(input_layer.layer_id).unwrap())
             .cloned()
             .collect_vec();
-    
+
         // FIXME (Ben) Verifier should check that there are no claims left in the aggregator! Wait until after Makis has finished his YieldClaims refactor.
 
         Ok(input_layer_claims)
@@ -681,7 +720,7 @@ pub fn generate_circuit_description<F: Field>(
         impl Fn(
             HashMap<NodeId, MultilinearExtension<F>>,
         ) -> Result<HashMap<LayerId, MultilinearExtension<F>>, GKRError>,
-        HashMap<NodeId, LayerId>
+        HashMap<NodeId, LayerId>,
     ),
     GKRError,
 > {
@@ -718,7 +757,7 @@ pub fn generate_circuit_description<F: Field>(
                 .insert(input_layer_node.id(), input_layer_description.layer_id);
             input_layer_id_to_input_shred_ids.insert(
                 input_layer_description.layer_id,
-                input_layer_node.subnodes().unwrap()
+                input_layer_node.subnodes().unwrap(),
             );
             input_layer_description
         })
@@ -799,6 +838,6 @@ pub fn generate_circuit_description<F: Field>(
     Ok((
         circuit_description,
         input_builder,
-        input_node_id_to_layer_id
+        input_node_id_to_layer_id,
     ))
 }

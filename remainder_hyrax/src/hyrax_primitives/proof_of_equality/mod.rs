@@ -1,9 +1,9 @@
 use rand::Rng;
+use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
-use remainder_shared_types::curves::PrimeOrderCurve;
 
-use crate::pedersen::{CommittedScalar, PedersenCommitter};
+use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 
 #[cfg(test)]
 /// Tests for proof of equality.

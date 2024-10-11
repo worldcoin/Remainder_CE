@@ -25,9 +25,7 @@ use std::marker::PhantomData;
 
 use crate::layer::LayerId;
 use crate::mle::evals::MultilinearExtension;
-use crate::prover::{
-    generate_circuit_description, prove, GKRCircuitDescription, GKRError
-};
+use crate::prover::{generate_circuit_description, prove, GKRCircuitDescription, GKRError};
 use remainder_shared_types::transcript::{Transcript, TranscriptWriter};
 
 use super::nodes::circuit_inputs::InputLayerNodeData;
@@ -36,6 +34,23 @@ use super::{
     component::Component,
     nodes::{node_enum::NodeEnum, Context},
 };
+
+/// Defines the type of hash used when adding a circuit description's hash
+/// into the transcript.
+pub enum CircuitHashType {
+    /// This uses Rust's [DefaultHasher] implementation and uses the
+    /// #[derive(Hash)] implementation. The hash function implemented
+    /// underneath is not cryptographically secure, and thus this option
+    /// is generally not recommended.
+    DefaultRustHash,
+    /// This converts the circuit description into a JSON string via
+    /// [serde::Serialize] and hashes the bytes using [Sha3_256].
+    Sha3_256,
+    /// This converts the circuit description into a JSON string via
+    /// [serde::Serialize] and hashes the bytes in chunks of 16, converting
+    /// them first to field elements.
+    Poseidon,
+}
 
 /// The struct used in order to aid with proving, which contains the function
 /// used in order to generate the circuit description itself, called the
@@ -76,7 +91,14 @@ impl<
     pub fn prove(
         &mut self,
         mut transcript_writer: TranscriptWriter<F, PoseidonSponge<F>>,
-    ) -> Result<(Transcript<F>, GKRCircuitDescription<F>, HashMap<LayerId, MultilinearExtension<F>>), GKRError> {
+    ) -> Result<
+        (
+            Transcript<F>,
+            GKRCircuitDescription<F>,
+            HashMap<LayerId, MultilinearExtension<F>>,
+        ),
+        GKRError,
+    > {
         let ctx = Context::new();
         let (component, input_layer_data) = (self.witness_builder)(&ctx);
 
@@ -104,9 +126,14 @@ impl<
             &inputs,
             &HashMap::new(),
             &circuit_description,
-            &mut transcript_writer
-        ).unwrap();
+            &mut transcript_writer,
+        )
+        .unwrap();
 
-        Ok((transcript_writer.get_transcript(), circuit_description, inputs))
+        Ok((
+            transcript_writer.get_transcript(),
+            circuit_description,
+            inputs,
+        ))
     }
 }

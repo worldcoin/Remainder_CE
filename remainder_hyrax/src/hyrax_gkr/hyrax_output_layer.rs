@@ -4,9 +4,8 @@ use remainder::mle::{Mle, MleIndex};
 use remainder::output_layer::{OutputLayer, OutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
+use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
-
-use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
 use super::hyrax_layer::HyraxClaim;
 
@@ -35,8 +34,8 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         let claim = output_layer.get_claim().unwrap();
         // Convert to a CommittedScalar claim
         let blinding_factor = &C::Scalar::random(blinding_rng);
-        let claim_commit = scalar_committer
-            .committed_scalar(&claim.get_claim().get_result(), blinding_factor);
+        let claim_commit =
+            scalar_committer.committed_scalar(&claim.get_claim().get_result(), blinding_factor);
         let committed_claim = HyraxClaim {
             point: claim.get_claim().get_point().clone(),
             to_layer_id: claim.get_to_layer_id().unwrap(),
@@ -63,12 +62,17 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         transcript: &mut impl ECTranscriptTrait<C>,
     ) -> HyraxClaim<C::Scalar, C> {
         // Get the first set of challenges needed for the output layer.
-        let bindings = layer_desc.mle.var_indices().iter().map(|idx| match idx {
-            MleIndex::Fixed(bit) => C::Scalar::from(*bit as u64),
-            MleIndex::Indexed(_) => transcript.get_scalar_field_challenge("output claim point"),
-            MleIndex::Free => panic!("MLEs should be indexed by this point"),
-            _ => panic!("Unexpected MleIndex"),
-        }).collect_vec();
+        let bindings = layer_desc
+            .mle
+            .var_indices()
+            .iter()
+            .map(|idx| match idx {
+                MleIndex::Fixed(bit) => C::Scalar::from(*bit as u64),
+                MleIndex::Indexed(_) => transcript.get_scalar_field_challenge("output claim point"),
+                MleIndex::Free => panic!("MLEs should be indexed by this point"),
+                _ => panic!("Unexpected MleIndex"),
+            })
+            .collect_vec();
         transcript.append_ec_point("output layer commit", proof.claim_commitment);
 
         HyraxClaim {

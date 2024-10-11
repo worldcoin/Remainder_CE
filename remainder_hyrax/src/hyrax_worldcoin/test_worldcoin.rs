@@ -1,19 +1,26 @@
 use std::collections::HashMap;
-use remainder::{input_layer::InputLayerDescription, layer::LayerId, mle::evals::MultilinearExtension, prover::GKRCircuitDescription, worldcoin::test_helpers::{v2_circuit_description_and_inputs, v3_circuit_description_and_inputs}};
-use remainder_shared_types::{
-    halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt}, transcript::{
-        ec_transcript::ECTranscript,
-        poseidon_transcript::PoseidonSponge,
-    }
-};
+
 use crate::{
     hyrax_gkr::{hyrax_input_layer::HyraxInputLayerDescription, HyraxProof},
-    pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
+    utils::vandermonde::VandermondeInverse,
+};
+use remainder::{
+    input_layer::InputLayerDescription,
+    layer::LayerId,
+    mle::evals::MultilinearExtension,
+    prover::GKRCircuitDescription,
+    worldcoin::test_helpers::{
+        v2_circuit_description_and_inputs, v3_circuit_description_and_inputs,
+    },
+};
+use remainder_shared_types::{
+    halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
+    pedersen::PedersenCommitter,
+    transcript::{ec_transcript::ECTranscript, poseidon_transcript::PoseidonSponge},
 };
 
 type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
-
 
 #[test]
 fn test_small_circuit_both_layers_public() {
@@ -69,7 +76,10 @@ pub fn test_iriscode_v3_with_hyrax_helper(mask: bool) {
 }
 
 /// Helper function for testing an iriscode circuit (of any version, with any data) with a Hyrax input layer.
-pub fn test_iriscode_circuit_with_public_layers_helper(circuit_desc: GKRCircuitDescription<Scalar>, inputs: HashMap<LayerId, MultilinearExtension<Scalar>>) {
+pub fn test_iriscode_circuit_with_public_layers_helper(
+    circuit_desc: GKRCircuitDescription<Scalar>,
+    inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
+) {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
     let blinding_rng = &mut rand::thread_rng();
@@ -91,16 +101,15 @@ pub fn test_iriscode_circuit_with_public_layers_helper(circuit_desc: GKRCircuitD
     );
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-    proof.verify(
-        &HashMap::new(),
-        &circuit_desc,
-        &committer,
-        &mut transcript,
-    );
+    proof.verify(&HashMap::new(), &circuit_desc, &committer, &mut transcript);
 }
 
 /// Helper function for testing an iriscode circuit (of any version, with any data) with a Hyrax input layer.
-pub fn test_iriscode_circuit_with_hyrax_helper(circuit_desc: GKRCircuitDescription<Scalar>, private_layer_desc: InputLayerDescription, inputs: HashMap<LayerId, MultilinearExtension<Scalar>>) {
+pub fn test_iriscode_circuit_with_hyrax_helper(
+    circuit_desc: GKRCircuitDescription<Scalar>,
+    private_layer_desc: InputLayerDescription,
+    inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
+) {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
     let blinding_rng = &mut rand::thread_rng();
