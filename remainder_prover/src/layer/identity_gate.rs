@@ -1016,7 +1016,7 @@ impl<F: Field> IdentityGate<F> {
     /// initialize necessary bookkeeping tables by traversing the nonzero gates
     pub fn init_phase_1(&mut self, challenge: Vec<F>) -> Result<Vec<F>, GateError> {
         if !LAZY_BETA_EVALUATION {
-            let beta_g = BetaValues::new_beta_equality_mle(challenge);
+            let beta_g = BetaValues::new_beta_equality_mle(challenge.clone());
             self.set_beta_g(beta_g);
         }
 
@@ -1030,7 +1030,7 @@ impl<F: Field> IdentityGate<F> {
             .into_iter()
             .for_each(|(z_ind, x_ind)| {
                 let beta_g_at_z = if LAZY_BETA_EVALUATION {
-                    BetaValues::compute_beta_over_challenge_and_index(claim.get_point(), z_ind)
+                    BetaValues::compute_beta_over_challenge_and_index(&challenge, z_ind)
                 } else {
                     *self
                         .beta_g
