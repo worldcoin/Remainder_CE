@@ -427,7 +427,7 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
                     } else {
                         (
                             BetaValues::compute_beta_over_challenge_and_index(
-                                g1_challenges,
+                                &g1_challenges,
                                 *z_ind,
                             ),
                             BetaValues::compute_beta_over_challenge_and_index(
