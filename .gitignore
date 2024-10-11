@@ -28,8 +28,6 @@ scripts-ion/
 scripts-noya/
 scripts-upshot/
 
-*.bin
-
 # Temporary benchmarking data.
 /flame-graphs/
 /massif/

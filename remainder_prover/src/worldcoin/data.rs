@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use ndarray::{Array, Array2};
-use ndarray_npy::read_npy;
 use remainder_shared_types::Field;
+use std::io::{self, Read};
 use std::path::PathBuf;
 
 use super::parameters::{decode_i64_array, decode_wirings};
@@ -191,6 +191,16 @@ pub fn build_iriscode_circuit_data<
     }
 }
 
+// Helper function to read bytes from a file, preallocating the required space.
+fn read_bytes_from_file(filename: &str) -> io::Result<Vec<u8>> {
+    let mut file = std::fs::File::open(filename).unwrap();
+    let initial_buffer_size = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
+    dbg!(initial_buffer_size);
+    let mut bufreader = Vec::with_capacity(initial_buffer_size);
+    file.read_to_end(&mut bufreader).unwrap();
+    Ok(bufreader)
+}
+
 /// Loads circuit structure data and witnesses for a run of the iris code circuit from disk for
 /// either the iris or mask case.
 ///
@@ -210,8 +220,11 @@ pub fn load_worldcoin_data_v2<
     image_path: PathBuf,
     is_mask: bool,
 ) -> IriscodeCircuitData<F> {
-    let image: Array2<u8> = read_npy(image_path).unwrap();
-    assert_eq!(image.shape(), [IM_NUM_ROWS, IM_NUM_COLS]);
+    let image_bytes = read_bytes_from_file(image_path.to_str().unwrap());
+    let image: Array2<u8> = Array2::from_shape_vec(
+        (IM_NUM_ROWS, IM_NUM_COLS),
+        image_bytes.unwrap()
+    ).unwrap();
 
     use super::parameters_v2::{
         IRIS_RH_MULTIPLICAND, IRIS_THRESHOLDS, MASK_RH_MULTIPLICAND, MASK_THRESHOLDS, WIRINGS,
@@ -266,9 +279,11 @@ pub fn load_worldcoin_data_v3<
     image_path: PathBuf,
     is_mask: bool,
 ) -> IriscodeCircuitData<F> {
-    let image: Array2<u8> = read_npy(image_path).unwrap();
-    assert_eq!(image.shape(), [IM_NUM_ROWS, IM_NUM_COLS]);
-
+    let image_bytes = read_bytes_from_file(image_path.to_str().unwrap());
+    let image: Array2<u8> = Array2::from_shape_vec(
+        (IM_NUM_ROWS, IM_NUM_COLS),
+        image_bytes.unwrap()
+    ).unwrap();
     use super::parameters_v3::{
         IRIS_RH_MULTIPLICAND, IRIS_THRESHOLDS, MASK_RH_MULTIPLICAND, MASK_THRESHOLDS, WIRINGS,
     };

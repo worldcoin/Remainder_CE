@@ -42,9 +42,9 @@ pub fn v2_circuit_description_and_inputs(mask: bool) -> (GKRCircuitDescription<F
         NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_ROWS, IM_NUM_COLS
     };
     let image_path = if mask {
-        Path::new("src/worldcoin/constants/v2/mask/test_image.npy").to_path_buf()
+        Path::new("src/worldcoin/constants/v2/mask/test_image.bin").to_path_buf()
     } else {
-        Path::new("src/worldcoin/constants/v2/iris/test_image.npy").to_path_buf()
+        Path::new("src/worldcoin/constants/v2/iris/test_image.bin").to_path_buf()
     };
     let data = load_worldcoin_data_v2::<
         Fr,
@@ -84,9 +84,9 @@ pub fn v3_circuit_description_and_inputs(mask: bool) -> (GKRCircuitDescription<F
         NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_ROWS, IM_NUM_COLS
     };
     let image_path = if mask {
-        Path::new("src/worldcoin/constants/v3/mask/test_image.npy").to_path_buf()
+        Path::new("src/worldcoin/constants/v3/mask/test_image.bin").to_path_buf()
     } else {
-        Path::new("src/worldcoin/constants/v3/iris/test_image.npy").to_path_buf()
+        Path::new("src/worldcoin/constants/v3/iris/test_image.bin").to_path_buf()
     };
     let data = load_worldcoin_data_v3::<
         Fr,
