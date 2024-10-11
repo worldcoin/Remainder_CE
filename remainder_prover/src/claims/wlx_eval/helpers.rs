@@ -247,7 +247,6 @@ fn prover_aggregate_claims_in_one_round<F: Field>(
             claims.get_num_vars(),
         )
         .unwrap();
-    dbg!(&wlx_evaluations);
     let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 
     // Append evaluations to the transcript before sampling a challenge.

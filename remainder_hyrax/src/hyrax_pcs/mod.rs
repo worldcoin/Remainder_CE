@@ -1,7 +1,4 @@
-use crate::{
-    hyrax_primitives::proof_of_dot_prod::ProofOfDotProduct,
-    pedersen::{CommittedScalar, PedersenCommitter},
-};
+use crate::hyrax_primitives::proof_of_dot_prod::ProofOfDotProduct;
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use ndarray::Array2;
@@ -13,7 +10,11 @@ use rayon::iter::ParallelIterator;
 use remainder::layouter::nodes::circuit_inputs::HyraxInputDType;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
-use remainder_shared_types::{curves::PrimeOrderCurve, HasByteRepresentation};
+use remainder_shared_types::{
+    curves::PrimeOrderCurve,
+    pedersen::{CommittedScalar, PedersenCommitter},
+    HasByteRepresentation,
+};
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
