@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::layer::LayerId;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Hash)]
 #[serde(bound = "F: Field")]
 /// The circuit description of a [HyraxInputLayer]. Stores the shape information of this layer.
 /// All of the functionality of Hyrax input layers are taken care of in `remainder_hyrax/`, so

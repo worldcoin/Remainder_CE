@@ -1,9 +1,8 @@
 use rand::Rng;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
+use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
-
-use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
 #[cfg(test)]
 /// Tests for proof of product.
