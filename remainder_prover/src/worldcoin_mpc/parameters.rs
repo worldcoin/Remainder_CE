@@ -7,10 +7,10 @@ pub const ENCODING_MATRIX_NUM_VARS: usize = 2;
 pub const IRIS_DATAPARALLEL_NUM_VARS: usize = 3200;
 
 /// The modulo of the ring Z/2^16Z (used for our galois ring GR4)
-pub const GR4_MODULO: u64 = 65536;
+pub const GR4_MODULUS: u64 = 65536;
 
 /// The number of bits of the element in the ring Z/2^16Z
-pub const NUM_BITS: u64 = 16;
+pub const GR4_ELEM_BIT_LENGTH: u64 = 16;
 
 /// The actual encoding matrix
 /// It's a square matrix, meaning the size of it is 2^(ENCODING_MATRIX_NUM_VARS)^2
