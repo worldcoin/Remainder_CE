@@ -1,12 +1,12 @@
 use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
 use crate::hyrax_primitives::proof_of_claim_agg::barycentric_weights;
 use crate::hyrax_primitives::proof_of_claim_agg::ProofOfClaimAggregation;
-use crate::pedersen::PedersenCommitter;
 
 use remainder::layer::LayerId;
 use remainder_shared_types::halo2curves::bn256::Fr;
 use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
 use remainder_shared_types::halo2curves::CurveExt;
+use remainder_shared_types::pedersen::PedersenCommitter;
 use remainder_shared_types::transcript::ec_transcript::ECTranscript;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 

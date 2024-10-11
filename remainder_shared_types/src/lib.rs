@@ -1,5 +1,5 @@
 pub mod curves;
-pub mod ec;
+pub mod pedersen;
 pub mod transcript;
 
 use std::hash::Hash;
@@ -13,7 +13,9 @@ pub use halo2curves;
 pub use halo2curves::bn256::Fr;
 pub use poseidon::Poseidon;
 
-///External definition of Field element trait, will remain an Alias for now
+/// The primary finite field used within a GKR circuit, as well as within
+/// sumcheck. Note that the field's size should be large enough such that
+/// d / |F| bits of computational soundness is considered secure!
 pub trait Field:
 ff_field
     + FromUniformBytes<64> // only need this bc of Poseidon transcript,
@@ -50,6 +52,12 @@ impl<
 /// Simple trait which allows us to convert to and from
 /// a little-endian byte representation.
 pub trait HasByteRepresentation {
+    /// Number of bytes within the element's representation.
+    const REPR_NUM_BYTES: usize;
+    /// Constructor which creates an instance of the element from a vec of
+    /// length `REPR_NUM_BYTES`.
     fn from_bytes_le(bytes: Vec<u8>) -> Self;
+    /// Function which creates an equivalent representation of the element
+    /// in a byte array of length `REPR_NUM_BYTES`.
     fn to_bytes_le(&self) -> Vec<u8>;
 }

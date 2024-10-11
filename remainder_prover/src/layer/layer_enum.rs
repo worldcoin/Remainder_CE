@@ -18,7 +18,7 @@ use super::LayerError;
 
 layer_enum!(Layer, (Regular: RegularLayer<F>), (Gate: GateLayer<F>), (IdentityGate: IdentityGate<F>), (MatMult: MatMult<F>));
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Hash)]
 #[serde(bound = "F: Field")]
 /// An enum representing the different types of descriptions for each layer,
 /// each description containing the shape information of the corresponding layer.

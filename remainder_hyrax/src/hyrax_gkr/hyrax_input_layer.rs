@@ -12,7 +12,9 @@ use remainder::{
     sumcheck::evaluate_at_a_point,
 };
 use remainder_shared_types::{
-    curves::PrimeOrderCurve, transcript::ec_transcript::ECTranscriptTrait
+    curves::PrimeOrderCurve,
+    pedersen::{CommittedScalar, PedersenCommitter},
+    transcript::ec_transcript::ECTranscriptTrait,
 };
 use remainder_shared_types::{ff_field, Field};
 
@@ -21,7 +23,6 @@ use crate::{
     hyrax_primitives::{
         proof_of_claim_agg::ProofOfClaimAggregation, proof_of_equality::ProofOfEquality,
     },
-    pedersen::{CommittedScalar, PedersenCommitter},
     utils::vandermonde::VandermondeInverse,
 };
 
@@ -118,11 +119,9 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         transcript: &mut impl ECTranscriptTrait<C>,
     ) {
         // Verify the proof of claim aggregation
-        let agg_claim = self.claim_agg_proof.verify(
-            claim_commitments,
-            committer,
-            transcript,
-        );
+        let agg_claim = self
+            .claim_agg_proof
+            .verify(claim_commitments, committer, transcript);
 
         // Verify the actual "evaluation" polynomial committed to at the random point
         self.evaluation_proof.verify(
@@ -181,7 +180,7 @@ impl From<InputLayerDescription> for HyraxInputLayerDescription {
 /// for the input layer.
 pub fn commit_to_input_values<C: PrimeOrderCurve>(
     input_layer_desc: &HyraxInputLayerDescription,
-    input_mle: &MultilinearExtension<C::Scalar>, 
+    input_mle: &MultilinearExtension<C::Scalar>,
     committer: &PedersenCommitter<C>,
     mut rng: &mut impl Rng,
 ) -> HyraxInputCommitment<C> {
@@ -191,7 +190,8 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
     for i in 0..num_rows {
         blinding_factors_matrix[i] = C::Scalar::random(&mut rng);
     }
-    let mle_coeffs_vec = MleCoefficientsVector::ScalarFieldVector(input_mle.get_evals_vector().clone()); 
+    let mle_coeffs_vec =
+        MleCoefficientsVector::ScalarFieldVector(input_mle.get_evals_vector().clone());
     let commitment_values = HyraxPCSEvaluationProof::compute_matrix_commitments(
         input_layer_desc.log_num_cols,
         &mle_coeffs_vec,

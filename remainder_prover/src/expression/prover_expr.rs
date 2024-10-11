@@ -36,7 +36,7 @@ use std::{
 ///
 /// TODO(ryancao): We should deprecate this and instead just have
 /// references to the `DenseMLE<F>`s which are stored in the circuit_map.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
 pub struct MleVecIndex(usize);
 
 impl MleVecIndex {

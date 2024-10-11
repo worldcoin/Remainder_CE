@@ -63,7 +63,7 @@ pub struct RegularLayer<F: Field> {
 }
 
 /// The circuit description counterpart of a [RegularLayer].
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
 #[serde(bound = "F: Field")]
 pub struct RegularLayerDescription<F: Field> {
     /// This layer's ID.

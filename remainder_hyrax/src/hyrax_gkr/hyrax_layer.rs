@@ -3,7 +3,6 @@ use crate::{
         proof_of_claim_agg::ProofOfClaimAggregation, proof_of_product::ProofOfProduct,
         proof_of_sumcheck::ProofOfSumcheck,
     },
-    pedersen::{CommittedScalar, CommittedVector, PedersenCommitter},
     utils::vandermonde::VandermondeInverse,
 };
 use itertools::Itertools;
@@ -16,9 +15,12 @@ use remainder::layer::LayerId;
 use remainder::{claims::wlx_eval::claim_group::ClaimGroup, mle::dense::DenseMle};
 use remainder::{claims::wlx_eval::ClaimMle, layer::LayerDescription};
 use remainder::{claims::wlx_eval::YieldWLXEvals, layer::layer_enum::LayerEnum};
-use remainder_shared_types::{curves::PrimeOrderCurve, transcript::ec_transcript::ECTranscriptTrait};
 use remainder_shared_types::ff_field;
+use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
 use remainder_shared_types::Field;
+use remainder_shared_types::{
+    curves::PrimeOrderCurve, transcript::ec_transcript::ECTranscriptTrait,
+};
 /// This struct represents what a proof looks like for one layer of GKR, but Hyrax version.
 pub struct HyraxLayerProof<C: PrimeOrderCurve> {
     /// This is the proof of the sumcheck rounds for that layer.
@@ -254,7 +256,8 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // Verify the proof of sumcheck
         // Append first sumcheck message to transcript, which is the proported sum.
         if num_sumcheck_rounds_expected > 0 {
-            transcript.append_ec_point("sumcheck message commitment", proof_of_sumcheck.messages[0]);
+            transcript
+                .append_ec_point("sumcheck message commitment", proof_of_sumcheck.messages[0]);
         }
 
         // Collect the "bindings" for each of the sumcheck rounds. Add sumcheck messages to transcript.
@@ -264,8 +267,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             .iter()
             .skip(1)
             .for_each(|message| {
-                let challenge = transcript
-                    .get_scalar_field_challenge("sumcheck round challenge");
+                let challenge = transcript.get_scalar_field_challenge("sumcheck round challenge");
                 bindings.push(challenge);
 
                 transcript.append_ec_point("sumcheck message commitment", *message);

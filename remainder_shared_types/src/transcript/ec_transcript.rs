@@ -6,9 +6,7 @@ use itertools::Itertools;
 
 use crate::curves::PrimeOrderCurve;
 
-use super::{
-    ProverTranscript, Transcript, TranscriptSponge,
-};
+use super::{ProverTranscript, Transcript, TranscriptSponge};
 
 pub trait ECTranscriptSponge<C: PrimeOrderCurve>: TranscriptSponge<C::Base> {
     /// Absorb a single field element `elem`.
@@ -58,8 +56,6 @@ pub trait ECTranscriptTrait<C: PrimeOrderCurve>: Display {
     fn get_ec_challenges(&mut self, label: &str, num_elements: usize) -> Vec<C>;
 }
 
-    
-
 /// A transcript that operates over the base field of a prime-order curve, while also allowing for
 /// the absorption and sampling of scalar field elements (and of course, EC points).
 pub struct ECTranscript<C: PrimeOrderCurve, T> {
@@ -102,7 +98,9 @@ impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscript<C, Tr
     }
 }
 
-impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscriptTrait<C> for ECTranscript<C, Tr> {
+impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscriptTrait<C>
+    for ECTranscript<C, Tr>
+{
     fn append_ec_point(&mut self, label: &str, elem: C) {
         let (x_coord, y_coord) = elem.affine_coordinates().unwrap();
         self.append_elements(label, &[x_coord, y_coord]);
@@ -203,7 +201,6 @@ impl<C: PrimeOrderCurve, Sp: ECTranscriptSponge<C>> std::fmt::Display for ECTran
     }
 }
 
-
 impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base>
     for ECTranscript<C, Sp>
 {
@@ -219,7 +216,12 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
         if !elements.is_empty() {
             let elements_repr = elements.iter().map(|elem| elem.to_repr()).collect_vec();
             if self.debug {
-                println!("Appending {} elements (\"{}\"): [{:?}, .., ]", elements.len(), label, elements[0]);
+                println!(
+                    "Appending {} elements (\"{}\"): [{:?}, .., ]",
+                    elements.len(),
+                    label,
+                    elements[0]
+                );
             }
             self.sponge.absorb_elements(elements);
             self.transcript.append_elements(label, &elements_repr);
@@ -242,7 +244,10 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
             let challenges = self.sponge.squeeze_elements(num_elements);
             self.transcript.squeeze_elements(label, num_elements);
             if self.debug {
-                println!("Squeezing {} challenges (\"{}\"): [{:?}, .., ]", num_elements, label, challenges[0]);
+                println!(
+                    "Squeezing {} challenges (\"{}\"): [{:?}, .., ]",
+                    num_elements, label, challenges[0]
+                );
             }
             challenges
         }
