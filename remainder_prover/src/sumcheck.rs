@@ -432,8 +432,6 @@ pub fn successors_from_mle_ref_product<F: Field>(
             mle_refs
                 .iter()
                 .map(|mle_ref| {
-                    let zero = F::ZERO;
-
                     // The relevant index into the mle bookkeeping table.
                     let mle_index = index / eval_count;
                     // We're computing `eval_count` evaluations of the MLE product.
@@ -460,9 +458,9 @@ pub fn successors_from_mle_ref_product<F: Field>(
                     // over here, we get the elements in the pair so when index = 0, it's [0] and [1], if index = 1,
                     // it's [2] and [3], etc. because we are extending a function that was originally defined
                     // over the hypercube, each pair corresponds to two points on a line. we grab these two points here
-                    let first = mle_ref.get(mle_index).unwrap_or(zero);
+                    let first = mle_ref.get(mle_index).unwrap_or(F::ZERO);
                     let second = if mle_ref.num_free_vars() != 0 {
-                        mle_ref.get(mle_index + 1).unwrap_or(zero)
+                        mle_ref.get(mle_index + 1).unwrap_or(F::ZERO)
                     } else {
                         first
                     };

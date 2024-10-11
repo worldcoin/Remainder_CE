@@ -77,16 +77,15 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
                 let evals = mle_refs
                     .iter()
                     .map(|mle_ref| {
-                        let zero = F::ZERO;
                         let index = if mle_ref.num_free_vars() < max_num_vars {
                             let max = 1 << mle_ref.num_free_vars();
                             (index * 2) % max
                         } else {
                             index * 2
                         };
-                        let first = mle_ref.get(index).unwrap_or(zero);
+                        let first = mle_ref.get(index).unwrap_or(F::ZERO);
                         let second = if mle_ref.num_free_vars() != 0 {
-                            mle_ref.get(index + 1).unwrap_or(zero)
+                            mle_ref.get(index + 1).unwrap_or(F::ZERO)
                         } else {
                             first
                         };
@@ -292,7 +291,6 @@ pub fn compute_full_gate<F: Field>(
 
     // If the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is the beta table for the challenges on z.
     let beta_g = BetaValues::new_beta_equality_mle(z_chals);
-    let zero = F::ZERO;
 
     // Literally summing over everything else (x, y).
     if copy_bits == 0 {
@@ -301,8 +299,8 @@ pub fn compute_full_gate<F: Field>(
             .copied()
             .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
                 let gz = beta_g.get(z_ind).unwrap_or(F::ZERO);
-                let ux = lhs.get(x_ind).unwrap_or(zero);
-                let vy = rhs.get(y_ind).unwrap_or(zero);
+                let ux = lhs.get(x_ind).unwrap_or(F::ZERO);
+                let vy = rhs.get(y_ind).unwrap_or(F::ZERO);
                 acc + gz * (ux + vy)
             })
     } else {
@@ -319,8 +317,8 @@ pub fn compute_full_gate<F: Field>(
                         .copied()
                         .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
                             let gz = beta_g.get(z_ind).unwrap_or(F::ZERO);
-                            let ux = lhs.get(idx + (x_ind * num_copy_idx)).unwrap_or(zero);
-                            let vy = rhs.get(idx + (y_ind * num_copy_idx)).unwrap_or(zero);
+                            let ux = lhs.get(idx + (x_ind * num_copy_idx)).unwrap_or(F::ZERO);
+                            let vy = rhs.get(idx + (y_ind * num_copy_idx)).unwrap_or(F::ZERO);
                             acc + gz * (ux + vy)
                         });
                 acc_outer + (g2 * inner_sum)
@@ -337,11 +335,10 @@ pub fn compute_full_gate_identity<F: Field>(
 ) -> F {
     // if the gate looks like f1(z, x)(f2(p2, x)) then this is the beta table for the challenges on z
     let beta_g = BetaValues::new_beta_equality_mle(challenges);
-    let zero = F::ZERO;
 
     nonzero_gates.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
         let gz = beta_g.get(*z_ind).unwrap_or(F::ZERO);
-        let ux = mle_ref.get(*x_ind).unwrap_or(zero);
+        let ux = mle_ref.get(*x_ind).unwrap_or(F::ZERO);
         acc + gz * ux
     })
 }

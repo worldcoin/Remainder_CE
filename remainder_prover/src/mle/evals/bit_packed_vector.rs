@@ -103,12 +103,20 @@ pub(in crate::mle::evals) struct BitPackedVector<F: Field> {
     /// be the machine's word size.
     /// For now, we're keeping it always to `u64` to make it easier to
     /// work with `F` chunks.
+    ///
+    /// *Invariant*: For every instance of a [BitPackedVector], either
+    /// [BitPackedVector::buf] or [BitPackedVector::naive_buf] is populated but
+    /// NEVER both.
     buf: Vec<u64>,
 
     /// If during initialization it is deduced that the number of bits
     /// needed per element is more than 64, we revert back to a standard
     /// representation. In that case, `Self::buf` is never used but instead
     /// `Self::naive_buf` is populated.
+    ///
+    /// *Invariant*: For every instance of a [BitPackedVector], either
+    /// [BitPackedVector::buf] or [BitPackedVector::naive_buf] is populated but
+    /// NEVER both.
     naive_buf: Vec<F>,
 
     /// The number of field elements stored in this vector.
@@ -288,6 +296,12 @@ impl<F: Field> BitPackedVector<F> {
 
     pub fn len(&self) -> usize {
         self.num_elements
+    }
+
+    /// Returns the number of bits used to encode each element.
+    #[allow(unused)]
+    pub fn get_bits_per_element(&self) -> usize {
+        self.bits_per_element
     }
 
     pub fn iter(&self) -> BitPackedIterator<F> {

@@ -177,11 +177,20 @@ fn test_bit_packed_vector_get_extensive(data: Vec<Qfr>) -> TestResult {
 }
 
 fn fr_pow(base: Fr, exp: u64) -> Fr {
-    if exp == 0 {
-        Fr::ONE
-    } else {
-        fr_pow(base, exp / 2) * fr_pow(base, exp / 2) * (if exp % 2 != 0 { base } else { Fr::ONE })
+    fn fr_pow_helper(acc: Fr, base: Fr, exp: u64) -> Fr {
+        if exp == 0 {
+            Fr::ONE
+        } else {
+            let p = fr_pow_helper(acc, base, exp / 2);
+            if exp % 2 == 0 {
+                acc * p * p
+            } else {
+                acc * p * p * base
+            }
+        }
     }
+
+    fr_pow_helper(Fr::ONE, base, exp)
 }
 
 #[quickcheck]
@@ -387,18 +396,16 @@ fn test_eval_iterator() {
     assert_eq!(it.next(), None);
 }
 
-/*
 #[test]
 fn test_equiv_repr() {
-    let evals1: Vec<Fr> = [1, 2, 3].into_iter().map(Fr::from).collect();
-    let evals2: Vec<Fr> = [1, 2, 3, 0, 0].into_iter().map(Fr::from).collect();
+    let evals1 = BitPackedVector::new(&[1, 2, 3].into_iter().map(Fr::from).collect_vec());
+    let evals2 = BitPackedVector::new(&[1, 2, 3, 0, 0].into_iter().map(Fr::from).collect_vec());
 
     assert!(Evaluations::equiv_repr(&evals1, &evals1));
     assert!(Evaluations::equiv_repr(&evals2, &evals2));
     assert!(Evaluations::equiv_repr(&evals1, &evals2));
     assert!(Evaluations::equiv_repr(&evals2, &evals1));
 }
-*/
 
 #[quickcheck]
 fn test_fix_variable_evaluation(evals: Vec<Qfr>, mut point: Vec<Qfr>) -> TestResult {
