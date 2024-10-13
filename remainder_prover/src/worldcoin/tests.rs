@@ -85,7 +85,7 @@ fn test_small_circuit_with_a_ligero_layer() {
 #[ignore]
 #[test]
 fn test_worldcoin_circuit_iris_v2_public_inputs() {
-    let (circuit_desc, _, inputs) = v2_circuit_description_and_inputs(false);
+    let (circuit_desc, _, inputs) = v2_circuit_description_and_inputs(false, None);
     let mut transcript_writer =
         TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
     prove(
