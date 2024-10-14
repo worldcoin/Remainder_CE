@@ -1,25 +1,34 @@
+use crate::input_layer::ligero_input_layer::{
+    LigeroInputLayerDescription, LigeroInputLayerDescriptionWithPrecommit,
+};
 use crate::input_layer::InputLayerDescription;
+use crate::layer::LayerId;
 use crate::layouter::compiling::{CircuitHashType, LayouterCircuit};
 use crate::layouter::component::Component;
 use crate::layouter::nodes::circuit_inputs::InputLayerNodeData;
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::Context;
+use crate::mle::evals::MultilinearExtension;
 use crate::prover::verify;
 use ark_std::{end_timer, start_timer};
 
 use itertools::Itertools;
+use remainder_ligero::ligero_structs::LigeroAuxInfo;
+use remainder_ligero::poseidon_ligero::PoseidonSpongeHasher;
+use remainder_ligero::LcCommit;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
 use remainder_shared_types::Field;
 use serde_json;
 use sha3::Digest;
 use sha3::Sha3_256;
+use std::collections::HashMap;
 use std::fs::File;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
-use super::GKRCircuitDescription;
+use super::{prove, GKRCircuitDescription};
 
 /// Writes the circuit description for the provided [GKRCircuitDescription]
 /// to the `circuit_description_path` specified, in JSON format.
@@ -156,43 +165,42 @@ pub fn test_circuit<
     }
 }
 
-/// Boilerplate code for testing a circuit with all public inputs
-pub fn test_circuit_new(
+/// Function which instantiates a circuit description with the given inputs
+/// and precommits and both attempts to both prove and verify said circuit.
+pub fn test_circuit_new<F: Field>(
     circuit_description: &GKRCircuitDescription<F>,
-    private_input_layer_descriptions: &[InputLayerDescription],
+    private_input_layer_description_and_precommits: HashMap<
+        LayerId,
+        LigeroInputLayerDescriptionWithPrecommit<F>,
+    >,
+    inputs: &HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    let transcript_writer = TranscriptWriter::<F, PoseidonSponge<F>>::new("GKR Prover Transcript");
+    let mut transcript_writer =
+        TranscriptWriter::<F, PoseidonSponge<F>>::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
 
-    match circuit.prove(transcript_writer) {
-        Ok((transcript, gkr_circuit_description, inputs)) => {
+    match prove(
+        inputs,
+        &private_input_layer_description_and_precommits,
+        circuit_description,
+        &mut transcript_writer,
+    ) {
+        Ok(_) => {
             end_timer!(prover_timer);
-            if let Some(path) = path {
-                let write_out_timer = start_timer!(|| "Writing out proof");
-                let f = File::create(path).unwrap();
-                let writer = BufWriter::new(f);
-                serde_json::to_writer(writer, &transcript).unwrap();
-                end_timer!(write_out_timer);
-            }
-
-            let transcript = if let Some(path) = path {
-                let read_in_timer = start_timer!(|| "Reading in proof");
-                let file = std::fs::File::open(path).unwrap();
-                let reader = BufReader::new(file);
-                let result = serde_json::from_reader(reader).unwrap();
-                end_timer!(read_in_timer);
-                result
-            } else {
-                transcript
-            };
-
+            let transcript = transcript_writer.get_transcript();
             let mut transcript_reader = TranscriptReader::<F, PoseidonSponge<F>>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
+            // --- Extract the ligero input layer descriptions ---
+            let private_input_layer_descriptions = private_input_layer_description_and_precommits
+                .into_values()
+                .map(|(layer_description, _)| layer_description)
+                .collect_vec();
+
             match verify(
                 &inputs,
-                &[],
-                &gkr_circuit_description,
+                &private_input_layer_descriptions,
+                &circuit_description,
                 CIRCUIT_DESCRIPTION_HASH_TYPE,
                 &mut transcript_reader,
             ) {
