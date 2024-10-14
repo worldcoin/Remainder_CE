@@ -177,6 +177,19 @@ pub fn get_total_mle_indices<F: Field>(
         .collect()
 }
 
+struct GrayCode {
+    num_bits: usize,
+    current_val: u32,
+}
+
+impl Iterator for GrayCode {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
+    }
+}
+
 /// Construct a parent MLE for the given MLEs and prefix bits, where the prefix bits of each MLE specify how it should be inserted into the parent.
 /// Entries left unspecified are filled with `F::ZERO`.
 /// # Requires:
