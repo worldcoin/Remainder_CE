@@ -126,7 +126,7 @@ pub fn prove<F: Field>(
     inputs
         .keys()
         .filter(|layer_id| !ligero_input_layers.contains_key(layer_id))
-        .sorted_by_key(|layer_id| layer_id.get_input_layer_id())
+        .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
         .for_each(|layer_id| {
             let mle = inputs.get(layer_id).unwrap();
             transcript_writer.append_elements("input layer", mle.get_evals_vector());
@@ -137,11 +137,11 @@ pub fn prove<F: Field>(
     let mut ligero_input_commitments = HashMap::<LayerId, LigeroCommitment<F>>::new();
     ligero_input_layers
         .keys()
-        .sorted_by_key(|layer_id| layer_id.get_input_layer_id())
+        .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
         .for_each(|layer_id| {
             // Commit to the Ligero input layer, if it is not already committed to.
-            let (desc, maybe_commitment) = ligero_input_layers.get(layer_id).unwrap();
-            let commitment = if let Some(commitment) = maybe_commitment {
+            let (desc, maybe_precommitment) = ligero_input_layers.get(layer_id).unwrap();
+            let commitment = if let Some(commitment) = maybe_precommitment {
                 commitment.clone()
             } else {
                 let input_mle = inputs.get(layer_id).unwrap();
@@ -159,7 +159,7 @@ pub fn prove<F: Field>(
     let input_layer_claims = prove_circuit(circuit_description, inputs, transcript_writer).unwrap();
 
     // If in debug mode, then check the claims on all input layers.
-    if !cfg!(debug_assertions) {
+    if cfg!(debug_assertions) {
         for claim in input_layer_claims.iter() {
             let input_mle = inputs.get(&claim.to_layer_id.unwrap()).unwrap();
             let evaluation = input_mle.evaluate_at_point(claim.get_claim().get_point());
@@ -203,12 +203,13 @@ pub fn verify<F: Field>(
     // Read and check public input values to transcript in order of layer id.
     public_inputs
         .keys()
-        .sorted_by_key(|layer_id| layer_id.get_input_layer_id())
+        .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
         .map(|layer_id| {
-            let expected_mle = public_inputs.get(layer_id).unwrap();
+            let layer_desc = circuit_description.input_layers.iter().find(|desc| desc.layer_id == *layer_id).unwrap();
             let transcript_mle = transcript
-                .consume_elements("input layer", 1 << expected_mle.num_vars())
+                .consume_elements("input layer", 1 << layer_desc.num_vars)
                 .unwrap();
+            let expected_mle = public_inputs.get(layer_id).unwrap();
             if expected_mle.get_evals_vector() != &transcript_mle {
                 Err(GKRError::PublicInputLayerValuesMismatch(*layer_id))
             } else {
@@ -221,7 +222,7 @@ pub fn verify<F: Field>(
     let mut ligero_commitments = HashMap::<LayerId, F>::new();
     ligero_inputs
         .iter()
-        .sorted_by_key(|desc| desc.layer_id.get_input_layer_id())
+        .sorted_by_key(|desc| desc.layer_id.get_raw_input_layer_id())
         .for_each(|desc| {
             let commitment = transcript
                 .consume_element("ligero input layer root")
@@ -701,8 +702,6 @@ impl<F: Field> GKRCircuitDescription<F> {
             .flat_map(|input_layer| aggregator.get_claims(input_layer.layer_id).unwrap())
             .cloned()
             .collect_vec();
-
-        // FIXME (Ben) Verifier should check that there are no claims left in the aggregator! Wait until after Makis has finished his YieldClaims refactor.
 
         Ok(input_layer_claims)
     }

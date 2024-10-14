@@ -30,7 +30,7 @@ use super::hyrax_layer::HyraxClaim;
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-/// The proof structure for a [HyraxInputLayer], which includes the [ProofOfClaimAggregation], and
+/// The proof structure for a Hyrax input layer. Includes the [ProofOfClaimAggregation], and
 /// the appropriate opening proof for opening the polynomial commitment at a random evaluation
 /// point.
 pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
@@ -50,7 +50,7 @@ pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
 impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
     pub fn prove(
         input_layer_desc: &HyraxInputLayerDescription,
-        commitment: &HyraxInputCommitment<C>,
+        prover_commitment: &HyraxProverInputCommitment<C>,
         committed_claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],
         committer: &PedersenCommitter<C>,
         blinding_rng: &mut impl Rng,
@@ -67,7 +67,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                 .collect_vec(),
         )
         .unwrap();
-        let wlx_evals = compute_claim_wlx(&commitment.mle.convert_to_scalar_field(), &claims);
+        let wlx_evals = compute_claim_wlx(&prover_commitment.mle.convert_to_scalar_field(), &claims);
         let interpolant_coeffs = converter.convert_to_coefficients(wlx_evals);
 
         let (proof_of_claim_agg, aggregated_claim): (
@@ -83,13 +83,13 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
 
         let evaluation_proof = HyraxPCSEvaluationProof::prove(
             input_layer_desc.log_num_cols,
-            &commitment.mle,
+            &prover_commitment.mle,
             &aggregated_claim.point,
             &aggregated_claim.evaluation.value,
             committer,
             blinding_rng,
             transcript,
-            &commitment.blinding_factors_matrix,
+            &prover_commitment.blinding_factors_matrix,
         );
 
         let proof_of_equality = ProofOfEquality::prove(
@@ -102,7 +102,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
 
         HyraxInputLayerProof {
             layer_id: input_layer_desc.layer_id,
-            input_commitment: commitment.commitment.clone(),
+            input_commitment: prover_commitment.commitment.clone(),
             claim_agg_proof: proof_of_claim_agg,
             evaluation_proof,
             proof_of_equality,
@@ -143,7 +143,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-/// The circuit description of a [HyraxInputLayer]. Stores the shape information of this layer.
+/// The circuit description of a Hyrax input layer. Stores the shape information of this layer.
 /// All of the functionality of Hyrax input layers are taken care of in `remainder_hyrax/`, so
 /// this is meant just to generate a circuit description.
 pub struct HyraxInputLayerDescription {
@@ -183,7 +183,7 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
     input_mle: &MultilinearExtension<C::Scalar>,
     committer: &PedersenCommitter<C>,
     mut rng: &mut impl Rng,
-) -> HyraxInputCommitment<C> {
+) -> HyraxProverInputCommitment<C> {
     let num_rows = 1 << (input_layer_desc.num_bits - input_layer_desc.log_num_cols);
     // Sample the blinding factors
     let mut blinding_factors_matrix = vec![C::Scalar::ZERO; num_rows];
@@ -198,7 +198,7 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
         committer,
         &blinding_factors_matrix,
     );
-    HyraxInputCommitment {
+    HyraxProverInputCommitment {
         mle: mle_coeffs_vec,
         commitment: commitment_values,
         blinding_factors_matrix,
@@ -207,7 +207,7 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
 
 /// The prover's view of the commitment to the input layer, which includes the blinding factors and the plaintext values.
 #[derive(Clone)]
-pub struct HyraxInputCommitment<C: PrimeOrderCurve> {
+pub struct HyraxProverInputCommitment<C: PrimeOrderCurve> {
     /// The plaintext values
     pub mle: MleCoefficientsVector<C>,
     /// The verifier's view of the commitment

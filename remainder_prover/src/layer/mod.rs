@@ -53,7 +53,7 @@ pub enum LayerError {
     TranscriptError(#[from] TranscriptReaderError),
     /// Incorrect number of variable bindings
     #[error("Layer {0} requires {1} variable bindings, but {2} were provided")]
-    NumVarsMitmatch(LayerId, usize, usize),
+    NumVarsMismatch(LayerId, usize, usize),
 }
 
 /// Errors to do with verifying a layer while working with a type implementing
@@ -236,7 +236,7 @@ impl std::fmt::Display for LayerId {
 impl LayerId {
 
     /// Returns the underlying usize if self is a variant of type Input, otherwise panics.
-    pub fn get_input_layer_id(&self) -> usize {
+    pub fn get_raw_input_layer_id(&self) -> usize {
         match self {
             LayerId::Input(id) => *id,
             _ => panic!("Expected LayerId::Input, found {:?}", self),
@@ -244,7 +244,7 @@ impl LayerId {
     }    
 
     /// Returns the underlying usize if self is a variant of type Input, otherwise panics.
-    pub fn get_layer_id(&self) -> usize {
+    pub fn get_raw_layer_id(&self) -> usize {
         match self {
             LayerId::Layer(id) => *id,
             _ => panic!("Expected LayerId::Layer, found {:?}", self),
