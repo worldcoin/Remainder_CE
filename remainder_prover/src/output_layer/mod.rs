@@ -97,7 +97,7 @@ impl<F: Field> OutputLayer<F> {
     pub fn fix_layer(&mut self, challenges: &[F]) -> Result<(), crate::layer::LayerError> {
         let bits = self.mle.index_mle_indices(0);
         if bits != challenges.len() {
-            return Err(LayerError::NumVarsMitmatch(
+            return Err(LayerError::NumVarsMismatch(
                 self.mle.layer_id(),
                 bits,
                 challenges.len(),

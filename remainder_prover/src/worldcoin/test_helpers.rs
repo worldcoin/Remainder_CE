@@ -10,7 +10,7 @@ use crate::worldcoin::parameters::decode_wirings;
 use ndarray::Array2;
 use remainder_shared_types::Fr;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Return the circuit description, "private" input layer description and inputs for a trivial 2x2
 /// identity matrix circuit.
@@ -31,20 +31,25 @@ pub fn small_circuit_description_and_inputs() -> (GKRCircuitDescription<Fr>, Inp
 
 /// Return the circuit description, "private" input layer description and inputs for the v2 iris
 /// code circuit, in either the mask (true) or iris (false) case.
+/// If `image_path` is `None`, the default test image is used.
 /// # Example:
 /// ```
 /// use remainder::worldcoin::test_helpers::v2_circuit_description_and_inputs;
-/// let (circuit_desc, _, inputs) = v2_circuit_description_and_inputs(false);
+/// let (circuit_desc, _, inputs) = v2_circuit_description_and_inputs(false, None);
 /// ```
-pub fn v2_circuit_description_and_inputs(mask: bool) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
+pub fn v2_circuit_description_and_inputs(mask: bool, image_path: Option<PathBuf>) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
     use super::parameters_v2::{
         BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
         NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_ROWS, IM_NUM_COLS
     };
-    let image_path = if mask {
-        Path::new("src/worldcoin/constants/v2/mask/test_image.npy").to_path_buf()
+    let image_path = if let Some(path) = image_path {
+        path.to_path_buf()
     } else {
-        Path::new("src/worldcoin/constants/v2/iris/test_image.npy").to_path_buf()
+        if mask {
+            Path::new("src/worldcoin/constants/v2/mask/test_image.bin").to_path_buf()
+        } else {
+            Path::new("src/worldcoin/constants/v2/iris/test_image.bin").to_path_buf()
+        }
     };
     let data = load_worldcoin_data_v2::<
         Fr,
@@ -73,20 +78,25 @@ pub fn v2_circuit_description_and_inputs(mask: bool) -> (GKRCircuitDescription<F
 
 /// Return the circuit description, "private" input layer description and inputs for the v3 iris
 /// code circuit, in either the mask (true) or iris (false) case.
+/// If `image_path` is `None`, the default test image is used.
 /// # Example:
 /// ```
 /// use remainder::worldcoin::test_helpers::v3_circuit_description_and_inputs;
-/// let (circuit_desc, _, inputs) = v3_circuit_description_and_inputs(false);
+/// let (circuit_desc, _, inputs) = v3_circuit_description_and_inputs(false, None);
 /// ```
-pub fn v3_circuit_description_and_inputs(mask: bool) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
+pub fn v3_circuit_description_and_inputs(mask: bool, image_path: Option<PathBuf>) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
     use super::parameters_v3::{
         BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
         NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_ROWS, IM_NUM_COLS
     };
-    let image_path = if mask {
-        Path::new("src/worldcoin/constants/v3/mask/test_image.npy").to_path_buf()
+    let image_path = if let Some(path) = image_path {
+        path.to_path_buf()
     } else {
-        Path::new("src/worldcoin/constants/v3/iris/test_image.npy").to_path_buf()
+        if mask {
+            Path::new("src/worldcoin/constants/v3/mask/test_image.bin").to_path_buf()
+        } else {
+            Path::new("src/worldcoin/constants/v3/iris/test_image.bin").to_path_buf()
+        }
     };
     let data = load_worldcoin_data_v3::<
         Fr,

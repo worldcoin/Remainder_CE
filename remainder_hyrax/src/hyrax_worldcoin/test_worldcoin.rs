@@ -64,14 +64,14 @@ fn test_v3_mask_with_hyrax_layer() {
 /// Test the iriscode circuit v2 with a Hyrax input layer in either the mask (true) or iris (false)
 /// case.
 pub fn test_iriscode_v2_with_hyrax_helper(mask: bool) {
-    let (desc, priv_layer_desc, inputs) = v2_circuit_description_and_inputs(mask);
+    let (desc, priv_layer_desc, inputs) = v2_circuit_description_and_inputs(mask, None);
     test_iriscode_circuit_with_hyrax_helper(desc, priv_layer_desc, inputs);
 }
 
 /// Test the iriscode circuit v3 with a Hyrax input layer in either the mask (true) or iris (false)
 /// case.
 pub fn test_iriscode_v3_with_hyrax_helper(mask: bool) {
-    let (desc, priv_layer_desc, inputs) = v3_circuit_description_and_inputs(mask);
+    let (desc, priv_layer_desc, inputs) = v3_circuit_description_and_inputs(mask, None);
     test_iriscode_circuit_with_hyrax_helper(desc, priv_layer_desc, inputs);
 }
 

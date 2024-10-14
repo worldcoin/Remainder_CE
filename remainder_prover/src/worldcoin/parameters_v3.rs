@@ -19,7 +19,7 @@ pub const IM_NUM_ROWS: usize = 128;
 pub const IM_NUM_COLS: usize = 1024;
 
 /// The number of variables in the MLE getting rerouted (typically the image input)
-pub const TO_REROUTE_NUM_VARS: usize = 7 + 10;
+pub const TO_REROUTE_NUM_VARS: usize = (IM_NUM_ROWS.next_power_of_two().ilog2() + IM_NUM_COLS.next_power_of_two().ilog2()) as usize;
 
 /// The wirings from the image (2d) to the LH matrix multiplicand (2d), first a flattened u16 array,
 /// then serialized as bytes
