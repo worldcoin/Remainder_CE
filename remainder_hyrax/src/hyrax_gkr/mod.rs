@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::utils::vandermonde::VandermondeInverse;
 use hyrax_input_layer::{
-    commit_to_input_values, verify_claim, HyraxProverInputCommitment, HyraxInputLayerDescription,
-    HyraxInputLayerProof,
+    commit_to_input_values, verify_claim, HyraxInputLayerDescription, HyraxInputLayerProof,
+    HyraxProverInputCommitment,
 };
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
@@ -22,6 +22,7 @@ use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 
 use self::hyrax_layer::HyraxLayerProof;
 
+pub mod helpers;
 /// The module that contains all functions necessary to do operations on a Hyrax input layer using the Hyrax PCS.
 pub mod hyrax_input_layer;
 /// The module that has all functions and implementations necessary to produce
@@ -54,7 +55,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
     /// Values of public input layers are appended to transcript in order of `LayerId` value,
     /// ascending. Then Hyrax commitments are appended to transcript in order of `LayerId` value,
     /// ascending; this is also the ordering of `HyraxProof.hyrax_input_proofs`.
-    /// 
+    ///
     /// # Arguments:
     /// * `inputs` - The MLEs of _all_ inputs (including Hyrax inputs), along with their layer ids.
     /// * `hyrax_input_layers` - The descriptions of the Hyrax input layers, along with (optionally) precommits.
@@ -70,7 +71,10 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         inputs: &HashMap<LayerId, MultilinearExtension<C::Scalar>>,
         hyrax_input_layers: &HashMap<
             LayerId,
-            (HyraxInputLayerDescription, Option<HyraxProverInputCommitment<C>>),
+            (
+                HyraxInputLayerDescription,
+                Option<HyraxProverInputCommitment<C>>,
+            ),
         >,
         circuit_description: &GKRCircuitDescription<C::Scalar>,
         committer: &PedersenCommitter<C>,

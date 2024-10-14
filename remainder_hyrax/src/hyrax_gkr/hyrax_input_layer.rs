@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rand::Rng;
@@ -67,7 +69,8 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                 .collect_vec(),
         )
         .unwrap();
-        let wlx_evals = compute_claim_wlx(&prover_commitment.mle.convert_to_scalar_field(), &claims);
+        let wlx_evals =
+            compute_claim_wlx(&prover_commitment.mle.convert_to_scalar_field(), &claims);
         let interpolant_coeffs = converter.convert_to_coefficients(wlx_evals);
 
         let (proof_of_claim_agg, aggregated_claim): (
@@ -155,6 +158,15 @@ pub struct HyraxInputLayerDescription {
     /// will be committed to in this input layer.
     pub log_num_cols: usize,
 }
+
+/// Type alias for a Hyrax input layer's description + optional precommit.
+pub type HyraxInputLayerDescriptionWithPrecommit<C> = HashMap<
+    LayerId,
+    (
+        HyraxInputLayerDescription,
+        Option<HyraxProverInputCommitment<C>>,
+    ),
+>;
 
 impl HyraxInputLayerDescription {
     /// Create a [HyraxInputLayerDescription] specifying the use of a square matrix ("default
