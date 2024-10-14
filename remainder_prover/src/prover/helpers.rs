@@ -1,3 +1,4 @@
+use crate::input_layer::InputLayerDescription;
 use crate::layouter::compiling::{CircuitHashType, LayouterCircuit};
 use crate::layouter::component::Component;
 use crate::layouter::nodes::circuit_inputs::InputLayerNodeData;
@@ -103,6 +104,62 @@ pub fn test_circuit<
 >(
     mut circuit: LayouterCircuit<F, C, Fn>,
     path: Option<&Path>,
+) {
+    let transcript_writer = TranscriptWriter::<F, PoseidonSponge<F>>::new("GKR Prover Transcript");
+    let prover_timer = start_timer!(|| "Proof generation");
+
+    match circuit.prove(transcript_writer) {
+        Ok((transcript, gkr_circuit_description, inputs)) => {
+            end_timer!(prover_timer);
+            if let Some(path) = path {
+                let write_out_timer = start_timer!(|| "Writing out proof");
+                let f = File::create(path).unwrap();
+                let writer = BufWriter::new(f);
+                serde_json::to_writer(writer, &transcript).unwrap();
+                end_timer!(write_out_timer);
+            }
+
+            let transcript = if let Some(path) = path {
+                let read_in_timer = start_timer!(|| "Reading in proof");
+                let file = std::fs::File::open(path).unwrap();
+                let reader = BufReader::new(file);
+                let result = serde_json::from_reader(reader).unwrap();
+                end_timer!(read_in_timer);
+                result
+            } else {
+                transcript
+            };
+
+            let mut transcript_reader = TranscriptReader::<F, PoseidonSponge<F>>::new(transcript);
+            let verifier_timer = start_timer!(|| "Proof verification");
+
+            match verify(
+                &inputs,
+                &[],
+                &gkr_circuit_description,
+                CIRCUIT_DESCRIPTION_HASH_TYPE,
+                &mut transcript_reader,
+            ) {
+                Ok(_) => {
+                    end_timer!(verifier_timer);
+                }
+                Err(err) => {
+                    println!("Verify failed! Error: {err}");
+                    panic!();
+                }
+            }
+        }
+        Err(err) => {
+            println!("Proof failed! Error: {err}");
+            panic!();
+        }
+    }
+}
+
+/// Boilerplate code for testing a circuit with all public inputs
+pub fn test_circuit_new(
+    circuit_description: &GKRCircuitDescription<F>,
+    private_input_layer_descriptions: &[InputLayerDescription],
 ) {
     let transcript_writer = TranscriptWriter::<F, PoseidonSponge<F>>::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
