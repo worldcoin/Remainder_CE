@@ -20,7 +20,7 @@ struct Args {
     version: u8,
 }
 
-/// Usage: `run_iriscode_circuit --image-filepath remainder_prover/src/worldcoin/constants/v2/mask/test_image.npy --version 2 --is-mask`
+/// Usage: `run_iriscode_circuit --image-filepath remainder_prover/src/worldcoin/constants/v2/mask/test_image.bin --version 2 --is-mask`
 fn main() {
     let args = Args::parse();
     let image_path = Path::new(&args.image_filepath).to_path_buf();

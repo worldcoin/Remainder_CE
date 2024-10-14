@@ -46,9 +46,9 @@ pub fn v2_circuit_description_and_inputs(mask: bool, image_path: Option<PathBuf>
         path.to_path_buf()
     } else {
         if mask {
-            Path::new("src/worldcoin/constants/v2/mask/test_image.npy").to_path_buf()
+            Path::new("src/worldcoin/constants/v2/mask/test_image.bin").to_path_buf()
         } else {
-            Path::new("src/worldcoin/constants/v2/iris/test_image.npy").to_path_buf()
+            Path::new("src/worldcoin/constants/v2/iris/test_image.bin").to_path_buf()
         }
     };
     let data = load_worldcoin_data_v2::<
@@ -93,9 +93,9 @@ pub fn v3_circuit_description_and_inputs(mask: bool, image_path: Option<PathBuf>
         path.to_path_buf()
     } else {
         if mask {
-            Path::new("src/worldcoin/constants/v3/mask/test_image.npy").to_path_buf()
+            Path::new("src/worldcoin/constants/v3/mask/test_image.bin").to_path_buf()
         } else {
-            Path::new("src/worldcoin/constants/v3/iris/test_image.npy").to_path_buf()
+            Path::new("src/worldcoin/constants/v3/iris/test_image.bin").to_path_buf()
         }
     };
     let data = load_worldcoin_data_v3::<
