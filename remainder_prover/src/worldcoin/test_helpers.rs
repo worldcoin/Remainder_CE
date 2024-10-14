@@ -29,6 +29,22 @@ pub fn small_circuit_description_and_inputs() -> (GKRCircuitDescription<Fr>, Inp
     (circuit_desc, private_input_layer_desc, inputs)
 }
 
+/// Return the circuit description, "private" input layer description and inputs for either version
+/// of the iris code circuit, in either the mask (true) or iris (false) case.
+/// If `image_path` is `None`, the default test image is used.
+/// # Example:
+/// ```
+/// use remainder::worldcoin::test_helpers::circuit_description_and_inputs;
+/// let (circuit_desc, _, inputs) = circuit_description_and_inputs(2, false, None);
+/// ```
+pub fn circuit_description_and_inputs(version: u8, mask: bool, image_path: Option<PathBuf>) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
+    match version {
+        2 => v2_circuit_description_and_inputs(mask, image_path),
+        3 => v3_circuit_description_and_inputs(mask, image_path),
+        _ => panic!(),
+    }
+}
+
 /// Return the circuit description, "private" input layer description and inputs for the v2 iris
 /// code circuit, in either the mask (true) or iris (false) case.
 /// If `image_path` is `None`, the default test image is used.
