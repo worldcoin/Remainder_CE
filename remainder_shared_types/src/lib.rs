@@ -13,6 +13,11 @@ pub use halo2curves;
 pub use halo2curves::bn256::Fr;
 pub use poseidon::Poseidon;
 
+use halo2curves::CurveExt;
+pub use halo2curves::{bn256::G1 as Bn256Point, group::Group};
+pub type Scalar = <Bn256Point as Group>::Scalar;
+pub type Base = <Bn256Point as CurveExt>::Base;
+
 /// The primary finite field used within a GKR circuit, as well as within
 /// sumcheck. Note that the field's size should be large enough such that
 /// d / |F| bits of computational soundness is considered secure!
