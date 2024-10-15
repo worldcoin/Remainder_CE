@@ -73,13 +73,6 @@ pub fn build_iriscode_circuit_description<
     let digit_multiplicities = InputShred::new(&ctx, log_base, &private_input_layer);
     println!("{:?} = Digit multiplicities", digit_multiplicities.id());
 
-    let sign_bits = InputShred::new(
-        &ctx,
-        MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS,
-        &private_input_layer,
-    );
-    println!("{:?} = Sign bits (iris code) input", sign_bits.id());
-
     // Public inputs
     let public_input_layer = InputLayerNode::new(&ctx, None);
     println!(
@@ -109,6 +102,13 @@ pub fn build_iriscode_circuit_description<
         "{:?} = Lookup table values for digit range check (input)",
         lookup_table_values.id()
     );
+
+    let sign_bits = InputShred::new(
+        &ctx,
+        MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS,
+        &private_input_layer,
+    );
+    println!("{:?} = Sign bits (iris code) input", sign_bits.id());
 
     // Intermediate layers
     let rerouted_image = IdentityGateNode::new(&ctx, &to_reroute, reroutings);
