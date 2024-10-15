@@ -55,17 +55,14 @@ pub fn prove_upgrade_to_v3(
         creates a new transcript each time.
         accepts the blinding_rng and the converter and the pedersen committer.
         accepts a prover commitment to the image
-        accepts a prover commitment to the iris/mask code
+        calculates the iris/mask code
         calls something like `circuit_description_and_inputs`
-        returns the proof and a commitment to the iris/mask
-
-    the calling context (of the helper) will create an iris/mask code commitment in the v3 case, and re-use an existing one in the v2 case.
-    it will need to return the full prover commitment in the v3 case, since these would be needed e.g. to prove a v3 to v4 upgrade.
+        returns the proof, the iris/mask (to be packaged together with the _signed_ commitment to the image)
+    The calling context will need to build a prover commitment to the image from the binary and the blinding factors, and then call the helper fn
 
     for each version:
         for each of [iris, mask]:
             select the appropriate kernel values and thresholds (these are all constants available in the source code)
-            fetch the pre-loaded transcript for this version and type (iris vs mask)
             for each eye:
                 derive the iris/mask code using the clear-text image, kernel values and thresholds (use this as a _public_ input).
                 append image commitment and iris/mask code to transcript.
