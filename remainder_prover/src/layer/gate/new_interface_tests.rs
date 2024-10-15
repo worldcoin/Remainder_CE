@@ -25,6 +25,8 @@ where
 #[cfg(test)]
 mod tests {
 
+    use std::collections::HashMap;
+
     use super::DifferenceBuilderComponent;
     use ark_std::test_rng;
     use rand::Rng;
@@ -33,22 +35,18 @@ mod tests {
     use crate::{
         layer::LayerId,
         layouter::{
-            compiling::LayouterCircuit,
-            component::{Component, ComponentSet},
+            component::Component,
             nodes::{
-                circuit_inputs::{
-                    InputLayerNode, InputLayerNodeData, InputShred, InputShredData,
-                },
+                circuit_inputs::{InputLayerNode, InputShred},
                 circuit_outputs::OutputNode,
                 gate::GateNode,
                 node_enum::NodeEnum,
                 sector::Sector,
-                CircuitNode, Context,
+                CircuitNode, Context, NodeId,
             },
         },
         mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
-        prover::helpers::test_circuit,
-        utils::get_input_shred_and_data,
+        prover::{generate_circuit_description, helpers::test_circuit_new},
     };
 
     impl<F: Field> DifferenceBuilderComponent<F> {
@@ -98,55 +96,58 @@ mod tests {
             LayerId::Input(0),
         );
 
-        let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None);
-            let mle_input_shred = InputShred::new(ctx, mle.mle.clone().num_vars(), &input_layer);
-            let mle_input_shred_data = InputShredData::new(
-                mle_input_shred.id(),
-                MultilinearExtension::new(mle.mle.get_evals_vector().to_vec()),
-            );
-            let neg_mle_input_shred =
-                InputShred::new(ctx, neg_mle.mle.clone().num_vars(), &input_layer);
-            let neg_mle_input_shred_data = InputShredData::new(
-                neg_mle_input_shred.id(),
-                MultilinearExtension::new(neg_mle.mle.get_evals_vector().to_vec()),
-            );
+        let ctx = &Context::new();
+        let input_layer = InputLayerNode::new(ctx, None);
+        let mle_input_shred = InputShred::new(ctx, mle.mle.clone().num_vars(), &input_layer);
+        let mle_input_shred_id = mle_input_shred.id();
+        let mle_input_shred_data = MultilinearExtension::new(mle.mle.get_evals_vector().to_vec());
+        let neg_mle_input_shred =
+            InputShred::new(ctx, neg_mle.mle.clone().num_vars(), &input_layer);
+        let neg_mle_input_shred_id = neg_mle_input_shred.id();
+        let neg_mle_input_shred_data =
+            MultilinearExtension::new(neg_mle.mle.get_evals_vector().to_vec());
 
-            let input_layer_data = InputLayerNodeData::new(
-                input_layer.id(),
-                vec![mle_input_shred_data, neg_mle_input_shred_data],
-            );
-            let mut nonzero_gates = vec![];
-            let total_num_elems = 1 << mle_input_shred.get_num_vars();
-            (0..total_num_elems).for_each(|idx| {
-                nonzero_gates.push((idx, idx, idx));
-            });
-
-            let gate_node = GateNode::new(
-                ctx,
-                &mle_input_shred,
-                &neg_mle_input_shred,
-                nonzero_gates,
-                super::super::BinaryOperation::Add,
-                None,
-            );
-
-            let component_2 = DifferenceBuilderComponent::new(ctx, &gate_node);
-
-            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
-                input_layer.into(),
-                mle_input_shred.into(),
-                neg_mle_input_shred.into(),
-                gate_node.into(),
-            ];
-            all_nodes.extend(component_2.yield_nodes());
-            (
-                ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-                vec![input_layer_data],
-            )
+        let mut nonzero_gates = vec![];
+        let total_num_elems = 1 << mle_input_shred.get_num_vars();
+        (0..total_num_elems).for_each(|idx| {
+            nonzero_gates.push((idx, idx, idx));
         });
 
-        test_circuit(circuit, None)
+        let gate_node = GateNode::new(
+            ctx,
+            &mle_input_shred,
+            &neg_mle_input_shred,
+            nonzero_gates,
+            super::super::BinaryOperation::Add,
+            None,
+        );
+
+        let component_2 = DifferenceBuilderComponent::new(ctx, &gate_node);
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            mle_input_shred.into(),
+            neg_mle_input_shred.into(),
+            gate_node.into(),
+        ];
+        all_nodes.extend(component_2.yield_nodes());
+
+        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+            generate_circuit_description(all_nodes).unwrap();
+
+        let input_builder = move |(mle_data, neg_mle_data): (
+            MultilinearExtension<Fr>,
+            MultilinearExtension<Fr>,
+        )| {
+            let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<Fr>> =
+                HashMap::new();
+            input_shred_id_to_data.insert(mle_input_shred_id, mle_data);
+            input_shred_id_to_data.insert(neg_mle_input_shred_id, neg_mle_data);
+            input_builder_from_shred_map(input_shred_id_to_data).unwrap()
+        };
+
+        let inputs = input_builder((mle_input_shred_data, neg_mle_input_shred_data));
+        test_circuit_new(&circ_desc, HashMap::new(), &inputs);
     }
 
     /// A circuit which takes in two MLEs of the same size, and performs a
@@ -162,13 +163,12 @@ mod tests {
     /// * `num_dataparallel_bits` - Defines the log_2 of the number of circuit copies.
     #[test]
     fn test_dataparallel_add_gate_circuit_newmainder() {
-        const NUM_DATAPARALLEL_BITS: usize = 1;
-        const NUM_FREE_BITS: usize = 1;
+        const NUM_DATAPARALLEL_BITS: usize = 2;
+        const NUM_FREE_BITS: usize = 2;
 
         let mut rng = test_rng();
         let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_FREE_BITS);
 
-        // --- This should be 2^4 ---
         let mle_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
             (0..size).map(|_| Fr::from(rng.gen::<u64>())),
             LayerId::Input(0),
@@ -183,62 +183,59 @@ mod tests {
                 .map(|elem| -elem),
             LayerId::Input(0),
         );
+        let mle_data = mle_dataparallel.mle;
+        let neg_mle_data = neg_mle_dataparallel.mle;
 
-        let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None);
-            let (dataparallel_mle_input_shred, dataparallel_mle_input_shred_data) =
-                get_input_shred_and_data(
-                    mle_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+        let ctx = &Context::new();
+        let input_layer = InputLayerNode::new(ctx, None);
+        let dataparallel_mle_input_shred =
+            InputShred::new(ctx, NUM_DATAPARALLEL_BITS + NUM_FREE_BITS, &input_layer);
+        let mle_input_id = dataparallel_mle_input_shred.id();
+        let dataparallel_neg_mle_input_shred =
+            InputShred::new(ctx, NUM_DATAPARALLEL_BITS + NUM_FREE_BITS, &input_layer);
+        let neg_input_id = dataparallel_neg_mle_input_shred.id();
 
-            let (dataparallel_neg_mle_input_shred, dataparallel_neg_mle_input_shred_data) =
-                get_input_shred_and_data(
-                    neg_mle_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
-            let input_layer_data = InputLayerNodeData::new(
-                input_layer.id(),
-                vec![
-                    dataparallel_mle_input_shred_data,
-                    dataparallel_neg_mle_input_shred_data,
-                ],
-            );
+        let mut nonzero_gates = vec![];
+        let table_size = 1 << (NUM_FREE_BITS);
 
-            let mut nonzero_gates = vec![];
-            let table_size = 1 << (NUM_FREE_BITS);
-
-            (0..table_size).for_each(|idx| {
-                nonzero_gates.push((idx, idx, idx));
-            });
-
-            let gate_node = GateNode::new(
-                ctx,
-                &dataparallel_mle_input_shred,
-                &dataparallel_neg_mle_input_shred,
-                nonzero_gates,
-                super::super::BinaryOperation::Add,
-                Some(NUM_DATAPARALLEL_BITS),
-            );
-
-            let component_2 = DifferenceBuilderComponent::new(ctx, &gate_node);
-
-            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
-                input_layer.into(),
-                dataparallel_mle_input_shred.into(),
-                dataparallel_neg_mle_input_shred.into(),
-                gate_node.into(),
-            ];
-            all_nodes.extend(component_2.yield_nodes());
-            (
-                ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-                vec![input_layer_data],
-            )
+        (0..table_size).for_each(|idx| {
+            nonzero_gates.push((idx, idx, idx));
         });
 
-        test_circuit(circuit, None)
+        let gate_node = GateNode::new(
+            ctx,
+            &dataparallel_mle_input_shred,
+            &dataparallel_neg_mle_input_shred,
+            nonzero_gates,
+            super::super::BinaryOperation::Add,
+            Some(NUM_DATAPARALLEL_BITS),
+        );
+
+        let component_2 = DifferenceBuilderComponent::new(ctx, &gate_node);
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            dataparallel_mle_input_shred.into(),
+            dataparallel_neg_mle_input_shred.into(),
+            gate_node.into(),
+        ];
+        all_nodes.extend(component_2.yield_nodes());
+        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+            generate_circuit_description(all_nodes).unwrap();
+
+        let input_builder = move |(mle_data, neg_mle_data): (
+            MultilinearExtension<Fr>,
+            MultilinearExtension<Fr>,
+        )| {
+            let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<Fr>> =
+                HashMap::new();
+            input_shred_id_to_data.insert(mle_input_id, mle_data);
+            input_shred_id_to_data.insert(neg_input_id, neg_mle_data);
+            input_builder_from_shred_map(input_shred_id_to_data).unwrap()
+        };
+
+        let inputs = input_builder((mle_data, neg_mle_data));
+        test_circuit_new(&circ_desc, HashMap::new(), &inputs);
     }
 
     /// A circuit which takes in two MLEs of the same size and adds
@@ -261,58 +258,62 @@ mod tests {
             (0..size).map(|_| Fr::from(rng.gen::<u64>())),
             LayerId::Input(0),
         );
-
         let neg_mle =
             DenseMle::new_from_raw(vec![mle.bookkeeping_table()[0].neg()], LayerId::Input(0));
+        let mle_data = mle.mle;
+        let neg_mle_data = neg_mle.mle;
 
-        let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None);
-            let (mle_input_shred, mle_input_shred_data) =
-                get_input_shred_and_data(mle.mle.get_evals_vector().to_vec(), ctx, &input_layer);
-            let (neg_mle_input_shred, neg_mle_input_shred_data) = get_input_shred_and_data(
-                neg_mle.mle.get_evals_vector().to_vec(),
-                ctx,
-                &input_layer,
-            );
-            let input_layer_data = InputLayerNodeData::new(
-                input_layer.id(),
-                vec![mle_input_shred_data, neg_mle_input_shred_data],
-            );
+        let ctx = &Context::new();
+        let input_layer = InputLayerNode::new(ctx, None);
+        let mle_input_shred = InputShred::new(ctx, NUM_FREE_BITS, &input_layer);
+        let mle_input_shred_id = mle_input_shred.id();
+        let neg_mle_input_shred = InputShred::new(ctx, 0, &input_layer);
+        let neg_mle_input_shred_id = neg_mle_input_shred.id();
 
-            let nonzero_gates = vec![(0, 0, 0)];
-            let gate_node = GateNode::new(
-                ctx,
-                &mle_input_shred,
-                &neg_mle_input_shred,
-                nonzero_gates,
-                super::super::BinaryOperation::Add,
-                None,
-            );
+        let nonzero_gates = vec![(0, 0, 0)];
+        let gate_node = GateNode::new(
+            ctx,
+            &mle_input_shred,
+            &neg_mle_input_shred,
+            nonzero_gates,
+            super::super::BinaryOperation::Add,
+            None,
+        );
 
-            let component_2 = DifferenceBuilderComponent::new(ctx, &gate_node);
+        let component_2 = DifferenceBuilderComponent::new(ctx, &gate_node);
 
-            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
-                input_layer.into(),
-                mle_input_shred.into(),
-                neg_mle_input_shred.into(),
-                gate_node.into(),
-            ];
-            all_nodes.extend(component_2.yield_nodes());
-            (
-                ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-                vec![input_layer_data],
-            )
-        });
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            mle_input_shred.into(),
+            neg_mle_input_shred.into(),
+            gate_node.into(),
+        ];
+        all_nodes.extend(component_2.yield_nodes());
 
-        test_circuit(circuit, None)
+        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+            generate_circuit_description(all_nodes).unwrap();
+
+        let input_builder = move |(mle_data, neg_mle_data): (
+            MultilinearExtension<Fr>,
+            MultilinearExtension<Fr>,
+        )| {
+            let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<Fr>> =
+                HashMap::new();
+            input_shred_id_to_data.insert(mle_input_shred_id, mle_data);
+            input_shred_id_to_data.insert(neg_mle_input_shred_id, neg_mle_data);
+            input_builder_from_shred_map(input_shred_id_to_data).unwrap()
+        };
+
+        let inputs = input_builder((mle_data, neg_mle_data));
+        test_circuit_new(&circ_desc, HashMap::new(), &inputs);
     }
 
     #[test]
     fn test_mul_add_gate_circuit_newmainder() {
-        const NUM_FREE_BITS: usize = 4;
+        const NUM_FREE_VARS: usize = 4;
 
         let mut rng = test_rng();
-        let size = 1 << NUM_FREE_BITS;
+        let size = 1 << NUM_FREE_VARS;
 
         let mle_1: DenseMle<Fr> = DenseMle::new_from_iter(
             (0..size).map(|_| Fr::from(rng.gen::<u64>())),
@@ -329,81 +330,84 @@ mod tests {
             LayerId::Input(0),
         );
 
-        let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None);
-            let (mle_1_input_shred, mle_1_input_shred_data) =
-                get_input_shred_and_data(mle_1.mle.get_evals_vector().to_vec(), ctx, &input_layer);
+        let mle_1_data = mle_1.mle;
+        let mle_2_data = mle_2.mle;
+        let neg_mle_2_data = neg_mle_2.mle;
 
-            let (mle_2_input_shred, mle_2_input_shred_data) =
-                get_input_shred_and_data(mle_2.mle.get_evals_vector().to_vec(), ctx, &input_layer);
-            let (neg_mle_2_input_shred, neg_mle_2_input_shred_data) = get_input_shred_and_data(
-                neg_mle_2.mle.get_evals_vector().to_vec(),
-                ctx,
-                &input_layer,
-            );
+        let ctx = &Context::new();
+        let input_layer = InputLayerNode::new(ctx, None);
+        let mle_1_input_shred = InputShred::new(ctx, NUM_FREE_VARS, &input_layer);
+        let mle_1_id = mle_1_input_shred.id();
+        let mle_2_input_shred = InputShred::new(ctx, NUM_FREE_VARS, &input_layer);
+        let mle_2_id = mle_2_input_shred.id();
+        let neg_mle_2_input_shred = InputShred::new(ctx, NUM_FREE_VARS, &input_layer);
+        let neg_mle_2_id = neg_mle_2_input_shred.id();
 
-            let input_layer_data = InputLayerNodeData::new(
-                input_layer.id(),
-                vec![
-                    mle_1_input_shred_data,
-                    mle_2_input_shred_data,
-                    neg_mle_2_input_shred_data,
-                ],
-            );
+        let mut nonzero_gates = vec![];
+        let table_size = 1 << NUM_FREE_VARS;
 
-            let mut nonzero_gates = vec![];
-            let table_size = 1 << NUM_FREE_BITS;
-
-            (0..table_size).for_each(|idx| {
-                nonzero_gates.push((idx, idx, idx));
-            });
-
-            let neg_mul_output = GateNode::new(
-                ctx,
-                &mle_1_input_shred,
-                &neg_mle_2_input_shred,
-                nonzero_gates.clone(),
-                super::super::BinaryOperation::Mul,
-                None,
-            );
-
-            let pos_mul_output = GateNode::new(
-                ctx,
-                &mle_1_input_shred,
-                &mle_2_input_shred,
-                nonzero_gates.clone(),
-                super::super::BinaryOperation::Mul,
-                None,
-            );
-
-            let add_gate_layer_output = GateNode::new(
-                ctx,
-                &pos_mul_output,
-                &neg_mul_output,
-                nonzero_gates,
-                super::super::BinaryOperation::Add,
-                None,
-            );
-
-            let component_2 = DifferenceBuilderComponent::new(ctx, &add_gate_layer_output);
-
-            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
-                input_layer.into(),
-                mle_1_input_shred.into(),
-                mle_2_input_shred.into(),
-                neg_mle_2_input_shred.into(),
-                neg_mul_output.into(),
-                pos_mul_output.into(),
-                add_gate_layer_output.into(),
-            ];
-            all_nodes.extend(component_2.yield_nodes());
-            (
-                ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-                vec![input_layer_data],
-            )
+        (0..table_size).for_each(|idx| {
+            nonzero_gates.push((idx, idx, idx));
         });
 
-        test_circuit(circuit, None)
+        let neg_mul_output = GateNode::new(
+            ctx,
+            &mle_1_input_shred,
+            &neg_mle_2_input_shred,
+            nonzero_gates.clone(),
+            super::super::BinaryOperation::Mul,
+            None,
+        );
+
+        let pos_mul_output = GateNode::new(
+            ctx,
+            &mle_1_input_shred,
+            &mle_2_input_shred,
+            nonzero_gates.clone(),
+            super::super::BinaryOperation::Mul,
+            None,
+        );
+
+        let add_gate_layer_output = GateNode::new(
+            ctx,
+            &pos_mul_output,
+            &neg_mul_output,
+            nonzero_gates,
+            super::super::BinaryOperation::Add,
+            None,
+        );
+
+        let component_2 = DifferenceBuilderComponent::new(ctx, &add_gate_layer_output);
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            mle_1_input_shred.into(),
+            mle_2_input_shred.into(),
+            neg_mle_2_input_shred.into(),
+            neg_mul_output.into(),
+            pos_mul_output.into(),
+            add_gate_layer_output.into(),
+        ];
+        all_nodes.extend(component_2.yield_nodes());
+
+        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+            generate_circuit_description(all_nodes).unwrap();
+
+        let input_builder = move |(mle_1_data, mle_2_data, neg_mle_2_data): (
+            MultilinearExtension<Fr>,
+            MultilinearExtension<Fr>,
+            MultilinearExtension<Fr>,
+        )| {
+            let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<Fr>> =
+                HashMap::new();
+            input_shred_id_to_data.insert(mle_1_id, mle_1_data);
+            input_shred_id_to_data.insert(mle_2_id, mle_2_data);
+            input_shred_id_to_data.insert(neg_mle_2_id, neg_mle_2_data);
+            input_builder_from_shred_map(input_shred_id_to_data).unwrap()
+        };
+
+        let inputs = input_builder((mle_1_data, mle_2_data, neg_mle_2_data));
+        test_circuit_new(&circ_desc, HashMap::new(), &inputs);
     }
 
     /// A circuit which takes in two MLEs of the same size, and performs a
@@ -438,65 +442,64 @@ mod tests {
                 .map(|elem| -elem),
             LayerId::Input(0),
         );
+        let mle_data = mle_dataparallel.mle;
+        let neg_mle_data = neg_mle_dataparallel.mle;
 
-        let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None);
-            let (dataparallel_mle_input_shred, dataparallel_mle_input_shred_data) =
-                get_input_shred_and_data(
-                    mle_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
-            let (dataparallel_neg_mle_input_shred, dataparallel_neg_mle_input_shred_data) =
-                get_input_shred_and_data(
-                    neg_mle_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+        let ctx = &Context::new();
+        let input_layer = InputLayerNode::new(ctx, None);
+        let dataparallel_mle_input_shred =
+            InputShred::new(ctx, NUM_DATAPARALLEL_BITS + NUM_FREE_BITS, &input_layer);
+        let mle_input_id = dataparallel_mle_input_shred.id();
+        let dataparallel_neg_mle_input_shred =
+            InputShred::new(ctx, NUM_DATAPARALLEL_BITS + NUM_FREE_BITS, &input_layer);
+        let neg_input_id = dataparallel_neg_mle_input_shred.id();
 
-            let input_layer_data = InputLayerNodeData::new(
-                input_layer.id(),
-                vec![
-                    dataparallel_mle_input_shred_data,
-                    dataparallel_neg_mle_input_shred_data,
-                ],
-            );
-            let nonzero_gates = vec![(0, 0, 0)];
+        let nonzero_gates = vec![(0, 0, 0)];
 
-            let gate_node = GateNode::new(
-                ctx,
-                &dataparallel_mle_input_shred,
-                &dataparallel_neg_mle_input_shred,
-                nonzero_gates,
-                super::super::BinaryOperation::Add,
-                Some(NUM_DATAPARALLEL_BITS),
-            );
+        let gate_node = GateNode::new(
+            ctx,
+            &dataparallel_mle_input_shred,
+            &dataparallel_neg_mle_input_shred,
+            nonzero_gates,
+            super::super::BinaryOperation::Add,
+            Some(NUM_DATAPARALLEL_BITS),
+        );
 
-            let component_2 = DifferenceBuilderComponent::new(ctx, &gate_node);
+        let component_2 = DifferenceBuilderComponent::new(ctx, &gate_node);
 
-            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
-                input_layer.into(),
-                dataparallel_mle_input_shred.into(),
-                dataparallel_neg_mle_input_shred.into(),
-                gate_node.into(),
-            ];
-            all_nodes.extend(component_2.yield_nodes());
-            (
-                ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-                vec![input_layer_data],
-            )
-        });
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            dataparallel_mle_input_shred.into(),
+            dataparallel_neg_mle_input_shred.into(),
+            gate_node.into(),
+        ];
+        all_nodes.extend(component_2.yield_nodes());
 
-        test_circuit(circuit, None)
+        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+            generate_circuit_description(all_nodes).unwrap();
+
+        let input_builder = move |(mle_data, neg_mle_data): (
+            MultilinearExtension<Fr>,
+            MultilinearExtension<Fr>,
+        )| {
+            let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<Fr>> =
+                HashMap::new();
+            input_shred_id_to_data.insert(mle_input_id, mle_data);
+            input_shred_id_to_data.insert(neg_input_id, neg_mle_data);
+            input_builder_from_shred_map(input_shred_id_to_data).unwrap()
+        };
+
+        let inputs = input_builder((mle_data, neg_mle_data));
+        test_circuit_new(&circ_desc, HashMap::new(), &inputs);
     }
 
     #[test]
     fn test_dataparallel_mul_add_gate_circuit_newmainder() {
-        const NUM_DATAPARALLEL_BITS: usize = 2;
-        const NUM_FREE_BITS: usize = 2;
+        const NUM_DATAPARALLEL_VARS: usize = 2;
+        const NUM_FREE_VARS: usize = 2;
 
         let mut rng = test_rng();
-        let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_FREE_BITS);
+        let size = 1 << (NUM_DATAPARALLEL_VARS + NUM_FREE_VARS);
 
         let mle_1_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
             (0..size).map(|_| Fr::from(rng.gen::<u64>())),
@@ -516,89 +519,86 @@ mod tests {
             LayerId::Input(0),
         );
 
-        let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None);
-            let (dataparallel_mle_1_input_shred, dataparallel_mle_1_input_shred_data) =
-                get_input_shred_and_data(
-                    mle_1_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
-            let (dataparallel_mle_2_input_shred, dataparallel_mle_2_input_shred_data) =
-                get_input_shred_and_data(
-                    mle_2_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+        let mle_1_data = mle_1_dataparallel.mle;
+        let mle_2_data = mle_2_dataparallel.mle;
+        let neg_mle_2_data = neg_mle_2_dataparallel.mle;
 
-            let (dataparallel_neg_mle_2_input_shred, dataparallel_neg_mle_2_input_shred_data) =
-                get_input_shred_and_data(
-                    neg_mle_2_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+        let ctx = &Context::new();
+        let input_layer = InputLayerNode::new(ctx, None);
+        let mle_1_input_shred =
+            InputShred::new(ctx, NUM_FREE_VARS + NUM_DATAPARALLEL_VARS, &input_layer);
+        let mle_1_id = mle_1_input_shred.id();
+        let mle_2_input_shred =
+            InputShred::new(ctx, NUM_FREE_VARS + NUM_DATAPARALLEL_VARS, &input_layer);
+        let mle_2_id = mle_2_input_shred.id();
+        let neg_mle_2_input_shred =
+            InputShred::new(ctx, NUM_FREE_VARS + NUM_DATAPARALLEL_VARS, &input_layer);
+        let neg_mle_2_id = neg_mle_2_input_shred.id();
 
-            let input_layer_data = InputLayerNodeData::new(
-                input_layer.id(),
-                vec![
-                    dataparallel_mle_1_input_shred_data,
-                    dataparallel_mle_2_input_shred_data,
-                    dataparallel_neg_mle_2_input_shred_data,
-                ],
-            );
+        let mut nonzero_gates = vec![];
+        let table_size = 1 << NUM_FREE_VARS;
 
-            let mut nonzero_gates = vec![];
-            let table_size = 1 << NUM_FREE_BITS;
-
-            (0..table_size).for_each(|idx| {
-                nonzero_gates.push((idx, idx, idx));
-            });
-
-            let neg_mul_output = GateNode::new(
-                ctx,
-                &dataparallel_mle_1_input_shred,
-                &dataparallel_neg_mle_2_input_shred,
-                nonzero_gates.clone(),
-                super::super::BinaryOperation::Mul,
-                Some(NUM_DATAPARALLEL_BITS),
-            );
-
-            let pos_mul_output = GateNode::new(
-                ctx,
-                &dataparallel_mle_1_input_shred,
-                &dataparallel_mle_2_input_shred,
-                nonzero_gates.clone(),
-                super::super::BinaryOperation::Mul,
-                Some(NUM_DATAPARALLEL_BITS),
-            );
-
-            let add_gate_layer_output = GateNode::new(
-                ctx,
-                &pos_mul_output,
-                &neg_mul_output,
-                nonzero_gates,
-                super::super::BinaryOperation::Add,
-                Some(NUM_DATAPARALLEL_BITS),
-            );
-
-            let component_2 = DifferenceBuilderComponent::new(ctx, &add_gate_layer_output);
-
-            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
-                input_layer.into(),
-                dataparallel_mle_1_input_shred.into(),
-                dataparallel_mle_2_input_shred.into(),
-                dataparallel_neg_mle_2_input_shred.into(),
-                neg_mul_output.into(),
-                pos_mul_output.into(),
-                add_gate_layer_output.into(),
-            ];
-            all_nodes.extend(component_2.yield_nodes());
-            (
-                ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-                vec![input_layer_data],
-            )
+        (0..table_size).for_each(|idx| {
+            nonzero_gates.push((idx, idx, idx));
         });
 
-        test_circuit(circuit, None)
+        let neg_mul_output = GateNode::new(
+            ctx,
+            &mle_1_input_shred,
+            &neg_mle_2_input_shred,
+            nonzero_gates.clone(),
+            super::super::BinaryOperation::Mul,
+            Some(NUM_DATAPARALLEL_VARS),
+        );
+
+        let pos_mul_output = GateNode::new(
+            ctx,
+            &mle_1_input_shred,
+            &mle_2_input_shred,
+            nonzero_gates.clone(),
+            super::super::BinaryOperation::Mul,
+            Some(NUM_DATAPARALLEL_VARS),
+        );
+
+        let add_gate_layer_output = GateNode::new(
+            ctx,
+            &pos_mul_output,
+            &neg_mul_output,
+            nonzero_gates,
+            super::super::BinaryOperation::Add,
+            Some(NUM_DATAPARALLEL_VARS),
+        );
+
+        let component_2 = DifferenceBuilderComponent::new(ctx, &add_gate_layer_output);
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            mle_1_input_shred.into(),
+            mle_2_input_shred.into(),
+            neg_mle_2_input_shred.into(),
+            neg_mul_output.into(),
+            pos_mul_output.into(),
+            add_gate_layer_output.into(),
+        ];
+        all_nodes.extend(component_2.yield_nodes());
+
+        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+            generate_circuit_description(all_nodes).unwrap();
+
+        let input_builder = move |(mle_1_data, mle_2_data, neg_mle_2_data): (
+            MultilinearExtension<Fr>,
+            MultilinearExtension<Fr>,
+            MultilinearExtension<Fr>,
+        )| {
+            let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<Fr>> =
+                HashMap::new();
+            input_shred_id_to_data.insert(mle_1_id, mle_1_data);
+            input_shred_id_to_data.insert(mle_2_id, mle_2_data);
+            input_shred_id_to_data.insert(neg_mle_2_id, neg_mle_2_data);
+            input_builder_from_shred_map(input_shred_id_to_data).unwrap()
+        };
+
+        let inputs = input_builder((mle_1_data, mle_2_data, neg_mle_2_data));
+        test_circuit_new(&circ_desc, HashMap::new(), &inputs);
     }
 }

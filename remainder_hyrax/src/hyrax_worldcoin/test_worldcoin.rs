@@ -14,13 +14,11 @@ use remainder::{
     },
 };
 use remainder_shared_types::{
-    halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
+    halo2curves::bn256::G1 as Bn256Point,
     pedersen::PedersenCommitter,
     transcript::{ec_transcript::ECTranscript, poseidon_transcript::PoseidonSponge},
+    Base, Scalar,
 };
-
-type Scalar = <Bn256Point as Group>::Scalar;
-type Base = <Bn256Point as CurveExt>::Base;
 
 #[test]
 fn test_small_circuit_both_layers_public() {

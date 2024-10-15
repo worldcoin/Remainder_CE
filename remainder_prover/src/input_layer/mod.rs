@@ -9,8 +9,6 @@ use serde::{Deserialize, Serialize};
 pub mod fiat_shamir_challenge;
 /// An input layer in which the input data is committed to using the Ligero PCS.
 pub mod ligero_input_layer;
-/// An input layer which requires no commitment and is openly evaluated at the random point.
-pub mod public_input_layer;
 
 /// The prover's view of an input layer during circuit proving (undifferentiated as to type).
 /// Note that, being undifferentiated, no functions for adding values or commitments to the transcript are provided.

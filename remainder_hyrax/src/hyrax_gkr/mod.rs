@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::utils::vandermonde::VandermondeInverse;
 use hyrax_input_layer::{
-    commit_to_input_values, verify_claim, HyraxInputCommitment, HyraxInputLayerDescription,
-    HyraxInputLayerProof,
+    commit_to_input_values, verify_claim, HyraxInputLayerDescription, HyraxInputLayerProof,
+    HyraxProverInputCommitment,
 };
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
@@ -22,8 +22,8 @@ use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 
 use self::hyrax_layer::HyraxLayerProof;
 
-/// The module that contains all functions necessary to do operations on an
-/// output layer, [HyraxInputLayer]
+pub mod helpers;
+/// The module that contains all functions necessary to do operations on a Hyrax input layer using the Hyrax PCS.
 pub mod hyrax_input_layer;
 /// The module that has all functions and implementations necessary to produce
 /// a [HyraxLayerProof]
@@ -52,16 +52,29 @@ pub struct HyraxProof<C: PrimeOrderCurve> {
 
 impl<C: PrimeOrderCurve> HyraxProof<C> {
     /// Create a [HyraxProof].
-    /// Values of public input layers are appended to transcript in order of LayerId ascending.
-    /// Hyrax commitments are appended to transcript in order of LayerId ascending.
-    /// this is also the ordering of `HyraxProof.hyrax_input_proofs`.
+    /// Values of public input layers are appended to transcript in order of `LayerId` value,
+    /// ascending. Then Hyrax commitments are appended to transcript in order of `LayerId` value,
+    /// ascending; this is also the ordering of `HyraxProof.hyrax_input_proofs`.
+    ///
+    /// # Arguments:
+    /// * `inputs` - The MLEs of _all_ inputs (including Hyrax inputs), along with their layer ids.
+    /// * `hyrax_input_layers` - The descriptions of the Hyrax input layers, along with (optionally) precommits.
+    /// * `circuit_description` - The description of the circuit to be proven.
+    /// * `committer` - The Pedersen committer to be used for commitments.
+    /// * `rng` - The random number generator to be used for randomness.
+    /// * `converter` - The Vandermonde inverse converter to be used for the proof.
+    /// * `transcript` - The transcript to be used for Fiat-Shamir challenges.
+    ///
     /// # Requires:
     ///   * `circuit_description.index_mle_indices(0)` has been called
     pub fn prove(
         inputs: &HashMap<LayerId, MultilinearExtension<C::Scalar>>,
         hyrax_input_layers: &HashMap<
             LayerId,
-            (HyraxInputLayerDescription, Option<HyraxInputCommitment<C>>),
+            (
+                HyraxInputLayerDescription,
+                Option<HyraxProverInputCommitment<C>>,
+            ),
         >,
         circuit_description: &GKRCircuitDescription<C::Scalar>,
         committer: &PedersenCommitter<C>,
@@ -75,7 +88,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         inputs
             .keys()
             .filter(|layer_id| !hyrax_input_layers.contains_key(layer_id))
-            .sorted_by_key(|layer_id| layer_id.get_input_layer_id())
+            .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
             .for_each(|layer_id| {
                 let mle = inputs.get(layer_id).unwrap();
                 transcript.append_scalar_points("input layer", mle.get_evals_vector());
@@ -83,15 +96,15 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
 
         // For each hyrax input layer, calculate commitments if not already provided, and then append each
         // commitment to the transcript.
-        let mut hyrax_input_commitments = HashMap::<LayerId, HyraxInputCommitment<C>>::new();
+        let mut hyrax_input_commitments = HashMap::<LayerId, HyraxProverInputCommitment<C>>::new();
         hyrax_input_layers
             .keys()
-            .sorted_by_key(|layer_id| layer_id.get_input_layer_id())
+            .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
             .for_each(|layer_id| {
                 // Commit to the Hyrax input layer, if it is not already committed to.
-                let (desc, maybe_commitment) = hyrax_input_layers.get(layer_id).unwrap();
-                let prover_commitment: HyraxInputCommitment<C> =
-                    if let Some(prover_commitment) = maybe_commitment {
+                let (desc, maybe_precommitment) = hyrax_input_layers.get(layer_id).unwrap();
+                let prover_commitment: HyraxProverInputCommitment<C> =
+                    if let Some(prover_commitment) = maybe_precommitment {
                         // Use the commitment provided by the calling context
                         (*prover_commitment).clone()
                     } else {
@@ -151,7 +164,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         });
 
         // If in debug mode, then check the claims on all input layers.
-        if !cfg!(debug_assertions) {
+        if cfg!(debug_assertions) {
             for claim in claims_on_input_layers.iter() {
                 let input_mle = inputs.get(&claim.to_layer_id).unwrap();
                 let evaluation = input_mle.evaluate_at_point(&claim.point);
@@ -167,7 +180,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         // Prove the claims on the Hyrax input layers
         let hyrax_input_proofs = hyrax_input_layers
             .keys()
-            .sorted_by_key(|layer_id| layer_id.get_input_layer_id())
+            .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
             .map(|layer_id| {
                 let (desc, _) = hyrax_input_layers.get(layer_id).unwrap();
                 let commitment = hyrax_input_commitments.get(layer_id).unwrap();
@@ -211,7 +224,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         // Append the public inputs to the transcript
         self.public_inputs
             .iter()
-            .sorted_by_key(|(layer_id, _)| layer_id.get_input_layer_id())
+            .sorted_by_key(|(layer_id, _)| layer_id.get_raw_input_layer_id())
             .for_each(|(_layer_id, mle)| {
                 transcript.append_scalar_points("input layer", mle.get_evals_vector());
             });
@@ -219,7 +232,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         // For each Hyrax input layer commitment (in order of LayerId), consume elements from the transcript and check they match the commitments contained in the HyraxInputLayerProof.
         self.hyrax_input_proofs
             .iter()
-            .sorted_by_key(|input_proof| input_proof.layer_id.get_input_layer_id())
+            .sorted_by_key(|input_proof| input_proof.layer_id.get_raw_input_layer_id())
             .for_each(|input_proof| {
                 let hyrax_commit = &input_proof.input_commitment;
                 transcript.append_ec_points("Hyrax input layer values", hyrax_commit);
@@ -329,7 +342,7 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
 
         let output_layer_proofs = output_layers
             .iter_mut()
-            .sorted_by_key(|output_layer| output_layer.layer_id().get_layer_id())
+            .sorted_by_key(|output_layer| output_layer.layer_id().get_raw_layer_id())
             .map(|output_layer| {
                 // Create the HyraxOutputLayerProof
                 let (output_layer_proof, committed_output_claim) =
@@ -427,7 +440,7 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
         // Output layer verification
         output_layer_proofs
             .iter()
-            .sorted_by_key(|(output_layer_id, _)| output_layer_id.get_layer_id())
+            .sorted_by_key(|(output_layer_id, _)| output_layer_id.get_raw_layer_id())
             .for_each(|(output_layer_id, output_layer_proof)| {
                 let output_layer_desc = circuit_description
                     .output_layers
