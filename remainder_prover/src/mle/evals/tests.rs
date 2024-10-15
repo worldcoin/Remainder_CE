@@ -176,21 +176,31 @@ fn test_bit_packed_vector_get_extensive(data: Vec<Qfr>) -> TestResult {
     TestResult::from_bool(true)
 }
 
+/// Tail-recursive implementation of the exponentiation function for field
+/// elements performing `O(log(exp))` field element multiplications.
 fn fr_pow(base: Fr, exp: u64) -> Fr {
-    fn fr_pow_helper(acc: Fr, base: Fr, exp: u64) -> Fr {
+    // helper(acc, base, exp) == acc * base^exp.
+    fn helper(acc: Fr, base: Fr, exp: u64) -> Fr {
         if exp == 0 {
-            Fr::ONE
+            acc
+        } else if exp % 2 == 0 {
+            helper(acc, base * base, exp / 2)
         } else {
-            let p = fr_pow_helper(acc, base, exp / 2);
-            if exp % 2 == 0 {
-                acc * p * p
-            } else {
-                acc * p * p * base
-            }
+            helper(acc * base, base * base, exp / 2)
         }
     }
 
-    fr_pow_helper(Fr::ONE, base, exp)
+    helper(Fr::ONE, base, exp)
+}
+
+#[test]
+fn test_fr_pow() {
+    assert_eq!(fr_pow(Fr::from(2), 0), Fr::ONE);
+    assert_eq!(fr_pow(Fr::from(2), 1), Fr::from(2));
+    assert_eq!(fr_pow(Fr::from(2), 5), Fr::from(32));
+    assert_eq!(fr_pow(Fr::from(2), 6), Fr::from(64));
+    assert_eq!(fr_pow(Fr::from(5), 2), Fr::from(25));
+    assert_eq!(fr_pow(Fr::from(5), 3), Fr::from(125));
 }
 
 #[quickcheck]
