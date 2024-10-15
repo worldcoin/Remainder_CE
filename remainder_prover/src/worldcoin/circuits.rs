@@ -5,10 +5,9 @@ use crate::digits::components::{
 };
 use crate::input_layer::InputLayerDescription;
 use crate::layer::LayerId;
-use crate::layouter::compiling::LayouterCircuit;
-use crate::layouter::component::{Component, ComponentSet};
+use crate::layouter::component::Component;
 use crate::layouter::nodes::circuit_inputs::{
-    InputLayerNode, InputLayerNodeData, InputShred,
+    InputLayerNode, InputShred,
 };
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::fiat_shamir_challenge::FiatShamirChallengeNode;
@@ -19,7 +18,6 @@ use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, Context, NodeId};
 use crate::mle::evals::MultilinearExtension;
 use crate::prover::{generate_circuit_description, GKRCircuitDescription};
-use crate::utils::{build_input_shred_and_data, get_input_shred_and_data};
 use crate::worldcoin::components::Subtractor;
 
 use itertools::Itertools;

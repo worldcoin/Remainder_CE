@@ -1,9 +1,6 @@
 use itertools::Itertools;
 use ndarray::{Array, Array2};
 use remainder_shared_types::Field;
-use std::io::{self, Read};
-use std::path::PathBuf;
-
 use super::parameters::{decode_i64_array, decode_wirings};
 use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::mle::bundled_input_mle::to_slice_of_vectors;
@@ -191,21 +188,11 @@ pub fn build_iriscode_circuit_data<
     }
 }
 
-// Helper function to read bytes from a file, preallocating the required space.
-fn read_bytes_from_file(filename: &str) -> io::Result<Vec<u8>> {
-    let mut file = std::fs::File::open(filename).unwrap();
-    let initial_buffer_size = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
-    dbg!(initial_buffer_size);
-    let mut bufreader = Vec::with_capacity(initial_buffer_size);
-    file.read_to_end(&mut bufreader).unwrap();
-    Ok(bufreader)
-}
-
 /// Loads circuit structure data and witnesses for a run of the iris code circuit from disk for
 /// either the iris or mask case.
 ///
 /// # Arguments:
-/// * `image_path` is the path to an image file (could be the iris or the mask).
+/// * `image_bytes` gives the bytes of an image (could be the iris or the mask).
 /// * `is_mask` indicates whether to load the files for the mask or the iris.
 pub fn load_worldcoin_data_v2<
     F: Field,
@@ -217,13 +204,12 @@ pub fn load_worldcoin_data_v2<
     const IM_NUM_ROWS: usize,
     const IM_NUM_COLS: usize,
 >(
-    image_path: PathBuf,
+    image_bytes: Vec<u8>,
     is_mask: bool,
 ) -> IriscodeCircuitData<F> {
-    let image_bytes = read_bytes_from_file(image_path.to_str().unwrap());
     let image: Array2<u8> = Array2::from_shape_vec(
         (IM_NUM_ROWS, IM_NUM_COLS),
-        image_bytes.unwrap()
+        image_bytes
     ).unwrap();
 
     use super::parameters_v2::{
@@ -264,7 +250,7 @@ pub fn load_worldcoin_data_v2<
 /// either the iris or mask case.
 ///
 /// # Arguments:
-/// * `image_path` is the path to an image file (could be the iris or the mask).
+/// * `image_bytes` gives the bytes of an image (could be the iris or the mask).
 /// * `is_mask` indicates whether to load the files for the mask or the iris.
 pub fn load_worldcoin_data_v3<
     F: Field,
@@ -276,13 +262,12 @@ pub fn load_worldcoin_data_v3<
     const IM_NUM_ROWS: usize,
     const IM_NUM_COLS: usize,
 >(
-    image_path: PathBuf,
+    image_bytes: Vec<u8>,
     is_mask: bool,
 ) -> IriscodeCircuitData<F> {
-    let image_bytes = read_bytes_from_file(image_path.to_str().unwrap());
     let image: Array2<u8> = Array2::from_shape_vec(
         (IM_NUM_ROWS, IM_NUM_COLS),
-        image_bytes.unwrap()
+        image_bytes
     ).unwrap();
     use super::parameters_v3::{
         IRIS_RH_MULTIPLICAND, IRIS_THRESHOLDS, MASK_RH_MULTIPLICAND, MASK_THRESHOLDS, WIRINGS,
