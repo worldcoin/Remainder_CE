@@ -3,8 +3,8 @@ use remainder_shared_types::Field;
 use crate::{
     layer::LayerId,
     layouter::nodes::{
-        circuit_inputs::{InputLayerNode, InputShred, InputShredData},
-        CircuitNode, Context,
+        circuit_inputs::{InputLayerNode, InputShred},
+        Context,
     },
     mle::Mle,
 };
@@ -56,7 +56,7 @@ pub trait BundledInputMle<F: Field, const N: usize> {
         &self,
         ctx: &Context,
         source: &InputLayerNode,
-    ) -> (Vec<InputShred>, Vec<InputShredData<F>>);
+    ) -> (Vec<InputShred>, Vec<MultilinearExtension<F>>);
 }
 
 /// A struct that bundles N MLEs together for semantic reasons.
@@ -92,7 +92,7 @@ impl<F: Field, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
         &self,
         ctx: &Context,
         source: &InputLayerNode,
-    ) -> (Vec<InputShred>, Vec<InputShredData<F>>) {
+    ) -> (Vec<InputShred>, Vec<MultilinearExtension<F>>) {
         self.mles
             .clone()
             .into_iter()
@@ -102,8 +102,7 @@ impl<F: Field, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
                     Evaluations::<F>::new(mle.num_free_vars(), mle.get_padded_evaluations()),
                 );
                 let input_shred = InputShred::new(ctx, mle.num_vars(), source);
-                let input_shred_data = InputShredData::new(input_shred.id(), mle);
-                (input_shred, input_shred_data)
+                (input_shred, mle)
             })
             .unzip()
     }

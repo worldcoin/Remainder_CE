@@ -23,7 +23,6 @@ use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{Layer, LayerDescription};
 use crate::layouter::compiling::CircuitHashType;
-use crate::layouter::component::Component;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, CircuitLocation, CircuitMap};
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, NodeId};
@@ -38,7 +37,6 @@ use crate::{
     layer::{layer_enum::LayerEnum, LayerError, LayerId},
 };
 use ark_std::{end_timer, start_timer};
-use helpers::get_circuit_description_hash_as_field_elems;
 use itertools::Itertools;
 use remainder_ligero::ligero_commit::{
     remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify,
@@ -205,7 +203,11 @@ pub fn verify<F: Field>(
         .keys()
         .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
         .map(|layer_id| {
-            let layer_desc = circuit_description.input_layers.iter().find(|desc| desc.layer_id == *layer_id).unwrap();
+            let layer_desc = circuit_description
+                .input_layers
+                .iter()
+                .find(|desc| desc.layer_id == *layer_id)
+                .unwrap();
             let transcript_mle = transcript
                 .consume_elements("input layer", 1 << layer_desc.num_vars)
                 .unwrap();

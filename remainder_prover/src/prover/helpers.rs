@@ -1,7 +1,5 @@
-use crate::input_layer::ligero_input_layer::{
-    LigeroInputLayerDescription, LigeroInputLayerDescriptionWithPrecommit,
-};
-use crate::input_layer::InputLayerDescription;
+use crate::input_layer::ligero_input_layer::LigeroInputLayerDescriptionWithPrecommit;
+
 use crate::layer::LayerId;
 use crate::layouter::compiling::{CircuitHashType, LayouterCircuit};
 use crate::layouter::component::Component;
@@ -13,9 +11,7 @@ use crate::prover::verify;
 use ark_std::{end_timer, start_timer};
 
 use itertools::Itertools;
-use remainder_ligero::ligero_structs::LigeroAuxInfo;
-use remainder_ligero::poseidon_ligero::PoseidonSpongeHasher;
-use remainder_ligero::LcCommit;
+
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
 use remainder_shared_types::Field;
