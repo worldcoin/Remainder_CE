@@ -54,7 +54,7 @@ pub fn circuit_description_and_inputs(version: u8, mask: bool, image_bytes: Opti
 
 /// Return the circuit description, "private" input layer description and inputs for the v2 iris
 /// code circuit, in either the mask (true) or iris (false) case.
-fn v2_circuit_description_and_inputs(mask: bool, image_bytes: Vec<u8>) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
+pub fn v2_circuit_description_and_inputs(mask: bool, image_bytes: Vec<u8>) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
     use super::parameters_v2::{
         BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
         NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_ROWS, IM_NUM_COLS
@@ -86,7 +86,7 @@ fn v2_circuit_description_and_inputs(mask: bool, image_bytes: Vec<u8>) -> (GKRCi
 
 /// Return the circuit description, "private" input layer description and inputs for the v3 iris
 /// code circuit, in either the mask (true) or iris (false) case.
-fn v3_circuit_description_and_inputs(mask: bool, image_bytes: Vec<u8>) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
+pub fn v3_circuit_description_and_inputs(mask: bool, image_bytes: Vec<u8>) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
     use super::parameters_v3::{
         BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
         NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_ROWS, IM_NUM_COLS
