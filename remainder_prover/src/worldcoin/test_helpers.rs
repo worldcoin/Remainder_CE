@@ -4,7 +4,8 @@ use crate::mle::evals::MultilinearExtension;
 use crate::prover::GKRCircuitDescription;
 use crate::worldcoin::circuits::build_iriscode_circuit_description;
 use crate::worldcoin::data::{
-    build_iriscode_circuit_data, load_worldcoin_data_v2, load_worldcoin_data_v3, wirings_to_reroutings
+    build_iriscode_circuit_data, load_worldcoin_data_v2, load_worldcoin_data_v3,
+    wirings_to_reroutings,
 };
 use crate::worldcoin::parameters::decode_wirings;
 use ndarray::Array2;
@@ -14,11 +15,16 @@ use std::path::{Path, PathBuf};
 
 /// Return the circuit description, "private" input layer description and inputs for a trivial 2x2
 /// identity matrix circuit.
-pub fn small_circuit_description_and_inputs() -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
+pub fn small_circuit_description_and_inputs() -> (
+    GKRCircuitDescription<Fr>,
+    InputLayerDescription,
+    HashMap<LayerId, MultilinearExtension<Fr>>,
+) {
     // rewirings for the 2x2 identity matrix
     let wirings = &[(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
     let reroutings = wirings_to_reroutings(wirings, 2, 2);
-    let (circuit_desc, input_builder, private_input_layer_desc) = build_iriscode_circuit_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
+    let (circuit_desc, input_builder, private_input_layer_desc) =
+        build_iriscode_circuit_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
     let data = build_iriscode_circuit_data::<Fr, 1, 1, 1, 16, 2>(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
         &[1, 0, 6, -1],
@@ -37,19 +43,24 @@ pub fn small_circuit_description_and_inputs() -> (GKRCircuitDescription<Fr>, Inp
 /// use remainder::worldcoin::test_helpers::v2_circuit_description_and_inputs;
 /// let (circuit_desc, _, inputs) = v2_circuit_description_and_inputs(false, None);
 /// ```
-pub fn v2_circuit_description_and_inputs(mask: bool, image_path: Option<PathBuf>) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
+pub fn v2_circuit_description_and_inputs(
+    mask: bool,
+    image_path: Option<PathBuf>,
+) -> (
+    GKRCircuitDescription<Fr>,
+    InputLayerDescription,
+    HashMap<LayerId, MultilinearExtension<Fr>>,
+) {
     use super::parameters_v2::{
-        BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
-        NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_ROWS, IM_NUM_COLS
+        BASE, IM_NUM_COLS, IM_NUM_ROWS, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS, TO_REROUTE_NUM_VARS, WIRINGS,
     };
     let image_path = if let Some(path) = image_path {
         path.to_path_buf()
+    } else if mask {
+        Path::new("src/worldcoin/constants/v2/mask/test_image.bin").to_path_buf()
     } else {
-        if mask {
-            Path::new("src/worldcoin/constants/v2/mask/test_image.bin").to_path_buf()
-        } else {
-            Path::new("src/worldcoin/constants/v2/iris/test_image.bin").to_path_buf()
-        }
+        Path::new("src/worldcoin/constants/v2/iris/test_image.bin").to_path_buf()
     };
     let data = load_worldcoin_data_v2::<
         Fr,
@@ -62,16 +73,18 @@ pub fn v2_circuit_description_and_inputs(mask: bool, image_path: Option<PathBuf>
         IM_NUM_COLS,
     >(image_path, mask);
     let wirings = &decode_wirings(WIRINGS);
-    let reroutings = wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
-    let (circuit_desc, input_builder, private_input_layer_desc) = build_iriscode_circuit_description::<
-        Fr,
-        TO_REROUTE_NUM_VARS,
-        MATMULT_ROWS_NUM_VARS,
-        MATMULT_COLS_NUM_VARS,
-        MATMULT_INTERNAL_DIM_NUM_VARS,
-        BASE,
-        NUM_DIGITS,
-    >(reroutings);
+    let reroutings =
+        wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+    let (circuit_desc, input_builder, private_input_layer_desc) =
+        build_iriscode_circuit_description::<
+            Fr,
+            TO_REROUTE_NUM_VARS,
+            MATMULT_ROWS_NUM_VARS,
+            MATMULT_COLS_NUM_VARS,
+            MATMULT_INTERNAL_DIM_NUM_VARS,
+            BASE,
+            NUM_DIGITS,
+        >(reroutings);
     let inputs = input_builder(data);
     (circuit_desc, private_input_layer_desc, inputs)
 }
@@ -84,10 +97,17 @@ pub fn v2_circuit_description_and_inputs(mask: bool, image_path: Option<PathBuf>
 /// use remainder::worldcoin::test_helpers::v3_circuit_description_and_inputs;
 /// let (circuit_desc, _, inputs) = v3_circuit_description_and_inputs(false, None);
 /// ```
-pub fn v3_circuit_description_and_inputs(mask: bool, image_path: Option<PathBuf>) -> (GKRCircuitDescription<Fr>, InputLayerDescription, HashMap<LayerId, MultilinearExtension<Fr>>) {
+pub fn v3_circuit_description_and_inputs(
+    mask: bool,
+    image_path: Option<PathBuf>,
+) -> (
+    GKRCircuitDescription<Fr>,
+    InputLayerDescription,
+    HashMap<LayerId, MultilinearExtension<Fr>>,
+) {
     use super::parameters_v3::{
-        BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
-        NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_ROWS, IM_NUM_COLS
+        BASE, IM_NUM_COLS, IM_NUM_ROWS, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS, TO_REROUTE_NUM_VARS, WIRINGS,
     };
     let image_path = if let Some(path) = image_path {
         path.to_path_buf()
@@ -109,16 +129,18 @@ pub fn v3_circuit_description_and_inputs(mask: bool, image_path: Option<PathBuf>
         IM_NUM_COLS,
     >(image_path, mask);
     let wirings = &decode_wirings(WIRINGS);
-    let reroutings = wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
-    let (circuit_desc, input_builder, private_input_layer_desc) = build_iriscode_circuit_description::<
-        Fr,
-        TO_REROUTE_NUM_VARS,
-        MATMULT_ROWS_NUM_VARS,
-        MATMULT_COLS_NUM_VARS,
-        MATMULT_INTERNAL_DIM_NUM_VARS,
-        BASE,
-        NUM_DIGITS,
-    >(reroutings);
+    let reroutings =
+        wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+    let (circuit_desc, input_builder, private_input_layer_desc) =
+        build_iriscode_circuit_description::<
+            Fr,
+            TO_REROUTE_NUM_VARS,
+            MATMULT_ROWS_NUM_VARS,
+            MATMULT_COLS_NUM_VARS,
+            MATMULT_INTERNAL_DIM_NUM_VARS,
+            BASE,
+            NUM_DIGITS,
+        >(reroutings);
     let inputs = input_builder(data);
     (circuit_desc, private_input_layer_desc, inputs)
 }

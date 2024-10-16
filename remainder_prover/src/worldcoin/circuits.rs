@@ -7,9 +7,7 @@ use crate::input_layer::InputLayerDescription;
 use crate::layer::LayerId;
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::{Component, ComponentSet};
-use crate::layouter::nodes::circuit_inputs::{
-    InputLayerNode, InputLayerNodeData, InputShred,
-};
+use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerNodeData, InputShred};
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::fiat_shamir_challenge::FiatShamirChallengeNode;
 use crate::layouter::nodes::identity_gate::IdentityGateNode;
@@ -225,7 +223,7 @@ pub fn build_iriscode_circuit_description<
 ) -> (
     GKRCircuitDescription<F>,
     impl Fn(IriscodeCircuitData<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
-    InputLayerDescription
+    InputLayerDescription,
 ) {
     assert!(BASE.is_power_of_two());
     let log_base = BASE.ilog2() as usize;
@@ -401,11 +399,14 @@ pub fn build_iriscode_circuit_description<
         input_builder_from_shred_map(input_shred_id_to_data).unwrap()
     };
 
-    let private_input_layer_id = input_node_id_to_layer_id.get(&private_input_layer.id()).unwrap();
-    let private_input_layer = circ_desc.input_layers.iter().find(|il| il.layer_id == *private_input_layer_id).unwrap().clone();
-    (
-        circ_desc,
-        input_builder,
-        private_input_layer,
-    )
+    let private_input_layer_id = input_node_id_to_layer_id
+        .get(&private_input_layer.id())
+        .unwrap();
+    let private_input_layer = circ_desc
+        .input_layers
+        .iter()
+        .find(|il| il.layer_id == *private_input_layer_id)
+        .unwrap()
+        .clone();
+    (circ_desc, input_builder, private_input_layer)
 }

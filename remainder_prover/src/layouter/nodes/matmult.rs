@@ -115,18 +115,17 @@ mod test {
     use remainder_shared_types::Fr;
 
     use crate::{
+        builders::layer_builder::from_mle,
         expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
         layouter::{
             compiling::LayouterCircuit,
             component::ComponentSet,
             nodes::{
-                circuit_inputs::{
-                    InputLayerNode, InputLayerNodeData, InputShred, InputShredData,
-                },
+                circuit_inputs::{InputLayerNode, InputLayerNodeData, InputShred, InputShredData},
                 circuit_outputs::OutputNode,
                 node_enum::NodeEnum,
                 sector::Sector,
-                CircuitNode,
+                CircuitNode, Context, NodeId,
             },
         },
         mle::evals::MultilinearExtension,
@@ -135,77 +134,170 @@ mod test {
 
     use super::MatMultNode;
 
+    use std::collections::HashMap;
+
+    use ark_std::test_rng;
+    use rand::Rng;
+    use remainder_shared_types::Field;
+
+    use crate::{
+        layer::LayerId,
+        prover::{generate_circuit_description, helpers::test_circuit_new, GKRCircuitDescription},
+    };
+
+    /// Struct which allows for easy "semantic" feeding of inputs into the
+    /// test matrix multiplication circuit.
+    struct MatmultTestInputs<F: Field> {
+        matrix_a_mle: MultilinearExtension<F>,
+        matrix_b_mle: MultilinearExtension<F>,
+        expected_matrix_mle: MultilinearExtension<F>,
+    }
+
+    /// Creates the [GKRCircuitDescription] and an associated helper input
+    /// function allowing for ease of proving for the matmul test circuit.
+    fn build_matmul_test_circuit_description<F: Field>(
+        matrix_a_num_rows_vars: usize,
+        matrix_a_num_cols_vars: usize, // This is the same as `matrix_b_num_rows_vars`
+        matrix_b_num_cols_vars: usize,
+    ) -> (
+        GKRCircuitDescription<F>,
+        impl Fn(MatmultTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
+    ) {
+        // --- Create global context manager ---
+        let context = Context::new();
+
+        // --- All inputs are public inputs ---
+        let public_input_layer_node = InputLayerNode::new(&context, None);
+
+        // --- Inputs to the circuit include the "matrix A MLE" and the "matrix B MLE" ---
+        let matrix_a_mle_shred = InputShred::new(
+            &context,
+            matrix_a_num_rows_vars + matrix_a_num_cols_vars,
+            &public_input_layer_node,
+        );
+        let matrix_b_mle_shred = InputShred::new(
+            &context,
+            matrix_a_num_cols_vars + matrix_b_num_cols_vars,
+            &public_input_layer_node,
+        );
+        let expected_result_mle_shred = InputShred::new(
+            &context,
+            matrix_a_num_rows_vars + matrix_b_num_cols_vars,
+            &public_input_layer_node,
+        );
+
+        // --- Save IDs to be used later ---
+        let matrix_a_shred_id = matrix_a_mle_shred.id();
+        let matrix_b_shred_id = matrix_b_mle_shred.id();
+        let expected_matrix_shred_id = expected_result_mle_shred.id();
+
+        // --- Create the circuit components ---
+        let matmult_sector = MatMultNode::new(
+            &context,
+            &matrix_a_mle_shred,
+            (matrix_a_num_rows_vars, matrix_a_num_cols_vars),
+            &matrix_b_mle_shred,
+            (matrix_a_num_cols_vars, matrix_b_num_cols_vars),
+        );
+
+        let difference_sector = Sector::new(
+            &context,
+            &[&matmult_sector, &expected_result_mle_shred],
+            |inputs| {
+                Expression::<F, AbstractExpr>::mle(inputs[0])
+                    - Expression::<F, AbstractExpr>::mle(inputs[1])
+            },
+        );
+
+        let output_node = OutputNode::new_zero(&context, &difference_sector);
+
+        // --- Generate the circuit description ---
+        let all_circuit_nodes: Vec<NodeEnum<F>> = vec![
+            public_input_layer_node.into(),
+            matrix_a_mle_shred.into(),
+            matrix_b_mle_shred.into(),
+            expected_result_mle_shred.into(),
+            matmult_sector.into(),
+            difference_sector.into(),
+            output_node.into(),
+        ];
+
+        let (circuit_description, convert_input_shreds_to_input_layers, _) =
+            generate_circuit_description(all_circuit_nodes).unwrap();
+
+        // --- Write closure which allows easy usage of circuit inputs ---
+        let circuit_data_fn = move |matmult_test_inputs: MatmultTestInputs<F>| {
+            let input_shred_id_to_data_mapping: HashMap<NodeId, MultilinearExtension<F>> = vec![
+                (matrix_a_shred_id, matmult_test_inputs.matrix_a_mle),
+                (matrix_b_shred_id, matmult_test_inputs.matrix_b_mle),
+                (
+                    expected_matrix_shred_id,
+                    matmult_test_inputs.expected_matrix_mle,
+                ),
+            ]
+            .into_iter()
+            .collect();
+            convert_input_shreds_to_input_layers(input_shred_id_to_data_mapping).unwrap()
+        };
+
+        (circuit_description, circuit_data_fn)
+    }
+
     #[test]
     fn test_matmult_node_in_circuit() {
-        let circuit = LayouterCircuit::new(|ctx| {
-            let mle_vec_a = MultilinearExtension::new(vec![
-                Fr::from(1),
-                Fr::from(2),
-                Fr::from(9),
-                Fr::from(10),
-                Fr::from(13),
-                Fr::from(1),
-                Fr::from(3),
-                Fr::from(10),
-            ]);
+        // --- Define data + input sizes first ---
+        // (4, 2) * (2, 2) --> (2, 2) for real sizes; take log_2 for num vars
+        let matrix_a_num_rows_vars = 2;
+        let matrix_a_num_cols_vars = 1;
+        let matrix_b_num_rows_vars = 1;
 
-            let mle_vec_b =
-                MultilinearExtension::new(vec![Fr::from(3), Fr::from(5), Fr::from(9), Fr::from(6)]);
+        let matrix_a_mle = MultilinearExtension::new(vec![
+            Fr::from(1),
+            Fr::from(2),
+            Fr::from(9),
+            Fr::from(10),
+            Fr::from(13),
+            Fr::from(1),
+            Fr::from(3),
+            Fr::from(10),
+        ]);
 
-            let exp_product = MultilinearExtension::new(vec![
-                Fr::from(3 + 2 * 9),
-                Fr::from(5 + 2 * 6),
-                Fr::from(9 * 3 + 10 * 9),
-                Fr::from(9 * 5 + 10 * 6),
-                Fr::from(13 * 3 + 9),
-                Fr::from(13 * 5 + 6),
-                Fr::from(3 * 3 + 10 * 9),
-                Fr::from(3 * 5 + 10 * 6),
-            ]);
+        let matrix_b_mle =
+            MultilinearExtension::new(vec![Fr::from(3), Fr::from(5), Fr::from(9), Fr::from(6)]);
 
-            let input_layer = InputLayerNode::new(ctx, None);
-            let input_matrix_a = InputShred::new(ctx, mle_vec_a.num_vars(), &input_layer);
-            let input_matrix_a_data = InputShredData::new(input_matrix_a.id(), mle_vec_a);
-            let input_matrix_b = InputShred::new(ctx, mle_vec_b.num_vars(), &input_layer);
-            let input_matrix_b_data = InputShredData::new(input_matrix_b.id(), mle_vec_b);
-            let input_matrix_product = InputShred::new(ctx, exp_product.num_vars(), &input_layer);
-            let input_matrix_product_data =
-                InputShredData::new(input_matrix_product.id(), exp_product);
+        let expected_matrix_mle = MultilinearExtension::new(vec![
+            Fr::from(3 + 2 * 9),
+            Fr::from(5 + 2 * 6),
+            Fr::from(9 * 3 + 10 * 9),
+            Fr::from(9 * 5 + 10 * 6),
+            Fr::from(13 * 3 + 9),
+            Fr::from(13 * 5 + 6),
+            Fr::from(3 * 3 + 10 * 9),
+            Fr::from(3 * 5 + 10 * 6),
+        ]);
 
-            let input_layer_data = InputLayerNodeData::new(
-                input_layer.id(),
-                vec![
-                    input_matrix_a_data,
-                    input_matrix_b_data,
-                    input_matrix_product_data,
-                ],
-            );
+        // --- Create circuit description + input helper function ---
+        let (matmult_test_circuit_desc, input_helper_fn) = build_matmul_test_circuit_description(
+            matrix_a_num_rows_vars,
+            matrix_a_num_cols_vars,
+            matrix_b_num_rows_vars,
+        );
 
-            let matmult_sector =
-                MatMultNode::new(ctx, &input_matrix_a, (2, 1), &input_matrix_b, (1, 1));
-
-            let difference_sector =
-                Sector::new(ctx, &[&matmult_sector, &input_matrix_product], |inputs| {
-                    Expression::<Fr, AbstractExpr>::mle(inputs[0])
-                        - Expression::<Fr, AbstractExpr>::mle(inputs[1])
-                });
-
-            let output_node = OutputNode::new_zero(ctx, &difference_sector);
-
-            (
-                ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
-                    input_layer.into(),
-                    input_matrix_a.into(),
-                    input_matrix_b.into(),
-                    input_matrix_product.into(),
-                    matmult_sector.into(),
-                    difference_sector.into(),
-                    output_node.into(),
-                ]),
-                vec![input_layer_data],
-            )
+        // --- Convert input data into circuit inputs which are assignable by prover ---
+        let circuit_inputs = input_helper_fn(MatmultTestInputs {
+            matrix_a_mle,
+            matrix_b_mle,
+            expected_matrix_mle,
         });
 
-        test_circuit(circuit, None);
+        // --- Specify private input layers (+ description and precommit), if any ---
+        let private_input_layers = HashMap::new();
+
+        // --- Prove/verify the circuit ---
+        test_circuit_new(
+            &matmult_test_circuit_desc,
+            private_input_layers,
+            &circuit_inputs,
+        );
     }
 }

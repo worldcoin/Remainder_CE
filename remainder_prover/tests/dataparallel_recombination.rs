@@ -1,21 +1,23 @@
+use std::collections::HashMap;
+
 use ark_std::test_rng;
 use remainder::{
+    layer::LayerId,
     layouter::{
-        compiling::LayouterCircuit,
-        component::{Component, ComponentSet},
+        component::Component,
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerNodeData},
+            circuit_inputs::{InputLayerNode, InputShred},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context,
+            CircuitNode, Context, NodeId,
         },
     },
-    mle::{dense::DenseMle, Mle},
-    prover::helpers::test_circuit,
+    mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
+    prover::{generate_circuit_description, helpers::test_circuit_new, GKRCircuitDescription},
 };
 use remainder_shared_types::{Field, Fr};
-use utils::{get_dummy_random_mle, get_input_shred_and_data_from_vec};
+use utils::get_dummy_random_mle;
 pub mod utils;
 
 pub struct DataParallelRecombinationInterleaveBuilder<F: Field> {
@@ -143,15 +145,110 @@ where
     }
 }
 
+/// Struct which allows for easy "semantic" feeding of inputs into the
+/// dataparallel recombination test circuit.
+struct DataparallelRecombinationTestInputs<F: Field> {
+    mle_1: MultilinearExtension<F>,
+    mle_2: MultilinearExtension<F>,
+    mle_3: MultilinearExtension<F>,
+    mle_4: MultilinearExtension<F>,
+    dataparallel_combined_mle: MultilinearExtension<F>,
+}
+
+/// Creates the [GKRCircuitDescription] and an associated helper input
+/// function allowing for ease of proving for the combined dataparallel circuit.
+fn build_dataparallel_recombination_test_circuit<F: Field>(
+    num_dataparallel_vars: usize,
+    num_free_vars: usize,
+) -> (
+    GKRCircuitDescription<F>,
+    impl Fn(DataparallelRecombinationTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
+) {
+    // --- Create global context manager ---
+    let context = Context::new();
+
+    // --- All inputs are public inputs ---
+    let public_input_layer_node = InputLayerNode::new(&context, None);
+
+    // --- Inputs to the circuit include the "dataparallel MLE 1" and the "dataparallel MLE 2" ---
+    let mle_1_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);
+    let mle_2_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);
+    let mle_3_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);
+    let mle_4_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);
+    let combined_dataparallel_mle_shred = InputShred::new(
+        &context,
+        num_dataparallel_vars + num_free_vars,
+        &public_input_layer_node,
+    );
+
+    // --- Save IDs to be used later ---
+    let mle_1_id = mle_1_shred.id();
+    let mle_2_id = mle_2_shred.id();
+    let mle_3_id = mle_3_shred.id();
+    let mle_4_id = mle_4_shred.id();
+    let combined_dataparallel_mle_id = combined_dataparallel_mle_shred.id();
+
+    // --- Create the circuit components ---
+    // Stack currently fails at layer 0, because expr and witgen for the first component is inconsistent.
+    // But if you change from stack to interleave, then it fails at layer 1, because the subtraction of the dataparallel
+    // mle from the output mle is not actually 0.
+    let component_1 = DataParallelRecombinationInterleaveBuilder::new(
+        &context,
+        &mle_1_shred,
+        &mle_2_shred,
+        &mle_3_shred,
+        &mle_4_shred,
+    );
+
+    let component_2 = DiffTwoInputsBuilder::new(
+        &context,
+        &component_1.get_output_sector(),
+        &combined_dataparallel_mle_shred,
+    );
+
+    let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![
+        public_input_layer_node.into(),
+        mle_1_shred.into(),
+        mle_2_shred.into(),
+        mle_3_shred.into(),
+        mle_4_shred.into(),
+        combined_dataparallel_mle_shred.into(),
+    ];
+    all_circuit_nodes.extend(component_1.yield_nodes());
+    all_circuit_nodes.extend(component_2.yield_nodes());
+
+    let (circuit_description, convert_input_shreds_to_input_layers, _) =
+        generate_circuit_description(all_circuit_nodes).unwrap();
+
+    // --- Write closure which allows easy usage of circuit inputs ---
+    let circuit_data_fn = move |test_inputs: DataparallelRecombinationTestInputs<F>| {
+        let input_shred_id_to_data_mapping: HashMap<NodeId, MultilinearExtension<F>> = vec![
+            (mle_1_id, test_inputs.mle_1),
+            (mle_2_id, test_inputs.mle_2),
+            (mle_3_id, test_inputs.mle_3),
+            (mle_4_id, test_inputs.mle_4),
+            (
+                combined_dataparallel_mle_id,
+                test_inputs.dataparallel_combined_mle,
+            ),
+        ]
+        .into_iter()
+        .collect();
+        convert_input_shreds_to_input_layers(input_shred_id_to_data_mapping).unwrap()
+    };
+
+    (circuit_description, circuit_data_fn)
+}
+
 #[test]
 fn test_dataparallel_recombination_newmainder() {
-    const FREE_VARS: usize = 2;
-    const DATAPARALLEL_VARS: usize = 2;
+    const NUM_FREE_VARS: usize = 2;
+    const NUM_DATAPARALLEL_VARS: usize = 2;
     let mut rng = test_rng();
 
-    let (mles_vec, vecs_vec): (Vec<DenseMle<Fr>>, Vec<Vec<Fr>>) = (0..(1 << DATAPARALLEL_VARS))
+    let (mles_vec, vecs_vec): (Vec<DenseMle<Fr>>, Vec<Vec<Fr>>) = (0..(1 << NUM_DATAPARALLEL_VARS))
         .map(|_| {
-            let mle = get_dummy_random_mle(FREE_VARS, &mut rng);
+            let mle = get_dummy_random_mle(NUM_FREE_VARS, &mut rng);
             let mle_copy = mle.clone();
             let mle_vec = mle_copy.bookkeeping_table();
             (mle, mle_vec.to_vec())
@@ -160,62 +257,30 @@ fn test_dataparallel_recombination_newmainder() {
 
     let combined_mle = DenseMle::batch_mles_lil(mles_vec); // This works
                                                            // let combined_mle = DenseMle::batch_mles(mles_vec); // This fails
-    let combined_mle_vec = combined_mle.bookkeeping_table();
 
-    let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None);
-        let (input_shred_1, input_shred_1_data) =
-            get_input_shred_and_data_from_vec(vecs_vec[0].clone(), ctx, &input_layer);
-        let (input_shred_2, input_shred_2_data) =
-            get_input_shred_and_data_from_vec(vecs_vec[1].clone(), ctx, &input_layer);
-        let (input_shred_3, input_shred_3_data) =
-            get_input_shred_and_data_from_vec(vecs_vec[2].clone(), ctx, &input_layer);
-        let (input_shred_4, input_shred_4_data) =
-            get_input_shred_and_data_from_vec(vecs_vec[3].clone(), ctx, &input_layer);
-        let (dataparallel_shred, dataparallel_shred_data) =
-            get_input_shred_and_data_from_vec(combined_mle_vec.to_vec(), ctx, &input_layer);
-        let input_data = InputLayerNodeData::new(
-            input_layer.id(),
-            vec![
-                input_shred_1_data,
-                input_shred_2_data,
-                input_shred_3_data,
-                input_shred_4_data,
-                dataparallel_shred_data,
-            ],
-        );
+    // --- Grab inputs from the above ---
+    let mle_1 = MultilinearExtension::new(vecs_vec[0].clone());
+    let mle_2 = MultilinearExtension::new(vecs_vec[1].clone());
+    let mle_3 = MultilinearExtension::new(vecs_vec[2].clone());
+    let mle_4 = MultilinearExtension::new(vecs_vec[3].clone());
+    let dataparallel_combined_mle = combined_mle.mle;
 
-        // Stack currently fails at layer 0, because expr and witgen for the first component is inconsistent.
-        // But if you change from stack to interleave, then it fails at layer 1, because the subtraction of the dataparallel
-        // mle from the output mle is not actually 0.
-        let component_1 = DataParallelRecombinationInterleaveBuilder::new(
-            ctx,
-            &input_shred_1,
-            &input_shred_2,
-            &input_shred_3,
-            &input_shred_4,
-        );
+    // --- Create circuit description + input helper function ---
+    let (circuit_description, input_helper_fn) =
+        build_dataparallel_recombination_test_circuit(NUM_DATAPARALLEL_VARS, NUM_FREE_VARS);
 
-        let component_2 =
-            DiffTwoInputsBuilder::new(ctx, &component_1.get_output_sector(), &dataparallel_shred);
-
-        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
-            input_layer.into(),
-            input_shred_1.into(),
-            input_shred_2.into(),
-            input_shred_3.into(),
-            input_shred_4.into(),
-            dataparallel_shred.into(),
-        ];
-
-        all_nodes.extend(component_1.yield_nodes());
-        all_nodes.extend(component_2.yield_nodes());
-
-        (
-            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-            vec![input_data],
-        )
+    // --- Convert input data into circuit inputs which are assignable by prover ---
+    let circuit_inputs = input_helper_fn(DataparallelRecombinationTestInputs {
+        mle_1,
+        mle_2,
+        mle_3,
+        mle_4,
+        dataparallel_combined_mle,
     });
 
-    test_circuit(circuit, None)
+    // --- Specify private input layers (+ description and precommit), if any ---
+    let private_input_layers = HashMap::new();
+
+    // --- Prove/verify the circuit ---
+    test_circuit_new(&circuit_description, private_input_layers, &circuit_inputs);
 }

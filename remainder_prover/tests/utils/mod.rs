@@ -1,3 +1,4 @@
+use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder::expression::abstract_expr::ExprBuilder;
@@ -69,6 +70,13 @@ pub fn get_total_mle_indices<F: Field>(
         .map(|bit| MleIndex::Fixed(*bit))
         .chain(repeat_n(MleIndex::Free, num_free_bits))
         .collect()
+}
+
+/// Returns the total number of variables which would be present in an MLE
+/// which combines the bookkeeping tables of the given MLEs (given in terms
+/// of the number of variables representing each one)
+pub fn get_total_combined_mle_num_vars(all_num_vars: &[usize]) -> usize {
+    log2(all_num_vars.iter().fold(0, |acc, elem| acc + (1 << *elem))) as usize
 }
 
 /// A builder which returns an expression with three nested selectors:

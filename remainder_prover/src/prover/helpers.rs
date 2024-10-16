@@ -187,14 +187,27 @@ pub fn test_circuit_new<F: Field>(
             let mut transcript_reader = TranscriptReader::<F, PoseidonSponge<F>>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
-            // --- Extract the ligero input layer descriptions ---
+            // --- Extract the public inputs (i.e. those which do not appear in the `private_input_layer_description_and_precommits`) ---
+            let public_input_layers = inputs
+                .clone()
+                .into_iter()
+                .filter_map(|(layer_id, layer_description)| {
+                    if private_input_layer_description_and_precommits.contains_key(&layer_id) {
+                        None
+                    } else {
+                        Some((layer_id, layer_description))
+                    }
+                })
+                .collect();
+
+            // --- Additionally, extract the ligero input layer descriptions ---
             let private_input_layer_descriptions = private_input_layer_description_and_precommits
                 .into_values()
                 .map(|(layer_description, _)| layer_description)
                 .collect_vec();
 
             match verify(
-                &inputs,
+                &public_input_layers,
                 &private_input_layer_descriptions,
                 &circuit_description,
                 CIRCUIT_DESCRIPTION_HASH_TYPE,
