@@ -61,7 +61,7 @@ pub trait HasByteRepresentation {
     const REPR_NUM_BYTES: usize;
     /// Constructor which creates an instance of the element from a vec of
     /// length `REPR_NUM_BYTES`.
-    fn from_bytes_le(bytes: Vec<u8>) -> Self;
+    fn from_bytes_le(bytes: &[u8]) -> Self;
     /// Function which creates an equivalent representation of the element
     /// in a byte array of length `REPR_NUM_BYTES`.
     fn to_bytes_le(&self) -> Vec<u8>;

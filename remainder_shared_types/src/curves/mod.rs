@@ -103,7 +103,7 @@ pub trait PrimeOrderCurve:
 impl HasByteRepresentation for Fr {
     const REPR_NUM_BYTES: usize = 32;
 
-    fn from_bytes_le(bytes: Vec<u8>) -> Self {
+    fn from_bytes_le(bytes: &[u8]) -> Self {
         if bytes.len() != Self::REPR_NUM_BYTES {
             panic!("Error: Attempted to convert from non-32-length byte vector into Fr")
         }
@@ -119,7 +119,7 @@ impl HasByteRepresentation for Fr {
 impl HasByteRepresentation for Fq {
     const REPR_NUM_BYTES: usize = 32;
 
-    fn from_bytes_le(bytes: Vec<u8>) -> Self {
+    fn from_bytes_le(bytes: &[u8]) -> Self {
         if bytes.len() != Self::REPR_NUM_BYTES {
             panic!("Error: Attempted to convert from non-32-length byte vector into Fr")
         }

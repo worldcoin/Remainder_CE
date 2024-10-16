@@ -45,7 +45,7 @@ pub fn deserialize_commitment_from_bytes<C: PrimeOrderCurve>(bytes: &[u8]) -> Ve
 pub fn deserialize_blinding_factors_from_bytes<C: PrimeOrderCurve>(bytes: &[u8]) -> Vec<C::Scalar> {
     let blinding_factors: Vec<C::Scalar> = bytes
         .chunks(C::SCALAR_ELEM_BYTEWIDTH)
-        .map(|chunk| C::Scalar::from_bytes_le(chunk.to_vec()))
+        .map(|chunk| C::Scalar::from_bytes_le(&chunk.to_vec()))
         .collect_vec();
     blinding_factors
 }
