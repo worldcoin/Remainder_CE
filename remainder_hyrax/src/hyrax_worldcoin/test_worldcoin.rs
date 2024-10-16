@@ -1,15 +1,13 @@
 use std::collections::HashMap;
 
 use crate::{
-    hyrax_gkr::{hyrax_input_layer::HyraxInputLayerDescription, HyraxProof},
+    hyrax_gkr::HyraxProof,
     utils::vandermonde::VandermondeInverse,
 };
 use remainder::{
-    input_layer::InputLayerDescription,
     layer::LayerId,
     mle::evals::MultilinearExtension,
-    prover::GKRCircuitDescription,
-    worldcoin::test_helpers::circuit_description_and_inputs,
+    worldcoin::{circuits::IriscodeProofDescription, test_helpers::circuit_description_and_inputs},
 };
 use remainder_shared_types::{
     halo2curves::bn256::G1 as Bn256Point,
@@ -21,16 +19,16 @@ use remainder_shared_types::{
 #[test]
 fn test_small_circuit_both_layers_public() {
     use remainder::worldcoin::test_helpers::small_circuit_description_and_inputs;
-    let (circuit_desc, _, inputs) = small_circuit_description_and_inputs();
-    test_iriscode_circuit_with_public_layers_helper(circuit_desc, inputs);
+    let (proof_desc, inputs) = small_circuit_description_and_inputs();
+    test_iriscode_circuit_with_public_layers_helper(proof_desc, inputs);
 }
 
 #[test]
 /// Test a small version of the iriscode circuit with a Hyrax input layer.
 fn test_small_circuit_with_hyrax_layer() {
     use remainder::worldcoin::test_helpers::small_circuit_description_and_inputs;
-    let (desc, priv_layer_desc, inputs) = small_circuit_description_and_inputs();
-    test_iriscode_circuit_with_hyrax_helper(desc, priv_layer_desc, inputs);
+    let (proof_desc, inputs) = small_circuit_description_and_inputs();
+    test_iriscode_circuit_with_hyrax_helper(proof_desc, inputs);
 }
 
 #[ignore] // Takes a long time to run
@@ -60,20 +58,20 @@ fn test_v3_mask_with_hyrax_layer() {
 /// Test the iriscode circuit v2 with a Hyrax input layer in either the mask (true) or iris (false)
 /// case.
 pub fn test_iriscode_v2_with_hyrax_helper(mask: bool) {
-    let (desc, priv_layer_desc, inputs) = circuit_description_and_inputs(2, mask, None);
-    test_iriscode_circuit_with_hyrax_helper(desc, priv_layer_desc, inputs);
+    let (desc, inputs) = circuit_description_and_inputs(2, mask, None);
+    test_iriscode_circuit_with_hyrax_helper(desc, inputs);
 }
 
 /// Test the iriscode circuit v3 with a Hyrax input layer in either the mask (true) or iris (false)
 /// case.
 pub fn test_iriscode_v3_with_hyrax_helper(mask: bool) {
-    let (desc, priv_layer_desc, inputs) = circuit_description_and_inputs(3, mask, None);
-    test_iriscode_circuit_with_hyrax_helper(desc, priv_layer_desc, inputs);
+    let (desc, inputs) = circuit_description_and_inputs(3, mask, None);
+    test_iriscode_circuit_with_hyrax_helper(desc, inputs);
 }
 
 /// Helper function for testing an iriscode circuit (of any version, with any data) with a Hyrax input layer.
 pub fn test_iriscode_circuit_with_public_layers_helper(
-    circuit_desc: GKRCircuitDescription<Scalar>,
+    proof_desc: IriscodeProofDescription<Scalar>,
     inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
 ) {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -89,7 +87,7 @@ pub fn test_iriscode_circuit_with_public_layers_helper(
     let proof = HyraxProof::prove(
         &inputs,
         &HashMap::new(),
-        &circuit_desc,
+        &proof_desc.circuit_description,
         &committer,
         blinding_rng,
         converter,
@@ -97,13 +95,13 @@ pub fn test_iriscode_circuit_with_public_layers_helper(
     );
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-    proof.verify(&HashMap::new(), &circuit_desc, &committer, &mut transcript);
+    proof.verify(&HashMap::new(), &proof_desc.circuit_description, &committer, &mut transcript);
 }
 
-/// Helper function for testing an iriscode circuit (of any version, with any data) with a Hyrax input layer.
+/// Helper function for testing an iriscode circuit (of any version, with any data) with Hyrax input
+/// layers for the private data.
 pub fn test_iriscode_circuit_with_hyrax_helper(
-    circuit_desc: GKRCircuitDescription<Scalar>,
-    private_layer_desc: InputLayerDescription,
+    proof_desc: IriscodeProofDescription<Scalar>,
     inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
 ) {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -116,32 +114,41 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
         "modulus modulus modulus modulus modulus",
         None,
     );
+    // Set up Hyrax input layer specification.
     let mut prover_hyrax_input_layers = HashMap::new();
-    let hyrax_input_layer_desc: HyraxInputLayerDescription = private_layer_desc.into();
     prover_hyrax_input_layers.insert(
-        hyrax_input_layer_desc.layer_id,
-        (hyrax_input_layer_desc.clone(), None),
+        proof_desc.image_input_layer.layer_id,
+        (proof_desc.image_input_layer.clone().into(), None),
     );
-
+    prover_hyrax_input_layers.insert(
+        proof_desc.digits_input_layer.layer_id,
+        (proof_desc.digits_input_layer.clone().into(), None),
+    );
+    // Prove.
     let proof = HyraxProof::prove(
         &inputs,
         &prover_hyrax_input_layers,
-        &circuit_desc,
+        &proof_desc.circuit_description,
         &committer,
         blinding_rng,
         converter,
         &mut transcript,
     );
+    // Verify.
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
     let mut verifier_hyrax_input_layers = HashMap::new();
     verifier_hyrax_input_layers.insert(
-        hyrax_input_layer_desc.layer_id,
-        hyrax_input_layer_desc.clone(),
+        proof_desc.image_input_layer.layer_id,
+        proof_desc.image_input_layer.clone().into(),
+    );
+    verifier_hyrax_input_layers.insert(
+        proof_desc.digits_input_layer.layer_id,
+        proof_desc.digits_input_layer.clone().into(),
     );
     proof.verify(
         &verifier_hyrax_input_layers,
-        &circuit_desc,
+        &proof_desc.circuit_description,
         &committer,
         &mut transcript,
     );

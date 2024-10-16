@@ -399,7 +399,7 @@ pub const ENABLE_OPTIMIZATION: bool = true;
 
 /// The Verifier Key associated with a GKR proof of a [ProofSystem].
 /// It consists of consice GKR Circuit description to be use by the Verifier.
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize, Hash, Clone)]
 #[serde(bound = "F: Field")]
 pub struct GKRCircuitDescription<F: Field> {
     /// The circuit descriptions of the input layers.

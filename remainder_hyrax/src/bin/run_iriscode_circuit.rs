@@ -22,6 +22,6 @@ struct Args {
 fn main() {
     let args = Args::parse();
     let image_bytes = read_bytes_from_file(&args.image_filepath);
-    let (desc, priv_layer_desc, inputs) = circuit_description_and_inputs(args.version, false, Some(image_bytes));
-    test_iriscode_circuit_with_hyrax_helper(desc, priv_layer_desc, inputs);
+    let (desc, inputs) = circuit_description_and_inputs(args.version, false, Some(image_bytes));
+    test_iriscode_circuit_with_hyrax_helper(desc, inputs);
 }
