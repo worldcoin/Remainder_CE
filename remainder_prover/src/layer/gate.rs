@@ -43,6 +43,13 @@ use super::{
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
+/// Controls whether the `beta` optimiation should be enabled. When enabled, all
+/// functions in this module that compute the value of a `beta` function at a
+/// given index, will compute its value lazily using
+/// [BetaValues::compute_beta_over_challenge_and_index] instead of pre-computing
+/// and storing the entire bookkeeping table.
+const LAZY_BETA_EVALUATION: bool = true;
+
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug, Copy)]
 
 /// Operations that are currently supported by the gate. Binary because these
@@ -68,7 +75,7 @@ impl BinaryOperation {
 
 /// Generic gate struct -- the binary operation performed by the gate is specified by
 /// the `gate_operation` parameter. Additionally, the number of dataparallel variables
-/// is specified by `num_dataparallel_bits` in order to account for batched and un-batched
+/// is specified by `num_dataparallel_vars` in order to account for batched and un-batched
 /// gates.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: Field")]
@@ -76,7 +83,7 @@ pub struct GateLayer<F: Field> {
     /// The layer id associated with this gate layer.
     pub layer_id: LayerId,
     /// The number of bits representing the number of "dataparallel" copies of the circuit.
-    pub num_dataparallel_bits: usize,
+    pub num_dataparallel_vars: usize,
     /// A vector of tuples representing the "nonzero" gates, especially useful in the sparse case
     /// the format is (z, x, y) where the gate at label z is the output of performing an operation
     /// on gates with labels x and y.
@@ -93,6 +100,17 @@ pub struct GateLayer<F: Field> {
     pub gate_operation: BinaryOperation,
     /// Temp for debugging
     challenges: Vec<F>,
+    /// the beta table which enumerates the incoming claim's challenge points on the MLE
+    beta_g1: Option<DenseMle<F>>,
+    /// the beta table which enumerates the incoming claim's challenge points on the
+    /// dataparallel vars of the MLE
+    beta_g2: Option<DenseMle<F>>,
+    /// the incoming claim's challenge points on the MLE
+    g1: Option<Vec<F>>,
+    /// the incoming claim's challenge points on the dataparallel vars of the MLE
+    g2: Option<Vec<F>>,
+    // the number of rounds in phase 1
+    num_rounds_phase1: Option<usize>,
 }
 
 impl<F: Field> Layer<F> for GateLayer<F> {
@@ -111,7 +129,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         let mut beta_g2_fully_bound = F::ONE;
         // We perform the dataparallel initialization only if there is at least one variable
         // representing which copy we are in.
-        if self.num_dataparallel_bits > 0 {
+        if self.num_dataparallel_vars > 0 {
             let (dataparallel_rounds, beta_g2_bound) = self
                 .perform_dataparallel_phase(&mut beta_g1, &mut beta_g2, transcript_writer)
                 .unwrap();
@@ -121,7 +139,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         // We perform the rounds binding "x" variables (phase 1) and the rounds binding "y" variables (phase 2) in sequence.
         let (phase_1_rounds, f2_at_u, u_challenges) = self
             .perform_phase_1(
-                claim.get_point()[self.num_dataparallel_bits..].to_vec(),
+                claim.get_point()[self.num_dataparallel_vars..].to_vec(),
                 beta_g2_fully_bound,
                 transcript_writer,
             )
@@ -159,15 +177,62 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         Ok(())
     }
 
-    fn initialize_sumcheck(&mut self, _claim_point: &[F]) -> Result<(), LayerError> {
-        todo!()
+    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
+        if !LAZY_BETA_EVALUATION {
+            let mut beta_g1 = BetaValues::new_beta_equality_mle(
+                claim_point[self.num_dataparallel_vars..].to_vec(),
+            );
+            beta_g1.index_mle_indices(0);
+            self.set_beta_g1(beta_g1);
+
+            let mut beta_g2 = BetaValues::new_beta_equality_mle(
+                claim_point[..self.num_dataparallel_vars].to_vec(),
+            );
+            beta_g2.index_mle_indices(0);
+            self.set_beta_g2(beta_g2);
+        } else {
+            self.set_g1(claim_point[self.num_dataparallel_vars..].to_vec());
+            self.set_g2(claim_point[..self.num_dataparallel_vars].to_vec());
+        }
+        let num_rounds_phase1 = self.lhs.num_free_vars();
+
+        self.lhs.index_mle_indices(0);
+        self.rhs.index_mle_indices(0);
+
+        Ok(())
     }
 
-    fn compute_round_sumcheck_message(
-        &mut self,
-        _round_index: usize,
-    ) -> Result<Vec<F>, LayerError> {
-        todo!()
+    fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError> {
+        // TODO!(ende): right now we still initializes the beta even the LAZY_BETA_EVALUATION flag is on
+        // it's because fn `compute_sumcheck_messages_data_parallel_identity_gate` cannot lazy
+        // evaluate beta's within it yet
+        if round_index == 0 && LAZY_BETA_EVALUATION {
+            let (mut beta_g2, mut beta_g1) = (
+                BetaValues::new_beta_equality_mle(self.g2.as_ref().unwrap().clone()),
+                BetaValues::new_beta_equality_mle(self.g1.as_ref().unwrap().clone()),
+            );
+            beta_g2.index_mle_indices(0);
+            beta_g1.index_mle_indices(0);
+            self.set_beta_g1(beta_g1);
+            self.set_beta_g2(beta_g2);
+        }
+
+        // data parallel phase
+        if round_index < self.num_dataparallel_vars {
+            todo!()
+        // init phase 1
+        } else if round_index == self.num_dataparallel_vars {
+            todo!()
+        // phase 1
+        } else if round_index < self.num_dataparallel_vars + self.num_rounds_phase1.unwrap() {
+            todo!()
+        // init phase 2
+        } else if round_index == self.num_dataparallel_vars + self.num_rounds_phase1.unwrap() {
+            todo!()
+        // phase 2
+        } else {
+            todo!()
+        }
     }
 
     fn bind_round_variable(
@@ -220,13 +285,13 @@ pub struct GateLayerDescription<F: Field> {
 
     /// The number of bits representing the number of "dataparallel" copies of
     /// the circuit.
-    num_dataparallel_bits: usize,
+    num_dataparallel_vars: usize,
 }
 
 impl<F: Field> GateLayerDescription<F> {
     /// Constructor for a [GateLayerDescription].
     pub fn new(
-        num_dataparallel_bits: Option<usize>,
+        num_dataparallel_vars: Option<usize>,
         wiring: Vec<(usize, usize, usize)>,
         lhs_circuit_mle: MleDescription<F>,
         rhs_circuit_mle: MleDescription<F>,
@@ -239,7 +304,7 @@ impl<F: Field> GateLayerDescription<F> {
             wiring,
             lhs_mle: lhs_circuit_mle,
             rhs_mle: rhs_circuit_mle,
-            num_dataparallel_bits: num_dataparallel_bits.unwrap_or(0),
+            num_dataparallel_vars: num_dataparallel_vars.unwrap_or(0),
         }
     }
 }
@@ -277,19 +342,19 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
-        }) - self.num_dataparallel_bits;
+        }) - self.num_dataparallel_vars;
         let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
-        }) - self.num_dataparallel_bits;
+        }) - self.num_dataparallel_vars;
 
         // --- Store all prover sumcheck messages to check against ---
         let mut sumcheck_messages: Vec<Vec<F>> = vec![];
 
         // First round check against the claim.
-        let first_round_num_evals = match (self.gate_operation, self.num_dataparallel_bits) {
+        let first_round_num_evals = match (self.gate_operation, self.num_dataparallel_vars) {
             (BinaryOperation::Add, 0) => NON_DATAPARALLEL_ROUND_ADD_NUM_EVALS,
             (BinaryOperation::Mul, 0) => NON_DATAPARALLEL_ROUND_MUL_NUM_EVALS,
             (BinaryOperation::Add, _) => DATAPARALLEL_ROUND_ADD_NUM_EVALS,
@@ -309,7 +374,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         // Check each of the messages -- note that here the verifier doesn't actually see the difference
         // between dataparallel rounds, phase 1 rounds, and phase 2 rounds; instead, the prover's proof reads
         // as a single continuous proof.
-        for sumcheck_round_idx in 1..self.num_dataparallel_bits + num_u + num_v {
+        for sumcheck_round_idx in 1..self.num_dataparallel_vars + num_u + num_v {
             // --- Read challenge r_{i - 1} from transcript ---
             let challenge = transcript_reader
                 .get_challenge("Sumcheck challenge")
@@ -321,7 +386,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
             // --- Read off g_i(0), g_i(1), ..., g_i(d) from transcript ---
             let univariate_num_evals = match (
-                sumcheck_round_idx < self.num_dataparallel_bits, // 0-indexed, so strictly less-than is correct
+                sumcheck_round_idx < self.num_dataparallel_vars, // 0-indexed, so strictly less-than is correct
                 self.gate_operation,
             ) {
                 (true, BinaryOperation::Add) => DATAPARALLEL_ROUND_ADD_NUM_EVALS,
@@ -376,14 +441,14 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
-        }) - self.num_dataparallel_bits;
+        }) - self.num_dataparallel_vars;
         let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
-        }) - self.num_dataparallel_bits;
-        (0..num_u + num_v + self.num_dataparallel_bits).collect_vec()
+        }) - self.num_dataparallel_vars;
+        (0..num_u + num_v + self.num_dataparallel_vars).collect_vec()
     }
 
     fn convert_into_verifier_layer(
@@ -400,19 +465,19 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
-        }) - self.num_dataparallel_bits;
+        }) - self.num_dataparallel_vars;
         let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
-        }) - self.num_dataparallel_bits;
+        }) - self.num_dataparallel_vars;
 
         // We want to separate the challenges into which ones are from the dataparallel bits, which ones
         // are for binding x (phase 1), and which are for binding y (phase 2).
         let mut sumcheck_bindings_vec = sumcheck_bindings.to_vec();
-        let last_v_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_bits + num_u);
-        let first_u_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_bits);
+        let last_v_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_vars + num_u);
+        let first_u_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_vars);
         let dataparallel_challenges = sumcheck_bindings_vec;
 
         assert_eq!(last_v_challenges.len(), num_v);
@@ -446,7 +511,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             wiring: self.wiring.clone(),
             lhs_mle: lhs_verifier_mle,
             rhs_mle: rhs_verifier_mle,
-            num_dataparallel_rounds: self.num_dataparallel_bits,
+            num_dataparallel_rounds: self.num_dataparallel_vars,
             claim_challenge_points: claim_point.to_vec(),
             dataparallel_sumcheck_challenges: dataparallel_challenges,
             first_u_challenges,
@@ -475,13 +540,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
     fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
         let lhs_mle = self.lhs_mle.into_dense_mle(circuit_map);
         let rhs_mle = self.rhs_mle.into_dense_mle(circuit_map);
-        let num_dataparallel_bits = if self.num_dataparallel_bits == 0 {
+        let num_dataparallel_vars = if self.num_dataparallel_vars == 0 {
             None
         } else {
-            Some(self.num_dataparallel_bits)
+            Some(self.num_dataparallel_vars)
         };
         let gate_layer = GateLayer::new(
-            num_dataparallel_bits,
+            num_dataparallel_vars,
             self.wiring.clone(),
             lhs_mle,
             rhs_mle,
@@ -511,7 +576,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
         // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
         // evaluating over all values in the boolean hypercube which includes dataparallel bits
-        let num_dataparallel_vals = 1 << (self.num_dataparallel_bits);
+        let num_dataparallel_vals = 1 << (self.num_dataparallel_vars);
         let res_table_num_entries =
             ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
 
@@ -780,7 +845,7 @@ impl<F: Field> YieldWLXEvals<F> for GateLayer<F> {
                     &mut self.lhs.clone(),
                     &mut self.rhs.clone(),
                     &self.nonzero_gates,
-                    self.num_dataparallel_bits,
+                    self.num_dataparallel_vars,
                 )
             })
             .collect();
@@ -798,7 +863,7 @@ impl<F: Field> GateLayer<F> {
     /// Construct a new gate layer
     ///
     /// # Arguments
-    /// * `num_dataparallel_bits`: an optional representing the number of bits representing the circuit copy we are looking at.
+    /// * `num_dataparallel_vars`: an optional representing the number of bits representing the circuit copy we are looking at.
     ///
     /// None if this is not dataparallel, otherwise specify the number of bits
     /// * `nonzero_gates`: the gate wiring between single-copy circuit (as the wiring for each circuit remains the same)
@@ -812,7 +877,7 @@ impl<F: Field> GateLayer<F> {
     /// # Returns
     /// A `Gate` struct that can now prove and verify rounds
     pub fn new(
-        num_dataparallel_bits: Option<usize>,
+        num_dataparallel_vars: Option<usize>,
         nonzero_gates: Vec<(usize, usize, usize)>,
         lhs: DenseMle<F>,
         rhs: DenseMle<F>,
@@ -820,7 +885,7 @@ impl<F: Field> GateLayer<F> {
         layer_id: LayerId,
     ) -> Self {
         GateLayer {
-            num_dataparallel_bits: num_dataparallel_bits.unwrap_or(0),
+            num_dataparallel_vars: num_dataparallel_vars.unwrap_or(0),
             nonzero_gates,
             lhs,
             rhs,
@@ -829,7 +894,32 @@ impl<F: Field> GateLayer<F> {
             phase_2_mles: None,
             gate_operation,
             challenges: vec![],
+            beta_g1: None,
+            beta_g2: None,
+            g1: None,
+            g2: None,
+            num_rounds_phase1: None,
         }
+    }
+
+    fn set_beta_g1(&mut self, beta_g1: DenseMle<F>) {
+        self.beta_g1 = Some(beta_g1);
+    }
+
+    fn set_beta_g2(&mut self, beta_g2: DenseMle<F>) {
+        self.beta_g2 = Some(beta_g2);
+    }
+
+    fn set_g1(&mut self, g1: Vec<F>) {
+        self.g1 = Some(g1);
+    }
+
+    fn set_g2(&mut self, g2: Vec<F>) {
+        self.g2 = Some(g2);
+    }
+
+    fn set_num_rounds_phase1(&mut self, num_rounds_phase1: usize) {
+        self.num_rounds_phase1 = Some(num_rounds_phase1);
     }
 
     fn compute_beta_tables(&mut self, challenges: &[F]) -> (DenseMle<F>, DenseMle<F>) {
@@ -840,7 +930,7 @@ impl<F: Field> GateLayer<F> {
             .iter()
             .enumerate()
             .for_each(|(bit_idx, challenge)| {
-                if bit_idx < self.num_dataparallel_bits {
+                if bit_idx < self.num_dataparallel_vars {
                     g2_challenges.push(*challenge);
                 } else {
                     g1_challenges.push(*challenge);
@@ -857,7 +947,7 @@ impl<F: Field> GateLayer<F> {
 
     /// Initialize the dataparallel phase: construct the necessary mles and return the first sumcheck message.
     /// This will then set the necessary fields of the [Gate] struct so that the dataparallel bits can be
-    /// correctly bound during the first `num_dataparallel_bits` rounds of sumcheck.
+    /// correctly bound during the first `num_dataparallel_vars` rounds of sumcheck.
     fn init_dataparallel_phase(
         &mut self,
         beta_g1: &mut DenseMle<F>,
@@ -876,7 +966,7 @@ impl<F: Field> GateLayer<F> {
             beta_g1,
             self.gate_operation,
             &self.nonzero_gates,
-            self.num_dataparallel_bits,
+            self.num_dataparallel_vars,
         )
     }
 
@@ -886,7 +976,7 @@ impl<F: Field> GateLayer<F> {
     fn init_phase_1(&mut self, challenges: Vec<F>) -> Result<Vec<F>, GateError> {
         let beta_g1 = BetaValues::new_beta_equality_mle(challenges);
 
-        self.lhs.index_mle_indices(self.num_dataparallel_bits);
+        self.lhs.index_mle_indices(self.num_dataparallel_vars);
         let num_x = self.lhs.num_free_vars();
 
         // Because we are binding `x` variables after this phase, all bookkeeping tables should have size
@@ -931,7 +1021,7 @@ impl<F: Field> GateLayer<F> {
         };
 
         phase_1_mles.iter_mut().for_each(|mle_vec| {
-            index_mle_indices_gate(mle_vec, self.num_dataparallel_bits);
+            index_mle_indices_gate(mle_vec, self.num_dataparallel_vars);
         });
 
         self.phase_1_mles = Some(phase_1_mles.clone());
@@ -950,7 +1040,7 @@ impl<F: Field> GateLayer<F> {
         let evals_vec = init_mle_refs
             .iter()
             .map(|mle_vec| {
-                compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_bits, max_deg)
+                compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_vars, max_deg)
                     .unwrap()
             })
             .collect_vec();
@@ -1018,7 +1108,7 @@ impl<F: Field> GateLayer<F> {
         };
 
         phase_2_mles.iter_mut().for_each(|mle_vec| {
-            index_mle_indices_gate(mle_vec, self.num_dataparallel_bits);
+            index_mle_indices_gate(mle_vec, self.num_dataparallel_vars);
         });
         self.phase_2_mles = Some(phase_2_mles.clone());
 
@@ -1037,7 +1127,7 @@ impl<F: Field> GateLayer<F> {
         let evals_vec = init_mle_refs
             .iter()
             .map(|mle_vec| {
-                compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_bits, max_deg)
+                compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_vars, max_deg)
                     .unwrap()
             })
             .collect_vec();
@@ -1071,7 +1161,7 @@ impl<F: Field> GateLayer<F> {
 
         transcript_writer
             .append_elements("Initial Sumcheck evaluations DATAPARALLEL", &first_message);
-        let num_rounds_copy_phase = self.num_dataparallel_bits;
+        let num_rounds_copy_phase = self.num_dataparallel_vars;
 
         // Do the first dataparallel bits number sumcheck rounds using libra giraffe.
         let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
@@ -1086,7 +1176,7 @@ impl<F: Field> GateLayer<F> {
                     round,
                     challenge,
                     &self.nonzero_gates,
-                    self.num_dataparallel_bits - round,
+                    self.num_dataparallel_vars - round,
                     self.gate_operation,
                 )
                 .unwrap();
@@ -1145,7 +1235,7 @@ impl<F: Field> GateLayer<F> {
                 let challenge = transcript_writer.get_challenge("Sumcheck challenge PHASE 1");
                 challenges.push(challenge);
                 // If there are dataparallel bits, we want to start at that index.
-                bind_round_gate(round + self.num_dataparallel_bits, challenge, phase_1_mles);
+                bind_round_gate(round + self.num_dataparallel_vars, challenge, phase_1_mles);
                 let phase_1_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_1_mles
                     .iter()
                     .map(|mle_vec| {
@@ -1154,7 +1244,7 @@ impl<F: Field> GateLayer<F> {
                     })
                     .collect();
                 let eval = compute_sumcheck_message_gate(
-                    round + self.num_dataparallel_bits,
+                    round + self.num_dataparallel_vars,
                     &phase_1_mle_refs,
                 )
                 .into_iter()
@@ -1173,7 +1263,7 @@ impl<F: Field> GateLayer<F> {
         phase_1_mles.iter_mut().for_each(|mle_ref_vec| {
             mle_ref_vec.iter_mut().for_each(|mle_ref| {
                 mle_ref.fix_variable(
-                    num_rounds_phase1 - 1 + self.num_dataparallel_bits,
+                    num_rounds_phase1 - 1 + self.num_dataparallel_vars,
                     final_chal_u,
                 );
             })
@@ -1224,7 +1314,7 @@ impl<F: Field> GateLayer<F> {
                 .chain((1..num_rounds_phase2).map(|round| {
                     let challenge = transcript_writer.get_challenge("Sumcheck challenge");
                     challenges.push(challenge);
-                    bind_round_gate(round + self.num_dataparallel_bits, challenge, phase_2_mles);
+                    bind_round_gate(round + self.num_dataparallel_vars, challenge, phase_2_mles);
                     let phase_2_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_2_mles
                         .iter()
                         .map(|mle_vec| {
@@ -1233,7 +1323,7 @@ impl<F: Field> GateLayer<F> {
                         })
                         .collect();
                     let eval = compute_sumcheck_message_gate(
-                        round + self.num_dataparallel_bits,
+                        round + self.num_dataparallel_vars,
                         &phase_2_mle_refs,
                     )
                     .into_iter()
@@ -1251,7 +1341,7 @@ impl<F: Field> GateLayer<F> {
             phase_2_mles.iter_mut().for_each(|mle_ref_vec| {
                 mle_ref_vec.iter_mut().for_each(|mle_ref| {
                     mle_ref.fix_variable(
-                        num_rounds_phase2 - 1 + self.num_dataparallel_bits,
+                        num_rounds_phase2 - 1 + self.num_dataparallel_vars,
                         final_chal,
                     );
                 })
@@ -1279,7 +1369,7 @@ impl<F: std::fmt::Debug + Field> GateLayer<F> {
                     .field("rhs_mle_ref_layer_id", &self.0.rhs.layer_id())
                     .field("rhs_mle_ref_mle_indices", &self.0.rhs.mle_indices())
                     .field("add_nonzero_gates", &self.0.nonzero_gates)
-                    .field("num_dataparallel_bits", &self.0.num_dataparallel_bits)
+                    .field("num_dataparallel_vars", &self.0.num_dataparallel_vars)
                     .finish()
             }
         }
