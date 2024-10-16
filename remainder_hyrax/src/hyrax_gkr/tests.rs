@@ -34,6 +34,7 @@ use remainder_shared_types::transcript::ec_transcript::{
     ECProverTranscript, ECTranscriptReader, ECTranscriptWriter, ECVerifierTranscript,
 };
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+use remainder_shared_types::transcript::test_transcript::TestSponge;
 use remainder_shared_types::Fr;
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
@@ -211,6 +212,225 @@ fn identity_gate_hyrax_layer_test() {
     let mle_producing_claim: DenseMle<Fr> =
         DenseMle::new_from_raw(vec![Fr::from(2_u64), Fr::from(3)], LayerId::Input(0));
     let claim_point = vec![Fr::from(6)];
+    let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
+    let blinding = Fr::from(blinding_rng.next_u64());
+    let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
+    let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
+        to_layer_id: LayerId::Layer(0),
+        point: claim_point,
+        evaluation: commitment_to_eval,
+    }];
+
+    // Convert the layer to a layer description for the verifier.
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
+
+    // Construct the layer proof
+    let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
+        &mut layer_enum,
+        &claims,
+        &vec![mle_producing_claim],
+        &committer,
+        &mut blinding_rng,
+        &mut prover_transcript,
+        &mut VandermondeInverse::new(),
+    );
+
+    // Convert the claims into their respective commitments for the verifier view.
+    let claim_commitments: Vec<_> = claims
+        .iter()
+        .map(|claim| claim.to_claim_commitment())
+        .collect();
+
+    // Verify
+    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptReader::new(prover_transcript.get_transcript());
+    HyraxLayerProof::verify(
+        &hyrax_layer_proof,
+        &layer_desc,
+        &claim_commitments,
+        &committer,
+        &mut verifier_transcript,
+    );
+}
+
+#[test]
+/// This is a dataparallel version of the [`identity_gate_hyrax_layer_test`]
+/// The input MLE has four (two dataparallel) variables. The resulting MLE after the
+/// rerouting only has three (two dataparallel) variables.
+fn dataparallel_uneven_identity_gate_hyrax_layer_test() {
+    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptWriter::new("Test claim agg transcript");
+
+    let mut blinding_rng = &mut rand::thread_rng();
+    const LAYER_DEGREE: usize = 2;
+    const NUM_VARS_MLE: usize = 2;
+    const DATAPARALLEL_NUM_VARS_MLE: usize = 1;
+
+    // The MLE we are going to reroute
+    let mle_1: DenseMle<Fr> = DenseMle::new_from_raw(
+        vec![
+            Fr::from(1),
+            Fr::from(5),
+            Fr::from(2),
+            Fr::from(6),
+            Fr::from(3),
+            Fr::from(7),
+            Fr::from(4),
+            Fr::from(8),
+        ],
+        LayerId::Layer(0),
+    );
+    let circuit_mle_1 = MleDescription::new(
+        LayerId::Layer(0),
+        &repeat_n(MleIndex::Free, NUM_VARS_MLE + DATAPARALLEL_NUM_VARS_MLE).collect_vec(),
+    );
+
+    // The wirings
+    let nonzero_gates = vec![(0, 1)];
+
+    // Construct the layer from the underlying MLE and the wirings
+    let mut circuit_layer_enum =
+        LayerDescriptionEnum::IdentityGate(IdentityGateLayerDescription::new(
+            LayerId::Layer(0),
+            nonzero_gates.clone(),
+            circuit_mle_1,
+            Some(DATAPARALLEL_NUM_VARS_MLE),
+        ));
+    circuit_layer_enum.index_mle_indices(0);
+    let identity_layer: IdentityGate<Scalar> = IdentityGate::new(
+        LayerId::Layer(0),
+        nonzero_gates,
+        mle_1,
+        Some(DATAPARALLEL_NUM_VARS_MLE),
+    );
+    let mut layer_enum = LayerEnum::IdentityGate(Box::new(identity_layer));
+
+    // Other auxiliaries for the layer
+    let committer = PedersenCommitter::<Bn256Point>::new(
+        (LAYER_DEGREE + 1) * (NUM_VARS_MLE + DATAPARALLEL_NUM_VARS_MLE) + 1,
+        "not working??not working??not working??not working??",
+        None,
+    );
+
+    // The MLE representing the expression above evaluated at the boolean hypercube.
+    let mle_producing_claim: DenseMle<Fr> =
+        DenseMle::new_from_raw(vec![Fr::from(2), Fr::from(6)], LayerId::Input(0));
+    let claim_point = vec![Fr::one()];
+    let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
+    let blinding = Fr::from(blinding_rng.next_u64());
+    let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
+    let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
+        to_layer_id: LayerId::Layer(0),
+        point: claim_point,
+        evaluation: commitment_to_eval,
+    }];
+
+    // Convert the layer to a layer description for the verifier.
+    let layer_desc: LayerDescriptionEnum<Fr> = circuit_layer_enum;
+
+    // Construct the layer proof
+    let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
+        &mut layer_enum,
+        &claims,
+        &vec![mle_producing_claim],
+        &committer,
+        &mut blinding_rng,
+        &mut prover_transcript,
+        &mut VandermondeInverse::new(),
+    );
+
+    // Convert the claims into their respective commitments for the verifier view.
+    let claim_commitments: Vec<_> = claims
+        .iter()
+        .map(|claim| claim.to_claim_commitment())
+        .collect();
+
+    // Verify
+    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptReader::new(prover_transcript.get_transcript());
+    HyraxLayerProof::verify(
+        &hyrax_layer_proof,
+        &layer_desc,
+        &claim_commitments,
+        &committer,
+        &mut verifier_transcript,
+    );
+}
+
+#[test]
+/// This is an "even" version of the [`identity_gate_hyrax_layer_test`]
+/// Meaning the input MLE has four (two dataparallel) variables. And the resulting MLE
+/// after the rerouting also has four (two dataparallel) variables.
+fn dataparallel_even_identity_gate_hyrax_layer_test() {
+    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptWriter::new("Test claim agg transcript");
+
+    let mut blinding_rng = &mut rand::thread_rng();
+    const LAYER_DEGREE: usize = 2;
+    const NUM_VARS_MLE: usize = 2;
+    const DATAPARALLEL_NUM_VARS_MLE: usize = 1;
+
+    // The MLE we are going to reroute
+    let mle_1: DenseMle<Fr> = DenseMle::new_from_raw(
+        vec![
+            Fr::from(1),
+            Fr::from(5),
+            Fr::from(2),
+            Fr::from(6),
+            Fr::from(3),
+            Fr::from(7),
+            Fr::from(4),
+            Fr::from(8),
+        ],
+        LayerId::Layer(0),
+    );
+    let circuit_mle_1 = MleDescription::new(
+        LayerId::Layer(0),
+        &repeat_n(MleIndex::Free, NUM_VARS_MLE + DATAPARALLEL_NUM_VARS_MLE).collect_vec(),
+    );
+
+    // The wirings
+    let nonzero_gates = vec![(0, 3), (1, 2), (2, 1), (3, 0)];
+
+    // Construct the layer from the underlying MLE and the wirings
+    let mut circuit_layer_enum =
+        LayerDescriptionEnum::IdentityGate(IdentityGateLayerDescription::new(
+            LayerId::Layer(0),
+            nonzero_gates.clone(),
+            circuit_mle_1,
+            Some(DATAPARALLEL_NUM_VARS_MLE),
+        ));
+    circuit_layer_enum.index_mle_indices(0);
+    let identity_layer: IdentityGate<Scalar> = IdentityGate::new(
+        LayerId::Layer(0),
+        nonzero_gates,
+        mle_1,
+        Some(DATAPARALLEL_NUM_VARS_MLE),
+    );
+    let mut layer_enum = LayerEnum::IdentityGate(Box::new(identity_layer));
+
+    // Other auxiliaries for the layer
+    let committer = PedersenCommitter::<Bn256Point>::new(
+        (LAYER_DEGREE + 1) * (NUM_VARS_MLE + DATAPARALLEL_NUM_VARS_MLE) + 1,
+        "not working??not working??not working??not working??",
+        None,
+    );
+
+    // The MLE representing the expression above evaluated at the boolean hypercube.
+    let mle_producing_claim: DenseMle<Fr> = DenseMle::new_from_raw(
+        vec![
+            Fr::from(4),
+            Fr::from(8),
+            Fr::from(3),
+            Fr::from(7),
+            Fr::from(2),
+            Fr::from(6),
+            Fr::from(1),
+            Fr::from(5),
+        ],
+        LayerId::Input(0),
+    );
+    let claim_point = vec![Fr::one(), Fr::from(5), Fr::from(2)];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
     let blinding = Fr::from(blinding_rng.next_u64());
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
