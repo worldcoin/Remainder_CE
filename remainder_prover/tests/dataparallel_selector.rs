@@ -65,8 +65,7 @@ where
     }
 }
 
-/// Struct which allows for easy "semantic" feeding of inputs into the
-/// dataparallel selector test circuit.
+/// Struct which allows for easy "semantic" feeding of inputs into the circuit.
 struct DataparallelSelectorTestInputs<F: Field> {
     dataparallel_mle_1: MultilinearExtension<F>,
     dataparallel_mle_2: MultilinearExtension<F>,
@@ -88,7 +87,7 @@ fn build_dataparallel_selector_test_circuit<F: Field>(
     // --- Create global context manager ---
     let context = Context::new();
 
-    // --- All inputs are public inputs ---
+    // --- All inputs are public ---
     let public_input_layer_node = InputLayerNode::new(&context, None);
 
     // --- Inputs to the circuit include the four dataparallel MLEs ---
@@ -120,9 +119,6 @@ fn build_dataparallel_selector_test_circuit<F: Field>(
     let dataparallel_mle_4_id = dataparallel_mle_4_shred.id();
 
     // --- Create the circuit components ---
-    // Stack currently fails at layer 0, because expr and witgen for the first component is inconsistent.
-    // But if you change from stack to interleave, then it fails at layer 1, because the subtraction of the dataparallel
-    // mle from the output mle is not actually 0.
     let component_1 = ProductScaledBuilderComponent::new(
         &context,
         &dataparallel_mle_1_shred,

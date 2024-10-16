@@ -19,8 +19,7 @@ use remainder_shared_types::{Field, Fr};
 pub mod utils;
 use utils::get_total_combined_mle_num_vars;
 
-/// Struct which allows for easy "semantic" feeding of inputs into the
-/// single-shred lookup test circuit.
+/// Struct which allows for easy "semantic" feeding of inputs into the circuit.
 struct SingleShredLookupTestInputs<F: Field> {
     table_mle: MultilinearExtension<F>,
     witness_mle: MultilinearExtension<F>,
@@ -158,8 +157,7 @@ pub fn single_shred_test() {
     test_circuit_new(&circuit_description, private_input_layers, &circuit_inputs);
 }
 
-/// Struct which allows for easy "semantic" feeding of inputs into the
-/// single-shred lookup test circuit.
+/// Struct which allows for easy "semantic" feeding of inputs into the circuit.
 struct MultiShredLookupTestInputs<F: Field> {
     table_mle: MultilinearExtension<F>,
     witness_mle_1: MultilinearExtension<F>,

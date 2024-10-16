@@ -105,8 +105,7 @@ where
     }
 }
 
-/// Struct which allows for easy "semantic" feeding of inputs into the
-/// linear/non-linear vars combined test circuit.
+/// Struct which allows for easy "semantic" feeding of inputs into the circuit.
 struct LinearNonlinearVarsTestInputs<F: Field> {
     selector_mle: MultilinearExtension<F>,
     product_mle: MultilinearExtension<F>,
@@ -124,10 +123,10 @@ fn build_linear_and_nonlinear_vars_test_circuit<F: Field>(
     // --- Create global context manager ---
     let context = Context::new();
 
-    // --- All inputs are public inputs ---
+    // --- All inputs are public ---
     let public_input_layer_node = InputLayerNode::new(&context, None);
 
-    // --- Inputs to the circuit include the four dataparallel MLEs ---
+    // --- "Semantic" circuit inputs ---
     let selector_mle_shred =
         InputShred::new(&context, selector_mle_num_vars, &public_input_layer_node);
     let product_mle_shred =

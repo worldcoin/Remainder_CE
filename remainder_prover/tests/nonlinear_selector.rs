@@ -89,8 +89,7 @@ where
     }
 }
 
-/// Struct which allows for easy "semantic" feeding of inputs into the
-/// nonlinear selector test circuit.
+/// Struct which allows for easy "semantic" feeding of inputs into the circuit.
 struct NonlinearSelectorTestInputs<F: Field> {
     left_sel_mle: MultilinearExtension<F>,
     right_sel_mle: MultilinearExtension<F>,
@@ -110,10 +109,10 @@ fn build_nonlinear_selector_test_circuit<F: Field>(
     // --- Create global context manager ---
     let context = Context::new();
 
-    // --- All inputs are public inputs ---
+    // --- All inputs are public ---
     let public_input_layer_node = InputLayerNode::new(&context, None);
 
-    // --- Inputs to the circuit are the MLEs at the leaves of the nested selector + product ---
+    // --- Inputs to the circuit are the MLEs at the leaves of the selector + product ---
     let left_sel_mle_shred = InputShred::new(&context, num_vars_sel_side, &public_input_layer_node);
     let right_sel_mle_shred =
         InputShred::new(&context, num_vars_sel_side, &public_input_layer_node);

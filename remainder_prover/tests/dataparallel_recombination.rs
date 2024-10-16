@@ -145,8 +145,7 @@ where
     }
 }
 
-/// Struct which allows for easy "semantic" feeding of inputs into the
-/// dataparallel recombination test circuit.
+/// Struct which allows for easy "semantic" feeding of inputs into the circuit.
 struct DataparallelRecombinationTestInputs<F: Field> {
     mle_1: MultilinearExtension<F>,
     mle_2: MultilinearExtension<F>,
@@ -167,10 +166,10 @@ fn build_dataparallel_recombination_test_circuit<F: Field>(
     // --- Create global context manager ---
     let context = Context::new();
 
-    // --- All inputs are public inputs ---
+    // --- All inputs are public ---
     let public_input_layer_node = InputLayerNode::new(&context, None);
 
-    // --- Inputs to the circuit include the "dataparallel MLE 1" and the "dataparallel MLE 2" ---
+    // --- "Semantic" circuit inputs ---
     let mle_1_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);
     let mle_2_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);
     let mle_3_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);

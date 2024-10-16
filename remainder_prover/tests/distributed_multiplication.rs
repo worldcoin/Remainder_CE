@@ -92,8 +92,7 @@ where
     }
 }
 
-/// Struct which allows for easy "semantic" feeding of inputs into the
-/// dataparallel selector test circuit.
+/// Struct which allows for easy "semantic" feeding of inputs into the circuit.
 struct DataparallelWraparoundTestInputs<F: Field> {
     dataparallel_mle_smaller: MultilinearExtension<F>,
     dataparallel_mle_bigger: MultilinearExtension<F>,
@@ -113,10 +112,10 @@ fn build_dataparallel_wraparound_multiplication_test_circuit<F: Field>(
     // --- Create global context manager ---
     let context = Context::new();
 
-    // --- All inputs are public inputs ---
+    // --- All inputs are public ---
     let public_input_layer_node = InputLayerNode::new(&context, None);
 
-    // --- Inputs to the circuit include the four dataparallel MLEs ---
+    // --- "Semantic" circuit inputs ---
     let dataparallel_mle_smaller_shred = InputShred::new(
         &context,
         num_dataparallel_vars + num_free_vars_smaller,

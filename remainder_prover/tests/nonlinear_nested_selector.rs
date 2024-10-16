@@ -99,8 +99,7 @@ where
     }
 }
 
-/// Struct which allows for easy "semantic" feeding of inputs into the
-/// linear/non-linear vars combined test circuit.
+/// Struct which allows for easy "semantic" feeding of inputs into the circuit.
 struct NonlinearNestedSelectorTestInputs<F: Field> {
     left_inner_sel_mle: MultilinearExtension<F>,
     right_inner_sel_mle: MultilinearExtension<F>,
@@ -122,7 +121,7 @@ fn build_nonlinear_nested_sel_test_circuit<F: Field>(
     // --- Create global context manager ---
     let context = Context::new();
 
-    // --- All inputs are public inputs ---
+    // --- All inputs are public ---
     let public_input_layer_node = InputLayerNode::new(&context, None);
 
     // --- Inputs to the circuit are the MLEs at the leaves of the nested selector + product ---

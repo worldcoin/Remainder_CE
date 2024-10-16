@@ -46,8 +46,7 @@ where
     }
 }
 
-/// Struct which allows for easy "semantic" feeding of inputs into the
-/// linear/non-linear vars combined test circuit.
+/// Struct which allows for easy "semantic" feeding of inputs into the circuit.
 struct ProductCheckerTestInputs<F: Field> {
     mle_1: MultilinearExtension<F>,
     mle_2: MultilinearExtension<F>,

@@ -194,8 +194,7 @@ where
     }
 }
 
-/// Struct which allows for easy "semantic" feeding of inputs into the
-/// test identity gate circuit.
+/// Struct which allows for easy "semantic" feeding of inputs into the circuit.
 struct CombinedNondataparallelTestInputs<F: Field> {
     mle_1: MultilinearExtension<F>,
     mle_2: MultilinearExtension<F>,
@@ -213,10 +212,10 @@ fn build_combined_nondataparallel_circuit<F: Field>(
     // --- Create global context manager ---
     let context = Context::new();
 
-    // --- All inputs are public inputs ---
+    // --- All inputs are public ---
     let public_input_layer_node = InputLayerNode::new(&context, None);
 
-    // --- Inputs to the circuit include the "dataparallel MLE 1" and the "dataparallel MLE 2" ---
+    // --- "Semantic" circuit inputs ---
     let mle_1_shred = InputShred::new(&context, mle_1_2_vars, &public_input_layer_node);
     let mle_2_shred = InputShred::new(&context, mle_1_2_vars, &public_input_layer_node);
 
