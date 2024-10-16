@@ -281,8 +281,8 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
                         (
-                            *beta_g.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
-                            *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                            beta_g.mle.f.get(*z_ind).unwrap_or(F::ZERO),
+                            beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
@@ -306,8 +306,8 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
             let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
                 (
-                    *beta_g.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
-                    *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                    beta_g.mle.f.get(*z_ind).unwrap_or(F::ZERO),
+                    beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
                 )
             } else {
                 (
@@ -379,12 +379,11 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         let mut remap_table = vec![F::ZERO; res_table_num_entries];
         (0..num_dataparallel_vals).for_each(|idx| {
             self.wiring.iter().for_each(|(z, x)| {
-                let zero = F::ZERO;
                 let id_val = source_mle_data
-                    .get_evals_vector()
+                    .f
                     .get(idx + (x * num_dataparallel_vals))
-                    .unwrap_or(&zero);
-                remap_table[idx + z * num_dataparallel_vals] = *id_val;
+                    .unwrap_or(F::ZERO);
+                remap_table[idx + z * num_dataparallel_vals] = id_val;
             });
         });
         let output_data = MultilinearExtension::new(remap_table);
@@ -421,8 +420,8 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
                         (
-                            *beta_g.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
-                            *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                            beta_g.mle.f.get(*z_ind).unwrap_or(F::ZERO),
+                            beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
@@ -446,8 +445,8 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
         let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
             let (gz, ux) = if let Some((beta_u, beta_g)) = &beta_ug {
                 (
-                    *beta_g.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
-                    *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                    beta_g.mle.f.get(*z_ind).unwrap_or(F::ZERO),
+                    beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
                 )
             } else {
                 (
@@ -577,10 +576,10 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         // --- Finally, send the claimed values for each of the bound MLE to the verifier ---
         // First, send the claimed value of V_{i + 1}(u)
         let source_mle_reduced = self.phase_1_mles.clone().unwrap()[1].clone();
-        debug_assert!(source_mle_reduced.bookkeeping_table().len() == 1);
+        debug_assert!(source_mle_reduced.len() == 1);
         transcript_writer.append(
             "Evaluation of V_{i + 1}(g_2, u)",
-            source_mle_reduced.bookkeeping_table()[0],
+            source_mle_reduced.first(),
         );
         Ok(())
     }
@@ -608,14 +607,12 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 let beta_g_at_z = if LAZY_BETA_EVALUATION {
                     BetaValues::compute_beta_over_challenge_and_index(claim_point, z_ind)
                 } else {
-                    *self
-                        .beta_g
+                    self.beta_g
                         .as_ref()
                         .unwrap()
                         .mle
-                        .f
                         .get(z_ind)
-                        .unwrap_or(&F::ZERO)
+                        .unwrap_or(F::ZERO)
                 };
                 a_hg_mle_ref[x_ind] += beta_g_at_z;
             });
@@ -690,15 +687,13 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some(beta_u) = &beta_u {
                         (
-                            *self
-                                .beta_g
+                            self.beta_g
                                 .as_ref()
                                 .unwrap()
                                 .mle
-                                .f
                                 .get(*z_ind)
-                                .unwrap_or(&F::ZERO),
-                            *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                                .unwrap_or(F::ZERO),
+                            beta_u.mle.get(*x_ind).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
@@ -725,15 +720,13 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             .fold(F::ZERO, |acc, (z_ind, x_ind)| {
                 let (gz, ux) = if let Some(beta_u) = &beta_u {
                     (
-                        *self
-                            .beta_g
+                        self.beta_g
                             .as_ref()
                             .unwrap()
                             .mle
-                            .f
                             .get(*z_ind)
-                            .unwrap_or(&F::ZERO),
-                        *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                            .unwrap_or(F::ZERO),
+                        beta_u.mle.get(*x_ind).unwrap_or(F::ZERO),
                     )
                 } else {
                     (
@@ -764,7 +757,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for IdentityGate<F> {
                         .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
                 );
             }
-            let val = mle_ref.bookkeeping_table()[0];
+            let val = mle_ref.first();
             let claim: ClaimMle<F> = ClaimMle::new(
                 fixed_mle_indices_u,
                 val,
@@ -996,8 +989,8 @@ impl<F: Field> IdentityGate<F> {
         self.mle_ref
             .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
 
-        if beta_g2.bookkeeping_table().len() == 1 {
-            let beta_g2_fully_bound = beta_g2.bookkeeping_table()[0];
+        if beta_g2.len() == 1 {
+            let beta_g2_fully_bound = beta_g2.first();
             Ok(beta_g2_fully_bound)
         } else {
             Err(LayerError::LayerNotReady)
@@ -1032,13 +1025,12 @@ impl<F: Field> IdentityGate<F> {
                 let beta_g_at_z = if LAZY_BETA_EVALUATION {
                     BetaValues::compute_beta_over_challenge_and_index(&challenge, z_ind)
                 } else {
-                    *self
-                        .beta_g
+                    self.beta_g
                         .as_ref()
                         .unwrap()
-                        .bookkeeping_table()
+                        .mle
                         .get(z_ind)
-                        .unwrap_or(&F::ZERO)
+                        .unwrap_or(F::ZERO)
                 };
 
                 a_hg_mle_ref[x_ind] += beta_g_at_z;

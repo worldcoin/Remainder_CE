@@ -108,7 +108,10 @@ impl<F: Field> OutputLayer<F> for MleOutputLayer<F> {
     }
 
     fn append_mle_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
-        transcript_writer.append_elements("Output Layer MLE evals", self.mle.bookkeeping_table());
+        transcript_writer.append_elements(
+            "Output Layer MLE evals",
+            &self.mle.iter().collect::<Vec<_>>(),
+        );
     }
 }
 
@@ -264,7 +267,7 @@ impl<F: Field> VerifierOutputLayer<F> for VerifierMleOutputLayer<F> {
 
 impl<F: Field> YieldClaim<ClaimMle<F>> for MleOutputLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
-        if self.mle.bookkeeping_table().len() != 1 {
+        if self.mle.len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
         }
 
@@ -279,7 +282,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for MleOutputLayer<F> {
             })
             .collect();
 
-        let claim_value = self.mle.bookkeeping_table()[0];
+        let claim_value = self.mle.first();
 
         Ok(vec![ClaimMle::new(
             mle_indices?,

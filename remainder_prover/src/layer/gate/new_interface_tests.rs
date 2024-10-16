@@ -122,25 +122,20 @@ mod tests {
             LayerId::Input(0),
         );
 
-        let half_mle = DenseMle::new_from_iter(
-            mle.mle.get_evals_vector()[..size / 2]
-                .into_iter()
-                .map(|elem| *elem),
-            LayerId::Input(0),
-        );
+        let half_mle = DenseMle::new_from_iter(mle.mle.iter().take(size / 2), LayerId::Input(0));
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let mle_input_shred = InputShred::new(ctx, mle.mle.clone().num_vars(), &input_layer);
             let mle_input_shred_data = InputShredData::new(
                 mle_input_shred.id(),
-                MultilinearExtension::new(mle.mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle.mle.to_vec()),
             );
             let half_mle_input_shred =
                 InputShred::new(ctx, half_mle.mle.clone().num_vars(), &input_layer);
             let half_mle_input_shred_data = InputShredData::new(
                 half_mle_input_shred.id(),
-                MultilinearExtension::new(half_mle.mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(half_mle.mle.to_vec()),
             );
 
             let input_layer_data = InputLayerData::new(
@@ -196,23 +191,21 @@ mod tests {
             LayerId::Input(0),
         );
 
-        let mle_one_element = DenseMle::new_from_iter(
-            vec![mle.bookkeeping_table()[1].clone()].into_iter(),
-            LayerId::Input(0),
-        );
+        let mle_one_element =
+            DenseMle::new_from_iter(mle.iter().skip(1).take(1), LayerId::Input(0));
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let mle_input_shred = InputShred::new(ctx, mle.mle.clone().num_vars(), &input_layer);
             let mle_input_shred_data = InputShredData::new(
                 mle_input_shred.id(),
-                MultilinearExtension::new(mle.mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle.mle.to_vec()),
             );
             let mle_one_element_input_shred =
                 InputShred::new(ctx, mle_one_element.mle.clone().num_vars(), &input_layer);
             let mle_one_element_input_shred_data = InputShredData::new(
                 mle_one_element_input_shred.id(),
-                MultilinearExtension::new(mle_one_element.mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle_one_element.mle.to_vec()),
             );
 
             let input_layer_data = InputLayerData::new(
@@ -275,25 +268,20 @@ mod tests {
         // we assume the batch bits are in the beginning
         // so the (individual first halves of batched mles) batched
         // is just the first half of the bookkeeping table of the batched mles
-        let half_mle = DenseMle::new_from_iter(
-            mle.mle.get_evals_vector()[..size / 2]
-                .into_iter()
-                .map(|elem| *elem),
-            LayerId::Input(0),
-        );
+        let half_mle = DenseMle::new_from_iter(mle.mle.iter().take(size / 2), LayerId::Input(0));
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let mle_input_shred = InputShred::new(ctx, mle.mle.clone().num_vars(), &input_layer);
             let mle_input_shred_data = InputShredData::new(
                 mle_input_shred.id(),
-                MultilinearExtension::new(mle.mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle.mle.to_vec()),
             );
             let half_mle_input_shred =
                 InputShred::new(ctx, half_mle.mle.clone().num_vars(), &input_layer);
             let half_mle_input_shred_data = InputShredData::new(
                 half_mle_input_shred.id(),
-                MultilinearExtension::new(half_mle.mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(half_mle.mle.to_vec()),
             );
 
             let input_layer_data = InputLayerData::new(
@@ -354,8 +342,7 @@ mod tests {
 
         let mle_one_element = DenseMle::new_from_iter(
             (0..1 << NUM_DATAPARALLEL_BITS)
-                .map(|idx| mle.mle.get_evals_vector()[idx + (1 << NUM_DATAPARALLEL_BITS)])
-                .clone(),
+                .map(|idx| mle.mle.get(idx + (1 << NUM_DATAPARALLEL_BITS)).unwrap()),
             LayerId::Input(0),
         );
 
@@ -364,13 +351,13 @@ mod tests {
             let mle_input_shred = InputShred::new(ctx, mle.mle.clone().num_vars(), &input_layer);
             let mle_input_shred_data = InputShredData::new(
                 mle_input_shred.id(),
-                MultilinearExtension::new(mle.mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle.mle.to_vec()),
             );
             let mle_one_element_input_shred =
                 InputShred::new(ctx, mle_one_element.mle.clone().num_vars(), &input_layer);
             let mle_one_element_input_shred_data = InputShredData::new(
                 mle_one_element_input_shred.id(),
-                MultilinearExtension::new(mle_one_element.mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle_one_element.mle.to_vec()),
             );
 
             let input_layer_data = InputLayerData::new(
@@ -428,27 +415,20 @@ mod tests {
             LayerId::Input(0),
         );
 
-        let neg_mle = DenseMle::new_from_iter(
-            mle.mle
-                .get_evals_vector()
-                .clone()
-                .into_iter()
-                .map(|elem| -elem),
-            LayerId::Input(0),
-        );
+        let neg_mle = DenseMle::new_from_iter(mle.mle.iter().map(|elem| -elem), LayerId::Input(0));
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let mle_input_shred = InputShred::new(ctx, mle.mle.clone().num_vars(), &input_layer);
             let mle_input_shred_data = InputShredData::new(
                 mle_input_shred.id(),
-                MultilinearExtension::new(mle.mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle.mle.to_vec()),
             );
             let neg_mle_input_shred =
                 InputShred::new(ctx, neg_mle.mle.clone().num_vars(), &input_layer);
             let neg_mle_input_shred_data = InputShredData::new(
                 neg_mle_input_shred.id(),
-                MultilinearExtension::new(neg_mle.mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(neg_mle.mle.to_vec()),
             );
 
             let input_layer_data = InputLayerData::new(
@@ -515,30 +495,17 @@ mod tests {
         );
 
         let neg_mle_dataparallel = DenseMle::new_from_iter(
-            mle_dataparallel
-                .mle
-                .get_evals_vector()
-                .clone()
-                .into_iter()
-                .map(|elem| -elem),
+            mle_dataparallel.mle.iter().map(|elem| -elem),
             LayerId::Input(0),
         );
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let (dataparallel_mle_input_shred, dataparallel_mle_input_shred_data) =
-                get_input_shred_and_data(
-                    mle_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(mle_dataparallel.mle.to_vec(), ctx, &input_layer);
 
             let (dataparallel_neg_mle_input_shred, dataparallel_neg_mle_input_shred_data) =
-                get_input_shred_and_data(
-                    neg_mle_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(neg_mle_dataparallel.mle.to_vec(), ctx, &input_layer);
             let input_layer_data = InputLayerData::new(
                 input_layer.id(),
                 vec![
@@ -603,18 +570,14 @@ mod tests {
             LayerId::Input(0),
         );
 
-        let neg_mle =
-            DenseMle::new_from_raw(vec![mle.bookkeeping_table()[0].neg()], LayerId::Input(0));
+        let neg_mle = DenseMle::new_from_raw(vec![mle.get(0).unwrap().neg()], LayerId::Input(0));
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let (mle_input_shred, mle_input_shred_data) =
-                get_input_shred_and_data(mle.mle.get_evals_vector().to_vec(), ctx, &input_layer);
-            let (neg_mle_input_shred, neg_mle_input_shred_data) = get_input_shred_and_data(
-                neg_mle.mle.get_evals_vector().to_vec(),
-                ctx,
-                &input_layer,
-            );
+                get_input_shred_and_data(mle.mle.to_vec(), ctx, &input_layer);
+            let (neg_mle_input_shred, neg_mle_input_shred_data) =
+                get_input_shred_and_data(neg_mle.mle.to_vec(), ctx, &input_layer);
             let input_layer_data = InputLayerData::new(
                 input_layer.id(),
                 vec![mle_input_shred_data, neg_mle_input_shred_data],
@@ -666,23 +629,17 @@ mod tests {
             LayerId::Input(0),
         );
 
-        let neg_mle_2 = DenseMle::new_from_iter(
-            mle_2.bookkeeping_table().iter().map(|elem| -elem),
-            LayerId::Input(0),
-        );
+        let neg_mle_2 = DenseMle::new_from_iter(mle_2.iter().map(|elem| -elem), LayerId::Input(0));
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let (mle_1_input_shred, mle_1_input_shred_data) =
-                get_input_shred_and_data(mle_1.mle.get_evals_vector().to_vec(), ctx, &input_layer);
+                get_input_shred_and_data(mle_1.mle.to_vec(), ctx, &input_layer);
 
             let (mle_2_input_shred, mle_2_input_shred_data) =
-                get_input_shred_and_data(mle_2.mle.get_evals_vector().to_vec(), ctx, &input_layer);
-            let (neg_mle_2_input_shred, neg_mle_2_input_shred_data) = get_input_shred_and_data(
-                neg_mle_2.mle.get_evals_vector().to_vec(),
-                ctx,
-                &input_layer,
-            );
+                get_input_shred_and_data(mle_2.mle.to_vec(), ctx, &input_layer);
+            let (neg_mle_2_input_shred, neg_mle_2_input_shred_data) =
+                get_input_shred_and_data(neg_mle_2.mle.to_vec(), ctx, &input_layer);
 
             let input_layer_data = InputLayerData::new(
                 input_layer.id(),
@@ -774,28 +731,16 @@ mod tests {
         );
 
         let neg_mle_dataparallel = DenseMle::new_from_iter(
-            mle_dataparallel
-                .mle
-                .get_evals_vector()
-                .iter()
-                .map(|elem| -elem),
+            mle_dataparallel.mle.iter().map(|elem| -elem),
             LayerId::Input(0),
         );
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let (dataparallel_mle_input_shred, dataparallel_mle_input_shred_data) =
-                get_input_shred_and_data(
-                    mle_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(mle_dataparallel.mle.to_vec(), ctx, &input_layer);
             let (dataparallel_neg_mle_input_shred, dataparallel_neg_mle_input_shred_data) =
-                get_input_shred_and_data(
-                    neg_mle_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(neg_mle_dataparallel.mle.to_vec(), ctx, &input_layer);
 
             let input_layer_data = InputLayerData::new(
                 input_layer.id(),
@@ -853,34 +798,19 @@ mod tests {
         );
 
         let neg_mle_2_dataparallel = DenseMle::new_from_iter(
-            mle_2_dataparallel
-                .bookkeeping_table()
-                .iter()
-                .map(|elem| -elem),
+            mle_2_dataparallel.iter().map(|elem| -elem),
             LayerId::Input(0),
         );
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let (dataparallel_mle_1_input_shred, dataparallel_mle_1_input_shred_data) =
-                get_input_shred_and_data(
-                    mle_1_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(mle_1_dataparallel.mle.to_vec(), ctx, &input_layer);
             let (dataparallel_mle_2_input_shred, dataparallel_mle_2_input_shred_data) =
-                get_input_shred_and_data(
-                    mle_2_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(mle_2_dataparallel.mle.to_vec(), ctx, &input_layer);
 
             let (dataparallel_neg_mle_2_input_shred, dataparallel_neg_mle_2_input_shred_data) =
-                get_input_shred_and_data(
-                    neg_mle_2_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(neg_mle_2_dataparallel.mle.to_vec(), ctx, &input_layer);
 
             let input_layer_data = InputLayerData::new(
                 input_layer.id(),

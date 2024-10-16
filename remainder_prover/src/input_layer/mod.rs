@@ -145,7 +145,7 @@ fn get_wlx_evaluations_helper<F: Field>(
 ) -> Result<Vec<F>, crate::claims::ClaimError> {
     let prep_timer = start_timer!(|| "Claim wlx prep");
     end_timer!(prep_timer);
-    info!("Wlx MLE len: {}", mle_ref.get_evals_vector().len());
+    info!("Wlx MLE len: {}", mle_ref.len());
     // Get the number of evaluations needed depending on the claim vectors.
     let (num_evals, common_idx, non_common_idx) = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION
     {
@@ -190,7 +190,7 @@ fn get_wlx_evaluations_helper<F: Field>(
                 new_chal.into_iter().for_each(|chal| {
                     fix_mle.fix_variable(chal);
                 });
-                fix_mle.get_evals()[0]
+                fix_mle.first()
             }
         })
         .collect();
