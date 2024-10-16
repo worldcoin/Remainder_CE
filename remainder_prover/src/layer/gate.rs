@@ -163,7 +163,10 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         todo!()
     }
 
-    fn compute_round_sumcheck_message(&self, _round_index: usize) -> Result<Vec<F>, LayerError> {
+    fn compute_round_sumcheck_message(
+        &mut self,
+        _round_index: usize,
+    ) -> Result<Vec<F>, LayerError> {
         todo!()
     }
 
