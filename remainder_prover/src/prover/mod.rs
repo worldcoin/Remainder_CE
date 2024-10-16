@@ -117,8 +117,19 @@ pub fn prove<F: Field>(
         (LigeroInputLayerDescription<F>, Option<LigeroCommitment<F>>),
     >,
     circuit_description: &GKRCircuitDescription<F>,
+    circuit_description_hash_type: CircuitHashType,
     transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
 ) -> Result<(), GKRError> {
+    dbg!("Before...");
+    // --- Generate circuit description hash and append to transcript ---
+    let hash_value_as_field_elems = get_circuit_description_hash_as_field_elems(
+        circuit_description,
+        circuit_description_hash_type,
+    );
+    dbg!("prover hash value");
+    dbg!(&hash_value_as_field_elems);
+    transcript_writer.append_elements("Circuit description hash", &hash_value_as_field_elems);
+
     // Add the input values of any public (i.e. non-ligero) input layers to transcript.
     // Select the public input layers from the input layers, and sort them by layer id, and append
     // their input values to the transcript.
@@ -204,6 +215,8 @@ pub fn verify<F: Field>(
         circuit_description,
         circuit_description_hash_type,
     );
+    dbg!("verifier hash value");
+    dbg!(&hash_value_as_field_elems);
     let prover_supplied_circuit_description_hash = transcript
         .consume_elements("Circuit description hash", hash_value_as_field_elems.len())
         .unwrap();

@@ -127,6 +127,7 @@ impl<
             &inputs,
             &HashMap::new(),
             &circuit_description,
+            CircuitHashType::Sha3_256,
             &mut transcript_writer,
         )
         .unwrap();

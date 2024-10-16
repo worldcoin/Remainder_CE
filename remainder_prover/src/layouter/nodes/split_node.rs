@@ -115,29 +115,21 @@ mod test {
 
     use ark_std::log2;
     use itertools::Itertools;
-    use num::Integer;
+
     use remainder_shared_types::{Field, Fr};
 
     use crate::{
         expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
         layer::LayerId,
-        layouter::{
-            compiling::LayouterCircuit,
-            component::ComponentSet,
-            nodes::{
-                circuit_inputs::{InputLayerNode, InputLayerNodeData, InputShred, InputShredData},
-                circuit_outputs::OutputNode,
-                node_enum::NodeEnum,
-                sector::Sector,
-                CircuitNode, Context, NodeId,
-            },
+        layouter::nodes::{
+            circuit_inputs::{InputLayerNode, InputShred},
+            circuit_outputs::OutputNode,
+            node_enum::NodeEnum,
+            sector::Sector,
+            CircuitNode, Context, NodeId,
         },
         mle::evals::MultilinearExtension,
-        prover::{
-            generate_circuit_description,
-            helpers::{test_circuit, test_circuit_new},
-            GKRCircuitDescription,
-        },
+        prover::{generate_circuit_description, helpers::test_circuit_new, GKRCircuitDescription},
     };
 
     use super::SplitNode;

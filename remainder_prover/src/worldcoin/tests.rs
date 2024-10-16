@@ -13,12 +13,14 @@ use super::test_helpers::{
 #[test]
 fn test_small_circuit_both_layers_public() {
     let (circuit_desc, _, inputs) = small_circuit_description_and_inputs();
+    dbg!("Got here !");
     let mut transcript_writer =
         TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
     prove(
         &inputs,
         &HashMap::new(),
         &circuit_desc,
+        crate::layouter::compiling::CircuitHashType::Sha3_256,
         &mut transcript_writer,
     )
     .unwrap();
@@ -64,6 +66,7 @@ fn test_small_circuit_with_a_ligero_layer() {
         &inputs,
         &ligero_layer_spec_map,
         &circuit_desc,
+        crate::layouter::compiling::CircuitHashType::Sha3_256,
         &mut transcript_writer,
     )
     .unwrap();
@@ -92,6 +95,7 @@ fn test_worldcoin_circuit_iris_v2_public_inputs() {
         &inputs,
         &HashMap::new(),
         &circuit_desc,
+        crate::layouter::compiling::CircuitHashType::Sha3_256,
         &mut transcript_writer,
     )
     .unwrap();

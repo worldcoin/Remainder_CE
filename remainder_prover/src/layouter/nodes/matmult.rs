@@ -115,30 +115,21 @@ mod test {
     use remainder_shared_types::Fr;
 
     use crate::{
-        builders::layer_builder::from_mle,
         expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-        layouter::{
-            compiling::LayouterCircuit,
-            component::ComponentSet,
-            nodes::{
-                circuit_inputs::{InputLayerNode, InputLayerNodeData, InputShred, InputShredData},
-                circuit_outputs::OutputNode,
-                node_enum::NodeEnum,
-                sector::Sector,
-                CircuitNode, Context, NodeId,
-            },
+        layouter::nodes::{
+            circuit_inputs::{InputLayerNode, InputShred},
+            circuit_outputs::OutputNode,
+            node_enum::NodeEnum,
+            sector::Sector,
+            CircuitNode, Context, NodeId,
         },
         mle::evals::MultilinearExtension,
-        prover::helpers::test_circuit,
     };
 
     use super::MatMultNode;
 
-    use std::collections::HashMap;
-
-    use ark_std::test_rng;
-    use rand::Rng;
     use remainder_shared_types::Field;
+    use std::collections::HashMap;
 
     use crate::{
         layer::LayerId,
