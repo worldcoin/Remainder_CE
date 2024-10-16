@@ -283,7 +283,8 @@ pub fn evaluate_mle_at_a_point<F: Field>(mle: &MultilinearExtension<F>, point: &
     // is \widetilde{\beta}(\vec{0}, point).
     let starting_beta_value =
         BetaValues::compute_beta_over_two_challenges(&vec![F::ZERO; mle_num_vars], point);
-    // This is the value that gets multiplied to the first MLE coefficient.
+    // This is the value that gets multiplied to the first MLE coefficient,
+    // which is (1 - r_1) * (1 - r_2) * ... * (1 - r_n) where (r_1, ..., r_n) is the point.
     let starting_evaluation_acc = starting_beta_value * mle_coefficients[0];
     let gray_code = GrayCode::new(mle_num_vars);
     // We simply compute the correct inverse and new multiplicative term
@@ -293,17 +294,25 @@ pub fn evaluate_mle_at_a_point<F: Field>(mle: &MultilinearExtension<F>, point: &
     let (_final_beta_value, evaluation) = gray_code.fold(
         (starting_beta_value, starting_evaluation_acc),
         |(prev_beta_value, evaluation_acc), (index, (flipped_bit_index, flipped_bit_value))| {
+            // For every bit i that is flipped, if it used to be a 1,
+            // then we multiply by r_i^{-1} and multiply by
+            // (1 - r_i) to account for this bit flip.
             let next_beta_value = if flipped_bit_value {
                 prev_beta_value
                     * point[flipped_bit_index as usize].invert().unwrap()
                     * (F::ONE - point[flipped_bit_index as usize])
-            } else {
+            }
+            // For every bit i that is flipped, if it used to be a 0,
+            // then we multiply by (1 - r_i)^{-1} and multiply by
+            // r_i to account for this bit flip.
+            else {
                 prev_beta_value
                     * (F::ONE - point[flipped_bit_index as usize])
                         .invert()
                         .unwrap()
                     * point[flipped_bit_index as usize]
             };
+            // Multiply this by the appropriate MLE coefficient.
             let next_evaluation_acc = next_beta_value * mle_coefficients[index as usize];
             (next_beta_value, evaluation_acc + next_evaluation_acc)
         },
