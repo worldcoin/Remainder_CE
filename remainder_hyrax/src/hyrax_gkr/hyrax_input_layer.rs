@@ -199,9 +199,12 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
     let num_rows = 1 << (input_layer_desc.num_bits - input_layer_desc.log_num_cols);
     // Sample the blinding factors
     let mut blinding_factors_matrix = vec![C::Scalar::ZERO; num_rows];
-    for i in 0..num_rows {
-        blinding_factors_matrix[i] = C::Scalar::random(&mut rng);
-    }
+    blinding_factors_matrix
+        .iter_mut()
+        .take(num_rows)
+        .for_each(|blinding_factor| {
+            *blinding_factor = C::Scalar::random(&mut rng);
+        });
     let mle_coeffs_vec =
         MleCoefficientsVector::ScalarFieldVector(input_mle.get_evals_vector().clone());
     let commitment_values = HyraxPCSEvaluationProof::compute_matrix_commitments(

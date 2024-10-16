@@ -19,12 +19,7 @@ fn test_completeness() {
         ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let x = committer.committed_scalar(&Fr::from(23_u64), &Fr::from(2_u64));
-    let proof = ProofOfOpening::prove(
-        &x,
-        &committer,
-        &mut rand::thread_rng(),
-        &mut transcript,
-    );
+    let proof = ProofOfOpening::prove(&x, &committer, &mut rand::thread_rng(), &mut transcript);
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
@@ -40,18 +35,9 @@ fn test_soundness() {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
     let x = committer.committed_scalar(&Fr::from(23_u64), &Fr::from(2_u64));
-    let proof = ProofOfOpening::prove(
-        &x,
-        &committer,
-        &mut rand::thread_rng(),
-        &mut transcript,
-    );
+    let proof = ProofOfOpening::prove(&x, &committer, &mut rand::thread_rng(), &mut transcript);
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-    proof.verify(
-        x.commitment + x.commitment,
-        &committer,
-        &mut transcript,
-    );
+    proof.verify(x.commitment + x.commitment, &committer, &mut transcript);
 }
