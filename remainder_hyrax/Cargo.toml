@@ -40,3 +40,7 @@ path = "src/bin/run_iriscode_circuit.rs"
 [[bin]]
 name = "get_circuit_description"
 path = "src/bin/get_circuit_description.rs"
+
+[[bin]]
+name = "upgrade_v2_to_v3"
+path = "src/bin/upgrade_v2_to_v3.rs"
