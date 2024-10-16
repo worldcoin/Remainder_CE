@@ -290,7 +290,7 @@ pub fn evaluate_mle_at_a_point<F: Field>(mle: &MultilinearExtension<F>, point: &
     // for each bit that is flipped in the beta value, and accumulate these
     // by doing an element-wise multiplication with the correct index
     // of the MLE coefficients.
-    let evaluation = gray_code.fold(
+    let (_final_beta_value, evaluation) = gray_code.fold(
         (starting_beta_value, starting_evaluation_acc),
         |(prev_beta_value, evaluation_acc), (index, (flipped_bit_index, flipped_bit_value))| {
             let next_beta_value = if flipped_bit_value {
@@ -308,7 +308,7 @@ pub fn evaluate_mle_at_a_point<F: Field>(mle: &MultilinearExtension<F>, point: &
             (next_beta_value, evaluation_acc + next_evaluation_acc)
         },
     );
-    evaluation.1
+    evaluation
 }
 
 #[cfg(test)]
