@@ -34,7 +34,6 @@ use remainder_shared_types::transcript::ec_transcript::{
     ECProverTranscript, ECTranscriptReader, ECTranscriptWriter, ECVerifierTranscript,
 };
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
-use remainder_shared_types::transcript::test_transcript::TestSponge;
 use remainder_shared_types::Fr;
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
