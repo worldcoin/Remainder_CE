@@ -89,8 +89,7 @@ pub fn combine_input_mles<F: Field>(
                 // --- interleaving, or alternatively by converting everything to "big-endian", ---
                 // --- merging the usual big-endian way, and re-converting the merged version back to ---
                 // --- "little-endian" ---
-                let inverted_input_mle =
-                    invert_mle_bookkeeping_table(input_mle.get_evals_vector().to_vec());
+                let inverted_input_mle = invert_mle_bookkeeping_table(input_mle.iter().collect());
 
                 // --- Fold the new (padded) bookkeeping table with the old ones ---
                 // let padded_bookkeeping_table = input_mle.get_padded_evaluations();

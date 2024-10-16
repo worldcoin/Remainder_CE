@@ -182,17 +182,11 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         // First, send the claimed value of V_{i + 1}(g_2, u)
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
         let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
-        debug_assert!(lhs_reduced.bookkeeping_table().len() == 1);
-        transcript_writer.append(
-            "Evaluation of V_{i + 1}(g_2, u)",
-            lhs_reduced.bookkeeping_table()[0],
-        );
+        debug_assert!(lhs_reduced.len() == 1);
+        transcript_writer.append("Evaluation of V_{i + 1}(g_2, u)", lhs_reduced.first());
         // Next, send the claimed value of V_{i + 1}(g_2, v)
-        debug_assert!(rhs_reduced.bookkeeping_table().len() == 1);
-        transcript_writer.append(
-            "Evaluation of V_{i + 1}(g_2, v)",
-            rhs_reduced.bookkeeping_table()[0],
-        );
+        debug_assert!(rhs_reduced.len() == 1);
+        transcript_writer.append("Evaluation of V_{i + 1}(g_2, v)", rhs_reduced.first());
 
         // The concatenation of all of these rounds is the proof resulting from a gate layer.
         //Ok(sumcheck_rounds.into())
@@ -246,7 +240,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
             );
         }
-        let val = lhs_reduced.bookkeeping_table()[0];
+        let val = lhs_reduced.first();
         let claim: Claim<F> = Claim::new(
             fixed_mle_indices_u,
             val,
@@ -264,7 +258,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
             );
         }
-        let val = rhs_reduced.bookkeeping_table()[0];
+        let val = rhs_reduced.first();
         let claim: Claim<F> = Claim::new(
             fixed_mle_indices_v,
             val,
@@ -608,15 +602,15 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             self.wiring.iter().for_each(|(z_ind, x_ind, y_ind)| {
                 let zero = F::ZERO;
                 let f2_val = lhs_data
-                    .get_evals_vector()
+                    .f
                     .get(idx + (x_ind * num_dataparallel_vals))
-                    .unwrap_or(&zero);
+                    .unwrap_or(zero);
                 let f3_val = rhs_data
-                    .get_evals_vector()
+                    .f
                     .get(idx + (y_ind * num_dataparallel_vals))
-                    .unwrap_or(&zero);
+                    .unwrap_or(zero);
                 res_table[idx + (z_ind * num_dataparallel_vals)] =
-                    self.gate_operation.perform_operation(*f2_val, *f3_val);
+                    self.gate_operation.perform_operation(f2_val, f3_val);
             });
         });
 
@@ -650,9 +644,9 @@ impl<F: Field> VerifierGateLayer<F> {
             .clone()
             .into_iter()
             .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
-                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
-                let vy = *beta_v.bookkeeping_table().get(y_ind).unwrap_or(&F::ZERO);
+                let gz = beta_g.get(z_ind).unwrap_or(F::ZERO);
+                let ux = beta_u.get(x_ind).unwrap_or(F::ZERO);
+                let vy = beta_v.get(y_ind).unwrap_or(F::ZERO);
                 acc + gz * ux * vy
             });
 
@@ -881,8 +875,8 @@ impl<F: Field> GateLayer<F> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind, y_ind)| {
-                let beta_g_at_z = *beta_g1.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                let f_3_at_y = *self.rhs.bookkeeping_table().get(y_ind).unwrap_or(&F::ZERO);
+                let beta_g_at_z = beta_g1.get(z_ind).unwrap_or(F::ZERO);
+                let f_3_at_y = self.rhs.get(y_ind).unwrap_or(F::ZERO);
                 a_hg_rhs[x_ind] += beta_g_at_z * f_3_at_y;
                 if self.gate_operation == BinaryOperation::Add {
                     a_hg_lhs[x_ind] += beta_g_at_z;
@@ -969,8 +963,8 @@ impl<F: Field> GateLayer<F> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind, y_ind)| {
-                let gz = *beta_g1.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+                let gz = beta_g1.get(z_ind).unwrap_or(F::ZERO);
+                let ux = beta_u.get(x_ind).unwrap_or(F::ZERO);
                 let adder = gz * ux;
                 a_f1_lhs[y_ind] += adder * f_at_u;
                 if self.gate_operation == BinaryOperation::Add {
@@ -1085,8 +1079,8 @@ impl<F: Field> GateLayer<F> {
         self.rhs
             .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
 
-        if beta_g2.bookkeeping_table().len() == 1 {
-            let beta_g2_fully_bound = beta_g2.bookkeeping_table()[0];
+        if beta_g2.len() == 1 {
+            let beta_g2_fully_bound = beta_g2.first();
             Ok((sumcheck_rounds.into(), beta_g2_fully_bound))
         } else {
             Err(LayerError::LayerNotReady)
@@ -1160,8 +1154,8 @@ impl<F: Field> GateLayer<F> {
 
         let f_2 = phase_1_mles[0][1].clone();
 
-        if f_2.bookkeeping_table().len() == 1 {
-            let f2_at_u = f_2.bookkeeping_table()[0];
+        if f_2.len() == 1 {
+            let f2_at_u = f_2.first();
             Ok((sumcheck_rounds.into(), f2_at_u, challenges))
         } else {
             Err(LayerError::LayerNotReady)

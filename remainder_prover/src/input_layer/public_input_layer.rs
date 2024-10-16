@@ -58,7 +58,7 @@ impl<F: Field> InputLayer<F> for PublicInputLayer<F> {
     fn commit(&mut self) -> Result<Self::VerifierCommitment, super::InputLayerError> {
         // Because this is a public input layer, we do not need to commit to the
         // MLE and the "commitment" is just the MLE evaluations themselves.
-        Ok(self.mle.get_evals_vector().clone())
+        Ok(self.mle.iter().collect())
     }
 
     /// Append the commitment to the Fiat-Shamir transcript.
@@ -84,7 +84,7 @@ impl<F: Field> InputLayer<F> for PublicInputLayer<F> {
     }
 
     fn get_padded_mle(&self) -> DenseMle<F> {
-        DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
+        DenseMle::new_from_raw(self.mle.iter().collect(), self.layer_id)
     }
 }
 
@@ -128,10 +128,10 @@ impl<F: Field> InputLayerDescription<F> for PublicInputLayerDescription<F> {
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
             }
-            debug_assert_eq!(mle_ref.bookkeeping_table().len(), 1);
+            debug_assert_eq!(mle_ref.len(), 1);
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
-            RawClaim::new(vec![], mle_ref.mle[0])
+            RawClaim::new(vec![], mle_ref.first())
         };
 
         if eval.get_point() == claim.get_point() && eval.get_eval() == claim.get_eval() {

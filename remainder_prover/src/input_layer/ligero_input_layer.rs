@@ -103,7 +103,7 @@ impl<F: Field> InputLayer<F> for LigeroInputLayer<F> {
             return Ok(prover_side_commit.get_root());
         }
 
-        let (comm, root) = remainder_ligero_commit(self.mle.get_evals_vector(), &self.aux);
+        let (comm, root) = remainder_ligero_commit(&self.mle.to_vec(), &self.aux);
 
         self.comm = Some(comm);
 
@@ -132,7 +132,7 @@ impl<F: Field> InputLayer<F> for LigeroInputLayer<F> {
             .ok_or(InputLayerError::OpeningBeforeCommitment)?;
 
         let _ = remainder_ligero_eval_prove(
-            self.mle.get_evals_vector(),
+            &self.mle.to_vec(),
             claim.get_point(),
             transcript_writer,
             &self.aux,
@@ -147,7 +147,7 @@ impl<F: Field> InputLayer<F> for LigeroInputLayer<F> {
     }
 
     fn get_padded_mle(&self) -> DenseMle<F> {
-        DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
+        DenseMle::new_from_raw(self.mle.iter().collect(), self.layer_id)
     }
 }
 
@@ -226,7 +226,7 @@ impl<F: Field> LigeroInputLayer<F> {
         rho_inv: u8,
         ratio: f64,
     ) -> Self {
-        let aux = LigeroAuxInfo::new(mle.f.len().next_power_of_two(), rho_inv, ratio, None);
+        let aux = LigeroAuxInfo::new(mle.len().next_power_of_two(), rho_inv, ratio, None);
 
         Self {
             mle,

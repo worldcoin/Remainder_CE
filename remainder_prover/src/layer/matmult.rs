@@ -49,10 +49,7 @@ pub struct Matrix<F: Field> {
 impl<F: Field> Matrix<F> {
     /// Create a new matrix.
     pub fn new(mle: DenseMle<F>, rows_num_vars: usize, cols_num_vars: usize) -> Matrix<F> {
-        assert_eq!(
-            mle.bookkeeping_table().len(),
-            (1 << rows_num_vars) * (1 << cols_num_vars)
-        );
+        assert_eq!(mle.len(), (1 << rows_num_vars) * (1 << cols_num_vars));
 
         Matrix {
             mle,
@@ -95,11 +92,11 @@ impl<F: Field> MatMult<F> {
         // check that both matrices are padded
         assert_eq!(
             (1 << self.matrix_a.cols_num_vars) * (1 << self.matrix_a.rows_num_vars),
-            matrix_a_mle.bookkeeping_table().len()
+            matrix_a_mle.len()
         );
         assert_eq!(
             (1 << self.matrix_b.cols_num_vars) * (1 << self.matrix_b.rows_num_vars),
-            matrix_b_mle.bookkeeping_table().len()
+            matrix_b_mle.len()
         );
 
         // check to make sure the dimensions match
@@ -138,15 +135,12 @@ impl<F: Field> MatMult<F> {
     }
 
     fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
-        assert_eq!(self.matrix_a.mle.bookkeeping_table().len(), 1);
-        assert_eq!(self.matrix_b.mle.bookkeeping_table().len(), 1);
+        assert_eq!(self.matrix_a.mle.len(), 1);
+        assert_eq!(self.matrix_b.mle.len(), 1);
 
         transcript_writer.append_elements(
             "Fully bound matrix evaluations",
-            &[
-                self.matrix_a.mle.bookkeeping_table()[0],
-                self.matrix_b.mle.bookkeeping_table()[0],
-            ],
+            &[self.matrix_a.mle.first(), self.matrix_b.mle.first()],
         );
     }
 }
@@ -206,6 +200,14 @@ impl<F: Field> Layer<F> for MatMult<F> {
         claim: RawClaim<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError> {
+        println!(
+            "MatMul::prove_rounds() for a product ({} x {}) * ({} x {}) matrix.",
+            self.matrix_a.rows_num_vars,
+            self.matrix_a.cols_num_vars,
+            self.matrix_b.rows_num_vars,
+            self.matrix_b.cols_num_vars
+        );
+
         let mut claim_b = claim.get_point().to_vec();
         let claim_a = claim_b.split_off(self.matrix_b.cols_num_vars);
         self.pre_processing_step(claim_a, claim_b);
@@ -289,7 +291,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
                     })
                     .collect_vec();
 
-                let matrix_val = matrix_mle.bookkeeping_table()[0];
+                let matrix_val = matrix_mle.first();
                 let claim: Claim<F> = Claim::new(
                     matrix_fixed_indices,
                     matrix_val,
@@ -459,8 +461,8 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
             .get_data_from_circuit_mle(&self.matrix_b.mle)
             .unwrap();
         let product = product_two_matrices_from_flattened_vectors(
-            matrix_a_data.get_evals_vector(),
-            matrix_b_data.get_evals_vector(),
+            &matrix_a_data.to_vec(),
+            &matrix_b_data.to_vec(),
             1 << self.matrix_a.rows_num_vars,
             1 << self.matrix_a.cols_num_vars,
             1 << self.matrix_b.rows_num_vars,
