@@ -92,16 +92,13 @@ impl<F: Clone> Transcript<F> {
 }
 
 impl<F> Display for Transcript<F> {
-
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.operations.iter().try_for_each(|op| {
-            match op {
-                Operation::Append(label, elements) => {
-                    writeln!(f, "Append: \"{}\" with {} elements", label, elements.len())
-                }
-                Operation::Squeeze(label, num_elements) => {
-                    writeln!(f, "Squeeze: \"{}\" with {} elements", label, num_elements)
-                }
+        self.operations.iter().try_for_each(|op| match op {
+            Operation::Append(label, elements) => {
+                writeln!(f, "Append: \"{}\" with {} elements", label, elements.len())
+            }
+            Operation::Squeeze(label, num_elements) => {
+                writeln!(f, "Squeeze: \"{}\" with {} elements", label, num_elements)
             }
         })
     }

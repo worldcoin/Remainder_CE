@@ -209,7 +209,7 @@ pub fn test_circuit_new<F: Field>(
             match verify(
                 &public_input_layers,
                 &private_input_layer_descriptions,
-                &circuit_description,
+                circuit_description,
                 CIRCUIT_DESCRIPTION_HASH_TYPE,
                 &mut transcript_reader,
             ) {

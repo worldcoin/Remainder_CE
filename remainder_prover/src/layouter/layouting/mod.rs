@@ -134,7 +134,6 @@ impl CircuitDescriptionMap {
     }
 }
 
-
 /// The location of a Node in the circuit
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct CircuitLocation {

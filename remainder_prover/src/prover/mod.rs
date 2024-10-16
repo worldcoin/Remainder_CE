@@ -37,6 +37,7 @@ use crate::{
     layer::{layer_enum::LayerEnum, LayerError, LayerId},
 };
 use ark_std::{end_timer, start_timer};
+use helpers::get_circuit_description_hash_as_field_elems;
 use itertools::Itertools;
 use remainder_ligero::ligero_commit::{
     remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify,
@@ -198,6 +199,19 @@ pub fn verify<F: Field>(
     circuit_description_hash_type: CircuitHashType,
     transcript: &mut impl VerifierTranscript<F>,
 ) -> Result<(), GKRError> {
+    // --- Generate circuit description hash and check against prover-provided circuit description hash ---
+    let hash_value_as_field_elems = get_circuit_description_hash_as_field_elems(
+        circuit_description,
+        circuit_description_hash_type,
+    );
+    let prover_supplied_circuit_description_hash = transcript
+        .consume_elements("Circuit description hash", hash_value_as_field_elems.len())
+        .unwrap();
+    assert_eq!(
+        prover_supplied_circuit_description_hash,
+        hash_value_as_field_elems
+    );
+
     // Read and check public input values to transcript in order of layer id.
     public_inputs
         .keys()
@@ -232,9 +246,7 @@ pub fn verify<F: Field>(
             ligero_commitments.insert(desc.layer_id, commitment);
         });
 
-    let input_layer_claims = circuit_description
-        .verify(transcript, circuit_description_hash_type)
-        .unwrap();
+    let input_layer_claims = circuit_description.verify(transcript).unwrap();
 
     // Every input layer claim is either for a public- or Ligero- input layer.
     let mut public_input_layer_claims = vec![];
@@ -595,19 +607,7 @@ impl<F: Field> GKRCircuitDescription<F> {
     fn verify(
         &self,
         transcript_reader: &mut impl VerifierTranscript<F>,
-        circuit_description_hash_type: CircuitHashType,
     ) -> Result<Vec<ClaimMle<F>>, GKRError> {
-        // --- Generate circuit description hash and check against prover-provided circuit description hash ---
-        // let hash_value_as_field_elems =
-        //     get_circuit_description_hash_as_field_elems(self, circuit_description_hash_type);
-        // let prover_supplied_circuit_description_hash = transcript_reader
-        //     .consume_elements("Circuit description hash", hash_value_as_field_elems.len())
-        //     .unwrap();
-        // assert_eq!(
-        //     prover_supplied_circuit_description_hash,
-        //     hash_value_as_field_elems
-        // );
-
         // Get the verifier challenges from the transcript.
         let fiat_shamir_challenges: Vec<FiatShamirChallenge<F>> = self
             .fiat_shamir_challenges

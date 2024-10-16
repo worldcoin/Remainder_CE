@@ -111,12 +111,10 @@ pub fn v3_circuit_description_and_inputs(
     };
     let image_path = if let Some(path) = image_path {
         path.to_path_buf()
+    } else if mask {
+        Path::new("src/worldcoin/constants/v3/mask/test_image.bin").to_path_buf()
     } else {
-        if mask {
-            Path::new("src/worldcoin/constants/v3/mask/test_image.bin").to_path_buf()
-        } else {
-            Path::new("src/worldcoin/constants/v3/iris/test_image.bin").to_path_buf()
-        }
+        Path::new("src/worldcoin/constants/v3/iris/test_image.bin").to_path_buf()
     };
     let data = load_worldcoin_data_v3::<
         Fr,

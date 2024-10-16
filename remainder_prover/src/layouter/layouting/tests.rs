@@ -53,10 +53,7 @@ fn test_topo_sort_with_cycle_include_children() {
         input_shred_2.clone(),
     ];
     // node id: [4]
-    let input_layer_node = InputLayerNode::new(
-        &ctx,
-        Some(input_shred_vec)
-    );
+    let input_layer_node = InputLayerNode::new(&ctx, Some(input_shred_vec));
 
     // node ids: [5, 6]
     let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
@@ -157,10 +154,7 @@ fn test_topo_sort_with_cycle_no_children() {
         input_shred_2.clone(),
     ];
     // node id: [4]
-    let input_layer_node = InputLayerNode::new(
-        &ctx,
-        Some(input_shred_vec),
-    );
+    let input_layer_node = InputLayerNode::new(&ctx, Some(input_shred_vec));
 
     // node ids: [5, 6]
     let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
@@ -264,10 +258,7 @@ fn test_topo_sort_without_cycle_no_children() {
         input_shred_2.clone(),
     ];
     // node id: [4]
-    let input_layer_node = InputLayerNode::new(
-        &ctx,
-        Some(input_shred_vec),
-    );
+    let input_layer_node = InputLayerNode::new(&ctx, Some(input_shred_vec));
 
     // node ids: [5, 6]
     let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
@@ -376,10 +367,7 @@ fn test_topo_sort_without_cycle_include_children() {
         input_shred_2.clone(),
     ];
     // node id: [4]
-    let input_layer_node = InputLayerNode::new(
-        &ctx,
-        Some(input_shred_vec),
-    );
+    let input_layer_node = InputLayerNode::new(&ctx, Some(input_shred_vec));
 
     // node ids: [5, 6]
     let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);

@@ -95,10 +95,7 @@ fn test_completeness() {
     let message2 = committer.committed_vector(&f2_padded, &Fr::from(7));
     assert_eq!(f20 + r2 * f21, mle_eval); // f2(r2) = mle_eval
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
-        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(
-            &[mle_ref.clone()],
-            Fr::one(),
-        )]),
+        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(&[mle_ref.clone()], Fr::one())]),
         &committer,
         &mut rand::thread_rng(),
     );
@@ -266,10 +263,7 @@ fn test_soundness() {
     mle_ref.fix_variable(1, bindings[0]);
     mle_ref.fix_variable(2, bindings[1]);
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
-        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(
-            &[mle_ref.clone()],
-            Fr::one(),
-        )]),
+        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(&[mle_ref.clone()], Fr::one())]),
         &committer,
         &mut rand::thread_rng(),
     );

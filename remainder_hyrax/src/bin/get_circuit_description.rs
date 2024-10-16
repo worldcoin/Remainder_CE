@@ -3,7 +3,10 @@ use std::path::Path;
 use clap::Parser;
 use remainder::{
     prover::helpers::write_circuit_description_to_file,
-    worldcoin::{circuits::build_iriscode_circuit_description, data::wirings_to_reroutings, parameters::decode_wirings},
+    worldcoin::{
+        circuits::build_iriscode_circuit_description, data::wirings_to_reroutings,
+        parameters::decode_wirings,
+    },
 };
 use remainder_shared_types::Fr;
 
@@ -24,11 +27,12 @@ fn main() {
     let args = Args::parse();
     if args.version == 2 {
         use remainder::worldcoin::parameters_v2::{
-            BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
-            NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_COLS
+            BASE, IM_NUM_COLS, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+            MATMULT_ROWS_NUM_VARS, NUM_DIGITS, TO_REROUTE_NUM_VARS, WIRINGS,
         };
         let wirings = &decode_wirings(WIRINGS);
-        let reroutings = wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+        let reroutings =
+            wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
         let (circuit_description, _, _) = build_iriscode_circuit_description::<
             Fr,
             TO_REROUTE_NUM_VARS,
@@ -44,11 +48,12 @@ fn main() {
         );
     } else if args.version == 3 {
         use remainder::worldcoin::parameters_v3::{
-            BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
-            NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_COLS
+            BASE, IM_NUM_COLS, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+            MATMULT_ROWS_NUM_VARS, NUM_DIGITS, TO_REROUTE_NUM_VARS, WIRINGS,
         };
         let wirings = &decode_wirings(WIRINGS);
-        let reroutings = wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+        let reroutings =
+            wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
         let (circuit_description, _, _) = build_iriscode_circuit_description::<
             Fr,
             TO_REROUTE_NUM_VARS,

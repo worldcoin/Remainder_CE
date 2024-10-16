@@ -1,3 +1,4 @@
+#![allow(clippy::type_complexity)]
 //! This is a module for constructing an [InstantiatedCircuit] given a
 //! [LayouterCircuit], which is a closure provided by the circuit builder that
 //! takes in one parameter, the context, along with all of the "circuit

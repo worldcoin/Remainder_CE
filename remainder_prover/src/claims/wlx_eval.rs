@@ -47,10 +47,8 @@ pub struct WLXAggregator<F: Field, L> {
     _marker: std::marker::PhantomData<L>,
 }
 
-impl<
-        F: Field,
-        L: Layer<F> + YieldWLXEvals<F> + YieldClaim<ClaimMle<F>>,
-    > ClaimAggregator<F> for WLXAggregator<F, L>
+impl<F: Field, L: Layer<F> + YieldWLXEvals<F> + YieldClaim<ClaimMle<F>>> ClaimAggregator<F>
+    for WLXAggregator<F, L>
 {
     type Claim = ClaimMle<F>;
 
@@ -122,11 +120,7 @@ impl<
     }
 }
 
-impl<
-        F: Field,
-        L: Layer<F> + YieldWLXEvals<F> + YieldClaim<ClaimMle<F>>,
-    > WLXAggregator<F, L>
-{
+impl<F: Field, L: Layer<F> + YieldWLXEvals<F> + YieldClaim<ClaimMle<F>>> WLXAggregator<F, L> {
     fn prover_aggregate_claims(
         &self,
         layer: &impl YieldWLXEvals<F>,

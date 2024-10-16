@@ -25,10 +25,7 @@ pub struct InputLayerNodeData<F: Field> {
 impl<F: Field> InputLayerNodeData<F> {
     /// Constructor for [InputLayerData], using the corresponding fields as
     /// parameters.
-    pub fn new(
-        corresponding_input_node_id: NodeId,
-        data: Vec<InputShredData<F>>,
-    ) -> Self {
+    pub fn new(corresponding_input_node_id: NodeId, data: Vec<InputShredData<F>>) -> Self {
         Self {
             corresponding_input_node_id,
             data,
@@ -138,10 +135,7 @@ impl CircuitNode for InputLayerNode {
 impl InputLayerNode {
     /// A constructor for an InputLayerNode. Can either be initialized empty
     /// or with some InputShreds.
-    pub fn new(
-        ctx: &Context,
-        input_shreds: Option<Vec<InputShred>>,
-    ) -> Self {
+    pub fn new(ctx: &Context, input_shreds: Option<Vec<InputShred>>) -> Self {
         InputLayerNode {
             id: ctx.get_new_id(),
             input_shreds: input_shreds.unwrap_or_default(),
