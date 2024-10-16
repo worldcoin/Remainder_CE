@@ -260,12 +260,9 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         maybe_hyrax_input_dtype: &Option<HyraxInputDType>,
     ) -> MleCoefficientsVector<C> {
         if let Some(hyrax_input_dtype) = maybe_hyrax_input_dtype {
-            MleCoefficientsVector::convert_from_scalar_field(
-                mle.get_evals_vector(),
-                hyrax_input_dtype,
-            )
+            MleCoefficientsVector::convert_from_scalar_field(&mle.to_vec(), hyrax_input_dtype)
         } else {
-            MleCoefficientsVector::ScalarFieldVector(mle.f.to_vec())
+            MleCoefficientsVector::ScalarFieldVector(mle.to_vec())
         }
     }
 
@@ -373,7 +370,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
                         .into_iter()
                         .for_each(|chal| fix_mle.fix_variable(chal));
                     assert_eq!(fix_mle.f.len(), 1);
-                    fix_mle.f[0]
+                    fix_mle.first()
                 }
             })
             .collect();
@@ -397,10 +394,10 @@ pub fn verify_public_input_layer<C: PrimeOrderCurve>(
         for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
             eval = mle.fix_variable(curr_bit, chal);
         }
-        debug_assert_eq!(mle.bookkeeping_table().len(), 1);
+        debug_assert_eq!(mle.len(), 1);
         eval.unwrap()
     } else {
-        RawClaim::new(vec![], mle.mle[0])
+        RawClaim::new(vec![], mle.mle.first())
     };
 
     assert_eq!(eval.get_point(), claim.get_point());

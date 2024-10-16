@@ -92,14 +92,12 @@ impl<F: Field, T: Layer<F>> Layers<F, T> {
                 .clone()
                 .into_iter()
                 .for_each(|(z_ind, x_ind, y_ind)| {
-                    let f2_val = *lhs
-                        .bookkeeping_table()
+                    let f2_val = lhs
                         .get(idx + (x_ind * num_dataparallel_vals))
-                        .unwrap_or(&F::ZERO);
-                    let f3_val = *rhs
-                        .bookkeeping_table()
+                        .unwrap_or(F::ZERO);
+                    let f3_val = rhs
                         .get(idx + (y_ind * num_dataparallel_vals))
-                        .unwrap_or(&F::ZERO);
+                        .unwrap_or(F::ZERO);
                     res_table[idx + (z_ind * num_dataparallel_vals)] =
                         gate_operation.perform_operation(f2_val, f3_val);
                 });

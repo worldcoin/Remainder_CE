@@ -6,7 +6,7 @@ use remainder_shared_types::Field;
 
 use crate::{layer::LayerId, mle::Mle};
 
-use super::{dense::DenseMle, zero::ZeroMle, MleIndex};
+use super::{dense::DenseMle, evals::EvaluationsIterator, zero::ZeroMle, MleIndex};
 
 /// A wrapper type for various kinds of [MleRef]s.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -19,12 +19,34 @@ pub enum MleEnum<F: Field> {
 }
 
 impl<F: Field> Mle<F> for MleEnum<F> {
-    fn bookkeeping_table(&self) -> &[F] {
+    fn len(&self) -> usize {
         match self {
-            MleEnum::Dense(item) => item.bookkeeping_table(),
-            MleEnum::Zero(item) => item.bookkeeping_table(),
+            MleEnum::Dense(item) => item.len(),
+            MleEnum::Zero(item) => item.len(),
         }
     }
+
+    fn iter(&self) -> EvaluationsIterator<F> {
+        match self {
+            MleEnum::Dense(item) => item.iter(),
+            MleEnum::Zero(item) => item.iter(),
+        }
+    }
+
+    fn first(&self) -> F {
+        match self {
+            MleEnum::Dense(item) => item.first(),
+            MleEnum::Zero(item) => item.first(),
+        }
+    }
+
+    fn get(&self, index: usize) -> Option<F> {
+        match self {
+            MleEnum::Dense(item) => item.get(index),
+            MleEnum::Zero(item) => item.get(index),
+        }
+    }
+
     fn mle_indices(&self) -> &[super::MleIndex<F>] {
         match self {
             MleEnum::Dense(item) => item.mle_indices(),
