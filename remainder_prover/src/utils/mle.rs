@@ -9,7 +9,7 @@ use remainder_shared_types::Field;
 
 use crate::{
     layer::LayerId,
-    mle::{dense::DenseMle, evals::MultilinearExtension, MleIndex},
+    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, MleIndex},
 };
 
 /// Return a vector containing a padded version of the input data, with the padding value at the end
@@ -177,19 +177,6 @@ pub fn get_total_mle_indices<F: Field>(
         .collect()
 }
 
-struct GrayCode {
-    num_bits: usize,
-    current_val: u32,
-}
-
-impl Iterator for GrayCode {
-    type Item = usize;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        todo!()
-    }
-}
-
 /// Construct a parent MLE for the given MLEs and prefix bits, where the prefix bits of each MLE specify how it should be inserted into the parent.
 /// Entries left unspecified are filled with `F::ZERO`.
 /// # Requires:
@@ -230,4 +217,143 @@ pub fn build_composite_mle<F: Field>(
             });
     }
     MultilinearExtension::new(out)
+}
+
+/// A struct representing an iterator that iterates through
+/// the range (0..2^{`num_bits`}) but in the ordering of a
+/// Gray Code, which means that the edit distance between
+/// the bit representation of any consecutive indices is only 1.
+///
+/// The iterator is of the type (u32, (u32, bool))
+/// which represents:
+/// (index, (index of the bit that was flipped, the previous value of the flipped bit.))
+pub struct GrayCode {
+    num_bits: usize,
+    current_val: u32,
+}
+
+impl GrayCode {
+    fn new(num_bits: usize) -> Self {
+        GrayCode {
+            num_bits,
+            current_val: 0,
+        }
+    }
+}
+
+impl Iterator for GrayCode {
+    type Item = (u32, (u32, bool));
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_val >= ((1 << self.num_bits) - 1) {
+            return None;
+        }
+
+        // Mask current value to ensure we only get num_bits
+        // number of bits per result.
+        let mask = (1 << self.num_bits) - 1;
+
+        // Because we don't store the previous value, just calculate it
+        // using the current_val that's stored.
+        let prev_gray = (self.current_val ^ (self.current_val >> 1)) & mask;
+        // The next value is simply XOR of the counter incremented by 1 and itself
+        // right-shifted.
+        // (source: algorithm in Wikipedia and ChatGPT hehe)
+        self.current_val += 1;
+        let new_gray = (self.current_val ^ (self.current_val >> 1)) & mask;
+
+        // Compute which bit was flipped.
+        let flipped_bit = (prev_gray ^ new_gray).trailing_zeros();
+        let previous_value = (prev_gray & (1 << flipped_bit)) != 0;
+
+        // The new gray code index is already in little endian, so for our
+        // current purposes, this is okay. For big endian, we need to reverse
+        // the bits.
+        Some((new_gray, (flipped_bit, previous_value)))
+    }
+}
+
+/// This function non-destructively evaluates an MLE at a given point using
+/// the gray codes iterator.
+pub fn evaluate_mle_at_a_point<F: Field>(mle: &MultilinearExtension<F>, point: &[F]) -> F {
+    let mle_num_vars = mle.num_vars();
+    let mle_coefficients = mle.get_evals_vector();
+    assert_eq!(point.len(), mle_num_vars);
+    // The gray codes start at index 1, so we start with the first value which
+    // is \widetilde{\beta}(\vec{0}, point).
+    let starting_beta_value =
+        BetaValues::compute_beta_over_two_challenges(&vec![F::ZERO; mle_num_vars], point);
+    // This is the value that gets multiplied to the first MLE coefficient.
+    let starting_evaluation_acc = starting_beta_value * mle_coefficients[0];
+    let gray_code = GrayCode::new(mle_num_vars);
+    // We simply compute the correct inverse and new multiplicative term
+    // for each bit that is flipped in the beta value, and accumulate these
+    // by doing an element-wise multiplication with the correct index
+    // of the MLE coefficients.
+    let evaluation = gray_code.fold(
+        (starting_beta_value, starting_evaluation_acc),
+        |(prev_beta_value, evaluation_acc), (index, (flipped_bit_index, flipped_bit_value))| {
+            let next_beta_value = if flipped_bit_value {
+                prev_beta_value
+                    * point[flipped_bit_index as usize].invert().unwrap()
+                    * (F::ONE - point[flipped_bit_index as usize])
+            } else {
+                prev_beta_value
+                    * (F::ONE - point[flipped_bit_index as usize])
+                        .invert()
+                        .unwrap()
+                    * point[flipped_bit_index as usize]
+            };
+            let next_evaluation_acc = next_beta_value * mle_coefficients[index as usize];
+            (next_beta_value, evaluation_acc + next_evaluation_acc)
+        },
+    );
+    evaluation.1
+}
+
+#[cfg(test)]
+mod tests {
+    use ark_std::test_rng;
+    use itertools::Itertools;
+    use remainder_shared_types::{ff_field, Fr};
+
+    use crate::mle::evals::MultilinearExtension;
+
+    use super::evaluate_mle_at_a_point;
+
+    fn evaluate_mle_destructive(mle: &mut MultilinearExtension<Fr>, point: &[Fr]) -> Fr {
+        point.iter().for_each(|challenge| {
+            mle.fix_variable(*challenge);
+        });
+        assert_eq!(mle.get_evals_vector().len(), 1);
+        mle.get_evals_vector()[0]
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_1_variable() {
+        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2)]);
+        let point = &[Fr::from(2)];
+        let computed_evaluation = evaluate_mle_at_a_point(&mle, point);
+        let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_2_variable() {
+        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2), Fr::ONE, Fr::from(2)]);
+        let point = &[Fr::from(2), Fr::from(3)];
+        let computed_evaluation = evaluate_mle_at_a_point(&mle, point);
+        let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_3_variable_random() {
+        let mut rng = test_rng();
+        let mut mle = MultilinearExtension::new((0..8).map(|_| Fr::random(&mut rng)).collect());
+        let point = &(0..3).map(|_| Fr::random(&mut rng)).collect_vec();
+        let computed_evaluation = evaluate_mle_at_a_point(&mle, point);
+        let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
 }
