@@ -466,55 +466,53 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
             Ok(final_vec_evals)
         // phase 2
-        } else {
-            if self.phase_2_mles.as_ref().unwrap()[0][1].num_free_vars() > 0 {
-                let phase_2_mle_refs: Vec<Vec<&DenseMle<F>>> = self
-                    .phase_2_mles
-                    .as_ref()
+        } else if self.phase_2_mles.as_ref().unwrap()[0][1].num_free_vars() > 0 {
+            let phase_2_mle_refs: Vec<Vec<&DenseMle<F>>> = self
+                .phase_2_mles
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|mle_vec| {
+                    let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                    mle_references
+                })
+                .collect();
+
+            let max_deg = phase_2_mle_refs
+                .iter()
+                .fold(0, |acc, elem| max(acc, elem.len()));
+
+            let evals_vec = phase_2_mle_refs
+                .iter()
+                .map(|mle_vec| {
+                    compute_sumcheck_message_no_beta_table(
+                        mle_vec,
+                        round_index - self.num_rounds_phase1.unwrap(),
+                        max_deg,
+                    )
                     .unwrap()
-                    .iter()
-                    .map(|mle_vec| {
-                        let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                        mle_references
-                    })
-                    .collect();
+                })
+                .collect_vec();
 
-                let max_deg = phase_2_mle_refs
-                    .iter()
-                    .fold(0, |acc, elem| max(acc, elem.len()));
+            let final_evals = evals_vec
+                .clone()
+                .into_iter()
+                .skip(1)
+                .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
+                    acc + SumcheckEvals(elem)
+                });
+            let SumcheckEvals(mut final_vec_evals) = final_evals;
 
-                let evals_vec = phase_2_mle_refs
-                    .iter()
-                    .map(|mle_vec| {
-                        compute_sumcheck_message_no_beta_table(
-                            mle_vec,
-                            round_index - self.num_rounds_phase1.unwrap(),
-                            max_deg,
-                        )
-                        .unwrap()
-                    })
-                    .collect_vec();
+            assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
+            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
 
-                let final_evals = evals_vec
-                    .clone()
-                    .into_iter()
-                    .skip(1)
-                    .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
-                        acc + SumcheckEvals(elem)
-                    });
-                let SumcheckEvals(mut final_vec_evals) = final_evals;
+            final_vec_evals
+                .iter_mut()
+                .for_each(|eval| *eval *= beta_g2_fully_bound);
 
-                assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
-                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
-
-                final_vec_evals
-                    .iter_mut()
-                    .for_each(|eval| *eval *= beta_g2_fully_bound);
-
-                Ok(final_vec_evals)
-            } else {
-                Ok(vec![])
-            }
+            Ok(final_vec_evals)
+        } else {
+            Ok(vec![])
         }
     }
 
