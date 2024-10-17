@@ -82,7 +82,7 @@ pub fn build_circuit<
         let (to_sub_from_matmult, to_sub_from_matmult_data) =
             build_input_shred_and_data(to_sub_from_matmult.clone(), ctx, &input_layer);
         println!("{:?} = input to sub from matmult", to_sub_from_matmult.id());
-        let rerouted_image = IdentityGateNode::new(ctx, &to_reroute, reroutings.clone());
+        let rerouted_image = IdentityGateNode::new(ctx, &to_reroute, reroutings.clone(), None);
         println!("{:?} = Identity gate", rerouted_image.id());
 
         let (rh_matmult_multiplicand, rh_matmult_multiplicand_data) =
@@ -292,7 +292,7 @@ pub fn build_iriscode_circuit_description<
     );
 
     // Intermediate layers
-    let rerouted_image = IdentityGateNode::new(&ctx, &to_reroute, reroutings);
+    let rerouted_image = IdentityGateNode::new(&ctx, &to_reroute, reroutings, None);
     println!("{:?} = Identity gate", rerouted_image.id());
 
     let matmult = MatMultNode::new(

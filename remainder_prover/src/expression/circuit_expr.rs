@@ -219,9 +219,9 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                     .map(|circuit_mle| {
                         circuit_map
                             .get_data_from_circuit_mle(circuit_mle) // Returns Result
-                            .map(|data| data.get_evals_vector().as_slice()) // Map Ok value to slice
+                            .map(|data| data.to_vec()) // Map Ok value to slice
                     })
-                    .collect::<Result<Vec<&[F]>, _>>() // Collect all into a Result
+                    .collect::<Result<Vec<Vec<F>>, _>>() // Collect all into a Result
                     .ok()?;
                 Some(evaluate_bookkeeping_tables_given_operation(
                     &mle_bookkeeping_tables,
@@ -233,8 +233,8 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 let b_bookkeeping_table = b.compute_bookkeeping_table(circuit_map)?;
                 Some(evaluate_bookkeeping_tables_given_operation(
                     &[
-                        (a_bookkeeping_table.get_evals_vector()),
-                        (b_bookkeeping_table.get_evals_vector()),
+                        (a_bookkeeping_table.to_vec()),
+                        (b_bookkeeping_table.to_vec()),
                     ],
                     BinaryOperation::Add,
                 ))
@@ -243,7 +243,6 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map)?;
                 Some(MultilinearExtension::new(
                     a_bookkeeping_table
-                        .get_evals_vector()
                         .iter()
                         .map(|elem| elem.neg())
                         .collect_vec(),
@@ -253,9 +252,8 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map)?;
                 Some(MultilinearExtension::new(
                     a_bookkeeping_table
-                        .get_evals_vector()
                         .iter()
-                        .map(|elem| *elem * scale)
+                        .map(|elem| elem * scale)
                         .collect_vec(),
                 ))
             }
@@ -268,10 +266,9 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 );
                 Some(MultilinearExtension::new(
                     a_bookkeeping_table
-                        .get_evals_vector()
                         .iter()
-                        .zip(b_bookkeeping_table.get_evals_vector())
-                        .flat_map(|(a, b)| vec![*a, *b])
+                        .zip(b_bookkeeping_table.iter())
+                        .flat_map(|(a, b)| vec![a, b])
                         .collect_vec(),
                 ))
             }
@@ -813,7 +810,7 @@ pub fn filter_bookkeeping_table<F: Field>(
     bookkeeping_table: &MultilinearExtension<F>,
     unfiltered_prefix_bits: &[bool],
 ) -> MultilinearExtension<F> {
-    let current_table = bookkeeping_table.get_evals_vector().to_vec();
+    let current_table = bookkeeping_table.to_vec();
     let filtered_table = unfiltered_prefix_bits
         .iter()
         .fold(current_table, |acc, bit| {
@@ -829,7 +826,7 @@ pub fn filter_bookkeeping_table<F: Field>(
 /// Evaluate the bookkeeping tables by applying the element-wise operation,
 /// which can either be addition or multiplication.
 fn evaluate_bookkeeping_tables_given_operation<F: Field>(
-    mle_bookkeeping_tables: &[&[F]],
+    mle_bookkeeping_tables: &[Vec<F>],
     binary_operation: BinaryOperation,
 ) -> MultilinearExtension<F> {
     let max_num_vars = mle_bookkeeping_tables

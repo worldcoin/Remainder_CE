@@ -52,7 +52,7 @@ pub fn evaluate_mle<F: Field>(mle: &DenseMle<F>, point: &[F]) -> F {
     point.iter().enumerate().for_each(|(i, coord)| {
         mle.fix_variable(i, *coord);
     });
-    mle.bookkeeping_table()[0]
+    mle.first()
 }
 
 #[test]
@@ -186,12 +186,16 @@ fn identity_gate_hyrax_layer_test() {
     let nonzero_gates = vec![(0, 1), (1, 3)];
 
     // Construct the layer from the underlying MLE and the wirings
-    let mut circuit_layer_enum = LayerDescriptionEnum::IdentityGate(
-        IdentityGateLayerDescription::new(LayerId::Layer(0), nonzero_gates.clone(), circuit_mle_1),
-    );
+    let mut circuit_layer_enum =
+        LayerDescriptionEnum::IdentityGate(IdentityGateLayerDescription::new(
+            LayerId::Layer(0),
+            nonzero_gates.clone(),
+            circuit_mle_1,
+            None,
+        ));
     circuit_layer_enum.index_mle_indices(0);
     let identity_layer: IdentityGate<Scalar> =
-        IdentityGate::new(LayerId::Layer(0), nonzero_gates, mle_1);
+        IdentityGate::new(LayerId::Layer(0), nonzero_gates, mle_1, None);
     let mut layer_enum = LayerEnum::IdentityGate(Box::new(identity_layer));
 
     // Other auxiliaries for the layer
@@ -1160,7 +1164,7 @@ fn buld_identity_regular_test_circuit<F: Field>(
 
     // Create identity gate layer
     let nonzero_gate_wiring = vec![(0, 2), (1, 1)];
-    let id_layer = IdentityGateNode::new(&context, &squaring_sector, nonzero_gate_wiring);
+    let id_layer = IdentityGateNode::new(&context, &squaring_sector, nonzero_gate_wiring, None);
 
     // Middle layer 2: subtract middle layer 1 from itself.
     let subtract_sector = Sector::new(&context, &[&id_layer], |mle_vec| {
@@ -1402,11 +1406,11 @@ fn build_identity_matmult_regular_test_circuit<F: Field>(
 
     // Create identity gate layer A
     let nonzero_gate_wiring_a = vec![(0, 2), (1, 1), (2, 0), (3, 1)];
-    let id_layer_a = IdentityGateNode::new(&context, &squaring_sector, nonzero_gate_wiring_a);
+    let id_layer_a = IdentityGateNode::new(&context, &squaring_sector, nonzero_gate_wiring_a, None);
 
     // Create identity gate layer B
     let nonzero_gate_wiring_b = vec![(0, 3), (1, 0), (2, 1), (3, 1)];
-    let id_layer_b = IdentityGateNode::new(&context, &squaring_sector, nonzero_gate_wiring_b);
+    let id_layer_b = IdentityGateNode::new(&context, &squaring_sector, nonzero_gate_wiring_b, None);
 
     // Create matmult layer, multiply id_output by itself
     let matmult_layer = MatMultNode::new(&context, &id_layer_a, (1, 1), &id_layer_b, (1, 1));

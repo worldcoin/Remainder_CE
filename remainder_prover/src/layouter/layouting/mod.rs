@@ -30,7 +30,7 @@ use super::nodes::{
 
 /// A HashMap that records during circuit compilation where nodes live in the circuit and what data they yield.
 #[derive(Debug)]
-pub struct CircuitMap<F>(pub(crate) HashMap<CircuitLocation, MultilinearExtension<F>>);
+pub struct CircuitMap<F: Field>(pub(crate) HashMap<CircuitLocation, MultilinearExtension<F>>);
 /// A map that maps layer ID to all the MLEs that are output from that layer. Together these MLEs are combined
 /// along with the information from their prefix bits to form the layerwise bookkeeping table.
 pub type LayerMap<F> = HashMap<LayerId, Vec<DenseMle<F>>>;

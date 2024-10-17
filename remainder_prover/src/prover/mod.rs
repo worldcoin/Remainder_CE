@@ -136,7 +136,7 @@ pub fn prove<F: Field>(
         .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
         .for_each(|layer_id| {
             let mle = inputs.get(layer_id).unwrap();
-            transcript_writer.append_elements("input layer", mle.get_evals_vector());
+            transcript_writer.append_elements("input layer", &mle.iter().collect_vec());
         });
 
     // For each Ligero input layer, calculate commitments if not already provided, and then add each
@@ -153,7 +153,7 @@ pub fn prove<F: Field>(
             } else {
                 let input_mle = inputs.get(layer_id).unwrap();
                 let (commitment, _) =
-                    remainder_ligero_commit(input_mle.get_evals_vector(), &desc.aux);
+                    remainder_ligero_commit(&input_mle.iter().collect_vec(), &desc.aux);
                 commitment
             };
             // Add the root of the commitment to the transcript.
@@ -186,7 +186,7 @@ pub fn prove<F: Field>(
             let mle = inputs.get(&layer_id).unwrap();
             let commitment = ligero_input_commitments.get(&layer_id).unwrap();
             remainder_ligero_eval_prove(
-                mle.get_evals_vector(),
+                &mle.f.iter().collect_vec(),
                 claim.get_claim().get_point(),
                 transcript_writer,
                 &desc.aux,
@@ -234,7 +234,7 @@ pub fn verify<F: Field>(
                 .consume_elements("input layer", 1 << layer_desc.num_vars)
                 .unwrap();
             let expected_mle = public_inputs.get(layer_id).unwrap();
-            if expected_mle.get_evals_vector() != &transcript_mle {
+            if expected_mle.f.iter().collect_vec() != transcript_mle {
                 Err(GKRError::PublicInputLayerValuesMismatch(*layer_id))
             } else {
                 Ok(())
@@ -339,7 +339,8 @@ pub fn prove_circuit<F: Field>(
         let layer_id = output.layer_id();
         info!("Output Layer: {:?}", layer_id);
 
-        transcript_writer.append_elements("output layer", output.get_mle().bookkeeping_table());
+        transcript_writer
+            .append_elements("output layer", &output.get_mle().get_padded_evaluations());
 
         let challenges =
             transcript_writer.get_challenges("output layer binding", output.num_free_vars());

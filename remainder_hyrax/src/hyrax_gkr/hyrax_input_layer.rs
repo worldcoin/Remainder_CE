@@ -269,7 +269,7 @@ fn compute_claim_wlx<F: Field>(mle_vec: &[F], claims: &ClaimGroup<F>) -> Vec<F> 
                     .into_iter()
                     .for_each(|chal| fix_mle.fix_variable(chal));
                 assert_eq!(fix_mle.f.len(), 1);
-                fix_mle.f[0]
+                fix_mle.first()
             }
         })
         .collect();
@@ -290,10 +290,10 @@ pub fn verify_claim<F: Field>(mle_vec: &[F], claim: &Claim<F>) {
         for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
             eval = mle.fix_variable(curr_bit, chal);
         }
-        debug_assert_eq!(mle.bookkeeping_table().len(), 1);
+        debug_assert_eq!(mle.len(), 1);
         eval.unwrap()
     } else {
-        Claim::new(vec![], mle.mle[0])
+        Claim::new(vec![], mle.mle.first())
     };
 
     assert_eq!(eval.get_point(), claim.get_point());

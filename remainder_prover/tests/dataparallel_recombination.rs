@@ -249,8 +249,8 @@ fn test_dataparallel_recombination_newmainder() {
         .map(|_| {
             let mle = get_dummy_random_mle(NUM_FREE_VARS, &mut rng);
             let mle_copy = mle.clone();
-            let mle_vec = mle_copy.bookkeeping_table();
-            (mle, mle_vec.to_vec())
+            let mle_vec = mle_copy.iter().collect();
+            (mle, mle_vec)
         })
         .unzip();
 

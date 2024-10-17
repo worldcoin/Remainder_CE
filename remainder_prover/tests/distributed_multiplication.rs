@@ -204,12 +204,11 @@ fn test_dataparallel_wraparound_multiplication_circuit() {
         .iter()
         .zip(bigger_mles_vec.iter())
         .map(|(small_mle, big_mle)| {
-            let small_mle_bt = small_mle.bookkeeping_table();
-            let big_mle_bt = big_mle.bookkeeping_table();
-            let prod_bt = big_mle_bt
-                .iter()
-                .zip(small_mle_bt.iter().cycle())
-                .map(|(big_elem, small_elem)| *big_elem * *small_elem);
+            let small_mle_bt_iter = small_mle.iter();
+            let big_mle_bt_iter = big_mle.iter();
+            let prod_bt = big_mle_bt_iter
+                .zip(small_mle_bt_iter.cycle())
+                .map(|(big_elem, small_elem)| big_elem * small_elem);
             DenseMle::new_from_iter(prod_bt, small_mle.layer_id)
         })
         .collect_vec();

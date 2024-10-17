@@ -204,17 +204,14 @@ pub fn build_composite_mle<F: Field>(
     });
     let mut out = vec![F::ZERO; 1 << out_num_vars];
     for (mle, prefix_bits) in mles {
-        mle.get_evals_vector()
-            .iter()
-            .enumerate()
-            .for_each(|(idx, eval)| {
-                let mut out_idx = 0;
-                for (i, bit) in prefix_bits.iter().enumerate() {
-                    out_idx |= (*bit as usize) << i;
-                }
-                out_idx |= idx << prefix_bits.len();
-                out[out_idx] = *eval;
-            });
+        mle.f.iter().enumerate().for_each(|(idx, eval)| {
+            let mut out_idx = 0;
+            for (i, bit) in prefix_bits.iter().enumerate() {
+                out_idx |= (*bit as usize) << i;
+            }
+            out_idx |= idx << prefix_bits.len();
+            out[out_idx] = eval;
+        });
     }
     MultilinearExtension::new(out)
 }
