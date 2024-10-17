@@ -7,7 +7,6 @@ mod new_interface_tests;
 
 use std::{cmp::max, collections::HashSet};
 
-use ark_std::cfg_into_iter;
 use gate_helpers::bind_round_gate;
 use itertools::Itertools;
 use remainder_shared_types::{
@@ -17,7 +16,7 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::{claim_aggregation::get_num_wlx_evaluations, Claim, ClaimError, RawClaim},
+    claims::{Claim, ClaimError, RawClaim},
     expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
@@ -34,11 +33,8 @@ pub use self::gate_helpers::{
 
 use super::{
     layer_enum::{LayerEnum, VerifierLayerEnum},
-    GenericLayer, LayerDescription, VerifierLayer,
+    LayerDescription, VerifierLayer,
 };
-
-#[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug, Copy)]
 
@@ -92,49 +88,6 @@ pub struct GateLayer<F: Field> {
     challenges: Vec<F>,
 }
 
-impl<F: Field> GenericLayer<F> for GateLayer<F> {
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &[Vec<F>],
-        claimed_vals: &[F],
-        _claimed_mles: Vec<DenseMle<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, ClaimError> {
-        // Get the number of evaluations.
-        let (num_evals, _, _) = get_num_wlx_evaluations(claim_vecs);
-
-        // We already have the first #claims evaluations, get the next num_evals - #claims evaluations.
-        let next_evals: Vec<F> = (num_claims..num_evals)
-            .map(|idx| {
-                // Get the challenge l(idx).
-                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                    .map(|claim_idx| {
-                        let evals: Vec<F> = cfg_into_iter!(claim_vecs)
-                            .map(|claim| claim[claim_idx])
-                            .collect();
-                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
-                    })
-                    .collect();
-
-                compute_full_gate(
-                    new_chal,
-                    &mut self.lhs.clone(),
-                    &mut self.rhs.clone(),
-                    &self.nonzero_gates,
-                    self.num_dataparallel_bits,
-                )
-            })
-            .collect();
-
-        // Concat this with the first k evaluations from the claims to get num_evals evaluations.
-        let mut claimed_vals = claimed_vals.to_vec();
-
-        claimed_vals.extend(&next_evals);
-        let wlx_evals = claimed_vals;
-        Ok(wlx_evals)
-    }
-}
 impl<F: Field> Layer<F> for GateLayer<F> {
     /// Gets this layer's id.
     fn layer_id(&self) -> LayerId {

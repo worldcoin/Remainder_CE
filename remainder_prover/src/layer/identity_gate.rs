@@ -3,17 +3,11 @@
 
 use std::collections::HashSet;
 
-use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::{
-        claim_aggregation::{
-            get_num_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
-        },
-        Claim, ClaimError, RawClaim,
-    },
+    claims::{Claim, ClaimError, RawClaim},
     expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{gate::gate_helpers::bind_round_identity, LayerError, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
@@ -32,18 +26,18 @@ use thiserror::Error;
 use super::{
     gate::{
         gate_helpers::{
-            compute_full_gate_identity, compute_sumcheck_messages_data_parallel_identity_gate,
+            compute_sumcheck_messages_data_parallel_identity_gate,
             evaluate_mle_ref_product_no_beta_table, prove_round_identity_gate_dataparallel_phase,
         },
         index_mle_indices_gate, GateError,
     },
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
-    GenericLayer, Layer, LayerDescription, LayerId, VerifierLayer,
+    Layer, LayerDescription, LayerId, VerifierLayer,
 };
 
 #[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 /// Controls whether the `beta` optimiation should be enabled. When enabled, all
 /// functions in this module that compute the value of a `beta` function at a
@@ -95,55 +89,6 @@ impl<F: Field> IdentityGateLayerDescription<F> {
 /// (regardless of if there's dataparallel or not)
 /// V_i(g_2, g_1) = \sum_{p_2} \sum_{x} \beta(g_2, p_2) f_1(g_1, x) (V_{i + 1}(p_2, x))
 const ID_NUM_EVALS: usize = 3;
-
-impl<F: Field> GenericLayer<F> for IdentityGate<F> {
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &[Vec<F>],
-        claimed_vals: &[F],
-        _claimed_mles: Vec<DenseMle<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, ClaimError> {
-        // get the number of evaluations
-        let num_evals = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
-            let (num_evals, _, _) = get_num_wlx_evaluations(claim_vecs);
-            num_evals
-        } else {
-            ((num_claims - 1) * num_idx) + 1
-        };
-
-        // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
-        let next_evals: Vec<F> = (num_claims..num_evals)
-            .map(|idx| {
-                // get the challenge l(idx)
-                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                    .map(|claim_idx| {
-                        let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-                            .map(|claim| claim[claim_idx])
-                            .collect();
-
-                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
-                    })
-                    .collect();
-
-                compute_full_gate_identity(
-                    new_chal,
-                    &mut self.mle_ref.clone(),
-                    &self.nonzero_gates,
-                    self.num_dataparallel_vars,
-                )
-            })
-            .collect();
-
-        // concat this with the first k evaluations from the claims to get num_evals evaluations
-        let mut claimed_vals = claimed_vals.to_vec();
-
-        claimed_vals.extend(&next_evals);
-        let wlx_evals = claimed_vals;
-        Ok(wlx_evals)
-    }
-}
 
 impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
     type VerifierLayer = VerifierIdentityGateLayer<F>;

@@ -3,11 +3,7 @@
 use remainder_shared_types::{transcript::VerifierTranscript, Field};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    input_layer_enum,
-    layer::LayerId,
-    mle::{dense::DenseMle, evals::MultilinearExtension},
-};
+use crate::{input_layer_enum, layer::LayerId, mle::evals::MultilinearExtension};
 
 use super::{
     hyrax_input_layer::HyraxInputLayerDescription,

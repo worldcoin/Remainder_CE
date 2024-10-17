@@ -19,7 +19,6 @@ use crate::{
     claims::{Claim, ClaimError, RawClaim},
     expression::{circuit_expr::MleDescription, expr_errors::ExpressionError},
     layouter::layouting::CircuitMap,
-    mle::dense::DenseMle,
     sumcheck::InterpError,
 };
 use remainder_shared_types::{
@@ -92,26 +91,11 @@ pub enum VerificationError {
     InterpError(#[from] InterpError),
 }
 
-/// A trait for any struct that can produce wlx evaluations.
-pub trait GenericLayer<F: Field> {
-    /// Returns a vector of evaluations of this layer's MLE on a sequence of
-    /// points computed by interpolating a polynomial that passes through the
-    /// points of `claims_vecs`.
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &[Vec<F>],
-        claimed_vals: &[F],
-        claim_mle_refs: Vec<DenseMle<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, ClaimError>;
-}
-
 /// A layer is the smallest component of the GKR protocol.
 ///
 /// Each `Layer` is a sub-protocol that takes in some `Claim` and creates a proof
 /// that the `Claim` is correct
-pub trait Layer<F: Field>: GenericLayer<F> {
+pub trait Layer<F: Field> {
     /// Gets this layer's ID.
     fn layer_id(&self) -> LayerId;
 

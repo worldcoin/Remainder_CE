@@ -440,7 +440,6 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             let layer_claims = claim_tracker.get(layer_id).unwrap();
             let layer_claim = prover_aggregate_claims(
                 layer_claims,
-                &layer,
                 output_mles_from_layer,
                 &mut transcript_writer,
             )?;
@@ -494,7 +493,6 @@ impl<F: Field, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> (C, Vec<InputLa
             let layer_claims = claim_tracker.get(layer_id).unwrap();
             let layer_claim = prover_aggregate_claims(
                 layer_claims,
-                &input_layer,
                 output_mles_from_layer,
                 &mut transcript_writer,
             )?;

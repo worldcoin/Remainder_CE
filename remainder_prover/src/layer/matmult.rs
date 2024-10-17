@@ -3,7 +3,6 @@
 use std::collections::HashSet;
 
 use ::serde::{Deserialize, Serialize};
-use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
@@ -11,28 +10,19 @@ use remainder_shared_types::{
 };
 
 use super::{
-    combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     gate::compute_sumcheck_message_no_beta_table,
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
-    GenericLayer, Layer, LayerDescription, LayerError, LayerId, VerifierLayer,
+    Layer, LayerDescription, LayerError, LayerId, VerifierLayer,
 };
 use crate::{
-    claims::{
-        claim_aggregation::{
-            get_num_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
-        },
-        Claim, ClaimError, RawClaim,
-    },
+    claims::{Claim, ClaimError, RawClaim},
     expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::VerificationError,
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
     sumcheck::evaluate_at_a_point,
 };
-
-#[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// Used to represent a matrix, along with its optional prefix bits (in circuit)
 /// basically an equivalence of DenseMle<F>, but uninstantiated, until preprocessing
@@ -142,55 +132,6 @@ impl<F: Field> MatMult<F> {
             "Fully bound matrix evaluations",
             &[self.matrix_a.mle.first(), self.matrix_b.mle.first()],
         );
-    }
-}
-
-impl<F: Field> GenericLayer<F> for MatMult<F> {
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &[Vec<F>],
-        claimed_vals: &[F],
-        claim_mles: Vec<DenseMle<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, ClaimError> {
-        // get the number of evaluations
-        let (num_evals, common_idx) = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
-            let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
-            (num_evals, common_idx)
-        } else {
-            (((num_claims - 1) * num_idx) + 1, None)
-        };
-
-        let mut claim_mles = claim_mles.clone();
-
-        if let Some(common_idx) = common_idx {
-            pre_fix_mle_refs(&mut claim_mles, &claim_vecs[0], common_idx);
-        }
-
-        // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
-        let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
-            .map(|idx| {
-                // get the challenge l(idx)
-                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                    .map(|claim_idx| {
-                        let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-                            .map(|claim| claim[claim_idx])
-                            .collect();
-                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
-                    })
-                    .collect();
-
-                let wlx_eval_on_mle_ref = combine_mle_refs_with_aggregate(&claim_mles, &new_chal);
-                wlx_eval_on_mle_ref.unwrap()
-            })
-            .collect();
-
-        // concat this with the first k evaluations from the claims to
-        // get num_evals evaluations
-        let mut wlx_evals = claimed_vals.to_vec();
-        wlx_evals.extend(&next_evals);
-        Ok(wlx_evals)
     }
 }
 

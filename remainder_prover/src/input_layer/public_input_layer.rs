@@ -10,13 +10,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::RawClaim,
-    layer::{GenericLayer, LayerId},
+    layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension},
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations, CommitmentEnum, InputLayer,
-    InputLayerDescription, InputLayerError,
+    enum_input_layer::InputLayerEnum, CommitmentEnum, InputLayer, InputLayerDescription,
+    InputLayerError,
 };
 use crate::mle::Mle;
 
@@ -153,26 +153,6 @@ impl<F: Field> InputLayerDescription<F> for PublicInputLayerDescription<F> {
 
         let prover_public_input_layer = PublicInputLayer::new(combined_mle, self.layer_id());
         prover_public_input_layer.into()
-    }
-}
-
-impl<F: Field> GenericLayer<F> for PublicInputLayer<F> {
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &[Vec<F>],
-        claimed_vals: &[F],
-        claim_mle_refs: Vec<DenseMle<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, crate::claims::ClaimError> {
-        get_wlx_evaluations(
-            self.mle.clone(),
-            claim_vecs,
-            claimed_vals,
-            claim_mle_refs,
-            num_claims,
-            num_idx,
-        )
     }
 }
 

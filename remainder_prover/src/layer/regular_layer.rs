@@ -5,7 +5,6 @@ mod tests;
 
 use std::collections::{HashMap, HashSet};
 
-use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
@@ -16,12 +15,7 @@ use tracing::info;
 
 use crate::{
     builders::layer_builder::LayerBuilder,
-    claims::{
-        claim_aggregation::{
-            get_num_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
-        },
-        Claim, ClaimError, RawClaim,
-    },
+    claims::{Claim, ClaimError, RawClaim},
     expression::{
         circuit_expr::{filter_bookkeeping_table, ExprDescription, MleDescription},
         generic_expr::{Expression, ExpressionNode, ExpressionType},
@@ -35,16 +29,11 @@ use crate::{
 };
 
 use super::{
-    combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::PostSumcheckLayer,
-    GenericLayer,
 };
 
 use super::{LayerDescription, VerifierLayer};
-
-#[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// The most common implementation of [crate::layer::Layer].
 ///
@@ -220,57 +209,6 @@ impl<F: Field> RegularLayer<F> {
     }
 }
 
-impl<F: Field> GenericLayer<F> for RegularLayer<F> {
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &[Vec<F>],
-        claimed_vals: &[F],
-        claim_mle_refs: Vec<DenseMle<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, ClaimError> {
-        // get the number of evaluations
-
-        let (num_evals, common_idx) = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
-            let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
-            (num_evals, common_idx)
-        } else {
-            assert!(claim_vecs.len() > 1);
-            (((num_claims - 1) * num_idx) + 1, None)
-        };
-
-        let mut claim_mle_refs = claim_mle_refs;
-
-        if let Some(common_idx) = common_idx {
-            pre_fix_mle_refs(&mut claim_mle_refs, &claim_vecs[0], common_idx);
-        }
-
-        // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
-        let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
-            .map(|idx| {
-                // get the challenge l(idx)
-                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                    .map(|claim_idx| {
-                        let evals: Vec<F> = cfg_into_iter!(claim_vecs)
-                            .map(|claim| claim[claim_idx])
-                            .collect();
-                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
-                    })
-                    .collect();
-
-                let wlx_eval_on_mle_ref =
-                    combine_mle_refs_with_aggregate(&claim_mle_refs, &new_chal);
-                wlx_eval_on_mle_ref.unwrap()
-            })
-            .collect();
-
-        // concat this with the first k evaluations from the claims to
-        // get num_evals evaluations
-        let mut wlx_evals = claimed_vals.to_vec();
-        wlx_evals.extend(&next_evals);
-        Ok(wlx_evals)
-    }
-}
 impl<F: Field> Layer<F> for RegularLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.id

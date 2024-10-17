@@ -2,7 +2,7 @@
 
 use std::cmp::max;
 
-use ark_std::{end_timer, start_timer};
+use ark_std::{cfg_into_iter, end_timer, start_timer};
 use remainder_shared_types::{
     transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
     Field,
@@ -11,12 +11,16 @@ use tracing::{debug, info};
 
 use crate::{
     claims::{Claim, RawClaim},
-    layer::{combine_mle_refs::get_og_mle_refs, GenericLayer},
+    layer::combine_mle_refs::{combine_mle_refs_with_aggregate, get_og_mle_refs, pre_fix_mle_refs},
     mle::dense::DenseMle,
     prover::GKRError,
+    sumcheck::evaluate_at_a_point,
 };
 
-use super::claim_group::ClaimGroup;
+use super::{claim_group::ClaimGroup, ClaimError};
+
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// A flag representing whether we are using the constant
 /// column optimization for claim aggregation in Regular Layers.
@@ -38,7 +42,6 @@ pub const CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION: bool = false;
 ///   evaluations and generate challenges.
 pub fn prover_aggregate_claims<F: Field>(
     claims: &[Claim<F>],
-    layer: &impl GenericLayer<F>,
     output_mles_from_layer: &[DenseMle<F>],
     transcript_writer: &mut impl ProverTranscript<F>,
 ) -> Result<RawClaim<F>, GKRError> {
@@ -63,9 +66,7 @@ pub fn prover_aggregate_claims<F: Field>(
     // TODO(Makis): Parallelize
     let intermediate_claims = claim_groups
         .into_iter()
-        .map(|claim_group| {
-            claim_group.prover_aggregate(&fixed_output_mles, layer, transcript_writer)
-        })
+        .map(|claim_group| claim_group.prover_aggregate(&fixed_output_mles, transcript_writer))
         .collect::<Result<Vec<_>, _>>()?;
 
     end_timer!(intermediate_timer);
@@ -75,7 +76,7 @@ pub fn prover_aggregate_claims<F: Field>(
 
     // Finally, aggregate all intermediate claims.
     let claim =
-        intermediate_claims_group.prover_aggregate(&fixed_output_mles, layer, transcript_writer)?;
+        intermediate_claims_group.prover_aggregate(&fixed_output_mles, transcript_writer)?;
 
     end_timer!(final_timer);
     Ok(claim)
@@ -136,6 +137,57 @@ pub fn get_num_wlx_evaluations<F: Field>(
         (num_vars) * (num_claims - 1) + 1 - (num_constant_columns as usize) * (num_claims - 1);
     debug!("num_evals originally = {}", num_evals);
     (max(num_evals, num_claims), Some(common_idx), non_common_idx)
+}
+
+/// Returns a vector of evaluations of this layer's MLE on a sequence of
+/// points computed by interpolating a polynomial that passes through the
+/// points of `claims_vecs`.
+pub fn get_wlx_evaluations<F: Field>(
+    claim_vecs: &[Vec<F>],
+    claimed_vals: &[F],
+    claim_mle_refs: Vec<DenseMle<F>>,
+    num_claims: usize,
+    num_idx: usize,
+) -> Result<Vec<F>, ClaimError> {
+    // get the number of evaluations
+
+    let (num_evals, common_idx) = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
+        let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
+        (num_evals, common_idx)
+    } else {
+        assert!(claim_vecs.len() > 1);
+        (((num_claims - 1) * num_idx) + 1, None)
+    };
+
+    let mut claim_mle_refs = claim_mle_refs;
+
+    if let Some(common_idx) = common_idx {
+        pre_fix_mle_refs(&mut claim_mle_refs, &claim_vecs[0], common_idx);
+    }
+
+    // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
+    let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
+        .map(|idx| {
+            // get the challenge l(idx)
+            let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+                .map(|claim_idx| {
+                    let evals: Vec<F> = cfg_into_iter!(claim_vecs)
+                        .map(|claim| claim[claim_idx])
+                        .collect();
+                    evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
+                })
+                .collect();
+
+            let wlx_eval_on_mle_ref = combine_mle_refs_with_aggregate(&claim_mle_refs, &new_chal);
+            wlx_eval_on_mle_ref.unwrap()
+        })
+        .collect();
+
+    // concat this with the first k evaluations from the claims to
+    // get num_evals evaluations
+    let mut wlx_evals = claimed_vals.to_vec();
+    wlx_evals.extend(&next_evals);
+    Ok(wlx_evals)
 }
 
 /// Performs claim aggregation on the verifier side.
