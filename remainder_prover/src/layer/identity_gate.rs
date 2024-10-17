@@ -749,7 +749,6 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
     // TODO!(ende): no references in codebase as of now
     fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
-        println!("challenge: {:?}", challenge);
         if round_index < self.num_dataparallel_vars {
             self.beta_g2
                 .as_mut()
@@ -781,7 +780,6 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F> {
-        println!("hit here");
         let [_, mle_ref] = self.phase_1_mles.as_ref().unwrap();
         let beta_ug = if !LAZY_BETA_EVALUATION {
             Some((

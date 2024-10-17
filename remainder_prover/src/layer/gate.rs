@@ -22,7 +22,10 @@ use crate::{
         Claim, ClaimError, YieldClaim,
     },
     expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
-    layer::{Layer, LayerError, LayerId, VerificationError},
+    layer::{
+        product::{PostSumcheckLayer, Product},
+        Layer, LayerError, LayerId, VerificationError,
+    },
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
     prover::SumcheckProof,
@@ -99,7 +102,7 @@ pub struct GateLayer<F: Field> {
     /// The gate operation representing the fan-in-two relationship.
     pub gate_operation: BinaryOperation,
     /// Temp for debugging
-    challenges: Vec<F>,
+    u_challenges: Vec<F>,
     /// the beta table which enumerates the incoming claim's challenge points on the MLE
     beta_g1: Option<DenseMle<F>>,
     /// the beta table which enumerates the incoming claim's challenge points on the
@@ -194,7 +197,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             self.set_g1(claim_point[self.num_dataparallel_vars..].to_vec());
             self.set_g2(claim_point[..self.num_dataparallel_vars].to_vec());
         }
-        let num_rounds_phase1 = self.lhs.num_free_vars();
+        let num_rounds_phase1 = self.lhs.num_free_vars() - self.num_dataparallel_vars;
+        self.set_num_rounds_phase1(num_rounds_phase1);
 
         self.lhs.index_mle_indices(0);
         self.rhs.index_mle_indices(0);
@@ -219,44 +223,422 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
         // data parallel phase
         if round_index < self.num_dataparallel_vars {
-            todo!()
+            Ok(compute_sumcheck_messages_data_parallel_gate(
+                &self.lhs,
+                &self.rhs,
+                self.beta_g2.as_ref().unwrap(),
+                self.beta_g1.as_ref().unwrap(),
+                self.gate_operation,
+                &self.nonzero_gates,
+                self.num_dataparallel_vars - round_index,
+            )
+            .unwrap())
         // init phase 1
         } else if round_index == self.num_dataparallel_vars {
-            todo!()
+            let num_x = self.lhs.num_free_vars();
+
+            // Because we are binding `x` variables after this phase, all bookkeeping tables should have size
+            // 2^(number of x variables).
+            let mut a_hg_rhs = vec![F::ZERO; 1 << num_x];
+            let mut a_hg_lhs = vec![F::ZERO; 1 << num_x];
+
+            // Over here, we are looping through the nonzero gates using the Libra trick. This takes advantage
+            // of the sparsity of the gate function. if we have the following expression:
+            // f1(z, x, y)(f2(x) + f3(y)) then because we are only binding the "x" variables, we can simply
+            // distribute over the y variables and construct bookkeeping tables that are size 2^(num_x_variables).
+            self.nonzero_gates
+                .clone()
+                .into_iter()
+                .for_each(|(z_ind, x_ind, y_ind)| {
+                    let beta_g_at_z = if LAZY_BETA_EVALUATION {
+                        BetaValues::compute_beta_over_challenge_and_index(
+                            self.g1.as_ref().unwrap(),
+                            z_ind,
+                        )
+                    } else {
+                        *self
+                            .beta_g1
+                            .as_ref()
+                            .unwrap()
+                            .bookkeeping_table()
+                            .get(z_ind)
+                            .unwrap_or(&F::ZERO)
+                    };
+                    let f_3_at_y = *self.rhs.bookkeeping_table().get(y_ind).unwrap_or(&F::ZERO);
+                    a_hg_rhs[x_ind] += beta_g_at_z * f_3_at_y;
+                    if self.gate_operation == BinaryOperation::Add {
+                        a_hg_lhs[x_ind] += beta_g_at_z;
+                    }
+                });
+
+            let a_hg_rhs_mle_ref = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0));
+
+            // The actual mles differ based on whether we are doing a add gate or a mul gate, because
+            // in the case of an add gate, we distribute the gate function whereas in the case of the
+            // mul gate, we simply take the product over all three mles.
+            let mut phase_1_mles = match self.gate_operation {
+                BinaryOperation::Add => {
+                    vec![
+                        vec![
+                            DenseMle::new_from_raw(a_hg_lhs, LayerId::Input(0)),
+                            self.lhs.clone(),
+                        ],
+                        vec![a_hg_rhs_mle_ref],
+                    ]
+                }
+                BinaryOperation::Mul => {
+                    vec![vec![a_hg_rhs_mle_ref, self.lhs.clone()]]
+                }
+            };
+
+            phase_1_mles.iter_mut().for_each(|mle_vec| {
+                index_mle_indices_gate(mle_vec, self.num_dataparallel_vars);
+            });
+
+            self.set_phase_1(Some(phase_1_mles.clone()));
+
+            let max_deg = phase_1_mles
+                .iter()
+                .fold(0, |acc, elem| max(acc, elem.len()));
+
+            let init_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_1_mles
+                .iter()
+                .map(|mle_vec| {
+                    let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                    mle_references
+                })
+                .collect();
+            let evals_vec = init_mle_refs
+                .iter()
+                .map(|mle_vec| {
+                    compute_sumcheck_message_no_beta_table(
+                        mle_vec,
+                        self.num_dataparallel_vars,
+                        max_deg,
+                    )
+                    .unwrap()
+                })
+                .collect_vec();
+            let final_evals = evals_vec
+                .clone()
+                .into_iter()
+                .skip(1)
+                .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
+                    acc + SumcheckEvals(elem)
+                });
+            let SumcheckEvals(mut final_vec_evals) = final_evals;
+
+            assert_eq!(self.beta_g2.as_mut().unwrap().bookkeeping_table().len(), 1);
+            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().bookkeeping_table()[0];
+
+            final_vec_evals
+                .iter_mut()
+                .for_each(|eval| *eval *= beta_g2_fully_bound);
+
+            Ok(final_vec_evals)
+
         // phase 1
         } else if round_index < self.num_dataparallel_vars + self.num_rounds_phase1.unwrap() {
-            todo!()
+            let phase_1_mle_refs: Vec<Vec<&DenseMle<F>>> = self
+                .phase_1_mles
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|mle_vec| {
+                    let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                    mle_references
+                })
+                .collect();
+
+            let max_deg = phase_1_mle_refs
+                .iter()
+                .fold(0, |acc, elem| max(acc, elem.len()));
+            let evals_vec = phase_1_mle_refs
+                .iter()
+                .map(|mle_vec| {
+                    compute_sumcheck_message_no_beta_table(mle_vec, round_index, max_deg).unwrap()
+                })
+                .collect_vec();
+
+            let final_evals = evals_vec
+                .clone()
+                .into_iter()
+                .skip(1)
+                .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
+                    acc + SumcheckEvals(elem)
+                });
+            let SumcheckEvals(mut final_vec_evals) = final_evals;
+
+            assert_eq!(self.beta_g2.as_mut().unwrap().bookkeeping_table().len(), 1);
+            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().bookkeeping_table()[0];
+
+            final_vec_evals
+                .iter_mut()
+                .for_each(|eval| *eval *= beta_g2_fully_bound);
+
+            Ok(final_vec_evals)
+
         // init phase 2
         } else if round_index == self.num_dataparallel_vars + self.num_rounds_phase1.unwrap() {
-            todo!()
+            let u_claim = &self.u_challenges;
+            assert_eq!(self.u_challenges.len(), self.num_rounds_phase1.unwrap());
+
+            let f2 = &self.phase_1_mles.as_ref().unwrap()[0][1];
+            assert_eq!(f2.bookkeeping_table().len(), 1);
+            let f2_at_u = f2.bookkeeping_table()[0];
+
+            let beta_g1 = self.beta_g1.as_ref().unwrap();
+
+            // Create a beta table according to the challenges used to bind the x variables.
+            let beta_u = BetaValues::new_beta_equality_mle(u_claim.to_vec());
+            let num_y = self.rhs.num_free_vars();
+
+            // Because we are binding the "y" variables, the size of the bookkeeping tables after this init
+            // phase are 2^(number of y variables).
+            let mut a_f1_lhs = vec![F::ZERO; 1 << num_y];
+            let mut a_f1_rhs = vec![F::ZERO; 1 << num_y];
+
+            // By the time we get here, we assume the "x" variables and "dataparallel" variables have been
+            // bound. Therefore, we are simply scaling by the appropriate gate value and the fully bound
+            // `lhs` of the expression in order to compute the necessary mles, once again using the Libra trick
+            self.nonzero_gates
+                .clone()
+                .into_iter()
+                .for_each(|(z_ind, x_ind, y_ind)| {
+                    let gz = *beta_g1.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                    let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+                    let adder = gz * ux;
+                    a_f1_lhs[y_ind] += adder * f2_at_u;
+                    if self.gate_operation == BinaryOperation::Add {
+                        a_f1_rhs[y_ind] += adder;
+                    }
+                });
+
+            let a_f1_lhs_mle_ref = DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0));
+
+            // --- We need to multiply h_g(x) by f_2(x) ---
+            let mut phase_2_mles = match self.gate_operation {
+                BinaryOperation::Add => {
+                    vec![
+                        vec![
+                            DenseMle::new_from_raw(a_f1_rhs, LayerId::Input(0)),
+                            self.rhs.clone(),
+                        ],
+                        vec![a_f1_lhs_mle_ref],
+                    ]
+                }
+                BinaryOperation::Mul => {
+                    vec![vec![a_f1_lhs_mle_ref, self.rhs.clone()]]
+                }
+            };
+
+            phase_2_mles.iter_mut().for_each(|mle_vec| {
+                index_mle_indices_gate(mle_vec, self.num_dataparallel_vars);
+            });
+            self.set_phase_2(Some(phase_2_mles.clone()));
+
+            // Return the first sumcheck message of this phase.
+            let max_deg = phase_2_mles
+                .iter()
+                .fold(0, |acc, elem| max(acc, elem.len()));
+
+            let init_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_2_mles
+                .iter()
+                .map(|mle_vec| {
+                    let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                    mle_references
+                })
+                .collect();
+            let evals_vec = init_mle_refs
+                .iter()
+                .map(|mle_vec| {
+                    compute_sumcheck_message_no_beta_table(
+                        mle_vec,
+                        self.num_dataparallel_vars,
+                        max_deg,
+                    )
+                    .unwrap()
+                })
+                .collect_vec();
+            let final_evals = evals_vec
+                .clone()
+                .into_iter()
+                .skip(1)
+                .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
+                    acc + SumcheckEvals(elem)
+                });
+            let SumcheckEvals(mut final_vec_evals) = final_evals;
+
+            assert_eq!(self.beta_g2.as_mut().unwrap().bookkeeping_table().len(), 1);
+            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().bookkeeping_table()[0];
+
+            final_vec_evals
+                .iter_mut()
+                .for_each(|eval| *eval *= beta_g2_fully_bound);
+
+            Ok(final_vec_evals)
         // phase 2
         } else {
-            todo!()
+            // TODO!(ende): investigate: if self.rhs.num_free_vars() > 0 {
+            let phase_2_mle_refs: Vec<Vec<&DenseMle<F>>> = self
+                .phase_2_mles
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|mle_vec| {
+                    let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                    mle_references
+                })
+                .collect();
+
+            let max_deg = phase_2_mle_refs
+                .iter()
+                .fold(0, |acc, elem| max(acc, elem.len()));
+            let evals_vec = phase_2_mle_refs
+                .iter()
+                .map(|mle_vec| {
+                    compute_sumcheck_message_no_beta_table(
+                        mle_vec,
+                        round_index - self.num_dataparallel_vars,
+                        max_deg,
+                    )
+                    .unwrap()
+                })
+                .collect_vec();
+
+            let final_evals = evals_vec
+                .clone()
+                .into_iter()
+                .skip(1)
+                .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
+                    acc + SumcheckEvals(elem)
+                });
+            let SumcheckEvals(mut final_vec_evals) = final_evals;
+
+            assert_eq!(self.beta_g2.as_mut().unwrap().bookkeeping_table().len(), 1);
+            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().bookkeeping_table()[0];
+
+            final_vec_evals
+                .iter_mut()
+                .for_each(|eval| *eval *= beta_g2_fully_bound);
+
+            Ok(final_vec_evals)
         }
     }
 
-    fn bind_round_variable(
-        &mut self,
-        _round_index: usize,
-        _challenge: F,
-    ) -> Result<(), LayerError> {
-        todo!()
+    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
+        if round_index < self.num_dataparallel_vars {
+            self.beta_g2
+                .as_mut()
+                .unwrap()
+                .fix_variable(round_index, challenge);
+            self.lhs.fix_variable(round_index, challenge);
+            self.rhs.fix_variable(round_index, challenge);
+
+            Ok(())
+        } else if round_index < self.num_rounds_phase1.unwrap() + self.num_dataparallel_vars {
+            let mles = self.phase_1_mles.as_mut().unwrap();
+            mles.iter_mut().for_each(|mle_ref_vec| {
+                mle_ref_vec.iter_mut().for_each(|mle_ref| {
+                    mle_ref.fix_variable(round_index, challenge);
+                })
+            });
+            self.add_to_u_challenges(challenge);
+            Ok(())
+        } else {
+            let round_index = round_index - self.num_rounds_phase1.unwrap();
+            let mles = self.phase_2_mles.as_mut().unwrap();
+            mles.iter_mut().for_each(|mle_ref_vec| {
+                mle_ref_vec.iter_mut().for_each(|mle_ref| {
+                    mle_ref.fix_variable(round_index, challenge);
+                })
+            });
+            Ok(())
+        }
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        todo!()
+        let num_u = self.lhs.mle_indices().iter().fold(0_usize, |acc, idx| {
+            acc + match idx {
+                MleIndex::Fixed(_) => 0,
+                _ => 1,
+            }
+        }) - self.num_dataparallel_vars;
+        let num_v = self.rhs.mle_indices().iter().fold(0_usize, |acc, idx| {
+            acc + match idx {
+                MleIndex::Fixed(_) => 0,
+                _ => 1,
+            }
+        }) - self.num_dataparallel_vars;
+        (0..num_u + num_v + self.num_dataparallel_vars).collect_vec()
     }
 
     fn max_degree(&self) -> usize {
-        todo!()
+        match self.gate_operation {
+            BinaryOperation::Add => 2,
+            BinaryOperation::Mul => 3,
+        }
     }
 
     fn get_post_sumcheck_layer(
         &self,
-        _round_challenges: &[F],
-        _claim_challenges: &[F],
+        round_challenges: &[F],
+        claim_challenges: &[F],
     ) -> super::product::PostSumcheckLayer<F, F> {
-        todo!()
+        let lhs_mle = &self.phase_1_mles.as_ref().unwrap()[0][1];
+        let rhs_mle = &self.phase_2_mles.as_ref().unwrap()[0][1];
+
+        let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
+        let g1_challenges = claim_challenges[self.num_dataparallel_vars..].to_vec();
+
+        let dataparallel_sumcheck_challenges =
+            round_challenges[..self.num_dataparallel_vars].to_vec();
+        let first_u_challenges = round_challenges[self.num_dataparallel_vars
+            ..self.num_dataparallel_vars + self.num_rounds_phase1.unwrap()]
+            .to_vec();
+        assert_eq!(first_u_challenges, self.u_challenges);
+        let last_v_challenges = round_challenges
+            [self.num_dataparallel_vars + self.num_rounds_phase1.unwrap()..]
+            .to_vec();
+        // Compute the gate function bound at those variables.
+        // Beta table corresponding to the equality of binding the x variables to u.
+        let beta_u = BetaValues::new_beta_equality_mle(first_u_challenges);
+        // Beta table corresponding to the equality of binding the y variables to v.
+        let beta_v = BetaValues::new_beta_equality_mle(last_v_challenges);
+        // Beta table representing all "z" label challenges.
+        let beta_g = BetaValues::new_beta_equality_mle(g1_challenges);
+        // Multiply the corresponding entries of the beta tables to get the full value of the gate function
+        // i.e. f1(z, x, y) bound at the challenges f1(g1, u, v).
+        let f_1_uv =
+            self.nonzero_gates
+                .clone()
+                .into_iter()
+                .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
+                    let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                    let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+                    let vy = *beta_v.bookkeeping_table().get(y_ind).unwrap_or(&F::ZERO);
+                    acc + gz * ux * vy
+                });
+
+        let beta_bound = if self.num_dataparallel_vars != 0 {
+            BetaValues::compute_beta_over_two_challenges(
+                &g2_challenges,
+                &dataparallel_sumcheck_challenges,
+            )
+        } else {
+            F::ONE
+        };
+
+        match self.gate_operation {
+            BinaryOperation::Add => PostSumcheckLayer(vec![
+                Product::<F, F>::new(&[lhs_mle.clone()], f_1_uv * beta_bound),
+                Product::<F, F>::new(&[rhs_mle.clone()], f_1_uv * beta_bound),
+            ]),
+            BinaryOperation::Mul => PostSumcheckLayer(vec![Product::<F, F>::new(
+                &[lhs_mle.clone(), rhs_mle.clone()],
+                f_1_uv * beta_bound,
+            )]),
+        }
     }
 }
 
@@ -273,7 +655,7 @@ pub struct GateLayerDescription<F: Field> {
     /// A vector of tuples representing the "nonzero" gates, especially useful
     /// in the sparse case the format is (z, x, y) where the gate at label z is
     /// the output of performing an operation on gates with labels x and y.
-    wiring: Vec<(usize, usize, usize)>,
+    nonzero_gates: Vec<(usize, usize, usize)>,
 
     /// The left side of the expression, i.e. the mle that makes up the "x"
     /// variables.
@@ -301,7 +683,7 @@ impl<F: Field> GateLayerDescription<F> {
         GateLayerDescription {
             id: gate_layer_id,
             gate_operation,
-            wiring,
+            nonzero_gates: wiring,
             lhs_mle: lhs_circuit_mle,
             rhs_mle: rhs_circuit_mle,
             num_dataparallel_vars: num_dataparallel_vars.unwrap_or(0),
@@ -508,7 +890,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         let verifier_gate_layer = VerifierGateLayer {
             layer_id: self.layer_id(),
             gate_operation: self.gate_operation,
-            wiring: self.wiring.clone(),
+            wiring: self.nonzero_gates.clone(),
             lhs_mle: lhs_verifier_mle,
             rhs_mle: rhs_verifier_mle,
             num_dataparallel_rounds: self.num_dataparallel_vars,
@@ -523,14 +905,76 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
     fn get_post_sumcheck_layer(
         &self,
-        _round_challenges: &[F],
-        _claim_challenges: &[F],
+        round_challenges: &[F],
+        claim_challenges: &[F],
     ) -> super::product::PostSumcheckLayer<F, Option<F>> {
-        todo!()
+        let num_rounds_phase1 = self.lhs_mle.num_free_vars() - self.num_dataparallel_vars;
+
+        let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
+        let g1_challenges = claim_challenges[self.num_dataparallel_vars..].to_vec();
+
+        let dataparallel_sumcheck_challenges =
+            round_challenges[..self.num_dataparallel_vars].to_vec();
+        let first_u_challenges = round_challenges
+            [self.num_dataparallel_vars..self.num_dataparallel_vars + num_rounds_phase1]
+            .to_vec();
+        let last_v_challenges =
+            round_challenges[self.num_dataparallel_vars + num_rounds_phase1..].to_vec();
+        // Compute the gate function bound at those variables.
+        // Beta table corresponding to the equality of binding the x variables to u.
+        let beta_u = BetaValues::new_beta_equality_mle(first_u_challenges);
+        // Beta table corresponding to the equality of binding the y variables to v.
+        let beta_v = BetaValues::new_beta_equality_mle(last_v_challenges);
+        // Beta table representing all "z" label challenges.
+        let beta_g = BetaValues::new_beta_equality_mle(g1_challenges);
+        // Multiply the corresponding entries of the beta tables to get the full value of the gate function
+        // i.e. f1(z, x, y) bound at the challenges f1(g1, u, v).
+        let f_1_uv =
+            self.nonzero_gates
+                .clone()
+                .into_iter()
+                .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
+                    let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                    let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+                    let vy = *beta_v.bookkeeping_table().get(y_ind).unwrap_or(&F::ZERO);
+                    acc + gz * ux * vy
+                });
+
+        let beta_bound = if self.num_dataparallel_vars != 0 {
+            BetaValues::compute_beta_over_two_challenges(
+                &g2_challenges,
+                &dataparallel_sumcheck_challenges,
+            )
+        } else {
+            F::ONE
+        };
+
+        match self.gate_operation {
+            BinaryOperation::Add => PostSumcheckLayer(vec![
+                Product::<F, Option<F>>::new(
+                    &[self.lhs_mle.clone()],
+                    f_1_uv * beta_bound,
+                    round_challenges,
+                ),
+                Product::<F, Option<F>>::new(
+                    &[self.rhs_mle.clone()],
+                    f_1_uv * beta_bound,
+                    round_challenges,
+                ),
+            ]),
+            BinaryOperation::Mul => PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
+                &[self.lhs_mle.clone(), self.rhs_mle.clone()],
+                f_1_uv * beta_bound,
+                round_challenges,
+            )]),
+        }
     }
 
     fn max_degree(&self) -> usize {
-        todo!()
+        match self.gate_operation {
+            BinaryOperation::Add => 2,
+            BinaryOperation::Mul => 3,
+        }
     }
 
     fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
@@ -547,7 +991,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         };
         let gate_layer = GateLayer::new(
             num_dataparallel_vars,
-            self.wiring.clone(),
+            self.nonzero_gates.clone(),
             lhs_mle,
             rhs_mle,
             self.gate_operation,
@@ -570,7 +1014,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
 
         let max_gate_val = self
-            .wiring
+            .nonzero_gates
             .iter()
             .fold(&0, |acc, (z, _, _)| std::cmp::max(acc, z));
 
@@ -589,7 +1033,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
         let mut res_table = vec![F::ZERO; res_table_num_entries];
         (0..num_dataparallel_vals).for_each(|idx| {
-            self.wiring.iter().for_each(|(z_ind, x_ind, y_ind)| {
+            self.nonzero_gates.iter().for_each(|(z_ind, x_ind, y_ind)| {
                 let zero = F::ZERO;
                 let f2_val = lhs_data
                     .get_evals_vector()
@@ -893,7 +1337,7 @@ impl<F: Field> GateLayer<F> {
             phase_1_mles: None,
             phase_2_mles: None,
             gate_operation,
-            challenges: vec![],
+            u_challenges: vec![],
             beta_g1: None,
             beta_g2: None,
             g1: None,
@@ -916,6 +1360,21 @@ impl<F: Field> GateLayer<F> {
 
     fn set_g2(&mut self, g2: Vec<F>) {
         self.g2 = Some(g2);
+    }
+
+    /// bookkeeping tables necessary for binding x
+    fn set_phase_1(&mut self, mle_refs: Option<Vec<Vec<DenseMle<F>>>>) {
+        self.phase_1_mles = mle_refs;
+    }
+
+    /// bookkeeping tables necessary for binding y
+    fn set_phase_2(&mut self, mle_refs: Option<Vec<Vec<DenseMle<F>>>>) {
+        self.phase_2_mles = mle_refs;
+    }
+
+    /// adding to all the u challenges
+    fn add_to_u_challenges(&mut self, u_challenge: F) {
+        self.u_challenges.push(u_challenge);
     }
 
     fn set_num_rounds_phase1(&mut self, num_rounds_phase1: usize) {
@@ -976,7 +1435,6 @@ impl<F: Field> GateLayer<F> {
     fn init_phase_1(&mut self, challenges: Vec<F>) -> Result<Vec<F>, GateError> {
         let beta_g1 = BetaValues::new_beta_equality_mle(challenges);
 
-        self.lhs.index_mle_indices(self.num_dataparallel_vars);
         let num_x = self.lhs.num_free_vars();
 
         // Because we are binding `x` variables after this phase, all bookkeeping tables should have size
