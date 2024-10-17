@@ -285,17 +285,17 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                         (
-                            *beta_g1.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
-                            *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                            beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
+                            beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
                             BetaValues::compute_beta_over_challenge_and_index(
-                                claim_challenges[self.num_dataparallel_vars..],
+                                &claim_challenges[self.num_dataparallel_vars..],
                                 *z_ind,
                             ),
                             BetaValues::compute_beta_over_challenge_and_index(
-                                round_challenges[self.num_dataparallel_vars..],
+                                &round_challenges[self.num_dataparallel_vars..],
                                 *x_ind,
                             ),
                         )
@@ -440,8 +440,8 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                         (
-                            *beta_g1.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
-                            *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                            beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
+                            beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
@@ -797,17 +797,17 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                         (
-                            *beta_g1.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
-                            *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                            beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
+                            beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
                             BetaValues::compute_beta_over_challenge_and_index(
-                                claim_challenges[self.num_dataparallel_vars..],
+                                &claim_challenges[self.num_dataparallel_vars..],
                                 *z_ind,
                             ),
                             BetaValues::compute_beta_over_challenge_and_index(
-                                round_challenges[self.num_dataparallel_vars..],
+                                &round_challenges[self.num_dataparallel_vars..],
                                 *x_ind,
                             ),
                         )
