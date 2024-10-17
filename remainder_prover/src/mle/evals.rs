@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use std::{error::Error, ops::Index};
+use std::error::Error;
 
 use ark_std::{cfg_into_iter, log2};
 use itertools::{EitherOrBoth::*, Itertools};
@@ -13,6 +13,10 @@ use rayon::prelude::ParallelSlice;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+pub mod bit_packed_vector;
+
+use bit_packed_vector::BitPackedVector;
 
 #[derive(Error, Debug, Clone)]
 /// the errors associated with the dimension of the MLE.
@@ -82,14 +86,13 @@ fn mirror_bits(num_bits: usize, mut value: usize) -> usize {
     result | (value << num_bits)
 }
 
-// ---------------------------------------------------------
-
 /// Stores a boolean function `f: {0, 1}^n -> F` represented as a list of up to
 /// `2^n` evaluations of `f` on the boolean hypercube.
 /// The `n` variables are indexed from `0` to `n-1` throughout the lifetime of
 /// the object.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Evaluations<F> {
+#[serde(bound = "F: Field")]
+pub struct Evaluations<F: Field> {
     /// To understand how evaluations are stored, let's index `f`'s input bits
     /// as follows: `f(b_0, b_1, ..., b_{n-1})`. Evaluations are ordered using
     /// the bit-string `b_{n-1}b_{n-2}...b_1b_0` as key, hence the bit `b_{n-1}`
@@ -104,7 +107,7 @@ pub struct Evaluations<F> {
     ///   following order: `[ f(0, 0), f(1, 0), f(0, 1), f(1, 1) ]`.
     /// * The evaluation table `[ 1, 0, 5, 0 ]` may be stored as `[1, 0, 5]` by
     ///   omitting the trailing zero. Note that both representations are valid.
-    evals: Vec<F>,
+    evals: BitPackedVector<F>,
 
     /// Number of input variables to `f`.
     /// Invariant: `0 <= evals.len() <= 2^num_vars`.
@@ -138,8 +141,10 @@ impl<F: Field> Evaluations<F> {
     pub fn new(num_vars: usize, evals: Vec<F>) -> Self {
         debug_assert!(evals.len() <= (1 << num_vars));
 
+        // debug_evals(&evals);
+
         Evaluations::<F> {
-            evals,
+            evals: BitPackedVector::new(&evals),
             num_vars,
             zero: F::ZERO,
         }
@@ -157,8 +162,10 @@ impl<F: Field> Evaluations<F> {
     pub fn new_from_big_endian(num_vars: usize, evals: &[F]) -> Self {
         debug_assert!(evals.len() <= (1 << num_vars));
 
+        println!("New MLE (big-endian) on {} entries.", evals.len());
+
         Self {
-            evals: Self::flip_endianess(num_vars, evals),
+            evals: BitPackedVector::new(&Self::flip_endianess(num_vars, evals)),
             num_vars,
             zero: F::ZERO,
         }
@@ -167,6 +174,13 @@ impl<F: Field> Evaluations<F> {
     /// returns the number of variables of the current Evalations.
     pub fn num_vars(&self) -> usize {
         self.num_vars
+    }
+
+    /// Returns the first element of the bookkeeping table.
+    /// # Panics
+    /// If the bookkeeping table is empty.
+    pub fn first(&self) -> F {
+        self.evals.get(0).unwrap()
     }
 
     /// Returns a iterator over the projection of the hypercube on `num_vars -
@@ -195,26 +209,24 @@ impl<F: Field> Evaluations<F> {
         }
     }
 
+    /// Returns an iterator that traverses the evaluations in "little-endian"
+    /// order.
+    pub fn iter(&self) -> EvaluationsIterator<F> {
+        EvaluationsIterator::<F> {
+            evals: self,
+            current_index: 0,
+        }
+    }
+
     /// Temporary function returning the length of the internal representation.
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.evals.len()
     }
 
-    /// Temporary function returning a reference to the internal representation.
-    pub fn repr(&self) -> &[F] {
-        &self.evals
-    }
-
-    /// Temporary function returning a clone of the internal representation
-    /// vector.
-    pub fn to_vec(&self) -> Vec<F> {
-        self.evals.clone()
-    }
-
     /// Temporary function for accessing a the `idx`-th element in the internal
     /// representation.
-    pub fn get(&self, idx: usize) -> Option<&F> {
+    pub fn get(&self, idx: usize) -> Option<F> {
         self.evals.get(idx)
     }
 
@@ -225,14 +237,14 @@ impl<F: Field> Evaluations<F> {
     /// omitting the longest contiguous suffix of `F::ZERO`s from each results
     /// in the same vectors.
     #[allow(dead_code)]
-    fn equiv_repr(evals1: &[F], evals2: &[F]) -> bool {
+    fn equiv_repr(evals1: &BitPackedVector<F>, evals2: &BitPackedVector<F>) -> bool {
         evals1
             .iter()
             .zip_longest(evals2.iter())
             .map(|pair| match pair {
-                Both(l, r) => *l == *r,
-                Left(l) => *l == F::ZERO,
-                Right(r) => *r == F::ZERO,
+                Both(l, r) => l == r,
+                Left(l) => l == F::ZERO,
+                Right(r) => r == F::ZERO,
             })
             .all(|x| x)
     }
@@ -266,19 +278,42 @@ impl<F: Field> Evaluations<F> {
     }
 }
 
-/// Provides a vector-like interface to evaluations; useful during refactoring
-/// but also for implementing `EvaluationsIterator`.
-impl<F: Field> Index<usize> for Evaluations<F> {
-    type Output = F;
+/// An iterator over evaluations in a "little-endian" order.
+pub struct EvaluationsIterator<'a, F: Field> {
+    /// Reference to the original `Evaluations` struct.
+    evals: &'a Evaluations<F>,
 
-    fn index(&self, index: usize) -> &Self::Output {
-        self.evals.get(index).unwrap_or(&self.zero)
+    /// Index of the next evaluation to be retrieved.
+    current_index: usize,
+}
+
+impl<'a, F: Field> Iterator for EvaluationsIterator<'a, F> {
+    type Item = F;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_index < self.evals.len() {
+            let val = self.evals.get(self.current_index).unwrap();
+            self.current_index += 1;
+
+            Some(val)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a, F: Field> Clone for EvaluationsIterator<'a, F> {
+    fn clone(&self) -> Self {
+        Self {
+            evals: self.evals,
+            current_index: self.current_index,
+        }
     }
 }
 
 /// An iterator over evaluations indexed by vertices of a projection of the
 /// boolean hypercube on `num_vars - 1` dimensions. See documentation for
-/// `Evaluations::iter` for more information.
+/// `Evaluations::project` for more information.
 pub struct EvaluationsPairIterator<'a, F: Field> {
     /// Reference to original bookkeeping table.
     evals: &'a Evaluations<F>,
@@ -321,8 +356,8 @@ impl<'a, F: Field> Iterator for EvaluationsPairIterator<'a, F> {
 
             self.current_pair_index += 1;
 
-            let val1 = self.evals[idx1];
-            let val2 = self.evals[idx2];
+            let val1 = self.evals.get(idx1).unwrap();
+            let val2 = self.evals.get(idx2).unwrap();
 
             Some((val1, val2))
         } else {
@@ -349,7 +384,8 @@ impl<'a, F: Field> Iterator for EvaluationsPairIterator<'a, F> {
 /// The `n` variables are indexed from `0` to `n-1` throughout the lifetime of
 /// the object even if `n` is modified by fixing a variable to a constant value.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MultilinearExtension<F> {
+#[serde(bound = "F: Field")]
+pub struct MultilinearExtension<F: Field> {
     /// The bookkeeping table with the evaluations of `f` on the hypercube.
     pub f: Evaluations<F>,
     dim_info: Option<DimInfo>,
@@ -377,12 +413,29 @@ impl<F: Field> MultilinearExtension<F> {
     pub fn new_sized_zero(num_vars: usize) -> Self {
         Self {
             f: Evaluations {
-                evals: vec![],
+                evals: BitPackedVector::new(&[]),
                 num_vars,
                 zero: F::ZERO,
             },
             dim_info: None,
         }
+    }
+
+    /// Returns an iterator accessing the evaluations defining this MLE in
+    /// "little-endian" order.
+    pub fn iter(&self) -> EvaluationsIterator<F> {
+        self.f.iter()
+    }
+
+    /// Generate a Vector of the evaluations of `f` over the hypercube.
+    pub fn to_vec(&self) -> Vec<F> {
+        self.f.iter().collect()
+    }
+
+    /// Return the first element of the bookkeeping table, assuming
+    /// one exists. Panics if the bookkeeping table is empty.
+    pub fn first(&self) -> F {
+        self.f.first()
     }
 
     /// Generate a new MultilinearExtension from `evals` and `dim_info`.
@@ -425,13 +478,10 @@ impl<F: Field> MultilinearExtension<F> {
 
     /// Set the MLE as an ndarray.
     pub fn get_mle_as_ndarray(&mut self) -> Result<ArrayView<F, IxDyn>, Box<dyn Error>> {
-        if let Some(dim_info) = self.dim_info() {
-            let ndarray: ArrayView<F, IxDyn> =
-                ArrayView::from_shape(dim_info.dims.clone(), self.get_evals_vector())?;
-            Ok(ndarray)
-        } else {
-            Err(DimensionError::NoDimensionInfoError().into())
-        }
+        // This is currently unimplemeted because `ArrayView` requires a valid
+        // reference to an array slice, but with the `BitPackedVector`
+        // implementation we no longer maintain such a representation.
+        unimplemented!();
     }
 
     /// Get the names of the axes of the MLE (multi-dimensional).
@@ -453,14 +503,20 @@ impl<F: Field> MultilinearExtension<F> {
         self.f.num_vars()
     }
 
-    /// Temporary function for accessing the bookkeping table.
-    pub fn get_evals(&self) -> &Evaluations<F> {
-        &self.f
-    }
-
-    /// Temporary function for accessing the bookkeping table.
-    pub fn get_evals_vector(&self) -> &Vec<F> {
-        &self.f.evals
+    /// Returns the `idx`-th element, if `idx` is in the range
+    /// `[0, 2^self.num_vars)`.
+    pub fn get(&self, idx: usize) -> Option<F> {
+        if idx >= (1 << self.num_vars()) {
+            // `idx` is out of range.
+            None
+        } else if idx >= self.f.len() {
+            // `idx` is within range, but value is implicitly assumed to be
+            // zero.
+            Some(F::ZERO)
+        } else {
+            // `idx`-th position is stored explicitly in `self.f`
+            self.f.get(idx)
+        }
     }
 
     /// Evaluate `\tilde{f}` at `point \in F^n`.
@@ -485,7 +541,7 @@ impl<F: Field> MultilinearExtension<F> {
                         acc * (F::ONE - point[i])
                     }
                 });
-                acc + *v * beta
+                acc + v * beta
             })
     }
 
@@ -495,7 +551,13 @@ impl<F: Field> MultilinearExtension<F> {
     pub fn value(&self) -> F {
         assert_eq!(self.num_vars(), 0);
 
-        self.f[0]
+        self.f.first()
+    }
+
+    /// Returns the length of the evaluations vector.
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        self.f.len()
     }
 
     /// Fix the 0-based `var_index`-th bit of `\tilde{f}` to an arbitrary field
@@ -537,8 +599,8 @@ impl<F: Field> MultilinearExtension<F> {
                 let idx1 = lsb_idx | msb_idx;
                 let idx2 = lsb_idx | mid_idx | msb_idx;
 
-                let val1 = self[idx1];
-                let val2 = self[idx2];
+                let val1 = self.get(idx1).unwrap();
+                let val2 = self.get(idx2).unwrap();
 
                 val1 + (val2 - val1) * point
             })
@@ -655,13 +717,15 @@ impl<F: Field> MultilinearExtension<F> {
             first + (*second - first) * point
         };
 
+        let evals_vec: Vec<F> = self.f.evals.iter().collect();
+
         // --- So this goes through and applies the formula from [Tha13], bottom ---
         // --- of page 23 ---
         #[cfg(feature = "parallel")]
-        let new = self.f.evals.par_chunks(2).map(transform);
+        let new = evals_vec.par_chunks(2).map(transform);
 
         #[cfg(not(feature = "parallel"))]
-        let new = self.f.evals.chunks(2).map(transform);
+        let new = evals_vec.chunks(2).map(transform);
 
         // --- Note that MLE is destructively modified into the new bookkeeping
         // table here ---
@@ -670,29 +734,16 @@ impl<F: Field> MultilinearExtension<F> {
 
     /// interlaces the MLEs into a single MLE, in a little endian fashion.
     pub fn interlace_mles(mles: Vec<MultilinearExtension<F>>) -> MultilinearExtension<F> {
-        let first_len = mles[0].get_evals_vector().len();
+        let first_len = mles[0].len();
 
-        if !mles.iter().all(|v| v.get_evals_vector().len() == first_len) {
+        if !mles.iter().all(|v| v.len() == first_len) {
             panic!("All mles's underlying bookkeeping table must have the same length");
         }
 
         let out = (0..first_len)
-            .flat_map(|i| {
-                mles.iter()
-                    .map(move |v| v.get_evals_vector().get(i).copied().unwrap())
-            })
+            .flat_map(|i| mles.iter().map(move |v| v.get(i).unwrap()))
             .collect();
 
         Self::new(out)
-    }
-}
-
-/// Provides a vector-like interface to MultilinearExtensions;
-/// useful during refactoring.
-impl<F: Field> Index<usize> for MultilinearExtension<F> {
-    type Output = F;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.f[index]
     }
 }
