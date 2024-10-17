@@ -223,6 +223,9 @@ impl<C: PrimeOrderCurve> HyraxPCSEvaluationProof<C> {
         // because it is either u8, i8, or already scalar field elements we can do this conversion straightforwardly. see
         // the function comments for more details.
         let matrix_as_field_elem = matrix.convert_to_scalar_field();
+        dbg!(matrix_as_field_elem.len());
+        dbg!(matrix_as_field_elem.len() / (1 << log_n_cols));
+        dbg!(1 << log_n_cols);
         let matrix_as_array2 = Array2::from_shape_vec(
             (
                 matrix_as_field_elem.len() / (1 << log_n_cols),

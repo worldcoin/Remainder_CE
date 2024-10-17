@@ -192,7 +192,7 @@ pub fn build_iriscode_circuit_data<
 /// either the iris or mask case.
 ///
 /// # Arguments:
-/// * `image_bytes` gives the bytes of an image (could be the iris or the mask).
+/// * `image_bytes` gives the bytes of an image (could be the iris or the mask) (unpadded).
 /// * `is_mask` indicates whether to load the files for the mask or the iris.
 pub fn load_worldcoin_data_v2<
     F: Field,

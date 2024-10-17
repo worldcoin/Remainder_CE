@@ -277,7 +277,7 @@ impl PrimeOrderCurve for Bn256 {
             let mut x_alloc_bytes = [0_u8; 32];
             x_alloc_bytes.copy_from_slice(&bytes[1..33]);
             let y_sign_byte: u8 = bytes[33];
-            let x_coord = Self::Base::from_bytes(&x_alloc_bytes).unwrap();
+            let x_coord = Self::Base::from_bytes_le(&x_alloc_bytes);
 
             Self::from_x_and_sign_y(x_coord, y_sign_byte)
         }

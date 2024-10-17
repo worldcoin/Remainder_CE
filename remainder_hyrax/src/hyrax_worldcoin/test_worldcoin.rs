@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, env};
 
 use crate::{
     hyrax_gkr::HyraxProof,
@@ -7,7 +7,7 @@ use crate::{
 use remainder::{
     layer::LayerId,
     mle::evals::MultilinearExtension,
-    worldcoin::{circuits::IriscodeProofDescription, test_helpers::circuit_description_and_inputs},
+    worldcoin::{circuits::IriscodeProofDescription, io::read_bytes_from_file, test_helpers::circuit_description_and_inputs},
 };
 use remainder_shared_types::{
     halo2curves::bn256::G1 as Bn256Point,
@@ -15,6 +15,8 @@ use remainder_shared_types::{
     transcript::{ec_transcript::ECTranscript, poseidon_transcript::PoseidonSponge},
     Base, Scalar,
 };
+
+use super::{orb::{load_image_commitment, IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING}, upgrade::{prove_single, verify_single}};
 
 #[test]
 fn test_small_circuit_both_layers_public() {
@@ -29,6 +31,47 @@ fn test_small_circuit_with_hyrax_layer() {
     use remainder::worldcoin::test_helpers::small_circuit_description_and_inputs;
     let (proof_desc, inputs) = small_circuit_description_and_inputs();
     test_iriscode_circuit_with_hyrax_helper(proof_desc, inputs);
+}
+
+#[ignore] // Takes a long time to run
+#[test]
+fn test_v2_iris_with_hyrax_precommit() {
+    let version = 2;
+    let left_eye = true;
+    let mask = false;
+    // Create the Pedersen committer using the same reference string and parameters as on the Orb
+    let committer: PedersenCommitter<Bn256Point> = PedersenCommitter::new(1 << IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING, None);
+    // Create a single RNG and Vandermonde inverse converter for all proofs.
+    let blinding_rng = &mut rand::thread_rng();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let (image, commitment, blinding_factors) = load_image_commitment(version, mask, left_eye);
+    let proof = prove_single(
+        version,
+        mask,
+        image.to_vec(),
+        commitment.to_vec(),
+        blinding_factors.to_vec(),
+        &committer,
+        blinding_rng,
+        converter,
+    );
+    let code = verify_single(version, mask, &proof, &committer);
+    //FIXME assert length of code
+}
+
+#[ignore] // Takes a long time to run
+#[test]
+fn test_upgrade_v2_v3() {
+    let mut data: HashMap<(u8, bool, bool), (Vec<u8>, Vec<u8>, Vec<u8>)> = HashMap::new();
+    for version in 2..=3 {
+        for mask in [false, true] {
+            for left_eye in [false, true] {
+                data.insert((version, mask, left_eye), load_image_commitment(version, mask, left_eye));
+            }
+        }
+    }
+    let proofs = super::upgrade::prove_upgrade_v2_to_v3(&data);
+    let _codes = super::upgrade::verify_upgrade_v2_to_v3(&proofs).unwrap();
 }
 
 #[ignore] // Takes a long time to run
