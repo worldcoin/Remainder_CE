@@ -30,22 +30,22 @@ pub enum UpgradeError {
 /// version, eye, and type (iris or mask), and returns, for each such combination, the corresponding mask or iris code.
 pub fn verify_upgrade_v2_to_v3(
     proofs: &HashMap<(u8, bool, bool), HyraxProof<Bn256Point>>,
-) -> Result<HashMap<(u8, bool, bool), Vec<bool>>, UpgradeError> {
+) -> Result<HashMap<(u8, bool, bool), (Vec<bool>, Vec<Bn256Point>)>, UpgradeError> {
     // Create the Pedersen committer using the same reference string and parameters as on the Orb
     let committer: PedersenCommitter<Bn256Point> = PedersenCommitter::new(1 << IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING, None);
 
-    let mut codes = HashMap::new();
+    let mut results = HashMap::new();
     for version in [2u8, 3u8] {
         for mask in [false, true] {
             for left_eye in [false, true] {
                 dbg!(version, mask, left_eye);
                 let proof = proofs.get(&(version, mask, left_eye)).unwrap();
                 let code = verify_single(version, mask, proof, &committer);
-                codes.insert((version, mask, left_eye), code);
+                results.insert((version, mask, left_eye), code);
             }
         }
     }
-    Ok(codes)
+    Ok(results)
 }
 
 pub fn verify_single(
@@ -53,7 +53,7 @@ pub fn verify_single(
     mask: bool,
     proof: &HyraxProof<Bn256Point>,
     committer: &PedersenCommitter<Bn256Point>,
-) -> Vec<bool> { // FIXME also return commitment
+) -> (Vec<bool>, Vec<Bn256Point>) {
     // Get the circuit description, as well as the inputs if we were using a test image;
     // we'll use these to ensure that the correct kernel values and thresholds are being
     // used in the supplied proof.
@@ -95,7 +95,7 @@ pub fn verify_single(
         .iter()
         .find(|(id, _)| id == &proof_desc.code_input_layer.layer_id)
         .unwrap().1.get_evals_vector();
-    code_mle
+    let code = code_mle
         .iter()
         .map(|b|
             match b {
@@ -103,7 +103,12 @@ pub fn verify_single(
                 &Fr::ZERO => false,
                 _ => panic!() // FIXME raise error
             }
-        ).collect()
+        ).collect();
+    let image_commitment = proof.hyrax_input_proofs
+        .iter()
+        .find(|proof| proof.layer_id == proof_desc.image_input_layer.layer_id)
+        .unwrap().input_commitment.clone();
+    (code, image_commitment)
 }
 
 // FIXME(Ben) document & make a struct that takes the three serialized commitment components
