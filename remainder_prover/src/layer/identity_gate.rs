@@ -310,8 +310,8 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
             let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                 (
-                    *beta_g1.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
-                    *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                    beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
+                    beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
                 )
             } else {
                 (
@@ -465,8 +465,8 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
         let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
             let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                 (
-                    *beta_g1.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
-                    *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                    beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
+                    beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
                 )
             } else {
                 (
@@ -673,13 +673,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                             z_ind,
                         )
                     } else {
-                        *self
-                            .beta_g1
-                            .as_ref()
-                            .unwrap()
-                            .bookkeeping_table()
-                            .get(z_ind)
-                            .unwrap_or(&F::ZERO)
+                        self.beta_g1.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO)
                     };
 
                     a_hg_mle_ref[x_ind] += beta_g_at_z;
@@ -710,8 +704,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             )
             .unwrap();
 
-            assert_eq!(self.beta_g2.as_mut().unwrap().bookkeeping_table().len(), 1);
-            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().bookkeeping_table()[0];
+            assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
+            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
 
             let SumcheckEvals(mut evaluations) = evals;
             evaluations
@@ -735,8 +729,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 evaluate_mle_ref_product_no_beta_table(&mles, independent_variable, mles.len())
                     .unwrap();
 
-            assert_eq!(self.beta_g2.as_mut().unwrap().bookkeeping_table().len(), 1);
-            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().bookkeeping_table()[0];
+            assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
+            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
 
             let SumcheckEvals(mut evaluations) = evals;
             evaluations
@@ -757,7 +751,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
             Ok(())
         } else {
-            assert_eq!(self.beta_g2.as_mut().unwrap().bookkeeping_table().len(), 1);
+            assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
             let mles = self.phase_1_mles.as_mut().unwrap();
             mles.iter_mut().for_each(|mle_ref| {
                 mle_ref.fix_variable(round_index, challenge);
@@ -830,8 +824,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             .fold(F::ZERO, |acc, (z_ind, x_ind)| {
                 let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                     (
-                        *beta_g1.mle.f.get(*z_ind).unwrap_or(&F::ZERO),
-                        *beta_u.mle.f.get(*x_ind).unwrap_or(&F::ZERO),
+                        beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
+                        beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
                     )
                 } else {
                     (
@@ -1171,13 +1165,7 @@ impl<F: Field> IdentityGate<F> {
                 let beta_g_at_z = if LAZY_BETA_EVALUATION {
                     BetaValues::compute_beta_over_challenge_and_index(&challenge, z_ind)
                 } else {
-                    *self
-                        .beta_g1
-                        .as_ref()
-                        .unwrap()
-                        .mle
-                        .get(z_ind)
-                        .unwrap_or(F::ZERO)
+                    self.beta_g1.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO)
                 };
 
                 a_hg_mle_ref[x_ind] += beta_g_at_z;
