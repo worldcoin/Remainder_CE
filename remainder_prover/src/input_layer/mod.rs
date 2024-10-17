@@ -1,15 +1,10 @@
 //! Trait for dealing with InputLayer
 
-use ark_std::cfg_into_iter;
 use enum_input_layer::InputLayerEnum;
-use itertools::Itertools;
 use remainder_ligero::ligero_structs::LigeroCommit;
 use remainder_ligero::poseidon_ligero::PoseidonSpongeHasher;
 use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 
-use crate::claims::claim_aggregation::{
-    get_num_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
-};
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use remainder_shared_types::{transcript::TranscriptReaderError, Field};
@@ -28,12 +23,6 @@ pub mod hyrax_input_layer;
 pub mod ligero_input_layer;
 /// An input layer which requires no commitment and is openly evaluated at the random point.
 pub mod public_input_layer;
-
-use crate::sumcheck::evaluate_at_a_point;
-
-use ark_std::{end_timer, start_timer};
-#[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(bound = "F: Field")]
@@ -66,7 +55,6 @@ pub enum InputLayerError {
     TranscriptMatchError,
 }
 
-use log::{debug, info};
 /// The InputLayer trait in which the evaluation proof, commitment, and proof/verification
 /// process takes place for input layers.
 pub trait InputLayer<F: Field> {
@@ -134,72 +122,4 @@ pub trait InputLayerDescription<F: Field> {
         claim: RawClaim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), InputLayerError>;
-}
-
-/// Computes the V_d(l(x)) evaluations for the input layer V_d.
-fn get_wlx_evaluations<F: Field>(
-    mut mle_ref: MultilinearExtension<F>,
-    claim_vecs: &[Vec<F>],
-    claimed_vals: &[F],
-    _claimed_mles: Vec<DenseMle<F>>,
-    num_claims: usize,
-    num_idx: usize,
-) -> Result<Vec<F>, crate::claims::ClaimError> {
-    let prep_timer = start_timer!(|| "Claim wlx prep");
-    end_timer!(prep_timer);
-    info!("Wlx MLE len: {}", mle_ref.len());
-    // Get the number of evaluations needed depending on the claim vectors.
-    let (num_evals, common_idx, non_common_idx) = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION
-    {
-        let (num_evals, common_idx, non_common_idx) = get_num_wlx_evaluations(claim_vecs);
-        (num_evals, common_idx, non_common_idx)
-    } else {
-        let num_evals = ((num_claims - 1) * num_idx) + 1;
-        let common_idx = None;
-        let non_common_idx = (0..num_idx).collect_vec();
-        (num_evals, common_idx, non_common_idx)
-    };
-
-    let chal_point = &claim_vecs[0];
-
-    if let Some(common_idx) = common_idx {
-        let mut common_idx_sorted = common_idx.clone();
-        common_idx_sorted.sort();
-        common_idx_sorted
-            .iter()
-            .enumerate()
-            .for_each(|(offset_idx, chal_idx)| {
-                mle_ref.fix_variable_at_index(*chal_idx - offset_idx, chal_point[*chal_idx]);
-            });
-    }
-    debug!("Evaluating {num_evals} times.");
-
-    // We already have the first #claims evaluations, get the next num_evals - #claims evaluations.
-    let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
-        .map(|idx| {
-            // Get the challenge l(idx).
-            let new_chal: Vec<F> = cfg_into_iter!(non_common_idx.clone())
-                .map(|claim_idx| {
-                    let evals: Vec<F> = cfg_into_iter!(claim_vecs)
-                        .map(|claim| claim[claim_idx])
-                        .collect();
-                    evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
-                })
-                .collect();
-
-            let mut fix_mle = mle_ref.clone();
-            {
-                new_chal.into_iter().for_each(|chal| {
-                    fix_mle.fix_variable(chal);
-                });
-                fix_mle.first()
-            }
-        })
-        .collect();
-
-    // Concat this with the first k evaluations from the claims to get num_evals evaluations.
-    let mut wlx_evals = claimed_vals.to_vec();
-    wlx_evals.extend(&next_evals);
-    debug!("Returning evals:\n{:#?} ", wlx_evals);
-    Ok(wlx_evals)
 }

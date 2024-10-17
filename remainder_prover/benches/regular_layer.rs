@@ -3,7 +3,7 @@ use criterion::{black_box, criterion_group, criterion_main, BatchSize, Benchmark
 use itertools::Itertools;
 use rand::Rng;
 use remainder::{
-    claims::Claim,
+    claims::{Claim, RawClaim},
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::{regular_layer::RegularLayer, Layer, LayerId},
     mle::{betavalues::BetaValues, dense::DenseMle},
@@ -49,7 +49,7 @@ fn create_dummy_mle(num_vars: usize) -> DenseMle<Fr> {
 fn get_dummy_expression_eval(
     expression: &Expression<Fr, ProverExpr>,
     rng: &mut impl Rng,
-) -> Claim<Fr> {
+) -> RawClaim<Fr> {
     let mut expression = expression.clone();
     let num_vars = expression.index_mle_indices(0);
 
@@ -79,7 +79,7 @@ fn get_dummy_expression_eval(
         evals[0]
     };
 
-    Claim::new(challenges, result)
+    RawClaim::new(challenges, result)
 }
 
 /// A collection of custom [Expression] structures to benchmark proving
@@ -149,7 +149,7 @@ struct BenchLayerConfig {
 
 /// Generates a [RegularLayer] according to `config` along with a [Claim] at a
 /// random point.
-fn create_dummy_regular_layer(config: BenchLayerConfig) -> (RegularLayer<Fr>, Claim<Fr>) {
+fn create_dummy_regular_layer(config: BenchLayerConfig) -> (RegularLayer<Fr>, RawClaim<Fr>) {
     let mut rng = test_rng();
 
     let leaf_mle = create_dummy_mle(config.mle_size);
@@ -250,7 +250,7 @@ fn bench_regular_layer(c: &mut Criterion) {
                             ),
                         )
                     },
-                    |(mut layer, claim, mut transcript)| layer.prove_rounds(claim, &mut transcript),
+                    |(mut layer, claim, mut transcript)| layer.prove(claim, &mut transcript),
                     BatchSize::SmallInput,
                 )
             },
@@ -277,7 +277,7 @@ fn bench_regular_layer(c: &mut Criterion) {
                             ),
                         )
                     },
-                    |(mut layer, claim, mut transcript)| layer.prove_rounds(claim, &mut transcript),
+                    |(mut layer, claim, mut transcript)| layer.prove(claim, &mut transcript),
                     BatchSize::SmallInput,
                 )
             },
@@ -304,7 +304,7 @@ fn bench_regular_layer(c: &mut Criterion) {
                             ),
                         )
                     },
-                    |(mut layer, claim, mut transcript)| layer.prove_rounds(claim, &mut transcript),
+                    |(mut layer, claim, mut transcript)| layer.prove(claim, &mut transcript),
                     BatchSize::SmallInput,
                 )
             },
@@ -331,7 +331,7 @@ fn bench_regular_layer(c: &mut Criterion) {
                             ),
                         )
                     },
-                    |(mut layer, claim, mut transcript)| layer.prove_rounds(claim, &mut transcript),
+                    |(mut layer, claim, mut transcript)| layer.prove(claim, &mut transcript),
                     BatchSize::SmallInput,
                 )
             },
