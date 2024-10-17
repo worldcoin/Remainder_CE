@@ -1,7 +1,7 @@
 //! Identity gate id(z, x) determines whether the xth gate from the
 //! i + 1th layer contributes to the zth gate in the ith layer.
 
-use std::collections::HashSet;
+use std::{cmp::Ordering, collections::HashSet};
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
@@ -646,101 +646,102 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             self.set_beta_g2(beta_g2);
         }
 
-        // data parallel phase
-        if round_index < self.num_dataparallel_vars {
-            Ok(compute_sumcheck_messages_data_parallel_identity_gate(
+        match round_index.cmp(&self.num_dataparallel_vars) {
+            // data parallel phase
+            Ordering::Less => Ok(compute_sumcheck_messages_data_parallel_identity_gate(
                 &self.mle_ref,
                 self.beta_g2.as_ref().unwrap(),
                 self.beta_g1.as_ref().unwrap(),
                 &self.nonzero_gates,
                 self.num_dataparallel_vars - round_index,
             )
-            .unwrap())
+            .unwrap()),
 
-        // init phase 1
-        } else if round_index == self.num_dataparallel_vars {
-            let num_vars = self.mle_ref.num_free_vars();
+            // init phase 1
+            Ordering::Equal => {
+                let num_vars = self.mle_ref.num_free_vars();
 
-            let mut a_hg_mle_ref = vec![F::ZERO; 1 << num_vars];
+                let mut a_hg_mle_ref = vec![F::ZERO; 1 << num_vars];
 
-            self.nonzero_gates
-                .clone()
-                .into_iter()
-                .for_each(|(z_ind, x_ind)| {
-                    let beta_g_at_z = if LAZY_BETA_EVALUATION {
-                        BetaValues::compute_beta_over_challenge_and_index(
-                            self.g1.as_ref().unwrap(),
-                            z_ind,
-                        )
-                    } else {
-                        self.beta_g1.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO)
-                    };
+                self.nonzero_gates
+                    .clone()
+                    .into_iter()
+                    .for_each(|(z_ind, x_ind)| {
+                        let beta_g_at_z = if LAZY_BETA_EVALUATION {
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                self.g1.as_ref().unwrap(),
+                                z_ind,
+                            )
+                        } else {
+                            self.beta_g1.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO)
+                        };
 
-                    a_hg_mle_ref[x_ind] += beta_g_at_z;
-                });
+                        a_hg_mle_ref[x_ind] += beta_g_at_z;
+                    });
 
-            let mut phase_1 = [
-                DenseMle::new_from_raw(a_hg_mle_ref, LayerId::Input(0)),
-                self.mle_ref.clone(),
-            ];
+                let mut phase_1 = [
+                    DenseMle::new_from_raw(a_hg_mle_ref, LayerId::Input(0)),
+                    self.mle_ref.clone(),
+                ];
 
-            index_mle_indices_gate(&mut phase_1, self.num_dataparallel_vars);
-            self.set_phase_1(phase_1.clone());
+                index_mle_indices_gate(&mut phase_1, self.num_dataparallel_vars);
+                self.set_phase_1(phase_1.clone());
 
-            let independent_variable = phase_1
-                .iter()
-                .map(|mle_ref| {
-                    mle_ref
-                        .mle_indices()
-                        .contains(&MleIndex::Indexed(self.num_dataparallel_vars))
-                })
-                .reduce(|acc, item| acc | item)
-                .unwrap();
-            let phase_1_mle_references: Vec<&DenseMle<F>> = phase_1.iter().collect();
-            let evals = evaluate_mle_ref_product_no_beta_table(
-                &phase_1_mle_references,
-                independent_variable,
-                phase_1.len(),
-            )
-            .unwrap();
-
-            assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
-            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
-
-            let SumcheckEvals(mut evaluations) = evals;
-            evaluations
-                .iter_mut()
-                .for_each(|eval| *eval *= beta_g2_fully_bound);
-            Ok(evaluations)
-
-        // phase 1
-        } else {
-            let mles: Vec<&DenseMle<F>> = self.phase_1_mles.as_ref().unwrap().iter().collect();
-            let independent_variable = mles
-                .iter()
-                .map(|mle_ref| {
-                    mle_ref
-                        .mle_indices()
-                        .contains(&MleIndex::Indexed(round_index))
-                })
-                .reduce(|acc, item| acc | item)
-                .unwrap();
-            let evals =
-                evaluate_mle_ref_product_no_beta_table(&mles, independent_variable, mles.len())
+                let independent_variable = phase_1
+                    .iter()
+                    .map(|mle_ref| {
+                        mle_ref
+                            .mle_indices()
+                            .contains(&MleIndex::Indexed(self.num_dataparallel_vars))
+                    })
+                    .reduce(|acc, item| acc | item)
                     .unwrap();
+                let phase_1_mle_references: Vec<&DenseMle<F>> = phase_1.iter().collect();
+                let evals = evaluate_mle_ref_product_no_beta_table(
+                    &phase_1_mle_references,
+                    independent_variable,
+                    phase_1.len(),
+                )
+                .unwrap();
 
-            assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
-            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
+                assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
+                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
 
-            let SumcheckEvals(mut evaluations) = evals;
-            evaluations
-                .iter_mut()
-                .for_each(|eval| *eval *= beta_g2_fully_bound);
-            Ok(evaluations)
+                let SumcheckEvals(mut evaluations) = evals;
+                evaluations
+                    .iter_mut()
+                    .for_each(|eval| *eval *= beta_g2_fully_bound);
+                Ok(evaluations)
+            }
+
+            // phase 1
+            Ordering::Greater => {
+                let mles: Vec<&DenseMle<F>> = self.phase_1_mles.as_ref().unwrap().iter().collect();
+                let independent_variable = mles
+                    .iter()
+                    .map(|mle_ref| {
+                        mle_ref
+                            .mle_indices()
+                            .contains(&MleIndex::Indexed(round_index))
+                    })
+                    .reduce(|acc, item| acc | item)
+                    .unwrap();
+                let evals =
+                    evaluate_mle_ref_product_no_beta_table(&mles, independent_variable, mles.len())
+                        .unwrap();
+
+                assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
+                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
+
+                let SumcheckEvals(mut evaluations) = evals;
+                evaluations
+                    .iter_mut()
+                    .for_each(|eval| *eval *= beta_g2_fully_bound);
+                Ok(evaluations)
+            }
         }
     }
 
-    // TODO!(ende): no references in codebase as of now
     fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
         if round_index < self.num_dataparallel_vars {
             self.beta_g2
