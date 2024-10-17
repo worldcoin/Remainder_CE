@@ -250,15 +250,9 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                             z_ind,
                         )
                     } else {
-                        *self
-                            .beta_g1
-                            .as_ref()
-                            .unwrap()
-                            .bookkeeping_table()
-                            .get(z_ind)
-                            .unwrap_or(&F::ZERO)
+                        self.beta_g1.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO)
                     };
-                    let f_3_at_y = *self.rhs.bookkeeping_table().get(y_ind).unwrap_or(&F::ZERO);
+                    let f_3_at_y = self.rhs.get(y_ind).unwrap_or(F::ZERO);
                     a_hg_rhs[x_ind] += beta_g_at_z * f_3_at_y;
                     if self.gate_operation == BinaryOperation::Add {
                         a_hg_lhs[x_ind] += beta_g_at_z;
@@ -322,8 +316,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 });
             let SumcheckEvals(mut final_vec_evals) = final_evals;
 
-            assert_eq!(self.beta_g2.as_mut().unwrap().bookkeeping_table().len(), 1);
-            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().bookkeeping_table()[0];
+            assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
+            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
 
             final_vec_evals
                 .iter_mut()
@@ -363,8 +357,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 });
             let SumcheckEvals(mut final_vec_evals) = final_evals;
 
-            assert_eq!(self.beta_g2.as_mut().unwrap().bookkeeping_table().len(), 1);
-            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().bookkeeping_table()[0];
+            assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
+            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
 
             final_vec_evals
                 .iter_mut()
@@ -378,8 +372,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             assert_eq!(self.u_challenges.len(), self.num_rounds_phase1.unwrap());
 
             let f2 = &self.phase_1_mles.as_ref().unwrap()[0][1];
-            assert_eq!(f2.bookkeeping_table().len(), 1);
-            let f2_at_u = f2.bookkeeping_table()[0];
+            assert_eq!(f2.len(), 1);
+            let f2_at_u = f2.first();
 
             let beta_g1 = self.beta_g1.as_ref().unwrap();
 
@@ -399,8 +393,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 .clone()
                 .into_iter()
                 .for_each(|(z_ind, x_ind, y_ind)| {
-                    let gz = *beta_g1.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                    let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+                    let gz = beta_g1.get(z_ind).unwrap_or(F::ZERO);
+                    let ux = beta_u.get(x_ind).unwrap_or(F::ZERO);
                     let adder = gz * ux;
                     a_f1_lhs[y_ind] += adder * f2_at_u;
                     if self.gate_operation == BinaryOperation::Add {
@@ -463,8 +457,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 });
             let SumcheckEvals(mut final_vec_evals) = final_evals;
 
-            assert_eq!(self.beta_g2.as_mut().unwrap().bookkeeping_table().len(), 1);
-            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().bookkeeping_table()[0];
+            assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
+            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
 
             final_vec_evals
                 .iter_mut()
@@ -510,8 +504,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     });
                 let SumcheckEvals(mut final_vec_evals) = final_evals;
 
-                assert_eq!(self.beta_g2.as_mut().unwrap().bookkeeping_table().len(), 1);
-                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().bookkeeping_table()[0];
+                assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
+                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
 
                 final_vec_evals
                     .iter_mut()
@@ -619,9 +613,9 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 .clone()
                 .into_iter()
                 .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
-                    let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                    let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
-                    let vy = *beta_v.bookkeeping_table().get(y_ind).unwrap_or(&F::ZERO);
+                    let gz = beta_g.get(z_ind).unwrap_or(F::ZERO);
+                    let ux = beta_u.get(x_ind).unwrap_or(F::ZERO);
+                    let vy = beta_v.get(y_ind).unwrap_or(F::ZERO);
                     acc + gz * ux * vy
                 });
 
@@ -939,9 +933,9 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
                 .clone()
                 .into_iter()
                 .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
-                    let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                    let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
-                    let vy = *beta_v.bookkeeping_table().get(y_ind).unwrap_or(&F::ZERO);
+                    let gz = beta_g.get(z_ind).unwrap_or(F::ZERO);
+                    let ux = beta_u.get(x_ind).unwrap_or(F::ZERO);
+                    let vy = beta_v.get(y_ind).unwrap_or(F::ZERO);
                     acc + gz * ux * vy
                 });
 
