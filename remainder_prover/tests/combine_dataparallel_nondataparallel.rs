@@ -216,15 +216,15 @@ fn test_combined_dataparallel_nondataparallel_circuit_newmainder() {
 
     let mle_1_vec_batched = DenseMle::batch_mles(mle_1_vec);
     let mle_2_vec_batched = DenseMle::batch_mles(mle_2_vec);
-    let mle_1_vec_raw = mle_1_vec_batched.bookkeeping_table();
-    let mle_2_vec_raw = mle_2_vec_batched.bookkeeping_table();
+    let mle_1_vec_iter = mle_1_vec_batched.iter();
+    let mle_2_vec_iter = mle_2_vec_batched.iter();
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
         let (input_shred_1, input_shred_1_data) =
-            get_input_shred_and_data_from_vec(mle_1_vec_raw.to_vec(), ctx, &input_layer);
+            get_input_shred_and_data_from_vec(mle_1_vec_iter.clone().collect(), ctx, &input_layer);
         let (input_shred_2, input_shred_2_data) =
-            get_input_shred_and_data_from_vec(mle_2_vec_raw.to_vec(), ctx, &input_layer);
+            get_input_shred_and_data_from_vec(mle_2_vec_iter.clone().collect(), ctx, &input_layer);
         let (input_shred_3, input_shred_3_data) =
             get_dummy_input_shred_and_data(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
         let (input_shred_4, input_shred_4_data) =

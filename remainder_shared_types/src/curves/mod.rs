@@ -114,6 +114,61 @@ impl HasByteRepresentation for Fr {
     fn to_bytes_le(&self) -> Vec<u8> {
         Fr::to_bytes(self).to_vec()
     }
+
+    fn to_u64s_le(&self) -> Vec<u64> {
+        let bytes = self.to_bytes_le();
+
+        let fold_bytes = |acc, x: &u8| (acc << 8) + (*x as u64);
+
+        vec![
+            bytes[0..8].iter().rev().fold(0, fold_bytes),
+            bytes[8..16].iter().rev().fold(0, fold_bytes),
+            bytes[16..24].iter().rev().fold(0, fold_bytes),
+            bytes[24..32].iter().rev().fold(0, fold_bytes),
+        ]
+    }
+
+    fn from_u64s_le(words: Vec<u64>) -> Self
+    where
+        Self: Sized,
+    {
+        let mask_8bit = (1_u64 << 8) - 1;
+
+        Self::from_bytes_le(vec![
+            (words[0] & mask_8bit) as u8,
+            ((words[0] & (mask_8bit << 8)) >> 8) as u8,
+            ((words[0] & (mask_8bit << 16)) >> 16) as u8,
+            ((words[0] & (mask_8bit << 24)) >> 24) as u8,
+            ((words[0] & (mask_8bit << 32)) >> 32) as u8,
+            ((words[0] & (mask_8bit << 40)) >> 40) as u8,
+            ((words[0] & (mask_8bit << 48)) >> 48) as u8,
+            ((words[0] & (mask_8bit << 56)) >> 56) as u8,
+            (words[1] & mask_8bit) as u8,
+            ((words[1] & (mask_8bit << 8)) >> 8) as u8,
+            ((words[1] & (mask_8bit << 16)) >> 16) as u8,
+            ((words[1] & (mask_8bit << 24)) >> 24) as u8,
+            ((words[1] & (mask_8bit << 32)) >> 32) as u8,
+            ((words[1] & (mask_8bit << 40)) >> 40) as u8,
+            ((words[1] & (mask_8bit << 48)) >> 48) as u8,
+            ((words[1] & (mask_8bit << 56)) >> 56) as u8,
+            (words[2] & mask_8bit) as u8,
+            ((words[2] & (mask_8bit << 8)) >> 8) as u8,
+            ((words[2] & (mask_8bit << 16)) >> 16) as u8,
+            ((words[2] & (mask_8bit << 24)) >> 24) as u8,
+            ((words[2] & (mask_8bit << 32)) >> 32) as u8,
+            ((words[2] & (mask_8bit << 40)) >> 40) as u8,
+            ((words[2] & (mask_8bit << 48)) >> 48) as u8,
+            ((words[2] & (mask_8bit << 56)) >> 56) as u8,
+            (words[3] & mask_8bit) as u8,
+            ((words[3] & (mask_8bit << 8)) >> 8) as u8,
+            ((words[3] & (mask_8bit << 16)) >> 16) as u8,
+            ((words[3] & (mask_8bit << 24)) >> 24) as u8,
+            ((words[3] & (mask_8bit << 32)) >> 32) as u8,
+            ((words[3] & (mask_8bit << 40)) >> 40) as u8,
+            ((words[3] & (mask_8bit << 48)) >> 48) as u8,
+            ((words[3] & (mask_8bit << 56)) >> 56) as u8,
+        ])
+    }
 }
 
 impl HasByteRepresentation for Fq {
@@ -129,6 +184,61 @@ impl HasByteRepresentation for Fq {
 
     fn to_bytes_le(&self) -> Vec<u8> {
         Fq::to_bytes(self).to_vec()
+    }
+
+    fn to_u64s_le(&self) -> Vec<u64> {
+        let bytes = self.to_bytes_le();
+
+        let fold_bytes = |acc, x: &u8| (acc << 8) + (*x as u64);
+
+        vec![
+            bytes[0..8].iter().rev().fold(0, fold_bytes),
+            bytes[8..16].iter().rev().fold(0, fold_bytes),
+            bytes[16..24].iter().rev().fold(0, fold_bytes),
+            bytes[24..32].iter().rev().fold(0, fold_bytes),
+        ]
+    }
+
+    fn from_u64s_le(words: Vec<u64>) -> Self
+    where
+        Self: Sized,
+    {
+        let mask_8bit = (1_u64 << 8) - 1;
+
+        Self::from_bytes_le(vec![
+            (words[0] & mask_8bit) as u8,
+            ((words[0] & (mask_8bit << 8)) >> 8) as u8,
+            ((words[0] & (mask_8bit << 16)) >> 16) as u8,
+            ((words[0] & (mask_8bit << 24)) >> 24) as u8,
+            ((words[0] & (mask_8bit << 32)) >> 32) as u8,
+            ((words[0] & (mask_8bit << 40)) >> 40) as u8,
+            ((words[0] & (mask_8bit << 48)) >> 48) as u8,
+            ((words[0] & (mask_8bit << 56)) >> 56) as u8,
+            (words[1] & mask_8bit) as u8,
+            ((words[1] & (mask_8bit << 8)) >> 8) as u8,
+            ((words[1] & (mask_8bit << 16)) >> 16) as u8,
+            ((words[1] & (mask_8bit << 24)) >> 24) as u8,
+            ((words[1] & (mask_8bit << 32)) >> 32) as u8,
+            ((words[1] & (mask_8bit << 40)) >> 40) as u8,
+            ((words[1] & (mask_8bit << 48)) >> 48) as u8,
+            ((words[1] & (mask_8bit << 56)) >> 56) as u8,
+            (words[2] & mask_8bit) as u8,
+            ((words[2] & (mask_8bit << 8)) >> 8) as u8,
+            ((words[2] & (mask_8bit << 16)) >> 16) as u8,
+            ((words[2] & (mask_8bit << 24)) >> 24) as u8,
+            ((words[2] & (mask_8bit << 32)) >> 32) as u8,
+            ((words[2] & (mask_8bit << 40)) >> 40) as u8,
+            ((words[2] & (mask_8bit << 48)) >> 48) as u8,
+            ((words[2] & (mask_8bit << 56)) >> 56) as u8,
+            (words[3] & mask_8bit) as u8,
+            ((words[3] & (mask_8bit << 8)) >> 8) as u8,
+            ((words[3] & (mask_8bit << 16)) >> 16) as u8,
+            ((words[3] & (mask_8bit << 24)) >> 24) as u8,
+            ((words[3] & (mask_8bit << 32)) >> 32) as u8,
+            ((words[3] & (mask_8bit << 40)) >> 40) as u8,
+            ((words[3] & (mask_8bit << 48)) >> 48) as u8,
+            ((words[3] & (mask_8bit << 56)) >> 56) as u8,
+        ])
     }
 }
 
