@@ -18,14 +18,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     input_layer::CommitmentEnum,
-    layer::{GenericLayer, LayerId},
+    layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension},
 };
 
-use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations, InputLayer, InputLayerDescription,
-    InputLayerError,
-};
+use super::{enum_input_layer::InputLayerEnum, InputLayer, InputLayerDescription, InputLayerError};
 
 /// An input layer in which `mle` will be committed to using the Ligero polynomial
 /// commitment scheme.
@@ -234,26 +231,6 @@ impl<F: Field> LigeroInputLayer<F> {
             comm: ligero_precomm_prover,
             aux,
         }
-    }
-}
-
-impl<F: Field> GenericLayer<F> for LigeroInputLayer<F> {
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &[Vec<F>],
-        claimed_vals: &[F],
-        claim_mle_refs: Vec<DenseMle<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, crate::claims::ClaimError> {
-        get_wlx_evaluations(
-            self.mle.clone(),
-            claim_vecs,
-            claimed_vals,
-            claim_mle_refs,
-            num_claims,
-            num_idx,
-        )
     }
 }
 

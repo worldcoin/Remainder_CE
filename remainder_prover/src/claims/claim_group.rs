@@ -9,11 +9,11 @@ use tracing::{debug, info};
 use crate::{
     claims::{
         claim_aggregation::{
-            get_num_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
+            get_num_wlx_evaluations, get_wlx_evaluations,
+            CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
         },
         ClaimError,
     },
-    layer::GenericLayer,
     mle::dense::DenseMle,
     prover::GKRError,
     sumcheck::evaluate_at_a_point,
@@ -271,7 +271,6 @@ impl<F: Field> ClaimGroup<F> {
     pub fn prover_aggregate(
         &self,
         layer_mles: &[DenseMle<F>],
-        layer: &impl GenericLayer<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<RawClaim<F>, GKRError> {
         let num_claims = self.get_num_claims();
@@ -286,15 +285,14 @@ impl<F: Field> ClaimGroup<F> {
 
         // Aggregate claims by performing the claim aggregation protocol.
         // First compute V_i(l(x)).
-        let wlx_evaluations = layer
-            .get_wlx_evaluations(
-                self.get_claim_points_matrix(),
-                self.get_results(),
-                layer_mles.to_vec(),
-                num_claims,
-                self.get_num_vars(),
-            )
-            .unwrap();
+        let wlx_evaluations = get_wlx_evaluations(
+            self.get_claim_points_matrix(),
+            self.get_results(),
+            layer_mles.to_vec(),
+            num_claims,
+            self.get_num_vars(),
+        )
+        .unwrap();
         dbg!(&wlx_evaluations);
         let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 

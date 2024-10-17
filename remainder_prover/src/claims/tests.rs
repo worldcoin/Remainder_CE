@@ -98,12 +98,11 @@ fn compute_claim_wlx<F: Field, Sp: TranscriptSponge<F>>(
 */
 
 fn claim_aggregation_wrapper<Sp: TranscriptSponge<Fr>>(
-    layer: &impl Layer<Fr>,
     output_mles_from_layer: Vec<DenseMle<Fr>>,
     claims: &[Claim<Fr>],
 ) -> RawClaim<Fr> {
     let mut transcript: TranscriptWriter<_, Sp> = TranscriptWriter::new("Claims Test Transcript");
-    prover_aggregate_claims(claims, layer, &output_mles_from_layer, &mut transcript).unwrap()
+    prover_aggregate_claims(claims, &output_mles_from_layer, &mut transcript).unwrap()
 }
 
 /// Compute l* = l(r*).
@@ -150,7 +149,7 @@ fn test_aggro_claim_1() {
     assert_eq!(l_star, vec![Fr::from(7).neg(), Fr::from(43)]);
 
     let aggregated_claim =
-        claim_aggregation_wrapper::<DummySponge<Fr, 10>>(&layer, output_mles_for_layer, &claims);
+        claim_aggregation_wrapper::<DummySponge<Fr, 10>>(output_mles_for_layer, &claims);
     let expected_claim = compute_expected_claim(&layer, &l_star);
 
     assert_eq!(aggregated_claim.get_eval(), expected_claim.get_eval());
@@ -177,7 +176,7 @@ fn test_aggro_claim_2() {
     let l_star = compute_l_star(&claims, r_star);
 
     let aggregated_claim =
-        claim_aggregation_wrapper::<DummySponge<Fr, -2>>(&layer, output_mles_for_layer, &claims);
+        claim_aggregation_wrapper::<DummySponge<Fr, -2>>(output_mles_for_layer, &claims);
     let expected_claim = compute_expected_claim(&layer, &l_star);
 
     assert_eq!(aggregated_claim.get_eval(), expected_claim.get_eval());
@@ -202,7 +201,7 @@ fn test_aggro_claim_3() {
     let l_star = compute_l_star(&claims, r_star);
 
     let aggregated_claim =
-        claim_aggregation_wrapper::<DummySponge<Fr, 25>>(&layer, output_mles_for_layer, &claims);
+        claim_aggregation_wrapper::<DummySponge<Fr, 25>>(output_mles_for_layer, &claims);
     let expected_claim = compute_expected_claim(&layer, &l_star);
 
     assert_eq!(aggregated_claim.get_eval(), expected_claim.get_eval());
@@ -250,11 +249,8 @@ fn test_aggro_claim_4() {
 
     let rchal = Fr::from(40).neg();
 
-    let res = claim_aggregation_wrapper::<DummySponge<_, -40>>(
-        &layer,
-        output_mles_from_layer,
-        &claim_group,
-    );
+    let res =
+        claim_aggregation_wrapper::<DummySponge<_, -40>>(output_mles_from_layer, &claim_group);
 
     let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
     let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -314,8 +310,7 @@ fn test_aggro_claim_negative_1() {
         test_claim.from_layer_id,
         test_claim.to_layer_id,
     );
-    let res =
-        claim_aggregation_wrapper::<DummySponge<_, 76>>(&layer, output_mles_from_layer, &claims);
+    let res = claim_aggregation_wrapper::<DummySponge<_, 76>>(output_mles_from_layer, &claims);
 
     let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
     let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -376,8 +371,7 @@ fn test_aggro_claim_negative_2() {
         test_claim.from_layer_id,
         test_claim.to_layer_id,
     );
-    let res =
-        claim_aggregation_wrapper::<DummySponge<_, 40>>(&layer, output_mle_from_layer, &claims);
+    let res = claim_aggregation_wrapper::<DummySponge<_, 40>>(output_mle_from_layer, &claims);
 
     let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
     let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -430,7 +424,7 @@ fn test_aggro_claim_common_suffix1() {
     */
 
     let aggregated_claim =
-        claim_aggregation_wrapper::<DummySponge<Fr, 10>>(&layer, output_mle_from_layer, &claims);
+        claim_aggregation_wrapper::<DummySponge<Fr, 10>>(output_mle_from_layer, &claims);
     let expected_claim = compute_expected_claim(&layer, &l_star);
 
     // Compare to W(l_star) computed by hand.
@@ -467,7 +461,7 @@ fn test_aggro_claim_common_suffix2() {
     assert_eq!(l_star, vec![Fr::from(11), Fr::from(3), Fr::from(5)]);
 
     let aggregated_claim =
-        claim_aggregation_wrapper::<DummySponge<Fr, 10>>(&layer, output_mle_from_layer, &claims);
+        claim_aggregation_wrapper::<DummySponge<Fr, 10>>(output_mle_from_layer, &claims);
     let expected_claim = compute_expected_claim(&layer, &l_star);
 
     // Compare to W(l_star) computed by hand.

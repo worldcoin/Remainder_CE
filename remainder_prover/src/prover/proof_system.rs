@@ -147,29 +147,6 @@ macro_rules! layer_enum {
                 }
             }
 
-            impl<F: Field> $crate::layer::GenericLayer<F> for [<$type_name Enum>]<F> {
-                fn get_wlx_evaluations(
-                    &self,
-                    claim_vecs: &[Vec<F>],
-                    claimed_vals: &[F],
-                    claimed_mles: Vec<$crate::mle::dense::DenseMle<F>>,
-                    num_claims: usize,
-                    num_idx: usize,
-                ) -> Result<Vec<F>, $crate::claims::ClaimError> {
-                    match self {
-                        $(
-                            Self::$var_name(layer) => layer.get_wlx_evaluations(
-                                claim_vecs,
-                                claimed_vals,
-                                claimed_mles,
-                                num_claims,
-                                num_idx,
-                            ),
-                        )*
-                    }
-                }
-            }
-
             impl<F: Field> $crate::layer::Layer<F> for [<$type_name Enum>]<F> {
                 fn layer_id(&self) -> super::LayerId {
                     match self {
@@ -361,23 +338,6 @@ macro_rules! input_layer_enum {
         }
         // LigeroInputLayer::new()
         // InputLayerEnum::new()
-
-        impl<F: Field> $crate::layer::GenericLayer<F> for $type_name<F> {
-            fn get_wlx_evaluations(
-                &self,
-                claim_vecs: &[Vec<F>],
-                claimed_vals: &[F],
-                claim_mle_refs: Vec<DenseMle<F>>,
-                num_claims: usize,
-                num_idx: usize,
-            ) -> Result<Vec<F>, $crate::claims::ClaimError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claim_mle_refs, num_claims, num_idx),
-                    )*
-                }
-            }
-        }
 
         $(
             impl<F: Field> From<$variant> for $type_name<F> {
