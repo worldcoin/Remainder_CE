@@ -479,50 +479,54 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             Ok(final_vec_evals)
         // phase 2
         } else {
-            // TODO!(ende): investigate: if self.rhs.num_free_vars() > 0 {
-            let phase_2_mle_refs: Vec<Vec<&DenseMle<F>>> = self
-                .phase_2_mles
-                .as_ref()
-                .unwrap()
-                .iter()
-                .map(|mle_vec| {
-                    let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                    mle_references
-                })
-                .collect();
-
-            let max_deg = phase_2_mle_refs
-                .iter()
-                .fold(0, |acc, elem| max(acc, elem.len()));
-            let evals_vec = phase_2_mle_refs
-                .iter()
-                .map(|mle_vec| {
-                    compute_sumcheck_message_no_beta_table(
-                        mle_vec,
-                        round_index - self.num_dataparallel_vars,
-                        max_deg,
-                    )
+            if self.phase_2_mles.as_ref().unwrap()[0][1].num_free_vars() > 0 {
+                let phase_2_mle_refs: Vec<Vec<&DenseMle<F>>> = self
+                    .phase_2_mles
+                    .as_ref()
                     .unwrap()
-                })
-                .collect_vec();
+                    .iter()
+                    .map(|mle_vec| {
+                        let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                        mle_references
+                    })
+                    .collect();
 
-            let final_evals = evals_vec
-                .clone()
-                .into_iter()
-                .skip(1)
-                .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
-                    acc + SumcheckEvals(elem)
-                });
-            let SumcheckEvals(mut final_vec_evals) = final_evals;
+                let max_deg = phase_2_mle_refs
+                    .iter()
+                    .fold(0, |acc, elem| max(acc, elem.len()));
 
-            assert_eq!(self.beta_g2.as_mut().unwrap().bookkeeping_table().len(), 1);
-            let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().bookkeeping_table()[0];
+                let evals_vec = phase_2_mle_refs
+                    .iter()
+                    .map(|mle_vec| {
+                        compute_sumcheck_message_no_beta_table(
+                            mle_vec,
+                            round_index - self.num_rounds_phase1.unwrap(),
+                            max_deg,
+                        )
+                        .unwrap()
+                    })
+                    .collect_vec();
 
-            final_vec_evals
-                .iter_mut()
-                .for_each(|eval| *eval *= beta_g2_fully_bound);
+                let final_evals = evals_vec
+                    .clone()
+                    .into_iter()
+                    .skip(1)
+                    .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
+                        acc + SumcheckEvals(elem)
+                    });
+                let SumcheckEvals(mut final_vec_evals) = final_evals;
 
-            Ok(final_vec_evals)
+                assert_eq!(self.beta_g2.as_mut().unwrap().bookkeeping_table().len(), 1);
+                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().bookkeeping_table()[0];
+
+                final_vec_evals
+                    .iter_mut()
+                    .for_each(|eval| *eval *= beta_g2_fully_bound);
+
+                Ok(final_vec_evals)
+            } else {
+                Ok(vec![])
+            }
         }
     }
 
@@ -570,13 +574,20 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 _ => 1,
             }
         }) - self.num_dataparallel_vars;
+
         (0..num_u + num_v + self.num_dataparallel_vars).collect_vec()
     }
 
     fn max_degree(&self) -> usize {
         match self.gate_operation {
             BinaryOperation::Add => 2,
-            BinaryOperation::Mul => 3,
+            BinaryOperation::Mul => {
+                if self.num_dataparallel_vars != 0 {
+                    3
+                } else {
+                    2
+                }
+            }
         }
     }
 
@@ -973,7 +984,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
     fn max_degree(&self) -> usize {
         match self.gate_operation {
             BinaryOperation::Add => 2,
-            BinaryOperation::Mul => 3,
+            BinaryOperation::Mul => {
+                if self.num_dataparallel_vars != 0 {
+                    3
+                } else {
+                    2
+                }
+            }
         }
     }
 
