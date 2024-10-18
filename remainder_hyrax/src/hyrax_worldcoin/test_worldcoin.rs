@@ -1,4 +1,5 @@
 use std::{collections::HashMap, env};
+use sha256::digest as sha256_digest;
 
 use crate::{
     hyrax_gkr::HyraxProof,
@@ -7,7 +8,7 @@ use crate::{
 use remainder::{
     layer::LayerId,
     mle::evals::MultilinearExtension,
-    worldcoin::{circuits::IriscodeProofDescription, io::read_bytes_from_file, parameters_v2::IRISCODE_LEN as V2_IRISCODE_LEN, parameters_v3::IRISCODE_LEN as V3_IRISCODE_LEN, test_helpers::circuit_description_and_inputs},
+    worldcoin::{circuits::IriscodeProofDescription, parameters_v2::IRISCODE_LEN as V2_IRISCODE_LEN, parameters_v3::IRISCODE_LEN as V3_IRISCODE_LEN, test_helpers::circuit_description_and_inputs},
 };
 use remainder_shared_types::{
     halo2curves::bn256::G1 as Bn256Point,
@@ -59,20 +60,33 @@ fn test_v2_iris_with_hyrax_precommit() {
 #[ignore] // Takes a long time to run
 #[test]
 fn test_upgrade_v2_v3() {
-    let mut data: HashMap<(u8, bool, bool), SerializedImageCommitment> = HashMap::new();
+    let mut commitments: HashMap<(u8, bool, bool), SerializedImageCommitment> = HashMap::new();
     for version in 2..=3 {
         for mask in [false, true] {
             for left_eye in [false, true] {
-                data.insert((version, mask, left_eye), load_image_commitment(version, mask, left_eye));
+                let serialized_commitment = load_image_commitment(version, mask, left_eye);
+                commitments.insert((version, mask, left_eye), serialized_commitment);
             }
         }
     }
-    let proofs = super::upgrade::prove_upgrade_v2_to_v3(&data);
-    let results = super::upgrade::verify_upgrade_v2_to_v3(&proofs).unwrap();
+    let proofs = super::upgrade::prove_upgrade_v2_to_v3(&commitments.clone());
+
+    // Get expected hashes for the commitments.
+    // In production, the verifier should be obtaining the hashes from the signed hashes.json file.
+    let mut proofs_and_hashes: HashMap<(u8, bool, bool), (HyraxProof<Bn256Point>, String)> = HashMap::new();
+    for ((version, mask, left_eye), proof) in proofs {
+        let serialized_commitment = commitments.get(&(version, mask, left_eye)).unwrap();
+        let hash = sha256_digest(&serialized_commitment.commitment_bytes.clone());
+        proofs_and_hashes.insert((version, mask, left_eye),
+            ( proof, hash)
+        );
+    }
+
+    let results = super::upgrade::verify_upgrade_v2_to_v3(&proofs_and_hashes).unwrap();
     for version in 2..=3 {
         for mask in [false, true] {
             for left_eye in [false, true] {
-                let (code, _commitment) = results.get(&(version, mask, left_eye)).unwrap();
+                let code = results.get(&(version, mask, left_eye)).unwrap();
                 assert_eq!(code.len(), if version == 2 { V2_IRISCODE_LEN } else { V3_IRISCODE_LEN });
             }
         }

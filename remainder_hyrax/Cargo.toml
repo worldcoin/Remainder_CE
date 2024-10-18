@@ -24,6 +24,7 @@ ff = "0.13.0"
 ndarray = "0.15.6"
 ndarray-npy = "0.8.1"
 rayon = "1.7"
+sha256 = "1.5.0"
 
 [features]
 parallel = []

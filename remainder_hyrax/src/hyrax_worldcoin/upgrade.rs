@@ -7,6 +7,7 @@ use ff::Field;
 use remainder::prover::GKRCircuitDescription;
 use remainder::utils::mle::pad_with;
 use remainder::worldcoin::test_helpers::{circuit_description_and_inputs, v2_circuit_description_and_inputs, v3_circuit_description_and_inputs};
+use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::halo2curves::{bn256::G1 as Bn256Point, group::Group};
 use remainder_shared_types::pedersen::PedersenCommitter;
 use remainder_shared_types::transcript::ec_transcript::{ECTranscript, ECTranscriptTrait};
@@ -23,6 +24,7 @@ use crate::hyrax_worldcoin::orb::{IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING};
 use crate::utils::vandermonde::VandermondeInverse;
 use thiserror::Error;
 use super::orb::SerializedImageCommitment;
+use sha256::digest as sha256_digest;
 
 type Scalar = Fr;
 type Base = Fq;
@@ -35,13 +37,16 @@ pub enum UpgradeError {
     NonBinaryIrisMaskCode(u8, bool, bool),
     #[error("Incorrect kernel values or thresholds in version {0} circuit, is_mask={1}, left_eye={2}.")]
     IncorrectKernelValuesOrThresholds(u8, bool, bool),
+    #[error("Image commitment does not match expected hash in version {0} circuit, is_mask={1}, left_eye={2}.")]
+    WrongHash(u8, bool, bool),
 }
 
 /// Verify the upgrade from v2 to v3 using the Hyrax proof system. Receives the [HyraxProof] for each combination of
 /// version, type (iris or mask) and eye, and returns, for each such combination, the corresponding mask or iris code.
+/// Checks that the image commitment matches the expected hash.
 pub fn verify_upgrade_v2_to_v3(
-    proofs: &HashMap<(u8, bool, bool), HyraxProof<Bn256Point>>,
-) -> Result<HashMap<(u8, bool, bool), (Vec<bool>, Vec<Bn256Point>)>, UpgradeError> {
+    proofs_and_hashes: &HashMap<(u8, bool, bool), (HyraxProof<Bn256Point>, String)>,
+) -> Result<HashMap<(u8, bool, bool), Vec<bool>>, UpgradeError> {
     // Create the Pedersen committer using the same reference string and parameters as on the Orb
     let committer: PedersenCommitter<Bn256Point> = PedersenCommitter::new(1 << IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING, None);
 
@@ -50,10 +55,16 @@ pub fn verify_upgrade_v2_to_v3(
         for is_mask in [false, true] {
             for is_left_eye in [false, true] {
                 dbg!(version, is_mask, is_left_eye);
-                let proof = proofs.get(&(version, is_mask, is_left_eye)).unwrap();
+                let (proof, expected_hash) = proofs_and_hashes.get(&(version, is_mask, is_left_eye)).unwrap();
                 match verify_iriscode(version, is_mask, is_left_eye, proof, &committer) {
                     Ok(result) => {
-                        results.insert((version, is_mask, is_left_eye), result);
+                        let (code, commitment) = result;
+                        // Check that the image commitment matches the expected hash.
+                        let commitment_hash = sha256_digest(&commitment.iter().flat_map(|p| p.to_bytes_compressed()).collect::<Vec<u8>>());
+                        if commitment_hash != *expected_hash {
+                            return Err(UpgradeError::WrongHash(version, is_left_eye, is_mask));
+                        }
+                        results.insert((version, is_mask, is_left_eye), code);
                     }
                     Err(e) => { return Err(e); }
                 }
