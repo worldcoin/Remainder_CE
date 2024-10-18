@@ -30,8 +30,7 @@ use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
 use crate::mle::mle_enum::MleEnum;
-use crate::mle::Mle;
-use crate::output_layer::{self, OutputLayer, OutputLayerDescription};
+use crate::output_layer::{OutputLayer, OutputLayerDescription};
 use crate::utils::mle::build_composite_mle;
 use crate::{
     claims::ClaimAggregator,
@@ -345,7 +344,7 @@ pub fn prove_circuit<F: Field>(
                 panic!("We don't support DenseMLE as output layers for now")
             }
             // --- Just write a single zero into the transcript since the counts (layer size) are already included in the circuit description ---
-            MleEnum::Zero(_) => transcript_writer.append_elements("output layer", &vec![F::ZERO]),
+            MleEnum::Zero(_) => transcript_writer.append_elements("output layer", &[F::ZERO]),
         };
 
         let challenges =

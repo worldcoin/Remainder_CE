@@ -477,8 +477,12 @@ mod tests {
         let mut nonzero_gates = vec![];
         nonzero_gates.push((0, 1));
 
-        let gate_node =
-            IdentityGateNode::new(&context, &dataparallel_first_mle_shred, nonzero_gates, None);
+        let gate_node = IdentityGateNode::new(
+            &context,
+            &dataparallel_first_mle_shred,
+            nonzero_gates,
+            Some(num_dataparallel_vars),
+        );
 
         let component_2 = EqualityCheckerComponent::new(
             &context,
@@ -536,7 +540,7 @@ mod tests {
             (0..1 << NUM_DATAPARALLEL_VARS)
                 .map(|idx| {
                     dataparallel_first_mle
-                        .get(idx + (1 << (NUM_DATAPARALLEL_VARS + NUM_FREE_VARS - 1)))
+                        .get(idx + (1 << (NUM_DATAPARALLEL_VARS)))
                         .unwrap()
                 })
                 .collect(),
