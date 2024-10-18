@@ -205,8 +205,7 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
         .for_each(|blinding_factor| {
             *blinding_factor = C::Scalar::random(&mut rng);
         });
-    let mle_coeffs_vec =
-        MleCoefficientsVector::ScalarFieldVector(input_mle.get_evals_vector().clone());
+    let mle_coeffs_vec = MleCoefficientsVector::ScalarFieldVector(input_mle.f.iter().collect_vec());
     let commitment_values = HyraxPCSEvaluationProof::compute_matrix_commitments(
         input_layer_desc.log_num_cols,
         &mle_coeffs_vec,

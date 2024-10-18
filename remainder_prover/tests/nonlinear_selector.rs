@@ -98,7 +98,7 @@ struct NonlinearSelectorTestInputs<F: Field> {
 }
 
 /// Creates the [GKRCircuitDescription] and an associated helper input
-/// function allowing for ease of proving for the dataparallel selector test circuit.
+/// function allowing for ease of proving.
 fn build_nonlinear_selector_test_circuit<F: Field>(
     num_vars_product_side: usize,
     num_vars_sel_side: usize,
