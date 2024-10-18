@@ -7,7 +7,7 @@ use crate::{
 use remainder::{
     layer::LayerId,
     mle::evals::MultilinearExtension,
-    worldcoin::{circuits::IriscodeProofDescription, io::read_bytes_from_file, test_helpers::circuit_description_and_inputs},
+    worldcoin::{circuits::IriscodeProofDescription, io::read_bytes_from_file, parameters_v2::IRISCODE_LEN as V2_IRISCODE_LEN, parameters_v3::IRISCODE_LEN as V3_IRISCODE_LEN, test_helpers::circuit_description_and_inputs},
 };
 use remainder_shared_types::{
     halo2curves::bn256::G1 as Bn256Point,
@@ -16,7 +16,7 @@ use remainder_shared_types::{
     Base, Scalar,
 };
 
-use super::{orb::{load_image_commitment, SerializedImageCommitment, IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING}, upgrade::{prove_single, verify_single}};
+use super::{orb::{load_image_commitment, SerializedImageCommitment, IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING}, upgrade::{prove_with_image_precommit, verify_iriscode}};
 
 #[test]
 fn test_small_circuit_both_layers_public() {
@@ -44,7 +44,7 @@ fn test_v2_iris_with_hyrax_precommit() {
     // Create a single RNG and Vandermonde inverse converter for all proofs.
     let blinding_rng = &mut rand::thread_rng();
     let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
-    let proof = prove_single(
+    let proof = prove_with_image_precommit(
         version,
         mask,
         load_image_commitment(version, mask, left_eye),
@@ -52,8 +52,8 @@ fn test_v2_iris_with_hyrax_precommit() {
         blinding_rng,
         converter,
     );
-    let code = verify_single(version, mask, &proof, &committer);
-    //FIXME assert length of code
+    let (code, _commitment) = verify_iriscode(version, mask, &proof, &committer);
+    assert_eq!(code.len(), V2_IRISCODE_LEN);
 }
 
 #[ignore] // Takes a long time to run
@@ -68,7 +68,15 @@ fn test_upgrade_v2_v3() {
         }
     }
     let proofs = super::upgrade::prove_upgrade_v2_to_v3(&data);
-    let _codes = super::upgrade::verify_upgrade_v2_to_v3(&proofs).unwrap();
+    let results = super::upgrade::verify_upgrade_v2_to_v3(&proofs).unwrap();
+    for version in 2..=3 {
+        for mask in [false, true] {
+            for left_eye in [false, true] {
+                let (code, _commitment) = results.get(&(version, mask, left_eye)).unwrap();
+                assert_eq!(code.len(), if version == 2 { V2_IRISCODE_LEN } else { V3_IRISCODE_LEN });
+            }
+        }
+    }
 }
 
 #[ignore] // Takes a long time to run

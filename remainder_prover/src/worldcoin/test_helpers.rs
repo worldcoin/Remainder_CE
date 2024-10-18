@@ -37,17 +37,17 @@ pub fn small_circuit_description_and_inputs() -> (IriscodeProofDescription<Fr>, 
 /// use remainder::worldcoin::test_helpers::circuit_description_and_inputs;
 /// let (desc, inputs) = circuit_description_and_inputs(2, false, None);
 /// ```
-pub fn circuit_description_and_inputs(version: u8, mask: bool, image_bytes: Option<Vec<u8>>) -> (IriscodeProofDescription<Fr>, HashMap<LayerId, MultilinearExtension<Fr>>) {
+pub fn circuit_description_and_inputs(version: u8, is_mask: bool, image_bytes: Option<Vec<u8>>) -> (IriscodeProofDescription<Fr>, HashMap<LayerId, MultilinearExtension<Fr>>) {
     let image_bytes = if let Some(image_bytes) = image_bytes {
         image_bytes
     } else {
-        let image_type = if mask { "mask" } else { "iris" };
+        let image_type = if is_mask { "mask" } else { "iris" };
         let image_path = format!("src/worldcoin/constants/v{version}/{image_type}/test_image.bin");
         read_bytes_from_file(&image_path)
     };
     match version {
-        2 => v2_circuit_description_and_inputs(mask, image_bytes),
-        3 => v3_circuit_description_and_inputs(mask, image_bytes),
+        2 => v2_circuit_description_and_inputs(is_mask, image_bytes),
+        3 => v3_circuit_description_and_inputs(is_mask, image_bytes),
         _ => panic!(),
     }
 }

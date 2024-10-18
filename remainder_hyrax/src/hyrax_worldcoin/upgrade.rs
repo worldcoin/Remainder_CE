@@ -12,6 +12,8 @@ use remainder_shared_types::transcript::ec_transcript::{ECTranscript, ECTranscri
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::transcript::Transcript;
 use remainder_shared_types::{Fq, Fr};
+use remainder::worldcoin::parameters_v2::IRISCODE_LEN as V2_IRISCODE_LEN;
+use remainder::worldcoin::parameters_v3::IRISCODE_LEN as V3_IRISCODE_LEN;
 
 use crate::hyrax_gkr::hyrax_input_layer::HyraxInputLayerDescription;
 use crate::hyrax_gkr::{self, HyraxProof};
@@ -42,24 +44,33 @@ pub fn verify_upgrade_v2_to_v3(
             for left_eye in [false, true] {
                 dbg!(version, mask, left_eye);
                 let proof = proofs.get(&(version, mask, left_eye)).unwrap();
-                let code = verify_single(version, mask, proof, &committer);
-                results.insert((version, mask, left_eye), code);
+                let result = verify_iriscode(version, mask, proof, &committer);
+                results.insert((version, mask, left_eye), result);
             }
         }
     }
     Ok(results)
 }
 
-pub fn verify_single(
+/// Verify that the iris/mask code in the supplied proof is correct, and return the unpadded iris/mask code, along with the
+/// commitment to the image.
+/// Checks, in particular:
+/// * That the [HyraxProof] verifies.
+/// * That the correct kernel values and thresholds are being used in the supplied proof.
+/// * That the MLE encoding the iris/mask code has only 0s in the padding region.
+/// * That the unpadded iris/mask code consists only of 0s and 1s.
+/// This is a helper function for the upgrade from v2 to v3.
+pub(crate) fn verify_iriscode(
     version: u8,
-    mask: bool,
+    is_mask: bool,
     proof: &HyraxProof<Bn256Point>,
     committer: &PedersenCommitter<Bn256Point>,
 ) -> (Vec<bool>, Vec<Bn256Point>) {
+    assert!(version == 2 || version == 3);
     // Get the circuit description, as well as the inputs if we were using a test image;
     // we'll use these to ensure that the correct kernel values and thresholds are being
     // used in the supplied proof.
-    let (proof_desc, test_inputs) = circuit_description_and_inputs(version, mask, None);
+    let (proof_desc, test_inputs) = circuit_description_and_inputs(version, is_mask, None);
 
     let mut hyrax_input_layers = HashMap::new();
     // The image, with the precommit (must use the same number of columns as were used at the time of committing!)
@@ -97,7 +108,7 @@ pub fn verify_single(
         .iter()
         .find(|(id, _)| id == &proof_desc.code_input_layer.layer_id)
         .unwrap().1.get_evals_vector();
-    let code = code_mle
+    let code: Vec<bool> = code_mle
         .iter()
         .map(|b|
             match b {
@@ -106,6 +117,9 @@ pub fn verify_single(
                 _ => panic!() // FIXME raise error
             }
         ).collect();
+    // Check that the MLE encoding the code used only 0s in the padding region
+    let code_len = if version == 2 { V2_IRISCODE_LEN } else { V3_IRISCODE_LEN };
+    code[code_len..].iter().for_each(|b| assert!(!b)); // FIXME raise error
     let image_commitment = proof.hyrax_input_proofs
         .iter()
         .find(|proof| proof.layer_id == proof_desc.image_input_layer.layer_id)
@@ -113,18 +127,19 @@ pub fn verify_single(
     (code, image_commitment)
 }
 
-// FIXME(Ben) document
-/// * `image` is unpadded
-pub fn prove_single(
+/// Prove a single instance of the iriscode circuit using the Hyrax proof system, using the provided
+/// precommitment for the image.
+/// This is a helper function for the upgrade from v2 to v3.
+pub(crate) fn prove_with_image_precommit(
     version: u8,
-    mask: bool,
+    is_mask: bool,
     image_commitment: SerializedImageCommitment,
     committer: &PedersenCommitter<Bn256Point>,
     blinding_rng: &mut rand::rngs::ThreadRng,
     converter: &mut VandermondeInverse<Scalar>,
 ) -> HyraxProof<Bn256Point> {
     // Build the circuit description and calculate inputs (including the iris/mask code).
-    let (proof_desc, inputs) = circuit_description_and_inputs(version, mask, Some(image_commitment.image.clone()));
+    let (proof_desc, inputs) = circuit_description_and_inputs(version, is_mask, Some(image_commitment.image.clone()));
     use crate::hyrax_gkr::hyrax_input_layer::HyraxProverInputCommitment;
 
     // Set up Hyrax input layer specification.
@@ -160,9 +175,10 @@ pub fn prove_single(
     )
 }
 
-/// Prove the upgrade from v2 to v3 using the Hyrax proof system. Receives the image, commitment and
-/// blinding for each combination of version, eye, and type (iris or mask), and returns, for each
+/// Prove the upgrade from v2 to v3 using the Hyrax proof system. Receives a [SerializedImageCommitment]
+/// for each combination of version, eye, and type (iris or mask), and returns, for each
 /// such combination, the corresponding [HyraxProof].
+/// (This is a convenience function for the mobile app).
 pub fn prove_upgrade_v2_to_v3(
     data: &HashMap<(u8, bool, bool), SerializedImageCommitment>,
 ) -> HashMap<(u8, bool, bool), HyraxProof<Bn256Point>> {
@@ -173,12 +189,13 @@ pub fn prove_upgrade_v2_to_v3(
     let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
 
     let mut proofs = HashMap::new();
+    // We iterate explicitly over the expected keys, to ensure that the HashMap is complete.
     for version in [2u8, 3u8] {
         for mask in [false, true] {
             for left_eye in [false, true] {
                 dbg!(version, mask, left_eye);
                 let commitment = data.get(&(version, left_eye, mask)).unwrap();
-                let proof = prove_single(
+                let proof = prove_with_image_precommit(
                     version,
                     mask,
                     commitment.clone(),
