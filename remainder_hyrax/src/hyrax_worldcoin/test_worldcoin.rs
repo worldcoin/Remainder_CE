@@ -16,7 +16,7 @@ use remainder_shared_types::{
     Base, Scalar,
 };
 
-use super::{orb::{load_image_commitment, IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING}, upgrade::{prove_single, verify_single}};
+use super::{orb::{load_image_commitment, SerializedImageCommitment, IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING}, upgrade::{prove_single, verify_single}};
 
 #[test]
 fn test_small_circuit_both_layers_public() {
@@ -44,13 +44,10 @@ fn test_v2_iris_with_hyrax_precommit() {
     // Create a single RNG and Vandermonde inverse converter for all proofs.
     let blinding_rng = &mut rand::thread_rng();
     let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
-    let (image, commitment, blinding_factors) = load_image_commitment(version, mask, left_eye);
     let proof = prove_single(
         version,
         mask,
-        image.to_vec(),
-        commitment.to_vec(),
-        blinding_factors.to_vec(),
+        load_image_commitment(version, mask, left_eye),
         &committer,
         blinding_rng,
         converter,
@@ -62,7 +59,7 @@ fn test_v2_iris_with_hyrax_precommit() {
 #[ignore] // Takes a long time to run
 #[test]
 fn test_upgrade_v2_v3() {
-    let mut data: HashMap<(u8, bool, bool), (Vec<u8>, Vec<u8>, Vec<u8>)> = HashMap::new();
+    let mut data: HashMap<(u8, bool, bool), SerializedImageCommitment> = HashMap::new();
     for version in 2..=3 {
         for mask in [false, true] {
             for left_eye in [false, true] {

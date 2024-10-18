@@ -16,8 +16,10 @@ use remainder_shared_types::{Fq, Fr};
 use crate::hyrax_gkr::hyrax_input_layer::HyraxInputLayerDescription;
 use crate::hyrax_gkr::{self, HyraxProof};
 use crate::hyrax_pcs::MleCoefficientsVector;
-use crate::hyrax_worldcoin::orb::{deserialize_blinding_factors_from_bytes_compressed, deserialize_commitment_from_bytes_compressed, IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING};
+use crate::hyrax_worldcoin::orb::{IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING};
 use crate::utils::vandermonde::VandermondeInverse;
+
+use super::orb::SerializedImageCommitment;
 
 type Scalar = Fr;
 type Base = Fq;
@@ -111,30 +113,19 @@ pub fn verify_single(
     (code, image_commitment)
 }
 
-// FIXME(Ben) document & make a struct that takes the three serialized commitment components
+// FIXME(Ben) document
 /// * `image` is unpadded
 pub fn prove_single(
     version: u8,
     mask: bool,
-    image: Vec<u8>,
-    commitment_bytes: Vec<u8>,
-    blinding_factors_bytes: Vec<u8>,
+    image_commitment: SerializedImageCommitment,
     committer: &PedersenCommitter<Bn256Point>,
     blinding_rng: &mut rand::rngs::ThreadRng,
     converter: &mut VandermondeInverse<Scalar>,
 ) -> HyraxProof<Bn256Point> {
-    // Deserialize the commitment and blinding factors.
-    let commitment = deserialize_commitment_from_bytes_compressed(&commitment_bytes);
-    let blinding_factors_matrix = deserialize_blinding_factors_from_bytes_compressed::<Bn256Point>(&blinding_factors_bytes);
     // Build the circuit description and calculate inputs (including the iris/mask code).
-    let (proof_desc, inputs) = circuit_description_and_inputs(version, mask, Some(image.to_vec()));
+    let (proof_desc, inputs) = circuit_description_and_inputs(version, mask, Some(image_commitment.image.clone()));
     use crate::hyrax_gkr::hyrax_input_layer::HyraxProverInputCommitment;
-    // Rebuild the image precommitment.
-    let image_precommit = HyraxProverInputCommitment {
-        mle: MleCoefficientsVector::<Bn256Point>::U8Vector(pad_with(0, &image)),
-        commitment: commitment,
-        blinding_factors_matrix: blinding_factors_matrix,
-    };
 
     // Set up Hyrax input layer specification.
     let mut hyrax_input_layers = HashMap::new();
@@ -146,7 +137,7 @@ pub fn prove_single(
     };
     hyrax_input_layers.insert(
         proof_desc.image_input_layer.layer_id,
-        (image_hyrax_input_layer_desc, Some(image_precommit)),
+        (image_hyrax_input_layer_desc, Some(image_commitment.into())),
     );
     // The digit multiplicities, without the precommit
     hyrax_input_layers.insert(
@@ -173,7 +164,7 @@ pub fn prove_single(
 /// blinding for each combination of version, eye, and type (iris or mask), and returns, for each
 /// such combination, the corresponding [HyraxProof].
 pub fn prove_upgrade_v2_to_v3(
-    data: &HashMap<(u8, bool, bool), (Vec<u8>, Vec<u8>, Vec<u8>)>,
+    data: &HashMap<(u8, bool, bool), SerializedImageCommitment>,
 ) -> HashMap<(u8, bool, bool), HyraxProof<Bn256Point>> {
     // Create the Pedersen committer using the same reference string and parameters as on the Orb
     let committer: PedersenCommitter<Bn256Point> = PedersenCommitter::new(1 << IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING, None);
@@ -186,13 +177,11 @@ pub fn prove_upgrade_v2_to_v3(
         for mask in [false, true] {
             for left_eye in [false, true] {
                 dbg!(version, mask, left_eye);
-                let (image, commitment_bytes, blinding_factors_bytes) = data.get(&(version, left_eye, mask)).unwrap();
+                let commitment = data.get(&(version, left_eye, mask)).unwrap();
                 let proof = prove_single(
                     version,
                     mask,
-                    image.to_vec(),
-                    commitment_bytes.to_vec(),
-                    blinding_factors_bytes.to_vec(),
+                    commitment.clone(),
                     &committer,
                     blinding_rng,
                     converter,
