@@ -49,10 +49,8 @@ pub fn dummy_sumcheck<F: Field>(
         let eval = compute_sumcheck_message_beta_cascade(expr, round_index, degree, &newbeta);
 
         if let Ok(SumcheckEvals(evaluations)) = eval {
-            // dbg!(&evaluations);
             messages.push((evaluations, challenge))
         } else {
-            // dbg!(&eval);
             panic!();
         };
 
@@ -101,10 +99,6 @@ pub fn verify_sumcheck_messages<F: Field>(
         let prev_at_r = evaluate_at_a_point(prev_evals, challenge.unwrap())
             .expect("could not evaluate at challenge point");
 
-        // dbg!(&prev_evals);
-        // dbg!(-prev_evals[0]);
-        // dbg!(prev_at_r);
-        // dbg!(curr_evals[0], curr_evals[1], curr_evals[0] + curr_evals[1]);
         // --- g_{i - 1}(r) should equal g_i(0) + g_i(1) ---
         if prev_at_r != curr_evals[0] + curr_evals[1] {
             return Err(VerifyError::SumcheckBad);
@@ -341,8 +335,6 @@ fn test_dummy_sumcheck_1() {
         LayerId::Input(0),
     );
     let layer_claims = get_dummy_claim(mle_output, &mut rng, None);
-
-    // dbg!(claimed_claim);
 
     let mle_ref_1 = mle_new;
     let mle_ref_2 = mle_2;

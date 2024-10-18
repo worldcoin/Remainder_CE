@@ -1,14 +1,9 @@
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::Field;
 
 use crate::{
-    input_layer::{
-        enum_input_layer::InputLayerDescriptionEnum, hyrax_input_layer::HyraxInputLayerDescription,
-        ligero_input_layer::LigeroInputLayerDescription,
-        public_input_layer::PublicInputLayerDescription,
-    },
+    input_layer::InputLayerDescription,
     layer::LayerId,
     layouter::{
         layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
@@ -18,7 +13,7 @@ use crate::{
     utils::mle::{argsort, pad_to_nearest_power_of_two},
 };
 
-use super::{InputLayerNode, InputLayerType};
+use super::InputLayerNode;
 
 /// Function which returns a vector of [MleIndex::Fixed] for prefix bits according to which
 /// position we are in the range from 0 to `total_num_bits` - `num_free_bits`.
@@ -145,18 +140,17 @@ fn invert_mle_bookkeeping_table<F: Field>(bookkeeping_table: Vec<F>) -> Vec<F> {
 }
 
 impl InputLayerNode {
-    /// From the circuit description map and a starting layer id,
-    /// create the circuit description of an input layer.
-    pub fn generate_input_circuit_description<F: Field>(
+    /// From the circuit description map and a starting layer id, create the circuit description of
+    /// an input layer, adding the input shreds to the circuit map.
+    pub fn generate_input_layer_description<F: Field>(
         &self,
         layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
-    ) -> Result<InputLayerDescriptionEnum<F>, DAGError> {
+    ) -> Result<InputLayerDescription, DAGError> {
         let input_layer_id = layer_id.get_and_inc();
         let Self {
             id: _,
             input_shreds,
-            input_layer_type,
         } = &self;
 
         let input_mle_num_vars = input_shreds
@@ -168,36 +162,9 @@ impl InputLayerNode {
             index_input_mles(&input_mle_num_vars);
         debug_assert_eq!(input_shred_indices.len(), input_shreds.len());
 
-        let out = match input_layer_type {
-            InputLayerType::LigeroInputLayer((rho_inv, ratio)) => {
-                let aux = LigeroAuxInfo::new(
-                    (1 << num_vars_combined_mle) as usize,
-                    *rho_inv,
-                    *ratio,
-                    None,
-                );
-                let ligero_input_layer_description: LigeroInputLayerDescription<F> =
-                    LigeroInputLayerDescription::new(
-                        input_layer_id.to_owned(),
-                        num_vars_combined_mle,
-                        aux,
-                    );
-                InputLayerDescriptionEnum::LigeroInputLayer(ligero_input_layer_description)
-            }
-            InputLayerType::PublicInputLayer => {
-                let public_input_layer_description = PublicInputLayerDescription::new(
-                    input_layer_id.to_owned(),
-                    num_vars_combined_mle,
-                );
-                InputLayerDescriptionEnum::PublicInputLayer(public_input_layer_description)
-            }
-            InputLayerType::HyraxInputLayer => {
-                let hyrax_input_layer_description = HyraxInputLayerDescription::new(
-                    input_layer_id.to_owned(),
-                    num_vars_combined_mle,
-                );
-                InputLayerDescriptionEnum::HyraxInputLayer(hyrax_input_layer_description)
-            }
+        let input_layer_description = InputLayerDescription {
+            layer_id: input_layer_id.to_owned(),
+            num_vars: num_vars_combined_mle,
         };
 
         input_shred_indices
@@ -213,6 +180,7 @@ impl InputLayerNode {
                     ),
                 );
             });
-        Ok(out)
+
+        Ok(input_layer_description)
     }
 }

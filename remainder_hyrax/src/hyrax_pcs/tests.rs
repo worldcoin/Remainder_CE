@@ -8,11 +8,10 @@ use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
 use remainder_shared_types::halo2curves::group::Group;
 use remainder_shared_types::halo2curves::CurveExt;
 use remainder_shared_types::pedersen::PedersenCommitter;
-use remainder_shared_types::transcript::ec_transcript::ECTranscriptReader;
-use remainder_shared_types::transcript::ec_transcript::ECTranscriptWriter;
+use remainder_shared_types::transcript::ec_transcript::ECTranscript;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 
-use crate::hyrax_pcs::HyraxPCSProof;
+use crate::hyrax_pcs::HyraxPCSEvaluationProof;
 use crate::hyrax_pcs::MleCoefficientsVector;
 
 type Scalar = <Bn256Point as Group>::Scalar;
@@ -37,46 +36,42 @@ fn sanity_check_test_honest_prover_small_identity() {
     let mle_evaluation_at_challenge = Scalar::one();
     let log_split_point = 1;
     let prover_random_generator = &mut rand::thread_rng();
-    let mut prover_transcript = ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new(
-        "testing proof of dot product - prover",
-    );
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let blinding_factors_matrix_rows = (0..2).map(|_| Scalar::one()).collect_vec();
-    let blinding_factor_evaluation = Scalar::one();
 
     let mut seed_matrix = [0u8; 32];
     OsRng.fill_bytes(&mut seed_matrix);
     let mut seed_eval = [0u8; 32];
     OsRng.fill_bytes(&mut seed_eval);
 
-    let comm_to_matrix = HyraxPCSProof::compute_matrix_commitments(
+    let comm_to_matrix = HyraxPCSEvaluationProof::compute_matrix_commitments(
         log_split_point,
         &input_layer_mle_coeff,
         &committer,
         &blinding_factors_matrix_rows,
     );
 
-    let hyrax_eval_proof = HyraxPCSProof::prove(
+    let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
         log_split_point,
         &input_layer_mle_coeff,
         &challenge_coordinates,
         &mle_evaluation_at_challenge,
         &committer_copy,
-        blinding_factor_evaluation,
         prover_random_generator,
-        &mut prover_transcript,
+        &mut transcript,
         &blinding_factors_matrix_rows,
     );
 
-    let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
-        prover_transcript.get_transcript(),
-    );
-    hyrax_eval_proof.verify_hyrax_evaluation_proof(
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+    hyrax_eval_proof.verify(
         log_split_point,
         &committer,
         &comm_to_matrix,
         &challenge_coordinates,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -100,41 +95,37 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
 
     let log_split_point = 1;
     let prover_random_generator = &mut rand::thread_rng();
-    let mut prover_transcript = ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new(
-        "testing proof of dot product - prover",
-    );
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let blinding_factors_matrix_rows = (0..4).map(|_| Scalar::one()).collect_vec();
-    let blinding_factor_evaluation = Scalar::one();
 
-    let comm_to_matrix = HyraxPCSProof::compute_matrix_commitments(
+    let comm_to_matrix = HyraxPCSEvaluationProof::compute_matrix_commitments(
         log_split_point,
         &input_layer_mle_coeff,
         &committer,
         &blinding_factors_matrix_rows,
     );
 
-    let hyrax_eval_proof = HyraxPCSProof::prove(
+    let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
         log_split_point,
         &input_layer_mle_coeff,
         &challenge_coordinates,
         &mle_evaluation_at_challenge,
         &committer_copy,
-        blinding_factor_evaluation,
         prover_random_generator,
-        &mut prover_transcript,
+        &mut transcript,
         &blinding_factors_matrix_rows,
     );
 
-    let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
-        prover_transcript.get_transcript(),
-    );
-    hyrax_eval_proof.verify_hyrax_evaluation_proof(
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+    hyrax_eval_proof.verify(
         log_split_point,
         &committer,
         &comm_to_matrix,
         &challenge_coordinates,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -180,43 +171,39 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         });
     let log_split_point = 1;
     let prover_random_generator = &mut rand::thread_rng();
-    let mut prover_transcript = ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new(
-        "testing proof of dot product - prover",
-    );
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let blinding_factors_matrix_rows = (0..4)
         .map(|_| Scalar::from(rand::random::<u64>()))
         .collect_vec();
-    let blinding_factor_evaluation = Scalar::from(rand::random::<u64>());
 
-    let comm_to_matrix = HyraxPCSProof::compute_matrix_commitments(
+    let comm_to_matrix = HyraxPCSEvaluationProof::compute_matrix_commitments(
         log_split_point,
         &input_layer_mle_coeff,
         &committer,
         &blinding_factors_matrix_rows,
     );
 
-    let hyrax_eval_proof = HyraxPCSProof::prove(
+    let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
         log_split_point,
         &input_layer_mle_coeff,
         &challenge_coordinates,
         &mle_evaluation_at_challenge,
         &committer_copy,
-        blinding_factor_evaluation,
         prover_random_generator,
-        &mut prover_transcript,
+        &mut transcript,
         &blinding_factors_matrix_rows,
     );
 
-    let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
-        prover_transcript.get_transcript(),
-    );
-    hyrax_eval_proof.verify_hyrax_evaluation_proof(
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+    hyrax_eval_proof.verify(
         log_split_point,
         &committer,
         &comm_to_matrix,
         &challenge_coordinates,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -243,8 +230,10 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         .map(|_| Scalar::from(rand::random::<u64>()))
         .collect_vec();
 
-    let (challenge_vec, _) =
-        HyraxPCSProof::<Bn256Point>::compute_l_r_from_log_n_cols(0, &challenge_coordinates);
+    let (challenge_vec, _) = HyraxPCSEvaluationProof::<Bn256Point>::compute_l_r_from_log_n_cols(
+        0,
+        &challenge_coordinates,
+    );
 
     let mle_evaluation_at_challenge = input_layer_mle_coeff_raw_vec
         .iter()
@@ -254,43 +243,39 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         });
     let log_split_point = 9;
     let prover_random_generator = &mut rand::thread_rng();
-    let mut prover_transcript = ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new(
-        "testing proof of dot product - prover",
-    );
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let blinding_factors_matrix_rows = (0..(1 << 9))
         .map(|_| Scalar::from(rand::random::<u64>()))
         .collect_vec();
-    let blinding_factor_evaluation = Scalar::from(rand::random::<u64>());
 
-    let comm_to_matrix = HyraxPCSProof::compute_matrix_commitments(
+    let comm_to_matrix = HyraxPCSEvaluationProof::compute_matrix_commitments(
         log_split_point,
         &input_layer_mle_coeff,
         &committer,
         &blinding_factors_matrix_rows,
     );
 
-    let hyrax_eval_proof = HyraxPCSProof::prove(
+    let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
         log_split_point,
         &input_layer_mle_coeff,
         &challenge_coordinates,
         &mle_evaluation_at_challenge,
         &committer_copy,
-        blinding_factor_evaluation,
         prover_random_generator,
-        &mut prover_transcript,
+        &mut transcript,
         &blinding_factors_matrix_rows,
     );
 
-    let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
-        prover_transcript.get_transcript(),
-    );
-    hyrax_eval_proof.verify_hyrax_evaluation_proof(
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+    hyrax_eval_proof.verify(
         log_split_point,
         &committer,
         &comm_to_matrix,
         &challenge_coordinates,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -312,7 +297,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_all_zero() {
         .collect_vec();
 
     let commit_timer = start_timer!(|| "commit time");
-    HyraxPCSProof::compute_matrix_commitments(
+    HyraxPCSEvaluationProof::compute_matrix_commitments(
         9,
         &input_layer_mle_coeff,
         &committer,
@@ -342,7 +327,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_all_64_bit_rand() {
         .collect_vec();
 
     let commit_timer = start_timer!(|| "commit time");
-    HyraxPCSProof::compute_matrix_commitments(
+    HyraxPCSEvaluationProof::compute_matrix_commitments(
         9,
         &input_layer_mle_coeff,
         &committer,

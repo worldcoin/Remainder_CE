@@ -20,14 +20,14 @@ use crate::{
     builders::layer_builder::LayerBuilder,
     claims::Claim,
     expression::{
-        circuit_expr::{filter_bookkeeping_table, ExprDescription, MleDescription},
+        circuit_expr::{filter_bookkeeping_table, ExprDescription},
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
         verifier_expr::VerifierExpr,
     },
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{betavalues::BetaValues, dense::DenseMle},
+    mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription},
     sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
 };
 
@@ -120,12 +120,18 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         let nonlinear_rounds = self.nonlinear_rounds.take().unwrap();
 
         for round_index in &nonlinear_rounds {
-            self.prove_nonlinear_round(transcript_writer, *round_index)?;
-            // TODO(Makis): Add debug assertion that g_i(0) + g_i(1) == g_{i-1}(r_i).
+            // First compute the appropriate number of univariate evaluations for this round.
+            let prover_sumcheck_message = self.compute_round_sumcheck_message(*round_index)?;
+            // Append the evaluations to the transcript.
+            transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
+            // Sample the challenge
+            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            // "Bind" the challenge to the expression at this point.
+            self.bind_round_variable(*round_index, challenge)?;
         }
 
         // By now, `self.expression` should be fully bound.
-        // TODO(Makis): Add assertion for that.
+        assert_eq!(self.expression.get_expression_num_free_variables(), 0);
 
         // Append the values of the leaf MLEs to the transcript.
         self.append_leaf_mles_to_transcript(transcript_writer)?;
@@ -415,10 +421,6 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         // `claim.get_result()` due to how we initialized `g_prev_round`.
         let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge)?;
 
-        // dbg!(&challenges, &claim_nonlinear_vals);
-        // dbg!(&g_final_r_final);
-        // dbg!(&expr_value_at_challenge_point);
-        // dbg!(&beta_fn_evaluated_at_challenge_point);
         // Final check:
         // `\sum_{b_2} \sum_{b_4} P(g_1, b_2, g_3, b_4) * \beta( (b_2, b_4), (g_2, g_4) )`.
         // P(g_1, challenge[0], g_3, challenge[0]) * \beta( challenge, (g_2, g_4) )
@@ -527,7 +529,6 @@ impl<F: Field> RegularLayer<F> {
     /// layer which are linear, and then appropriately initializing the
     /// necessary beta values over the nonlinear rounds.
     fn start_sumcheck(&mut self, claim: &Claim<F>) -> Result<(), LayerError> {
-        println!("Starting sumcheck for layer: {:?}", self.id);
         let claim_point = claim.get_point();
 
         // Grab and index the expression.
@@ -565,40 +566,6 @@ impl<F: Field> RegularLayer<F> {
         // Store the nonlinear rounds of the expression within the layer so
         // that we know these are the rounds we perform sumcheck over.
         self.nonlinear_rounds = Some(expression_nonlinear_indices);
-
-        Ok(())
-    }
-
-    /// Performs a round of the sumcheck protocol on this Layer.
-    fn prove_nonlinear_round(
-        &mut self,
-        transcript_writer: &mut impl ProverTranscript<F>,
-        round_index: usize,
-    ) -> Result<(), LayerError> {
-        println!("Proving round: {round_index}");
-
-        // Grabs the degree of univariate polynomial we are sending over.
-        let degree = get_round_degree(&self.expression, round_index);
-
-        // Compute the sumcheck message for this round.
-        let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
-            &self.expression,
-            round_index,
-            degree,
-            self.beta_vals.as_ref().unwrap(),
-        )?
-        .0;
-
-        transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
-
-        let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-
-        self.expression.fix_variable(round_index, challenge);
-
-        self.beta_vals
-            .as_mut()
-            .unwrap()
-            .beta_update(round_index, challenge);
 
         Ok(())
     }

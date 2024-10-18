@@ -68,6 +68,13 @@ impl NodeId {
     }
 }
 
+/// Implement Display for NodeId, so that we can use it in error messages
+impl std::fmt::Display for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#x}", self.0)
+    }
+}
+
 /// A Node in the directed acyclic graph (DAG). The directed edges in the DAG model the dependencies
 /// between nodes, with the dependent node being the target of the edge and the dependency being the
 /// source.

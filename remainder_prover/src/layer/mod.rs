@@ -17,8 +17,9 @@ use thiserror::Error;
 
 use crate::{
     claims::{Claim, ClaimError},
-    expression::{circuit_expr::MleDescription, expr_errors::ExpressionError},
+    expression::expr_errors::ExpressionError,
     layouter::layouting::CircuitMap,
+    mle::mle_description::MleDescription,
     sumcheck::InterpError,
 };
 use remainder_shared_types::{
@@ -50,6 +51,9 @@ pub enum LayerError {
     #[error("Transcript Error: {0}")]
     /// Transcript Error
     TranscriptError(#[from] TranscriptReaderError),
+    /// Incorrect number of variable bindings
+    #[error("Layer {0} requires {1} variable bindings, but {2} were provided")]
+    NumVarsMismatch(LayerId, usize, usize),
 }
 
 /// Errors to do with verifying a layer while working with a type implementing
@@ -211,13 +215,42 @@ pub trait VerifierLayer<F: Field> {
 pub enum LayerId {
     /// An Mle located in the input layer
     Input(usize),
-    /// A layer between the output layer and input layers
-    Layer(usize),
     /// A layer representing values sampled from the verifier via Fiat-Shamir
     FiatShamirChallengeLayer(usize),
+    /// A layer between the output layer and input layers
+    Layer(usize),
+}
+
+/// Implement Display for LayerId, so that we can use it in error messages
+impl std::fmt::Display for LayerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LayerId::Input(id) => write!(f, "Input Layer {}", id),
+            LayerId::Layer(id) => write!(f, "Layer {}", id),
+            LayerId::FiatShamirChallengeLayer(id) => {
+                write!(f, "Fiat-Shamir Challenge Layer {}", id)
+            }
+        }
+    }
 }
 
 impl LayerId {
+    /// Returns the underlying usize if self is a variant of type Input, otherwise panics.
+    pub fn get_raw_input_layer_id(&self) -> usize {
+        match self {
+            LayerId::Input(id) => *id,
+            _ => panic!("Expected LayerId::Input, found {:?}", self),
+        }
+    }
+
+    /// Returns the underlying usize if self is a variant of type Input, otherwise panics.
+    pub fn get_raw_layer_id(&self) -> usize {
+        match self {
+            LayerId::Layer(id) => *id,
+            _ => panic!("Expected LayerId::Layer, found {:?}", self),
+        }
+    }
+
     /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number
     pub fn next(&self) -> LayerId {
         match self {

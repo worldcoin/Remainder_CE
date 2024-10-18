@@ -10,32 +10,20 @@ use remainder_shared_types::{
 use thiserror::Error;
 
 use crate::{
-    input_layer::enum_input_layer::InputLayerEnum,
-    layer::{combine_mle_refs::CombineMleRefError, layer_enum::LayerEnum, LayerError},
+    layer::{layer_enum::LayerEnum, LayerError},
     mle::dense::DenseMle,
     prover::GKRError,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    input_layer::InputLayer,
-    layer::{Layer, LayerId},
-};
+use crate::layer::{Layer, LayerId};
 
 /// Errors to do with aggregating and collecting claims.
 #[derive(Error, Debug, Clone)]
 pub enum ClaimError {
-    /// The Layer has not finished the sumcheck protocol.
-    #[error("The Layer has not finished the sumcheck protocol")]
-    SumCheckNotComplete,
-
     /// MLE indices must all be fixed.
     #[error("MLE indices must all be fixed")]
     ClaimMleIndexError,
-
-    /// Layer ID not assigned.
-    #[error("Layer ID not assigned")]
-    LayerMleError,
 
     /// MLE within MleRef has multiple values within it.
     #[error("MLE within MleRef has multiple values within it")]
@@ -45,10 +33,6 @@ pub enum ClaimError {
     #[error("Error aggregating claims")]
     ClaimAggroError,
 
-    /// Should be evaluating to a sum.
-    #[error("Should be evaluating to a sum")]
-    ExpressionEvalError,
-
     /// All claims in a group should agree on the number of variables.
     #[error("All claims in a group should agree on the number of variables")]
     NumVarsMismatch,
@@ -56,10 +40,6 @@ pub enum ClaimError {
     /// All claims in a group should agree the destination layer field.
     #[error("All claims in a group should agree the destination layer field")]
     LayerIdMismatch,
-
-    /// Error while combining mle refs in order to evaluate challenge point.
-    #[error("Error while combining mle refs in order to evaluate challenge point")]
-    MleRefCombineError(#[from] CombineMleRefError),
 
     /// Zero MLE refs cannot be used as intermediate values within a circuit!
     #[error("Zero MLE refs cannot be used as intermediate values within a circuit")]
@@ -112,9 +92,6 @@ pub trait ClaimAggregator<F: Field> {
     /// claims for.
     type Layer: Layer<F>;
 
-    /// The `InputLayer` this claim aggregator aggregates claims for.
-    type InputLayer: InputLayer<F>;
-
     /// Creates an empty [ClaimAggregator], ready to track claims.
     fn new() -> Self;
 
@@ -139,22 +116,6 @@ pub trait ClaimAggregator<F: Field> {
     fn prover_aggregate_claims(
         &self,
         layer: &LayerEnum<F>,
-        output_mles_from_layer: &[DenseMle<F>],
-        transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<Claim<F>, GKRError>;
-
-    /// Similar to `prover_aggregate_claims` but for an input layer.
-    ///
-    /// Aggregates all the claims made on `input_layer` and returns a single
-    /// claim.
-    ///
-    /// Should be called only after all claims for `input_layer` have been
-    /// retrieved using `extract_claims`.
-    ///
-    /// Adds any communication to the F-S Transcript as needed.
-    fn prover_aggregate_claims_input(
-        &self,
-        layer: &InputLayerEnum<F>,
         output_mles_from_layer: &[DenseMle<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError>;

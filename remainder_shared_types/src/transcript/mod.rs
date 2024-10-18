@@ -1,11 +1,14 @@
 //! Types for modeling and interacting with a transcript sponge when applying the
 //! Fiat-Shamir transformation on a an interactive protocol.
 
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::warn;
 
 use crate::Field;
+use std::fmt::Debug;
 
 pub mod ec_transcript;
 pub mod keccak_transcript;
@@ -18,7 +21,7 @@ pub mod test_transcript;
 /// operating on field elements. It is typically used for representing the
 /// transcript of an interactive protocol turned non-interactive view
 /// Fiat-Shamir.
-pub trait TranscriptSponge<F>: Clone + Send + Sync + Default {
+pub trait TranscriptSponge<F>: Clone + Send + Sync + Default + Debug {
     /// Absorb a single field element `elem`.
     fn absorb(&mut self, elem: F);
 
@@ -52,14 +55,14 @@ enum Operation<F> {
 /// `TranscriptWriter`, and is then serialized and saved on disk as part of the
 /// generated proof. The verifier de-serializes the transcript and can access it
 /// through the `TranscriptReader` interface.
-#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Clone, Serialize, Deserialize, Debug)]
 pub struct Transcript<T> {
     /// A label used to identify this transcript. Used for debugging purposes.
     label: String,
 
     /// The content of the transcript represented as a sequence of operations
     /// used to generate it.
-    transcript_operations: Vec<Operation<T>>,
+    operations: Vec<Operation<T>>,
 }
 
 impl<F: Clone> Transcript<F> {
@@ -67,7 +70,7 @@ impl<F: Clone> Transcript<F> {
     pub fn new(label: &str) -> Self {
         Self {
             label: String::from(label),
-            transcript_operations: vec![],
+            operations: vec![],
         }
     }
 
@@ -75,7 +78,7 @@ impl<F: Clone> Transcript<F> {
     /// `label` is an identifier for this operation that can be used for sanity
     /// checking by the verifier.
     pub fn append_elements(&mut self, label: &str, elements: &[F]) {
-        self.transcript_operations
+        self.operations
             .push(Operation::Append(String::from(label), elements.to_vec()));
     }
 
@@ -83,8 +86,21 @@ impl<F: Clone> Transcript<F> {
     /// `label` is an identifier for this operation that can be used for sanity
     /// checking by the verifier.
     pub fn squeeze_elements(&mut self, label: &str, num_elements: usize) {
-        self.transcript_operations
+        self.operations
             .push(Operation::Squeeze(String::from(label), num_elements));
+    }
+}
+
+impl<F> Display for Transcript<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.operations.iter().try_for_each(|op| match op {
+            Operation::Append(label, elements) => {
+                writeln!(f, "Append: \"{}\" with {} elements", label, elements.len())
+            }
+            Operation::Squeeze(label, num_elements) => {
+                writeln!(f, "Squeeze: \"{}\" with {} elements", label, num_elements)
+            }
+        })
     }
 }
 
@@ -195,16 +211,13 @@ pub trait VerifierTranscript<F> {
 /// Errors that a `TranscriptReader` may produce.
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum TranscriptReaderError {
-    #[error("Transcript indices out of bounds")]
-    InternalIndicesError,
     #[error("An unexpected consume operation was requested")]
     ConsumeError,
     #[error("An unexpected squeeze operation was requested")]
     SqueezeError,
 }
 
-/// The verifier-side interface for interacting with a transcript sponge. A
-/// `TranscriptReader` is typically created using a `Transcript` produced by a
+/// A `TranscriptReader` is typically created using a `Transcript` produced by a
 /// `TranscriptWriter`.
 ///
 /// Its operation is similar to that of the writer, except that instead of an
@@ -238,11 +251,6 @@ impl<F: Field, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReade
     /// The operation can fail with:
     /// * `TranscriptReaderError::ConsumeError`: if there are no more elements
     ///   to consume or if a squeeze was expected.
-    /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
-    ///   is invalid. This is an internal error which should never appear under
-    ///   normal circumstances.
-    ///
-    /// TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
     /// by the `TranscriptWriter` for the corresponding operation. If the labels
@@ -251,7 +259,7 @@ impl<F: Field, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReade
     fn consume_element(&mut self, label: &'static str) -> Result<F, TranscriptReaderError> {
         let (operation_idx, element_idx) = self.next_element;
 
-        match self.transcript.transcript_operations.get(operation_idx) {
+        match self.transcript.operations.get(operation_idx) {
             None => Err(TranscriptReaderError::ConsumeError),
             Some(Operation::Squeeze(_, _)) => Err(TranscriptReaderError::ConsumeError),
             Some(Operation::Append(expected_label, v)) => {
@@ -259,7 +267,11 @@ impl<F: Field, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReade
                     warn!("Label mismatch on TranscriptReader consume_element. Expected \"{}\" but instead got \"{}\".", expected_label, label);
                 }
                 match v.get(element_idx) {
-                    None => Err(TranscriptReaderError::InternalIndicesError),
+                    None => {
+                        // This should never happen if `self.advance_indices()` maintains its
+                        // invariants. Panicking because we reached an inconsistent state.
+                        panic!("Internal TranscriptReader Error: indices are in an inconsistent state!");
+                    }
                     Some(&element) => {
                         self.advance_indices()?;
                         self.sponge.absorb(element);
@@ -278,11 +290,6 @@ impl<F: Field, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReade
     ///   elements remain in the transcript or if a squeeze operation was
     ///   expected to occur at any point before the consumption of
     ///   `num_elements` elements.
-    /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
-    ///   is invalid. This is an internal error which should never appear under
-    ///   normal circumstances.
-    ///
-    /// TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
     /// by the `TranscriptWriter` for the corresponding operations. In
@@ -308,11 +315,6 @@ impl<F: Field, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReade
     /// * `TranscriptReaderError::SqueezeError`: if a squeeze is requested at a
     ///   time when either a consume operation was expected or no more
     ///   operations were expected.
-    /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
-    ///   is invalid. This is an internal error which should never appear under
-    ///   normal circumstances.
-    ///
-    /// TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
     /// by the `TranscriptWriter` for the corresponding operation. If the labels
@@ -321,7 +323,7 @@ impl<F: Field, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReade
     fn get_challenge(&mut self, label: &'static str) -> Result<F, TranscriptReaderError> {
         let (operation_idx, element_idx) = self.next_element;
 
-        match self.transcript.transcript_operations.get(operation_idx) {
+        match self.transcript.operations.get(operation_idx) {
             None => Err(TranscriptReaderError::SqueezeError),
             Some(Operation::Append(_, _)) => Err(TranscriptReaderError::SqueezeError),
             Some(Operation::Squeeze(expected_label, num_elements)) => {
@@ -344,11 +346,6 @@ impl<F: Field, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReade
     /// * `TranscriptReaderError::SqueezeError`: if any of the squeeze
     ///   operations requested does not correspond to a squeeze operation
     ///   performed by the `TranscriptWriter` that produced the transcript.
-    /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
-    ///   is invalid. This is an internal error which should never appear under
-    ///   normal circumstances.
-    ///
-    /// TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
     /// by the `TranscriptWriter` for the corresponding operations. In
@@ -385,8 +382,11 @@ impl<F: std::fmt::Debug, T: Default> TranscriptReader<F, T> {
     fn advance_indices(&mut self) -> Result<(), TranscriptReaderError> {
         let (operation_idx, element_idx) = self.next_element;
 
-        match self.transcript.transcript_operations.get(operation_idx) {
-            None => Err(TranscriptReaderError::InternalIndicesError),
+        match self.transcript.operations.get(operation_idx) {
+            None => {
+                // `advance_indices` should never be called in an already inconsistent state.
+                panic!("Internal TranscriptReader Error: attempt to advance indices in an already inconsistent state!");
+            }
             Some(Operation::Append(_, v)) => {
                 if element_idx + 1 >= v.len() {
                     self.next_element = (operation_idx + 1, 0);
@@ -455,7 +455,7 @@ mod tests {
 
         let expected_transcript = Transcript::<Fr> {
             label: String::from("New tw"),
-            transcript_operations: appended_elements,
+            operations: appended_elements,
         };
 
         assert_eq!(transcript, expected_transcript);
