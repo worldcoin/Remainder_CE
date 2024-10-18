@@ -37,8 +37,8 @@ fn test_small_circuit_with_hyrax_layer() {
 #[test]
 fn test_v2_iris_with_hyrax_precommit() {
     let version = 2;
-    let left_eye = true;
-    let mask = false;
+    let is_left_eye = true;
+    let is_mask = false;
     // Create the Pedersen committer using the same reference string and parameters as on the Orb
     let committer: PedersenCommitter<Bn256Point> = PedersenCommitter::new(1 << IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING, None);
     // Create a single RNG and Vandermonde inverse converter for all proofs.
@@ -46,13 +46,13 @@ fn test_v2_iris_with_hyrax_precommit() {
     let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     let proof = prove_with_image_precommit(
         version,
-        mask,
-        load_image_commitment(version, mask, left_eye),
+        is_mask,
+        load_image_commitment(version, is_mask, is_left_eye),
         &committer,
         blinding_rng,
         converter,
     );
-    let (code, _commitment) = verify_iriscode(version, mask, &proof, &committer);
+    let (code, _commitment) = verify_iriscode(version, is_mask, is_left_eye, &proof, &committer).unwrap();
     assert_eq!(code.len(), V2_IRISCODE_LEN);
 }
 
