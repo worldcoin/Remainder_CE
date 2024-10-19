@@ -41,3 +41,7 @@ path = "src/bin/run_iriscode_circuit.rs"
 [[bin]]
 name = "get_circuit_description"
 path = "src/bin/get_circuit_description.rs"
+
+[[bin]]
+name = "worldcoin"
+path = "src/bin/worldcoin.rs"
