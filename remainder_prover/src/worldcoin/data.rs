@@ -1,6 +1,3 @@
-use itertools::Itertools;
-use ndarray::{Array, Array2};
-use remainder_shared_types::Field;
 use super::parameters::{decode_i64_array, decode_wirings};
 use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::mle::bundled_input_mle::to_slice_of_vectors;
@@ -8,6 +5,9 @@ use crate::mle::evals::MultilinearExtension;
 use crate::utils::arithmetic::i64_to_field;
 use crate::utils::mle::pad_with;
 use crate::worldcoin::parameters::decode_i32_array;
+use itertools::Itertools;
+use ndarray::{Array, Array2};
+use remainder_shared_types::Field;
 
 /// Input data for the Worldcoin iriscode circuit.
 #[derive(Debug, Clone)]
@@ -207,10 +207,8 @@ pub fn load_worldcoin_data_v2<
     image_bytes: Vec<u8>,
     is_mask: bool,
 ) -> IriscodeCircuitData<F> {
-    let image: Array2<u8> = Array2::from_shape_vec(
-        (IM_NUM_ROWS, IM_NUM_COLS),
-        image_bytes
-    ).unwrap();
+    let image: Array2<u8> =
+        Array2::from_shape_vec((IM_NUM_ROWS, IM_NUM_COLS), image_bytes).unwrap();
 
     use super::parameters_v2::{
         IRIS_RH_MULTIPLICAND, IRIS_THRESHOLDS, MASK_RH_MULTIPLICAND, MASK_THRESHOLDS, WIRINGS,
@@ -265,10 +263,8 @@ pub fn load_worldcoin_data_v3<
     image_bytes: Vec<u8>,
     is_mask: bool,
 ) -> IriscodeCircuitData<F> {
-    let image: Array2<u8> = Array2::from_shape_vec(
-        (IM_NUM_ROWS, IM_NUM_COLS),
-        image_bytes
-    ).unwrap();
+    let image: Array2<u8> =
+        Array2::from_shape_vec((IM_NUM_ROWS, IM_NUM_COLS), image_bytes).unwrap();
     use super::parameters_v3::{
         IRIS_RH_MULTIPLICAND, IRIS_THRESHOLDS, MASK_RH_MULTIPLICAND, MASK_THRESHOLDS, WIRINGS,
     };

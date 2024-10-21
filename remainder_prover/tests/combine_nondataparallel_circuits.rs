@@ -1,28 +1,30 @@
+use std::collections::HashMap;
+
 use ark_std::test_rng;
 
 use itertools::Itertools;
 use remainder::{
+    layer::LayerId,
     layouter::{
-        compiling::LayouterCircuit,
-        component::{Component, ComponentSet},
+        component::Component,
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerNodeData},
+            circuit_inputs::{InputLayerNode, InputShred},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context,
+            CircuitNode, Context, NodeId,
         },
     },
-    prover::helpers::test_circuit,
+    mle::evals::MultilinearExtension,
+    prover::{generate_circuit_description, helpers::test_circuit_new, GKRCircuitDescription},
 };
-use remainder_shared_types::{Field, Fr};
+use remainder_shared_types::Field;
 
 use utils::{
-    ConstantScaledSumBuilderComponent, DifferenceBuilderComponent, ProductScaledBuilderComponent,
-    ProductSumBuilderComponent,
+    get_dummy_random_mle, ConstantScaledSumBuilderComponent, DifferenceBuilderComponent,
+    ProductScaledBuilderComponent, ProductSumBuilderComponent,
 };
 
-use crate::utils::get_dummy_input_shred_and_data;
 pub mod utils;
 
 struct ConstantScaledCircuitComponent<F: Field> {
@@ -192,37 +194,86 @@ where
     }
 }
 
+/// Struct which allows for easy "semantic" feeding of inputs into the circuit.
+struct CombinedNondataparallelTestInputs<F: Field> {
+    mle_1: MultilinearExtension<F>,
+    mle_2: MultilinearExtension<F>,
+}
+
+/// Creates the [GKRCircuitDescription] and an associated helper input
+/// function allowing for ease of proving for the combined
+/// dataparallel/non-dataparallel circuit.
+fn build_combined_nondataparallel_circuit<F: Field>(
+    mle_1_2_vars: usize,
+) -> (
+    GKRCircuitDescription<F>,
+    impl Fn(CombinedNondataparallelTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
+) {
+    // --- Create global context manager ---
+    let context = Context::new();
+
+    // --- All inputs are public ---
+    let public_input_layer_node = InputLayerNode::new(&context, None);
+
+    // --- "Semantic" circuit inputs ---
+    let mle_1_shred = InputShred::new(&context, mle_1_2_vars, &public_input_layer_node);
+    let mle_2_shred = InputShred::new(&context, mle_1_2_vars, &public_input_layer_node);
+
+    // --- Save IDs to be used later ---
+    let mle_1_id = mle_1_shred.id();
+    let mle_2_id = mle_2_shred.id();
+
+    // --- Create the circuit components ---
+    let component_1 = ProductScaledSumCircuitComponent::new(&context, &mle_1_shred, &mle_2_shred);
+    let component_2 = SumConstantCircuitComponent::new(&context, &mle_1_shred, &mle_2_shred);
+    let component_3 = ConstantScaledCircuitComponent::new(&context, &mle_1_shred, &mle_2_shred);
+
+    let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![
+        public_input_layer_node.into(),
+        mle_1_shred.into(),
+        mle_2_shred.into(),
+    ];
+    all_circuit_nodes.extend(component_1.yield_nodes());
+    all_circuit_nodes.extend(component_2.yield_nodes());
+    all_circuit_nodes.extend(component_3.yield_nodes());
+
+    let (circuit_description, convert_input_shreds_to_input_layers, _) =
+        generate_circuit_description(all_circuit_nodes).unwrap();
+
+    // --- Write closure which allows easy usage of circuit inputs ---
+    let circuit_data_fn =
+        move |combined_nondataparallel_test_inputs: CombinedNondataparallelTestInputs<F>| {
+            let input_shred_id_to_data_mapping: HashMap<NodeId, MultilinearExtension<F>> = vec![
+                (mle_1_id, combined_nondataparallel_test_inputs.mle_1),
+                (mle_2_id, combined_nondataparallel_test_inputs.mle_2),
+            ]
+            .into_iter()
+            .collect();
+            convert_input_shreds_to_input_layers(input_shred_id_to_data_mapping).unwrap()
+        };
+
+    (circuit_description, circuit_data_fn)
+}
+
 #[test]
 fn test_combined_nondataparallel_circuit_newmainder() {
     const VARS_MLE_1_2: usize = 2;
     let mut rng = test_rng();
 
-    let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None);
-        let (input_mle_1, input_mle_1_data) =
-            get_dummy_input_shred_and_data(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
-        let (input_mle_2, input_mle_2_data) =
-            get_dummy_input_shred_and_data(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
-        let input_data = InputLayerNodeData::new(
-            input_layer.id(),
-            vec![input_mle_1_data, input_mle_2_data],
-        );
+    // --- Generate circuit inputs ---
+    let mle_1 = get_dummy_random_mle(VARS_MLE_1_2, &mut rng).mle;
+    let mle_2 = get_dummy_random_mle(VARS_MLE_1_2, &mut rng).mle;
 
-        let component_1 = ProductScaledSumCircuitComponent::new(ctx, &input_mle_1, &input_mle_2);
-        let component_2 = SumConstantCircuitComponent::new(ctx, &input_mle_1, &input_mle_2);
-        let component_3 = ConstantScaledCircuitComponent::new(ctx, &input_mle_1, &input_mle_2);
+    // --- Create circuit description + input helper function ---
+    let (circuit_description, input_helper_fn) =
+        build_combined_nondataparallel_circuit(VARS_MLE_1_2);
 
-        let mut all_nodes: Vec<NodeEnum<Fr>> =
-            vec![input_layer.into(), input_mle_1.into(), input_mle_2.into()];
+    // --- Convert input data into circuit inputs which are assignable by prover ---
+    let circuit_inputs = input_helper_fn(CombinedNondataparallelTestInputs { mle_1, mle_2 });
 
-        all_nodes.extend(component_1.yield_nodes());
-        all_nodes.extend(component_2.yield_nodes());
-        all_nodes.extend(component_3.yield_nodes());
-        (
-            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-            vec![input_data],
-        )
-    });
+    // --- Specify private input layers (+ description and precommit), if any ---
+    let private_input_layers = HashMap::new();
 
-    test_circuit(circuit, None)
+    // --- Prove/verify the circuit ---
+    test_circuit_new(&circuit_description, private_input_layers, &circuit_inputs);
 }

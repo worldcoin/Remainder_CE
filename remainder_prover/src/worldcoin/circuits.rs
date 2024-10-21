@@ -6,9 +6,7 @@ use crate::digits::components::{
 use crate::input_layer::InputLayerDescription;
 use crate::layer::LayerId;
 use crate::layouter::component::Component;
-use crate::layouter::nodes::circuit_inputs::{
-    InputLayerNode, InputShred,
-};
+use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputShred};
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::fiat_shamir_challenge::FiatShamirChallengeNode;
 use crate::layouter::nodes::identity_gate::IdentityGateNode;
@@ -51,7 +49,10 @@ pub fn build_iriscode_proof_description<
     const NUM_DIGITS: usize,
 >(
     reroutings: Vec<(usize, usize)>,
-) -> (IriscodeProofDescription<F>, impl Fn(IriscodeCircuitData<F>) -> HashMap<LayerId, MultilinearExtension<F>>) {
+) -> (
+    IriscodeProofDescription<F>,
+    impl Fn(IriscodeCircuitData<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
+) {
     assert!(BASE.is_power_of_two());
     let log_base = BASE.ilog2() as usize;
     let mut output_nodes = vec![];
@@ -132,7 +133,7 @@ pub fn build_iriscode_proof_description<
     println!("{:?} = Sign bits (iris code) input", sign_bits.id());
 
     // Intermediate layers
-    let rerouted_image = IdentityGateNode::new(&ctx, &to_reroute, reroutings);
+    let rerouted_image = IdentityGateNode::new(&ctx, &to_reroute, reroutings, None);
     println!("{:?} = Identity gate", rerouted_image.id());
 
     let matmult = MatMultNode::new(
@@ -246,14 +247,22 @@ pub fn build_iriscode_proof_description<
     // Get the input layer descriptions corresponding to the input layer _nodes_
     let get_input_layer_description = |node_id: NodeId| {
         let input_layer_id = input_node_id_to_layer_id.get(&node_id).unwrap();
-        circ_desc.input_layers.iter().find(|il| il.layer_id == *input_layer_id).unwrap().clone()
+        circ_desc
+            .input_layers
+            .iter()
+            .find(|il| il.layer_id == *input_layer_id)
+            .unwrap()
+            .clone()
     };
 
-    (IriscodeProofDescription {
-        circuit_description: circuit_description,
-        image_input_layer: get_input_layer_description(to_reroute_input_layer.id()),
-        digits_input_layer: get_input_layer_description(digits_input_layer.id()),
-        code_input_layer: get_input_layer_description(sign_bits_input_layer.id()),
-        auxiliary_input_layer: get_input_layer_description(auxiliary_input_layer.id()),
-    }, input_builder)
+    (
+        IriscodeProofDescription {
+            circuit_description: circuit_description,
+            image_input_layer: get_input_layer_description(to_reroute_input_layer.id()),
+            digits_input_layer: get_input_layer_description(digits_input_layer.id()),
+            code_input_layer: get_input_layer_description(sign_bits_input_layer.id()),
+            auxiliary_input_layer: get_input_layer_description(auxiliary_input_layer.id()),
+        },
+        input_builder,
+    )
 }

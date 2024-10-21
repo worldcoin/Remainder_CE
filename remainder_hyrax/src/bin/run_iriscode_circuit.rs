@@ -1,5 +1,7 @@
 use clap::Parser;
-use remainder::worldcoin::{io::read_bytes_from_file, test_helpers::circuit_description_and_inputs};
+use remainder::worldcoin::{
+    io::read_bytes_from_file, test_helpers::circuit_description_and_inputs,
+};
 use remainder_hyrax::hyrax_worldcoin::test_worldcoin::test_iriscode_circuit_with_hyrax_helper;
 
 #[derive(Parser, Debug)]

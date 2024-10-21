@@ -156,13 +156,7 @@ mod test {
         let mle =
             MultilinearExtension::new((0..size).map(|_| Fr::from(rng.gen::<u64>())).collect());
 
-        let neg_mle = MultilinearExtension::new(
-            mle.get_evals_vector()
-                .clone()
-                .into_iter()
-                .map(|elem| -elem)
-                .collect_vec(),
-        );
+        let neg_mle = MultilinearExtension::new(mle.iter().map(|elem| -elem).collect_vec());
 
         let mut nonzero_gates = vec![];
 
@@ -225,13 +219,7 @@ mod test {
         let mle =
             MultilinearExtension::new((0..size).map(|_| Fr::from(rng.gen::<u64>())).collect());
 
-        let neg_mle = MultilinearExtension::new(
-            mle.get_evals_vector()
-                .clone()
-                .into_iter()
-                .map(|elem| -elem)
-                .collect_vec(),
-        );
+        let neg_mle = MultilinearExtension::new(mle.iter().map(|elem| -elem).collect_vec());
 
         let mut nonzero_gates = vec![];
         let table_size = 1 << NUM_FREE_VARS;

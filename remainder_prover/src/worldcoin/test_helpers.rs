@@ -2,7 +2,8 @@ use crate::layer::LayerId;
 use crate::mle::evals::MultilinearExtension;
 use crate::worldcoin::circuits::build_iriscode_proof_description;
 use crate::worldcoin::data::{
-    build_iriscode_circuit_data, load_worldcoin_data_v2, load_worldcoin_data_v3, wirings_to_reroutings
+    build_iriscode_circuit_data, load_worldcoin_data_v2, load_worldcoin_data_v3,
+    wirings_to_reroutings,
 };
 use crate::worldcoin::io::read_bytes_from_file;
 use crate::worldcoin::parameters::decode_wirings;
@@ -14,11 +15,15 @@ use super::circuits::IriscodeProofDescription;
 
 /// Return the circuit description, "private" input layer description and inputs for a trivial 2x2
 /// identity matrix circuit.
-pub fn small_circuit_description_and_inputs() -> (IriscodeProofDescription<Fr>, HashMap<LayerId, MultilinearExtension<Fr>>) {
+pub fn small_circuit_description_and_inputs() -> (
+    IriscodeProofDescription<Fr>,
+    HashMap<LayerId, MultilinearExtension<Fr>>,
+) {
     // rewirings for the 2x2 identity matrix
     let wirings = &[(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
     let reroutings = wirings_to_reroutings(wirings, 2, 2);
-    let (proof_desc, input_builder) = build_iriscode_proof_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
+    let (proof_desc, input_builder) =
+        build_iriscode_proof_description::<Fr, 2, 1, 1, 1, 16, 2>(reroutings);
     let data = build_iriscode_circuit_data::<Fr, 1, 1, 1, 16, 2>(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
         &[1, 0, 6, -1],
@@ -37,7 +42,14 @@ pub fn small_circuit_description_and_inputs() -> (IriscodeProofDescription<Fr>, 
 /// use remainder::worldcoin::test_helpers::circuit_description_and_inputs;
 /// let (desc, inputs) = circuit_description_and_inputs(2, false, None);
 /// ```
-pub fn circuit_description_and_inputs(version: u8, is_mask: bool, image_bytes: Option<Vec<u8>>) -> (IriscodeProofDescription<Fr>, HashMap<LayerId, MultilinearExtension<Fr>>) {
+pub fn circuit_description_and_inputs(
+    version: u8,
+    is_mask: bool,
+    image_bytes: Option<Vec<u8>>,
+) -> (
+    IriscodeProofDescription<Fr>,
+    HashMap<LayerId, MultilinearExtension<Fr>>,
+) {
     let image_bytes = if let Some(image_bytes) = image_bytes {
         image_bytes
     } else {
@@ -54,10 +66,16 @@ pub fn circuit_description_and_inputs(version: u8, is_mask: bool, image_bytes: O
 
 /// Return the circuit description, "private" input layer description and inputs for the v2 iris
 /// code circuit, in either the mask (true) or iris (false) case.
-pub fn v2_circuit_description_and_inputs(mask: bool, image_bytes: Vec<u8>) -> (IriscodeProofDescription<Fr>, HashMap<LayerId, MultilinearExtension<Fr>>) {
+pub fn v2_circuit_description_and_inputs(
+    mask: bool,
+    image_bytes: Vec<u8>,
+) -> (
+    IriscodeProofDescription<Fr>,
+    HashMap<LayerId, MultilinearExtension<Fr>>,
+) {
     use super::parameters_v2::{
-        BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
-        NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_ROWS, IM_NUM_COLS
+        BASE, IM_NUM_COLS, IM_NUM_ROWS, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS, TO_REROUTE_NUM_VARS, WIRINGS,
     };
     let data = load_worldcoin_data_v2::<
         Fr,
@@ -70,7 +88,8 @@ pub fn v2_circuit_description_and_inputs(mask: bool, image_bytes: Vec<u8>) -> (I
         IM_NUM_COLS,
     >(image_bytes, mask);
     let wirings = &decode_wirings(WIRINGS);
-    let reroutings = wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+    let reroutings =
+        wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
     let (proof_desc, input_builder) = build_iriscode_proof_description::<
         Fr,
         TO_REROUTE_NUM_VARS,
@@ -86,10 +105,16 @@ pub fn v2_circuit_description_and_inputs(mask: bool, image_bytes: Vec<u8>) -> (I
 
 /// Return the circuit description, "private" input layer description and inputs for the v3 iris
 /// code circuit, in either the mask (true) or iris (false) case.
-pub fn v3_circuit_description_and_inputs(mask: bool, image_bytes: Vec<u8>) -> (IriscodeProofDescription<Fr>, HashMap<LayerId, MultilinearExtension<Fr>>) {
+pub fn v3_circuit_description_and_inputs(
+    mask: bool,
+    image_bytes: Vec<u8>,
+) -> (
+    IriscodeProofDescription<Fr>,
+    HashMap<LayerId, MultilinearExtension<Fr>>,
+) {
     use super::parameters_v3::{
-        BASE, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS, MATMULT_ROWS_NUM_VARS,
-        NUM_DIGITS, WIRINGS, TO_REROUTE_NUM_VARS, IM_NUM_ROWS, IM_NUM_COLS
+        BASE, IM_NUM_COLS, IM_NUM_ROWS, MATMULT_COLS_NUM_VARS, MATMULT_INTERNAL_DIM_NUM_VARS,
+        MATMULT_ROWS_NUM_VARS, NUM_DIGITS, TO_REROUTE_NUM_VARS, WIRINGS,
     };
     let data = load_worldcoin_data_v3::<
         Fr,
@@ -102,7 +127,8 @@ pub fn v3_circuit_description_and_inputs(mask: bool, image_bytes: Vec<u8>) -> (I
         IM_NUM_COLS,
     >(image_bytes, mask);
     let wirings = &decode_wirings(WIRINGS);
-    let reroutings = wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
+    let reroutings =
+        wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
     let (proof_desc, input_builder) = build_iriscode_proof_description::<
         Fr,
         TO_REROUTE_NUM_VARS,

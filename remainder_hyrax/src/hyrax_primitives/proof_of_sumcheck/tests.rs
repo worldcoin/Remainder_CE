@@ -80,7 +80,7 @@ fn test_completeness() {
     mle_ref.index_mle_indices(0);
     mle_ref.fix_variable(0, r1);
     mle_ref.fix_variable(1, r2);
-    let mle_eval = mle_ref.bookkeeping_table()[0];
+    let mle_eval = mle_ref.first();
     // first sumcheck message f1
     let f10 = v00 + v01;
     let f11 = v10 + v11 - v00 - v01;
@@ -95,10 +95,7 @@ fn test_completeness() {
     let message2 = committer.committed_vector(&f2_padded, &Fr::from(7));
     assert_eq!(f20 + r2 * f21, mle_eval); // f2(r2) = mle_eval
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
-        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(
-            &[mle_ref.clone()],
-            Fr::one(),
-        )]),
+        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(&[mle_ref.clone()], Fr::one())]),
         &committer,
         &mut rand::thread_rng(),
     );
@@ -206,11 +203,11 @@ fn test_example_with_regular_layer() {
     equality_mle.fix_variable(1, r2);
     mle_ref.fix_variable(1, r2);
 
-    let _mle_eval = mle_ref.bookkeeping_table()[0] * equality_mle.bookkeeping_table()[0];
+    let _mle_eval = mle_ref.first() * equality_mle.first();
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
         &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(
-            &[mle_ref.clone()],
-            equality_mle.bookkeeping_table()[0],
+            &vec![mle_ref.clone()],
+            equality_mle.first(),
         )]),
         &committer,
         &mut rand::thread_rng(),
@@ -266,10 +263,7 @@ fn test_soundness() {
     mle_ref.fix_variable(1, bindings[0]);
     mle_ref.fix_variable(2, bindings[1]);
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
-        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(
-            &[mle_ref.clone()],
-            Fr::one(),
-        )]),
+        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(&[mle_ref.clone()], Fr::one())]),
         &committer,
         &mut rand::thread_rng(),
     );

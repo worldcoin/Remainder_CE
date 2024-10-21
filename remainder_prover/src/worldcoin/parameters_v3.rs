@@ -22,7 +22,8 @@ pub const IM_NUM_COLS: usize = 1024;
 pub const IRISCODE_LEN: usize = 4 * 16 * 256;
 
 /// The number of variables in the MLE getting rerouted (typically the image input)
-pub const TO_REROUTE_NUM_VARS: usize = (IM_NUM_ROWS.next_power_of_two().ilog2() + IM_NUM_COLS.next_power_of_two().ilog2()) as usize;
+pub const TO_REROUTE_NUM_VARS: usize =
+    (IM_NUM_ROWS.next_power_of_two().ilog2() + IM_NUM_COLS.next_power_of_two().ilog2()) as usize;
 
 /// The wirings from the image (2d) to the LH matrix multiplicand (2d), first a flattened u16 array,
 /// then serialized as bytes
@@ -35,9 +36,7 @@ pub static IRIS_THRESHOLDS: &[u8] = include_bytes!("constants/v3/iris/thresholds
 pub static MASK_THRESHOLDS: &[u8] = include_bytes!("constants/v3/mask/thresholds.bin");
 
 /// The RH multiplicand for the iris circuit, first flattened as a 1d i32 array, then serialized as bytes.
-pub static IRIS_RH_MULTIPLICAND: &[u8] =
-    include_bytes!("constants/v3/iris/rh_multiplicand.bin");
+pub static IRIS_RH_MULTIPLICAND: &[u8] = include_bytes!("constants/v3/iris/rh_multiplicand.bin");
 
 /// The RH multiplicand for the mask circuit, first flattened as a 1d i32 array, then serialized as bytes.
-pub static MASK_RH_MULTIPLICAND: &[u8] =
-    include_bytes!("constants/v3/mask/rh_multiplicand.bin");
+pub static MASK_RH_MULTIPLICAND: &[u8] = include_bytes!("constants/v3/mask/rh_multiplicand.bin");

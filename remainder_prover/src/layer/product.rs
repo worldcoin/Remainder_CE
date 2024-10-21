@@ -74,9 +74,7 @@ impl<F: Field> Product<F, F> {
     /// Panics if any are not fully bound.
     pub fn new(mle_refs: &[DenseMle<F>], coefficient: F) -> Self {
         // ensure all MLEs are fully bound
-        assert!(mle_refs
-            .iter()
-            .all(|mle_ref| mle_ref.bookkeeping_table().len() == 1));
+        assert!(mle_refs.iter().all(|mle_ref| mle_ref.len() == 1));
         if mle_refs.is_empty() {
             return Product {
                 intermediates: vec![Intermediate::Composite { value: F::ONE }],
@@ -87,8 +85,8 @@ impl<F: Field> Product<F, F> {
         let _ = mle_refs
             .iter()
             .skip(1)
-            .fold(mle_refs[0].bookkeeping_table()[0], |acc, mle_ref| {
-                let prod_val = acc * mle_ref.bookkeeping_table()[0];
+            .fold(mle_refs[0].first(), |acc, mle_ref| {
+                let prod_val = acc * mle_ref.first();
                 intermediates.push(Self::build_atom(mle_ref));
                 intermediates.push(Intermediate::Composite { value: prod_val });
                 prod_val
@@ -104,7 +102,7 @@ impl<F: Field> Product<F, F> {
         Intermediate::Atom {
             layer_id: mle_ref.layer_id,
             point: mle_ref.get_bound_point(),
-            value: mle_ref.bookkeeping_table()[0],
+            value: mle_ref.first(),
         }
     }
 

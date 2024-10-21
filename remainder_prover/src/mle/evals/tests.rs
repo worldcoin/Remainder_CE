@@ -1,22 +1,38 @@
 use ark_std::log2;
 use quickcheck::{Arbitrary, TestResult};
-use remainder_shared_types::Fr;
+use remainder_shared_types::{halo2curves::ff::Field, Fr, HasByteRepresentation};
 
 use super::*;
 
-// Quickcheck wrapper for a Field Fr.
+/// Wrapper for a Field element to be used for Quickcheck.
+/// This is needed because Rust doesn't allow implementing the foreign trait
+/// [Arbitrary] for the foreign type [Fr].
+/// See
+/// [https://stackoverflow.com/questions/25413201/how-do-i-implement-a-trait-i-dont-own-for-a-type-i-dont-own].
 #[derive(Debug, Clone, PartialEq)]
 struct Qfr(Fr);
 
 impl Arbitrary for Qfr {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {
-        // Qfr(Fr::random(g))
-        Qfr(Fr::from_raw([
-            u64::arbitrary(g),
-            u64::arbitrary(g),
-            u64::arbitrary(g),
-            u64::arbitrary(g),
-        ]))
+        // Generate an arbitrary byte-representation of a field element.
+        // To ensure this is a valid representation, we zero-out the higher-order byte.
+        // The resulting element is then upper bounded by
+        // `0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`
+        // which is smaller that the `r` defining `Fr`.
+        let bytes: Vec<u8> = vec![0; 31]
+            .iter()
+            .map(|_| u8::arbitrary(g))
+            .chain([0_u8])
+            .collect();
+        Qfr(Fr::from_bytes_le(&bytes))
+
+        // I think this is technically wrong although it never panicked.
+        // Qfr(Fr::from_raw([
+        //     u64::arbitrary(g),
+        //     u64::arbitrary(g),
+        //     u64::arbitrary(g),
+        //     u64::arbitrary(g),
+        // ]))
     }
 }
 
@@ -24,6 +40,194 @@ impl From<Qfr> for Fr {
     fn from(val: Qfr) -> Self {
         val.0
     }
+}
+
+#[test]
+fn test_bit_packed_vector_get_empty() {
+    let data: Vec<Fr> = vec![];
+    let bpv = BitPackedVector::new(&data);
+
+    assert!(bpv.get(0).is_none());
+    assert!(bpv.get(1).is_none());
+}
+
+#[test]
+fn test_bit_packed_vector_get_constant() {
+    let data: Vec<Fr> = vec![Fr::from(42), Fr::from(42), Fr::from(42)];
+    let bpv = BitPackedVector::new(&data);
+
+    assert_eq!(bpv.get(0).unwrap(), Fr::from(42));
+    assert_eq!(bpv.get(1).unwrap(), Fr::from(42));
+    assert_eq!(bpv.get(2).unwrap(), Fr::from(42));
+    assert!(bpv.get(3).is_none());
+}
+
+#[test]
+fn test_bit_packed_vector_get_small() {
+    // Test bit-width: 2.
+
+    let data: Vec<Fr> = [10, 11, 12, 13].into_iter().map(|x| Fr::from(x)).collect();
+    let bpv = BitPackedVector::new(&data);
+
+    assert_eq!(bpv.get(0).unwrap(), Fr::from(10));
+    assert_eq!(bpv.get(1).unwrap(), Fr::from(11));
+    assert_eq!(bpv.get(2).unwrap(), Fr::from(12));
+    assert_eq!(bpv.get(3).unwrap(), Fr::from(13));
+    assert!(bpv.get(4).is_none());
+}
+
+#[test]
+fn test_bit_packed_vector_get_small_with_negative() {
+    // Test bit-width: 2.
+    let data = vec![Fr::from(0), Fr::from(1), Fr::from(1).neg(), Fr::from(2)];
+
+    let bpv = BitPackedVector::new(&data);
+
+    assert_eq!(bpv.get(0).unwrap(), data[0]);
+    assert_eq!(bpv.get(1).unwrap(), data[1]);
+    assert_eq!(bpv.get(2).unwrap(), data[2]);
+    assert_eq!(bpv.get(3).unwrap(), data[3]);
+    assert!(bpv.get(4).is_none());
+}
+
+#[test]
+fn test_bit_packed_vector_get_large_1() {
+    // Test bit-wdth: 7.
+
+    let n: usize = 128; // = 2^7.
+    let offset: u64 = 100;
+
+    let data: Vec<Fr> = (0..n)
+        .into_iter()
+        .map(|x| Fr::from(offset + x as u64))
+        .collect();
+    let bpv = BitPackedVector::new(&data);
+
+    for i in 0..n {
+        assert_eq!(bpv.get(i).unwrap(), Fr::from(100 + i as u64));
+    }
+
+    assert!(bpv.get(n).is_none());
+}
+
+#[test]
+fn test_bit_packed_vector_get_large_2() {
+    // Test bit-width = 8.
+
+    let n: usize = 256; // = 2^8.
+    let offset: u64 = 100;
+
+    let data: Vec<Fr> = (0..n)
+        .into_iter()
+        .map(|x| Fr::from(offset + x as u64))
+        .collect();
+    let bpv = BitPackedVector::new(&data);
+
+    for i in 0..n {
+        assert_eq!(bpv.get(i).unwrap(), Fr::from(100 + i as u64));
+    }
+
+    assert!(bpv.get(n).is_none());
+}
+
+#[test]
+fn test_bit_packed_vector_get_large_3() {
+    // Test bit-width: 100.
+
+    let n = 100;
+    let small_val = Fr::from(0);
+    // 2^100 - 1
+    let large_val = Fr::from_bytes_le(&[
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x0f, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00,
+    ]);
+    let offset = Fr::from(1_234); // 0x4D2
+
+    let data: Vec<Fr> = (0..n)
+        .into_iter()
+        .map(|i| offset + if i % 2 == 0 { small_val } else { large_val })
+        .collect();
+    let bpv = BitPackedVector::new(&data);
+
+    for i in 0..n {
+        assert_eq!(
+            bpv.get(i).unwrap(),
+            offset + if i % 2 == 0 { small_val } else { large_val }
+        );
+    }
+
+    assert!(bpv.get(n).is_none());
+}
+
+#[quickcheck]
+fn test_bit_packed_vector_get_extensive(data: Vec<Qfr>) -> TestResult {
+    let data = data.iter().map(|e| e.0).collect::<Vec<_>>();
+
+    let n = data.len();
+    let bpv = BitPackedVector::new(&data);
+
+    for i in 0..n {
+        assert_eq!(bpv.get(i).unwrap(), data[i]);
+    }
+
+    assert!(bpv.get(n).is_none());
+
+    TestResult::from_bool(true)
+}
+
+/// Tail-recursive implementation of the exponentiation function for field
+/// elements performing `O(log(exp))` field element multiplications.
+fn fr_pow(base: Fr, exp: u64) -> Fr {
+    // helper(acc, base, exp) == acc * base^exp.
+    fn helper(acc: Fr, base: Fr, exp: u64) -> Fr {
+        if exp == 0 {
+            acc
+        } else if exp % 2 == 0 {
+            helper(acc, base * base, exp / 2)
+        } else {
+            helper(acc * base, base * base, exp / 2)
+        }
+    }
+
+    helper(Fr::ONE, base, exp)
+}
+
+#[test]
+fn test_fr_pow() {
+    assert_eq!(fr_pow(Fr::from(2), 0), Fr::ONE);
+    assert_eq!(fr_pow(Fr::from(2), 1), Fr::from(2));
+    assert_eq!(fr_pow(Fr::from(2), 5), Fr::from(32));
+    assert_eq!(fr_pow(Fr::from(2), 6), Fr::from(64));
+    assert_eq!(fr_pow(Fr::from(5), 2), Fr::from(25));
+    assert_eq!(fr_pow(Fr::from(5), 3), Fr::from(125));
+}
+
+#[quickcheck]
+fn test_bit_packed_vector_get_all_bits(offset: Qfr) -> bool {
+    let offset = Fr::from(offset);
+    for num_bits in 1..256 {
+        let a = offset;
+        let b = a + fr_pow(Fr::from(2), num_bits) - Fr::ONE;
+
+        let num_elements = 10;
+        let data: Vec<Fr> = [a, b].repeat(num_elements);
+        let bpv = BitPackedVector::new(&data);
+
+        for i in 0..num_elements {
+            let x = bpv.get(i);
+            if x.is_none() || x.unwrap() != data[i] {
+                println!(
+                    "Num bits: {num_bits}\nIdx: {i}\nExp: {:?}\nGot: {:?}",
+                    data[i],
+                    x.unwrap()
+                );
+                return false;
+            }
+        }
+    }
+
+    true
 }
 
 #[test]
@@ -44,7 +248,8 @@ fn evals_new_2_vars() {
 #[test]
 fn evals_new_from_big_endian_2_vars() {
     let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(Fr::from).collect();
-    let expected_evals: Vec<Fr> = [1, 3, 2, 4].into_iter().map(Fr::from).collect();
+    let expected_evals =
+        BitPackedVector::new(&[1, 3, 2, 4].into_iter().map(Fr::from).collect::<Vec<Fr>>());
 
     let f = Evaluations::new_from_big_endian(2, &evals);
 
@@ -142,7 +347,7 @@ fn test_flip_endianess_3() {
 }
 
 #[test]
-fn test_eval_iterator_1() {
+fn test_eval_projection_iterator_1() {
     let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
     let f = Evaluations::<Fr>::new(3, evals);
 
@@ -156,7 +361,7 @@ fn test_eval_iterator_1() {
 }
 
 #[test]
-fn test_eval_iterator_2() {
+fn test_eval_projection_iterator_2() {
     let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
     let f = Evaluations::<Fr>::new(3, evals);
 
@@ -170,7 +375,7 @@ fn test_eval_iterator_2() {
 }
 
 #[test]
-fn test_eval_iterator_3() {
+fn test_eval_projection_iterator_3() {
     let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
     let f = Evaluations::<Fr>::new(3, evals);
 
@@ -184,9 +389,27 @@ fn test_eval_iterator_3() {
 }
 
 #[test]
+fn test_eval_iterator() {
+    let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
+    let f = Evaluations::<Fr>::new(3, evals);
+
+    let mut it = f.iter();
+
+    assert_eq!(it.next().unwrap(), Fr::from(0));
+    assert_eq!(it.next().unwrap(), Fr::from(1));
+    assert_eq!(it.next().unwrap(), Fr::from(2));
+    assert_eq!(it.next().unwrap(), Fr::from(3));
+    assert_eq!(it.next().unwrap(), Fr::from(4));
+    assert_eq!(it.next().unwrap(), Fr::from(5));
+    assert_eq!(it.next().unwrap(), Fr::from(6));
+    assert_eq!(it.next().unwrap(), Fr::from(7));
+    assert_eq!(it.next(), None);
+}
+
+#[test]
 fn test_equiv_repr() {
-    let evals1: Vec<Fr> = [1, 2, 3].into_iter().map(Fr::from).collect();
-    let evals2: Vec<Fr> = [1, 2, 3, 0, 0].into_iter().map(Fr::from).collect();
+    let evals1 = BitPackedVector::new(&[1, 2, 3].into_iter().map(Fr::from).collect_vec());
+    let evals2 = BitPackedVector::new(&[1, 2, 3, 0, 0].into_iter().map(Fr::from).collect_vec());
 
     assert!(Evaluations::equiv_repr(&evals1, &evals1));
     assert!(Evaluations::equiv_repr(&evals2, &evals2));
@@ -223,7 +446,7 @@ fn test_fix_variable_evaluation(evals: Vec<Qfr>, mut point: Vec<Qfr>) -> TestRes
     assert_eq!(mle1.f.evals.len(), 1);
     assert_eq!(mle1.num_vars(), 0);
 
-    let res1 = mle1.f[0];
+    let res1 = mle1.f.first();
     let res2 = mle2.evaluate_at_point(&point);
 
     TestResult::from_bool(res1 == res2)
@@ -281,13 +504,13 @@ fn fix_variable_2_vars() {
     // f(2, y) = ... = -(1-y) + 5y
     f_tilde.fix_variable(Fr::from(2));
     let expected_output: Vec<Fr> = vec![Fr::from(1).neg(), Fr::from(5)];
-    assert_eq!(f_tilde.f.evals, expected_output);
+    assert_eq!(f_tilde.f.evals.to_vec(), expected_output);
 
     // Now fix y to 3.
     // f(2, 3) = ... = 17.
     f_tilde.fix_variable(Fr::from(3));
     let expected_output: Vec<Fr> = vec![Fr::from(17)];
-    assert_eq!(f_tilde.f.evals, expected_output);
+    assert_eq!(f_tilde.f.evals.to_vec(), expected_output);
 }
 
 #[test]
@@ -301,7 +524,7 @@ fn fix_variable_at_index_two_vars_fix_first() {
     f_tilde.fix_variable_at_index(0, Fr::from(2));
     let expected_output: Vec<Fr> = vec![Fr::from(1).neg(), Fr::from(5)];
 
-    assert_eq!(f_tilde.f.evals, expected_output);
+    assert_eq!(f_tilde.f.evals.to_vec(), expected_output);
 }
 
 #[test]
@@ -316,7 +539,7 @@ fn fix_variable_at_index_two_vars_fix_second() {
     f_tilde.fix_variable_at_index(1, Fr::from(2));
     let expected_output: Vec<Fr> = vec![Fr::from(3).neg(), Fr::from(4)];
 
-    assert_eq!(f_tilde.f.evals, expected_output);
+    assert_eq!(f_tilde.f.evals.to_vec(), expected_output);
 }
 
 #[test]
@@ -340,7 +563,7 @@ fn fix_variable_at_index_3_vars_fix_first() {
     f_tilde.fix_variable_at_index(0, Fr::from(3));
     let expected_output = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
 
-    assert_eq!(f_tilde.f.evals, expected_output);
+    assert_eq!(f_tilde.f.evals.to_vec(), expected_output);
 }
 
 #[test]
@@ -364,7 +587,7 @@ fn fix_variable_at_index_3_vars_fix_second() {
     f_tilde.fix_variable_at_index(1, Fr::from(4));
     let expected_output = vec![Fr::from(0), Fr::from(2), Fr::from(4), Fr::from(7)];
 
-    assert_eq!(f_tilde.f.evals, expected_output);
+    assert_eq!(f_tilde.f.evals.to_vec(), expected_output);
 }
 
 #[test]
@@ -388,7 +611,7 @@ fn fix_variable_at_index_3_vars_fix_third() {
     f_tilde.fix_variable_at_index(2, Fr::from(5));
     let expected_output = vec![Fr::from(0), Fr::from(7), Fr::from(5), Fr::from(12)];
 
-    assert_eq!(f_tilde.f.evals, expected_output);
+    assert_eq!(f_tilde.f.evals.to_vec(), expected_output);
 }
 
 #[test]
@@ -406,7 +629,7 @@ fn test_interlace_mles() {
     let interlaced_mle = MultilinearExtension::interlace_mles(mles);
 
     assert_eq!(
-        *interlaced_mle.get_evals_vector(),
+        *interlaced_mle.iter().collect::<Vec<_>>(),
         vec![
             Fr::from(0),
             Fr::from(1),

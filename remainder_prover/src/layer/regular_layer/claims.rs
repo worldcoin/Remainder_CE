@@ -60,13 +60,13 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for RegularLayer<F> {
                         let mle_layer_id = mle_ref.layer_id();
 
                         // --- Grab the actual value that the claim is supposed to evaluate to ---
-                        if mle_ref.bookkeeping_table().len() > 1 {
+                        if mle_ref.len() > 1 {
                             return Err(ClaimError::MleRefMleError);
                         }
-                        if mle_ref.bookkeeping_table().is_empty() {
+                        if mle_ref.len() == 0 {
                             return Err(ClaimError::IntermediateZeroMLERefError);
                         }
-                        let claimed_value = mle_ref.bookkeeping_table()[0];
+                        let claimed_value = mle_ref.first();
 
                         // Note: No need to append claim values here.
                         // We already appended them when evaluating the
@@ -96,10 +96,10 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for RegularLayer<F> {
                             let mle_layer_id = mle_ref.layer_id();
 
                             // --- Grab the actual value that the claim is supposed to evaluate to ---
-                            if mle_ref.bookkeeping_table().len() != 1 {
+                            if mle_ref.len() != 1 {
                                 return Err(ClaimError::MleRefMleError);
                             }
-                            let claimed_value = mle_ref.bookkeeping_table()[0];
+                            let claimed_value = mle_ref.first();
 
                             // Note: No need to append the claim value to the transcript here. We
                             // already appended when evaluating the expression for sumcheck.

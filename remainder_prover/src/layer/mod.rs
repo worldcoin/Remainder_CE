@@ -227,21 +227,21 @@ impl std::fmt::Display for LayerId {
         match self {
             LayerId::Input(id) => write!(f, "Input Layer {}", id),
             LayerId::Layer(id) => write!(f, "Layer {}", id),
-            LayerId::FiatShamirChallengeLayer(id) => write!(f, "Fiat-Shamir Challenge Layer {}", id),
+            LayerId::FiatShamirChallengeLayer(id) => {
+                write!(f, "Fiat-Shamir Challenge Layer {}", id)
+            }
         }
     }
 }
 
-
 impl LayerId {
-
     /// Returns the underlying usize if self is a variant of type Input, otherwise panics.
     pub fn get_raw_input_layer_id(&self) -> usize {
         match self {
             LayerId::Input(id) => *id,
             _ => panic!("Expected LayerId::Input, found {:?}", self),
         }
-    }    
+    }
 
     /// Returns the underlying usize if self is a variant of type Input, otherwise panics.
     pub fn get_raw_layer_id(&self) -> usize {
@@ -249,7 +249,7 @@ impl LayerId {
             LayerId::Layer(id) => *id,
             _ => panic!("Expected LayerId::Layer, found {:?}", self),
         }
-    }    
+    }
 
     /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number
     pub fn next(&self) -> LayerId {

@@ -114,11 +114,11 @@ pub fn combine_mle_refs_with_aggregate<F: Field>(
     if updated_list.len() > 1 {
         return Err(CombineMleRefError::NotFullyCombined);
     }
-    if updated_list[0].bookkeeping_table().len() != 1 {
+    if updated_list[0].len() != 1 {
         return Err(CombineMleRefError::MleRefNotFullyFixed);
     }
 
-    Ok(updated_list[0].bookkeeping_table()[0])
+    Ok(updated_list[0].first())
 }
 
 /// for input layer stuff, combining refs together
@@ -129,11 +129,7 @@ pub fn combine_mle_refs<F: Field>(items: Vec<DenseMle<F>>) -> DenseMle<F> {
     let num_fields = items.len();
 
     // --- All the items within should be the same size ---
-    let max_size = items
-        .iter()
-        .map(|mle_ref| mle_ref.mle.get_evals_vector().len())
-        .max()
-        .unwrap();
+    let max_size = items.iter().map(|mle_ref| mle_ref.mle.len()).max().unwrap();
 
     let part_size = 1 << log2(max_size);
     let part_count = 2_u32.pow(log2(num_fields)) as usize;
@@ -147,7 +143,7 @@ pub fn combine_mle_refs<F: Field>(items: Vec<DenseMle<F>>) -> DenseMle<F> {
         .flat_map(|index| {
             items
                 .iter()
-                .map(move |item| *item.bookkeeping_table().get(index).unwrap_or(&F::ZERO))
+                .map(move |item| item.get(index).unwrap_or(F::ZERO))
                 .chain(repeat_n(F::ZERO, padding_count))
         })
         .chain(repeat_n(F::ZERO, total_padding))
@@ -191,33 +187,20 @@ fn split_mle_ref<F: Field>(mle: DenseMle<F>) -> Vec<DenseMle<F>> {
         .collect_vec();
 
     // depending on whether this is a zero mle ref or dense mle ref, construct the first mle_ref in the pair
-    let first_mle = {
-        DenseMle {
-            mle: MultilinearExtension::new_from_evals(Evaluations::<F>::new(
-                mle.num_free_vars() - 1,
-                mle.mle
-                    .get_evals_vector()
-                    .clone()
-                    .into_iter()
-                    .step_by(2)
-                    .collect_vec(),
-            )),
-            mle_indices: first_og_indices,
-            layer_id: mle.layer_id,
-        }
+    let first_mle = DenseMle {
+        mle: MultilinearExtension::new_from_evals(Evaluations::<F>::new(
+            mle.num_free_vars() - 1,
+            mle.mle.iter().step_by(2).collect_vec(),
+        )),
+        mle_indices: first_og_indices,
+        layer_id: mle.layer_id,
     };
 
     // second mle ref in the pair
     let second_mle = DenseMle {
         mle: MultilinearExtension::new_from_evals(Evaluations::<F>::new(
             mle.num_free_vars() - 1,
-            mle.mle
-                .get_evals_vector()
-                .clone()
-                .into_iter()
-                .skip(1)
-                .step_by(2)
-                .collect_vec(),
+            mle.mle.iter().skip(1).step_by(2).collect_vec(),
         )),
         mle_indices: second_og_indices,
         layer_id: mle.layer_id,
@@ -310,13 +293,13 @@ fn combine_pair<F: Field>(
     lsb_idx: usize,
     chal_point: &[F],
 ) -> DenseMle<F> {
-    let mle_ref_first_bt = mle_ref_first.bookkeeping_table().to_vec();
+    let mle_ref_first_bt = mle_ref_first.iter().collect::<Vec<_>>();
 
     // if the second mle ref is None, we assume its bookkeeping table is all zeros. we are dealing with
     // fully fixed mle_refs, so this bookkeeping table size is just 1
 
     let mle_ref_second_bt = mle_ref_second
-        .map(|mle_ref| mle_ref.bookkeeping_table().to_vec())
+        .map(|mle_ref| mle_ref.iter().collect())
         .unwrap_or(vec![F::ZERO]);
 
     // recomputes the mle indices, which now reflect that that we are binding the bit in the least significant bit fixed bit index

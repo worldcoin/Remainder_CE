@@ -199,11 +199,13 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
     let num_rows = 1 << (input_layer_desc.num_bits - input_layer_desc.log_num_cols);
     // Sample the blinding factors
     let mut blinding_factors_matrix = vec![C::Scalar::ZERO; num_rows];
-    for i in 0..num_rows {
-        blinding_factors_matrix[i] = C::Scalar::random(&mut rng);
-    }
-    let mle_coeffs_vec =
-        MleCoefficientsVector::ScalarFieldVector(input_mle.get_evals_vector().clone());
+    blinding_factors_matrix
+        .iter_mut()
+        .take(num_rows)
+        .for_each(|blinding_factor| {
+            *blinding_factor = C::Scalar::random(&mut rng);
+        });
+    let mle_coeffs_vec = MleCoefficientsVector::ScalarFieldVector(input_mle.f.iter().collect_vec());
     let commitment_values = HyraxPCSEvaluationProof::compute_matrix_commitments(
         input_layer_desc.log_num_cols,
         &mle_coeffs_vec,
@@ -266,7 +268,7 @@ fn compute_claim_wlx<F: Field>(mle_vec: &[F], claims: &ClaimGroup<F>) -> Vec<F> 
                     .into_iter()
                     .for_each(|chal| fix_mle.fix_variable(chal));
                 assert_eq!(fix_mle.f.len(), 1);
-                fix_mle.f[0]
+                fix_mle.first()
             }
         })
         .collect();
@@ -287,10 +289,10 @@ pub fn verify_claim<F: Field>(mle_vec: &[F], claim: &Claim<F>) {
         for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
             eval = mle.fix_variable(curr_bit, chal);
         }
-        debug_assert_eq!(mle.bookkeeping_table().len(), 1);
+        debug_assert_eq!(mle.len(), 1);
         eval.unwrap()
     } else {
-        Claim::new(vec![], mle.mle[0])
+        Claim::new(vec![], mle.mle.first())
     };
 
     assert_eq!(eval.get_point(), claim.get_point());

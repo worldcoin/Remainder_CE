@@ -29,7 +29,7 @@ use crate::layouter::nodes::{CircuitNode, NodeId};
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
-use crate::mle::Mle;
+use crate::mle::mle_enum::MleEnum;
 use crate::output_layer::{OutputLayer, OutputLayerDescription};
 use crate::utils::mle::build_composite_mle;
 use crate::{
@@ -37,6 +37,7 @@ use crate::{
     layer::{layer_enum::LayerEnum, LayerError, LayerId},
 };
 use ark_std::{end_timer, start_timer};
+use helpers::get_circuit_description_hash_as_field_elems;
 use itertools::Itertools;
 use remainder_ligero::ligero_commit::{
     remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify,
@@ -116,8 +117,16 @@ pub fn prove<F: Field>(
         (LigeroInputLayerDescription<F>, Option<LigeroCommitment<F>>),
     >,
     circuit_description: &GKRCircuitDescription<F>,
+    circuit_description_hash_type: CircuitHashType,
     transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
 ) -> Result<(), GKRError> {
+    // --- Generate circuit description hash and append to transcript ---
+    let hash_value_as_field_elems = get_circuit_description_hash_as_field_elems(
+        circuit_description,
+        circuit_description_hash_type,
+    );
+    transcript_writer.append_elements("Circuit description hash", &hash_value_as_field_elems);
+
     // Add the input values of any public (i.e. non-ligero) input layers to transcript.
     // Select the public input layers from the input layers, and sort them by layer id, and append
     // their input values to the transcript.
@@ -127,7 +136,7 @@ pub fn prove<F: Field>(
         .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
         .for_each(|layer_id| {
             let mle = inputs.get(layer_id).unwrap();
-            transcript_writer.append_elements("input layer", mle.get_evals_vector());
+            transcript_writer.append_elements("input layer", &mle.iter().collect_vec());
         });
 
     // For each Ligero input layer, calculate commitments if not already provided, and then add each
@@ -144,7 +153,7 @@ pub fn prove<F: Field>(
             } else {
                 let input_mle = inputs.get(layer_id).unwrap();
                 let (commitment, _) =
-                    remainder_ligero_commit(input_mle.get_evals_vector(), &desc.aux);
+                    remainder_ligero_commit(&input_mle.iter().collect_vec(), &desc.aux);
                 commitment
             };
             // Add the root of the commitment to the transcript.
@@ -177,7 +186,7 @@ pub fn prove<F: Field>(
             let mle = inputs.get(&layer_id).unwrap();
             let commitment = ligero_input_commitments.get(&layer_id).unwrap();
             remainder_ligero_eval_prove(
-                mle.get_evals_vector(),
+                &mle.f.iter().collect_vec(),
                 claim.get_claim().get_point(),
                 transcript_writer,
                 &desc.aux,
@@ -198,6 +207,19 @@ pub fn verify<F: Field>(
     circuit_description_hash_type: CircuitHashType,
     transcript: &mut impl VerifierTranscript<F>,
 ) -> Result<(), GKRError> {
+    // --- Generate circuit description hash and check against prover-provided circuit description hash ---
+    let hash_value_as_field_elems = get_circuit_description_hash_as_field_elems(
+        circuit_description,
+        circuit_description_hash_type,
+    );
+    let prover_supplied_circuit_description_hash = transcript
+        .consume_elements("Circuit description hash", hash_value_as_field_elems.len())
+        .unwrap();
+    assert_eq!(
+        prover_supplied_circuit_description_hash,
+        hash_value_as_field_elems
+    );
+
     // Read and check public input values to transcript in order of layer id.
     public_inputs
         .keys()
@@ -212,7 +234,7 @@ pub fn verify<F: Field>(
                 .consume_elements("input layer", 1 << layer_desc.num_vars)
                 .unwrap();
             let expected_mle = public_inputs.get(layer_id).unwrap();
-            if expected_mle.get_evals_vector() != &transcript_mle {
+            if expected_mle.f.iter().collect_vec() != transcript_mle {
                 Err(GKRError::PublicInputLayerValuesMismatch(*layer_id))
             } else {
                 Ok(())
@@ -232,9 +254,7 @@ pub fn verify<F: Field>(
             ligero_commitments.insert(desc.layer_id, commitment);
         });
 
-    let input_layer_claims = circuit_description
-        .verify(transcript, circuit_description_hash_type)
-        .unwrap();
+    let input_layer_claims = circuit_description.verify(transcript).unwrap();
 
     // Every input layer claim is either for a public- or Ligero- input layer.
     let mut public_input_layer_claims = vec![];
@@ -319,7 +339,13 @@ pub fn prove_circuit<F: Field>(
         let layer_id = output.layer_id();
         info!("Output Layer: {:?}", layer_id);
 
-        transcript_writer.append_elements("output layer", output.get_mle().bookkeeping_table());
+        match output.get_mle() {
+            MleEnum::Dense(_) => {
+                panic!("We don't support DenseMLE as output layers for now")
+            }
+            // --- Just write a single zero into the transcript since the counts (layer size) are already included in the circuit description ---
+            MleEnum::Zero(_) => transcript_writer.append_elements("output layer", &[F::ZERO]),
+        };
 
         let challenges =
             transcript_writer.get_challenges("output layer binding", output.num_free_vars());
@@ -595,19 +621,7 @@ impl<F: Field> GKRCircuitDescription<F> {
     fn verify(
         &self,
         transcript_reader: &mut impl VerifierTranscript<F>,
-        circuit_description_hash_type: CircuitHashType,
     ) -> Result<Vec<ClaimMle<F>>, GKRError> {
-        // --- Generate circuit description hash and check against prover-provided circuit description hash ---
-        // let hash_value_as_field_elems =
-        //     get_circuit_description_hash_as_field_elems(self, circuit_description_hash_type);
-        // let prover_supplied_circuit_description_hash = transcript_reader
-        //     .consume_elements("Circuit description hash", hash_value_as_field_elems.len())
-        //     .unwrap();
-        // assert_eq!(
-        //     prover_supplied_circuit_description_hash,
-        //     hash_value_as_field_elems
-        // );
-
         // Get the verifier challenges from the transcript.
         let fiat_shamir_challenges: Vec<FiatShamirChallenge<F>> = self
             .fiat_shamir_challenges

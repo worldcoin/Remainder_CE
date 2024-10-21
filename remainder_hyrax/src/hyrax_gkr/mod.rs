@@ -1,3 +1,4 @@
+#![allow(clippy::type_complexity)]
 use std::collections::HashMap;
 
 use crate::utils::vandermonde::VandermondeInverse;
@@ -91,7 +92,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
             .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
             .for_each(|layer_id| {
                 let mle = inputs.get(layer_id).unwrap();
-                transcript.append_scalar_points("input layer", mle.get_evals_vector());
+                transcript.append_scalar_points("input layer", &mle.f.iter().collect_vec());
             });
 
         // For each hyrax input layer, calculate commitments if not already provided, and then append each
@@ -226,7 +227,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
             .iter()
             .sorted_by_key(|(layer_id, _)| layer_id.get_raw_input_layer_id())
             .for_each(|(_layer_id, mle)| {
-                transcript.append_scalar_points("input layer", mle.get_evals_vector());
+                transcript.append_scalar_points("input layer", &mle.f.iter().collect_vec());
             });
 
         // For each Hyrax input layer commitment (in order of LayerId), consume elements from the transcript and check they match the commitments contained in the HyraxInputLayerProof.
@@ -282,7 +283,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
                 committer,
             );
             plaintext_claims.into_iter().for_each(|claim| {
-                verify_claim::<C::Scalar>(values.get_evals_vector(), claim.get_claim());
+                verify_claim::<C::Scalar>(&values.f.iter().collect_vec(), claim.get_claim());
             });
         });
 
