@@ -1,11 +1,7 @@
 use crate::input_layer::ligero_input_layer::LigeroInputLayerDescriptionWithPrecommit;
 
 use crate::layer::LayerId;
-use crate::layouter::compiling::{CircuitHashType, LayouterCircuit};
-use crate::layouter::component::Component;
-use crate::layouter::nodes::circuit_inputs::InputLayerNodeData;
-use crate::layouter::nodes::node_enum::NodeEnum;
-use crate::layouter::nodes::Context;
+use crate::layouter::compiling::CircuitHashType;
 use crate::mle::evals::MultilinearExtension;
 use crate::prover::verify;
 use ark_std::{end_timer, start_timer};
@@ -21,7 +17,7 @@ use sha3::Sha3_256;
 use std::collections::HashMap;
 use std::fs::File;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::io::{BufReader, BufWriter};
+use std::io::BufWriter;
 use std::path::Path;
 
 use super::{prove, GKRCircuitDescription};
@@ -73,10 +69,14 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
             // we split instead into two chunks of 16 bytes each and
             // absorb two field elements.
             // TODO(ryancao): Update this by using `REPR_NUM_BYTES` after merging with the testing branch
-            let circuit_description_hash_bytes_first_half =
-                &circuit_description_hash_bytes.to_vec()[..16];
-            let circuit_description_hash_bytes_second_half =
-                &circuit_description_hash_bytes.to_vec()[16..];
+            let mut circuit_description_hash_bytes_first_half = [0; 32];
+            let mut circuit_description_hash_bytes_second_half = [0; 32];
+
+            circuit_description_hash_bytes_first_half[..16]
+                .copy_from_slice(&circuit_description_hash_bytes.to_vec()[..16]);
+            circuit_description_hash_bytes_second_half[..16]
+                .copy_from_slice(&circuit_description_hash_bytes.to_vec()[16..]);
+
             vec![
                 F::from_bytes_le(circuit_description_hash_bytes_first_half.to_vec()),
                 F::from_bytes_le(circuit_description_hash_bytes_second_half.to_vec()),
@@ -101,66 +101,6 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
 /// TODO(ryancao): Move this into the prover/verifier settings!!! (This is already a TDH ticket)
 const CIRCUIT_DESCRIPTION_HASH_TYPE: CircuitHashType = CircuitHashType::DefaultRustHash;
 
-/// Boilerplate code for testing a circuit with all public inputs
-pub fn test_circuit<
-    F: Field,
-    C: Component<NodeEnum<F>>,
-    Fn: FnMut(&Context) -> (C, Vec<InputLayerNodeData<F>>),
->(
-    mut circuit: LayouterCircuit<F, C, Fn>,
-    path: Option<&Path>,
-) {
-    let transcript_writer = TranscriptWriter::<F, PoseidonSponge<F>>::new("GKR Prover Transcript");
-    let prover_timer = start_timer!(|| "Proof generation");
-
-    match circuit.prove(transcript_writer) {
-        Ok((transcript, gkr_circuit_description, inputs)) => {
-            end_timer!(prover_timer);
-            if let Some(path) = path {
-                let write_out_timer = start_timer!(|| "Writing out proof");
-                let f = File::create(path).unwrap();
-                let writer = BufWriter::new(f);
-                serde_json::to_writer(writer, &transcript).unwrap();
-                end_timer!(write_out_timer);
-            }
-
-            let transcript = if let Some(path) = path {
-                let read_in_timer = start_timer!(|| "Reading in proof");
-                let file = std::fs::File::open(path).unwrap();
-                let reader = BufReader::new(file);
-                let result = serde_json::from_reader(reader).unwrap();
-                end_timer!(read_in_timer);
-                result
-            } else {
-                transcript
-            };
-
-            let mut transcript_reader = TranscriptReader::<F, PoseidonSponge<F>>::new(transcript);
-            let verifier_timer = start_timer!(|| "Proof verification");
-
-            match verify(
-                &inputs,
-                &[],
-                &gkr_circuit_description,
-                CIRCUIT_DESCRIPTION_HASH_TYPE,
-                &mut transcript_reader,
-            ) {
-                Ok(_) => {
-                    end_timer!(verifier_timer);
-                }
-                Err(err) => {
-                    println!("Verify failed! Error: {err}");
-                    panic!();
-                }
-            }
-        }
-        Err(err) => {
-            println!("Proof failed! Error: {err}");
-            panic!();
-        }
-    }
-}
-
 /// Function which instantiates a circuit description with the given inputs
 /// and precommits and both attempts to both prove and verify said circuit.
 pub fn test_circuit_new<F: Field>(
@@ -179,6 +119,7 @@ pub fn test_circuit_new<F: Field>(
         inputs,
         &private_input_layer_description_and_precommits,
         circuit_description,
+        CIRCUIT_DESCRIPTION_HASH_TYPE,
         &mut transcript_writer,
     ) {
         Ok(_) => {
@@ -187,16 +128,29 @@ pub fn test_circuit_new<F: Field>(
             let mut transcript_reader = TranscriptReader::<F, PoseidonSponge<F>>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
-            // --- Extract the ligero input layer descriptions ---
+            // --- Extract the public inputs (i.e. those which do not appear in the `private_input_layer_description_and_precommits`) ---
+            let public_input_layers = inputs
+                .clone()
+                .into_iter()
+                .filter_map(|(layer_id, layer_description)| {
+                    if private_input_layer_description_and_precommits.contains_key(&layer_id) {
+                        None
+                    } else {
+                        Some((layer_id, layer_description))
+                    }
+                })
+                .collect();
+
+            // --- Additionally, extract the ligero input layer descriptions ---
             let private_input_layer_descriptions = private_input_layer_description_and_precommits
                 .into_values()
                 .map(|(layer_description, _)| layer_description)
                 .collect_vec();
 
             match verify(
-                &inputs,
+                &public_input_layers,
                 &private_input_layer_descriptions,
-                &circuit_description,
+                circuit_description,
                 CIRCUIT_DESCRIPTION_HASH_TYPE,
                 &mut transcript_reader,
             ) {

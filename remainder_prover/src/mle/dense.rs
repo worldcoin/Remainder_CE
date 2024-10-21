@@ -9,7 +9,7 @@ use itertools::{repeat_n, Itertools};
 use serde::{Deserialize, Serialize};
 
 use super::betavalues::BetaValues;
-use super::{mle_enum::MleEnum, Mle, MleIndex};
+use super::{evals::EvaluationsIterator, mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
     claims::{wlx_eval::ClaimMle, Claim},
     mle::evals::{Evaluations, MultilinearExtension},
@@ -23,7 +23,8 @@ use remainder_shared_types::Field;
 
 /// An implementation of an [Mle] using a dense representation.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct DenseMle<F> {
+#[serde(bound = "F: Field")]
+pub struct DenseMle<F: Field> {
     /// The ID of the layer this data belongs to.
     pub layer_id: LayerId,
 
@@ -42,14 +43,9 @@ impl<F: Field> Mle<F> for DenseMle<F> {
 
     fn get_padded_evaluations(&self) -> Vec<F> {
         let size: usize = 1 << self.mle.num_vars();
-        let padding = size - self.mle.get_evals().len();
+        let padding = size - self.mle.len();
 
-        self.mle
-            .get_evals_vector()
-            .iter()
-            .cloned()
-            .chain(repeat_n(F::ZERO, padding))
-            .collect()
+        self.mle.iter().chain(repeat_n(F::ZERO, padding)).collect()
     }
 
     fn add_prefix_bits(&mut self, mut new_bits: Vec<MleIndex<F>>) {
@@ -61,8 +57,12 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         self.layer_id
     }
 
-    fn bookkeeping_table(&self) -> &[F] {
-        self.mle.get_evals_vector()
+    fn len(&self) -> usize {
+        self.mle.len()
+    }
+
+    fn iter(&self) -> EvaluationsIterator<F> {
+        self.mle.iter()
     }
 
     fn mle_indices(&self) -> &[MleIndex<F>] {
@@ -166,11 +166,19 @@ impl<F: Field> Mle<F> for DenseMle<F> {
     fn get_enum(self) -> MleEnum<F> {
         MleEnum::Dense(self)
     }
+
+    fn get(&self, index: usize) -> Option<F> {
+        self.mle.get(index)
+    }
+
+    fn first(&self) -> F {
+        self.iter().next().unwrap()
+    }
 }
 
 impl<F: Field> YieldClaim<ClaimMle<F>> for DenseMle<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
-        if self.bookkeeping_table().len() != 1 {
+        if self.len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
         }
         let mle_indices: Result<Vec<F>, _> = self
@@ -182,7 +190,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for DenseMle<F> {
                     .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
             })
             .collect();
-        let claim_value = self.bookkeeping_table()[0];
+        let claim_value = self.first();
 
         Ok(vec![ClaimMle::new(
             mle_indices?,
@@ -311,9 +319,9 @@ impl<F: Field> DenseMle<F> {
         let super_big_endian_vector = mles
             .iter()
             .flat_map(|mle| {
-                let mle_vec = mle.bookkeeping_table();
-                let evals = Evaluations::new_from_big_endian(mle.num_free_vars(), mle_vec);
-                evals.to_vec()
+                let mle_vec = mle.iter().collect::<Vec<_>>();
+                let evals = Evaluations::new_from_big_endian(mle.num_free_vars(), &mle_vec);
+                evals.iter().collect::<Vec<_>>()
             })
             .collect_vec();
 
@@ -324,7 +332,7 @@ impl<F: Field> DenseMle<F> {
             &super_big_endian_vector,
         );
 
-        Self::new_from_raw(evals.to_vec(), layer_id)
+        Self::new_from_raw(evals.iter().collect(), layer_id)
     }
 
     /// creates an expression from the current Mle
@@ -363,7 +371,8 @@ impl<F: Field> IntoIterator for DenseMle<F> {
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.mle.get_evals_vector().clone().into_iter()
+        // TEMPORARY: get_evals_vector()
+        self.mle.iter().collect::<Vec<F>>().into_iter()
     }
 }
 
@@ -400,14 +409,8 @@ pub fn get_padded_evaluations_for_list<F: Field, const L: usize>(items: &[Vec<F>
 impl<F: Field> DenseMle<F> {
     /// Splits the MLE into a new MLE with a tuple of size 2 as its element.
     pub fn split(self) -> [DenseMle<F>; 2] {
-        let first_iter = self.mle.get_evals_vector().clone().into_iter().step_by(2);
-        let second_iter = self
-            .mle
-            .get_evals_vector()
-            .clone()
-            .into_iter()
-            .skip(1)
-            .step_by(2);
+        let first_iter = self.mle.iter().step_by(2);
+        let second_iter = self.mle.iter().skip(1).step_by(2);
 
         [
             DenseMle::new_from_iter(first_iter, self.layer_id),

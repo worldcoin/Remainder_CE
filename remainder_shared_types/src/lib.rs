@@ -65,4 +65,12 @@ pub trait HasByteRepresentation {
     /// Function which creates an equivalent representation of the element
     /// in a byte array of length `REPR_NUM_BYTES`.
     fn to_bytes_le(&self) -> Vec<u8>;
+
+    /// Similar to `to_bytes_le` but returns chunks of `u64`s.
+    fn to_u64s_le(&self) -> Vec<u64>;
+
+    /// Similar to `from_bytes_le` but takes chunks of `u64`s.
+    fn from_u64s_le(words: Vec<u64>) -> Self
+    where
+        Self: Sized;
 }
