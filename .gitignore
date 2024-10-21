@@ -28,6 +28,10 @@ scripts-ion/
 scripts-noya/
 scripts-upshot/
 
+*.bin
+# Ignore all npy files - probably contains customer-specific data.
+*.npy
+
 # Temporary benchmarking data.
 /flame-graphs/
 /massif/

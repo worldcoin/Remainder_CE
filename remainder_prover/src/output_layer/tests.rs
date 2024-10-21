@@ -59,7 +59,7 @@ fn test_output_layer_get_claims() {
     let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
         TranscriptWriter::new("Test Transcript Writer");
 
-    transcript_writer.append_elements("output layer", output_layer.get_mle().bookkeeping_table());
+    transcript_writer.append_elements("output layer", &output_layer.get_mle().iter().collect_vec());
     let challenges = transcript_writer.get_challenges("la la", 2);
     // Fix `x_1 = 1` and `x_2 = 1`.
     output_layer.fix_layer(&challenges).unwrap();
@@ -114,7 +114,7 @@ fn test_output_layer_get_claims_with_prefix_bits() {
     let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
         TranscriptWriter::new("Test Transcript Writer");
 
-    transcript_writer.append_elements("output layer", output_layer.get_mle().bookkeeping_table());
+    transcript_writer.append_elements("output layer", &output_layer.get_mle().iter().collect_vec());
     let challenges = transcript_writer.get_challenges("la la", output_layer.num_free_vars());
     output_layer.fix_layer(&challenges).unwrap();
     let claims = output_layer.get_claims().unwrap();

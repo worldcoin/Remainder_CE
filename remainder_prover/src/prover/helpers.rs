@@ -73,10 +73,14 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
             // we split instead into two chunks of 16 bytes each and
             // absorb two field elements.
             // TODO(ryancao): Update this by using `REPR_NUM_BYTES` after merging with the testing branch
-            let circuit_description_hash_bytes_first_half =
-                &circuit_description_hash_bytes.to_vec()[..16];
-            let circuit_description_hash_bytes_second_half =
-                &circuit_description_hash_bytes.to_vec()[16..];
+            let mut circuit_description_hash_bytes_first_half = [0; 32];
+            let mut circuit_description_hash_bytes_second_half = [0; 32];
+
+            circuit_description_hash_bytes_first_half[..16]
+                .copy_from_slice(&circuit_description_hash_bytes.to_vec()[..16]);
+            circuit_description_hash_bytes_second_half[..16]
+                .copy_from_slice(&circuit_description_hash_bytes.to_vec()[16..]);
+
             vec![
                 F::from_bytes_le(&circuit_description_hash_bytes_first_half.to_vec()),
                 F::from_bytes_le(&circuit_description_hash_bytes_second_half.to_vec()),
@@ -179,6 +183,7 @@ pub fn test_circuit_new<F: Field>(
         inputs,
         &private_input_layer_description_and_precommits,
         circuit_description,
+        CIRCUIT_DESCRIPTION_HASH_TYPE,
         &mut transcript_writer,
     ) {
         Ok(_) => {
@@ -187,16 +192,29 @@ pub fn test_circuit_new<F: Field>(
             let mut transcript_reader = TranscriptReader::<F, PoseidonSponge<F>>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
-            // --- Extract the ligero input layer descriptions ---
+            // --- Extract the public inputs (i.e. those which do not appear in the `private_input_layer_description_and_precommits`) ---
+            let public_input_layers = inputs
+                .clone()
+                .into_iter()
+                .filter_map(|(layer_id, layer_description)| {
+                    if private_input_layer_description_and_precommits.contains_key(&layer_id) {
+                        None
+                    } else {
+                        Some((layer_id, layer_description))
+                    }
+                })
+                .collect();
+
+            // --- Additionally, extract the ligero input layer descriptions ---
             let private_input_layer_descriptions = private_input_layer_description_and_precommits
                 .into_values()
                 .map(|(layer_description, _)| layer_description)
                 .collect_vec();
 
             match verify(
-                &inputs,
+                &public_input_layers,
                 &private_input_layer_descriptions,
-                &circuit_description,
+                circuit_description,
                 CIRCUIT_DESCRIPTION_HASH_TYPE,
                 &mut transcript_reader,
             ) {

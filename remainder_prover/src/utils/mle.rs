@@ -74,7 +74,7 @@ pub fn argsort<T: Ord>(slice: &[T], invert: bool) -> Vec<usize> {
 /// Helper function to create random MLE with specific number of vars
 pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F> {
     let capacity = 2_u32.pow(num_vars as u32);
-    let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
+    let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()) * F::from(rng.gen::<u64>()))
         .take(capacity as usize)
         .collect_vec();
     DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
@@ -188,10 +188,11 @@ pub fn get_total_mle_indices<F: Field>(
 /// use remainder::utils::mle::build_composite_mle;
 /// use remainder::mle::evals::MultilinearExtension;
 /// use remainder_shared_types::Fr;
+/// use itertools::{Itertools};
 /// let mle1 = MultilinearExtension::new(vec![Fr::from(2)]);
 /// let mle2 = MultilinearExtension::new(vec![Fr::from(1), Fr::from(3)]);
 /// let result = build_composite_mle(&[(&mle1, &vec![false, true]), (&mle2, &vec![true])]);
-/// assert_eq!(result.get_evals_vector(), &vec![Fr::from(0), Fr::from(1), Fr::from(2), Fr::from(3)]);
+/// assert_eq!(*result.f.iter().collect_vec().clone(), vec![Fr::from(0), Fr::from(1), Fr::from(2), Fr::from(3)]);
 /// ```
 pub fn build_composite_mle<F: Field>(
     mles: &[(&MultilinearExtension<F>, &Vec<bool>)],
@@ -204,17 +205,14 @@ pub fn build_composite_mle<F: Field>(
     });
     let mut out = vec![F::ZERO; 1 << out_num_vars];
     for (mle, prefix_bits) in mles {
-        mle.get_evals_vector()
-            .iter()
-            .enumerate()
-            .for_each(|(idx, eval)| {
-                let mut out_idx = 0;
-                for (i, bit) in prefix_bits.iter().enumerate() {
-                    out_idx |= (*bit as usize) << i;
-                }
-                out_idx |= idx << prefix_bits.len();
-                out[out_idx] = *eval;
-            });
+        mle.f.iter().enumerate().for_each(|(idx, eval)| {
+            let mut out_idx = 0;
+            for (i, bit) in prefix_bits.iter().enumerate() {
+                out_idx |= (*bit as usize) << i;
+            }
+            out_idx |= idx << prefix_bits.len();
+            out[out_idx] = eval;
+        });
     }
     MultilinearExtension::new(out)
 }
