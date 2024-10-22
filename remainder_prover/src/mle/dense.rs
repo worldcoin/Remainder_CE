@@ -8,7 +8,6 @@ use itertools::{repeat_n, Itertools};
 
 use serde::{Deserialize, Serialize};
 
-use super::betavalues::BetaValues;
 use super::{evals::EvaluationsIterator, mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
     claims::{wlx_eval::ClaimMle, Claim},
@@ -353,15 +352,6 @@ impl<F: Field> DenseMle<F> {
                 _ => panic!("MLE index not bound"),
             })
             .collect()
-    }
-
-    /// Evaluates a [DenseMle] that has not been bound at a point.
-    /// I.e., computes $\widetilde{V}_i(r_1, ..., r_n)$ for a point
-    /// $(r_1, ..., r_n)$.
-    pub fn evaluate_at_a_point(&self, point: &[F]) -> F {
-        let evaluated_at_0 =
-            BetaValues::compute_beta_over_two_challenges(point, &vec![F::ZERO; point.len()]);
-        todo!()
     }
 }
 

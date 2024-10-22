@@ -275,7 +275,6 @@ impl Iterator for GrayCode {
 /// the gray codes iterator.
 pub fn evaluate_mle_at_a_point<F: Field>(mle: &MultilinearExtension<F>, point: &[F]) -> F {
     let mle_num_vars = mle.num_vars();
-    let mle_coefficients = mle.get_evals_vector();
     assert_eq!(point.len(), mle_num_vars);
     // The gray codes start at index 1, so we start with the first value which
     // is \widetilde{\beta}(\vec{0}, point).
@@ -283,8 +282,16 @@ pub fn evaluate_mle_at_a_point<F: Field>(mle: &MultilinearExtension<F>, point: &
         BetaValues::compute_beta_over_two_challenges(&vec![F::ZERO; mle_num_vars], point);
     // This is the value that gets multiplied to the first MLE coefficient,
     // which is (1 - r_1) * (1 - r_2) * ... * (1 - r_n) where (r_1, ..., r_n) is the point.
-    let starting_evaluation_acc = starting_beta_value * mle_coefficients[0];
+    let starting_evaluation_acc = starting_beta_value * mle.first();
     let gray_code = GrayCode::new(mle_num_vars);
+    let inverses = point
+        .iter()
+        .map(|elem| elem.invert().unwrap())
+        .collect_vec();
+    let one_minus_inverses = point
+        .iter()
+        .map(|elem| (F::ONE - elem).invert().unwrap())
+        .collect_vec();
     // We simply compute the correct inverse and new multiplicative term
     // for each bit that is flipped in the beta value, and accumulate these
     // by doing an element-wise multiplication with the correct index
@@ -297,7 +304,7 @@ pub fn evaluate_mle_at_a_point<F: Field>(mle: &MultilinearExtension<F>, point: &
             // (1 - r_i) to account for this bit flip.
             let next_beta_value = if flipped_bit_value {
                 prev_beta_value
-                    * point[flipped_bit_index as usize].invert().unwrap()
+                    * inverses[flipped_bit_index as usize]
                     * (F::ONE - point[flipped_bit_index as usize])
             }
             // For every bit i that is flipped, if it used to be a 0,
@@ -305,17 +312,25 @@ pub fn evaluate_mle_at_a_point<F: Field>(mle: &MultilinearExtension<F>, point: &
             // r_i to account for this bit flip.
             else {
                 prev_beta_value
-                    * (F::ONE - point[flipped_bit_index as usize])
-                        .invert()
-                        .unwrap()
+                    * (one_minus_inverses[flipped_bit_index as usize])
                     * point[flipped_bit_index as usize]
             };
             // Multiply this by the appropriate MLE coefficient.
-            let next_evaluation_acc = next_beta_value * mle_coefficients[index as usize];
+            let next_evaluation_acc = next_beta_value * mle.get(index as usize).unwrap();
             (next_beta_value, evaluation_acc + next_evaluation_acc)
         },
     );
     evaluation
+}
+
+/// Destructively evaluate an MLE at a point by using the `fix_variable` algorithm
+/// iteratively until all of the variables have been bound.
+pub fn evaluate_mle_destructive<F: Field>(mle: &mut MultilinearExtension<F>, point: &[F]) -> F {
+    point.iter().for_each(|challenge| {
+        mle.fix_variable(*challenge);
+    });
+    assert_eq!(mle.len(), 1);
+    mle.first()
 }
 
 #[cfg(test)]
@@ -324,17 +339,9 @@ mod tests {
     use itertools::Itertools;
     use remainder_shared_types::{ff_field, Fr};
 
-    use crate::mle::evals::MultilinearExtension;
+    use crate::{mle::evals::MultilinearExtension, utils::mle::evaluate_mle_destructive};
 
     use super::evaluate_mle_at_a_point;
-
-    fn evaluate_mle_destructive(mle: &mut MultilinearExtension<Fr>, point: &[Fr]) -> Fr {
-        point.iter().for_each(|challenge| {
-            mle.fix_variable(*challenge);
-        });
-        assert_eq!(mle.get_evals_vector().len(), 1);
-        mle.get_evals_vector()[0]
-    }
 
     #[test]
     fn test_evaluate_mle_at_a_point_1_variable() {
