@@ -92,7 +92,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
             .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
             .for_each(|layer_id| {
                 let mle = inputs.get(layer_id).unwrap();
-                transcript.append_scalar_points("input layer", &mle.f.iter().collect_vec());
+                transcript.append_scalar_field_elems("input layer", &mle.f.iter().collect_vec());
             });
 
         // For each hyrax input layer, calculate commitments if not already provided, and then append each
@@ -227,7 +227,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
             .iter()
             .sorted_by_key(|(layer_id, _)| layer_id.get_raw_input_layer_id())
             .for_each(|(_layer_id, mle)| {
-                transcript.append_scalar_points("input layer", &mle.f.iter().collect_vec());
+                transcript.append_scalar_field_elems("input layer", &mle.f.iter().collect_vec());
             });
 
         // For each Hyrax input layer commitment (in order of LayerId), consume elements from the transcript and check they match the commitments contained in the HyraxInputLayerProof.
