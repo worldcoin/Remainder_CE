@@ -293,7 +293,6 @@ impl<F: Field> ClaimGroup<F> {
             self.get_num_vars(),
         )
         .unwrap();
-        dbg!(&wlx_evaluations);
         let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 
         // Append evaluations to the transcript before sampling a challenge.
