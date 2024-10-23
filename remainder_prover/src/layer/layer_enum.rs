@@ -59,19 +59,6 @@ impl<F: Field> LayerEnum<F> {
 
         expression.get_expression_size()
     }
-
-    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> Box<dyn std::fmt::Display + 'a> {
-        match self {
-            LayerEnum::Regular(layer) => Box::new(layer.expression().circuit_description_fmt()),
-            LayerEnum::Gate(gate_layer) => Box::new(gate_layer.circuit_description_fmt()),
-            LayerEnum::IdentityGate(id_gate_layer) => {
-                Box::new(id_gate_layer.circuit_description_fmt())
-            }
-            LayerEnum::MatMult(mat_mult_layer) => {
-                Box::new(mat_mult_layer.circuit_description_fmt())
-            }
-        }
-    }
 }
 
 impl<F: Field> YieldWLXEvals<F> for LayerEnum<F> {
