@@ -114,7 +114,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         info!("Proving a GKR Layer.");
 
         // Initialize tables and pre-fix variables.
-        self.initialize_sumcheck(&claim.get_point())?;
+        self.initialize_sumcheck(claim.get_point())?;
 
         let mut previous_round_message = vec![claim.get_result()];
         let mut previous_challenge = F::ZERO;
