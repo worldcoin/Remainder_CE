@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::{
-    builders::layer_builder::LayerBuilder,
     claims::Claim,
     expression::{
         circuit_expr::{filter_bookkeeping_table, ExprDescription},
@@ -56,7 +55,7 @@ pub struct RegularLayer<F: Field> {
 
     /// Stores the indices of the non-linear rounds in this GKR layer so we
     /// only produce sumcheck proofs over those.
-    nonlinear_rounds: Option<Vec<usize>>,
+    nonlinear_rounds: Vec<usize>,
 
     /// Store the beta values associated with an expression.
     beta_vals: Option<BetaValues<F>>,
@@ -115,19 +114,29 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         info!("Proving a GKR Layer.");
 
         // Initialize tables and pre-fix variables.
-        self.start_sumcheck(&claim)?;
+        self.initialize_sumcheck(claim.get_point())?;
 
-        let nonlinear_rounds = self.nonlinear_rounds.take().unwrap();
+        let mut previous_round_message = vec![claim.get_result()];
+        let mut previous_challenge = F::ZERO;
 
-        for round_index in &nonlinear_rounds {
+        for round_index in self.nonlinear_rounds.clone() {
             // First compute the appropriate number of univariate evaluations for this round.
-            let prover_sumcheck_message = self.compute_round_sumcheck_message(*round_index)?;
+            let prover_sumcheck_message = self.compute_round_sumcheck_message(round_index)?;
+            // In debug mode, catch sumcheck round errors from the prover side.
+            debug_assert_eq!(
+                evaluate_at_a_point(&previous_round_message, previous_challenge).unwrap(),
+                prover_sumcheck_message[0] + prover_sumcheck_message[1]
+            );
             // Append the evaluations to the transcript.
             transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
             // Sample the challenge
             let challenge = transcript_writer.get_challenge("Sumcheck challenge");
             // "Bind" the challenge to the expression at this point.
-            self.bind_round_variable(*round_index, challenge)?;
+            self.bind_round_variable(round_index, challenge)?;
+            // For debug mode, update the previous message and challenge for the purpose
+            // of checking whether these still pass the sumcheck round checks.
+            previous_round_message = prover_sumcheck_message;
+            previous_challenge = challenge;
         }
 
         // By now, `self.expression` should be fully bound.
@@ -139,11 +148,19 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         Ok(())
     }
 
+    /// Initialize all necessary information in order to start sumcheck within a
+    /// layer of GKR. This includes pre-fixing all of the rounds within the
+    /// layer which are linear, and then appropriately initializing the
+    /// necessary beta values over the nonlinear rounds.
     fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
         let expression = &mut self.expression;
-        let _expression_num_indices = expression.index_mle_indices(0);
+        let expression_num_indices = expression.index_mle_indices(0);
         let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
         let expression_linear_indices = expression.get_all_linear_rounds();
+        debug_assert_eq!(
+            expression_num_indices,
+            expression_nonlinear_indices.len() + expression_linear_indices.len()
+        );
 
         // for each of the linear indices in the expression, we can fix the variable at that index for
         // the expression, so that now the only unbound indices are the nonlinear indices.
@@ -164,9 +181,6 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         let newbeta = BetaValues::new(betavec);
         self.beta_vals = Some(newbeta);
 
-        // store the nonlinear rounds of the expression within the layer so that we know these are the
-        // rounds we perform sumcheck over.
-        self.nonlinear_rounds = Some(expression_nonlinear_indices);
         Ok(())
     }
 
@@ -205,8 +219,13 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         Ok(())
     }
 
+    /// Returns the round indices (with respect to the indices of all relevant
+    /// variables within the layer) which are nonlinear. For example, if the
+    /// current layer's [Expression] looks something like
+    /// V_{i + 1}(x_1, x_2, x_3) * V_{i + 2}(x_1, x_2)
+    /// then the `sumcheck_round_indices` of this layer would be [1, 2].
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        self.nonlinear_rounds.clone().unwrap()
+        self.nonlinear_rounds.clone()
     }
 
     fn max_degree(&self) -> usize {
@@ -524,52 +543,6 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
 }
 
 impl<F: Field> RegularLayer<F> {
-    /// Initialize all necessary information in order to start sumcheck within a
-    /// layer of GKR. This includes pre-fixing all of the rounds within the
-    /// layer which are linear, and then appropriately initializing the
-    /// necessary beta values over the nonlinear rounds.
-    fn start_sumcheck(&mut self, claim: &Claim<F>) -> Result<(), LayerError> {
-        let claim_point = claim.get_point();
-
-        // Grab and index the expression.
-        let expression = &mut self.expression;
-        let expression_num_indices = expression.index_mle_indices(0);
-
-        let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
-        let expression_linear_indices = expression.get_all_linear_rounds();
-        debug_assert_eq!(
-            expression_num_indices,
-            expression_nonlinear_indices.len() + expression_linear_indices.len()
-        );
-
-        // For each of the linear indices in the expression, we can fix the
-        // variable at that index for the expression, so that now the only
-        // unbound indices are the nonlinear indices.
-        expression_linear_indices
-            .into_iter()
-            .sorted()
-            .for_each(|round_idx| {
-                expression.fix_variable_at_index(round_idx, claim_point[round_idx]);
-            });
-
-        // We need the beta values over the nonlinear indices of the
-        // expression, so we grab the claim points that are over these
-        // nonlinear indices and then initialize the betavalues struct over
-        // them.
-        let betavec = expression_nonlinear_indices
-            .iter()
-            .map(|idx| (*idx, claim_point[*idx]))
-            .collect_vec();
-        let newbeta = BetaValues::new(betavec);
-        self.beta_vals = Some(newbeta);
-
-        // Store the nonlinear rounds of the expression within the layer so
-        // that we know these are the rounds we perform sumcheck over.
-        self.nonlinear_rounds = Some(expression_nonlinear_indices);
-
-        Ok(())
-    }
-
     /// Traverse the fully-bound `self.expression` and append all MLE values
     /// to the trascript.
     pub fn append_leaf_mles_to_transcript(
@@ -617,19 +590,12 @@ impl<F: Field> RegularLayer<F> {
     /// The `Expression` is the relationship this `Layer` proves
     /// and the `LayerId` is the location of this `Layer` in the overall circuit
     pub fn new_raw(id: LayerId, expression: Expression<F, ProverExpr>) -> Self {
+        // --- Compute nonlinear rounds from `expression` ---
+        let nonlinear_rounds = expression.get_all_nonlinear_rounds();
         RegularLayer {
             id,
             expression,
-            nonlinear_rounds: None,
-            beta_vals: None,
-        }
-    }
-
-    pub(crate) fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
-        Self {
-            id,
-            expression: builder.build_expression(),
-            nonlinear_rounds: None,
+            nonlinear_rounds,
             beta_vals: None,
         }
     }

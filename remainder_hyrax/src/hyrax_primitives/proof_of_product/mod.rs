@@ -60,11 +60,11 @@ impl<C: PrimeOrderCurve> ProofOfProduct<C> {
         let z4 = b_4 + c * y.blinding;
         let z5 = b_5 + c * (z.blinding - x.blinding * y.value);
 
-        transcript.append_scalar_point("PoP z1", z1);
-        transcript.append_scalar_point("PoP z2", z2);
-        transcript.append_scalar_point("PoP z3", z3);
-        transcript.append_scalar_point("PoP z4", z4);
-        transcript.append_scalar_point("PoP z5", z5);
+        transcript.append_scalar_field_elem("PoP z1", z1);
+        transcript.append_scalar_field_elem("PoP z2", z2);
+        transcript.append_scalar_field_elem("PoP z3", z3);
+        transcript.append_scalar_field_elem("PoP z4", z4);
+        transcript.append_scalar_field_elem("PoP z5", z5);
 
         Self {
             alpha,
@@ -96,11 +96,11 @@ impl<C: PrimeOrderCurve> ProofOfProduct<C> {
         // A scalar field element $c$ is sampled from the transcript.
         let c = transcript.get_scalar_field_challenge("PoP c");
 
-        transcript.append_scalar_point("PoP z1", self.z1);
-        transcript.append_scalar_point("PoP z2", self.z2);
-        transcript.append_scalar_point("PoP z3", self.z3);
-        transcript.append_scalar_point("PoP z4", self.z4);
-        transcript.append_scalar_point("PoP z5", self.z5);
+        transcript.append_scalar_field_elem("PoP z1", self.z1);
+        transcript.append_scalar_field_elem("PoP z2", self.z2);
+        transcript.append_scalar_field_elem("PoP z3", self.z3);
+        transcript.append_scalar_field_elem("PoP z4", self.z4);
+        transcript.append_scalar_field_elem("PoP z5", self.z5);
 
         // Check the following:
         // \alpha \cdot X^c \overset{?}{=} g^{z_1}\cdot h^{z_2} \\
