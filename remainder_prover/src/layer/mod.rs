@@ -166,7 +166,9 @@ pub trait LayerDescription<F: Field> {
     /// The list of sumcheck rounds this layer will prove, by index.
     fn sumcheck_round_indices(&self) -> Vec<usize>;
 
-    /// Turns this [LayerDescription] into a Verifier Layer
+    /// Turns this [LayerDescription] into a [VerifierLayer] by taking the
+    /// `sumcheck_bindings` and `claim_point` and inserting them into the
+    /// expression to become a verifier expression.
     fn convert_into_verifier_layer(
         &self,
         sumcheck_bindings: &[F],
