@@ -116,15 +116,27 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         // Initialize tables and pre-fix variables.
         self.start_sumcheck(&claim)?;
 
+        let mut previous_round_message = vec![claim.get_result()];
+        let mut previous_challenge = F::ZERO;
+
         for round_index in self.nonlinear_rounds.clone() {
             // First compute the appropriate number of univariate evaluations for this round.
             let prover_sumcheck_message = self.compute_round_sumcheck_message(round_index)?;
+            // In debug mode, catch sumcheck round errors from the prover side.
+            debug_assert_eq!(
+                evaluate_at_a_point(&previous_round_message, previous_challenge).unwrap(),
+                prover_sumcheck_message[0] + prover_sumcheck_message[1]
+            );
             // Append the evaluations to the transcript.
             transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
             // Sample the challenge
             let challenge = transcript_writer.get_challenge("Sumcheck challenge");
             // "Bind" the challenge to the expression at this point.
             self.bind_round_variable(round_index, challenge)?;
+            // For debug mode, update the previous message and challenge for the purpose
+            // of checking whether these still pass the sumcheck round checks.
+            previous_round_message = prover_sumcheck_message;
+            previous_challenge = challenge;
         }
 
         // By now, `self.expression` should be fully bound.
