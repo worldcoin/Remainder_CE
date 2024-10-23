@@ -110,17 +110,6 @@ impl<F: Field> Mle<F> for MleEnum<F> {
     }
 }
 
-/*
-impl<F: Field> YieldClaim<ClaimMle<F>> for MleEnum<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
-        match self {
-            MleEnum::Dense(layer) => layer.get_claims(),
-            MleEnum::Zero(layer) => layer.get_claims(),
-        }
-    }
-}
-*/
-
 impl<F: Field> From<DenseMle<F>> for MleEnum<F> {
     fn from(value: DenseMle<F>) -> Self {
         Self::Dense(value)

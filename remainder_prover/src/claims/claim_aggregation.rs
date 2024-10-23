@@ -63,7 +63,6 @@ pub fn prover_aggregate_claims<F: Field>(
     end_timer!(claim_preproc_timer);
     let intermediate_timer = start_timer!(|| "Intermediate claim aggregation.".to_string());
 
-    // TODO(Makis): Parallelize
     let intermediate_claims = claim_groups
         .into_iter()
         .map(|claim_group| claim_group.prover_aggregate(&fixed_output_mles, transcript_writer))
@@ -222,7 +221,6 @@ pub fn verifier_aggregate_claims<F: Field>(
     end_timer!(claim_preproc_timer);
     let intermediate_timer = start_timer!(|| "Intermediate claim aggregation.".to_string());
 
-    // TODO(Makis): Parallelize
     let intermediate_claims = claim_groups
         .into_iter()
         .map(|claim_group| claim_group.verifier_aggregate(transcript_reader))
