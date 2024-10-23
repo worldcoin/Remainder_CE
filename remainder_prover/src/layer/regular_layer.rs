@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::{
-    builders::layer_builder::LayerBuilder,
     claims::Claim,
     expression::{
         circuit_expr::{filter_bookkeeping_table, ExprDescription},
@@ -56,7 +55,7 @@ pub struct RegularLayer<F: Field> {
 
     /// Stores the indices of the non-linear rounds in this GKR layer so we
     /// only produce sumcheck proofs over those.
-    nonlinear_rounds: Option<Vec<usize>>,
+    nonlinear_rounds: Vec<usize>,
 
     /// Store the beta values associated with an expression.
     beta_vals: Option<BetaValues<F>>,
@@ -117,17 +116,15 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         // Initialize tables and pre-fix variables.
         self.start_sumcheck(&claim)?;
 
-        let nonlinear_rounds = self.nonlinear_rounds.take().unwrap();
-
-        for round_index in &nonlinear_rounds {
+        for round_index in self.nonlinear_rounds.clone() {
             // First compute the appropriate number of univariate evaluations for this round.
-            let prover_sumcheck_message = self.compute_round_sumcheck_message(*round_index)?;
+            let prover_sumcheck_message = self.compute_round_sumcheck_message(round_index)?;
             // Append the evaluations to the transcript.
             transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
             // Sample the challenge
             let challenge = transcript_writer.get_challenge("Sumcheck challenge");
             // "Bind" the challenge to the expression at this point.
-            self.bind_round_variable(*round_index, challenge)?;
+            self.bind_round_variable(round_index, challenge)?;
         }
 
         // By now, `self.expression` should be fully bound.
@@ -164,9 +161,6 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         let newbeta = BetaValues::new(betavec);
         self.beta_vals = Some(newbeta);
 
-        // store the nonlinear rounds of the expression within the layer so that we know these are the
-        // rounds we perform sumcheck over.
-        self.nonlinear_rounds = Some(expression_nonlinear_indices);
         Ok(())
     }
 
@@ -205,8 +199,13 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         Ok(())
     }
 
+    /// Returns the round indices (with respect to the indices of all relevant
+    /// variables within the layer) which are nonlinear. For example, if the
+    /// current layer's [Expression] looks something like
+    /// V_{i + 1}(x_1, x_2, x_3) * V_{i + 2}(x_1, x_2)
+    /// then the `sumcheck_round_indices` of this layer would be [1, 2].
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        self.nonlinear_rounds.clone().unwrap()
+        self.nonlinear_rounds.clone()
     }
 
     fn max_degree(&self) -> usize {
@@ -565,7 +564,7 @@ impl<F: Field> RegularLayer<F> {
 
         // Store the nonlinear rounds of the expression within the layer so
         // that we know these are the rounds we perform sumcheck over.
-        self.nonlinear_rounds = Some(expression_nonlinear_indices);
+        self.nonlinear_rounds = expression_nonlinear_indices;
 
         Ok(())
     }
@@ -617,19 +616,12 @@ impl<F: Field> RegularLayer<F> {
     /// The `Expression` is the relationship this `Layer` proves
     /// and the `LayerId` is the location of this `Layer` in the overall circuit
     pub fn new_raw(id: LayerId, expression: Expression<F, ProverExpr>) -> Self {
+        // --- Compute nonlinear rounds from `expression` ---
+        let nonlinear_rounds = expression.get_all_nonlinear_rounds();
         RegularLayer {
             id,
             expression,
-            nonlinear_rounds: None,
-            beta_vals: None,
-        }
-    }
-
-    pub(crate) fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
-        Self {
-            id,
-            expression: builder.build_expression(),
-            nonlinear_rounds: None,
+            nonlinear_rounds,
             beta_vals: None,
         }
     }

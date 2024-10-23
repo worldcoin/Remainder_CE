@@ -339,8 +339,8 @@ impl<F: Field> Expression<F, ProverExpr> {
 
     /// this traverses the expression tree to get all of the nonlinear rounds. can only be used after indexing the expression.
     /// returns the indices sorted.
-    pub fn get_all_nonlinear_rounds(&mut self) -> Vec<usize> {
-        let (expression_node, mle_vec) = self.deconstruct_mut();
+    pub fn get_all_nonlinear_rounds(&self) -> Vec<usize> {
+        let (expression_node, mle_vec) = self.deconstruct_ref();
         let mut curr_nonlinear_indices: Vec<usize> = Vec::new();
         let mut nonlinear_rounds =
             expression_node.get_all_nonlinear_rounds(&mut curr_nonlinear_indices, mle_vec);
@@ -350,8 +350,8 @@ impl<F: Field> Expression<F, ProverExpr> {
 
     /// this traverses the expression tree to get all of the linear rounds. can only be used after indexing the expression.
     /// returns the indices sorted.
-    pub fn get_all_linear_rounds(&mut self) -> Vec<usize> {
-        let (expression_node, mle_vec) = self.deconstruct_mut();
+    pub fn get_all_linear_rounds(&self) -> Vec<usize> {
+        let (expression_node, mle_vec) = self.deconstruct_ref();
         let mut linear_rounds = expression_node.get_all_linear_rounds(mle_vec);
         linear_rounds.sort();
         linear_rounds

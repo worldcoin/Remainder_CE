@@ -3,10 +3,8 @@ use std::marker::PhantomData;
 use remainder_shared_types::Field;
 
 use crate::{
-    builders::layer_builder::LayerBuilder,
     layer::{
         gate::{BinaryOperation, GateLayer},
-        regular_layer::RegularLayer,
         Layer, LayerId,
     },
     mle::dense::DenseMle,
@@ -23,18 +21,6 @@ pub struct Layers<F: Field, T: Layer<F>> {
 }
 
 impl<F: Field, T: Layer<F>> Layers<F, T> {
-    /// Add a GKRLayer to a list of layers
-    pub fn add_gkr<B: LayerBuilder<F>>(&mut self, new_layer: B) -> B::Successor
-    where
-        T: From<RegularLayer<F>>,
-    {
-        let id = LayerId::Layer(self.layers.len());
-        let successor = new_layer.next_layer(id, None);
-        let layer = RegularLayer::<F>::new(new_layer, id);
-        self.layers.push(layer.into());
-        successor
-    }
-
     /// Add a batched Add Gate layer to a list of layers
     /// In the batched case, consider a vector of mles corresponding to an mle for each "batch" or "copy".
     /// Add a Gate layer to a list of layers
