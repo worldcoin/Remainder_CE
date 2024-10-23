@@ -1067,23 +1067,3 @@ impl<F: Field> IdentityGate<F> {
         Ok(evaluations)
     }
 }
-
-/// For circuit serialization to hash the circuit description into the transcript.
-impl<F: std::fmt::Debug + Field> IdentityGate<F> {
-    pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
-        // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
-        // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct IdentityGateCircuitDesc<'a, F: std::fmt::Debug + Field>(&'a IdentityGate<F>);
-
-        impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for IdentityGateCircuitDesc<'a, F> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.debug_struct("IdentityGate")
-                    .field("mle_ref_layer_id", &self.0.mle_ref.layer_id())
-                    .field("mle_ref_mle_indices", &self.0.mle_ref.mle_indices())
-                    .field("identity_nonzero_gates", &self.0.nonzero_gates)
-                    .finish()
-            }
-        }
-        IdentityGateCircuitDesc(self)
-    }
-}
