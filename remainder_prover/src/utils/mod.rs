@@ -49,21 +49,6 @@ pub fn build_input_shred_and_data<F: Field>(
     (input_shred, input_shred_data)
 }
 
-/// Using a data vector, get an [InputShred] which represents its
-/// shape, along with [InputShredData] which represents the
-/// corresponding data.
-pub fn get_input_shred_and_data<F: Field>(
-    mle_vec: Vec<F>,
-    ctx: &Context,
-    input_node: &InputLayerNode,
-) -> (InputShred, InputShredData<F>) {
-    assert!(mle_vec.len().is_power_of_two());
-    let data = MultilinearExtension::new(mle_vec);
-    let input_shred = InputShred::new(ctx, data.num_vars(), input_node);
-    let input_shred_data = InputShredData::new(input_shred.id(), data);
-    (input_shred, input_shred_data)
-}
-
 /// Returns whether a particular file exists in the filesystem
 ///
 /// TODO!(ryancao): Shucks does this check a relative path...?
