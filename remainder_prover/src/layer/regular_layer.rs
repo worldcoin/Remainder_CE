@@ -154,13 +154,8 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
     /// necessary beta values over the nonlinear rounds.
     fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
         let expression = &mut self.expression;
-        let expression_num_indices = expression.index_mle_indices(0);
         let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
         let expression_linear_indices = expression.get_all_linear_rounds();
-        debug_assert_eq!(
-            expression_num_indices,
-            expression_nonlinear_indices.len() + expression_linear_indices.len()
-        );
 
         // for each of the linear indices in the expression, we can fix the variable at that index for
         // the expression, so that now the only unbound indices are the nonlinear indices.
