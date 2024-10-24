@@ -589,8 +589,9 @@ impl<F: Field> RegularLayer<F> {
     ///
     /// The `Expression` is the relationship this `Layer` proves
     /// and the `LayerId` is the location of this `Layer` in the overall circuit
-    pub fn new_raw(id: LayerId, expression: Expression<F, ProverExpr>) -> Self {
+    pub fn new_raw(id: LayerId, mut expression: Expression<F, ProverExpr>) -> Self {
         // --- Compute nonlinear rounds from `expression` ---
+        expression.index_mle_indices(0);
         let nonlinear_rounds = expression.get_all_nonlinear_rounds();
         RegularLayer {
             id,
