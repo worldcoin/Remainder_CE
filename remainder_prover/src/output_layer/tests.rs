@@ -10,9 +10,9 @@ use remainder_shared_types::{
     Fr,
 };
 
+use crate::claims::Claim;
 use crate::mle::Mle;
 use crate::{
-    claims::{wlx_eval::ClaimMle, YieldClaim},
     layer::LayerId,
     mle::{zero::ZeroMle, MleIndex},
     output_layer::OutputLayerDescription,
@@ -63,18 +63,13 @@ fn test_output_layer_get_claims() {
     let challenges = transcript_writer.get_challenges("la la", 2);
     // Fix `x_1 = 1` and `x_2 = 1`.
     output_layer.fix_layer(&challenges).unwrap();
-    let claims = output_layer.get_claims().unwrap();
+    let claim = output_layer.get_claim().unwrap();
 
     let expected_point = vec![Fr::ONE, Fr::ONE];
     let expected_result = Fr::from(0);
-    let expected_claims = vec![ClaimMle::new(
-        expected_point.clone(),
-        expected_result,
-        None,
-        Some(layer_id),
-    )];
+    let expected_claim = Claim::new(expected_point.clone(), expected_result, layer_id, layer_id);
 
-    assert_eq!(claims, expected_claims);
+    assert_eq!(claim, expected_claim);
 
     // ---- Part 3: Generate claims from the verifier's side.
     let transcript = transcript_writer.get_transcript();
@@ -84,9 +79,9 @@ fn test_output_layer_get_claims() {
         .retrieve_mle_from_transcript_and_fix_layer(&mut transcript_reader)
         .unwrap();
 
-    let claims = verifier_output_layer.get_claims().unwrap();
+    let claim = verifier_output_layer.get_claim().unwrap();
 
-    assert_eq!(claims, expected_claims);
+    assert_eq!(claim, expected_claim);
 }
 
 #[test]
@@ -117,19 +112,14 @@ fn test_output_layer_get_claims_with_prefix_bits() {
     transcript_writer.append_elements("output layer", &output_layer.get_mle().iter().collect_vec());
     let challenges = transcript_writer.get_challenges("la la", output_layer.num_free_vars());
     output_layer.fix_layer(&challenges).unwrap();
-    let claims = output_layer.get_claims().unwrap();
+    let claim = output_layer.get_claim().unwrap();
 
     let expected_point = vec![Fr::ONE, Fr::ZERO, Fr::ONE, Fr::ONE];
     let expected_result = Fr::from(0);
 
-    let expected_claims = vec![ClaimMle::new(
-        expected_point.clone(),
-        expected_result,
-        None,
-        Some(layer_id),
-    )];
+    let expected_claim = Claim::new(expected_point.clone(), expected_result, layer_id, layer_id);
 
-    assert_eq!(claims, expected_claims);
+    assert_eq!(claim, expected_claim);
 
     // ---- Part 3: Generate claims from the verifier's side.
     let transcript = transcript_writer.get_transcript();
@@ -139,10 +129,10 @@ fn test_output_layer_get_claims_with_prefix_bits() {
         .retrieve_mle_from_transcript_and_fix_layer(&mut transcript_reader)
         .unwrap();
 
-    let claims = verifier_output_layer.get_claims().unwrap();
+    let claim = verifier_output_layer.get_claim().unwrap();
 
     // TODO(Makis): This still fails because the verifier doesn't know about
     // the prefix bits. I think we should pass this information to the verifier
     // key.
-    assert_eq!(claims, expected_claims)
+    assert_eq!(claim, expected_claim)
 }
