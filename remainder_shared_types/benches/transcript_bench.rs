@@ -123,7 +123,7 @@ fn bench_bn254_base_field_transcript_absorb_scalar(c: &mut Criterion) {
                         <ECTranscript<
                             Bn256Point,
                             PoseidonSponge<Bn256Base>,
-                        > as ECTranscriptTrait<Bn256Point>>::append_scalar_points(
+                        > as ECTranscriptTrait<Bn256Point>>::append_scalar_field_elems(
                             &mut transcript_writer,
                             "benchmark",
                             &to_be_absorbed,
