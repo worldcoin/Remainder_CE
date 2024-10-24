@@ -19,7 +19,7 @@ impl Arbitrary for Qfr {
         // The resulting element is then upper bounded by
         // `0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`
         // which is smaller that the `r` defining `Fr`.
-        let bytes: Vec<u8> = vec![0; 31]
+        let bytes: Vec<u8> = [0; 31]
             .iter()
             .map(|_| u8::arbitrary(g))
             .chain([0_u8])
@@ -66,7 +66,7 @@ fn test_bit_packed_vector_get_constant() {
 fn test_bit_packed_vector_get_small() {
     // Test bit-width: 2.
 
-    let data: Vec<Fr> = [10, 11, 12, 13].into_iter().map(|x| Fr::from(x)).collect();
+    let data: Vec<Fr> = [10, 11, 12, 13].into_iter().map(Fr::from).collect();
     let bpv = BitPackedVector::new(&data);
 
     assert_eq!(bpv.get(0).unwrap(), Fr::from(10));
@@ -98,7 +98,6 @@ fn test_bit_packed_vector_get_large_1() {
     let offset: u64 = 100;
 
     let data: Vec<Fr> = (0..n)
-        .into_iter()
         .map(|x| Fr::from(offset + x as u64))
         .collect();
     let bpv = BitPackedVector::new(&data);
@@ -118,7 +117,6 @@ fn test_bit_packed_vector_get_large_2() {
     let offset: u64 = 100;
 
     let data: Vec<Fr> = (0..n)
-        .into_iter()
         .map(|x| Fr::from(offset + x as u64))
         .collect();
     let bpv = BitPackedVector::new(&data);
@@ -145,7 +143,6 @@ fn test_bit_packed_vector_get_large_3() {
     let offset = Fr::from(1_234); // 0x4D2
 
     let data: Vec<Fr> = (0..n)
-        .into_iter()
         .map(|i| offset + if i % 2 == 0 { small_val } else { large_val })
         .collect();
     let bpv = BitPackedVector::new(&data);

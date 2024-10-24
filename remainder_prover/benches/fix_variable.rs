@@ -52,13 +52,13 @@ fn create_dummy_mle(num_vars: usize) -> MultilinearExtension<Fr> {
     // on them. As for the second point, we performed benchmarks using random
     // field elements and we didn't notice any statistically significant
     // regression in performance for `halo2curves::bn256::Fr`.
-    let evals: Vec<Fr> = (0..(1 << num_vars)).map(|i| Fr::from(i)).collect();
+    let evals: Vec<Fr> = (0..(1 << num_vars)).map(Fr::from).collect();
     // let evals: Vec<Fr> = (0..(1 << num_vars)).map(|_| Fr::random(OsRng)).collect();
 
     let f = Evaluations::new(num_vars, evals);
-    let f_tilde = MultilinearExtension::new_from_evals(f);
+    
 
-    f_tilde
+    MultilinearExtension::new_from_evals(f)
 }
 
 /// Run `fix_variable` on `mle` instructing Rayon to use up to `num_threads`
@@ -121,7 +121,7 @@ fn bench_fix_variable_at_index(c: &mut Criterion) {
         let mut group = c.benchmark_group(format!("fix_var_at_index_{num_vars}"));
 
         // Fix first variable.
-        group.bench_function(&format!("first"), |b| {
+        group.bench_function("first".to_string(), |b| {
             b.iter_batched(
                 || f_tilde.clone(),
                 |mut mle| mle.fix_variable_at_index(0, black_box(Fr::one())),
@@ -130,7 +130,7 @@ fn bench_fix_variable_at_index(c: &mut Criterion) {
         });
 
         // Fix middle variable.
-        group.bench_function(&format!("middle"), |b| {
+        group.bench_function("middle".to_string(), |b| {
             b.iter_batched(
                 || f_tilde.clone(),
                 |mut mle| mle.fix_variable_at_index(num_vars / 2, black_box(Fr::one())),
@@ -139,7 +139,7 @@ fn bench_fix_variable_at_index(c: &mut Criterion) {
         });
 
         // Fix last variable.
-        group.bench_function(&format!("last"), |b| {
+        group.bench_function("last".to_string(), |b| {
             b.iter_batched(
                 || f_tilde.clone(),
                 |mut mle| mle.fix_variable_at_index(num_vars - 1, black_box(Fr::one())),
@@ -189,7 +189,7 @@ fn bench_fix_variable_parallelism(c: &mut Criterion) {
     let mut group = c.benchmark_group("rayon_fix_var_default");
     for num_vars in [10, 15, 20, 23] {
         group.bench_with_input(
-            BenchmarkId::new(format!("rayon_fix_var_default"), num_vars),
+            BenchmarkId::new("rayon_fix_var_default".to_string(), num_vars),
             &num_threads,
             |b, &num_threads| {
                 b.iter_batched(
@@ -245,7 +245,7 @@ fn bench_fix_variable_at_index_parallelism(c: &mut Criterion) {
     let mut group = c.benchmark_group("rayon_fix_var_at_index_default");
     for num_vars in [10, 15, 20, 23] {
         group.bench_with_input(
-            BenchmarkId::new(format!("rayon_fix_var_at_index_default"), num_vars),
+            BenchmarkId::new("rayon_fix_var_at_index_default".to_string(), num_vars),
             &num_threads,
             |b, &num_threads| {
                 b.iter_batched(

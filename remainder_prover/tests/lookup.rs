@@ -374,16 +374,14 @@ pub fn multi_shred_test() {
     // The Ligero (private) input layer in this circuit consists of eight total
     // inputs -- each of the four witnesses which are to be constrained, plus
     // the multiplicities for each of them.
-    let ligero_input_layer_num_vars = get_total_combined_mle_num_vars(&vec![
-        TABLE_MLE_NUM_VARS,
+    let ligero_input_layer_num_vars = get_total_combined_mle_num_vars(&[TABLE_MLE_NUM_VARS,
         TABLE_MLE_NUM_VARS,
         TABLE_MLE_NUM_VARS,
         TABLE_MLE_NUM_VARS,
         WITNESS_MLE_1_NUM_VARS,
         WITNESS_MLE_2_NUM_VARS,
         WITNESS_MLE_3_NUM_VARS,
-        WITNESS_MLE_4_NUM_VARS,
-    ]);
+        WITNESS_MLE_4_NUM_VARS]);
     let private_input_layers = vec![(
         ligero_input_layer_id,
         (

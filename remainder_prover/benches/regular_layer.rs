@@ -3,7 +3,7 @@ use criterion::{black_box, criterion_group, criterion_main, BatchSize, Benchmark
 use itertools::Itertools;
 use rand::Rng;
 use remainder::{
-    claims::{Claim, RawClaim},
+    claims::RawClaim,
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::{regular_layer::RegularLayer, Layer, LayerId},
     mle::{betavalues::BetaValues, dense::DenseMle},
@@ -34,9 +34,9 @@ fn create_dummy_mle(num_vars: usize) -> DenseMle<Fr> {
     // let evals: Vec<Fr> = (0..(1 << num_vars)).map(|_|
     // Fr::random(OsRng)).collect();
 
-    let dense_mle = DenseMle::<Fr>::new_from_raw(evals, LayerId::Layer(0));
+    
 
-    dense_mle
+    DenseMle::<Fr>::new_from_raw(evals, LayerId::Layer(0))
 }
 
 /// Evaluates (at a random field point) the Multilinear Extension of the boolean
@@ -71,7 +71,7 @@ fn get_dummy_expression_eval(
     let eval = compute_sumcheck_message_beta_cascade(&expression, 0, 2, &beta).unwrap();
     let SumcheckEvals(evals) = eval;
 
-    let result = if expression_nonlinear_indices.len() > 0 {
+    let result = if !expression_nonlinear_indices.is_empty() {
         debug_assert!(evals.len() > 1);
         evals[0] + evals[1]
     } else {
@@ -226,7 +226,7 @@ fn create_dummy_regular_layer(config: BenchLayerConfig) -> (RegularLayer<Fr>, Ra
 /// Benchmark [RegularLayer::prove_rounds] on layers of different structure and
 /// sizes.
 fn bench_regular_layer(c: &mut Criterion) {
-    let mut group = c.benchmark_group(format!("regular_layer"));
+    let mut group = c.benchmark_group("regular_layer".to_string());
 
     for mle_size in [10, 15, 20] {
         let config = BenchLayerConfig {
@@ -237,7 +237,7 @@ fn bench_regular_layer(c: &mut Criterion) {
         let (layer, claim) = create_dummy_regular_layer(config);
 
         group.bench_with_input(
-            BenchmarkId::new(format!("product_four"), mle_size),
+            BenchmarkId::new("product_four".to_string(), mle_size),
             &mle_size,
             |b, _mle_size| {
                 b.iter_batched(
@@ -264,7 +264,7 @@ fn bench_regular_layer(c: &mut Criterion) {
         let (layer, claim) = create_dummy_regular_layer(config);
 
         group.bench_with_input(
-            BenchmarkId::new(format!("product_eight"), mle_size),
+            BenchmarkId::new("product_eight".to_string(), mle_size),
             &mle_size,
             |b, _mle_size| {
                 b.iter_batched(
@@ -291,7 +291,7 @@ fn bench_regular_layer(c: &mut Criterion) {
         let (layer, claim) = create_dummy_regular_layer(config);
 
         group.bench_with_input(
-            BenchmarkId::new(format!("balanced_two"), mle_size),
+            BenchmarkId::new("balanced_two".to_string(), mle_size),
             &mle_size,
             |b, _mle_size| {
                 b.iter_batched(
@@ -318,7 +318,7 @@ fn bench_regular_layer(c: &mut Criterion) {
         let (layer, claim) = create_dummy_regular_layer(config);
 
         group.bench_with_input(
-            BenchmarkId::new(format!("unbalanced_two"), mle_size),
+            BenchmarkId::new("unbalanced_two".to_string(), mle_size),
             &mle_size,
             |b, _mle_size| {
                 b.iter_batched(
