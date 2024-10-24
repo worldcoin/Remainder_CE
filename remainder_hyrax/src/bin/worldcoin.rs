@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use remainder_hyrax::
-    hyrax_worldcoin::orb::{load_image_commitment, SerializedImageCommitment}
-;
+use remainder_hyrax::hyrax_worldcoin::orb::{load_image_commitment, SerializedImageCommitment};
 
 fn main() {
     let mut commitments: HashMap<(u8, bool, bool), SerializedImageCommitment> = HashMap::new();

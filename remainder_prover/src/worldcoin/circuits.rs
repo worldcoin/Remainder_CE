@@ -257,7 +257,7 @@ pub fn build_iriscode_proof_description<
 
     (
         IriscodeProofDescription {
-            circuit_description: circuit_description,
+            circuit_description,
             image_input_layer: get_input_layer_description(to_reroute_input_layer.id()),
             digits_input_layer: get_input_layer_description(digits_input_layer.id()),
             code_input_layer: get_input_layer_description(sign_bits_input_layer.id()),

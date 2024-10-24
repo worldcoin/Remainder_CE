@@ -19,17 +19,35 @@ use crate::{hyrax_gkr::HyraxProof, utils::vandermonde::VandermondeInverse};
 mod tests {
     use std::collections::HashMap;
 
-    use crate::{hyrax_gkr::HyraxProof, hyrax_worldcoin::{test_worldcoin::{test_iriscode_circuit_with_hyrax_helper, test_iriscode_circuit_with_public_layers_helper}, upgrade::{prove_upgrade_v2_to_v3, verify_upgrade_v2_to_v3}}, utils::vandermonde::VandermondeInverse};
-    use remainder::
-        worldcoin::{parameters_v2::IRISCODE_LEN as V2_IRISCODE_LEN, parameters_v3::IRISCODE_LEN as V3_IRISCODE_LEN}
-    ;
+    use crate::{
+        hyrax_gkr::HyraxProof,
+        hyrax_worldcoin::{
+            test_worldcoin::{
+                test_iriscode_circuit_with_hyrax_helper,
+                test_iriscode_circuit_with_public_layers_helper,
+            },
+            upgrade::{prove_upgrade_v2_to_v3, verify_upgrade_v2_to_v3},
+        },
+        utils::vandermonde::VandermondeInverse,
+    };
+    use remainder::worldcoin::{
+        parameters_v2::IRISCODE_LEN as V2_IRISCODE_LEN,
+        parameters_v3::IRISCODE_LEN as V3_IRISCODE_LEN,
+    };
     use remainder_shared_types::{
-        halo2curves::bn256::G1 as Bn256Point,
-        pedersen::PedersenCommitter,
-        Scalar,
+        halo2curves::bn256::G1 as Bn256Point, pedersen::PedersenCommitter, Scalar,
     };
 
-    use super::{super::{orb::{load_image_commitment, SerializedImageCommitment, IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING}, upgrade::{prove_with_image_precommit, verify_iriscode}}, test_iriscode_v2_with_hyrax_helper, test_iriscode_v3_with_hyrax_helper};
+    use super::{
+        super::{
+            orb::{
+                load_image_commitment, SerializedImageCommitment, IMAGE_COMMIT_LOG_NUM_COLS,
+                PUBLIC_STRING,
+            },
+            upgrade::{prove_with_image_precommit, verify_iriscode},
+        },
+        test_iriscode_v2_with_hyrax_helper, test_iriscode_v3_with_hyrax_helper,
+    };
 
     #[test]
     fn test_small_circuit_both_layers_public() {
@@ -53,7 +71,8 @@ mod tests {
         let is_left_eye = true;
         let is_mask = false;
         // Create the Pedersen committer using the same reference string and parameters as on the Orb
-        let committer: PedersenCommitter<Bn256Point> = PedersenCommitter::new(1 << IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING, None);
+        let committer: PedersenCommitter<Bn256Point> =
+            PedersenCommitter::new(1 << IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING, None);
         // Create a single RNG and Vandermonde inverse converter for all proofs.
         let blinding_rng = &mut rand::thread_rng();
         let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
@@ -65,7 +84,8 @@ mod tests {
             blinding_rng,
             converter,
         );
-        let (code, _commitment) = verify_iriscode(version, is_mask, is_left_eye, &proof, &committer).unwrap();
+        let (code, _commitment) =
+            verify_iriscode(version, is_mask, is_left_eye, &proof, &committer).unwrap();
         assert_eq!(code.len(), V2_IRISCODE_LEN);
     }
 
@@ -87,13 +107,12 @@ mod tests {
 
         // Get expected hashes for the commitments.
         // In production, the verifier should be obtaining the hashes from the signed hashes.json file.
-        let mut proofs_and_hashes: HashMap<(u8, bool, bool), (HyraxProof<Bn256Point>, String)> = HashMap::new();
+        let mut proofs_and_hashes: HashMap<(u8, bool, bool), (HyraxProof<Bn256Point>, String)> =
+            HashMap::new();
         for ((version, mask, left_eye), proof) in proofs {
             let serialized_commitment = commitments.get(&(version, mask, left_eye)).unwrap();
             let hash = sha256_digest(&serialized_commitment.commitment_bytes.clone());
-            proofs_and_hashes.insert((version, mask, left_eye),
-                ( proof, hash)
-            );
+            proofs_and_hashes.insert((version, mask, left_eye), (proof, hash));
         }
 
         let results = verify_upgrade_v2_to_v3(&proofs_and_hashes).unwrap();
@@ -101,7 +120,14 @@ mod tests {
             for mask in [false, true] {
                 for left_eye in [false, true] {
                     let code = results.get(&(version, mask, left_eye)).unwrap();
-                    assert_eq!(code.len(), if version == 2 { V2_IRISCODE_LEN } else { V3_IRISCODE_LEN });
+                    assert_eq!(
+                        code.len(),
+                        if version == 2 {
+                            V2_IRISCODE_LEN
+                        } else {
+                            V3_IRISCODE_LEN
+                        }
+                    );
                 }
             }
         }
@@ -172,7 +198,12 @@ pub fn test_iriscode_circuit_with_public_layers_helper(
     );
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-    proof.verify(&HashMap::new(), &proof_desc.circuit_description, &committer, &mut transcript);
+    proof.verify(
+        &HashMap::new(),
+        &proof_desc.circuit_description,
+        &committer,
+        &mut transcript,
+    );
 }
 
 /// Helper function for testing an iriscode circuit (of any version, with any data) with Hyrax input
