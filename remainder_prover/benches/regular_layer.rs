@@ -34,8 +34,6 @@ fn create_dummy_mle(num_vars: usize) -> DenseMle<Fr> {
     // let evals: Vec<Fr> = (0..(1 << num_vars)).map(|_|
     // Fr::random(OsRng)).collect();
 
-    
-
     DenseMle::<Fr>::new_from_raw(evals, LayerId::Layer(0))
 }
 

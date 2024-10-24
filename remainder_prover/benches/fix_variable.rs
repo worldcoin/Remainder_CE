@@ -56,7 +56,6 @@ fn create_dummy_mle(num_vars: usize) -> MultilinearExtension<Fr> {
     // let evals: Vec<Fr> = (0..(1 << num_vars)).map(|_| Fr::random(OsRng)).collect();
 
     let f = Evaluations::new(num_vars, evals);
-    
 
     MultilinearExtension::new_from_evals(f)
 }
