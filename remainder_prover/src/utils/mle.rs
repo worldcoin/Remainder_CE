@@ -117,38 +117,6 @@ pub fn get_dummy_random_mle_vec<F: Field>(
         .collect_vec()
 }
 
-///returns an iterator that wil give permutations of binary bits of size
-/// num_bits
-///
-/// 0,0,0 -> 0,0,1 -> 0,1,0 -> 0,1,1 -> 1,0,0 -> 1,0,1 -> 1,1,0 -> 1,1,1
-pub(crate) fn bits_iter<F: Field>(num_bits: usize) -> impl Iterator<Item = Vec<MleIndex<F>>> {
-    std::iter::successors(
-        Some(vec![MleIndex::<F>::Fixed(false); num_bits]),
-        move |prev| {
-            let mut prev = prev.clone();
-            let mut removed_bits = 0;
-            for index in (0..num_bits).rev() {
-                let curr = prev.remove(index);
-                if curr == MleIndex::Fixed(false) {
-                    prev.push(MleIndex::Fixed(true));
-                    break;
-                } else {
-                    removed_bits += 1;
-                }
-            }
-            if removed_bits == num_bits {
-                None
-            } else {
-                Some(
-                    prev.into_iter()
-                        .chain(repeat_n(MleIndex::Fixed(false), removed_bits))
-                        .collect_vec(),
-                )
-            }
-        },
-    )
-}
-
 /// Returns the specific bit decomp for a given index,
 /// using `num_bits` bits. Note that this returns the
 /// decomposition in BIG ENDIAN!

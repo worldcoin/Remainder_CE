@@ -84,6 +84,11 @@ impl<F: Field, E: ExpressionType<F>> Expression<F, E> {
         }
     }
 
+    /// Returns a reference to the internal `expression_node` and `mle_vec` fields.
+    pub fn deconstruct_ref(&self) -> (&ExpressionNode<F, E>, &E::MleVec) {
+        (&self.expression_node, &self.mle_vec)
+    }
+
     /// Returns a mutable reference to the `expression_node` and `mle_vec`
     /// present within the given [Expression].
     pub fn deconstruct_mut(&mut self) -> (&mut ExpressionNode<F, E>, &mut E::MleVec) {

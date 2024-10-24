@@ -1,4 +1,3 @@
-use crate::builders::layer_builder::from_mle;
 use crate::expression::generic_expr::Expression;
 use crate::expression::prover_expr::ProverExpr;
 use crate::layer::regular_layer::RegularLayer;
@@ -56,14 +55,7 @@ fn claims_from_expr_and_points(
 /// on the boolean hypercube are given by `mle_evals`.
 fn layer_from_evals(mle_evals: Vec<Fr>) -> RegularLayer<Fr> {
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_evals, LayerId::Input(0));
-
-    let layer = from_mle(
-        mle,
-        |mle| mle.clone().expression(),
-        |_, _, _| unimplemented!(),
-    );
-
-    RegularLayer::new(layer, LayerId::Input(0))
+    RegularLayer::new_raw(LayerId::Input(0), mle.expression())
 }
 
 /// Returns a random MLE expression with an associated GKR layer, along with the
@@ -233,12 +225,13 @@ fn test_aggro_claim_4() {
     let expr = Expression::<Fr, ProverExpr>::products(vec![mle_ref, mle_ref2]);
     let mut expr_copy = expr.clone();
 
-    let layer = from_mle(
-        (mle1, mle2),
-        |mle| Expression::<Fr, ProverExpr>::products(vec![mle.clone().0, mle.clone().1]),
-        |_, _, _| unimplemented!(),
-    );
-    let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
+    let layer = RegularLayer::new_raw(LayerId::Input(0), expr);
+    // let layer = from_mle(
+    //     (mle1, mle2),
+    //     |mle| Expression::<Fr, ProverExpr>::products(vec![mle.clone().0, mle.clone().1]),
+    //     |_, _, _| unimplemented!(),
+    // );
+    // let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
 
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -288,12 +281,7 @@ fn test_aggro_claim_negative_1() {
     let mle_ref = mle1.clone();
     let mut expr = Expression::<Fr, ProverExpr>::mle(mle_ref);
 
-    let layer = from_mle(
-        mle1,
-        |mle| mle.clone().expression(),
-        |_, _, _| unimplemented!(),
-    );
-    let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
+    let layer = RegularLayer::new_raw(LayerId::Input(0), expr.clone());
 
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -349,12 +337,13 @@ fn test_aggro_claim_negative_2() {
     let mut expr_copy = expr.clone();
     let output_mle_from_layer = vec![mle1.clone()];
 
-    let layer = from_mle(
-        mle1,
-        |mle| mle.clone().expression(),
-        |_, _, _| unimplemented!(),
-    );
-    let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
+    let layer = RegularLayer::new_raw(LayerId::Input(0), expr);
+    // let layer = from_mle(
+    //     mle1,
+    //     |mle| mle.clone().expression(),
+    //     |_, _, _| unimplemented!(),
+    // );
+    // let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
 
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
