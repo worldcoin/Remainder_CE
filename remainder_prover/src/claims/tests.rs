@@ -99,7 +99,7 @@ fn claim_aggregation_wrapper<Sp: TranscriptSponge<Fr>>(
 
 /// Compute l* = l(r*).
 fn compute_l_star(claims: &[Claim<Fr>], r_star: Fr) -> Vec<Fr> {
-    assert!(claims.len() > 0);
+    assert!(!claims.is_empty());
     let num_vars = claims[0].get_num_vars();
 
     (0..num_vars)

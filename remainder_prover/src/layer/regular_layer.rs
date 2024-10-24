@@ -81,53 +81,6 @@ impl<F: Field> RegularLayer<F> {
         &self.expression
     }
 
-    /// Initialize all necessary information in order to start sumcheck within a
-    /// layer of GKR. This includes pre-fixing all of the rounds within the
-    /// layer which are linear, and then appropriately initializing the
-    /// necessary beta values over the nonlinear rounds.
-    fn start_sumcheck(&mut self, claim: &RawClaim<F>) -> Result<(), LayerError> {
-        println!("Starting sumcheck for layer: {:?}", self.id);
-        let claim_point = claim.get_point();
-
-        // Grab and index the expression.
-        let expression = &mut self.expression;
-        let expression_num_indices = expression.index_mle_indices(0);
-
-        let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
-        let expression_linear_indices = expression.get_all_linear_rounds();
-        debug_assert_eq!(
-            expression_num_indices,
-            expression_nonlinear_indices.len() + expression_linear_indices.len()
-        );
-
-        // For each of the linear indices in the expression, we can fix the
-        // variable at that index for the expression, so that now the only
-        // unbound indices are the nonlinear indices.
-        expression_linear_indices
-            .into_iter()
-            .sorted()
-            .for_each(|round_idx| {
-                expression.fix_variable_at_index(round_idx, claim_point[round_idx]);
-            });
-
-        // We need the beta values over the nonlinear indices of the
-        // expression, so we grab the claim points that are over these
-        // nonlinear indices and then initialize the betavalues struct over
-        // them.
-        let betavec = expression_nonlinear_indices
-            .iter()
-            .map(|idx| (*idx, claim_point[*idx]))
-            .collect_vec();
-        let newbeta = BetaValues::new(betavec);
-        self.beta_vals = Some(newbeta);
-
-        // Store the nonlinear rounds of the expression within the layer so
-        // that we know these are the rounds we perform sumcheck over.
-        self.nonlinear_rounds = expression_nonlinear_indices;
-
-        Ok(())
-    }
-
     /// Performs a round of the sumcheck protocol on this Layer.
     #[allow(dead_code)]
     fn prove_nonlinear_round(
