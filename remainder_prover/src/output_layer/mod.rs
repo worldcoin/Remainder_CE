@@ -297,6 +297,7 @@ impl<F: Field> VerifierOutputLayer<F> {
         self.mle.layer_id()
     }
 
+    /// Extract a claim on this output layer by extracting the bindings from the fixed variables.
     pub fn get_claim(&self) -> Result<Claim<F>, crate::layer::LayerError> {
         // We do not support non-zero MLEs on Output Layers at this point!
         assert!(self.is_zero());

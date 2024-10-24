@@ -2,17 +2,14 @@ use std::collections::HashMap;
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
-use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
-use rand_chacha::ChaCha20Rng;
+use rand::Rng;
 use remainder::claims::claim_aggregation::{
     get_num_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
 };
-use remainder::claims::Claim;
 use remainder::{
     claims::{claim_group::ClaimGroup, RawClaim},
-    input_layer::{InputLayer, InputLayerDescription},
+    input_layer::InputLayerDescription,
     layer::LayerId,
-    layouter::nodes::circuit_inputs::HyraxInputDType,
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     sumcheck::evaluate_at_a_point,
 };

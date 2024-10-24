@@ -138,6 +138,7 @@ impl<F: Field> RegularLayer<F> {
     }
 
     /// Performs a round of the sumcheck protocol on this Layer.
+    #[allow(dead_code)]
     fn prove_nonlinear_round(
         &mut self,
         transcript_writer: &mut impl ProverTranscript<F>,

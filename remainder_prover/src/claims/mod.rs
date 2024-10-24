@@ -13,7 +13,6 @@ use std::{collections::HashMap, fmt};
 use remainder_shared_types::Field;
 use thiserror::Error;
 
-use crate::layer::combine_mle_refs::CombineMleRefError;
 use serde::{Deserialize, Serialize};
 
 use crate::layer::LayerId;

@@ -10,16 +10,13 @@ use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
 use rand::Rng;
-use remainder::claims::{Claim, RawClaim};
-use remainder::expression::circuit_expr::filter_bookkeeping_table;
+use remainder::claims::RawClaim;
 use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
-use remainder::input_layer::{InputLayer, InputLayerDescription};
-use remainder::layer::layer_enum::LayerEnum;
 use remainder::layer::LayerId;
 use remainder::layer::{Layer, LayerDescription};
 use remainder::mle::evals::MultilinearExtension;
 use remainder::mle::Mle;
-use remainder::prover::{generate_circuit_description, GKRCircuitDescription, InstantiatedCircuit};
+use remainder::prover::{GKRCircuitDescription, InstantiatedCircuit};
 
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
