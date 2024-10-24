@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 pub use halo2curves::ff::Field as ff_field;
 
 pub use halo2curves;
-pub use halo2curves::bn256::{Fr, Fq};
+pub use halo2curves::bn256::{Fq, Fr};
 pub use poseidon::Poseidon;
 
 use halo2curves::CurveExt;
