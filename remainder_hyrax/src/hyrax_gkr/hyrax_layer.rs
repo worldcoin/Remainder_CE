@@ -7,20 +7,22 @@ use crate::{
 };
 use itertools::Itertools;
 use rand::Rng;
-use remainder::layer::combine_mle_refs::get_og_mle_refs;
-use remainder::layer::product::{new_with_values, Product};
 use remainder::layer::product::{Intermediate, PostSumcheckLayer};
 use remainder::layer::Layer;
+use remainder::layer::LayerDescription;
 use remainder::layer::LayerId;
-use remainder::{claims::wlx_eval::claim_group::ClaimGroup, mle::dense::DenseMle};
-use remainder::{claims::wlx_eval::ClaimMle, layer::LayerDescription};
-use remainder::{claims::wlx_eval::YieldWLXEvals, layer::layer_enum::LayerEnum};
+use remainder::mle::dense::DenseMle;
+use remainder::{claims::claim_aggregation::get_wlx_evaluations, layer::layer_enum::LayerEnum};
+use remainder::{claims::claim_group::ClaimGroup, layer::combine_mle_refs::get_og_mle_refs};
+use remainder::{
+    claims::RawClaim,
+    layer::product::{new_with_values, Product},
+};
+use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
+use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use remainder_shared_types::Field;
-use remainder_shared_types::{
-    curves::PrimeOrderCurve, transcript::ec_transcript::ECTranscriptTrait,
-};
 /// This struct represents what a proof looks like for one layer of GKR, but Hyrax version.
 pub struct HyraxLayerProof<C: PrimeOrderCurve> {
     /// This is the proof of the sumcheck rounds for that layer.
@@ -95,23 +97,22 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             // NB we don't use aggregate_claims here because the sampling of the evaluation
             // point for the aggregate claim needs to happen elsewhere in Hyrax.
             // Convert to a ClaimGroup so that we can use the helper functions
-            let claim_group = ClaimGroup::new(
+            let claim_group = ClaimGroup::new_from_raw_claims(
                 claims
                     .iter()
-                    .map(|hyrax_claim| hyrax_claim.to_claim())
+                    .map(|hyrax_claim| hyrax_claim.to_raw_claim())
                     .collect_vec(),
             )
             .unwrap();
             // Calculate the evaluations at 0, 1, 2, ..
-            let wlx_evals = layer
-                .get_wlx_evaluations(
-                    claim_group.get_claim_points_matrix(),
-                    claim_group.get_results(),
-                    get_og_mle_refs(output_mles_from_layer),
-                    claim_group.get_num_claims(),
-                    claim_group.get_num_vars(),
-                )
-                .unwrap();
+            let wlx_evals = get_wlx_evaluations(
+                claim_group.get_claim_points_matrix(),
+                claim_group.get_results(),
+                get_og_mle_refs(output_mles_from_layer),
+                claim_group.get_num_claims(),
+                claim_group.get_num_vars(),
+            )
+            .unwrap();
             // Convert the evaluations to coefficients
             converter.convert_to_coefficients(wlx_evals)
         } else {
@@ -132,7 +133,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         let mut bindings: Vec<C::Scalar> = vec![];
 
         // Initialize the sumcheck layer.
-        layer.initialize_sumcheck(&agg_claim.point).unwrap();
+        layer.initialize(&agg_claim.point).unwrap();
 
         // Note that the commitment to the aggregate evaluationp `eval` does not need to be added to the
         // transcript since it is derived from commitments that are added to the transcript already
@@ -411,11 +412,9 @@ pub fn get_claims_from_product<F: Field, T: Clone>(
 
 /// Implementation of HyraxClaim as used by the prover
 impl<C: PrimeOrderCurve> HyraxClaim<C::Scalar, CommittedScalar<C>> {
-    /// Convert to a raw [Claim] for claim aggregation
-    pub fn to_claim(&self) -> ClaimMle<C::Scalar> {
-        let mut claim = ClaimMle::new_raw(self.point.clone(), self.evaluation.value);
-        claim.to_layer_id = Some(self.to_layer_id);
-        claim
+    /// Convert to a [RawClaim] for claim aggregation
+    pub fn to_raw_claim(&self) -> RawClaim<C::Scalar> {
+        RawClaim::new(self.point.clone(), self.evaluation.value)
     }
 
     /// Convert to a HyraxClaim<C::Scalar, C>

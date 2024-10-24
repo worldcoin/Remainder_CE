@@ -183,7 +183,7 @@ fn test_unsigned_recomposition() {
     let inputs = input_builder((
         digits
             .into_iter()
-            .map(|data| MultilinearExtension::new(data))
+            .map(MultilinearExtension::new)
             .collect_vec(),
         MultilinearExtension::new(expected),
     ));
@@ -294,7 +294,7 @@ fn test_complementary_recomposition() {
     let inputs = input_builder((
         digits
             .into_iter()
-            .map(|data| MultilinearExtension::new(data))
+            .map(MultilinearExtension::new)
             .collect_vec(),
         MultilinearExtension::new(expected),
         MultilinearExtension::new(bits),

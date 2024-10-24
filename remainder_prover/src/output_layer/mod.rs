@@ -10,10 +10,13 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::layer::{LayerError, LayerId};
+use crate::{
+    claims::Claim,
+    layer::{LayerError, LayerId},
+};
 
 use crate::{
-    claims::{wlx_eval::ClaimMle, ClaimError, YieldClaim},
+    claims::ClaimError,
     layouter::layouting::CircuitMap,
     mle::{
         dense::DenseMle, mle_description::MleDescription, mle_enum::MleEnum,
@@ -113,7 +116,7 @@ impl<F: Field> OutputLayer<F> {
     }
 
     /// Extract a claim on this output layer by extracting the bindings from the fixed variables.
-    pub fn get_claim(&mut self) -> Result<ClaimMle<F>, crate::layer::LayerError> {
+    pub fn get_claim(&mut self) -> Result<Claim<F>, crate::layer::LayerError> {
         if self.mle.len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
         }
@@ -131,11 +134,11 @@ impl<F: Field> OutputLayer<F> {
 
         let claim_value = self.mle.first();
 
-        Ok(ClaimMle::new(
+        Ok(Claim::new(
             mle_indices?,
             claim_value,
-            None,
-            Some(self.mle.layer_id()),
+            self.mle.layer_id(),
+            self.mle.layer_id(),
         ))
     }
 }
@@ -293,38 +296,9 @@ impl<F: Field> VerifierOutputLayer<F> {
     pub fn layer_id(&self) -> LayerId {
         self.mle.layer_id()
     }
-}
 
-impl<F: Field> YieldClaim<ClaimMle<F>> for OutputLayer<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
-        if self.mle.len() != 1 {
-            return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
-        }
-
-        let mle_indices: Result<Vec<F>, _> = self
-            .mle
-            .mle_indices()
-            .iter()
-            .map(|index| {
-                index
-                    .val()
-                    .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
-            })
-            .collect();
-
-        let claim_value = self.mle.first();
-
-        Ok(vec![ClaimMle::new(
-            mle_indices?,
-            claim_value,
-            None,
-            Some(self.mle.layer_id()),
-        )])
-    }
-}
-
-impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierOutputLayer<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
+    /// Extract a claim on this output layer by extracting the bindings from the fixed variables.
+    pub fn get_claim(&self) -> Result<Claim<F>, crate::layer::LayerError> {
         // We do not support non-zero MLEs on Output Layers at this point!
         assert!(self.is_zero());
 
@@ -366,12 +340,12 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierOutputLayer<F> {
             }
         }
 
-        Ok(vec![ClaimMle::new(
+        Ok(Claim::new(
             claim_point,
             claim_value,
-            None,
-            Some(self.mle.layer_id()),
-        )])
+            self.mle.layer_id(),
+            self.mle.layer_id(),
+        ))
     }
 }
 

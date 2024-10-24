@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rand::Rng;
+use remainder::claims::claim_aggregation::{
+    get_num_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
+};
 use remainder::{
-    claims::{
-        wlx_eval::{claim_group::ClaimGroup, get_num_wlx_evaluations},
-        Claim,
-    },
+    claims::{claim_group::ClaimGroup, RawClaim},
     input_layer::InputLayerDescription,
-    layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
+    layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     sumcheck::evaluate_at_a_point,
 };
@@ -62,10 +62,10 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         // Calculate the coefficients of the polynomial that interpolates the claims
         // NB we don't use aggregate_claims here because the sampling of the evaluation
         // point for the aggregate claim needs to happen elsewhere in Hyrax.
-        let claims = ClaimGroup::new(
+        let claims = ClaimGroup::new_from_raw_claims(
             committed_claims
                 .iter()
-                .map(|committed_claim| committed_claim.to_claim())
+                .map(|committed_claim| committed_claim.to_raw_claim())
                 .collect_vec(),
         )
         .unwrap();
@@ -280,7 +280,7 @@ fn compute_claim_wlx<F: Field>(mle_vec: &[F], claims: &ClaimGroup<F>) -> Vec<F> 
 }
 
 /// Verifies a claim by evaluating the MLE at the challenge point and checking that the result.
-pub fn verify_claim<F: Field>(mle_vec: &[F], claim: &Claim<F>) {
+pub fn verify_claim<F: Field>(mle_vec: &[F], claim: &RawClaim<F>) {
     let mut mle = DenseMle::new_from_raw(mle_vec.to_vec(), LayerId::Input(0));
     mle.index_mle_indices(0);
 
@@ -292,9 +292,9 @@ pub fn verify_claim<F: Field>(mle_vec: &[F], claim: &Claim<F>) {
         debug_assert_eq!(mle.len(), 1);
         eval.unwrap()
     } else {
-        Claim::new(vec![], mle.mle.first())
+        RawClaim::new(vec![], mle.mle.first())
     };
 
     assert_eq!(eval.get_point(), claim.get_point());
-    assert_eq!(eval.get_result(), claim.get_result());
+    assert_eq!(eval.get_eval(), claim.get_eval());
 }

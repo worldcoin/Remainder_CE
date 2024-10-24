@@ -13,7 +13,8 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
 use self::layers::Layers;
-use crate::claims::wlx_eval::{ClaimMle, WLXAggregator};
+use crate::claims::claim_aggregation::{prover_aggregate_claims, verifier_aggregate_claims};
+use crate::claims::{Claim, ClaimTracker};
 use crate::expression::circuit_expr::filter_bookkeeping_table;
 use crate::input_layer::fiat_shamir_challenge::{
     FiatShamirChallenge, FiatShamirChallengeDescription,
@@ -21,7 +22,8 @@ use crate::input_layer::fiat_shamir_challenge::{
 use crate::input_layer::ligero_input_layer::{LigeroCommitment, LigeroInputLayerDescription};
 use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
-use crate::layer::{Layer, LayerDescription};
+use crate::layer::{layer_enum::LayerEnum, LayerError, LayerId};
+use crate::layer::{Layer, LayerDescription, VerifierLayer};
 use crate::layouter::compiling::CircuitHashType;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, CircuitLocation, CircuitMap};
 use crate::layouter::nodes::node_enum::NodeEnum;
@@ -32,10 +34,6 @@ use crate::mle::mle_description::MleDescription;
 use crate::mle::mle_enum::MleEnum;
 use crate::output_layer::{OutputLayer, OutputLayerDescription};
 use crate::utils::mle::build_composite_mle;
-use crate::{
-    claims::ClaimAggregator,
-    layer::{layer_enum::LayerEnum, LayerError, LayerId},
-};
 use ark_std::{end_timer, start_timer};
 use helpers::get_circuit_description_hash_as_field_elems;
 use itertools::Itertools;
@@ -51,8 +49,8 @@ use thiserror::Error;
 use tracing::{debug, info};
 use tracing::{instrument, span, Level};
 
+/// Errors that can be generated during GKR proving.
 #[derive(Error, Debug, Clone)]
-/// Errors relating to the proving of a GKR circuit
 pub enum GKRError {
     #[error("No claims were found for layer {0:?}")]
     /// No claims were found for layer
@@ -168,12 +166,12 @@ pub fn prove<F: Field>(
     // If in debug mode, then check the claims on all input layers.
     if cfg!(debug_assertions) {
         for claim in input_layer_claims.iter() {
-            let input_mle = inputs.get(&claim.to_layer_id.unwrap()).unwrap();
-            let evaluation = input_mle.evaluate_at_point(claim.get_claim().get_point());
-            if evaluation != claim.get_claim().get_result() {
+            let input_mle = inputs.get(&claim.get_to_layer_id()).unwrap();
+            let evaluation = input_mle.evaluate_at_point(claim.get_point());
+            if evaluation != claim.get_eval() {
                 return Err(GKRError::EvaluationMismatch(
-                    claim.to_layer_id.unwrap(),
-                    claim.to_layer_id.unwrap(),
+                    claim.get_to_layer_id(),
+                    claim.get_to_layer_id(),
                 ));
             }
         }
@@ -181,13 +179,13 @@ pub fn prove<F: Field>(
 
     // Create a Ligero evaluation proof for each claim on a Ligero input layer, writing it to transcript.
     for claim in input_layer_claims.iter() {
-        let layer_id = claim.to_layer_id.unwrap();
+        let layer_id = claim.get_to_layer_id();
         if let Some((desc, _)) = ligero_input_layers.get(&layer_id) {
             let mle = inputs.get(&layer_id).unwrap();
             let commitment = ligero_input_commitments.get(&layer_id).unwrap();
             remainder_ligero_eval_prove(
                 &mle.f.iter().collect_vec(),
-                claim.get_claim().get_point(),
+                claim.get_point(),
                 transcript_writer,
                 &desc.aux,
                 commitment,
@@ -260,7 +258,7 @@ pub fn verify<F: Field>(
     let mut public_input_layer_claims = vec![];
     let mut ligero_input_layer_claims = vec![];
     input_layer_claims.into_iter().for_each(|claim| {
-        let layer_id = claim.to_layer_id.unwrap();
+        let layer_id = claim.get_to_layer_id();
         if public_inputs.contains_key(&layer_id) {
             public_input_layer_claims.push(claim);
         } else if ligero_commitments.contains_key(&layer_id) {
@@ -274,19 +272,19 @@ pub fn verify<F: Field>(
 
     // Check the claims on public input layers via explicit evaluation.
     for claim in public_input_layer_claims.iter() {
-        let input_mle = public_inputs.get(&claim.to_layer_id.unwrap()).unwrap();
-        let evaluation = input_mle.evaluate_at_point(claim.get_claim().get_point());
-        if evaluation != claim.get_claim().get_result() {
+        let input_mle = public_inputs.get(&claim.get_to_layer_id()).unwrap();
+        let evaluation = input_mle.evaluate_at_point(claim.get_point());
+        if evaluation != claim.get_eval() {
             return Err(GKRError::EvaluationMismatch(
-                claim.to_layer_id.unwrap(),
-                claim.from_layer_id.unwrap(),
+                claim.get_to_layer_id(),
+                claim.get_from_layer_id(),
             ));
         }
     }
 
     // Check the claims on Ligero input layers via their evaluation proofs.
     for claim in ligero_input_layer_claims.iter() {
-        let layer_id = claim.to_layer_id.unwrap();
+        let layer_id = claim.get_to_layer_id();
         let commitment = ligero_commitments.get(&layer_id).unwrap();
         let desc = ligero_inputs
             .iter()
@@ -296,8 +294,8 @@ pub fn verify<F: Field>(
             commitment,
             &desc.aux,
             transcript,
-            claim.get_claim().get_point(),
-            claim.get_claim().get_result(),
+            claim.get_point(),
+            claim.get_eval(),
         );
     }
 
@@ -310,7 +308,7 @@ pub fn prove_circuit<F: Field>(
     circuit_description: &GKRCircuitDescription<F>,
     inputs: &HashMap<LayerId, MultilinearExtension<F>>,
     transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
-) -> Result<Vec<ClaimMle<F>>, GKRError> {
+) -> Result<Vec<Claim<F>>, GKRError> {
     // Note: no need to return the Transcript, since it is already in the TranscriptWriter!
     // Note(Ben): this can't be an instance method, because it consumes the intermediate layers!
     // Note(Ben): this is a GKR specific method.  So it makes sense for IT to define the challenge sampler, so that the circuit can be instantiated (rather than leaving this complexity to the calling context).
@@ -327,8 +325,8 @@ pub fn prove_circuit<F: Field>(
         layer_map,
     } = instantiated_circuit;
 
-    // Claim aggregator to keep track of GKR-style claims across all layers.
-    let mut aggregator = WLXAggregator::<F, LayerEnum<F>>::new();
+    // Maps a `LayerId` to a collection of claims made on that layer.
+    let mut claim_tracker = ClaimTracker::new();
 
     // --------- STAGE 1: Output Claim Generation ---------
     let claims_timer = start_timer!(|| "Output claims generation");
@@ -353,11 +351,10 @@ pub fn prove_circuit<F: Field>(
             .fix_layer(&challenges)
             .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
-        // Add the claim to either the set of current claims we're proving
-        // or the global set of claims we need to eventually prove.
-        aggregator
-            .extract_claims(output)
+        let claim = output
+            .get_claim()
             .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
+        claim_tracker.insert(claim.get_to_layer_id(), claim);
     }
 
     end_timer!(claims_timer);
@@ -381,11 +378,9 @@ pub fn prove_circuit<F: Field>(
             start_timer!(|| format!("Claim aggregation for layer {:?}", layer_id));
 
         let output_mles_from_layer = layer_map.get(&layer_id).unwrap();
-        let layer_claim = aggregator.prover_aggregate_claims(
-            &layer,
-            output_mles_from_layer,
-            transcript_writer,
-        )?;
+        let layer_claims = claim_tracker.get(layer_id).unwrap();
+        let layer_claim =
+            prover_aggregate_claims(layer_claims, output_mles_from_layer, transcript_writer)?;
 
         end_timer!(claim_aggr_timer);
 
@@ -395,14 +390,17 @@ pub fn prove_circuit<F: Field>(
 
         // Compute all sumcheck messages across this particular layer.
         layer
-            .prove_rounds(layer_claim, transcript_writer)
+            .prove(layer_claim, transcript_writer)
             .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
         end_timer!(sumcheck_msg_timer);
 
-        aggregator
-            .extract_claims(&layer)
-            .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
+        for claim in layer
+            .get_claims()
+            .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?
+        {
+            claim_tracker.insert(claim.get_to_layer_id(), claim);
+        }
 
         end_timer!(layer_timer);
     }
@@ -412,7 +410,7 @@ pub fn prove_circuit<F: Field>(
 
     let input_layer_claims = input_layers
         .iter()
-        .filter_map(|input_layer| aggregator.get_claims(input_layer.layer_id))
+        .filter_map(|input_layer| claim_tracker.get(input_layer.layer_id))
         .flatten()
         .cloned()
         .collect_vec();
@@ -621,7 +619,7 @@ impl<F: Field> GKRCircuitDescription<F> {
     fn verify(
         &self,
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Vec<ClaimMle<F>>, GKRError> {
+    ) -> Result<Vec<Claim<F>>, GKRError> {
         // Get the verifier challenges from the transcript.
         let fiat_shamir_challenges: Vec<FiatShamirChallenge<F>> = self
             .fiat_shamir_challenges
@@ -634,8 +632,8 @@ impl<F: Field> GKRCircuitDescription<F> {
             })
             .collect();
 
-        // Claim aggregator to keep track of GKR-style claims across all layers.
-        let mut aggregator = WLXAggregator::<F, LayerEnum<F>>::new();
+        // Claim tracker to keep track of GKR-style claims across all layers.
+        let mut claim_tracker = ClaimTracker::new();
 
         // --------- Output Claim Generation ---------
         let claims_timer = start_timer!(|| "Output claims generation");
@@ -650,9 +648,10 @@ impl<F: Field> GKRCircuitDescription<F> {
                 .retrieve_mle_from_transcript_and_fix_layer(transcript_reader)
                 .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
 
-            aggregator
-                .extract_claims(&verifier_output_layer)
-                .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
+            let claim = verifier_output_layer
+                .get_claim()
+                .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, err))?;
+            claim_tracker.insert(claim.get_to_layer_id(), claim);
         }
 
         end_timer!(claims_timer);
@@ -672,7 +671,11 @@ impl<F: Field> GKRCircuitDescription<F> {
             let claim_aggr_timer =
                 start_timer!(|| format!("Verify aggregated claim for layer {:?}", layer_id));
 
-            let prev_claim = aggregator.verifier_aggregate_claims(layer_id, transcript_reader)?;
+            let layer_claims = claim_tracker.get(layer_id).unwrap();
+            let prev_claim =
+                verifier_aggregate_claims(layer_claims, transcript_reader).map_err(|err| {
+                    GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err))
+                })?;
             debug!("Aggregated claim: {:#?}", prev_claim);
 
             end_timer!(claim_aggr_timer);
@@ -690,9 +693,12 @@ impl<F: Field> GKRCircuitDescription<F> {
 
             end_timer!(sumcheck_msg_timer);
 
-            aggregator
-                .extract_claims(&verifier_layer)
-                .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
+            for claim in verifier_layer
+                .get_claims()
+                .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, err))?
+            {
+                claim_tracker.insert(claim.get_to_layer_id(), claim);
+            }
 
             end_timer!(layer_timer);
         }
@@ -702,9 +708,9 @@ impl<F: Field> GKRCircuitDescription<F> {
         // --------- Verify claims on the verifier challenges ---------
         let fiat_shamir_challenges_timer = start_timer!(|| "Verifier challenges proof generation");
         for fiat_shamir_challenge in fiat_shamir_challenges {
-            if let Some(claims) = aggregator.get_claims(fiat_shamir_challenge.layer_id()) {
-                claims.iter().for_each(|claim_mle| {
-                    fiat_shamir_challenge.verify(claim_mle.get_claim()).unwrap();
+            if let Some(claims) = claim_tracker.get(fiat_shamir_challenge.layer_id()) {
+                claims.iter().for_each(|claim| {
+                    fiat_shamir_challenge.verify(claim.get_raw_claim()).unwrap();
                 });
             } else {
                 return Err(GKRError::NoClaimsForLayer(fiat_shamir_challenge.layer_id()));
@@ -715,7 +721,7 @@ impl<F: Field> GKRCircuitDescription<F> {
         let input_layer_claims = self
             .input_layers
             .iter()
-            .flat_map(|input_layer| aggregator.get_claims(input_layer.layer_id).unwrap())
+            .flat_map(|input_layer| claim_tracker.get(input_layer.layer_id).unwrap())
             .cloned()
             .collect_vec();
 

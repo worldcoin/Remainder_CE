@@ -34,10 +34,9 @@ fn create_random_field_vec<F: Field>(num_items: usize, mut rng: impl Rng) -> Vec
 
 /// Creates a vector of uniformly random BN256 G1 points.
 fn create_random_bn254_g1_vec(num_items: usize, mut rng: impl Rng) -> Vec<Bn256Point> {
-    let ret = (0..num_items)
+    (0..num_items)
         .map(|_| <Bn256Point as PrimeOrderCurve>::random(&mut rng))
-        .collect_vec();
-    ret
+        .collect_vec()
 }
 
 // ========================================
