@@ -97,9 +97,7 @@ fn test_bit_packed_vector_get_large_1() {
     let n: usize = 128; // = 2^7.
     let offset: u64 = 100;
 
-    let data: Vec<Fr> = (0..n)
-        .map(|x| Fr::from(offset + x as u64))
-        .collect();
+    let data: Vec<Fr> = (0..n).map(|x| Fr::from(offset + x as u64)).collect();
     let bpv = BitPackedVector::new(&data);
 
     for i in 0..n {
@@ -116,9 +114,7 @@ fn test_bit_packed_vector_get_large_2() {
     let n: usize = 256; // = 2^8.
     let offset: u64 = 100;
 
-    let data: Vec<Fr> = (0..n)
-        .map(|x| Fr::from(offset + x as u64))
-        .collect();
+    let data: Vec<Fr> = (0..n).map(|x| Fr::from(offset + x as u64)).collect();
     let bpv = BitPackedVector::new(&data);
 
     for i in 0..n {
