@@ -27,8 +27,9 @@ use crate::{
     },
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription},
+    mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription, Mle},
     sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
+    worldcoin_mpc::parameters::GR4_MODULUS,
 };
 
 use super::{
@@ -508,6 +509,23 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
 
     fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
         let prover_expr = self.expression.into_prover_expression(circuit_map);
+        if self.id == LayerId::Layer(4) {
+            println!("prover_expr {:?}", prover_expr);
+            let quotients = &prover_expr.mle_vec[0];
+            let shares_before_modulo_gr4 = &prover_expr.mle_vec[2];
+            let expected_shares = &prover_expr.mle_vec[1];
+
+            quotients
+                .iter()
+                .zip(shares_before_modulo_gr4.iter())
+                .zip(expected_shares.iter())
+                .for_each(|((quotient, share_before_modulo_gr4), expected_share)| {
+                    assert_eq!(
+                        quotient * F::from(GR4_MODULUS) + expected_share,
+                        share_before_modulo_gr4
+                    );
+                });
+        }
         let regular_layer = RegularLayer::new_raw(self.layer_id(), prover_expr);
         regular_layer.into()
     }

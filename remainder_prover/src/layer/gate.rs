@@ -1283,8 +1283,8 @@ impl<F: std::fmt::Debug + Field> GateLayer<F> {
 pub fn compute_gate_data_outputs<F: Field>(
     wiring: Vec<(usize, usize, usize)>,
     num_dataparallel_bits: usize,
-    lhs_data: MultilinearExtension<F>,
-    rhs_data: MultilinearExtension<F>,
+    lhs_data: &MultilinearExtension<F>,
+    rhs_data: &MultilinearExtension<F>,
     gate_operation: BinaryOperation,
 ) -> MultilinearExtension<F> {
     let max_gate_val = wiring
