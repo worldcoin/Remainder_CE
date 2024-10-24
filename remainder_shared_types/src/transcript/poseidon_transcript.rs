@@ -7,7 +7,7 @@ use itertools::Itertools;
 use poseidon::Poseidon;
 
 /// A Poseidon implementation of a transcript sponge.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PoseidonSponge<F: Field> {
     /// The specific poseidon sponge configuration.
     sponge: Poseidon<F, 3, 2>,
@@ -32,16 +32,12 @@ impl<F: Field> TranscriptSponge<F> for PoseidonSponge<F> {
 
     fn squeeze(&mut self) -> F {
         self.sponge.squeeze()
-        // F::ONE + F::ONE + F::ONE
     }
 
     fn squeeze_elements(&mut self, num_elements: usize) -> Vec<F> {
         (0..num_elements)
             .map(|_| self.sponge.squeeze())
             .collect_vec()
-        // (0..num_elements)
-        //     .map(|_| F::ONE + F::ONE + F::ONE)
-        //     .collect_vec()
     }
 }
 
@@ -51,17 +47,16 @@ mod tests {
     use halo2curves::bn256::Fq as Base;
     use halo2curves::bn256::G1 as Bn256Point;
 
-    use crate::transcript::{
-        ec_transcript::{ECProverTranscript, ECTranscriptWriter},
-        ProverTranscript,
-    };
+    use crate::transcript::ec_transcript::ECTranscript;
+    use crate::transcript::ec_transcript::ECTranscriptTrait;
+    use crate::transcript::ProverTranscript;
 
     use super::PoseidonSponge;
 
     #[test]
     fn test_poseidon() {
         let mut transcript =
-            ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new("new transcript");
+            ECTranscript::<Bn256Point, PoseidonSponge<Base>>::new("new transcript");
         transcript.append("test2", Base::one());
         let one = halo2curves::bn256::G1::generator();
         transcript.append_ec_point("ec_test", one);

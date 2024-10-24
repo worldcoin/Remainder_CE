@@ -17,10 +17,12 @@ use super::{
 };
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
-    expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::VerificationError,
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
+    mle::{
+        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription,
+        verifier_mle::VerifierMle, Mle, MleIndex,
+    },
     sumcheck::evaluate_at_a_point,
 };
 
@@ -153,22 +155,23 @@ impl<F: Field> Layer<F> for MatMult<F> {
         let claim_a = claim_b.split_off(self.matrix_b.cols_num_vars);
         self.pre_processing_step(claim_a, claim_b);
 
-        let mut challenges: Vec<F> = vec![];
         let num_vars_middle = self.num_vars_middle_ab.unwrap(); // TODO: raise error if not
 
         for round in 0..num_vars_middle {
-            let message = compute_sumcheck_message_no_beta_table(
-                &[&self.matrix_a.mle, &self.matrix_b.mle],
-                round,
-                2,
-            )
-            .unwrap();
+            // Compute the round's sumcheck message.
+            let message = self.compute_round_sumcheck_message(round)?;
+            // Add to transcript.
             transcript_writer.append_elements("Sumcheck evaluations", &message);
+            // Sample the challenge to bind the round's MatMult expression to.
             let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-            challenges.push(challenge);
-            self.matrix_a.mle.fix_variable(round, challenge);
-            self.matrix_b.mle.fix_variable(round, challenge);
+            // Bind the Matrix MLEs to this variable.
+            self.bind_round_variable(round, challenge)?;
         }
+
+        // Assert that the MLEs have been fully bound.
+        assert_eq!(self.matrix_a.mle.num_free_vars(), 0);
+        assert_eq!(self.matrix_b.mle.num_free_vars(), 0);
+
         self.append_leaf_mles_to_transcript(transcript_writer);
         Ok(())
     }
@@ -413,7 +416,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         let output_data = MultilinearExtension::new(product);
         assert_eq!(
             output_data.num_vars(),
-            mle_output_necessary.mle_indices().len()
+            mle_output_necessary.var_indices().len()
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
@@ -493,7 +496,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         let matrix_a_new_indices = self
             .matrix_a
             .mle
-            .mle_indices()
+            .var_indices()
             .iter()
             .map(|mle_idx| match mle_idx {
                 &MleIndex::Indexed(_) => {
@@ -524,7 +527,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         let matrix_b_new_indices = self
             .matrix_b
             .mle
-            .mle_indices()
+            .var_indices()
             .iter()
             .map(|mle_idx| match mle_idx {
                 &MleIndex::Indexed(_) => {
@@ -611,7 +614,7 @@ impl<F: Field> VerifierLayer<F> for VerifierMatMultLayer<F> {
             .map(|matrix| {
                 let matrix_fixed_indices = matrix
                     .mle
-                    .mle_indices()
+                    .var_indices()
                     .iter()
                     .map(|index| {
                         index

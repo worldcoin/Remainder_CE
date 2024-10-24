@@ -41,6 +41,19 @@ pub fn get_input_shred_from_num_vars(
 /// Using a data vector, get an [InputShred] which represents its
 /// shape, along with [InputShredData] which represents the
 /// corresponding data.
+pub fn build_input_shred_and_data<F: Field>(
+    data: MultilinearExtension<F>,
+    ctx: &Context,
+    input_node: &InputLayerNode,
+) -> (InputShred, InputShredData<F>) {
+    let input_shred = InputShred::new(ctx, data.num_vars(), input_node);
+    let input_shred_data = InputShredData::new(input_shred.id(), data);
+    (input_shred, input_shred_data)
+}
+
+/// Using a data vector, get an [InputShred] which represents its
+/// shape, along with [InputShredData] which represents the
+/// corresponding data.
 pub fn get_input_shred_and_data<F: Field>(
     mle_vec: Vec<F>,
     ctx: &Context,

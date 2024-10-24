@@ -72,77 +72,76 @@ impl FiatShamirChallengeNode {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use remainder_shared_types::Fr;
 
     use crate::{
         expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-        layouter::{
-            compiling::LayouterCircuit,
-            component::ComponentSet,
-            nodes::{
-                circuit_inputs::{
-                    InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
-                },
-                circuit_outputs::OutputNode,
-                node_enum::NodeEnum,
-                sector::Sector,
-                CircuitNode,
-            },
+        layouter::nodes::{
+            circuit_inputs::{InputLayerNode, InputShred},
+            circuit_outputs::OutputNode,
+            sector::Sector,
+            CircuitNode, Context, NodeId,
         },
         mle::evals::MultilinearExtension,
-        prover::helpers::test_circuit,
+        prover::{generate_circuit_description, helpers::test_circuit_new},
     };
 
     use super::FiatShamirChallengeNode;
 
     #[test]
     fn test_verifier_challenge_node_in_circuit() {
-        let circuit = LayouterCircuit::new(|ctx| {
-            let mle_vec_a = MultilinearExtension::new(vec![
-                Fr::from(1),
-                Fr::from(2),
-                Fr::from(9),
-                Fr::from(10),
-                Fr::from(13),
-                Fr::from(1),
-                Fr::from(3),
-                Fr::from(10),
-            ]);
+        let ctx = &Context::new();
+        let input_a_data = MultilinearExtension::new(vec![
+            Fr::from(1),
+            Fr::from(2),
+            Fr::from(9),
+            Fr::from(10),
+            Fr::from(13),
+            Fr::from(1),
+            Fr::from(3),
+            Fr::from(10),
+        ]);
 
-            let verifier_challenge_node = FiatShamirChallengeNode::new(ctx, 8);
+        let verifier_challenge_node = FiatShamirChallengeNode::new(ctx, 8);
 
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let input_a = InputShred::new(ctx, mle_vec_a.num_vars(), &input_layer);
-            let input_a_data = InputShredData::new(input_a.id(), mle_vec_a);
-            let input_data = InputLayerData::new(input_layer.id(), vec![input_a_data], None);
+        let input_layer = InputLayerNode::new(ctx, None);
+        let input_a = InputShred::new(ctx, input_a_data.num_vars(), &input_layer);
+        let input_a_id = input_a.id();
 
-            let product_sector =
-                Sector::new(ctx, &[&input_a, &verifier_challenge_node], |inputs| {
-                    Expression::<Fr, AbstractExpr>::mle(inputs[0])
-                        - Expression::<Fr, AbstractExpr>::mle(inputs[1])
-                });
-
-            let difference_sector =
-                Sector::new(ctx, &[&product_sector, &product_sector], |inputs| {
-                    Expression::<Fr, AbstractExpr>::mle(inputs[0])
-                        - Expression::<Fr, AbstractExpr>::mle(inputs[1])
-                });
-
-            let output_node = OutputNode::new_zero(ctx, &difference_sector);
-
-            (
-                ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
-                    input_layer.into(),
-                    input_a.into(),
-                    verifier_challenge_node.into(),
-                    product_sector.into(),
-                    difference_sector.into(),
-                    output_node.into(),
-                ]),
-                vec![input_data],
-            )
+        let product_sector = Sector::new(ctx, &[&input_a, &verifier_challenge_node], |inputs| {
+            Expression::<Fr, AbstractExpr>::mle(inputs[0])
+                - Expression::<Fr, AbstractExpr>::mle(inputs[1])
         });
 
-        test_circuit(circuit, None);
+        let difference_sector = Sector::new(ctx, &[&product_sector, &product_sector], |inputs| {
+            Expression::<Fr, AbstractExpr>::mle(inputs[0])
+                - Expression::<Fr, AbstractExpr>::mle(inputs[1])
+        });
+
+        let output_node = OutputNode::new_zero(ctx, &difference_sector);
+
+        let all_nodes = vec![
+            input_layer.into(),
+            input_a.into(),
+            verifier_challenge_node.into(),
+            product_sector.into(),
+            difference_sector.into(),
+            output_node.into(),
+        ];
+
+        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+            generate_circuit_description(all_nodes).unwrap();
+
+        let input_builder = move |input_data: MultilinearExtension<Fr>| {
+            let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<Fr>> =
+                HashMap::new();
+            input_shred_id_to_data.insert(input_a_id, input_data);
+            input_builder_from_shred_map(input_shred_id_to_data).unwrap()
+        };
+
+        let inputs = input_builder(input_a_data);
+        test_circuit_new(&circ_desc, HashMap::new(), &inputs);
     }
 }

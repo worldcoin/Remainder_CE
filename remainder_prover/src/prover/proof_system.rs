@@ -32,7 +32,7 @@ macro_rules! layer_enum {
 
                 fn compute_data_outputs(
                     &self,
-                    mle_outputs_necessary: &std::collections::HashSet<&$crate::expression::circuit_expr::MleDescription<F>>,
+                    mle_outputs_necessary: &std::collections::HashSet<&$crate::mle::mle_description::MleDescription<F>>,
                     circuit_map: &mut $crate::layouter::layouting::CircuitMap<F>,
                 ) {
                     match self {
@@ -79,7 +79,7 @@ macro_rules! layer_enum {
 
                 fn get_circuit_mles(
                     &self,
-                ) -> Vec<& $crate::expression::circuit_expr::MleDescription<F>> {
+                ) -> Vec<& $crate::mle::mle_description::MleDescription<F>> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.get_circuit_mles(),
@@ -238,113 +238,5 @@ macro_rules! layer_enum {
             }
         )*
         }
-    }
-}
-
-///This macro generates an inputlayer enum that represents all the possible layers
-/// Every layer variant of the enum needs to implement InputLayer, and the enum will also implement InputLayer and pass methods to it's variants
-///
-/// Usage:
-///
-/// input_layer_enum(EnumName, (FirstVariant: InputLayerType), (SecondVariant: SecondInputLayerType), ..)
-#[macro_export]
-macro_rules! input_layer_enum {
-    ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
-        #[derive(Debug)]
-        #[doc = r"Remainder generated trait enum"]
-        pub enum $type_name<F: Field> {
-            $(
-                #[doc = "Remainder generated layer variant"]
-                $var_name(Box<$variant>),
-            )*
-        }
-
-        paste::paste! {
-            #[derive(serde::Serialize, serde::Deserialize, Debug)]
-            #[serde(bound = "F: Field")]
-            #[doc = r"Remainder generated commitment enum"]
-            pub enum [<$type_name ProverCommitment>]<F: Field> {
-                $(
-                    #[doc = "Remainder generated Commitment variant"]
-                    $var_name(<$variant as InputLayer<F>>::ProverCommitment),
-                )*
-            }
-
-            #[derive(serde::Serialize, serde::Deserialize, Debug)]
-            #[serde(bound = "F: Field")]
-            #[doc = r"Remainder generated commitment enum"]
-            pub enum [<$type_name VerifierCommitment>]<F: Field> {
-                $(
-                    #[doc = "Remainder generated Commitment variant"]
-                    $var_name(<$variant as InputLayer<F>>::VerifierCommitment),
-                )*
-            }
-        }
-
-        impl<F: Field> $crate::input_layer::InputLayer<F> for $type_name<F> {
-            paste::paste! {
-                type ProverCommitment = [<$type_name ProverCommitment>]<F>;
-                type VerifierCommitment = [<$type_name VerifierCommitment>]<F>;
-            }
-
-            fn commit(&mut self) -> Result<Self::VerifierCommitment, $crate::input_layer::InputLayerError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => {
-                            Ok(Self::VerifierCommitment::$var_name(layer.commit()?))
-                        }
-                    )*
-                }
-            }
-
-            fn append_commitment_to_transcript(
-                commitment: &Self::VerifierCommitment,
-                transcript_writer: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
-            ) {
-                match commitment {
-                    $(
-                        Self::VerifierCommitment::$var_name(commitment) => <$variant as InputLayer<F>>::append_commitment_to_transcript(commitment, transcript_writer),
-                    )*
-                }
-            }
-
-            fn open(
-                &self,
-                transcript_writer: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
-                claim: $crate::claims::RawClaim<F>,
-            ) -> Result<(), $crate::input_layer::InputLayerError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.open(transcript_writer, claim),
-                    )*
-                }
-            }
-
-            fn layer_id(&self) -> $crate::layer::LayerId {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.layer_id(),
-                    )*
-                }
-            }
-
-            fn get_padded_mle(&self) -> $crate::mle::dense::DenseMle<F,>{
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.get_padded_mle(),
-                    )*
-                }
-            }
-        }
-        // LigeroInputLayer::new()
-        // InputLayerEnum::new()
-
-        $(
-            impl<F: Field> From<$variant> for $type_name<F> {
-                fn from(var: $variant) -> $type_name<F> {
-                    Self::$var_name(Box::new(var))
-                }
-            }
-        )*
     }
 }

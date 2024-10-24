@@ -72,7 +72,7 @@ pub fn remainder_ligero_eval_prove<F: Field>(
     challenge_coord: &[F],
     transcript_writer: &mut impl ProverTranscript<F>,
     aux: &LigeroAuxInfo<F>,
-    comm: LigeroCommit<PoseidonSpongeHasher<F>, F>,
+    comm: &LigeroCommit<PoseidonSpongeHasher<F>, F>,
 ) -> Result<(), ProverError<&'static str>> {
     // --- Sanitycheck ---
     assert!(input_layer_bookkeeping_table.len().is_power_of_two());
@@ -82,7 +82,7 @@ pub fn remainder_ligero_eval_prove<F: Field>(
         get_ml_inner_outer_tensors(challenge_coord, aux.num_rows, aux.orig_num_cols);
 
     // --- Compute evaluation proof and write to `transcript_writer`
-    prove(&comm, &outer_tensor[..], aux, transcript_writer)
+    prove(comm, &outer_tensor[..], aux, transcript_writer)
 }
 
 /// API for Remainder's Ligero eval proof verification.
@@ -101,7 +101,7 @@ pub fn remainder_ligero_eval_prove<F: Field>(
 /// // TODO!(ryancao) -- see tests below!
 /// ```
 pub fn remainder_ligero_verify<F: Field>(
-    commit_root: F,
+    commit_root: &F,
     aux: &LigeroAuxInfo<F>,
     tr: &mut impl VerifierTranscript<F>,
     challenge_coord: &[F],
@@ -114,7 +114,7 @@ pub fn remainder_ligero_verify<F: Field>(
     let (inner_tensor, outer_tensor) =
         get_ml_inner_outer_tensors(challenge_coord, aux.num_rows, aux.orig_num_cols);
 
-    let result = verify(&commit_root, &outer_tensor[..], &inner_tensor[..], aux, tr).unwrap();
+    let result = verify(commit_root, &outer_tensor[..], &inner_tensor[..], aux, tr).unwrap();
 
     assert_eq!(result, claimed_value);
 }
@@ -177,7 +177,7 @@ mod tests {
             &challenge_coord,
             &mut transcript_writer,
             &aux,
-            comm,
+            &comm,
         );
 
         let transcript = transcript_writer.get_transcript();
@@ -187,7 +187,7 @@ mod tests {
         let transcript_commit_result = transcript_reader.consume_element("root").unwrap();
 
         remainder_ligero_verify::<Fr>(
-            transcript_commit_result,
+            &transcript_commit_result,
             &aux,
             &mut transcript_reader,
             &challenge_coord,

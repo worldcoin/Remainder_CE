@@ -3,8 +3,7 @@ use remainder_shared_types::halo2curves::bn256::Fr;
 use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
 /// Tests for the Pedersen commitment scheme using the BN254 (aka BN256) curve and its scalar field (Fr).
 use remainder_shared_types::halo2curves::CurveExt;
-use remainder_shared_types::transcript::ec_transcript::ECTranscriptReader;
-use remainder_shared_types::transcript::ec_transcript::ECTranscriptWriter;
+use remainder_shared_types::transcript::ec_transcript::ECTranscript;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 
 type Base = <Bn256Point as CurveExt>::Base;
@@ -22,28 +21,25 @@ fn sanity_check_test_honest_prover() {
     let a = (0..2).map(|_| Fr::one()).collect_vec();
     let prover_random_generator = &mut rand::thread_rng();
 
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("testing proof of dot product - prover");
-
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     let eval_proof = ProofOfDotProduct::prove(
         &x,
         &y,
         &a,
         &committer,
         prover_random_generator,
-        &mut prover_transcript,
+        &mut transcript,
     );
 
-    let transcript = prover_transcript.get_transcript();
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(transcript);
-
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     eval_proof.verify(
         &x.commitment,
         &y.commitment,
         &a,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -71,27 +67,24 @@ fn sanity_check_honest_prover_2() {
     );
     let prover_random_generator = &mut rand::thread_rng();
 
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("testing proof of dot product - prover");
-
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     let eval_proof = ProofOfDotProduct::prove(
         &x,
         &y,
         &a,
         &committer,
         prover_random_generator,
-        &mut prover_transcript,
+        &mut transcript,
     );
 
-    let transcript = prover_transcript.get_transcript();
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(transcript);
-
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     eval_proof.verify(
         &x.commitment,
         &y.commitment,
         &a,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }

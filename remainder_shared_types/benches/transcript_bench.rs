@@ -12,10 +12,10 @@ use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use itertools::Itertools;
 use rand::Rng;
 use remainder_shared_types::curves::PrimeOrderCurve;
-use remainder_shared_types::transcript::ec_transcript::ECProverTranscript;
+use remainder_shared_types::transcript::ec_transcript::ECTranscript;
 use remainder_shared_types::{
     transcript::{
-        ec_transcript::ECTranscriptWriter, poseidon_transcript::PoseidonSponge, ProverTranscript,
+        ec_transcript::ECTranscriptTrait, poseidon_transcript::PoseidonSponge, ProverTranscript,
         TranscriptWriter,
     },
     Field,
@@ -114,16 +114,16 @@ fn bench_bn254_base_field_transcript_absorb_scalar(c: &mut Criterion) {
                         let rng = test_rng();
                         (
                             create_random_field_vec::<Bn256Scalar>(num_elems, rng),
-                            ECTranscriptWriter::<Bn256Point, PoseidonSponge<Bn256Base>>::new(
+                            ECTranscript::<Bn256Point, PoseidonSponge<Bn256Base>>::new(
                                 "Test transcript",
                             ),
                         )
                     },
                     |(to_be_absorbed, mut transcript_writer)| {
-                        <ECTranscriptWriter<
+                        <ECTranscript<
                             Bn256Point,
                             PoseidonSponge<Bn256Base>,
-                        > as ECProverTranscript<Bn256Point>>::append_scalar_points(
+                        > as ECTranscriptTrait<Bn256Point>>::append_scalar_points(
                             &mut transcript_writer,
                             "benchmark",
                             &to_be_absorbed,
@@ -149,15 +149,14 @@ fn bench_bn254_base_field_transcript_squeeze_scalar(c: &mut Criterion) {
             |b| {
                 b.iter_batched(
                     || {
-                        ECTranscriptWriter::<Bn256Point, PoseidonSponge<Bn256Base>>::new(
+                        ECTranscript::<Bn256Point, PoseidonSponge<Bn256Base>>::new(
                             "Test transcript",
                         )
                     },
                     |mut transcript_writer| {
-                        <ECTranscriptWriter<
+                        <ECTranscript<Bn256Point, PoseidonSponge<Bn256Base>> as ECTranscriptTrait<
                             Bn256Point,
-                            PoseidonSponge<Bn256Base>,
-                        > as ECProverTranscript<Bn256Point>>::get_scalar_field_challenges(
+                        >>::get_scalar_field_challenges(
                             &mut transcript_writer,
                             "benchmark",
                             num_elems,
@@ -187,16 +186,16 @@ fn bench_bn254_base_field_transcript_absorb_ec(c: &mut Criterion) {
                         let rng = test_rng();
                         (
                             create_random_bn254_g1_vec(num_elems, rng),
-                            ECTranscriptWriter::<Bn256Point, PoseidonSponge<Bn256Base>>::new(
+                            ECTranscript::<Bn256Point, PoseidonSponge<Bn256Base>>::new(
                                 "Test transcript",
                             ),
                         )
                     },
                     |(to_be_absorbed, mut transcript_writer)| {
-                        <ECTranscriptWriter<
+                        <ECTranscript<
                             Bn256Point,
                             PoseidonSponge<Bn256Base>,
-                        > as ECProverTranscript<Bn256Point>>::append_ec_points(
+                        > as ECTranscriptTrait<Bn256Point>>::append_ec_points(
                             &mut transcript_writer,
                             "benchmark",
                             &to_be_absorbed,
@@ -221,18 +220,15 @@ fn bench_bn254_base_field_transcript_squeeze_ec(c: &mut Criterion) {
             |b| {
                 b.iter_batched(
                     || {
-                        ECTranscriptWriter::<Bn256Point, PoseidonSponge<Bn256Base>>::new(
+                        ECTranscript::<Bn256Point, PoseidonSponge<Bn256Base>>::new(
                             "Test transcript",
                         )
                     },
                     |mut transcript_writer| {
-                        <ECTranscriptWriter<
+                        <ECTranscript<Bn256Point, PoseidonSponge<Bn256Base>> as ECTranscriptTrait<
                             Bn256Point,
-                            PoseidonSponge<Bn256Base>,
-                        > as ECProverTranscript<Bn256Point>>::get_ec_challenges(
-                            &mut transcript_writer,
-                            "benchmark",
-                            num_elems,
+                        >>::get_ec_challenges(
+                            &mut transcript_writer, "benchmark", num_elems
                         )
                     },
                     BatchSize::SmallInput,

@@ -9,7 +9,7 @@ use remainder_shared_types::Field;
 
 use crate::{
     layer::LayerId,
-    mle::{dense::DenseMle, MleIndex},
+    mle::{dense::DenseMle, evals::MultilinearExtension, MleIndex},
 };
 
 /// Return a vector containing a padded version of the input data, with the padding value at the end
@@ -74,7 +74,7 @@ pub fn argsort<T: Ord>(slice: &[T], invert: bool) -> Vec<usize> {
 /// Helper function to create random MLE with specific number of vars
 pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F> {
     let capacity = 2_u32.pow(num_vars as u32);
-    let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
+    let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()) * F::from(rng.gen::<u64>()))
         .take(capacity as usize)
         .collect_vec();
     DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
@@ -175,4 +175,44 @@ pub fn get_total_mle_indices<F: Field>(
         .map(|bit| MleIndex::Fixed(*bit))
         .chain(repeat_n(MleIndex::Free, num_free_bits))
         .collect()
+}
+
+/// Construct a parent MLE for the given MLEs and prefix bits, where the prefix bits of each MLE specify how it should be inserted into the parent.
+/// Entries left unspecified are filled with `F::ZERO`.
+/// # Requires:
+/// * that the number of variables in each MLE, plus the number of its prefix bits, is the same across all pairs; this will be the number of variables in the returned MLE.
+/// * the slice is non-empty.
+///
+/// # Example:
+/// ```
+/// use remainder::utils::mle::build_composite_mle;
+/// use remainder::mle::evals::MultilinearExtension;
+/// use remainder_shared_types::Fr;
+/// use itertools::{Itertools};
+/// let mle1 = MultilinearExtension::new(vec![Fr::from(2)]);
+/// let mle2 = MultilinearExtension::new(vec![Fr::from(1), Fr::from(3)]);
+/// let result = build_composite_mle(&[(&mle1, &vec![false, true]), (&mle2, &vec![true])]);
+/// assert_eq!(*result.f.iter().collect_vec().clone(), vec![Fr::from(0), Fr::from(1), Fr::from(2), Fr::from(3)]);
+/// ```
+pub fn build_composite_mle<F: Field>(
+    mles: &[(&MultilinearExtension<F>, &Vec<bool>)],
+) -> MultilinearExtension<F> {
+    assert!(!mles.is_empty());
+    let out_num_vars = mles[0].0.num_vars() + mles[0].1.len();
+    // Check that all (MLE, prefix bit) pairs require the same total number of variables.
+    mles.iter().for_each(|(mle, prefix_bits)| {
+        assert_eq!(mle.num_vars() + prefix_bits.len(), out_num_vars);
+    });
+    let mut out = vec![F::ZERO; 1 << out_num_vars];
+    for (mle, prefix_bits) in mles {
+        mle.f.iter().enumerate().for_each(|(idx, eval)| {
+            let mut out_idx = 0;
+            for (i, bit) in prefix_bits.iter().enumerate() {
+                out_idx |= (*bit as usize) << i;
+            }
+            out_idx |= idx << prefix_bits.len();
+            out[out_idx] = eval;
+        });
+    }
+    MultilinearExtension::new(out)
 }

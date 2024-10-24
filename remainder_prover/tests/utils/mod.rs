@@ -1,3 +1,4 @@
+use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder::expression::abstract_expr::ExprBuilder;
@@ -27,13 +28,6 @@ pub fn get_dummy_random_mle(num_vars: usize, rng: &mut impl Rng) -> DenseMle<Fr>
     DenseMle::new_from_raw(mle_vec, LayerId::Input(0))
 }
 
-/// Returns a vector with random elements generated from u64 for testing according to the number of variables.
-pub fn get_dummy_random_vec(num_vars: usize, rng: &mut impl Rng) -> Vec<Fr> {
-    (0..(1 << num_vars))
-        .map(|_| Fr::from(rng.gen::<u64>()))
-        .collect_vec()
-}
-
 /// Returns an [InputShred] with the appropriate [MultilinearExtension] as the data generated from random u64
 pub fn get_dummy_input_shred_and_data(
     num_vars: usize,
@@ -41,7 +35,7 @@ pub fn get_dummy_input_shred_and_data(
     ctx: &Context,
     input_node: &InputLayerNode,
 ) -> (InputShred, InputShredData<Fr>) {
-    // let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+    // let input_layer = InputLayerNode::new(ctx, None);
     let mle_vec = (0..(1 << num_vars))
         .map(|_| Fr::from(rng.gen::<u64>()))
         .collect_vec();
@@ -64,23 +58,6 @@ pub fn get_input_shred_and_data_from_vec(
     (input_shred, input_shred_data)
 }
 
-/// Returns a vector of MLEs for dataparallel testing according to the number of variables and
-/// number of dataparallel bits.
-pub fn get_dummy_random_mle_vec(
-    num_vars: usize,
-    num_dataparallel_bits: usize,
-    rng: &mut impl Rng,
-) -> Vec<DenseMle<Fr>> {
-    (0..(1 << num_dataparallel_bits))
-        .map(|_| {
-            let mle_vec = (0..(1 << num_vars))
-                .map(|_| Fr::from(rng.gen::<u64>()))
-                .collect_vec();
-            DenseMle::new_from_raw(mle_vec, LayerId::Input(0))
-        })
-        .collect_vec()
-}
-
 /// Returns the total MLE indices given a Vec<bool>
 /// for the prefix bits and then the number of free
 /// bits after.
@@ -93,6 +70,13 @@ pub fn get_total_mle_indices<F: Field>(
         .map(|bit| MleIndex::Fixed(*bit))
         .chain(repeat_n(MleIndex::Free, num_free_bits))
         .collect()
+}
+
+/// Returns the total number of variables which would be present in an MLE
+/// which combines the bookkeeping tables of the given MLEs (given in terms
+/// of the number of variables representing each one)
+pub fn get_total_combined_mle_num_vars(all_num_vars: &[usize]) -> usize {
+    log2(all_num_vars.iter().fold(0, |acc, elem| acc + (1 << *elem))) as usize
 }
 
 /// A builder which returns an expression with three nested selectors:

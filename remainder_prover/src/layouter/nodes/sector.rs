@@ -267,7 +267,7 @@ mod tests {
         layouter::{
             layouting::{CircuitDescriptionMap, CircuitLocation},
             nodes::{
-                circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
+                circuit_inputs::{InputLayerNode, InputShred},
                 CircuitNode, CompilableNode, Context,
             },
         },
@@ -278,7 +278,7 @@ mod tests {
     #[test]
     fn test_sector_group_compile() {
         let ctx = Context::new();
-        let input_node = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+        let input_node = InputLayerNode::new(&ctx, None);
         let input_shred_1: InputShred = InputShred::new(&ctx, 0, &input_node);
         let input_shred_2 = InputShred::new(&ctx, 0, &input_node);
 
