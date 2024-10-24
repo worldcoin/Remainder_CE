@@ -1,23 +1,24 @@
-//! Unit tests for [crate::output_layer::mle_output_layer].
+//! Unit tests for [crate::output_layer].
 
 use itertools::{repeat_n, Itertools};
 use pretty_assertions::assert_eq;
 
 use remainder_shared_types::ff_field;
+use remainder_shared_types::transcript::ProverTranscript;
 use remainder_shared_types::{
     transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
     Fr,
 };
 
 use crate::claims::Claim;
-use crate::output_layer::VerifierOutputLayer;
+use crate::mle::Mle;
 use crate::{
     layer::LayerId,
     mle::{zero::ZeroMle, MleIndex},
-    output_layer::{mle_output_layer::MleOutputLayerDescription, OutputLayerDescription},
+    output_layer::OutputLayerDescription,
 };
 
-use super::{mle_output_layer::MleOutputLayer, OutputLayer};
+use super::OutputLayer;
 
 #[test]
 fn test_fix_layer() {
@@ -26,14 +27,11 @@ fn test_fix_layer() {
 
     let mle = ZeroMle::new(num_vars, None, layer_id);
 
-    let mut output_layer = MleOutputLayer::new_zero(mle);
+    let mut output_layer = OutputLayer::new_zero(mle);
 
-    // Use a `TestSponge` which always returns `1`.
-    let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
-        TranscriptWriter::new("Test Transcript Writer");
-
+    let challenges = vec![Fr::ONE, Fr::ONE];
     // Fix `x_1 = 1` and `x_2 = 1`.
-    output_layer.fix_layer(&mut transcript_writer).unwrap();
+    output_layer.fix_layer(&challenges).unwrap();
 
     // Expect the output layer to be fully bound and evaluating to
     // `f(1, 1)` which is equal to `0`.
@@ -48,8 +46,8 @@ fn test_output_layer_get_claims() {
 
     let mle = ZeroMle::new(num_vars, None, layer_id);
 
-    let mut output_layer = MleOutputLayer::new_zero(mle.clone());
-    let mut circuit_output_layer = MleOutputLayerDescription::new_zero(
+    let mut output_layer = OutputLayer::new_zero(mle.clone());
+    let mut circuit_output_layer = OutputLayerDescription::new_zero(
         layer_id,
         &repeat_n(MleIndex::Free, num_vars).collect_vec(),
     );
@@ -61,20 +59,17 @@ fn test_output_layer_get_claims() {
     let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
         TranscriptWriter::new("Test Transcript Writer");
 
-    output_layer.append_mle_to_transcript(&mut transcript_writer);
-    output_layer.fix_layer(&mut transcript_writer).unwrap();
-    let claims = output_layer.get_claims().unwrap();
+    transcript_writer.append_elements("output layer", &output_layer.get_mle().iter().collect_vec());
+    let challenges = transcript_writer.get_challenges("la la", 2);
+    // Fix `x_1 = 1` and `x_2 = 1`.
+    output_layer.fix_layer(&challenges).unwrap();
+    let claim = output_layer.get_claim().unwrap();
 
     let expected_point = vec![Fr::ONE, Fr::ONE];
     let expected_result = Fr::from(0);
-    let expected_claims = vec![Claim::new(
-        expected_point.clone(),
-        expected_result,
-        layer_id,
-        layer_id,
-    )];
+    let expected_claim = Claim::new(expected_point.clone(), expected_result, layer_id, layer_id);
 
-    assert_eq!(claims, expected_claims);
+    assert_eq!(claim, expected_claim);
 
     // ---- Part 3: Generate claims from the verifier's side.
     let transcript = transcript_writer.get_transcript();
@@ -84,9 +79,9 @@ fn test_output_layer_get_claims() {
         .retrieve_mle_from_transcript_and_fix_layer(&mut transcript_reader)
         .unwrap();
 
-    let claims = verifier_output_layer.get_claims().unwrap();
+    let claim = verifier_output_layer.get_claim().unwrap();
 
-    assert_eq!(claims, expected_claims);
+    assert_eq!(claim, expected_claim);
 }
 
 #[test]
@@ -98,8 +93,8 @@ fn test_output_layer_get_claims_with_prefix_bits() {
 
     let mle = ZeroMle::new(num_free_vars, Some(prefix_bits.clone()), layer_id);
 
-    let mut output_layer = MleOutputLayer::new_zero(mle.clone());
-    let mut circuit_output_layer = MleOutputLayerDescription::new_zero(
+    let mut output_layer = OutputLayer::new_zero(mle.clone());
+    let mut circuit_output_layer = OutputLayerDescription::new_zero(
         layer_id,
         &prefix_bits
             .into_iter()
@@ -114,21 +109,17 @@ fn test_output_layer_get_claims_with_prefix_bits() {
     let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
         TranscriptWriter::new("Test Transcript Writer");
 
-    output_layer.append_mle_to_transcript(&mut transcript_writer);
-    output_layer.fix_layer(&mut transcript_writer).unwrap();
-    let claims = output_layer.get_claims().unwrap();
+    transcript_writer.append_elements("output layer", &output_layer.get_mle().iter().collect_vec());
+    let challenges = transcript_writer.get_challenges("la la", output_layer.num_free_vars());
+    output_layer.fix_layer(&challenges).unwrap();
+    let claim = output_layer.get_claim().unwrap();
 
     let expected_point = vec![Fr::ONE, Fr::ZERO, Fr::ONE, Fr::ONE];
     let expected_result = Fr::from(0);
 
-    let expected_claims = vec![Claim::new(
-        expected_point.clone(),
-        expected_result,
-        layer_id,
-        layer_id,
-    )];
+    let expected_claim = Claim::new(expected_point.clone(), expected_result, layer_id, layer_id);
 
-    assert_eq!(claims, expected_claims);
+    assert_eq!(claim, expected_claim);
 
     // ---- Part 3: Generate claims from the verifier's side.
     let transcript = transcript_writer.get_transcript();
@@ -138,10 +129,10 @@ fn test_output_layer_get_claims_with_prefix_bits() {
         .retrieve_mle_from_transcript_and_fix_layer(&mut transcript_reader)
         .unwrap();
 
-    let claims = verifier_output_layer.get_claims().unwrap();
+    let claim = verifier_output_layer.get_claim().unwrap();
 
     // TODO(Makis): This still fails because the verifier doesn't know about
     // the prefix bits. I think we should pass this information to the verifier
     // key.
-    assert_eq!(claims, expected_claims)
+    assert_eq!(claim, expected_claim)
 }

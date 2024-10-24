@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 ark-std = "0.4"
 approx = "0.5"
+clap = { version = "=4.3.21", features = ["derive"] }
 criterion = "0.5.1"
 # derive_more = "0.99.17"
 itertools = "0.11.0"
@@ -32,7 +33,6 @@ pretty_env_logger = "0.5"
 # chrono = "0.4.31"
 chrono = "=0.4.30"
 # clap = { version = "=4.2.1", features = ["derive"] }
-clap = { version = "=4.3.21", features = ["derive"] }
 once_cell = "1.18.0"
 num-bigint = "0.4.4"
 num-traits = "0.2.17"
@@ -59,7 +59,3 @@ harness = false
 [[bench]]
 name = "regular_layer"
 harness = false
-
-[[bin]]
-name = "run_iriscode_circuit"
-path = "src/bin/run_iriscode_circuit.rs"

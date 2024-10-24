@@ -17,10 +17,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
-    expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
+    mle::{
+        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
+        mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
+    },
     prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
@@ -133,16 +135,14 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
         // --- Finally, send the claimed values for each of the bound MLEs to the verifier ---
         // First, send the claimed value of V_{i + 1}(g_2, u)
-        let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
-        let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
+        let lhs_reduced = &self.phase_1_mles.as_ref().unwrap()[0][1];
+        let rhs_reduced = &self.phase_2_mles.as_ref().unwrap()[0][1];
         debug_assert!(lhs_reduced.len() == 1);
         transcript_writer.append("Evaluation of V_{i + 1}(g_2, u)", lhs_reduced.first());
         // Next, send the claimed value of V_{i + 1}(g_2, v)
         debug_assert!(rhs_reduced.len() == 1);
         transcript_writer.append("Evaluation of V_{i + 1}(g_2, v)", rhs_reduced.first());
 
-        // The concatenation of all of these rounds is the proof resulting from a gate layer.
-        //Ok(sumcheck_rounds.into())
         Ok(())
     }
 
@@ -301,13 +301,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
         // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
         // --- BITS ---
-        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+        let num_u = self.lhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
         }) - self.num_dataparallel_bits;
-        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+        let num_v = self.rhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
@@ -399,13 +399,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+        let num_u = self.lhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
         }) - self.num_dataparallel_bits;
-        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+        let num_v = self.rhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
@@ -423,13 +423,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
         // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
         // --- BITS ---
-        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+        let num_u = self.lhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
         }) - self.num_dataparallel_bits;
-        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+        let num_v = self.rhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
@@ -570,7 +570,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         let output_data = MultilinearExtension::new(res_table);
         assert_eq!(
             output_data.num_vars(),
-            mle_output_necessary.mle_indices().len()
+            mle_output_necessary.var_indices().len()
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
@@ -674,7 +674,7 @@ impl<F: Field> VerifierLayer<F> for VerifierGateLayer<F> {
     fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
         // Grab the claim on the left side.
         // TODO!(ryancao): Do error handling here!
-        let lhs_vars = self.lhs_mle.mle_indices();
+        let lhs_vars = self.lhs_mle.var_indices();
         let lhs_point = lhs_vars
             .iter()
             .map(|idx| match idx {
@@ -696,7 +696,7 @@ impl<F: Field> VerifierLayer<F> for VerifierGateLayer<F> {
 
         // Grab the claim on the right side.
         // TODO!(ryancao): Do error handling here!
-        let rhs_vars: &[MleIndex<F>] = self.rhs_mle.mle_indices();
+        let rhs_vars: &[MleIndex<F>] = self.rhs_mle.var_indices();
         let rhs_point = rhs_vars
             .iter()
             .map(|idx| match idx {

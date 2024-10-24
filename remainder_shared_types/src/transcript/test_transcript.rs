@@ -6,14 +6,15 @@ use std::marker::PhantomData;
 use super::TranscriptSponge;
 use crate::Field;
 use itertools::Itertools;
+use std::fmt::Debug;
 
 /// An implementation of a transcript sponge that always returns 1.
-#[derive(Clone, Default)]
-pub struct TestSponge<F: Field> {
+#[derive(Clone, Default, Debug)]
+pub struct TestSponge<F: Field + Debug> {
     _marker: PhantomData<F>,
 }
 
-impl<F: Field> TranscriptSponge<F> for TestSponge<F> {
+impl<F: Field + Debug> TranscriptSponge<F> for TestSponge<F> {
     fn absorb(&mut self, _elem: F) {}
 
     fn absorb_elements(&mut self, _elements: &[F]) {}

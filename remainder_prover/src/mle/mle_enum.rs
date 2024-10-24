@@ -1,5 +1,6 @@
 //! A wrapper `enum` type around various implementations of [MleRef]s.
 
+use itertools::{repeat_n, Itertools};
 use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::Field;
@@ -102,7 +103,10 @@ impl<F: Field> Mle<F> for MleEnum<F> {
     }
 
     fn get_padded_evaluations(&self) -> Vec<F> {
-        todo!()
+        match self {
+            MleEnum::Dense(dense_mle) => dense_mle.mle.f.iter().collect_vec(),
+            MleEnum::Zero(zero_mle) => repeat_n(F::ZERO, 1 << zero_mle.num_vars).collect_vec(),
+        }
     }
 
     fn add_prefix_bits(&mut self, _new_bits: Vec<MleIndex<F>>) {
