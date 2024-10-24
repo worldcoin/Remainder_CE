@@ -1,16 +1,8 @@
 use std::collections::HashMap;
 
-use remainder_hyrax::{
-    hyrax_gkr::HyraxProof,
-    hyrax_worldcoin::orb::{load_image_commitment, SerializedImageCommitment},
-};
-use remainder_shared_types::Bn256Point;
-
-use sha256::digest as sha256_digest;
-
-use remainder::worldcoin::{
-    parameters_v2::IRISCODE_LEN as V2_IRISCODE_LEN, parameters_v3::IRISCODE_LEN as V3_IRISCODE_LEN,
-};
+use remainder_hyrax::
+    hyrax_worldcoin::orb::{load_image_commitment, SerializedImageCommitment}
+;
 
 fn main() {
     let mut commitments: HashMap<(u8, bool, bool), SerializedImageCommitment> = HashMap::new();
@@ -44,6 +36,6 @@ fn main() {
             }
         }
     }
-    let proofs =
+    let _proofs =
         remainder_hyrax::hyrax_worldcoin::upgrade::prove_upgrade_v2_to_v3(&commitments.clone());
 }
