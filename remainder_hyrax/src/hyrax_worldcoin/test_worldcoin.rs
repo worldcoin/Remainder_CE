@@ -1,5 +1,4 @@
 use std::{collections::HashMap, env};
-use sha256::digest as sha256_digest;
 
 use crate::{
     hyrax_gkr::HyraxProof,
@@ -60,6 +59,8 @@ fn test_v2_iris_with_hyrax_precommit() {
 #[ignore] // Takes a long time to run
 #[test]
 fn test_upgrade_v2_v3() {
+    use sha256::digest as sha256_digest;
+
     let mut commitments: HashMap<(u8, bool, bool), SerializedImageCommitment> = HashMap::new();
     for version in 2..=3 {
         for mask in [false, true] {

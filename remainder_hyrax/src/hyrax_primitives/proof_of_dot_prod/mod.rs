@@ -74,13 +74,13 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
             .zip(d_vec.iter())
             .map(|(x_elem, d_elem)| c * x_elem + d_elem)
             .collect_vec();
-        transcript.append_scalar_points("PoDP z_vector", &z_vector);
+        transcript.append_scalar_field_elems("PoDP z_vector", &z_vector);
         // the blinding factor to commit to z
         let z_delta = c * x.blinding + r_delta;
-        transcript.append_scalar_point("PoDP z_delta", z_delta);
+        transcript.append_scalar_field_elem("PoDP z_delta", z_delta);
         // the blinding factor to commit to <z, a>
         let z_beta = c * y.blinding + r_beta;
-        transcript.append_scalar_point("PoDP z_beta", z_beta);
+        transcript.append_scalar_field_elem("PoDP z_beta", z_beta);
 
         // we send over this information to the verifier in order to verify that the prover indeed knows the
         // dot product of x and a.
@@ -129,9 +129,9 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
         // truncate in order to convert it into the scalar field.
         let c = transcript.get_scalar_field_challenge("challenge c");
 
-        transcript.append_scalar_points("PoDP z_vector", z_vector);
-        transcript.append_scalar_point("PoDP z_delta", *z_delta);
-        transcript.append_scalar_point("PoDP z_beta", *z_beta);
+        transcript.append_scalar_field_elems("PoDP z_vector", z_vector);
+        transcript.append_scalar_field_elem("PoDP z_delta", *z_delta);
+        transcript.append_scalar_field_elem("PoDP z_beta", *z_beta);
 
         // we compute <z, a> and then commitments to z and <z, a> based off of the blinding factors and values in
         // the evaluation proof.

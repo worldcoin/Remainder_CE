@@ -3,5 +3,6 @@
         "./Cargo.toml",
         // "./remainder_prover/Cargo.toml",
         // "./remainder_shared_types/Cargo.toml"
-    ]
+    ],
+    "makefile.configureOnOpen": false
 }

@@ -8,7 +8,7 @@ use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputShred};
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, Context, NodeId};
-use crate::mle::bundled_input_mle::{to_slice_of_vectors, BundledInputMle, FlatMles};
+use crate::mle::bundled_input_mle::{to_slice_of_vectors, BundledInputMle};
 use crate::mle::evals::MultilinearExtension;
 use crate::prover::generate_circuit_description;
 use crate::prover::helpers::test_circuit_new;
@@ -27,7 +27,7 @@ fn test_complementary_recomposition_vertical() {
         .unzip();
 
     // FlatMles for the digits
-    let digits: FlatMles<Fr, 2> = FlatMles::new_from_raw(
+    let digits: BundledInputMle<Fr, 2> = BundledInputMle::new_from_raw(
         to_slice_of_vectors(digits_raw.iter().map(digits_to_field).collect_vec()),
         LayerId::Input(0),
     );
@@ -183,7 +183,7 @@ fn test_unsigned_recomposition() {
     let inputs = input_builder((
         digits
             .into_iter()
-            .map(|data| MultilinearExtension::new(data))
+            .map(MultilinearExtension::new)
             .collect_vec(),
         MultilinearExtension::new(expected),
     ));
@@ -294,7 +294,7 @@ fn test_complementary_recomposition() {
     let inputs = input_builder((
         digits
             .into_iter()
-            .map(|data| MultilinearExtension::new(data))
+            .map(MultilinearExtension::new)
             .collect_vec(),
         MultilinearExtension::new(expected),
         MultilinearExtension::new(bits),

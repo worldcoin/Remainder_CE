@@ -1,3 +1,4 @@
+use crate::hyrax_gkr::ECTranscriptTrait;
 use itertools::Itertools;
 use rand::Rng;
 use remainder::mle::{Mle, MleIndex};
@@ -5,7 +6,6 @@ use remainder::output_layer::{OutputLayer, OutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
-use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 
 use super::hyrax_layer::HyraxClaim;
 
@@ -34,11 +34,10 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         let claim = output_layer.get_claim().unwrap();
         // Convert to a CommittedScalar claim
         let blinding_factor = &C::Scalar::random(blinding_rng);
-        let claim_commit =
-            scalar_committer.committed_scalar(&claim.get_claim().get_result(), blinding_factor);
+        let claim_commit = scalar_committer.committed_scalar(&claim.get_eval(), blinding_factor);
         let committed_claim = HyraxClaim {
-            point: claim.get_claim().get_point().clone(),
-            to_layer_id: claim.get_to_layer_id().unwrap(),
+            point: claim.get_point().to_vec(),
+            to_layer_id: claim.get_to_layer_id(),
             evaluation: claim_commit,
         };
         let commitment = committed_claim.to_claim_commitment().evaluation;

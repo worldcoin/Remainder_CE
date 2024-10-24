@@ -42,23 +42,21 @@ where
 #[cfg(test)]
 mod tests {
 
-    use std::{collections::HashMap, ops::Mul};
+    use std::collections::HashMap;
 
     use super::{DifferenceBuilderComponent, EqualityCheckerComponent};
     use ark_std::test_rng;
     use itertools::Itertools;
     use rand::Rng;
     use remainder_shared_types::{Field, Fr};
-    use tracing_subscriber::registry::Data;
 
     use crate::{
         components::EqualityChecker,
         layer::LayerId,
         layouter::{
-            compiling::LayouterCircuit,
             component::Component,
             nodes::{
-                circuit_inputs::{InputLayerNode, InputShred, InputShredData},
+                circuit_inputs::{InputLayerNode, InputShred},
                 circuit_outputs::OutputNode,
                 gate::GateNode,
                 identity_gate::IdentityGateNode,

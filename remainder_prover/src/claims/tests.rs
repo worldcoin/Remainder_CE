@@ -1,14 +1,14 @@
-use crate::builders::layer_builder::from_mle;
 use crate::expression::generic_expr::Expression;
 use crate::expression::prover_expr::ProverExpr;
 use crate::layer::regular_layer::RegularLayer;
+use crate::layer::Layer;
 use crate::mle::dense::DenseMle;
 use crate::mle::{Mle, MleIndex};
+use crate::sumcheck::evaluate_at_a_point;
 use crate::utils::test_utils::DummySponge;
+use claim_aggregation::prover_aggregate_claims;
 use rand::Rng;
 use remainder_shared_types::transcript::{TranscriptSponge, TranscriptWriter};
-
-use self::claim_group::ClaimGroup;
 
 use super::*;
 use ark_std::test_rng;
@@ -31,13 +31,13 @@ fn test_get_claim() {
 
 // ------- Helper functions for claim aggregation tests -------
 
-/// Builds `ClaimGroup<Fr>` by evaluation an expression `expr` on
+/// Builds a vector of [Claim]s by evaluation an expression `expr` on
 /// each point in `points`.
 fn claims_from_expr_and_points(
     expr: &Expression<Fr, ProverExpr>,
     points: &Vec<Vec<Fr>>,
-) -> ClaimGroup<Fr> {
-    let claims_vector: Vec<ClaimMle<Fr>> = points
+) -> Vec<Claim<Fr>> {
+    points
         .iter()
         .flat_map(|point| {
             let mut exp = expr.clone();
@@ -48,24 +48,14 @@ fn claims_from_expr_and_points(
                 .get_claims()
                 .unwrap()
         })
-        .collect();
-    ClaimGroup::new(claims_vector).unwrap()
+        .collect()
 }
 
 /// Builds GKR layer whose MLE is the function whose evaluations
 /// on the boolean hypercube are given by `mle_evals`.
 fn layer_from_evals(mle_evals: Vec<Fr>) -> RegularLayer<Fr> {
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_evals, LayerId::Input(0));
-
-    let layer = from_mle(
-        mle,
-        |mle| mle.clone().expression(),
-        |_, _, _| unimplemented!(),
-    );
-
-    let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
-
-    layer
+    RegularLayer::new_raw(LayerId::Input(0), mle.expression())
 }
 
 /// Returns a random MLE expression with an associated GKR layer, along with the
@@ -99,44 +89,33 @@ fn compute_claim_wlx<F: Field, Sp: TranscriptSponge<F>>(
 }
 */
 
-/// Wraps around low-level claim aggregation WITHOUT Layer ID
-/// information.
-fn claim_aggregation_back_end_wrapper<Sp: TranscriptSponge<Fr>>(
-    layer: &impl YieldWLXEvals<Fr>,
+fn claim_aggregation_wrapper<Sp: TranscriptSponge<Fr>>(
     output_mles_from_layer: Vec<DenseMle<Fr>>,
-    claims: &ClaimGroup<Fr>,
-) -> Claim<Fr> {
-    let num_claims = claims.get_num_claims();
-    let num_vars = claims.get_num_vars();
-
-    let points_matrix = claims.get_claim_points_matrix();
-
-    debug_assert_eq!(points_matrix.len(), num_claims);
-    debug_assert_eq!(points_matrix[0].len(), num_vars);
-
+    claims: &[Claim<Fr>],
+) -> RawClaim<Fr> {
     let mut transcript: TranscriptWriter<_, Sp> = TranscriptWriter::new("Claims Test Transcript");
-
-    prover_aggregate_claims_helper(claims, layer, &output_mles_from_layer, &mut transcript).unwrap()
+    prover_aggregate_claims(claims, &output_mles_from_layer, &mut transcript).unwrap()
 }
 
 /// Compute l* = l(r*).
-fn compute_l_star(claims: &ClaimGroup<Fr>, r_star: &Fr) -> Vec<Fr> {
-    let num_vars = claims.get_num_vars();
+fn compute_l_star(claims: &[Claim<Fr>], r_star: Fr) -> Vec<Fr> {
+    assert!(!claims.is_empty());
+    let num_vars = claims[0].get_num_vars();
 
     (0..num_vars)
         .map(|i| {
-            let evals: &Vec<Fr> = claims.get_points_column(i);
-            evaluate_at_a_point(evals, *r_star).unwrap()
+            let evals: Vec<Fr> = claims.iter().map(|claim| claim.get_point()[i]).collect();
+            evaluate_at_a_point(&evals, r_star).unwrap()
         })
         .collect()
 }
 
 // Returns expected aggregated claim of `expr` on l(r_star) = `l_star`.
-fn compute_expected_claim(layer: &RegularLayer<Fr>, l_star: &Vec<Fr>) -> ClaimMle<Fr> {
-    let mut expr = layer.expression().clone();
+fn compute_expected_claim(layer: &RegularLayer<Fr>, l_star: &Vec<Fr>) -> RawClaim<Fr> {
+    let mut expr = layer.get_expression().clone();
     expr.index_mle_indices(0);
     let result = expr.evaluate_expr(l_star.clone()).unwrap();
-    ClaimMle::new_raw(l_star.clone(), result)
+    RawClaim::new(l_star.clone(), result)
 }
 
 // ----------------------------------------------------------
@@ -154,21 +133,18 @@ fn test_aggro_claim_1() {
 
     let output_mles_for_layer = vec![DenseMle::new_from_raw(mle_evals.clone(), LayerId::Input(0))];
     let layer = layer_from_evals(mle_evals);
-    let claims = claims_from_expr_and_points(layer.expression(), &points);
+    let claims = claims_from_expr_and_points(layer.get_expression(), &points);
 
-    let l_star = compute_l_star(&claims, &r_star);
+    let l_star = compute_l_star(&claims, r_star);
 
     // Compare to l(10) computed by hand.
     assert_eq!(l_star, vec![Fr::from(7).neg(), Fr::from(43)]);
 
-    let aggregated_claim = claim_aggregation_back_end_wrapper::<DummySponge<Fr, 10>>(
-        &layer,
-        output_mles_for_layer,
-        &claims,
-    );
+    let aggregated_claim =
+        claim_aggregation_wrapper::<DummySponge<Fr, 10>>(output_mles_for_layer, &claims);
     let expected_claim = compute_expected_claim(&layer, &l_star);
 
-    assert_eq!(aggregated_claim.get_result(), expected_claim.get_result());
+    assert_eq!(aggregated_claim.get_eval(), expected_claim.get_eval());
 }
 
 /// Test claim aggregation on another small MLE on 2 variables
@@ -187,18 +163,15 @@ fn test_aggro_claim_2() {
 
     let output_mles_for_layer = vec![DenseMle::new_from_raw(mle_evals.clone(), LayerId::Input(0))];
     let layer = layer_from_evals(mle_evals);
-    let claims = claims_from_expr_and_points(layer.expression(), &points);
+    let claims = claims_from_expr_and_points(layer.get_expression(), &points);
 
-    let l_star = compute_l_star(&claims, &r_star);
+    let l_star = compute_l_star(&claims, r_star);
 
-    let aggregated_claim = claim_aggregation_back_end_wrapper::<DummySponge<Fr, -2>>(
-        &layer,
-        output_mles_for_layer,
-        &claims,
-    );
+    let aggregated_claim =
+        claim_aggregation_wrapper::<DummySponge<Fr, -2>>(output_mles_for_layer, &claims);
     let expected_claim = compute_expected_claim(&layer, &l_star);
 
-    assert_eq!(aggregated_claim.get_result(), expected_claim.get_result());
+    assert_eq!(aggregated_claim.get_eval(), expected_claim.get_eval());
 }
 
 /// Test claim aggregation for 3 claims on a random MLE on 3
@@ -215,18 +188,15 @@ fn test_aggro_claim_3() {
     // ---------------
     let (layer, layerwise_bt) = build_random_mle_layer(3);
     let output_mles_for_layer = vec![layerwise_bt];
-    let claims = claims_from_expr_and_points(layer.expression(), &points);
+    let claims = claims_from_expr_and_points(layer.get_expression(), &points);
 
-    let l_star = compute_l_star(&claims, &r_star);
+    let l_star = compute_l_star(&claims, r_star);
 
-    let aggregated_claim = claim_aggregation_back_end_wrapper::<DummySponge<Fr, 25>>(
-        &layer,
-        output_mles_for_layer,
-        &claims,
-    );
+    let aggregated_claim =
+        claim_aggregation_wrapper::<DummySponge<Fr, 25>>(output_mles_for_layer, &claims);
     let expected_claim = compute_expected_claim(&layer, &l_star);
 
-    assert_eq!(aggregated_claim.get_result(), expected_claim.get_result());
+    assert_eq!(aggregated_claim.get_eval(), expected_claim.get_eval());
 }
 
 /// Test claim aggregation on a random, product MLE on 3 variables
@@ -255,12 +225,13 @@ fn test_aggro_claim_4() {
     let expr = Expression::<Fr, ProverExpr>::products(vec![mle_ref, mle_ref2]);
     let mut expr_copy = expr.clone();
 
-    let layer = from_mle(
-        (mle1, mle2),
-        |mle| Expression::<Fr, ProverExpr>::products(vec![mle.clone().0, mle.clone().1]),
-        |_, _, _| unimplemented!(),
-    );
-    let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
+    let layer = RegularLayer::new_raw(LayerId::Input(0), expr);
+    // let layer = from_mle(
+    //     (mle1, mle2),
+    //     |mle| Expression::<Fr, ProverExpr>::products(vec![mle.clone().0, mle.clone().1]),
+    //     |_, _, _| unimplemented!(),
+    // );
+    // let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
 
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -271,11 +242,8 @@ fn test_aggro_claim_4() {
 
     let rchal = Fr::from(40).neg();
 
-    let res = claim_aggregation_back_end_wrapper::<DummySponge<_, -40>>(
-        &layer,
-        output_mles_from_layer,
-        &claim_group,
-    );
+    let res =
+        claim_aggregation_wrapper::<DummySponge<_, -40>>(output_mles_from_layer, &claim_group);
 
     let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
     let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -289,14 +257,13 @@ fn test_aggro_claim_4() {
     expr_copy.index_mle_indices(0);
 
     let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
-    let claim_fixed_vars: ClaimMle<Fr> = ClaimMle::new_raw(fix_vars, eval_fixed_vars);
-    assert_ne!(res.get_result(), claim_fixed_vars.get_result());
+    let claim_fixed_vars: RawClaim<Fr> = RawClaim::new(fix_vars, eval_fixed_vars);
+    assert_ne!(res.get_eval(), claim_fixed_vars.get_eval());
 }
 
 /// Make sure claim aggregation FAILS for a WRONG CLAIM!
 #[test]
 fn test_aggro_claim_negative_1() {
-    let _dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
     let mut rng = test_rng();
     let mle_v1 = vec![
         Fr::from(rng.gen::<u64>()),
@@ -312,15 +279,9 @@ fn test_aggro_claim_negative_1() {
     let output_mles_from_layer = vec![mle1.clone()];
 
     let mle_ref = mle1.clone();
-    let expr = Expression::<Fr, ProverExpr>::mle(mle_ref);
-    let mut expr_copy = expr.clone();
+    let mut expr = Expression::<Fr, ProverExpr>::mle(mle_ref);
 
-    let layer = from_mle(
-        mle1,
-        |mle| mle.clone().expression(),
-        |_, _, _| unimplemented!(),
-    );
-    let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
+    let layer = RegularLayer::new_raw(LayerId::Input(0), expr.clone());
 
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -329,19 +290,15 @@ fn test_aggro_claim_negative_1() {
 
     let rchal = Fr::from(76);
 
-    let mut claim_group = claims_from_expr_and_points(&layer.expression, &chals);
-    let test_claim = &claim_group.claims[0];
-    claim_group.claims[0] = ClaimMle::new(
-        test_claim.get_point().clone(),
-        test_claim.get_result() - Fr::one(),
+    let mut claims = claims_from_expr_and_points(&layer.expression, &chals);
+    let test_claim = &claims[0];
+    claims[0] = Claim::new(
+        test_claim.get_point().to_vec(),
+        test_claim.get_eval() - Fr::one(),
         test_claim.from_layer_id,
         test_claim.to_layer_id,
     );
-    let res = claim_aggregation_back_end_wrapper::<DummySponge<_, 76>>(
-        &layer,
-        output_mles_from_layer,
-        &claim_group,
-    );
+    let res = claim_aggregation_wrapper::<DummySponge<_, 76>>(output_mles_from_layer, &claims);
 
     let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
     let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -352,11 +309,11 @@ fn test_aggro_claim_negative_1() {
         .map(|evals| evaluate_at_a_point(&evals, rchal).unwrap())
         .collect();
 
-    expr_copy.index_mle_indices(0);
+    expr.index_mle_indices(0);
 
-    let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
-    let claim_fixed_vars: ClaimMle<Fr> = ClaimMle::new_raw(fix_vars, eval_fixed_vars);
-    assert_ne!(res.get_result(), claim_fixed_vars.get_result());
+    let eval_fixed_vars = expr.evaluate_expr(fix_vars.clone()).unwrap();
+    let claim_fixed_vars: RawClaim<Fr> = RawClaim::new(fix_vars, eval_fixed_vars);
+    assert_ne!(res.get_eval(), claim_fixed_vars.get_eval());
 }
 
 /// Make sure claim aggregation fails for ANOTHER WRONG CLAIM!
@@ -380,12 +337,13 @@ fn test_aggro_claim_negative_2() {
     let mut expr_copy = expr.clone();
     let output_mle_from_layer = vec![mle1.clone()];
 
-    let layer = from_mle(
-        mle1,
-        |mle| mle.clone().expression(),
-        |_, _, _| unimplemented!(),
-    );
-    let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
+    let layer = RegularLayer::new_raw(LayerId::Input(0), expr);
+    // let layer = from_mle(
+    //     mle1,
+    //     |mle| mle.clone().expression(),
+    //     |_, _, _| unimplemented!(),
+    // );
+    // let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
 
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -394,19 +352,15 @@ fn test_aggro_claim_negative_2() {
 
     let rchal = Fr::from(76);
 
-    let mut claim_group = claims_from_expr_and_points(&layer.expression, &chals);
-    let test_claim = &claim_group.claims[2];
-    claim_group.claims[2] = ClaimMle::new(
-        test_claim.get_point().clone(),
-        test_claim.get_result() + Fr::one(),
+    let mut claims = claims_from_expr_and_points(&layer.expression, &chals);
+    let test_claim = claims[2].clone();
+    claims[2] = Claim::new(
+        test_claim.get_point().to_vec(),
+        test_claim.get_eval() + Fr::one(),
         test_claim.from_layer_id,
         test_claim.to_layer_id,
     );
-    let res = claim_aggregation_back_end_wrapper::<DummySponge<_, 40>>(
-        &layer,
-        output_mle_from_layer,
-        &claim_group,
-    );
+    let res = claim_aggregation_wrapper::<DummySponge<_, 40>>(output_mle_from_layer, &claims);
 
     let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
     let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -421,8 +375,8 @@ fn test_aggro_claim_negative_2() {
 
     let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
 
-    let claim_fixed_vars: ClaimMle<Fr> = ClaimMle::new_raw(fix_vars, eval_fixed_vars);
-    assert_ne!(res.get_result(), claim_fixed_vars.get_result());
+    let claim_fixed_vars: RawClaim<Fr> = RawClaim::new(fix_vars, eval_fixed_vars);
+    assert_ne!(res.get_eval(), claim_fixed_vars.get_eval());
 }
 
 #[test]
@@ -442,13 +396,13 @@ fn test_aggro_claim_common_suffix1() {
 
     let output_mle_from_layer = vec![DenseMle::new_from_raw(mle_evals.clone(), LayerId::Input(0))];
     let layer = layer_from_evals(mle_evals);
-    let claims = claims_from_expr_and_points(layer.expression(), &points);
+    let claims = claims_from_expr_and_points(layer.get_expression(), &points);
 
     // W(l(0)), W(l(1)) computed by hand.
-    assert_eq!(claims.get_results()[0], Fr::from(163));
-    assert_eq!(claims.get_results()[1], Fr::from(1015));
+    assert_eq!(claims[0].get_eval(), Fr::from(163));
+    assert_eq!(claims[1].get_eval(), Fr::from(1015));
 
-    let l_star = compute_l_star(&claims, &r_star);
+    let l_star = compute_l_star(&claims, r_star);
 
     // Compare to l(10) computed by hand.
     assert_eq!(l_star, vec![Fr::from(11), Fr::from(13), Fr::from(5)]);
@@ -458,17 +412,14 @@ fn test_aggro_claim_common_suffix1() {
     assert_eq!(wlx.1.first().unwrap().clone(), vec![Fr::from(2269)]);
     */
 
-    let aggregated_claim = claim_aggregation_back_end_wrapper::<DummySponge<Fr, 10>>(
-        &layer,
-        output_mle_from_layer,
-        &claims,
-    );
+    let aggregated_claim =
+        claim_aggregation_wrapper::<DummySponge<Fr, 10>>(output_mle_from_layer, &claims);
     let expected_claim = compute_expected_claim(&layer, &l_star);
 
     // Compare to W(l_star) computed by hand.
-    assert_eq!(expected_claim.get_result(), Fr::from(26773));
+    assert_eq!(expected_claim.get_eval(), Fr::from(26773));
 
-    assert_eq!(aggregated_claim.get_result(), expected_claim.get_result());
+    assert_eq!(aggregated_claim.get_eval(), expected_claim.get_eval());
 }
 
 #[test]
@@ -487,26 +438,23 @@ fn test_aggro_claim_common_suffix2() {
     // ---------------
     let output_mle_from_layer = vec![DenseMle::new_from_raw(mle_evals.clone(), LayerId::Input(0))];
     let layer = layer_from_evals(mle_evals);
-    let claims = claims_from_expr_and_points(layer.expression(), &points);
+    let claims = claims_from_expr_and_points(layer.get_expression(), &points);
 
     // W(l(0)), W(l(1)) computed by hand.
-    assert_eq!(claims.get_results()[0], Fr::from(163));
-    assert_eq!(claims.get_results()[1], Fr::from(767));
+    assert_eq!(claims[0].get_eval(), Fr::from(163));
+    assert_eq!(claims[1].get_eval(), Fr::from(767));
 
-    let l_star = compute_l_star(&claims, &r_star);
+    let l_star = compute_l_star(&claims, r_star);
 
     // Compare to l(10) computed by hand.
     assert_eq!(l_star, vec![Fr::from(11), Fr::from(3), Fr::from(5)]);
 
-    let aggregated_claim = claim_aggregation_back_end_wrapper::<DummySponge<Fr, 10>>(
-        &layer,
-        output_mle_from_layer,
-        &claims,
-    );
+    let aggregated_claim =
+        claim_aggregation_wrapper::<DummySponge<Fr, 10>>(output_mle_from_layer, &claims);
     let expected_claim = compute_expected_claim(&layer, &l_star);
 
     // Compare to W(l_star) computed by hand.
-    assert_eq!(expected_claim.get_result(), Fr::from(6203));
+    assert_eq!(expected_claim.get_eval(), Fr::from(6203));
 
-    assert_eq!(aggregated_claim.get_result(), expected_claim.get_result());
+    assert_eq!(aggregated_claim.get_eval(), expected_claim.get_eval());
 }
