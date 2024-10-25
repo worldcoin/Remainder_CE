@@ -10,13 +10,12 @@ use serde::{Deserialize, Serialize};
 
 use super::{evals::EvaluationsIterator, mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
-    claims::{wlx_eval::ClaimMle, Claim},
+    claims::RawClaim,
     mle::evals::{Evaluations, MultilinearExtension},
 };
 use crate::{
-    claims::{ClaimError, YieldClaim},
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::{LayerError, LayerId},
+    layer::LayerId,
 };
 use remainder_shared_types::Field;
 
@@ -68,7 +67,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         &self.mle_indices
     }
 
-    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<Claim<F>> {
+    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<RawClaim<F>> {
         // Bind the `MleIndex::IndexedBit(index)` to the challenge `point`.
 
         // First, find the bit corresponding to `index` and compute its absolute
@@ -111,7 +110,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         self.mle.fix_variable_at_index(bit_count - 1, point);
 
         if self.num_free_vars() == 0 {
-            let fixed_claim_return = Claim::new(
+            let fixed_claim_return = RawClaim::new(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())
@@ -127,7 +126,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
     /// Bind the bit `index` to the value `binding`.
     /// If this was the last unbound variable, then return a Claim object giving the fully specified
     /// evaluation point and the (single) value of the bookkeeping table.  Otherwise, return None.
-    fn fix_variable(&mut self, index: usize, binding: F) -> Option<Claim<F>> {
+    fn fix_variable(&mut self, index: usize, binding: F) -> Option<RawClaim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::Indexed(index) {
                 mle_index.bind_index(binding);
@@ -137,7 +136,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         self.mle.fix_variable(binding);
 
         if self.num_free_vars() == 0 {
-            let fixed_claim_return = Claim::new(
+            let fixed_claim_return = RawClaim::new(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())
@@ -175,6 +174,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
     }
 }
 
+/*
 impl<F: Field> YieldClaim<ClaimMle<F>> for DenseMle<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.len() != 1 {
@@ -199,6 +199,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for DenseMle<F> {
         )])
     }
 }
+*/
 
 impl<F: Field> DenseMle<F> {
     /// Constructs a new `DenseMle` with specified prefix_bits

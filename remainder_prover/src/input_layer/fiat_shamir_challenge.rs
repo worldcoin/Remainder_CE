@@ -6,7 +6,7 @@ use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::Claim,
+    claims::RawClaim,
     layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension},
 };
@@ -81,7 +81,7 @@ impl<F: Field> FiatShamirChallenge<F> {
     /// On a copy of the underlying data, fix variables for each of the coordinates of the the point
     /// in `claim`, and check whether the single element left in the bookkeeping table is equal to
     /// the claimed value in `claim`.
-    pub fn verify(&self, claim: &Claim<F>) -> Result<(), FiatShamirChallengeError> {
+    pub fn verify(&self, claim: &RawClaim<F>) -> Result<(), FiatShamirChallengeError> {
         let mle_evals = self.mle.to_vec();
         let mut mle = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
         mle.index_mle_indices(0);
@@ -100,14 +100,14 @@ impl<F: Field> FiatShamirChallenge<F> {
             }
             eval.unwrap()
         } else {
-            Claim::new(vec![], mle.first())
+            RawClaim::new(vec![], mle.first())
         };
 
         // This is an internal error as it should never happen.
         assert_eq!(eval.get_point(), claim.get_point());
 
         // Check if the evaluation of the MLE matches the claimed value.
-        if eval.get_result() == claim.get_result() {
+        if eval.get_eval() == claim.get_eval() {
             Ok(())
         } else {
             Err(FiatShamirChallengeError::EvaluationMismatch)
@@ -156,7 +156,7 @@ mod tests {
 
         let claim_point = vec![Fr::ONE, Fr::ZERO];
         let claim_result = Fr::from(1);
-        let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
+        let claim: RawClaim<Fr> = RawClaim::new(claim_point, claim_result);
 
         let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
         let mle = MultilinearExtension::new(mle_vec);
