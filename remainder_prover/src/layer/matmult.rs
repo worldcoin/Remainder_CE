@@ -35,9 +35,20 @@ use crate::{
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-/// Used to represent a matrix, along with its optional prefix bits (in circuit)
-/// basically an equivalence of DenseMle<F>, but uninstantiated, until preprocessing
-/// TODO(vishady): NEED TO PAD THIS BEFORE CALLING `::new` SO IT SHOULD ALWAYS TAKE IN LOG DIMENSIONS!
+/// Used to represent a matrix; basically an MLE which is the
+/// flattened version of this matrix along with the log2
+/// num_rows (`rows_num_vars`) and the log2 num_cols `cols_num_vars`.
+///
+/// This ensures that the flattened MLE provided already has
+/// a bookkeeping table where the rows and columns are padded to
+/// the nearest power of 2.
+///
+/// NOTE: the flattened MLE that represents a matrix is in
+/// row major order. Because internal bookkeeping tables are
+/// stored in little-endian, this causes the FIRST "column"
+/// number of variables to represent the columns of the matrix,
+/// and the LAST "row" number of variables to represent the
+/// rows of teh matrix.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: Field")]
 pub struct Matrix<F: Field> {
@@ -59,38 +70,64 @@ impl<F: Field> Matrix<F> {
         }
     }
 
-    /// get the dimension of this matrix
+    /// Get the dimensions of this matrix.
     pub fn rows_cols_num_vars(&self) -> (usize, usize) {
         (self.rows_num_vars, self.cols_num_vars)
     }
 }
 
-/// Used to represent a matrix multiplication layer
+/// Used to represent a matrix multiplication layer.
+///
+/// #Attributes:
+/// * `layer_id` - the LayerId of this MatMult layer.
+/// * `matrix_a` - the lefthand side matrix in the multiplication.
+/// * `matrix_b` - the righthand side matrix in the multiplication.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: Field")]
 pub struct MatMult<F: Field> {
     layer_id: LayerId,
     matrix_a: Matrix<F>,
     matrix_b: Matrix<F>,
-    num_vars_middle_ab: Option<usize>,
+    num_vars_middle_ab: usize,
 }
 
 impl<F: Field> MatMult<F> {
-    /// Create a new matrix multiplication layer
+    /// Create a new matrix multiplication layer.
     pub fn new(layer_id: LayerId, matrix_a: Matrix<F>, matrix_b: Matrix<F>) -> MatMult<F> {
+        // Check to make sure the inner dimensions of the matrices we are
+        // producting match. I.e., the number of variables representing the
+        // columns of matrix a are the same as the number of variables
+        // representing the rows of matrix b.
+        assert_eq!(matrix_a.cols_num_vars, matrix_b.rows_num_vars);
+        let num_vars_middle_ab = matrix_a.cols_num_vars;
         MatMult {
             layer_id,
             matrix_a,
             matrix_b,
-            num_vars_middle_ab: None,
+            num_vars_middle_ab,
         }
     }
 
+    /// The step, according to [Tha13](https://eprint.iacr.org/2013/351.pdf), which
+    /// makes the matmult algorithm super-efficient.
+    ///
+    /// Given the claim on the output of the matrix multiplication, we bind
+    /// the variables representing the "rows" of `matrix_a` to the first
+    /// log(num_rows_a) vars in this claim, and we bind the variables
+    /// representing the "columns" of `matrix_b` to the last log(num_cols_b)
+    /// vars in the claim.
+    ///
+    /// #Arguments
+    /// * `claim_a`: the first log_num_rows variables of the claim made on the
+    /// MLE representing the output of this layer.
+    /// * `claim_b`: the last log_num_cols variables of the claim made on the
+    /// MLE representing the output of this layer.
     fn pre_processing_step(&mut self, claim_a: Vec<F>, claim_b: Vec<F>) {
         let matrix_a_mle = &mut self.matrix_a.mle;
         let matrix_b_mle = &mut self.matrix_b.mle;
 
-        // check that both matrices are padded
+        // Check that both matrices are padded such that the number of rows
+        // and the number of columns are both powers of 2.
         assert_eq!(
             (1 << self.matrix_a.cols_num_vars) * (1 << self.matrix_a.rows_num_vars),
             matrix_a_mle.len()
@@ -100,25 +137,21 @@ impl<F: Field> MatMult<F> {
             matrix_b_mle.len()
         );
 
-        // check to make sure the dimensions match
-        if self.matrix_a.cols_num_vars == self.matrix_b.rows_num_vars {
-            self.num_vars_middle_ab = Some(self.matrix_a.cols_num_vars);
-        } else {
-            panic!("Matrix dimensions do not match")
-        }
-
         matrix_a_mle.index_mle_indices(0);
         matrix_b_mle.index_mle_indices(0);
 
-        // bind the row indices of matrix a to relevant claim point
+        // Bind the row indices of matrix A to the relevant claim point.
         claim_a.into_iter().enumerate().for_each(|(idx, chal)| {
             matrix_a_mle.fix_variable_at_index(idx + self.matrix_a.cols_num_vars, chal);
         });
 
-        // bind the column indices of matrix b to relevant claim point
+        // Bind the column indices of matrix B to the relevant claim point.
         claim_b.into_iter().enumerate().for_each(|(idx, chal)| {
             matrix_b_mle.fix_variable(idx, chal);
         });
+        // We want to re-index the MLE indices in matrix b such that it
+        // starts from 0 after the pre-processing, so we do that by first
+        // setting them to be free and then re-indexing them.
         let new_b_indices = matrix_b_mle
             .clone()
             .mle_indices
@@ -147,6 +180,11 @@ impl<F: Field> MatMult<F> {
 }
 
 impl<F: Field> Layer<F> for MatMult<F> {
+    // Since we pre-process the matrices first, by pre-binding the
+    // row variables of matrix A and the column variables of matrix B,
+    // the number of rounds of sumcheck is simply the number of variables
+    // that represent the singular (same) inner dimension of both of the
+    // matrices in this matrix product.
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
@@ -160,11 +198,19 @@ impl<F: Field> Layer<F> for MatMult<F> {
             self.matrix_b.cols_num_vars
         );
 
+        // Split the claim on the MLE representing the output of this layer
+        // accordingly.
+        // We need to make sure the number of variables in the claim is the
+        // sum of the outer dimensions of this matrix product.
+        assert_eq!(
+            claim.get_point().len(),
+            self.matrix_a.rows_num_vars + self.matrix_b.cols_num_vars
+        );
         let mut claim_b = claim.get_point().clone();
         let claim_a = claim_b.split_off(self.matrix_b.cols_num_vars);
         self.pre_processing_step(claim_a, claim_b);
 
-        let num_vars_middle = self.num_vars_middle_ab.unwrap(); // TODO: raise error if not
+        let num_vars_middle = self.num_vars_middle_ab;
 
         for round in 0..num_vars_middle {
             // Compute the round's sumcheck message.
@@ -211,7 +257,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        (0..self.num_vars_middle_ab.unwrap()).collect_vec()
+        (0..self.num_vars_middle_ab).collect_vec()
     }
 
     fn max_degree(&self) -> usize {
@@ -365,11 +411,14 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         Ok(VerifierLayerEnum::MatMult(verifier_layer))
     }
 
+    /// The number of sumcheck rounds are only those over the inner dimensions
+    /// of the matrix, hence they enumerate from 0 to the inner dimension.
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        assert_eq!(self.matrix_a.cols_num_vars, self.matrix_b.rows_num_vars);
         (0..self.matrix_a.cols_num_vars).collect_vec()
     }
 
+    /// Compute the evaluations of the MLE that represents the
+    /// product of the two matrices over the boolean hypercube.
     fn compute_data_outputs(
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
@@ -462,7 +511,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         })
     }
 
-    /// Return the PostSumcheckLayer, given challenges that fully bind the expression.
+    /// Return the [PostSumcheckLayer], given challenges that fully bind the expression.
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
@@ -473,6 +522,12 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         let mut indexed_index_counter = 0;
         let mut bound_index_counter = 0;
 
+        // We need to make sure the MLE indices of the post-sumcheck layer
+        // match the MLE indices in proving, since it is pre-processed
+        // when we start proving.
+        // I.e, we keep the first variables representing the columns of matrix
+        // A as Indexed for sumcheck, and keep the rest as bound to their
+        // respective claim point in pre-processing.
         let matrix_a_new_indices = self
             .matrix_a
             .mle
@@ -500,6 +555,9 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
             .collect_vec();
         pre_bound_matrix_a_mle.set_mle_indices(matrix_a_new_indices);
 
+        // We keep the last variables representing the rows of matrix B
+        // as Indexed for sumcheck, and keep the rest as bound to their
+        // respective claim point in pre-processing.
         let mut pre_bound_matrix_b_mle = self.matrix_b.mle.clone();
         let claim_chals_matrix_b = claim_challenges[..self.matrix_b.cols_num_vars].to_vec();
         let mut bound_index_counter = 0;
@@ -706,27 +764,6 @@ impl<F: Field> YieldWLXEvals<F> for MatMult<F> {
         let mut wlx_evals = claimed_vals.to_vec();
         wlx_evals.extend(&next_evals);
         Ok(wlx_evals)
-    }
-}
-
-impl<F: std::fmt::Debug + Field> MatMult<F> {
-    pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
-        // Dummy struct which simply exists to implement `std::fmt::Display`
-        // so that it can be returned as an `impl std::fmt::Display`
-        struct MatMultCircuitDesc<'a, F: std::fmt::Debug + Field>(&'a MatMult<F>);
-
-        impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for MatMultCircuitDesc<'a, F> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.debug_struct("MatMult")
-                    .field("matrix_a_layer_id", &self.0.matrix_a.mle.layer_id)
-                    .field("matrix_a_mle_indices", &self.0.matrix_a.mle.mle_indices)
-                    .field("matrix_b_layer_id", &self.0.matrix_b.mle.layer_id)
-                    .field("matrix_b_mle_indices", &self.0.matrix_b.mle.mle_indices)
-                    .field("num_vars_middle_ab", &self.0.matrix_a.cols_num_vars)
-                    .finish()
-            }
-        }
-        MatMultCircuitDesc(self)
     }
 }
 
