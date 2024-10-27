@@ -12,7 +12,7 @@ use crate::{
     utils::mle::get_total_mle_indices,
 };
 
-use super::{CircuitNode, CompilableNode, Context, NodeId};
+use super::{CircuitNode, CompilableNode, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
@@ -41,7 +41,6 @@ impl CircuitNode for IdentityGateNode {
 impl IdentityGateNode {
     /// Constructs a new IdentityGateNode and computes the data it generates
     pub fn new(
-        ctx: &Context,
         pre_routed_data: &impl CircuitNode,
         nonzero_gates: Vec<(usize, usize)>,
         num_dataparallel_bits: Option<usize>,
@@ -59,7 +58,7 @@ impl IdentityGateNode {
         let num_vars = log2(remap_table_len) as usize;
 
         Self {
-            id: ctx.get_new_id(),
+            id: NodeId::new(),
             num_dataparallel_bits,
             nonzero_gates,
             pre_routed_data: pre_routed_data.id(),
@@ -119,7 +118,7 @@ mod test {
             identity_gate::IdentityGateNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
         mle::evals::MultilinearExtension,
         prover::{generate_circuit_description, helpers::test_circuit_new, GKRCircuitDescription},
@@ -140,9 +139,6 @@ mod test {
         GKRCircuitDescription<F>,
         impl Fn(IdentityGateTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
     ) {
-        // --- Create global context manager ---
-        let context = Context::new();
-
         // --- Nonzero gates ---
         let mut nonzero_gates = vec![];
         (1..(1 << mle_and_shifted_mle_num_vars)).for_each(|idx| {
@@ -150,16 +146,14 @@ mod test {
         });
 
         // --- All inputs are public inputs ---
-        let public_input_layer_node = InputLayerNode::new(&context, None);
+        let public_input_layer_node = InputLayerNode::new(None);
 
         // --- Inputs to the circuit include the "primary MLE" and the "shifted MLE" ---
         let mle_shred = InputShred::new(
-            &context,
             mle_and_shifted_mle_num_vars,
             &public_input_layer_node,
         );
         let shifted_mle_shred = InputShred::new(
-            &context,
             mle_and_shifted_mle_num_vars,
             &public_input_layer_node,
         );
@@ -169,9 +163,8 @@ mod test {
         let shifted_mle_shred_id = shifted_mle_shred.id();
 
         // --- Create the circuit components ---
-        let gate_sector = IdentityGateNode::new(&context, &mle_shred, nonzero_gates, None);
+        let gate_sector = IdentityGateNode::new(&mle_shred, nonzero_gates, None);
         let diff_sector = Sector::new(
-            &context,
             &[&gate_sector, &shifted_mle_shred],
             |input_nodes| {
                 assert_eq!(input_nodes.len(), 2);
@@ -182,7 +175,7 @@ mod test {
             },
         );
 
-        let output = OutputNode::new_zero(&context, &diff_sector);
+        let output = OutputNode::new_zero(&diff_sector);
 
         // --- Generate the circuit description ---
         let all_circuit_nodes: Vec<NodeEnum<F>> = vec![

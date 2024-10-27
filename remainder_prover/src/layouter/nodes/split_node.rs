@@ -8,7 +8,7 @@ use crate::{
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
 };
 
-use super::{CircuitNode, CompilableNode, Context, NodeId};
+use super::{CircuitNode, CompilableNode, NodeId};
 
 /// A Node that derives new `ClaimableNode`s from a single
 /// `ClaimableNode`.
@@ -25,14 +25,14 @@ pub struct SplitNode {
 
 impl SplitNode {
     /// Creates 2^num_vars `SplitNodes` from a single ClaimableNode
-    pub fn new(ctx: &Context, node: &impl CircuitNode, num_vars: usize) -> Vec<Self> {
+    pub fn new(node: &impl CircuitNode, num_vars: usize) -> Vec<Self> {
         let num_vars_node = node.get_num_vars();
         let source = node.id();
         let max_num_vars = num_vars_node - num_vars;
         (0..(1 << num_vars))
             .zip(bits_iter(num_vars))
             .map(|(_, prefix_bits)| Self {
-                id: ctx.get_new_id(),
+                id: NodeId::new(),
                 source,
                 num_vars: max_num_vars,
                 prefix_bits,
@@ -126,7 +126,7 @@ mod test {
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
         mle::evals::MultilinearExtension,
         prover::{generate_circuit_description, helpers::test_circuit_new, GKRCircuitDescription},
@@ -156,14 +156,13 @@ mod test {
         let context = Context::new();
 
         // --- All inputs are public inputs ---
-        let public_input_layer_node = InputLayerNode::new(&context, None);
+        let public_input_layer_node = InputLayerNode::new(None);
 
         // --- Two inputs to the circuit: the MLE to be split and multiplied against itself,
         // and the expected result of that ---
         let mle_shred =
-            InputShred::new(&context, mle_to_be_split_num_vars, &public_input_layer_node);
+            InputShred::new(mle_to_be_split_num_vars, &public_input_layer_node);
         let expected_mle_shred = InputShred::new(
-            &context,
             mle_to_be_split_num_vars - 1,
             &public_input_layer_node,
         );
@@ -173,19 +172,18 @@ mod test {
         let expected_mle_shred_id = expected_mle_shred.id();
 
         // --- Create the circuit components (this just splits the MLE in half) ---
-        let split_sectors = SplitNode::new(&context, &mle_shred, 1);
+        let split_sectors = SplitNode::new(&mle_shred, 1);
         let sector_prod = Sector::new(
-            &context,
             &[&split_sectors[0], &split_sectors[1]],
             |inputs| Expression::<F, AbstractExpr>::products(vec![inputs[0], inputs[1]]),
         );
 
-        let final_sector = Sector::new(&context, &[&&sector_prod, &expected_mle_shred], |inputs| {
+        let final_sector = Sector::new(&[&&sector_prod, &expected_mle_shred], |inputs| {
             Expression::<F, AbstractExpr>::mle(inputs[0])
                 - Expression::<F, AbstractExpr>::mle(inputs[1])
         });
 
-        let output = OutputNode::new_zero(&context, &final_sector);
+        let output = OutputNode::new_zero(&final_sector);
 
         // --- Generate the circuit description ---
         let all_circuit_nodes: Vec<NodeEnum<F>> = vec![

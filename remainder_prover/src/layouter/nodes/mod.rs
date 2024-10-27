@@ -1,8 +1,4 @@
 //! Module for nodes that can be added to a circuit DAG
-
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-
 pub use itertools::Either;
 pub use remainder_shared_types::{Field, Fr};
 use serde::{Deserialize, Serialize};
@@ -11,6 +7,7 @@ use crate::expression::{abstract_expr::AbstractExpr, generic_expr::Expression};
 use crate::layer::layer_enum::LayerDescriptionEnum;
 use crate::layer::LayerId;
 
+use super::context::CircuitContext;
 use super::layouting::{CircuitDescriptionMap, DAGError};
 
 pub mod circuit_inputs;
@@ -25,35 +22,14 @@ pub mod node_enum;
 pub mod sector;
 pub mod split_node;
 
-/// Container of global context for node creation
-///
-/// Contains a consistently incrementing Id to prevent
-/// collisions in node id creation
-#[derive(Debug, Default, Clone)]
-pub struct Context(Arc<AtomicU64>);
-
-impl Context {
-    /// Creates an empty Context
-    pub fn new() -> Self {
-        Self(Arc::new(AtomicU64::new(0)))
-    }
-
-    /// Retrieves a new node id from the context
-    /// that is guaranteed to be unique.
-    pub fn get_new_id(&self) -> NodeId {
-        let id = self.0.fetch_add(1, Ordering::Relaxed);
-        NodeId(id)
-    }
-}
-
 /// The circuit-unique ID for each node
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Copy, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct NodeId(u64);
 
 impl NodeId {
-    /// Creates a new NodeId from a Context
-    pub fn new(ctx: &Context) -> Self {
-        ctx.get_new_id()
+    /// Creates a new NodeId from the global circuit context.
+    pub fn new() -> Self {
+        Self(CircuitContext::next_node_id())
     }
 
     /// Creates a new NodeId from a u64, for testing only

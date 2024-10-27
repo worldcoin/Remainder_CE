@@ -17,7 +17,7 @@ use remainder_shared_types::Field;
 use crate::expression::generic_expr::Expression;
 
 use super::fiat_shamir_challenge::FiatShamirChallengeNode;
-use super::{CircuitNode, Context, NodeId};
+use super::{CircuitNode, NodeId};
 
 /// Represents the use of a lookup into a particular table (represented by a LookupTable).
 #[derive(Clone, Debug)]
@@ -42,14 +42,12 @@ impl LookupConstraint {
     ///   if `constrained` has length not a power of two, then `multiplicitites` must also count the
     ///   implicit padding!
     pub fn new<F: Field>(
-        ctx: &Context,
         lookup_table: &LookupTable,
         constrained: &dyn CircuitNode,
         multiplicities: &dyn CircuitNode,
     ) -> Self {
-        let id = ctx.get_new_id();
         LookupConstraint {
-            id,
+            id: NodeId::new(),
             table_node_id: lookup_table.id(),
             constrained_node_id: constrained.id(),
             multiplicities_node_id: multiplicities.id(),
@@ -99,12 +97,11 @@ impl LookupTable {
     /// # Requires
     /// * The length of the table must be a power of two.
     pub fn new<F: Field>(
-        ctx: &Context,
         table: &dyn CircuitNode,
         fiat_shamir_challenge_node: &FiatShamirChallengeNode,
     ) -> Self {
         LookupTable {
-            id: ctx.get_new_id(),
+            id: NodeId::new(),
             constraints: vec![],
             table_node_id: table.id(),
             fiat_shamir_challenge_node_id: fiat_shamir_challenge_node.id(),

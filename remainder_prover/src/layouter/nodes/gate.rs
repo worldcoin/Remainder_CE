@@ -45,7 +45,6 @@ impl CircuitNode for GateNode {
 impl GateNode {
     /// Constructs a new GateNode and computes the data it generates
     pub fn new(
-        ctx: &Context,
         lhs: &dyn CircuitNode,
         rhs: &dyn CircuitNode,
         nonzero_gates: Vec<(usize, usize, usize)>,
@@ -65,7 +64,7 @@ impl GateNode {
         let num_vars = log2(res_table_num_entries) as usize;
 
         Self {
-            id: ctx.get_new_id(),
+            id: NodeId::new(),
             num_dataparallel_bits,
             nonzero_gates,
             gate_operation,
@@ -139,7 +138,7 @@ mod test {
             circuit_inputs::{InputLayerNode, InputShred},
             circuit_outputs::OutputNode,
             gate::GateNode,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
         mle::evals::MultilinearExtension,
         prover::{generate_circuit_description, helpers::test_circuit_new},
@@ -147,7 +146,6 @@ mod test {
 
     #[test]
     fn test_gate_node_in_circuit() {
-        let ctx = &Context::new();
         const NUM_FREE_VARS: usize = 4;
 
         let mut rng = test_rng();
@@ -164,16 +162,15 @@ mod test {
             nonzero_gates.push((idx, idx, idx));
         });
 
-        let input_layer = InputLayerNode::new(ctx, None);
+        let input_layer = InputLayerNode::new(None);
 
-        let input_shred_pos = InputShred::new(ctx, NUM_FREE_VARS, &input_layer);
+        let input_shred_pos = InputShred::new(NUM_FREE_VARS, &input_layer);
         let input_shred_pos_id = input_shred_pos.id();
 
-        let input_shred_neg = InputShred::new(ctx, NUM_FREE_VARS, &input_layer);
+        let input_shred_neg = InputShred::new(NUM_FREE_VARS, &input_layer);
         let input_shred_neg_id = input_shred_neg.id();
 
         let gate_sector = GateNode::new(
-            ctx,
             &input_shred_pos,
             &input_shred_neg,
             nonzero_gates,
@@ -181,7 +178,7 @@ mod test {
             None,
         );
 
-        let output = OutputNode::new_zero(ctx, &gate_sector);
+        let output = OutputNode::new_zero(&gate_sector);
 
         let all_nodes = vec![
             input_layer.into(),
@@ -209,7 +206,6 @@ mod test {
 
     #[test]
     fn test_data_parallel_gate_node_in_circuit() {
-        let ctx = &Context::new();
         const NUM_DATAPARALLEL_VARS: usize = 3;
         const NUM_FREE_VARS: usize = 4;
 
@@ -228,18 +224,17 @@ mod test {
             nonzero_gates.push((idx, idx, idx));
         });
 
-        let input_layer = InputLayerNode::new(ctx, None);
+        let input_layer = InputLayerNode::new(None);
 
         let input_shred_pos =
-            InputShred::new(ctx, NUM_DATAPARALLEL_VARS + NUM_FREE_VARS, &input_layer);
+            InputShred::new(NUM_DATAPARALLEL_VARS + NUM_FREE_VARS, &input_layer);
         let input_shred_pos_id = input_shred_pos.id();
 
         let input_shred_neg =
-            InputShred::new(ctx, NUM_DATAPARALLEL_VARS + NUM_FREE_VARS, &input_layer);
+            InputShred::new(NUM_DATAPARALLEL_VARS + NUM_FREE_VARS, &input_layer);
         let input_shred_neg_id = input_shred_neg.id();
 
         let gate_sector = GateNode::new(
-            ctx,
             &input_shred_pos,
             &input_shred_neg,
             nonzero_gates,
@@ -247,7 +242,7 @@ mod test {
             Some(NUM_DATAPARALLEL_VARS),
         );
 
-        let output = OutputNode::new_zero(ctx, &gate_sector);
+        let output = OutputNode::new_zero(&gate_sector);
 
         let all_nodes = vec![
             input_layer.into(),

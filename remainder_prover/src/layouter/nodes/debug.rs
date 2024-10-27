@@ -28,9 +28,9 @@ impl CircuitNode for DebugNode {
 
 impl DebugNode {
     /// Creates a new DebugNode w/ a label applied to the given set of Nodes
-    pub fn new(ctx: &Context, label: String, nodes: &[&dyn CircuitNode]) -> Self {
+    pub fn new(label: String, nodes: &[&dyn CircuitNode]) -> Self {
         Self {
-            id: ctx.get_new_id(),
+            id: NodeId::new(),
             label,
             sources: nodes.iter().map(|node| node.id()).collect(),
         }
