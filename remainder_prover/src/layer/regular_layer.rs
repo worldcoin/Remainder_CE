@@ -171,7 +171,6 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
 
         let mut previous_round_message = vec![claim.get_eval()];
         let mut previous_challenge = F::ZERO;
-        dbg!(&self.expression);
 
         for round_index in self.nonlinear_rounds.clone() {
             // First compute the appropriate number of univariate evaluations for this round.
