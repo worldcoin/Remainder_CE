@@ -128,7 +128,7 @@ impl<F: Field> FiatShamirChallengeDescription<F> {
         assert_eq!(values.len(), 1 << self.num_bits);
         FiatShamirChallenge {
             mle: MultilinearExtension::new(values),
-            layer_id: self.layer_id
+            layer_id: self.layer_id,
         }
     }
 }

@@ -10,7 +10,10 @@ use std::collections::HashSet;
 use remainder_shared_types::Fr;
 
 use crate::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression, prover_expr::ProverExpr}, layer::LayerId, layouter::nodes::NodeId, mle::dense::DenseMle
+    expression::{abstract_expr::AbstractExpr, generic_expr::Expression, prover_expr::ProverExpr},
+    layer::LayerId,
+    layouter::nodes::NodeId,
+    mle::dense::DenseMle,
 };
 
 #[test]
