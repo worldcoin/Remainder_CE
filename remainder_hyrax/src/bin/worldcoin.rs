@@ -9,28 +9,6 @@ fn main() {
             for left_eye in [false, true] {
                 let serialized_commitment = load_image_commitment(version, mask, left_eye);
                 commitments.insert((version, mask, left_eye), serialized_commitment.clone());
-
-                println!(
-                    "({}, {}, {}, data) = {}",
-                    version,
-                    mask,
-                    left_eye,
-                    serialized_commitment.image.len()
-                );
-                println!(
-                    "({}, {}, {}, commitment) = {}",
-                    version,
-                    mask,
-                    left_eye,
-                    serialized_commitment.commitment_bytes.len()
-                );
-                println!(
-                    "({}, {}, {}, blinding) = {}",
-                    version,
-                    mask,
-                    left_eye,
-                    serialized_commitment.blinding_factors_bytes.len()
-                );
             }
         }
     }
