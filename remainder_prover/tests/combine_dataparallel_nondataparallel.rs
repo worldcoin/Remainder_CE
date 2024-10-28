@@ -44,20 +44,15 @@ impl<F: Field> DataParallelComponent<F> {
     /// ## Arguments
     /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
     /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
-    pub fn new(
-        mle_1_input: &dyn CircuitNode,
-        mle_2_input: &dyn CircuitNode,
-    ) -> Self {
-        let product_scaled_component =
-            ProductScaledBuilderComponent::new(mle_1_input, mle_2_input);
+    pub fn new(mle_1_input: &dyn CircuitNode, mle_2_input: &dyn CircuitNode) -> Self {
+        let product_scaled_component = ProductScaledBuilderComponent::new(mle_1_input, mle_2_input);
 
         let product_scaled_meta_component = ProductScaledBuilderComponent::new(
             &product_scaled_component.get_output_sector(),
             &product_scaled_component.get_output_sector(),
         );
-        let output_component = DifferenceBuilderComponent::new(
-            &product_scaled_meta_component.get_output_sector(),
-        );
+        let output_component =
+            DifferenceBuilderComponent::new(&product_scaled_meta_component.get_output_sector());
 
         Self {
             first_layer_component: product_scaled_component,
@@ -110,9 +105,8 @@ impl<F: Field> TripleNestedSelectorComponent<F> {
     ) -> Self {
         let triple_nested_selector_component =
             TripleNestedBuilderComponent::new(inner_inner_sel, inner_sel, outer_sel);
-        let output_component = DifferenceBuilderComponent::new(
-            &triple_nested_selector_component.get_output_sector(),
-        );
+        let output_component =
+            DifferenceBuilderComponent::new(&triple_nested_selector_component.get_output_sector());
 
         Self {
             first_layer_component: triple_nested_selector_component,
@@ -149,12 +143,8 @@ impl<F: Field> ScaledProductComponent<F> {
     /// ## Arguments
     /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
     /// * `mle_2` - An MLE with arbitrary bookkeeping table values, same size as `mle_1`.
-    pub fn new(
-        mle_1_input: &dyn CircuitNode,
-        mle_2_input: &dyn CircuitNode,
-    ) -> Self {
-        let product_scaled_component =
-            ProductScaledBuilderComponent::new(mle_1_input, mle_2_input);
+    pub fn new(mle_1_input: &dyn CircuitNode, mle_2_input: &dyn CircuitNode) -> Self {
+        let product_scaled_component = ProductScaledBuilderComponent::new(mle_1_input, mle_2_input);
 
         let output_component =
             DifferenceBuilderComponent::new(&product_scaled_component.get_output_sector());
@@ -229,12 +219,9 @@ fn build_combined_dataparallel_nondataparallel_test_circuit<F: Field>(
     let mle_6_id = mle_6_shred.id();
 
     // --- Create the circuit components ---
-    let component_1 = DataParallelComponent::new(
-        &dataparallel_mle_1_shred,
-        &dataparallel_mle_2_shred,
-    );
-    let component_2 =
-        TripleNestedSelectorComponent::new(&mle_4_shred, &mle_5_shred, &mle_6_shred);
+    let component_1 =
+        DataParallelComponent::new(&dataparallel_mle_1_shred, &dataparallel_mle_2_shred);
+    let component_2 = TripleNestedSelectorComponent::new(&mle_4_shred, &mle_5_shred, &mle_6_shred);
     let component_3 = ScaledProductComponent::new(&mle_3_shred, &mle_4_shred);
 
     let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![

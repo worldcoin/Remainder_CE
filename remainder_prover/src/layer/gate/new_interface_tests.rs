@@ -119,8 +119,7 @@ mod tests {
 
         // --- Circuit inputs as semantic "shreds" ---
         let first_mle_shred = InputShred::new(num_free_vars, &public_input_layer_node);
-        let second_mle_shred =
-            InputShred::new(num_free_vars - 1, &public_input_layer_node);
+        let second_mle_shred = InputShred::new(num_free_vars - 1, &public_input_layer_node);
 
         // --- Save IDs to be used later ---
         let first_mle_id = first_mle_shred.id();
@@ -229,8 +228,7 @@ mod tests {
 
         let gate_node = IdentityGateNode::new(&first_mle_shred, nonzero_gates, None);
 
-        let component_2 =
-            EqualityCheckerComponent::new(&gate_node, &mle_one_element_shred);
+        let component_2 = EqualityCheckerComponent::new(&gate_node, &mle_one_element_shred);
 
         let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![
             public_input_layer_node.into(),
@@ -338,8 +336,7 @@ mod tests {
             Some(num_dataparallel_vars),
         );
 
-        let component_2 =
-            EqualityCheckerComponent::new(&gate_node, &dataparallel_second_mle_shred);
+        let component_2 = EqualityCheckerComponent::new(&gate_node, &dataparallel_second_mle_shred);
 
         let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![
             public_input_layer_node.into(),
@@ -465,10 +462,8 @@ mod tests {
             Some(num_dataparallel_vars),
         );
 
-        let component_2 = EqualityCheckerComponent::new(
-            &gate_node,
-            &dataparallel_mle_one_element_shred,
-        );
+        let component_2 =
+            EqualityCheckerComponent::new(&gate_node, &dataparallel_mle_one_element_shred);
 
         let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![
             public_input_layer_node.into(),
@@ -575,8 +570,7 @@ mod tests {
         let mle_input_shred = InputShred::new(mle.mle.clone().num_vars(), &input_layer);
         let mle_input_shred_id = mle_input_shred.id();
         let mle_input_shred_data = MultilinearExtension::new(mle.mle.f.iter().collect_vec());
-        let neg_mle_input_shred =
-            InputShred::new(neg_mle.mle.clone().num_vars(), &input_layer);
+        let neg_mle_input_shred = InputShred::new(neg_mle.mle.clone().num_vars(), &input_layer);
         let neg_mle_input_shred_id = neg_mle_input_shred.id();
         let neg_mle_input_shred_data =
             MultilinearExtension::new(neg_mle.mle.f.iter().collect_vec());

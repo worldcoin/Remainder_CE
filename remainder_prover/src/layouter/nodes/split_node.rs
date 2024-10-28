@@ -156,12 +156,9 @@ mod test {
 
         // --- Two inputs to the circuit: the MLE to be split and multiplied against itself,
         // and the expected result of that ---
-        let mle_shred =
-            InputShred::new(mle_to_be_split_num_vars, &public_input_layer_node);
-        let expected_mle_shred = InputShred::new(
-            mle_to_be_split_num_vars - 1,
-            &public_input_layer_node,
-        );
+        let mle_shred = InputShred::new(mle_to_be_split_num_vars, &public_input_layer_node);
+        let expected_mle_shred =
+            InputShred::new(mle_to_be_split_num_vars - 1, &public_input_layer_node);
 
         // --- Save IDs to be used later ---
         let mle_shred_id = mle_shred.id();
@@ -169,10 +166,9 @@ mod test {
 
         // --- Create the circuit components (this just splits the MLE in half) ---
         let split_sectors = SplitNode::new(&mle_shred, 1);
-        let sector_prod = Sector::new(
-            &[&split_sectors[0], &split_sectors[1]],
-            |inputs| Expression::<F, AbstractExpr>::products(vec![inputs[0], inputs[1]]),
-        );
+        let sector_prod = Sector::new(&[&split_sectors[0], &split_sectors[1]], |inputs| {
+            Expression::<F, AbstractExpr>::products(vec![inputs[0], inputs[1]])
+        });
 
         let final_sector = Sector::new(&[&&sector_prod, &expected_mle_shred], |inputs| {
             Expression::<F, AbstractExpr>::mle(inputs[0])

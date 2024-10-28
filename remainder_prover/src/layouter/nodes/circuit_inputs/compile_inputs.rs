@@ -160,7 +160,7 @@ impl InputLayerNode {
         debug_assert_eq!(input_shred_indices.len(), input_shreds.len());
 
         let input_layer_description = InputLayerDescription {
-            layer_id: input_layer_id.clone(),
+            layer_id: *input_layer_id,
             num_vars: num_vars_combined_mle,
         };
 
@@ -172,7 +172,7 @@ impl InputLayerNode {
                 circuit_description_map.add_node_id_and_location_num_vars(
                     input_shred.id,
                     (
-                        CircuitLocation::new(input_layer_id.clone(), prefix_bits),
+                        CircuitLocation::new(*input_layer_id, prefix_bits),
                         input_shred.get_num_vars(),
                     ),
                 );

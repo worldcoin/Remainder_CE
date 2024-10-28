@@ -126,10 +126,8 @@ fn build_nonlinear_nested_sel_test_circuit<F: Field>(
         InputShred::new(num_vars_inner_sel_side, &public_input_layer_node);
     let right_outer_sel_mle_shred =
         InputShred::new(num_vars_outer_sel_side, &public_input_layer_node);
-    let right_prod_mle_1_shred =
-        InputShred::new(num_vars_product_side, &public_input_layer_node);
-    let right_prod_mle_2_shred =
-        InputShred::new(num_vars_product_side, &public_input_layer_node);
+    let right_prod_mle_1_shred = InputShred::new(num_vars_product_side, &public_input_layer_node);
+    let right_prod_mle_2_shred = InputShred::new(num_vars_product_side, &public_input_layer_node);
 
     // --- Save IDs to be used later ---
     let left_inner_sel_mle_id = left_inner_sel_mle_shred.id();

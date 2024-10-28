@@ -2,6 +2,6 @@
 
 pub mod compiling;
 pub mod component;
+pub mod context;
 pub mod layouting;
 pub mod nodes;
-pub mod context;

@@ -109,12 +109,9 @@ fn build_nonlinear_selector_test_circuit<F: Field>(
 
     // --- Inputs to the circuit are the MLEs at the leaves of the selector + product ---
     let left_sel_mle_shred = InputShred::new(num_vars_sel_side, &public_input_layer_node);
-    let right_sel_mle_shred =
-        InputShred::new(num_vars_sel_side, &public_input_layer_node);
-    let right_prod_mle_1_shred =
-        InputShred::new(num_vars_product_side, &public_input_layer_node);
-    let right_prod_mle_2_shred =
-        InputShred::new(num_vars_product_side, &public_input_layer_node);
+    let right_sel_mle_shred = InputShred::new(num_vars_sel_side, &public_input_layer_node);
+    let right_prod_mle_1_shred = InputShred::new(num_vars_product_side, &public_input_layer_node);
+    let right_prod_mle_2_shred = InputShred::new(num_vars_product_side, &public_input_layer_node);
 
     // --- Save IDs to be used later ---
     let left_sel_mle_id = left_sel_mle_shred.id();

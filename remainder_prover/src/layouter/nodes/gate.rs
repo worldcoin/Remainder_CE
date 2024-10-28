@@ -225,12 +225,10 @@ mod test {
 
         let input_layer = InputLayerNode::new(None);
 
-        let input_shred_pos =
-            InputShred::new(NUM_DATAPARALLEL_VARS + NUM_FREE_VARS, &input_layer);
+        let input_shred_pos = InputShred::new(NUM_DATAPARALLEL_VARS + NUM_FREE_VARS, &input_layer);
         let input_shred_pos_id = input_shred_pos.id();
 
-        let input_shred_neg =
-            InputShred::new(NUM_DATAPARALLEL_VARS + NUM_FREE_VARS, &input_layer);
+        let input_shred_neg = InputShred::new(NUM_DATAPARALLEL_VARS + NUM_FREE_VARS, &input_layer);
         let input_shred_neg_id = input_shred_neg.id();
 
         let gate_sector = GateNode::new(

@@ -182,13 +182,11 @@ mod test {
             (matrix_a_num_cols_vars, matrix_b_num_cols_vars),
         );
 
-        let difference_sector = Sector::new(
-            &[&matmult_sector, &expected_result_mle_shred],
-            |inputs| {
+        let difference_sector =
+            Sector::new(&[&matmult_sector, &expected_result_mle_shred], |inputs| {
                 Expression::<F, AbstractExpr>::mle(inputs[0])
                     - Expression::<F, AbstractExpr>::mle(inputs[1])
-            },
-        );
+            });
 
         let output_node = OutputNode::new_zero(&difference_sector);
 

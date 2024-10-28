@@ -28,10 +28,7 @@ use crate::{
 
 /// Using the number of variables, get an input shred that represents
 /// this information.
-pub fn get_input_shred_from_num_vars(
-    num_vars: usize,
-    input_node: &InputLayerNode,
-) -> InputShred {
+pub fn get_input_shred_from_num_vars(num_vars: usize, input_node: &InputLayerNode) -> InputShred {
     InputShred::new(num_vars, input_node)
 }
 

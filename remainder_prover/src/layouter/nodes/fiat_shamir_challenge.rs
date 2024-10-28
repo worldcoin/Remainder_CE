@@ -56,10 +56,7 @@ impl FiatShamirChallengeNode {
         let fsc_layer = FiatShamirChallengeDescription::new(layer_id, self.get_num_vars());
         circuit_description_map.add_node_id_and_location_num_vars(
             self.id,
-            (
-                CircuitLocation::new(layer_id, vec![]),
-                self.get_num_vars(),
-            ),
+            (CircuitLocation::new(layer_id, vec![]), self.get_num_vars()),
         );
         fsc_layer
     }

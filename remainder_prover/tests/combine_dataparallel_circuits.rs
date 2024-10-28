@@ -44,10 +44,7 @@ impl<F: Field> DataParallelConstantScaledCircuitAltComponent<F> {
     /// ## Arguments
     /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
     /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
-    pub fn new(
-        mle_1_input: &dyn CircuitNode,
-        mle_2_input: &dyn CircuitNode,
-    ) -> Self {
+    pub fn new(mle_1_input: &dyn CircuitNode, mle_2_input: &dyn CircuitNode) -> Self {
         let first_layer_component =
             ConstantScaledSumBuilderComponent::new(mle_1_input, mle_2_input);
 
@@ -98,10 +95,7 @@ impl<F: Field> DataParallelSumConstantCircuitAltComponent<F> {
     /// ## Arguments
     /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
     /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
-    pub fn new(
-        mle_1_input: &dyn CircuitNode,
-        mle_2_input: &dyn CircuitNode,
-    ) -> Self {
+    pub fn new(mle_1_input: &dyn CircuitNode, mle_2_input: &dyn CircuitNode) -> Self {
         let first_layer_component = ProductSumBuilderComponent::new(mle_1_input, mle_2_input);
 
         let second_layer_component = ConstantScaledSumBuilderComponent::new(
@@ -151,12 +145,8 @@ impl<F: Field> DataParallelProductScaledSumCircuitAltComponent<F> {
     /// ## Arguments
     /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
     /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
-    pub fn new(
-        mle_1_input: &dyn CircuitNode,
-        mle_2_input: &dyn CircuitNode,
-    ) -> Self {
-        let first_layer_component =
-            ProductScaledBuilderComponent::new(mle_1_input, mle_2_input);
+    pub fn new(mle_1_input: &dyn CircuitNode, mle_2_input: &dyn CircuitNode) -> Self {
+        let first_layer_component = ProductScaledBuilderComponent::new(mle_1_input, mle_2_input);
 
         let second_layer_component = ProductSumBuilderComponent::new(
             &first_layer_component.get_output_sector(),

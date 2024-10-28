@@ -562,7 +562,7 @@ impl<F: Field> GKRCircuitDescription<F> {
                 );
                 fiat_shamir_challenges.push(FiatShamirChallenge {
                     mle: fiat_shamir_challenge_mle,
-                    layer_id: fiat_shamir_challenge_description.layer_id()
+                    layer_id: fiat_shamir_challenge_description.layer_id(),
                 });
             });
 
@@ -764,9 +764,7 @@ pub fn generate_circuit_description<F: Field>(
         .iter()
         .map(|input_layer_node| {
             let input_layer_description = input_layer_node
-                .generate_input_layer_description::<F>(
-                    &mut circuit_description_map,
-                )
+                .generate_input_layer_description::<F>(&mut circuit_description_map)
                 .unwrap();
             input_layer_id_to_input_shred_ids.insert(
                 input_layer_description.layer_id,
@@ -779,9 +777,8 @@ pub fn generate_circuit_description<F: Field>(
     let fiat_shamir_challenges = fiat_shamir_challenge_nodes
         .iter()
         .map(|fiat_shamir_challenge_node| {
-            fiat_shamir_challenge_node.generate_circuit_description::<F>(
-                &mut circuit_description_map,
-            )
+            fiat_shamir_challenge_node
+                .generate_circuit_description::<F>(&mut circuit_description_map)
         })
         .collect_vec();
 
@@ -797,9 +794,7 @@ pub fn generate_circuit_description<F: Field>(
         (intermediate_layers, output_layers),
         |(mut lookup_intermediate_acc, mut lookup_output_acc), lookup_node| {
             let (intermediate_layers, output_layer) = lookup_node
-                .generate_lookup_circuit_description(
-                    &mut circuit_description_map,
-                )
+                .generate_lookup_circuit_description(&mut circuit_description_map)
                 .unwrap();
             lookup_intermediate_acc.extend(intermediate_layers);
             lookup_output_acc.push(output_layer);
@@ -847,8 +842,5 @@ pub fn generate_circuit_description<F: Field>(
     };
 
     CircuitContext::reset();
-    Ok((
-        circuit_description,
-        input_builder,
-    ))
+    Ok((circuit_description, input_builder))
 }

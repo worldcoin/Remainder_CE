@@ -1,7 +1,7 @@
 //! For assigning ids to nodes and various sorts of layers.
 
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use once_cell::sync::Lazy;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 /// [CircuitContext] keeps track of the ids of the nodes and layers that are created.
 /// Contains a consistently incrementing counters to prevent id collisions.
@@ -26,7 +26,9 @@ impl CircuitContext {
         CONTEXT.node_id.store(0, Ordering::SeqCst);
         CONTEXT.input_layer_id.store(0, Ordering::SeqCst);
         CONTEXT.layer_id.store(0, Ordering::SeqCst);
-        CONTEXT.fiat_shamir_challenge_layer_id.store(0, Ordering::SeqCst);
+        CONTEXT
+            .fiat_shamir_challenge_layer_id
+            .store(0, Ordering::SeqCst);
     }
 
     /// Retrieves a new node id that is guaranteed to be unique.
@@ -46,6 +48,8 @@ impl CircuitContext {
 
     /// Retrieves a new fiat shamir challenge layer id that is guaranteed to be unique.
     pub fn next_fiat_shamir_challenge_layer_id() -> usize {
-        CONTEXT.fiat_shamir_challenge_layer_id.fetch_add(1, Ordering::Relaxed)
+        CONTEXT
+            .fiat_shamir_challenge_layer_id
+            .fetch_add(1, Ordering::Relaxed)
     }
 }

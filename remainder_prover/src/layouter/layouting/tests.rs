@@ -90,10 +90,7 @@ fn test_topo_sort_with_cycle_include_children() {
 
     // adding a cycle here
     // node id: [13]
-    let debug_node_1 = DebugNode::new(
-        "debug".to_string(),
-        &[&input_layer_node, &debug_node_0],
-    );
+    let debug_node_1 = DebugNode::new("debug".to_string(), &[&input_layer_node, &debug_node_0]);
 
     debug_node_0.add_node(&debug_node_1);
 
@@ -185,10 +182,7 @@ fn test_topo_sort_with_cycle_no_children() {
 
     // adding a cycle here
     // node id: [13]
-    let debug_node_1 = DebugNode::new(
-        "debug".to_string(),
-        &[&input_layer_node, &debug_node_0],
-    );
+    let debug_node_1 = DebugNode::new("debug".to_string(), &[&input_layer_node, &debug_node_0]);
 
     debug_node_0.add_node(&debug_node_1);
 
@@ -466,9 +460,7 @@ impl Arbitrary for QDepGraph {
                 .filter(|_| *g.choose(&[true, false]).unwrap())
                 .collect();
 
-            let sector = Sector::new(&inputs, |ids| {
-                Expression::<Fr, AbstractExpr>::products(ids)
-            });
+            let sector = Sector::new(&inputs, Expression::<Fr, AbstractExpr>::products);
 
             graph.extend([NodeEnum::Sector(sector)]);
         }

@@ -124,22 +124,17 @@ fn build_linear_and_nonlinear_vars_test_circuit<F: Field>(
     let public_input_layer_node = InputLayerNode::new(None);
 
     // --- "Semantic" circuit inputs ---
-    let selector_mle_shred =
-        InputShred::new(selector_mle_num_vars, &public_input_layer_node);
-    let product_mle_shred =
-        InputShred::new(product_mle_num_vars, &public_input_layer_node);
+    let selector_mle_shred = InputShred::new(selector_mle_num_vars, &public_input_layer_node);
+    let product_mle_shred = InputShred::new(product_mle_num_vars, &public_input_layer_node);
 
     // --- Save IDs to be used later ---
     let selector_mle_id = selector_mle_shred.id();
     let product_mle_id = product_mle_shred.id();
 
     // --- Create the circuit components ---
-    let component_1 =
-        LastVarLinearBuilderComponent::new(&selector_mle_shred, &product_mle_shred);
-    let component_2 =
-        FirstVarLinearBuilderComponent::new(&component_1.get_output_sector());
-    let output_component =
-        DifferenceBuilderComponent::new(&component_2.get_output_sector());
+    let component_1 = LastVarLinearBuilderComponent::new(&selector_mle_shred, &product_mle_shred);
+    let component_2 = FirstVarLinearBuilderComponent::new(&component_1.get_output_sector());
+    let output_component = DifferenceBuilderComponent::new(&component_2.get_output_sector());
 
     let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![
         public_input_layer_node.into(),

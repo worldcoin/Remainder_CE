@@ -111,10 +111,8 @@ fn build_dataparallel_selector_test_circuit<F: Field>(
     let dataparallel_mle_4_id = dataparallel_mle_4_shred.id();
 
     // --- Create the circuit components ---
-    let component_1 = ProductScaledBuilderComponent::new(
-        &dataparallel_mle_1_shred,
-        &dataparallel_mle_2_shred,
-    );
+    let component_1 =
+        ProductScaledBuilderComponent::new(&dataparallel_mle_1_shred, &dataparallel_mle_2_shred);
     let component_2 = DataparallelTripleNestedSelectorComponent::new(
         &component_1.get_output_sector(),
         &dataparallel_mle_3_shred,

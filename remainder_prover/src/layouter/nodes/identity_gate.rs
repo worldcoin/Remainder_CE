@@ -148,14 +148,9 @@ mod test {
         let public_input_layer_node = InputLayerNode::new(None);
 
         // --- Inputs to the circuit include the "primary MLE" and the "shifted MLE" ---
-        let mle_shred = InputShred::new(
-            mle_and_shifted_mle_num_vars,
-            &public_input_layer_node,
-        );
-        let shifted_mle_shred = InputShred::new(
-            mle_and_shifted_mle_num_vars,
-            &public_input_layer_node,
-        );
+        let mle_shred = InputShred::new(mle_and_shifted_mle_num_vars, &public_input_layer_node);
+        let shifted_mle_shred =
+            InputShred::new(mle_and_shifted_mle_num_vars, &public_input_layer_node);
 
         // --- Save IDs to be used later ---
         let mle_shred_id = mle_shred.id();
@@ -163,16 +158,13 @@ mod test {
 
         // --- Create the circuit components ---
         let gate_sector = IdentityGateNode::new(&mle_shred, nonzero_gates, None);
-        let diff_sector = Sector::new(
-            &[&gate_sector, &shifted_mle_shred],
-            |input_nodes| {
-                assert_eq!(input_nodes.len(), 2);
-                let mle_1_id = input_nodes[0];
-                let mle_2_id = input_nodes[1];
+        let diff_sector = Sector::new(&[&gate_sector, &shifted_mle_shred], |input_nodes| {
+            assert_eq!(input_nodes.len(), 2);
+            let mle_1_id = input_nodes[0];
+            let mle_2_id = input_nodes[1];
 
-                mle_1_id.expr() - mle_2_id.expr()
-            },
-        );
+            mle_1_id.expr() - mle_2_id.expr()
+        });
 
         let output = OutputNode::new_zero(&diff_sector);
 

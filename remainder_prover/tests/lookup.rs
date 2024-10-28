@@ -44,10 +44,8 @@ fn build_single_shred_lookup_test_circuit<F: Field>(
 
     // --- Witness values are private, as are multiplicities ---
     let ligero_input_layer_node = InputLayerNode::new(None);
-    let witness_mle_shred =
-        InputShred::new(witness_mle_num_vars, &ligero_input_layer_node);
-    let multiplicities_mle_shred =
-        InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
+    let witness_mle_shred = InputShred::new(witness_mle_num_vars, &ligero_input_layer_node);
+    let multiplicities_mle_shred = InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
 
     // --- Save IDs to be used later ---
     let ligero_input_layer_id = ligero_input_layer_node.input_layer_id();
@@ -57,13 +55,9 @@ fn build_single_shred_lookup_test_circuit<F: Field>(
 
     // --- Create the circuit components ---
     let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(1);
-    let lookup_table =
-        LookupTable::new::<F>(&table_mle_shred, &fiat_shamir_challenge_node);
-    let lookup_constraint = LookupConstraint::new::<F>(
-        &lookup_table,
-        &witness_mle_shred,
-        &multiplicities_mle_shred,
-    );
+    let lookup_table = LookupTable::new::<F>(&table_mle_shred, &fiat_shamir_challenge_node);
+    let lookup_constraint =
+        LookupConstraint::new::<F>(&lookup_table, &witness_mle_shred, &multiplicities_mle_shred);
 
     let all_circuit_nodes: Vec<NodeEnum<F>> = vec![
         public_input_layer_node.into(),
@@ -91,11 +85,7 @@ fn build_single_shred_lookup_test_circuit<F: Field>(
         convert_input_shreds_to_input_layers(input_shred_id_to_data_mapping).unwrap()
     };
 
-    (
-        circuit_description,
-        circuit_data_fn,
-        ligero_input_layer_id
-    )
+    (circuit_description, circuit_data_fn, ligero_input_layer_id)
 }
 
 /// Test the case where there is only one LookupConstraint for the LookupTable i.e. just one constrained
@@ -186,25 +176,17 @@ fn build_multi_shred_lookup_test_circuit<F: Field>(
     // --- Witness values are private, as are multiplicities ---
     let ligero_input_layer_node = InputLayerNode::new(None);
 
-    let witness_mle_1_shred =
-        InputShred::new(witness_mle_1_num_vars, &ligero_input_layer_node);
-    let multiplicities_mle_1_shred =
-        InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
+    let witness_mle_1_shred = InputShred::new(witness_mle_1_num_vars, &ligero_input_layer_node);
+    let multiplicities_mle_1_shred = InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
 
-    let witness_mle_2_shred =
-        InputShred::new(witness_mle_2_num_vars, &ligero_input_layer_node);
-    let multiplicities_mle_2_shred =
-        InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
+    let witness_mle_2_shred = InputShred::new(witness_mle_2_num_vars, &ligero_input_layer_node);
+    let multiplicities_mle_2_shred = InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
 
-    let witness_mle_3_shred =
-        InputShred::new(witness_mle_3_num_vars, &ligero_input_layer_node);
-    let multiplicities_mle_3_shred =
-        InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
+    let witness_mle_3_shred = InputShred::new(witness_mle_3_num_vars, &ligero_input_layer_node);
+    let multiplicities_mle_3_shred = InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
 
-    let witness_mle_4_shred =
-        InputShred::new(witness_mle_4_num_vars, &ligero_input_layer_node);
-    let multiplicities_mle_4_shred =
-        InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
+    let witness_mle_4_shred = InputShred::new(witness_mle_4_num_vars, &ligero_input_layer_node);
+    let multiplicities_mle_4_shred = InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
 
     // --- Save IDs to be used later ---
     let ligero_input_layer_id = ligero_input_layer_node.input_layer_id();
@@ -221,8 +203,7 @@ fn build_multi_shred_lookup_test_circuit<F: Field>(
 
     // --- Create the circuit components ---
     let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(1);
-    let lookup_table =
-        LookupTable::new::<F>(&table_mle_shred, &fiat_shamir_challenge_node);
+    let lookup_table = LookupTable::new::<F>(&table_mle_shred, &fiat_shamir_challenge_node);
     let lookup_constraint_1 = LookupConstraint::new::<F>(
         &lookup_table,
         &witness_mle_1_shred,
@@ -285,11 +266,7 @@ fn build_multi_shred_lookup_test_circuit<F: Field>(
         convert_input_shreds_to_input_layers(input_shred_id_to_data_mapping).unwrap()
     };
 
-    (
-        circuit_description,
-        circuit_data_fn,
-        ligero_input_layer_id
-    )
+    (circuit_description, circuit_data_fn, ligero_input_layer_id)
 }
 
 /// Test the lookup functionality when there are multiple LookupConstraints for the same LookupTable.

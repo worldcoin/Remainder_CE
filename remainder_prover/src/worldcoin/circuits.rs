@@ -124,8 +124,7 @@ pub fn build_iriscode_circuit_description<
     let digits_concatenator = DigitsConcatenator::new(&digits_refs);
 
     let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(1);
-    let lookup_table =
-        LookupTable::new::<F>(&lookup_table_values, &fiat_shamir_challenge_node);
+    let lookup_table = LookupTable::new::<F>(&lookup_table_values, &fiat_shamir_challenge_node);
     println!("{:?} = Lookup table", lookup_table.id());
 
     let lookup_constraint = LookupConstraint::new::<F>(
@@ -183,7 +182,8 @@ pub fn build_iriscode_circuit_description<
     // Add output nodes
     all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));
 
-    let (circ_desc, input_builder_from_shred_map) = generate_circuit_description(all_nodes).unwrap();
+    let (circ_desc, input_builder_from_shred_map) =
+        generate_circuit_description(all_nodes).unwrap();
 
     let input_builder = move |data: IriscodeCircuitData<F>| {
         let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<F>> = HashMap::new();

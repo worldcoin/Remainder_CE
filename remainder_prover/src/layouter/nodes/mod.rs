@@ -25,6 +25,12 @@ pub mod split_node;
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Copy, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct NodeId(u64);
 
+impl Default for NodeId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NodeId {
     /// Creates a new NodeId from the global circuit context.
     pub fn new() -> Self {

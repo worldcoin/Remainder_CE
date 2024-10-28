@@ -79,8 +79,7 @@ fn build_product_checker_test_circuit<F: Field>(
     let ligero_input_layer_id = ligero_input_layer_node.input_layer_id();
 
     // --- Create the circuit components ---
-    let checker =
-        ProductCheckerComponent::new(&mle_1_shred, &mle_2_shred, &mle_expected_shred);
+    let checker = ProductCheckerComponent::new(&mle_1_shred, &mle_2_shred, &mle_expected_shred);
     let output = OutputNode::new_zero(&checker.sector);
 
     let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![
@@ -93,10 +92,8 @@ fn build_product_checker_test_circuit<F: Field>(
     ];
     all_circuit_nodes.extend(checker.yield_nodes());
 
-    let (
-        circuit_description,
-        convert_input_shreds_to_input_layers,
-    ) = generate_circuit_description(all_circuit_nodes).unwrap();
+    let (circuit_description, convert_input_shreds_to_input_layers) =
+        generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
     let circuit_data_fn = move |test_inputs: ProductCheckerTestInputs<F>| {

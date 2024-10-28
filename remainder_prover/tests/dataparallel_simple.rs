@@ -44,12 +44,8 @@ struct NonSelectorDataparallelComponent<F: Field> {
 impl<F: Field> NonSelectorDataparallelComponent<F> {
     /// A simple wrapper around the [TripleNestedBuilderComponent] which
     /// additionally contains a [DifferenceBuilderComponent] for zero output
-    pub fn new(
-        mle_1_input: &dyn CircuitNode,
-        mle_2_input: &dyn CircuitNode,
-    ) -> Self {
-        let first_layer_component =
-            ProductScaledBuilderComponent::new(mle_1_input, mle_2_input);
+    pub fn new(mle_1_input: &dyn CircuitNode, mle_2_input: &dyn CircuitNode) -> Self {
+        let first_layer_component = ProductScaledBuilderComponent::new(mle_1_input, mle_2_input);
 
         let output_component =
             DifferenceBuilderComponent::new(&first_layer_component.get_output_sector());
@@ -110,10 +106,8 @@ fn build_dataparallel_simple_test_circuit<F: Field>(
     // Stack currently fails at layer 0, because expr and witgen for the first component is inconsistent.
     // But if you change from stack to interleave, then it fails at layer 1, because the subtraction of the dataparallel
     // mle from the output mle is not actually 0.
-    let component_1 = NonSelectorDataparallelComponent::new(
-        &dataparallel_mle_1_shred,
-        &dataparallel_mle_2_shred,
-    );
+    let component_1 =
+        NonSelectorDataparallelComponent::new(&dataparallel_mle_1_shred, &dataparallel_mle_2_shred);
 
     let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![
         public_input_layer_node.into(),

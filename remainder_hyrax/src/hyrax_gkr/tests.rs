@@ -1000,11 +1000,7 @@ fn build_medium_regular_test_circuit<F: Field>(
         convert_input_shreds_to_input_layers(input_shred_id_to_data_mapping).unwrap()
     };
 
-    (
-        circuit_description,
-        circuit_data_fn,
-        input_layer_id,
-    )
+    (circuit_description, circuit_data_fn, input_layer_id)
 }
 
 #[test]
