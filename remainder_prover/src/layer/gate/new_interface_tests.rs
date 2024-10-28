@@ -145,7 +145,7 @@ mod tests {
         ];
         all_circuit_nodes.extend(component_2.yield_nodes());
 
-        let (circuit_description, convert_input_shreds_to_input_layers, _) =
+        let (circuit_description, convert_input_shreds_to_input_layers) =
             generate_circuit_description(all_circuit_nodes).unwrap();
 
         // --- Write closure which allows easy usage of circuit inputs ---
@@ -240,7 +240,7 @@ mod tests {
         ];
         all_circuit_nodes.extend(component_2.yield_nodes());
 
-        let (circuit_description, convert_input_shreds_to_input_layers, _) =
+        let (circuit_description, convert_input_shreds_to_input_layers) =
             generate_circuit_description(all_circuit_nodes).unwrap();
 
         // --- Write closure which allows easy usage of circuit inputs ---
@@ -349,7 +349,7 @@ mod tests {
         ];
         all_circuit_nodes.extend(component_2.yield_nodes());
 
-        let (circuit_description, convert_input_shreds_to_input_layers, _) =
+        let (circuit_description, convert_input_shreds_to_input_layers) =
             generate_circuit_description(all_circuit_nodes).unwrap();
 
         // --- Write closure which allows easy usage of circuit inputs ---
@@ -478,7 +478,7 @@ mod tests {
         ];
         all_circuit_nodes.extend(component_2.yield_nodes());
 
-        let (circuit_description, convert_input_shreds_to_input_layers, _) =
+        let (circuit_description, convert_input_shreds_to_input_layers) =
             generate_circuit_description(all_circuit_nodes).unwrap();
 
         // --- Write closure which allows easy usage of circuit inputs ---
@@ -605,7 +605,7 @@ mod tests {
         ];
         all_nodes.extend(component_2.yield_nodes());
 
-        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        let (circ_desc, input_builder_from_shred_map) =
             generate_circuit_description(all_nodes).unwrap();
 
         let input_builder = move |(mle_data, neg_mle_data): (
@@ -686,7 +686,7 @@ mod tests {
             gate_node.into(),
         ];
         all_nodes.extend(component_2.yield_nodes());
-        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        let (circ_desc, input_builder_from_shred_map) =
             generate_circuit_description(all_nodes).unwrap();
 
         let input_builder = move |(mle_data, neg_mle_data): (
@@ -753,7 +753,7 @@ mod tests {
         ];
         all_nodes.extend(component_2.yield_nodes());
 
-        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        let (circ_desc, input_builder_from_shred_map) =
             generate_circuit_description(all_nodes).unwrap();
 
         let input_builder = move |(mle_data, neg_mle_data): (
@@ -846,7 +846,7 @@ mod tests {
         ];
         all_nodes.extend(component_2.yield_nodes());
 
-        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        let (circ_desc, input_builder_from_shred_map) =
             generate_circuit_description(all_nodes).unwrap();
 
         let input_builder = move |(mle_1_data, mle_2_data, neg_mle_2_data): (
@@ -925,7 +925,7 @@ mod tests {
         ];
         all_nodes.extend(component_2.yield_nodes());
 
-        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        let (circ_desc, input_builder_from_shred_map) =
             generate_circuit_description(all_nodes).unwrap();
 
         let input_builder = move |(mle_data, neg_mle_data): (
@@ -1025,7 +1025,7 @@ mod tests {
         ];
         all_nodes.extend(component_2.yield_nodes());
 
-        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        let (circ_desc, input_builder_from_shred_map) =
             generate_circuit_description(all_nodes).unwrap();
 
         let input_builder = move |(mle_1_data, mle_2_data, neg_mle_2_data): (

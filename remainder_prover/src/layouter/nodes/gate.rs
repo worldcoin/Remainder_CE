@@ -187,7 +187,7 @@ mod test {
             output.into(),
         ];
 
-        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        let (circ_desc, input_builder_from_shred_map) =
             generate_circuit_description(all_nodes).unwrap();
 
         let input_builder =
@@ -251,7 +251,7 @@ mod test {
             output.into(),
         ];
 
-        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        let (circ_desc, input_builder_from_shred_map) =
             generate_circuit_description(all_nodes).unwrap();
 
         let input_builder =

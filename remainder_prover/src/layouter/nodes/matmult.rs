@@ -203,7 +203,7 @@ mod test {
             output_node.into(),
         ];
 
-        let (circuit_description, convert_input_shreds_to_input_layers, _) =
+        let (circuit_description, convert_input_shreds_to_input_layers) =
             generate_circuit_description(all_circuit_nodes).unwrap();
 
         // --- Write closure which allows easy usage of circuit inputs ---

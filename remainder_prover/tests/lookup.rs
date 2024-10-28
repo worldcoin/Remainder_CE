@@ -50,7 +50,7 @@ fn build_single_shred_lookup_test_circuit<F: Field>(
         InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
 
     // --- Save IDs to be used later ---
-    let ligero_input_layer_id = ligero_input_layer_node.id();
+    let ligero_input_layer_id = ligero_input_layer_node.input_layer_id();
     let table_mle_id = table_mle_shred.id();
     let witness_mle_id = witness_mle_shred.id();
     let multiplicities_mle_id = multiplicities_mle_shred.id();
@@ -76,7 +76,7 @@ fn build_single_shred_lookup_test_circuit<F: Field>(
         lookup_constraint.into(),
     ];
 
-    let (circuit_description, convert_input_shreds_to_input_layers, input_node_id_to_layer_id_map) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
@@ -94,9 +94,7 @@ fn build_single_shred_lookup_test_circuit<F: Field>(
     (
         circuit_description,
         circuit_data_fn,
-        *input_node_id_to_layer_id_map
-            .get(&ligero_input_layer_id)
-            .unwrap(),
+        ligero_input_layer_id
     )
 }
 
@@ -209,7 +207,7 @@ fn build_multi_shred_lookup_test_circuit<F: Field>(
         InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
 
     // --- Save IDs to be used later ---
-    let ligero_input_layer_id = ligero_input_layer_node.id();
+    let ligero_input_layer_id = ligero_input_layer_node.input_layer_id();
     let table_mle_id = table_mle_shred.id();
 
     let witness_mle_1_id = witness_mle_1_shred.id();
@@ -266,7 +264,7 @@ fn build_multi_shred_lookup_test_circuit<F: Field>(
         lookup_constraint_4.into(),
     ];
 
-    let (circuit_description, convert_input_shreds_to_input_layers, input_node_id_to_layer_id_map) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
@@ -290,9 +288,7 @@ fn build_multi_shred_lookup_test_circuit<F: Field>(
     (
         circuit_description,
         circuit_data_fn,
-        *input_node_id_to_layer_id_map
-            .get(&ligero_input_layer_id)
-            .unwrap(),
+        ligero_input_layer_id
     )
 }
 

@@ -4,7 +4,6 @@ use remainder_shared_types::Field;
 
 use crate::{
     input_layer::InputLayerDescription,
-    layer::LayerId,
     layouter::{
         layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
         nodes::CircuitNode,
@@ -148,10 +147,9 @@ impl InputLayerNode {
     ) -> Result<InputLayerDescription, DAGError> {
         let Self {
             id: _,
+            input_layer_id,
             input_shreds,
         } = &self;
-        let input_layer_id = LayerId::new_input_layer();
-
         let input_mle_num_vars = input_shreds
             .iter()
             .map(|node| node.get_num_vars())
@@ -162,7 +160,7 @@ impl InputLayerNode {
         debug_assert_eq!(input_shred_indices.len(), input_shreds.len());
 
         let input_layer_description = InputLayerDescription {
-            layer_id: input_layer_id,
+            layer_id: input_layer_id.clone(),
             num_vars: num_vars_combined_mle,
         };
 
@@ -174,7 +172,7 @@ impl InputLayerNode {
                 circuit_description_map.add_node_id_and_location_num_vars(
                     input_shred.id,
                     (
-                        CircuitLocation::new(input_layer_id, prefix_bits),
+                        CircuitLocation::new(input_layer_id.clone(), prefix_bits),
                         input_shred.get_num_vars(),
                     ),
                 );

@@ -78,7 +78,7 @@ fn test_complementary_recomposition_vertical() {
     ];
     all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
 
-    let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+    let (circ_desc, input_builder_from_shred_map) =
         generate_circuit_description(all_nodes).unwrap();
 
     let input_builder = move |(digits_data, bits_data, values_data): (
@@ -158,7 +158,7 @@ fn test_unsigned_recomposition() {
     ];
 
     all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
-    let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+    let (circ_desc, input_builder_from_shred_map) =
         generate_circuit_description(all_nodes).unwrap();
 
     let input_builder = move |(digits_data, expected_data): (
@@ -265,7 +265,7 @@ fn test_complementary_recomposition() {
 
     all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
 
-    let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+    let (circ_desc, input_builder_from_shred_map) =
         generate_circuit_description(all_nodes).unwrap();
 
     let input_builder = move |(digits_data, expected_data, bits_data): (
@@ -315,7 +315,7 @@ fn test_bits_are_binary_soundness() {
         output.into(),
     ];
 
-    let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+    let (circ_desc, input_builder_from_shred_map) =
         generate_circuit_description(all_nodes).unwrap();
 
     let input_builder = move |bits_data: MultilinearExtension<Fr>| {
@@ -348,7 +348,7 @@ fn test_bits_are_binary() {
         component.sector.into(),
         output.into(),
     ];
-    let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+    let (circ_desc, input_builder_from_shred_map) =
         generate_circuit_description(all_nodes).unwrap();
 
     let input_builder = move |bits_data: MultilinearExtension<Fr>| {

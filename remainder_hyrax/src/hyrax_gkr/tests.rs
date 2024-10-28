@@ -785,7 +785,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     // Make this an output node.
     let output_node = OutputNode::new_zero(&subtract_sector);
 
-    let (circuit_desc, input_builder, _) = generate_circuit_description(vec![
+    let (circuit_desc, input_builder) = generate_circuit_description(vec![
         input_layer.into(),
         input_shred.clone().into(),
         squaring_sector.into(),
@@ -862,7 +862,7 @@ fn build_small_regular_test_circuit<F: Field>(
         output_node.into(),
     ];
 
-    let (circuit_description, convert_input_shreds_to_input_layers, _) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
@@ -952,7 +952,7 @@ fn build_medium_regular_test_circuit<F: Field>(
 
     // --- Save IDs to be used later ---
     let input_mle_id = input_mle_shred.id();
-    let input_layer_node_id = input_layer_node.id();
+    let input_layer_id = input_layer_node.input_layer_id();
 
     // --- Create the circuit components ---
     // Middle layer 1: square the input.
@@ -988,7 +988,7 @@ fn build_medium_regular_test_circuit<F: Field>(
         output_node.into(),
     ];
 
-    let (circuit_description, convert_input_shreds_to_input_layers, input_node_id_to_layer_id_map) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
@@ -1000,13 +1000,10 @@ fn build_medium_regular_test_circuit<F: Field>(
         convert_input_shreds_to_input_layers(input_shred_id_to_data_mapping).unwrap()
     };
 
-    let maybe_private_input_layer_id = *input_node_id_to_layer_id_map
-        .get(&input_layer_node_id)
-        .unwrap();
     (
         circuit_description,
         circuit_data_fn,
-        maybe_private_input_layer_id,
+        input_layer_id,
     )
 }
 
@@ -1173,7 +1170,7 @@ fn buld_identity_regular_test_circuit<F: Field>(
         output_node.into(),
     ];
 
-    let (circuit_description, convert_input_shreds_to_input_layers, _) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
@@ -1287,7 +1284,7 @@ fn build_matmult_regular_test_circuit<F: Field>(
         output_node.into(),
     ];
 
-    let (circuit_description, convert_input_shreds_to_input_layers, _) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
@@ -1417,7 +1414,7 @@ fn build_identity_matmult_regular_test_circuit<F: Field>(
         output_node.into(),
     ];
 
-    let (circuit_description, convert_input_shreds_to_input_layers, _) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---

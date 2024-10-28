@@ -76,7 +76,7 @@ fn build_product_checker_test_circuit<F: Field>(
     let mle_1_id = mle_1_shred.id();
     let mle_2_id = mle_2_shred.id();
     let mle_expected_id = mle_expected_shred.id();
-    let ligero_input_layer_node_id = ligero_input_layer_node.id();
+    let ligero_input_layer_id = ligero_input_layer_node.input_layer_id();
 
     // --- Create the circuit components ---
     let checker =
@@ -96,7 +96,6 @@ fn build_product_checker_test_circuit<F: Field>(
     let (
         circuit_description,
         convert_input_shreds_to_input_layers,
-        input_layer_node_ids_to_layer_ids,
     ) = generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
@@ -110,11 +109,6 @@ fn build_product_checker_test_circuit<F: Field>(
         .collect();
         convert_input_shreds_to_input_layers(input_shred_id_to_data_mapping).unwrap()
     };
-
-    // --- Grab Ligero input layer ID for later use ---
-    let ligero_input_layer_id = *input_layer_node_ids_to_layer_ids
-        .get(&ligero_input_layer_node_id)
-        .unwrap();
 
     (circuit_description, circuit_data_fn, ligero_input_layer_id)
 }

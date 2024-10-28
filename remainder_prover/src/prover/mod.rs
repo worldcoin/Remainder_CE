@@ -730,8 +730,8 @@ impl<F: Field> GKRCircuitDescription<F> {
 }
 
 /// Generate the circuit description given a set of [NodeEnum]s.
-/// Returns a [GKRCircuitDescription], a function that takes a map of input shred data and returns a
-/// map of input layer data, and a 1:1 mapping of input layer node ids to input layer ids.
+/// Returns a [GKRCircuitDescription], and a function that takes a map of input shred data and returns a
+/// map of input layer data.
 /// Circuit description already has indices assigned to the MLEs.
 pub fn generate_circuit_description<F: Field>(
     nodes: Vec<NodeEnum<F>>,
@@ -741,7 +741,6 @@ pub fn generate_circuit_description<F: Field>(
         impl Fn(
             HashMap<NodeId, MultilinearExtension<F>>,
         ) -> Result<HashMap<LayerId, MultilinearExtension<F>>, GKRError>,
-        HashMap<NodeId, LayerId>,
     ),
     GKRError,
 > {
@@ -758,7 +757,6 @@ pub fn generate_circuit_description<F: Field>(
     let mut circuit_description_map = CircuitDescriptionMap::new();
 
     let mut input_layer_id_to_input_shred_ids = HashMap::new();
-    let mut input_node_id_to_layer_id = HashMap::new();
     let input_layers = input_layer_nodes
         .iter()
         .map(|input_layer_node| {
@@ -767,8 +765,6 @@ pub fn generate_circuit_description<F: Field>(
                     &mut circuit_description_map,
                 )
                 .unwrap();
-            input_node_id_to_layer_id
-                .insert(input_layer_node.id(), input_layer_description.layer_id);
             input_layer_id_to_input_shred_ids.insert(
                 input_layer_description.layer_id,
                 input_layer_node.subnodes().unwrap(),
@@ -850,6 +846,5 @@ pub fn generate_circuit_description<F: Field>(
     Ok((
         circuit_description,
         input_builder,
-        input_node_id_to_layer_id,
     ))
 }
