@@ -195,14 +195,14 @@ pub fn build_composite_mle<F: Field>(
 /// (index, (index of the bit that was flipped, the previous value of the flipped bit.))
 pub struct GrayCode {
     num_bits: usize,
-    current_val: u32,
+    current_iteration: u32,
 }
 
 impl GrayCode {
     fn new(num_bits: usize) -> Self {
-        GrayCode {
+        Self {
             num_bits,
-            current_val: 0,
+            current_iteration: 0,
         }
     }
 }
@@ -211,7 +211,7 @@ impl Iterator for GrayCode {
     type Item = (u32, (u32, bool));
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_val >= ((1 << self.num_bits) - 1) {
+        if self.current_iteration >= ((1 << self.num_bits) - 1) {
             return None;
         }
 
@@ -221,12 +221,12 @@ impl Iterator for GrayCode {
 
         // Because we don't store the previous value, just calculate it
         // using the current_val that's stored.
-        let prev_gray = (self.current_val ^ (self.current_val >> 1)) & mask;
+        let prev_gray = (self.current_iteration ^ (self.current_iteration >> 1)) & mask;
         // The next value is simply XOR of the counter incremented by 1 and itself
         // right-shifted.
         // (source: algorithm in Wikipedia and ChatGPT hehe)
-        self.current_val += 1;
-        let new_gray = (self.current_val ^ (self.current_val >> 1)) & mask;
+        self.current_iteration += 1;
+        let new_gray = (self.current_iteration ^ (self.current_iteration >> 1)) & mask;
 
         // Compute which bit was flipped.
         let flipped_bit = (prev_gray ^ new_gray).trailing_zeros();
@@ -239,9 +239,103 @@ impl Iterator for GrayCode {
     }
 }
 
+pub struct LexicographicLE {
+    num_bits: usize,
+    current_val: u32,
+}
+
+impl LexicographicLE {
+    fn new(num_bits: usize) -> Self {
+        Self {
+            num_bits,
+            current_val: 0,
+        }
+    }
+}
+
+impl Iterator for LexicographicLE {
+    type Item = (u32, Vec<(u32, bool)>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_val >= ((1 << self.num_bits) - 1) {
+            return None;
+        }
+
+        let prev_val = self.current_val;
+        self.current_val += 1;
+        let flipped_bits = prev_val ^ self.current_val;
+
+        let mut flipped_bit_idx_and_values = Vec::<(u32, bool)>::new();
+
+        (0..32).for_each(|idx| {
+            if (flipped_bits & (1 << idx)) != 0 {
+                flipped_bit_idx_and_values.push((idx, (prev_val & (1 << idx)) != 0))
+            }
+        });
+
+        Some((self.current_val, flipped_bit_idx_and_values))
+    }
+}
+
+pub fn evaluate_mle_at_a_point_lexicographic_order<F: Field>(
+    mle: &MultilinearExtension<F>,
+    point: &[F],
+) -> F {
+    let mle_num_vars = mle.num_vars();
+    assert_eq!(point.len(), mle_num_vars);
+
+    let starting_beta_value =
+        BetaValues::compute_beta_over_two_challenges(&vec![F::ZERO; mle_num_vars], point);
+
+    let starting_evaluation_acc = starting_beta_value * mle.first();
+    let lexicographic_le = LexicographicLE::new(mle_num_vars);
+    let inverses = point
+        .iter()
+        .map(|elem| elem.invert().unwrap())
+        .collect_vec();
+    let one_minus_inverses = point
+        .iter()
+        .map(|elem| (F::ONE - elem).invert().unwrap())
+        .collect_vec();
+
+    let (_final_beta_value, evaluation) = lexicographic_le.fold(
+        (starting_beta_value, starting_evaluation_acc),
+        |(prev_beta_value, evaluation_acc), (index, flipped_bit_indices_and_values)| {
+            let next_beta_value = flipped_bit_indices_and_values.iter().fold(
+                prev_beta_value,
+                |acc, (flipped_bit_index, flipped_bit_value)| {
+                    // For every bit i that is flipped, if it used to be a 1,
+                    // then we multiply by r_i^{-1} and multiply by
+                    // (1 - r_i) to account for this bit flip.
+                    let acc = if *flipped_bit_value {
+                        acc * inverses[*flipped_bit_index as usize]
+                            * (F::ONE - point[*flipped_bit_index as usize])
+                    }
+                    // For every bit i that is flipped, if it used to be a 0,
+                    // then we multiply by (1 - r_i)^{-1} and multiply by
+                    // r_i to account for this bit flip.
+                    else {
+                        acc * (one_minus_inverses[*flipped_bit_index as usize])
+                            * point[*flipped_bit_index as usize]
+                    };
+                    acc
+                },
+            );
+
+            // Multiply this by the appropriate MLE coefficient.
+            let next_evaluation_acc = next_beta_value * mle.get(index as usize).unwrap();
+            (next_beta_value, evaluation_acc + next_evaluation_acc)
+        },
+    );
+    evaluation
+}
+
 /// This function non-destructively evaluates an MLE at a given point using
 /// the gray codes iterator.
-pub fn evaluate_mle_at_a_point<F: Field>(mle: &MultilinearExtension<F>, point: &[F]) -> F {
+pub fn evaluate_mle_at_a_point_gray_codes<F: Field>(
+    mle: &MultilinearExtension<F>,
+    point: &[F],
+) -> F {
     let mle_num_vars = mle.num_vars();
     assert_eq!(point.len(), mle_num_vars);
     // The gray codes start at index 1, so we start with the first value which
@@ -307,34 +401,65 @@ mod tests {
     use itertools::Itertools;
     use remainder_shared_types::{ff_field, Fr};
 
-    use crate::{mle::evals::MultilinearExtension, utils::mle::evaluate_mle_destructive};
+    use crate::{
+        mle::evals::MultilinearExtension,
+        utils::mle::{evaluate_mle_at_a_point_lexicographic_order, evaluate_mle_destructive},
+    };
 
-    use super::evaluate_mle_at_a_point;
+    use super::evaluate_mle_at_a_point_gray_codes;
 
     #[test]
-    fn test_evaluate_mle_at_a_point_1_variable() {
+    fn test_evaluate_mle_at_a_point_1_variable_gray_codes() {
         let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2)]);
         let point = &[Fr::from(2)];
-        let computed_evaluation = evaluate_mle_at_a_point(&mle, point);
+        let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
         let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
         assert_eq!(computed_evaluation, expected_evaluation);
     }
 
     #[test]
-    fn test_evaluate_mle_at_a_point_2_variable() {
+    fn test_evaluate_mle_at_a_point_2_variable_gray_codes() {
         let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2), Fr::ONE, Fr::from(2)]);
         let point = &[Fr::from(2), Fr::from(3)];
-        let computed_evaluation = evaluate_mle_at_a_point(&mle, point);
+        let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
         let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
         assert_eq!(computed_evaluation, expected_evaluation);
     }
 
     #[test]
-    fn test_evaluate_mle_at_a_point_3_variable_random() {
+    fn test_evaluate_mle_at_a_point_3_variable_gray_codes_random() {
         let mut rng = test_rng();
         let mut mle = MultilinearExtension::new((0..8).map(|_| Fr::random(&mut rng)).collect());
         let point = &(0..3).map(|_| Fr::random(&mut rng)).collect_vec();
-        let computed_evaluation = evaluate_mle_at_a_point(&mle, point);
+        let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
+        let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_1_variable_lexicographic() {
+        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2)]);
+        let point = &[Fr::from(2)];
+        let computed_evaluation = evaluate_mle_at_a_point_lexicographic_order(&mle, point);
+        let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_2_variable_lexicographic() {
+        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2), Fr::ONE, Fr::from(2)]);
+        let point = &[Fr::from(2), Fr::from(3)];
+        let computed_evaluation = evaluate_mle_at_a_point_lexicographic_order(&mle, point);
+        let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_3_variable_lexicographic_random() {
+        let mut rng = test_rng();
+        let mut mle = MultilinearExtension::new((0..8).map(|_| Fr::random(&mut rng)).collect());
+        let point = &(0..3).map(|_| Fr::random(&mut rng)).collect_vec();
+        let computed_evaluation = evaluate_mle_at_a_point_lexicographic_order(&mle, point);
         let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
         assert_eq!(computed_evaluation, expected_evaluation);
     }
