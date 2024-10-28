@@ -12,7 +12,7 @@ use remainder::{
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
     },
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
@@ -34,16 +34,15 @@ impl<F: Field> DataparallelTripleNestedSelectorComponent<F> {
     /// A simple wrapper around the [TripleNestedBuilderComponent] which
     /// additionally contains a [DifferenceBuilderComponent] for zero output
     pub fn new(
-        ctx: &Context,
         mle_1_input: &dyn CircuitNode,
         mle_2_input: &dyn CircuitNode,
         mle_3_input: &dyn CircuitNode,
     ) -> Self {
         let first_layer_component =
-            TripleNestedBuilderComponent::new(ctx, mle_1_input, mle_2_input, mle_3_input);
+            TripleNestedBuilderComponent::new(mle_1_input, mle_2_input, mle_3_input);
 
         let output_component =
-            DifferenceBuilderComponent::new(ctx, &first_layer_component.get_output_sector());
+            DifferenceBuilderComponent::new(&first_layer_component.get_output_sector());
 
         Self {
             first_layer_component,
@@ -84,30 +83,23 @@ fn build_dataparallel_selector_test_circuit<F: Field>(
     GKRCircuitDescription<F>,
     impl Fn(DataparallelSelectorTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- All inputs are public ---
-    let public_input_layer_node = InputLayerNode::new(&context, None);
+    let public_input_layer_node = InputLayerNode::new(None);
 
     // --- Inputs to the circuit include the four dataparallel MLEs ---
     let dataparallel_mle_1_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + num_vars_mle_1_2,
         &public_input_layer_node,
     );
     let dataparallel_mle_2_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + num_vars_mle_1_2,
         &public_input_layer_node,
     );
     let dataparallel_mle_3_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + num_vars_mle_3,
         &public_input_layer_node,
     );
     let dataparallel_mle_4_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + num_vars_mle_4,
         &public_input_layer_node,
     );
@@ -120,12 +112,10 @@ fn build_dataparallel_selector_test_circuit<F: Field>(
 
     // --- Create the circuit components ---
     let component_1 = ProductScaledBuilderComponent::new(
-        &context,
         &dataparallel_mle_1_shred,
         &dataparallel_mle_2_shred,
     );
     let component_2 = DataparallelTripleNestedSelectorComponent::new(
-        &context,
         &component_1.get_output_sector(),
         &dataparallel_mle_3_shred,
         &dataparallel_mle_4_shred,

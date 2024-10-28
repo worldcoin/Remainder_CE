@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::expression::{abstract_expr::AbstractExpr, generic_expr::Expression};
 use crate::layer::layer_enum::LayerDescriptionEnum;
-use crate::layer::LayerId;
 
 use super::context::CircuitContext;
 use super::layouting::{CircuitDescriptionMap, DAGError};
@@ -81,7 +80,6 @@ pub trait CompilableNode<F: Field>: CircuitNode {
     /// shape of a certain layer.
     fn generate_circuit_description(
         &self,
-        layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError>;
 }

@@ -65,7 +65,6 @@ impl MatMultNode {
 impl<F: Field> CompilableNode<F> for MatMultNode {
     fn generate_circuit_description(
         &self,
-        layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError> {
         let (matrix_a_location, matrix_a_num_vars) =
@@ -94,7 +93,7 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
             self.rows_cols_num_vars_b.1,
         );
 
-        let matmult_layer_id = layer_id.get_and_inc();
+        let matmult_layer_id = LayerId::new_layer();
         let matmult_layer = MatMultLayerDescription::new(matmult_layer_id, matrix_a, matrix_b);
         circuit_description_map.add_node_id_and_location_num_vars(
             self.id,

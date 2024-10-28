@@ -7,17 +7,19 @@ use once_cell::sync::Lazy;
 /// Contains a consistently incrementing counters to prevent id collisions.
 #[derive(Debug, Default)]
 pub struct CircuitContext {
-    node_id: AtomicUsize,
-    input_layer_id: AtomicU64,
-    layer_id: AtomicU64,
-    output_layer_id: AtomicU64,
+    node_id: AtomicU64,
+    input_layer_id: AtomicUsize,
+    layer_id: AtomicUsize,
+    fiat_shamir_challenge_layer_id: AtomicUsize,
+    output_layer_id: AtomicUsize,
 }
 
 static CONTEXT: Lazy<CircuitContext> = Lazy::new(|| CircuitContext {
-    node_id: AtomicUsize::new(0),
-    input_layer_id: AtomicU64::new(0),
-    layer_id: AtomicU64::new(0),
-    output_layer_id: AtomicU64::new(0),
+    node_id: AtomicU64::new(0),
+    input_layer_id: AtomicUsize::new(0),
+    layer_id: AtomicUsize::new(0),
+    fiat_shamir_challenge_layer_id: AtomicUsize::new(0),
+    output_layer_id: AtomicUsize::new(0),
 });
 
 impl CircuitContext {
@@ -26,26 +28,32 @@ impl CircuitContext {
         CONTEXT.node_id.store(0, Ordering::SeqCst);
         CONTEXT.input_layer_id.store(0, Ordering::SeqCst);
         CONTEXT.layer_id.store(0, Ordering::SeqCst);
+        CONTEXT.fiat_shamir_challenge_layer_id.store(0, Ordering::SeqCst);
         CONTEXT.output_layer_id.store(0, Ordering::SeqCst);
     }
 
     /// Retrieves a new node id that is guaranteed to be unique.
-    pub fn next_node_id() -> usize {
+    pub fn next_node_id() -> u64 {
         CONTEXT.node_id.fetch_add(1, Ordering::Relaxed)
     }
 
     /// Retrieves a new input layer id that is guaranteed to be unique.
-    pub fn next_input_layer_id() -> u64 {
+    pub fn next_input_layer_id() -> usize {
         CONTEXT.input_layer_id.fetch_add(1, Ordering::Relaxed)
     }
 
     /// Retrieves a new layer id that is guaranteed to be unique.
-    pub fn next_layer_id() -> u64 {
+    pub fn next_layer_id() -> usize {
         CONTEXT.layer_id.fetch_add(1, Ordering::Relaxed)
     }
 
+    /// Retrieves a new fiat shamir challenge layer id that is guaranteed to be unique.
+    pub fn next_fiat_shamir_challenge_layer_id() -> usize {
+        CONTEXT.fiat_shamir_challenge_layer_id.fetch_add(1, Ordering::Relaxed)
+    }
+
     /// Retrieves a new output layer id that is guaranteed to be unique.
-    pub fn next_output_layer_id() -> u64 {
+    pub fn next_output_layer_id() -> usize {
         CONTEXT.output_layer_id.fetch_add(1, Ordering::Relaxed)
     }
 }

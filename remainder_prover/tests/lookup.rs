@@ -8,7 +8,7 @@ use remainder::{
         fiat_shamir_challenge::FiatShamirChallengeNode,
         lookup::{LookupConstraint, LookupTable},
         node_enum::NodeEnum,
-        CircuitNode, Context, NodeId,
+        CircuitNode, NodeId,
     },
     mle::evals::MultilinearExtension,
     prover::{generate_circuit_description, helpers::test_circuit_new, GKRCircuitDescription},
@@ -38,19 +38,16 @@ fn build_single_shred_lookup_test_circuit<F: Field>(
     impl Fn(SingleShredLookupTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
     LayerId,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- Lookup table is public ---
-    let public_input_layer_node = InputLayerNode::new(&context, None);
-    let table_mle_shred = InputShred::new(&context, table_mle_num_vars, &public_input_layer_node);
+    let public_input_layer_node = InputLayerNode::new(None);
+    let table_mle_shred = InputShred::new(table_mle_num_vars, &public_input_layer_node);
 
     // --- Witness values are private, as are multiplicities ---
-    let ligero_input_layer_node = InputLayerNode::new(&context, None);
+    let ligero_input_layer_node = InputLayerNode::new(None);
     let witness_mle_shred =
-        InputShred::new(&context, witness_mle_num_vars, &ligero_input_layer_node);
+        InputShred::new(witness_mle_num_vars, &ligero_input_layer_node);
     let multiplicities_mle_shred =
-        InputShred::new(&context, table_mle_num_vars, &ligero_input_layer_node);
+        InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
 
     // --- Save IDs to be used later ---
     let ligero_input_layer_id = ligero_input_layer_node.id();
@@ -59,11 +56,10 @@ fn build_single_shred_lookup_test_circuit<F: Field>(
     let multiplicities_mle_id = multiplicities_mle_shred.id();
 
     // --- Create the circuit components ---
-    let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(&context, 1);
+    let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(1);
     let lookup_table =
-        LookupTable::new::<F>(&context, &table_mle_shred, &fiat_shamir_challenge_node);
+        LookupTable::new::<F>(&table_mle_shred, &fiat_shamir_challenge_node);
     let lookup_constraint = LookupConstraint::new::<F>(
-        &context,
         &lookup_table,
         &witness_mle_shred,
         &multiplicities_mle_shred,
@@ -185,35 +181,32 @@ fn build_multi_shred_lookup_test_circuit<F: Field>(
     impl Fn(MultiShredLookupTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
     LayerId,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- Lookup table is public ---
-    let public_input_layer_node = InputLayerNode::new(&context, None);
-    let table_mle_shred = InputShred::new(&context, table_mle_num_vars, &public_input_layer_node);
+    let public_input_layer_node = InputLayerNode::new(None);
+    let table_mle_shred = InputShred::new(table_mle_num_vars, &public_input_layer_node);
 
     // --- Witness values are private, as are multiplicities ---
-    let ligero_input_layer_node = InputLayerNode::new(&context, None);
+    let ligero_input_layer_node = InputLayerNode::new(None);
 
     let witness_mle_1_shred =
-        InputShred::new(&context, witness_mle_1_num_vars, &ligero_input_layer_node);
+        InputShred::new(witness_mle_1_num_vars, &ligero_input_layer_node);
     let multiplicities_mle_1_shred =
-        InputShred::new(&context, table_mle_num_vars, &ligero_input_layer_node);
+        InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
 
     let witness_mle_2_shred =
-        InputShred::new(&context, witness_mle_2_num_vars, &ligero_input_layer_node);
+        InputShred::new(witness_mle_2_num_vars, &ligero_input_layer_node);
     let multiplicities_mle_2_shred =
-        InputShred::new(&context, table_mle_num_vars, &ligero_input_layer_node);
+        InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
 
     let witness_mle_3_shred =
-        InputShred::new(&context, witness_mle_3_num_vars, &ligero_input_layer_node);
+        InputShred::new(witness_mle_3_num_vars, &ligero_input_layer_node);
     let multiplicities_mle_3_shred =
-        InputShred::new(&context, table_mle_num_vars, &ligero_input_layer_node);
+        InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
 
     let witness_mle_4_shred =
-        InputShred::new(&context, witness_mle_4_num_vars, &ligero_input_layer_node);
+        InputShred::new(witness_mle_4_num_vars, &ligero_input_layer_node);
     let multiplicities_mle_4_shred =
-        InputShred::new(&context, table_mle_num_vars, &ligero_input_layer_node);
+        InputShred::new(table_mle_num_vars, &ligero_input_layer_node);
 
     // --- Save IDs to be used later ---
     let ligero_input_layer_id = ligero_input_layer_node.id();
@@ -229,29 +222,25 @@ fn build_multi_shred_lookup_test_circuit<F: Field>(
     let multiplicities_mle_4_id = multiplicities_mle_4_shred.id();
 
     // --- Create the circuit components ---
-    let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(&context, 1);
+    let fiat_shamir_challenge_node = FiatShamirChallengeNode::new(1);
     let lookup_table =
-        LookupTable::new::<F>(&context, &table_mle_shred, &fiat_shamir_challenge_node);
+        LookupTable::new::<F>(&table_mle_shred, &fiat_shamir_challenge_node);
     let lookup_constraint_1 = LookupConstraint::new::<F>(
-        &context,
         &lookup_table,
         &witness_mle_1_shred,
         &multiplicities_mle_1_shred,
     );
     let lookup_constraint_2 = LookupConstraint::new::<F>(
-        &context,
         &lookup_table,
         &witness_mle_2_shred,
         &multiplicities_mle_2_shred,
     );
     let lookup_constraint_3 = LookupConstraint::new::<F>(
-        &context,
         &lookup_table,
         &witness_mle_3_shred,
         &multiplicities_mle_3_shred,
     );
     let lookup_constraint_4 = LookupConstraint::new::<F>(
-        &context,
         &lookup_table,
         &witness_mle_4_shred,
         &multiplicities_mle_4_shred,

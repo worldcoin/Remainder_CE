@@ -12,7 +12,7 @@ use remainder::{
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
     },
     mle::{dense::DenseMle, evals::MultilinearExtension},
@@ -45,20 +45,17 @@ impl<F: Field> DataParallelComponent<F> {
     /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
     /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
     pub fn new(
-        ctx: &Context,
         mle_1_input: &dyn CircuitNode,
         mle_2_input: &dyn CircuitNode,
     ) -> Self {
         let product_scaled_component =
-            ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);
+            ProductScaledBuilderComponent::new(mle_1_input, mle_2_input);
 
         let product_scaled_meta_component = ProductScaledBuilderComponent::new(
-            ctx,
             &product_scaled_component.get_output_sector(),
             &product_scaled_component.get_output_sector(),
         );
         let output_component = DifferenceBuilderComponent::new(
-            ctx,
             &product_scaled_meta_component.get_output_sector(),
         );
 
@@ -107,15 +104,13 @@ impl<F: Field> TripleNestedSelectorComponent<F> {
     /// * `outer_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
     /// the size of `inner_sel_mle`
     pub fn new(
-        ctx: &Context,
         inner_inner_sel: &dyn CircuitNode,
         inner_sel: &dyn CircuitNode,
         outer_sel: &dyn CircuitNode,
     ) -> Self {
         let triple_nested_selector_component =
-            TripleNestedBuilderComponent::new(ctx, inner_inner_sel, inner_sel, outer_sel);
+            TripleNestedBuilderComponent::new(inner_inner_sel, inner_sel, outer_sel);
         let output_component = DifferenceBuilderComponent::new(
-            ctx,
             &triple_nested_selector_component.get_output_sector(),
         );
 
@@ -155,15 +150,14 @@ impl<F: Field> ScaledProductComponent<F> {
     /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
     /// * `mle_2` - An MLE with arbitrary bookkeeping table values, same size as `mle_1`.
     pub fn new(
-        ctx: &Context,
         mle_1_input: &dyn CircuitNode,
         mle_2_input: &dyn CircuitNode,
     ) -> Self {
         let product_scaled_component =
-            ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);
+            ProductScaledBuilderComponent::new(mle_1_input, mle_2_input);
 
         let output_component =
-            DifferenceBuilderComponent::new(ctx, &product_scaled_component.get_output_sector());
+            DifferenceBuilderComponent::new(&product_scaled_component.get_output_sector());
 
         Self {
             first_layer_component: product_scaled_component,
@@ -209,27 +203,22 @@ fn build_combined_dataparallel_nondataparallel_test_circuit<F: Field>(
         CombinedDataparallelNondataparallelTestInputs<F>,
     ) -> HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- All inputs are public ---
-    let public_input_layer_node = InputLayerNode::new(&context, None);
+    let public_input_layer_node = InputLayerNode::new(None);
 
     // --- "Semantic" circuit inputs ---
     let dataparallel_mle_1_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + mle_1_2_3_4_num_vars,
         &public_input_layer_node,
     );
     let dataparallel_mle_2_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + mle_1_2_3_4_num_vars,
         &public_input_layer_node,
     );
-    let mle_3_shred = InputShred::new(&context, mle_1_2_3_4_num_vars, &public_input_layer_node);
-    let mle_4_shred = InputShred::new(&context, mle_1_2_3_4_num_vars, &public_input_layer_node);
-    let mle_5_shred = InputShred::new(&context, mle_5_num_vars, &public_input_layer_node);
-    let mle_6_shred = InputShred::new(&context, mle_6_num_vars, &public_input_layer_node);
+    let mle_3_shred = InputShred::new(mle_1_2_3_4_num_vars, &public_input_layer_node);
+    let mle_4_shred = InputShred::new(mle_1_2_3_4_num_vars, &public_input_layer_node);
+    let mle_5_shred = InputShred::new(mle_5_num_vars, &public_input_layer_node);
+    let mle_6_shred = InputShred::new(mle_6_num_vars, &public_input_layer_node);
 
     // --- Save IDs to be used later ---
     let dataparallel_mle_1_id = dataparallel_mle_1_shred.id();
@@ -241,13 +230,12 @@ fn build_combined_dataparallel_nondataparallel_test_circuit<F: Field>(
 
     // --- Create the circuit components ---
     let component_1 = DataParallelComponent::new(
-        &context,
         &dataparallel_mle_1_shred,
         &dataparallel_mle_2_shred,
     );
     let component_2 =
-        TripleNestedSelectorComponent::new(&context, &mle_4_shred, &mle_5_shred, &mle_6_shred);
-    let component_3 = ScaledProductComponent::new(&context, &mle_3_shred, &mle_4_shred);
+        TripleNestedSelectorComponent::new(&mle_4_shred, &mle_5_shred, &mle_6_shred);
+    let component_3 = ScaledProductComponent::new(&mle_3_shred, &mle_4_shred);
 
     let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![
         public_input_layer_node.into(),

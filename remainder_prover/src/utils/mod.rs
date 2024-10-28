@@ -21,7 +21,7 @@ use remainder_shared_types::Field;
 use crate::{
     layouter::nodes::{
         circuit_inputs::{InputLayerNode, InputShred, InputShredData},
-        CircuitNode, Context,
+        CircuitNode,
     },
     mle::evals::MultilinearExtension,
 };
@@ -30,10 +30,9 @@ use crate::{
 /// this information.
 pub fn get_input_shred_from_num_vars(
     num_vars: usize,
-    ctx: &Context,
     input_node: &InputLayerNode,
 ) -> InputShred {
-    InputShred::new(ctx, num_vars, input_node)
+    InputShred::new(num_vars, input_node)
 }
 
 /// Using a data vector, get an [InputShred] which represents its
@@ -41,10 +40,9 @@ pub fn get_input_shred_from_num_vars(
 /// corresponding data.
 pub fn build_input_shred_and_data<F: Field>(
     data: MultilinearExtension<F>,
-    ctx: &Context,
     input_node: &InputLayerNode,
 ) -> (InputShred, InputShredData<F>) {
-    let input_shred = InputShred::new(ctx, data.num_vars(), input_node);
+    let input_shred = InputShred::new(data.num_vars(), input_node);
     let input_shred_data = InputShredData::new(input_shred.id(), data);
     (input_shred, input_shred_data)
 }

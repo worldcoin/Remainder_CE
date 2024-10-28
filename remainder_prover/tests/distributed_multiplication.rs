@@ -12,7 +12,7 @@ use remainder::{
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
     },
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
@@ -27,8 +27,8 @@ pub struct DataparallelDistributedMultiplication<F: Field> {
 }
 
 impl<F: Field> DataparallelDistributedMultiplication<F> {
-    pub fn new(ctx: &Context, smaller_mle: &dyn CircuitNode, bigger_mle: &dyn CircuitNode) -> Self {
-        let combine_sector = Sector::new(ctx, &[smaller_mle, bigger_mle], |input_nodes| {
+    pub fn new(smaller_mle: &dyn CircuitNode, bigger_mle: &dyn CircuitNode) -> Self {
+        let combine_sector = Sector::new(&[smaller_mle, bigger_mle], |input_nodes| {
             assert_eq!(input_nodes.len(), 2);
             let smaller_mle_id = input_nodes[0];
             let bigger_mle_id = input_nodes[1];
@@ -61,8 +61,8 @@ pub struct DiffTwoInputsBuilder<F: Field> {
 }
 
 impl<F: Field> DiffTwoInputsBuilder<F> {
-    pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
-        let first_layer_sector = Sector::new(ctx, &[mle_1, mle_2], |input_nodes| {
+    pub fn new(mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
+        let first_layer_sector = Sector::new(&[mle_1, mle_2], |input_nodes| {
             assert_eq!(input_nodes.len(), 2);
             let mle_1_id = input_nodes[0];
             let mle_2_id = input_nodes[1];
@@ -70,7 +70,7 @@ impl<F: Field> DiffTwoInputsBuilder<F> {
             mle_1_id.expr() - mle_2_id.expr()
         });
 
-        let output_node = OutputNode::new_zero(ctx, &first_layer_sector);
+        let output_node = OutputNode::new_zero(&first_layer_sector);
 
         Self {
             first_layer_sector,
@@ -109,25 +109,19 @@ fn build_dataparallel_wraparound_multiplication_test_circuit<F: Field>(
     GKRCircuitDescription<F>,
     impl Fn(DataparallelWraparoundTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- All inputs are public ---
-    let public_input_layer_node = InputLayerNode::new(&context, None);
+    let public_input_layer_node = InputLayerNode::new(None);
 
     // --- "Semantic" circuit inputs ---
     let dataparallel_mle_smaller_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + num_free_vars_smaller,
         &public_input_layer_node,
     );
     let dataparallel_mle_bigger_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + num_free_vars_bigger,
         &public_input_layer_node,
     );
     let dataparallel_mle_combined_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + num_free_vars_bigger,
         &public_input_layer_node,
     );
@@ -139,12 +133,10 @@ fn build_dataparallel_wraparound_multiplication_test_circuit<F: Field>(
 
     // --- Create the circuit components ---
     let component_1 = DataparallelDistributedMultiplication::new(
-        &context,
         &dataparallel_mle_smaller_shred,
         &dataparallel_mle_bigger_shred,
     );
     let component_2 = DiffTwoInputsBuilder::new(
-        &context,
         &component_1.get_output_sector(),
         &dataparallel_mle_combined_shred,
     );

@@ -12,7 +12,7 @@ use remainder::{
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
     },
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
@@ -45,15 +45,14 @@ impl<F: Field> NonSelectorDataparallelComponent<F> {
     /// A simple wrapper around the [TripleNestedBuilderComponent] which
     /// additionally contains a [DifferenceBuilderComponent] for zero output
     pub fn new(
-        ctx: &Context,
         mle_1_input: &dyn CircuitNode,
         mle_2_input: &dyn CircuitNode,
     ) -> Self {
         let first_layer_component =
-            ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);
+            ProductScaledBuilderComponent::new(mle_1_input, mle_2_input);
 
         let output_component =
-            DifferenceBuilderComponent::new(ctx, &first_layer_component.get_output_sector());
+            DifferenceBuilderComponent::new(&first_layer_component.get_output_sector());
 
         Self {
             first_layer_component,
@@ -90,20 +89,15 @@ fn build_dataparallel_simple_test_circuit<F: Field>(
     GKRCircuitDescription<F>,
     impl Fn(DataparallelSelectorTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- All inputs are public ---
-    let public_input_layer_node = InputLayerNode::new(&context, None);
+    let public_input_layer_node = InputLayerNode::new(None);
 
     // --- "Semantic" circuit inputs ---
     let dataparallel_mle_1_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + num_free_vars,
         &public_input_layer_node,
     );
     let dataparallel_mle_2_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + num_free_vars,
         &public_input_layer_node,
     );
@@ -117,7 +111,6 @@ fn build_dataparallel_simple_test_circuit<F: Field>(
     // But if you change from stack to interleave, then it fails at layer 1, because the subtraction of the dataparallel
     // mle from the output mle is not actually 0.
     let component_1 = NonSelectorDataparallelComponent::new(
-        &context,
         &dataparallel_mle_1_shred,
         &dataparallel_mle_2_shred,
     );

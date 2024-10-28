@@ -118,7 +118,6 @@ impl LookupTable {
     /// descriptions, and output circuit description needed in order to verify the lookup.
     pub fn generate_lookup_circuit_description<F: Field>(
         &self,
-        intermediate_layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<LookupCircuitDescription<F>, DAGError> {
         type AE<F> = Expression<F, AbstractExpr>;
@@ -163,7 +162,7 @@ impl LookupTable {
         );
         let expr_num_vars = expr.num_vars();
 
-        let layer_id = intermediate_layer_id.get_and_inc();
+        let layer_id = LayerId::new_layer();
         let layer = RegularLayerDescription::new_raw(layer_id, expr);
         let mut intermediate_layers = vec![LayerDescriptionEnum::Regular(layer)];
         println!(
@@ -187,7 +186,6 @@ impl LookupTable {
             maybe_lhs_numerator_desc,
             lhs_denominator_desc,
             &mut intermediate_layers,
-            intermediate_layer_id,
         );
 
         // Build the RHS of the equation (defined by the table values and multiplicities)
@@ -221,7 +219,7 @@ impl LookupTable {
                     acc + CE::from_mle_desc(mult_constraint_mle_desc)
                 },
             );
-            let layer_id = intermediate_layer_id.get_and_inc();
+            let layer_id = LayerId::new_layer();
             let layer = RegularLayerDescription::new_raw(layer_id, expr);
             intermediate_layers.push(LayerDescriptionEnum::Regular(layer));
             println!(
@@ -264,7 +262,7 @@ impl LookupTable {
         let expr = CE::from_mle_desc(fiat_shamir_challenge_circuit_mle)
             - CE::from_mle_desc(table_circuit_mle);
         let r_minus_table_num_vars = expr.num_vars();
-        let layer_id = intermediate_layer_id.get_and_inc();
+        let layer_id = LayerId::new_layer();
         let layer = RegularLayerDescription::new_raw(layer_id, expr);
         intermediate_layers.push(LayerDescriptionEnum::Regular(layer));
         println!(
@@ -282,7 +280,6 @@ impl LookupTable {
             Some(rhs_numerator_desc),
             rhs_denominator_desc,
             &mut intermediate_layers,
-            intermediate_layer_id,
         );
 
         // Add a layer that calculates the difference between the fractions on the LHS and RHS
@@ -297,7 +294,7 @@ impl LookupTable {
                 - CE::<F>::products(vec![rhs_numerator.clone(), lhs_denominator.clone()])
         };
 
-        let layer_id = intermediate_layer_id.get_and_inc();
+        let layer_id = LayerId::new_layer();
         let layer = RegularLayerDescription::new_raw(layer_id, expr);
         intermediate_layers.push(LayerDescriptionEnum::Regular(layer));
         println!(
@@ -401,7 +398,6 @@ fn build_fractional_sum<F: Field>(
     maybe_numerator_desc: Option<MleDescription<F>>,
     denominator_desc: MleDescription<F>,
     layers: &mut Vec<LayerDescriptionEnum<F>>,
-    current_layer_id: &mut LayerId,
 ) -> (Option<MleDescription<F>>, MleDescription<F>) {
     type CE<F> = Expression<F, ExprDescription>;
 
@@ -439,7 +435,7 @@ fn build_fractional_sum<F: Field>(
         let next_denominator_num_vars = next_denominator_expr.num_vars();
 
         // Create the circuit layer by combining the two
-        let layer_id = current_layer_id.get_and_inc();
+        let layer_id = LayerId::new_layer();
 
         let layer = RegularLayerDescription::new_raw(
             layer_id,

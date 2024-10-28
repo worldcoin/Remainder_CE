@@ -11,7 +11,7 @@ use remainder::{
             circuit_inputs::{InputLayerNode, InputShred},
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
     },
     mle::evals::MultilinearExtension,
@@ -40,14 +40,12 @@ pub struct NonlinearSelectorBuilderComponent<F: Field> {
 
 impl<F: Field> NonlinearSelectorBuilderComponent<F> {
     pub fn new(
-        ctx: &Context,
         left_sel_mle: &dyn CircuitNode,
         right_sel_mle: &dyn CircuitNode,
         right_prod_mle_1: &dyn CircuitNode,
         right_prod_mle_2: &dyn CircuitNode,
     ) -> Self {
         let nonlinear_selector_sector = Sector::new(
-            ctx,
             &[
                 left_sel_mle,
                 right_sel_mle,
@@ -106,20 +104,17 @@ fn build_nonlinear_selector_test_circuit<F: Field>(
     GKRCircuitDescription<F>,
     impl Fn(NonlinearSelectorTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- All inputs are public ---
-    let public_input_layer_node = InputLayerNode::new(&context, None);
+    let public_input_layer_node = InputLayerNode::new(None);
 
     // --- Inputs to the circuit are the MLEs at the leaves of the selector + product ---
-    let left_sel_mle_shred = InputShred::new(&context, num_vars_sel_side, &public_input_layer_node);
+    let left_sel_mle_shred = InputShred::new(num_vars_sel_side, &public_input_layer_node);
     let right_sel_mle_shred =
-        InputShred::new(&context, num_vars_sel_side, &public_input_layer_node);
+        InputShred::new(num_vars_sel_side, &public_input_layer_node);
     let right_prod_mle_1_shred =
-        InputShred::new(&context, num_vars_product_side, &public_input_layer_node);
+        InputShred::new(num_vars_product_side, &public_input_layer_node);
     let right_prod_mle_2_shred =
-        InputShred::new(&context, num_vars_product_side, &public_input_layer_node);
+        InputShred::new(num_vars_product_side, &public_input_layer_node);
 
     // --- Save IDs to be used later ---
     let left_sel_mle_id = left_sel_mle_shred.id();
@@ -129,13 +124,12 @@ fn build_nonlinear_selector_test_circuit<F: Field>(
 
     // --- Create the circuit components ---
     let component_1 = NonlinearSelectorBuilderComponent::new(
-        &context,
         &left_sel_mle_shred,
         &right_sel_mle_shred,
         &right_prod_mle_1_shred,
         &right_prod_mle_2_shred,
     );
-    let component_2 = DifferenceBuilderComponent::new(&context, &component_1.get_output_sector());
+    let component_2 = DifferenceBuilderComponent::new(&component_1.get_output_sector());
 
     let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![
         public_input_layer_node.into(),

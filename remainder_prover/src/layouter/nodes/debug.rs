@@ -1,6 +1,6 @@
 //! Contains nodes that apply debug labels to the circuit DAG
 
-use super::{CircuitNode, Context, NodeId};
+use super::{CircuitNode, NodeId};
 
 /// A node in the DAG used for debugging purposes only which
 /// applies a label to a given set of nodes

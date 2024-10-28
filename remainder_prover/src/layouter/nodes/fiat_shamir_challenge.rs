@@ -10,7 +10,7 @@ use crate::{
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation},
 };
 
-use super::{CircuitNode, Context, NodeId};
+use super::{CircuitNode, NodeId};
 
 #[derive(Debug, Clone)]
 /// The node representing the random challenge that the verifier supplies via Fiat-Shamir.
@@ -46,27 +46,22 @@ impl FiatShamirChallengeNode {
         }
     }
 
-    /// Generate a [iatShamirChallengeDescription], which is the
+    /// Generate a [FiatShamirChallengeDescription], which is the
     /// circuit description for a [FiatShamirChallengeNode].
     pub fn generate_circuit_description<F: Field>(
         &self,
-        layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> FiatShamirChallengeDescription<F> {
-        let verifier_challenge_layer_id = layer_id.get_and_inc();
-
-        let verifier_challenge_layer =
-            FiatShamirChallengeDescription::new(verifier_challenge_layer_id, self.get_num_vars());
-
+        let layer_id = LayerId::new_fiat_shamir_challenge_layer();
+        let fsc_layer = FiatShamirChallengeDescription::new(layer_id, self.get_num_vars());
         circuit_description_map.add_node_id_and_location_num_vars(
             self.id,
             (
-                CircuitLocation::new(verifier_challenge_layer_id, vec![]),
+                CircuitLocation::new(layer_id, vec![]),
                 self.get_num_vars(),
             ),
         );
-
-        verifier_challenge_layer
+        fsc_layer
     }
 }
 

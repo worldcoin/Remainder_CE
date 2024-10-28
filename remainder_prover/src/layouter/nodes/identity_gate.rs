@@ -70,7 +70,6 @@ impl IdentityGateNode {
 impl<F: Field> CompilableNode<F> for IdentityGateNode {
     fn generate_circuit_description(
         &self,
-        layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError> {
         let (pre_routed_data_location, pre_routed_num_vars) = circuit_description_map
@@ -82,7 +81,7 @@ impl<F: Field> CompilableNode<F> for IdentityGateNode {
         let pre_routed_mle =
             MleDescription::new(pre_routed_data_location.layer_id, &total_mle_indices);
 
-        let id_gate_layer_id = layer_id.get_and_inc();
+        let id_gate_layer_id = LayerId::new_layer();
         let id_gate_layer = IdentityGateLayerDescription::new(
             id_gate_layer_id,
             self.nonzero_gates.clone(),

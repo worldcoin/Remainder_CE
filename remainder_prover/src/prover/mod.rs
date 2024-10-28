@@ -559,10 +559,10 @@ impl<F: Field> GKRCircuitDescription<F> {
                     CircuitLocation::new(fiat_shamir_challenge_description.layer_id(), vec![]),
                     fiat_shamir_challenge_mle.clone(),
                 );
-                fiat_shamir_challenges.push(FiatShamirChallenge::new(
-                    fiat_shamir_challenge_mle,
-                    fiat_shamir_challenge_description.layer_id(),
-                ));
+                fiat_shamir_challenges.push(FiatShamirChallenge {
+                    mle: fiat_shamir_challenge_mle,
+                    layer_id: fiat_shamir_challenge_description.layer_id()
+                });
             });
 
         // Step 1c: Compute the data outputs, using the map from Layer ID to
@@ -753,12 +753,6 @@ pub fn generate_circuit_description<F: Field>(
         lookup_nodes,
         output_nodes,
     ) = layout(nodes).unwrap();
-
-    // Define counters for the layer ids
-    let mut input_layer_id = LayerId::Input(0);
-    let mut intermediate_layer_id = LayerId::Layer(0);
-    let mut fiat_shamir_challenge_layer_id = LayerId::FiatShamirChallengeLayer(0);
-
     let mut intermediate_layers = Vec::<LayerDescriptionEnum<F>>::new();
     let mut output_layers = Vec::<OutputLayerDescription<F>>::new();
     let mut circuit_description_map = CircuitDescriptionMap::new();
@@ -770,7 +764,6 @@ pub fn generate_circuit_description<F: Field>(
         .map(|input_layer_node| {
             let input_layer_description = input_layer_node
                 .generate_input_layer_description::<F>(
-                    &mut input_layer_id,
                     &mut circuit_description_map,
                 )
                 .unwrap();
@@ -788,7 +781,6 @@ pub fn generate_circuit_description<F: Field>(
         .iter()
         .map(|fiat_shamir_challenge_node| {
             fiat_shamir_challenge_node.generate_circuit_description::<F>(
-                &mut fiat_shamir_challenge_layer_id,
                 &mut circuit_description_map,
             )
         })
@@ -796,7 +788,7 @@ pub fn generate_circuit_description<F: Field>(
 
     for node in &intermediate_nodes {
         let node_compiled_intermediate_layers = node
-            .generate_circuit_description(&mut intermediate_layer_id, &mut circuit_description_map)
+            .generate_circuit_description(&mut circuit_description_map)
             .unwrap();
         intermediate_layers.extend(node_compiled_intermediate_layers);
     }
@@ -807,7 +799,6 @@ pub fn generate_circuit_description<F: Field>(
         |(mut lookup_intermediate_acc, mut lookup_output_acc), lookup_node| {
             let (intermediate_layers, output_layer) = lookup_node
                 .generate_lookup_circuit_description(
-                    &mut intermediate_layer_id,
                     &mut circuit_description_map,
                 )
                 .unwrap();

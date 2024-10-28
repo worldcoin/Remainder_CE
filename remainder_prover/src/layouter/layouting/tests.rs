@@ -18,7 +18,6 @@ use super::{
         debug::DebugNode,
         node_enum::NodeEnum,
         sector::Sector,
-        Context,
     },
     topo_sort,
 };
@@ -38,66 +37,60 @@ fn test_topo_sort_with_cycle_include_children() {
     //
     //
     //
-    let ctx = Context::new();
     let dummy_data: MultilinearExtension<Fr> = MultilinearExtension::new_zero();
 
-    let input_node = InputLayerNode::new(&ctx, None);
+    let input_node = InputLayerNode::new(None);
 
     // node ids: [1, 2, 3]
-    let input_shred_0 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
-    let input_shred_1 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
-    let input_shred_2 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
+    let input_shred_0 = InputShred::new(dummy_data.clone().num_vars(), &input_node);
+    let input_shred_1 = InputShred::new(dummy_data.clone().num_vars(), &input_node);
+    let input_shred_2 = InputShred::new(dummy_data.clone().num_vars(), &input_node);
     let input_shred_vec = vec![
         input_shred_0.clone(),
         input_shred_1.clone(),
         input_shred_2.clone(),
     ];
     // node id: [4]
-    let input_layer_node = InputLayerNode::new(&ctx, Some(input_shred_vec));
+    let input_layer_node = InputLayerNode::new(Some(input_shred_vec));
 
     // node ids: [5, 6]
-    let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
-    let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
+    let input_shred_3_node = InputShred::new(dummy_data.clone().num_vars(), &input_node);
+    let input_shred_4_node = InputShred::new(dummy_data.clone().num_vars(), &input_node);
 
     // for now, use debug node as the fake gate layer
     // node id: [7]
     let mut debug_node_0 = DebugNode::new(
-        &ctx,
         "debug".to_string(),
         &[&input_layer_node, &input_shred_3_node],
     );
 
     // node id: [8]
     let sector_0_node = Sector::new(
-        &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
         Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [9]
     let sector_1_node = Sector::new(
-        &ctx,
         &[&input_shred_2, &input_shred_4_node, &sector_0_node],
         Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [10]
-    let output_0_node = OutputNode::new(&ctx, &sector_1_node);
+    let output_0_node = OutputNode::new(&sector_1_node);
 
     // node id: [11]
     let sector_2_node = Sector::new(
-        &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
         Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [12]
-    let output_1_node = OutputNode::new(&ctx, &sector_2_node);
+    let output_1_node = OutputNode::new(&sector_2_node);
 
     // adding a cycle here
     // node id: [13]
     let debug_node_1 = DebugNode::new(
-        &ctx,
         "debug".to_string(),
         &[&input_layer_node, &debug_node_0],
     );
@@ -139,66 +132,60 @@ fn test_topo_sort_with_cycle_no_children() {
     //
     //
     //
-    let ctx = Context::new();
     let dummy_data: MultilinearExtension<Fr> = MultilinearExtension::new_zero();
 
-    let input_node = InputLayerNode::new(&ctx, None);
+    let input_node = InputLayerNode::new(None);
 
     // node ids: [1, 2, 3]
-    let input_shred_0 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
-    let input_shred_1 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
-    let input_shred_2 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
+    let input_shred_0 = InputShred::new(dummy_data.clone().num_vars(), &input_node);
+    let input_shred_1 = InputShred::new(dummy_data.clone().num_vars(), &input_node);
+    let input_shred_2 = InputShred::new(dummy_data.clone().num_vars(), &input_node);
     let input_shred_vec = vec![
         input_shred_0.clone(),
         input_shred_1.clone(),
         input_shred_2.clone(),
     ];
     // node id: [4]
-    let input_layer_node = InputLayerNode::new(&ctx, Some(input_shred_vec));
+    let input_layer_node = InputLayerNode::new(Some(input_shred_vec));
 
     // node ids: [5, 6]
-    let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
-    let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
+    let input_shred_3_node = InputShred::new(dummy_data.clone().num_vars(), &input_node);
+    let input_shred_4_node = InputShred::new(dummy_data.clone().num_vars(), &input_node);
 
     // for now, use debug node as the fake gate layer
     // node id: [7]
     let mut debug_node_0 = DebugNode::new(
-        &ctx,
         "debug".to_string(),
         &[&input_layer_node, &input_shred_3_node],
     );
 
     // node id: [8]
     let sector_0_node = Sector::new(
-        &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
         Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [9]
     let sector_1_node = Sector::new(
-        &ctx,
         &[&input_shred_2, &input_shred_4_node, &sector_0_node],
         Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [10]
-    let output_0_node = OutputNode::new(&ctx, &sector_1_node);
+    let output_0_node = OutputNode::new(&sector_1_node);
 
     // node id: [11]
     let sector_2_node = Sector::new(
-        &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
         Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [12]
-    let output_1_node = OutputNode::new(&ctx, &sector_2_node);
+    let output_1_node = OutputNode::new(&sector_2_node);
 
     // adding a cycle here
     // node id: [13]
     let debug_node_1 = DebugNode::new(
-        &ctx,
         "debug".to_string(),
         &[&input_layer_node, &debug_node_0],
     );
@@ -243,61 +230,56 @@ fn test_topo_sort_without_cycle_no_children() {
     //
     //
     //
-    let ctx = Context::new();
     let dummy_data: MultilinearExtension<Fr> = MultilinearExtension::new_zero();
 
-    let input_node = InputLayerNode::new(&ctx, None);
+    let input_node = InputLayerNode::new(None);
 
     // node ids: [1, 2, 3]
-    let input_shred_0 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
-    let input_shred_1 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
-    let input_shred_2 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
+    let input_shred_0 = InputShred::new(dummy_data.clone().num_vars(), &input_node);
+    let input_shred_1 = InputShred::new(dummy_data.clone().num_vars(), &input_node);
+    let input_shred_2 = InputShred::new(dummy_data.clone().num_vars(), &input_node);
     let input_shred_vec = vec![
         input_shred_0.clone(),
         input_shred_1.clone(),
         input_shred_2.clone(),
     ];
     // node id: [4]
-    let input_layer_node = InputLayerNode::new(&ctx, Some(input_shred_vec));
+    let input_layer_node = InputLayerNode::new(Some(input_shred_vec));
 
     // node ids: [5, 6]
-    let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
-    let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
+    let input_shred_3_node = InputShred::new(dummy_data.clone().num_vars(), &input_node);
+    let input_shred_4_node = InputShred::new(dummy_data.clone().num_vars(), &input_node);
 
     // for now, use debug node as the fake gate layer
     // node id: [7]
     let debug_node = DebugNode::new(
-        &ctx,
         "debug".to_string(),
         &[&input_layer_node, &input_shred_3_node],
     );
 
     // node id: [8]
     let sector_0_node = Sector::new(
-        &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
         Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [9]
     let sector_1_node = Sector::new(
-        &ctx,
         &[&input_shred_2, &input_shred_4_node, &sector_0_node],
         Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [10]
-    let output_0_node = OutputNode::new(&ctx, &sector_1_node);
+    let output_0_node = OutputNode::new(&sector_1_node);
 
     // node id: [11]
     let sector_2_node = Sector::new(
-        &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
         Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [12]
-    let output_1_node = OutputNode::new(&ctx, &sector_2_node);
+    let output_1_node = OutputNode::new(&sector_2_node);
 
     let mut nodes = vec![
         NodeEnum::InputLayer(input_layer_node),
@@ -352,61 +334,56 @@ fn test_topo_sort_without_cycle_include_children() {
     //
     //
     //
-    let ctx = Context::new();
     let dummy_data: MultilinearExtension<Fr> = MultilinearExtension::new_zero();
 
-    let input_node = InputLayerNode::new(&ctx, None);
+    let input_node = InputLayerNode::new(None);
 
     // node ids: [1, 2, 3]
-    let input_shred_0 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
-    let input_shred_1 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
-    let input_shred_2 = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
+    let input_shred_0 = InputShred::new(dummy_data.clone().num_vars(), &input_node);
+    let input_shred_1 = InputShred::new(dummy_data.clone().num_vars(), &input_node);
+    let input_shred_2 = InputShred::new(dummy_data.clone().num_vars(), &input_node);
     let input_shred_vec = vec![
         input_shred_0.clone(),
         input_shred_1.clone(),
         input_shred_2.clone(),
     ];
     // node id: [4]
-    let input_layer_node = InputLayerNode::new(&ctx, Some(input_shred_vec));
+    let input_layer_node = InputLayerNode::new(Some(input_shred_vec));
 
     // node ids: [5, 6]
-    let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
-    let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone().num_vars(), &input_node);
+    let input_shred_3_node = InputShred::new(dummy_data.clone().num_vars(), &input_node);
+    let input_shred_4_node = InputShred::new(dummy_data.clone().num_vars(), &input_node);
 
     // for now, use debug node as the fake gate layer
     // node id: [7]
     let debug_node = DebugNode::new(
-        &ctx,
         "debug".to_string(),
         &[&input_layer_node, &input_shred_3_node],
     );
 
     // node id: [8]
     let sector_0_node = Sector::new(
-        &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
         Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [9]
     let sector_1_node = Sector::new(
-        &ctx,
         &[&input_shred_2, &input_shred_4_node, &sector_0_node],
         Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [10]
-    let output_0_node = OutputNode::new(&ctx, &sector_1_node);
+    let output_0_node = OutputNode::new(&sector_1_node);
 
     // node id: [11]
     let sector_2_node = Sector::new(
-        &ctx,
         &[&input_shred_0.clone(), &input_shred_1.clone()],
         Expression::<Fr, AbstractExpr>::products,
     );
 
     // node id: [12]
-    let output_1_node = OutputNode::new(&ctx, &sector_2_node);
+    let output_1_node = OutputNode::new(&sector_2_node);
 
     let mut nodes = vec![
         NodeEnum::InputLayer(input_layer_node),
@@ -467,14 +444,13 @@ impl Arbitrary for QDepGraph {
         // Number of output nodes (all are sinks).
         let num_outputs = n;
 
-        let ctx = Context::new();
         let dummy_data = MultilinearExtension::<Fr>::new_zero();
 
         // Start with the input nodes.
         let mut graph: Vec<NodeEnum<Fr>> = (0..num_input_shreds)
             .map(|_| {
-                let input_node = InputLayerNode::new(&ctx, None);
-                let input_shred = InputShred::new(&ctx, dummy_data.num_vars(), &input_node);
+                let input_node = InputLayerNode::new(None);
+                let input_shred = InputShred::new(dummy_data.num_vars(), &input_node);
                 NodeEnum::InputShred(input_shred)
             })
             .collect();
@@ -490,7 +466,7 @@ impl Arbitrary for QDepGraph {
                 .filter(|_| *g.choose(&[true, false]).unwrap())
                 .collect();
 
-            let sector = Sector::new(&ctx, &inputs, |ids| {
+            let sector = Sector::new(&inputs, |ids| {
                 Expression::<Fr, AbstractExpr>::products(ids)
             });
 
@@ -510,7 +486,7 @@ impl Arbitrary for QDepGraph {
 
         for _ in 0..num_outputs {
             let input = *g.choose(&available_edges).unwrap();
-            let output = OutputNode::new(&ctx, input);
+            let output = OutputNode::new(input);
             output_nodes.extend([NodeEnum::Output(output)]);
         }
 

@@ -12,7 +12,7 @@ use remainder::{
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
     },
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
@@ -45,21 +45,19 @@ impl<F: Field> DataParallelConstantScaledCircuitAltComponent<F> {
     /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
     /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
     pub fn new(
-        ctx: &Context,
         mle_1_input: &dyn CircuitNode,
         mle_2_input: &dyn CircuitNode,
     ) -> Self {
         let first_layer_component =
-            ConstantScaledSumBuilderComponent::new(ctx, mle_1_input, mle_2_input);
+            ConstantScaledSumBuilderComponent::new(mle_1_input, mle_2_input);
 
         let second_layer_component = ProductScaledBuilderComponent::new(
-            ctx,
             &first_layer_component.get_output_sector(),
             mle_1_input,
         );
 
         let output_component =
-            DifferenceBuilderComponent::new(ctx, &second_layer_component.get_output_sector());
+            DifferenceBuilderComponent::new(&second_layer_component.get_output_sector());
 
         Self {
             first_layer_component,
@@ -101,20 +99,18 @@ impl<F: Field> DataParallelSumConstantCircuitAltComponent<F> {
     /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
     /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
     pub fn new(
-        ctx: &Context,
         mle_1_input: &dyn CircuitNode,
         mle_2_input: &dyn CircuitNode,
     ) -> Self {
-        let first_layer_component = ProductSumBuilderComponent::new(ctx, mle_1_input, mle_2_input);
+        let first_layer_component = ProductSumBuilderComponent::new(mle_1_input, mle_2_input);
 
         let second_layer_component = ConstantScaledSumBuilderComponent::new(
-            ctx,
             &first_layer_component.get_output_sector(),
             mle_1_input,
         );
 
         let output_component =
-            DifferenceBuilderComponent::new(ctx, &second_layer_component.get_output_sector());
+            DifferenceBuilderComponent::new(&second_layer_component.get_output_sector());
 
         Self {
             first_layer_component,
@@ -156,21 +152,19 @@ impl<F: Field> DataParallelProductScaledSumCircuitAltComponent<F> {
     /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
     /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
     pub fn new(
-        ctx: &Context,
         mle_1_input: &dyn CircuitNode,
         mle_2_input: &dyn CircuitNode,
     ) -> Self {
         let first_layer_component =
-            ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);
+            ProductScaledBuilderComponent::new(mle_1_input, mle_2_input);
 
         let second_layer_component = ProductSumBuilderComponent::new(
-            ctx,
             &first_layer_component.get_output_sector(),
             mle_1_input,
         );
 
         let output_component =
-            DifferenceBuilderComponent::new(ctx, &second_layer_component.get_output_sector());
+            DifferenceBuilderComponent::new(&second_layer_component.get_output_sector());
 
         Self {
             first_layer_component,
@@ -210,20 +204,15 @@ fn build_combined_dataparallel_test_circuit<F: Field>(
     GKRCircuitDescription<F>,
     impl Fn(CombinedDataparallelTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- All inputs are public inputs ---
-    let public_input_layer_node = InputLayerNode::new(&context, None);
+    let public_input_layer_node = InputLayerNode::new(None);
 
     // --- Inputs to the circuit include the "dataparallel MLE 1" and the "dataparallel MLE 2" ---
     let dataparallel_mle_1_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + mle_1_and_2_num_vars,
         &public_input_layer_node,
     );
     let dataparallel_mle_2_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + mle_1_and_2_num_vars,
         &public_input_layer_node,
     );
@@ -234,17 +223,14 @@ fn build_combined_dataparallel_test_circuit<F: Field>(
 
     // --- Create the circuit components ---
     let component_1 = DataParallelProductScaledSumCircuitAltComponent::new(
-        &context,
         &dataparallel_mle_1_shred,
         &dataparallel_mle_2_shred,
     );
     let component_2 = DataParallelSumConstantCircuitAltComponent::new(
-        &context,
         &dataparallel_mle_1_shred,
         &dataparallel_mle_2_shred,
     );
     let component_3 = DataParallelConstantScaledCircuitAltComponent::new(
-        &context,
         &dataparallel_mle_1_shred,
         &dataparallel_mle_2_shred,
     );

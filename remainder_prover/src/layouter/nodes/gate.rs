@@ -14,7 +14,7 @@ use crate::{
     mle::{mle_description::MleDescription, MleIndex},
 };
 
-use super::{CircuitNode, CompilableNode, Context, NodeId};
+use super::{CircuitNode, CompilableNode, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
@@ -78,7 +78,6 @@ impl GateNode {
 impl<F: Field> CompilableNode<F> for GateNode {
     fn generate_circuit_description(
         &self,
-        layer_id: &mut LayerId,
         circuit_description_map: &mut crate::layouter::layouting::CircuitDescriptionMap,
     ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError> {
         let (lhs_location, lhs_num_vars) =
@@ -101,7 +100,7 @@ impl<F: Field> CompilableNode<F> for GateNode {
             .collect_vec();
         let rhs_circuit_mle = MleDescription::new(rhs_location.layer_id, &total_indices);
 
-        let gate_layer_id = layer_id.get_and_inc();
+        let gate_layer_id = LayerId::new_layer();
         let gate_circuit_description = GateLayerDescription::new(
             self.num_dataparallel_bits,
             self.nonzero_gates.clone(),

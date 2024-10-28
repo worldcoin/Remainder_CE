@@ -4,7 +4,7 @@ use itertools::{repeat_n, Itertools};
 use remainder_shared_types::Field;
 
 use crate::{
-    layer::{layer_enum::LayerDescriptionEnum, LayerId},
+    layer::layer_enum::LayerDescriptionEnum,
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
 };
 
@@ -58,7 +58,6 @@ impl CircuitNode for SplitNode {
 impl<F: Field> CompilableNode<F> for SplitNode {
     fn generate_circuit_description(
         &self,
-        _layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError> {
         let (source_location, _) =
@@ -151,9 +150,6 @@ mod test {
     ) {
         // --- Sanitycheck ---
         assert!(mle_to_be_split_num_vars > 0);
-
-        // --- Create global context manager ---
-        let context = Context::new();
 
         // --- All inputs are public inputs ---
         let public_input_layer_node = InputLayerNode::new(None);

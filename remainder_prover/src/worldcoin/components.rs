@@ -2,7 +2,7 @@ use remainder_shared_types::Field;
 
 use crate::layouter::{
     component::Component,
-    nodes::{sector::Sector, CircuitNode, Context},
+    nodes::{sector::Sector, CircuitNode},
 };
 
 /// Calculates `matmult - thresholds`, making the result available as self.sector.
@@ -14,8 +14,8 @@ pub struct Subtractor<F: Field> {
 
 impl<F: Field> Subtractor<F> {
     /// Create a new [Thresholder] component.
-    pub fn new(ctx: &Context, a: &dyn CircuitNode, b: &dyn CircuitNode) -> Self {
-        let sector = Sector::new(ctx, &[a, b], |nodes| {
+    pub fn new(a: &dyn CircuitNode, b: &dyn CircuitNode) -> Self {
+        let sector = Sector::new(&[a, b], |nodes| {
             assert_eq!(nodes.len(), 2);
             nodes[0].expr() - nodes[1].expr()
         });

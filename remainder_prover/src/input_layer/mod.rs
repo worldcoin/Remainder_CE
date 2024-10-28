@@ -20,6 +20,14 @@ pub struct InputLayer<F: Field> {
     pub layer_id: LayerId,
 }
 
+impl<F: Field> InputLayer<F> {
+    /// Create a new [InputLayer] from the given MLE, allocating the next available layer ID.
+    pub fn new(mle: MultilinearExtension<F>) -> Self {
+        let layer_id = LayerId::new_input_layer();
+        Self { mle, layer_id }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
 /// The verifier's view of an input layer during circuit proving, containing
 /// the shape information of this input layer.

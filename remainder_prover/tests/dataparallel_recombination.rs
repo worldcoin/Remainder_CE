@@ -10,7 +10,7 @@ use remainder::{
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
     },
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
@@ -26,13 +26,12 @@ pub struct DataParallelRecombinationInterleaveBuilder<F: Field> {
 
 impl<F: Field> DataParallelRecombinationInterleaveBuilder<F> {
     pub fn new(
-        ctx: &Context,
         mle_1: &dyn CircuitNode,
         mle_2: &dyn CircuitNode,
         mle_3: &dyn CircuitNode,
         mle_4: &dyn CircuitNode,
     ) -> Self {
-        let combine_sector = Sector::new(ctx, &[mle_1, mle_2, mle_3, mle_4], |input_nodes| {
+        let combine_sector = Sector::new(&[mle_1, mle_2, mle_3, mle_4], |input_nodes| {
             assert_eq!(input_nodes.len(), 4);
             let mle_1_id = input_nodes[0];
             let mle_2_id = input_nodes[1];
@@ -70,13 +69,12 @@ pub struct DataParallelRecombinationStackBuilder<F: Field> {
 
 impl<F: Field> DataParallelRecombinationStackBuilder<F> {
     pub fn new(
-        ctx: &Context,
         mle_1: &dyn CircuitNode,
         mle_2: &dyn CircuitNode,
         mle_3: &dyn CircuitNode,
         mle_4: &dyn CircuitNode,
     ) -> Self {
-        let combine_sector = Sector::new(ctx, &[mle_1, mle_2, mle_3, mle_4], |input_nodes| {
+        let combine_sector = Sector::new(&[mle_1, mle_2, mle_3, mle_4], |input_nodes| {
             assert_eq!(input_nodes.len(), 4);
             let mle_1_id = input_nodes[0];
             let mle_2_id = input_nodes[1];
@@ -114,8 +112,8 @@ pub struct DiffTwoInputsBuilder<F: Field> {
 }
 
 impl<F: Field> DiffTwoInputsBuilder<F> {
-    pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
-        let first_layer_sector = Sector::new(ctx, &[mle_1, mle_2], |input_nodes| {
+    pub fn new(mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
+        let first_layer_sector = Sector::new(&[mle_1, mle_2], |input_nodes| {
             assert_eq!(input_nodes.len(), 2);
             let mle_1_id = input_nodes[0];
             let mle_2_id = input_nodes[1];
@@ -123,7 +121,7 @@ impl<F: Field> DiffTwoInputsBuilder<F> {
             mle_1_id.expr() - mle_2_id.expr()
         });
 
-        let output_node = OutputNode::new_zero(ctx, &first_layer_sector);
+        let output_node = OutputNode::new_zero(&first_layer_sector);
 
         Self {
             first_layer_sector,
@@ -163,19 +161,15 @@ fn build_dataparallel_recombination_test_circuit<F: Field>(
     GKRCircuitDescription<F>,
     impl Fn(DataparallelRecombinationTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- All inputs are public ---
-    let public_input_layer_node = InputLayerNode::new(&context, None);
+    let public_input_layer_node = InputLayerNode::new(None);
 
     // --- "Semantic" circuit inputs ---
-    let mle_1_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);
-    let mle_2_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);
-    let mle_3_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);
-    let mle_4_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);
+    let mle_1_shred = InputShred::new(num_free_vars, &public_input_layer_node);
+    let mle_2_shred = InputShred::new(num_free_vars, &public_input_layer_node);
+    let mle_3_shred = InputShred::new(num_free_vars, &public_input_layer_node);
+    let mle_4_shred = InputShred::new(num_free_vars, &public_input_layer_node);
     let combined_dataparallel_mle_shred = InputShred::new(
-        &context,
         num_dataparallel_vars + num_free_vars,
         &public_input_layer_node,
     );
@@ -192,7 +186,6 @@ fn build_dataparallel_recombination_test_circuit<F: Field>(
     // But if you change from stack to interleave, then it fails at layer 1, because the subtraction of the dataparallel
     // mle from the output mle is not actually 0.
     let component_1 = DataParallelRecombinationInterleaveBuilder::new(
-        &context,
         &mle_1_shred,
         &mle_2_shred,
         &mle_3_shred,
@@ -200,7 +193,6 @@ fn build_dataparallel_recombination_test_circuit<F: Field>(
     );
 
     let component_2 = DiffTwoInputsBuilder::new(
-        &context,
         &component_1.get_output_sector(),
         &combined_dataparallel_mle_shred,
     );

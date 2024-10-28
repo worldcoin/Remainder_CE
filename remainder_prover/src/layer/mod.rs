@@ -18,7 +18,7 @@ use thiserror::Error;
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
     expression::expr_errors::ExpressionError,
-    layouter::layouting::CircuitMap,
+    layouter::{context::CircuitContext, layouting::CircuitMap},
     mle::mle_description::MleDescription,
     sumcheck::InterpError,
 };
@@ -245,6 +245,22 @@ impl std::fmt::Display for LayerId {
 }
 
 impl LayerId {
+
+    /// Creates a new LayerId representing an input layer.
+    pub fn new_input_layer() -> Self {
+        LayerId::Input(CircuitContext::next_input_layer_id())
+    }
+
+    /// Creates a new LayerId representing a layer.
+    pub fn new_layer() -> Self {
+        LayerId::Layer(CircuitContext::next_layer_id())
+    }
+
+    /// Creates a new LayerId representing a Fiat-Shamir challenge layer.
+    pub fn new_fiat_shamir_challenge_layer() -> Self {
+        LayerId::FiatShamirChallengeLayer(CircuitContext::next_fiat_shamir_challenge_layer_id())
+    }
+
     /// Returns the underlying usize if self is a variant of type Input, otherwise panics.
     pub fn get_raw_input_layer_id(&self) -> usize {
         match self {

@@ -144,14 +144,13 @@ impl InputLayerNode {
     /// an input layer, adding the input shreds to the circuit map.
     pub fn generate_input_layer_description<F: Field>(
         &self,
-        layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<InputLayerDescription, DAGError> {
-        let input_layer_id = layer_id.get_and_inc();
         let Self {
             id: _,
             input_shreds,
         } = &self;
+        let input_layer_id = LayerId::new_input_layer();
 
         let input_mle_num_vars = input_shreds
             .iter()
@@ -163,7 +162,7 @@ impl InputLayerNode {
         debug_assert_eq!(input_shred_indices.len(), input_shreds.len());
 
         let input_layer_description = InputLayerDescription {
-            layer_id: input_layer_id.to_owned(),
+            layer_id: input_layer_id,
             num_vars: num_vars_combined_mle,
         };
 

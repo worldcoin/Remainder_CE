@@ -122,7 +122,6 @@ impl<F: Field> CircuitNode for SectorGroup<F> {
 impl<F: Field> CompilableNode<F> for SectorGroup<F> {
     fn generate_circuit_description(
         &self,
-        layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError> {
         //topo sort the children
@@ -159,7 +158,7 @@ impl<F: Field> CompilableNode<F> for SectorGroup<F> {
             .into_iter()
             .map(|children| {
                 LayerDescriptionEnum::Regular(
-                    compile_layer(children.as_slice(), layer_id, circuit_description_map).unwrap(),
+                    compile_layer(children.as_slice(), circuit_description_map).unwrap(),
                 )
             })
             .collect_vec();
@@ -171,7 +170,6 @@ impl<F: Field> CompilableNode<F> for SectorGroup<F> {
 /// builds the layer/adds their locations to the circuit map
 fn compile_layer<F: Field>(
     children: &[&Sector<F>],
-    layer_id: &mut LayerId,
     circuit_description_map: &mut CircuitDescriptionMap,
 ) -> Result<RegularLayerDescription<F>, DAGError> {
     // This will store all the expression yet to be merged
@@ -232,7 +230,7 @@ fn compile_layer<F: Field>(
 
     let expr = new_expr.build_circuit_expr(circuit_description_map)?;
 
-    let regular_layer_id = layer_id.get_and_inc();
+    let regular_layer_id = LayerId::new_layer();
     let layer = RegularLayerDescription::new_raw(regular_layer_id, expr);
 
     // Add the new sectors to the circuit map
@@ -276,7 +274,6 @@ mod tests {
 
     #[test]
     fn test_sector_group_compile() {
-        let ctx = Context::new();
         let input_node = InputLayerNode::new(None);
         let input_shred_1: InputShred = InputShred::new(0, &input_node);
         let input_shred_2 = InputShred::new(0, &input_node);
@@ -311,7 +308,7 @@ mod tests {
             ),
         );
         let _circuit_description = sector_group
-            .generate_circuit_description(&mut LayerId::Input(1), &mut circuit_description_map)
+            .generate_circuit_description(&mut circuit_description_map)
             .unwrap();
     }
 }
