@@ -26,9 +26,6 @@ use crate::{
     sumcheck::evaluate_at_a_point,
 };
 
-#[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-
 /// Used to represent a matrix; basically an MLE which is the
 /// flattened version of this matrix along with the log2
 /// num_rows (`rows_num_vars`) and the log2 num_cols `cols_num_vars`.
