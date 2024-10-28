@@ -162,7 +162,7 @@ impl LookupTable {
         );
         let expr_num_vars = expr.num_vars();
 
-        let layer_id = LayerId::new_layer();
+        let layer_id = LayerId::next_layer_id();
         let layer = RegularLayerDescription::new_raw(layer_id, expr);
         let mut intermediate_layers = vec![LayerDescriptionEnum::Regular(layer)];
         println!(
@@ -219,7 +219,7 @@ impl LookupTable {
                     acc + CE::from_mle_desc(mult_constraint_mle_desc)
                 },
             );
-            let layer_id = LayerId::new_layer();
+            let layer_id = LayerId::next_layer_id();
             let layer = RegularLayerDescription::new_raw(layer_id, expr);
             intermediate_layers.push(LayerDescriptionEnum::Regular(layer));
             println!(
@@ -262,7 +262,7 @@ impl LookupTable {
         let expr = CE::from_mle_desc(fiat_shamir_challenge_circuit_mle)
             - CE::from_mle_desc(table_circuit_mle);
         let r_minus_table_num_vars = expr.num_vars();
-        let layer_id = LayerId::new_layer();
+        let layer_id = LayerId::next_layer_id();
         let layer = RegularLayerDescription::new_raw(layer_id, expr);
         intermediate_layers.push(LayerDescriptionEnum::Regular(layer));
         println!(
@@ -294,7 +294,7 @@ impl LookupTable {
                 - CE::<F>::products(vec![rhs_numerator.clone(), lhs_denominator.clone()])
         };
 
-        let layer_id = LayerId::new_layer();
+        let layer_id = LayerId::next_layer_id();
         let layer = RegularLayerDescription::new_raw(layer_id, expr);
         intermediate_layers.push(LayerDescriptionEnum::Regular(layer));
         println!(
@@ -435,7 +435,7 @@ fn build_fractional_sum<F: Field>(
         let next_denominator_num_vars = next_denominator_expr.num_vars();
 
         // Create the circuit layer by combining the two
-        let layer_id = LayerId::new_layer();
+        let layer_id = LayerId::next_layer_id();
 
         let layer = RegularLayerDescription::new_raw(
             layer_id,

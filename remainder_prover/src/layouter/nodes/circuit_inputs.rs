@@ -139,7 +139,7 @@ impl InputLayerNode {
     pub fn new(input_shreds: Option<Vec<InputShred>>) -> Self {
         InputLayerNode {
             id: NodeId::new(),
-            input_layer_id: LayerId::new_input_layer(),
+            input_layer_id: LayerId::next_input_layer_id(),
             input_shreds: input_shreds.unwrap_or_default(),
         }
     }

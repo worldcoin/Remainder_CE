@@ -81,7 +81,7 @@ impl<F: Field> CompilableNode<F> for IdentityGateNode {
         let pre_routed_mle =
             MleDescription::new(pre_routed_data_location.layer_id, &total_mle_indices);
 
-        let id_gate_layer_id = LayerId::new_layer();
+        let id_gate_layer_id = LayerId::next_layer_id();
         let id_gate_layer = IdentityGateLayerDescription::new(
             id_gate_layer_id,
             self.nonzero_gates.clone(),

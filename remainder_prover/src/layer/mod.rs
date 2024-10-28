@@ -245,19 +245,18 @@ impl std::fmt::Display for LayerId {
 }
 
 impl LayerId {
-
     /// Creates a new LayerId representing an input layer.
-    pub fn new_input_layer() -> Self {
+    pub fn next_input_layer_id() -> Self {
         LayerId::Input(CircuitContext::next_input_layer_id())
     }
 
     /// Creates a new LayerId representing a layer.
-    pub fn new_layer() -> Self {
+    pub fn next_layer_id() -> Self {
         LayerId::Layer(CircuitContext::next_layer_id())
     }
 
     /// Creates a new LayerId representing a Fiat-Shamir challenge layer.
-    pub fn new_fiat_shamir_challenge_layer() -> Self {
+    pub fn next_fiat_shamir_challenge_layer_id() -> Self {
         LayerId::FiatShamirChallengeLayer(CircuitContext::next_fiat_shamir_challenge_layer_id())
     }
 
@@ -275,37 +274,5 @@ impl LayerId {
             LayerId::Layer(id) => *id,
             _ => panic!("Expected LayerId::Layer, found {:?}", self),
         }
-    }
-
-    /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number
-    pub fn next(&self) -> LayerId {
-        match self {
-            LayerId::Input(id) => LayerId::Input(id + 1),
-            LayerId::Layer(id) => LayerId::Layer(id + 1),
-            LayerId::FiatShamirChallengeLayer(id) => LayerId::FiatShamirChallengeLayer(id + 1),
-        }
-    }
-
-    /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number.
-    /// Mutates self to store the next layer id.
-    pub fn get_and_inc(&mut self) -> LayerId {
-        let ret = *self;
-        self.increment_self();
-        ret
-    }
-
-    /// Mutates self to store the next layer id.
-    pub fn increment_self(&mut self) {
-        match self {
-            LayerId::Input(ref mut id) => {
-                *id += 1;
-            }
-            LayerId::Layer(ref mut id) => {
-                *id += 1;
-            }
-            LayerId::FiatShamirChallengeLayer(ref mut id) => {
-                *id += 1;
-            }
-        };
     }
 }

@@ -65,7 +65,7 @@ impl<F: Field> FiatShamirChallenge<F> {
     /// Create a new [FiatShamirChallenge] from the given MLE allocating the next available FS layer
     /// ID.
     pub fn new(mle: MultilinearExtension<F>) -> Self {
-        let layer_id = LayerId::new_fiat_shamir_challenge_layer();
+        let layer_id = LayerId::next_fiat_shamir_challenge_layer_id();
         Self { mle, layer_id }
     }
 

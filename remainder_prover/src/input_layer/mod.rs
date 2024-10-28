@@ -23,7 +23,7 @@ pub struct InputLayer<F: Field> {
 impl<F: Field> InputLayer<F> {
     /// Create a new [InputLayer] from the given MLE, allocating the next available layer ID.
     pub fn new(mle: MultilinearExtension<F>) -> Self {
-        let layer_id = LayerId::new_input_layer();
+        let layer_id = LayerId::next_input_layer_id();
         Self { mle, layer_id }
     }
 }

@@ -100,7 +100,7 @@ impl<F: Field> CompilableNode<F> for GateNode {
             .collect_vec();
         let rhs_circuit_mle = MleDescription::new(rhs_location.layer_id, &total_indices);
 
-        let gate_layer_id = LayerId::new_layer();
+        let gate_layer_id = LayerId::next_layer_id();
         let gate_circuit_description = GateLayerDescription::new(
             self.num_dataparallel_bits,
             self.nonzero_gates.clone(),

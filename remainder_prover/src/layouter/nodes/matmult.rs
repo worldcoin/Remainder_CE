@@ -93,7 +93,7 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
             self.rows_cols_num_vars_b.1,
         );
 
-        let matmult_layer_id = LayerId::new_layer();
+        let matmult_layer_id = LayerId::next_layer_id();
         let matmult_layer = MatMultLayerDescription::new(matmult_layer_id, matrix_a, matrix_b);
         circuit_description_map.add_node_id_and_location_num_vars(
             self.id,

@@ -230,7 +230,7 @@ fn compile_layer<F: Field>(
 
     let expr = new_expr.build_circuit_expr(circuit_description_map)?;
 
-    let regular_layer_id = LayerId::new_layer();
+    let regular_layer_id = LayerId::next_layer_id();
     let layer = RegularLayerDescription::new_raw(regular_layer_id, expr);
 
     // Add the new sectors to the circuit map
