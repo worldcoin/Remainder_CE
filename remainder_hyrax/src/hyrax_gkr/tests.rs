@@ -31,6 +31,7 @@ use remainder::layouter::nodes::{CircuitNode, Context};
 use remainder::mle::dense::DenseMle;
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
 use remainder::mle::{Mle, MleIndex};
+use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::{
     ECProverTranscript, ECTranscriptReader, ECTranscriptWriter, ECVerifierTranscript,
 };
@@ -123,7 +124,7 @@ fn degree_one_regular_hyrax_layer_test() {
     );
     let claim_point = vec![Fr::from(6), Fr::from(5).neg()];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
 
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
@@ -213,7 +214,7 @@ fn identity_gate_hyrax_layer_test() {
         DenseMle::new_from_raw(vec![Fr::from(2_u64), Fr::from(3)], LayerId::Input(0));
     let claim_point = vec![Fr::from(6)];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
@@ -317,7 +318,7 @@ fn dataparallel_uneven_identity_gate_hyrax_layer_test() {
         DenseMle::new_from_raw(vec![Fr::from(2), Fr::from(6)], LayerId::Input(0));
     let claim_point = vec![Fr::one()];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
@@ -448,7 +449,7 @@ fn dataparallel_even_identity_gate_hyrax_layer_test() {
     );
     let claim_point = vec![Fr::one(), Fr::from(5), Fr::from(2), Fr::from(3)];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
@@ -558,7 +559,7 @@ fn even_add_gate_hyrax_layer_test() {
     );
     let claim_point = vec![Fr::from(3), Fr::from(2)];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
@@ -668,7 +669,7 @@ fn even_mul_gate_hyrax_layer_test() {
     );
     let claim_point = vec![Fr::zero(), Fr::zero()];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
@@ -776,7 +777,7 @@ fn uneven_add_gate_hyrax_layer_test() {
         DenseMle::new_from_raw(vec![Fr::from(5), Fr::from(3)], LayerId::Input(0));
     let claim_point = vec![Fr::from(6)];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
@@ -884,7 +885,7 @@ fn uneven_mul_gate_hyrax_layer_test() {
         DenseMle::new_from_raw(vec![Fr::from(6), Fr::from(2)], LayerId::Input(0));
     let claim_point = vec![Fr::from(6)];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
@@ -1021,7 +1022,7 @@ fn dataparallel_even_add_gate_hyrax_layer_test() {
     );
     let claim_point = vec![Fr::from(3), Fr::from(2), Fr::from(1)];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
@@ -1158,7 +1159,7 @@ fn dataparallel_even_mul_gate_hyrax_layer_test() {
     );
     let claim_point = vec![Fr::from(3), Fr::from(2), Fr::from(1)];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
@@ -1286,7 +1287,7 @@ fn dataparallel_uneven_add_gate_hyrax_layer_test() {
     );
     let claim_point = vec![Fr::from(3), Fr::from(2)];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
@@ -1414,7 +1415,7 @@ fn dataparallel_uneven_mul_gate_hyrax_layer_test() {
     );
     let claim_point = vec![Fr::from(3), Fr::from(2)];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
@@ -1515,7 +1516,7 @@ fn matmult_hyrax_layer_test() {
     );
     let claim_point = vec![Fr::from(6), Fr::from(5).neg()];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Layer(0),
@@ -1609,7 +1610,7 @@ fn product_of_mles_regular_layer_test() {
     );
     let claim_point = vec![Fr::from(3), Fr::from(5)];
     let mle = mle_producing_claim;
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval =
         committer.committed_scalar(&evaluate_mle(&mle, &claim_point), &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
@@ -1718,7 +1719,7 @@ fn selector_only_test() {
     );
     let claim_point = vec![Fr::from(5), Fr::from(2), Fr::from(3).neg()];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Input(0),
@@ -1833,7 +1834,7 @@ fn degree_two_selector_regular_hyrax_layer_test() {
     );
     let claim_point = vec![Fr::from(5), Fr::from(2), Fr::from(3).neg()];
     let evaluation_of_mle_at_point = evaluate_mle(&mle_producing_claim, &claim_point);
-    let blinding = Fr::from(blinding_rng.next_u64());
+    let blinding = Fr::random(&mut blinding_rng);
     let commitment_to_eval = committer.committed_scalar(&evaluation_of_mle_at_point, &blinding);
     let claims: Vec<HyraxClaim<Fr, CommittedScalar<Bn256Point>>> = vec![HyraxClaim {
         to_layer_id: LayerId::Input(0),

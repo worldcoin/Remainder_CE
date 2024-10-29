@@ -116,7 +116,7 @@ pub struct GateLayer<F: Field> {
     /// the incoming claim's challenge points on the dataparallel vars of the MLE
     g2: Option<Vec<F>>,
     // the number of rounds in phase 1
-    num_rounds_phase1: Option<usize>,
+    num_rounds_phase1: usize,
 }
 
 impl<F: Field> Layer<F> for GateLayer<F> {
@@ -194,8 +194,6 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             self.set_g1(claim_point[self.num_dataparallel_vars..].to_vec());
             self.set_g2(claim_point[..self.num_dataparallel_vars].to_vec());
         }
-        let num_rounds_phase1 = self.lhs.num_free_vars() - self.num_dataparallel_vars;
-        self.set_num_rounds_phase1(num_rounds_phase1);
 
         self.lhs.index_mle_indices(0);
         self.rhs.index_mle_indices(0);
@@ -218,7 +216,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             self.set_beta_g2(beta_g2);
         }
 
-        let rounds_before_phase_2 = self.num_dataparallel_vars + self.num_rounds_phase1.unwrap();
+        let rounds_before_phase_2 = self.num_dataparallel_vars + self.num_rounds_phase1;
 
         match round_index.cmp(&self.num_dataparallel_vars) {
             // dataparallel phase
@@ -289,7 +287,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     index_mle_indices_gate(mle_vec, self.num_dataparallel_vars);
                 });
 
-                self.set_phase_1(Some(phase_1_mles.clone()));
+                self.set_phase_1(phase_1_mles.clone());
 
                 let max_deg = phase_1_mles
                     .iter()
@@ -379,7 +377,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 // init phase 2
                 Ordering::Equal => {
                     let u_claim = &self.u_challenges;
-                    assert_eq!(self.u_challenges.len(), self.num_rounds_phase1.unwrap());
+                    assert_eq!(self.u_challenges.len(), self.num_rounds_phase1);
 
                     let f2 = &self.phase_1_mles.as_ref().unwrap()[0][1];
                     assert_eq!(f2.len(), 1);
@@ -433,7 +431,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     phase_2_mles.iter_mut().for_each(|mle_vec| {
                         index_mle_indices_gate(mle_vec, self.num_dataparallel_vars);
                     });
-                    self.set_phase_2(Some(phase_2_mles.clone()));
+                    self.set_phase_2(phase_2_mles.clone());
 
                     // Return the first sumcheck message of this phase.
                     let max_deg = phase_2_mles
@@ -500,7 +498,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                             .map(|mle_vec| {
                                 compute_sumcheck_message_no_beta_table(
                                     mle_vec,
-                                    round_index - self.num_rounds_phase1.unwrap(),
+                                    round_index - self.num_rounds_phase1,
                                     max_deg,
                                 )
                                 .unwrap()
@@ -542,7 +540,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             self.rhs.fix_variable(round_index, challenge);
 
             Ok(())
-        } else if round_index < self.num_rounds_phase1.unwrap() + self.num_dataparallel_vars {
+        } else if round_index < self.num_rounds_phase1 + self.num_dataparallel_vars {
             let mles = self.phase_1_mles.as_mut().unwrap();
             mles.iter_mut().for_each(|mle_ref_vec| {
                 mle_ref_vec.iter_mut().for_each(|mle_ref| {
@@ -552,7 +550,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             self.add_to_u_challenges(challenge);
             Ok(())
         } else {
-            let round_index = round_index - self.num_rounds_phase1.unwrap();
+            let round_index = round_index - self.num_rounds_phase1;
             let mles = self.phase_2_mles.as_mut().unwrap();
             mles.iter_mut().for_each(|mle_ref_vec| {
                 mle_ref_vec.iter_mut().for_each(|mle_ref| {
@@ -606,13 +604,12 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
         let dataparallel_sumcheck_challenges =
             round_challenges[..self.num_dataparallel_vars].to_vec();
-        let first_u_challenges = round_challenges[self.num_dataparallel_vars
-            ..self.num_dataparallel_vars + self.num_rounds_phase1.unwrap()]
+        let first_u_challenges = round_challenges
+            [self.num_dataparallel_vars..self.num_dataparallel_vars + self.num_rounds_phase1]
             .to_vec();
         assert_eq!(first_u_challenges, self.u_challenges);
-        let last_v_challenges = round_challenges
-            [self.num_dataparallel_vars + self.num_rounds_phase1.unwrap()..]
-            .to_vec();
+        let last_v_challenges =
+            round_challenges[self.num_dataparallel_vars + self.num_rounds_phase1..].to_vec();
         // Compute the gate function bound at those variables.
         // Beta table corresponding to the equality of binding the x variables to u.
         let beta_u = BetaValues::new_beta_equality_mle(first_u_challenges);
@@ -1347,8 +1344,11 @@ impl<F: Field> GateLayer<F> {
         gate_operation: BinaryOperation,
         layer_id: LayerId,
     ) -> Self {
+        let num_dataparallel_vars = num_dataparallel_vars.unwrap_or(0);
+        let num_rounds_phase1 = lhs.num_free_vars() - num_dataparallel_vars;
+
         GateLayer {
-            num_dataparallel_vars: num_dataparallel_vars.unwrap_or(0),
+            num_dataparallel_vars,
             nonzero_gates,
             lhs,
             rhs,
@@ -1361,7 +1361,7 @@ impl<F: Field> GateLayer<F> {
             beta_g2: None,
             g1: None,
             g2: None,
-            num_rounds_phase1: None,
+            num_rounds_phase1,
         }
     }
 
@@ -1382,22 +1382,18 @@ impl<F: Field> GateLayer<F> {
     }
 
     /// bookkeeping tables necessary for binding x
-    fn set_phase_1(&mut self, mle_refs: Option<Vec<Vec<DenseMle<F>>>>) {
-        self.phase_1_mles = mle_refs;
+    fn set_phase_1(&mut self, mle_refs: Vec<Vec<DenseMle<F>>>) {
+        self.phase_1_mles = Some(mle_refs);
     }
 
     /// bookkeeping tables necessary for binding y
-    fn set_phase_2(&mut self, mle_refs: Option<Vec<Vec<DenseMle<F>>>>) {
-        self.phase_2_mles = mle_refs;
+    fn set_phase_2(&mut self, mle_refs: Vec<Vec<DenseMle<F>>>) {
+        self.phase_2_mles = Some(mle_refs);
     }
 
     /// adding to all the u challenges
     fn add_to_u_challenges(&mut self, u_challenge: F) {
         self.u_challenges.push(u_challenge);
-    }
-
-    fn set_num_rounds_phase1(&mut self, num_rounds_phase1: usize) {
-        self.num_rounds_phase1 = Some(num_rounds_phase1);
     }
 
     fn compute_beta_tables(&mut self, challenges: &[F]) -> (DenseMle<F>, DenseMle<F>) {

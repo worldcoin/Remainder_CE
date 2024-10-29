@@ -102,9 +102,6 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         self.id
     }
 
-    /// Note that this ONLY verifies for non-dataparallel identity gate!!!
-    ///
-    /// TODO(vishady, ryancao): Implement dataparallel identity gate prover + verifier
     fn verify_rounds(
         &self,
         claim: Claim<F>,
