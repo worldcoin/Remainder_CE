@@ -136,7 +136,7 @@ pub(crate) fn verify_iriscode(
         &mut transcript,
     );
 
-    // Check that the correct kernel values and thresholds are being used.
+    // Check that the correct kernel values, lookup table values and thresholds are being used.
     let expected_aux_mle = test_inputs
         .get(&proof_desc.auxiliary_input_layer.layer_id)
         .unwrap();
