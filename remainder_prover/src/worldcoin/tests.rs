@@ -1,4 +1,5 @@
 use crate::input_layer::ligero_input_layer::LigeroInputLayerDescription;
+use crate::input_layer::InputLayerDescription;
 use crate::prover::{prove, verify};
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
@@ -6,20 +7,17 @@ use remainder_shared_types::transcript::{TranscriptReader, TranscriptWriter};
 use remainder_shared_types::Fr;
 use std::collections::HashMap;
 
-use super::test_helpers::{
-    small_circuit_description_and_inputs, v2_circuit_description_and_inputs,
-};
+use super::test_helpers::{circuit_description_and_inputs, small_circuit_description_and_inputs};
 
 #[test]
 fn test_small_circuit_both_layers_public() {
-    let (circuit_desc, _, inputs) = small_circuit_description_and_inputs();
-    dbg!("Got here !");
+    let (desc, inputs) = small_circuit_description_and_inputs();
     let mut transcript_writer =
         TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
     prove(
         &inputs,
         &HashMap::new(),
-        &circuit_desc,
+        &desc.circuit_description,
         crate::layouter::compiling::CircuitHashType::Sha3_256,
         &mut transcript_writer,
     )
@@ -29,34 +27,45 @@ fn test_small_circuit_both_layers_public() {
     verify(
         &inputs,
         &[],
-        &circuit_desc,
+        &desc.circuit_description,
         crate::layouter::compiling::CircuitHashType::Sha3_256,
         &mut transcript_reader,
     )
     .unwrap();
 }
 
-#[test]
-fn test_small_circuit_with_a_ligero_layer() {
-    let (circuit_desc, private_input_layer_desc, mut inputs) =
-        small_circuit_description_and_inputs();
-
-    // Create the Ligero input layer specifcation.
+// Helper function for [test_small_circuit_with_hyrax_layer].
+fn build_ligero_layer_spec(
+    input_layer_desc: &InputLayerDescription,
+) -> LigeroInputLayerDescription<Fr> {
     let aux = LigeroAuxInfo::<Fr>::new(
-        1 << private_input_layer_desc.num_vars,
+        1 << input_layer_desc.num_vars,
         4,       // rho_inv
         1.0,     // ratio
         Some(1), // maybe_num_col_opens
     );
-    let ligero_layer_desc = LigeroInputLayerDescription::<Fr> {
-        layer_id: private_input_layer_desc.layer_id,
-        num_vars: private_input_layer_desc.num_vars,
+    LigeroInputLayerDescription {
+        layer_id: input_layer_desc.layer_id,
+        num_vars: input_layer_desc.num_vars,
         aux,
-    };
+    }
+}
+
+#[test]
+fn test_small_circuit_with_ligero_layers() {
+    let (desc, mut inputs) = small_circuit_description_and_inputs();
+
+    // Create the Ligero input layer specifcations.
     let mut ligero_layer_spec_map = HashMap::new();
+    let image_ligero_spec = build_ligero_layer_spec(&desc.image_input_layer);
     ligero_layer_spec_map.insert(
-        private_input_layer_desc.layer_id,
-        (ligero_layer_desc.clone(), None),
+        desc.image_input_layer.layer_id,
+        (image_ligero_spec.clone(), None),
+    );
+    let digits_ligero_spec = build_ligero_layer_spec(&desc.digits_input_layer);
+    ligero_layer_spec_map.insert(
+        desc.digits_input_layer.layer_id,
+        (digits_ligero_spec.clone(), None),
     );
 
     // Prove.
@@ -65,20 +74,21 @@ fn test_small_circuit_with_a_ligero_layer() {
     prove(
         &inputs,
         &ligero_layer_spec_map,
-        &circuit_desc,
+        &desc.circuit_description,
         crate::layouter::compiling::CircuitHashType::Sha3_256,
         &mut transcript_writer,
     )
     .unwrap();
 
-    // Verify (remembering to remove the private input layer from the inputs).
+    // Verify (remembering to remove the private input layers from the inputs).
     let mut transcript_reader =
         TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript_writer.get_transcript());
-    inputs.remove(&private_input_layer_desc.layer_id);
+    inputs.remove(&desc.image_input_layer.layer_id);
+    inputs.remove(&desc.digits_input_layer.layer_id);
     verify(
         &inputs,
-        &[ligero_layer_desc],
-        &circuit_desc,
+        &[image_ligero_spec, digits_ligero_spec],
+        &desc.circuit_description,
         crate::layouter::compiling::CircuitHashType::Sha3_256,
         &mut transcript_reader,
     )
@@ -88,13 +98,13 @@ fn test_small_circuit_with_a_ligero_layer() {
 #[ignore]
 #[test]
 fn test_worldcoin_circuit_iris_v2_public_inputs() {
-    let (circuit_desc, _, inputs) = v2_circuit_description_and_inputs(false, None);
+    let (desc, inputs) = circuit_description_and_inputs(2, false, None);
     let mut transcript_writer =
         TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("GKR Prover Transcript");
     prove(
         &inputs,
         &HashMap::new(),
-        &circuit_desc,
+        &desc.circuit_description,
         crate::layouter::compiling::CircuitHashType::Sha3_256,
         &mut transcript_writer,
     )
@@ -104,7 +114,7 @@ fn test_worldcoin_circuit_iris_v2_public_inputs() {
     verify(
         &inputs,
         &[],
-        &circuit_desc,
+        &desc.circuit_description,
         crate::layouter::compiling::CircuitHashType::Sha3_256,
         &mut transcript_reader,
     )

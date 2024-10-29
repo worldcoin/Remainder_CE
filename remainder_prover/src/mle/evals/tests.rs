@@ -24,7 +24,7 @@ impl Arbitrary for Qfr {
             .map(|_| u8::arbitrary(g))
             .chain([0_u8])
             .collect();
-        Qfr(Fr::from_bytes_le(bytes))
+        Qfr(Fr::from_bytes_le(&bytes))
 
         // I think this is technically wrong although it never panicked.
         // Qfr(Fr::from_raw([
@@ -131,7 +131,7 @@ fn test_bit_packed_vector_get_large_3() {
     let n = 100;
     let small_val = Fr::from(0);
     // 2^100 - 1
-    let large_val = Fr::from_bytes_le(vec![
+    let large_val = Fr::from_bytes_le(&[
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x0f, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00,
