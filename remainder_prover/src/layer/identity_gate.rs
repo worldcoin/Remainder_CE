@@ -5,6 +5,8 @@ use std::collections::HashSet;
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
+use tracing_subscriber::layer::Identity;
 
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
@@ -49,7 +51,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 const LAZY_BETA_EVALUATION: bool = true;
 
 /// The circuit Description for an [IdentityGate].
-#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash)]
 #[serde(bound = "F: Field")]
 pub struct IdentityGateLayerDescription<F: Field> {
     /// The layer id associated with this gate layer.
@@ -67,6 +69,12 @@ pub struct IdentityGateLayerDescription<F: Field> {
     /// The number of vars representing the number of "dataparallel" copies of
     /// the circuit.
     num_dataparallel_vars: usize,
+}
+
+impl<F: Field> Display for IdentityGateLayerDescription<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: IdentityGateLayer with #wirings={}, re-routing values from layer {}", self.id, self.wiring.len(), self.source_mle.layer_id())
+    }
 }
 
 impl<F: Field> IdentityGateLayerDescription<F> {

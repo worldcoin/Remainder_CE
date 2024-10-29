@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 
 use crate::utils::vandermonde::VandermondeInverse;
+use ark_std::{end_timer, start_timer};
 use hyrax_input_layer::{
     commit_to_input_values, verify_claim, HyraxInputLayerDescription, HyraxInputLayerProof,
     HyraxProverInputCommitment,
@@ -122,6 +123,11 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
                 // Store the prover's view for later use in the evaluation proofs.
                 hyrax_input_commitments.insert(*layer_id, prover_commitment);
             });
+
+        // FIXME(Ben) display the layers
+        for layer in circuit_description.intermediate_layers.iter() {
+            println!("{}", layer);
+        }
 
         // Get the verifier challenges from the transcript.
         let mut challenge_sampler =
@@ -363,6 +369,7 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
             .map(|layer| {
                 let claims = claim_tracker.get(&layer.layer_id()).unwrap().clone();
                 let output_mles_from_layer = layer_map.get(&layer.layer_id()).unwrap();
+                let layer_timer = start_timer!(|| format!("Proving layer {}", layer.layer_id()));
                 let (layer_proof, claims_from_layer) = HyraxLayerProof::prove(
                     layer,
                     &claims,
@@ -380,7 +387,7 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
                         claim_tracker.insert(claim.to_layer_id, vec![claim]);
                     }
                 }
-
+                end_timer!(layer_timer);
                 (layer.layer_id(), layer_proof)
             })
             .collect_vec();
