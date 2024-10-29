@@ -10,7 +10,6 @@ use std::{
     collections::HashSet,
 };
 
-use ark_std::cfg_into_iter;
 use gate_helpers::bind_round_gate;
 use itertools::Itertools;
 use remainder_shared_types::{
@@ -20,17 +19,16 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::{
-        wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
-        Claim, ClaimError, YieldClaim,
-    },
-    expression::{circuit_expr::MleDescription, verifier_expr::VerifierMle},
+    claims::{Claim, ClaimError, RawClaim},
     layer::{
         product::{PostSumcheckLayer, Product},
         Layer, LayerError, LayerId, VerificationError,
     },
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
+    mle::{
+        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
+        mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
+    },
     prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
@@ -45,9 +43,6 @@ use super::{
     layer_enum::{LayerEnum, VerifierLayerEnum},
     LayerDescription, VerifierLayer,
 };
-
-#[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// Controls whether the `beta` optimiation should be enabled. When enabled, all
 /// functions in this module that compute the value of a `beta` function at a
@@ -125,9 +120,9 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         self.layer_id
     }
 
-    fn prove_rounds(
+    fn prove(
         &mut self,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError> {
         let mut sumcheck_rounds = vec![];
@@ -164,16 +159,14 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
         // --- Finally, send the claimed values for each of the bound MLEs to the verifier ---
         // First, send the claimed value of V_{i + 1}(g_2, u)
-        let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
-        let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
+        let lhs_reduced = &self.phase_1_mles.as_ref().unwrap()[0][1];
+        let rhs_reduced = &self.phase_2_mles.as_ref().unwrap()[0][1];
         debug_assert!(lhs_reduced.len() == 1);
         transcript_writer.append("Evaluation of V_{i + 1}(g_2, u)", lhs_reduced.first());
         // Next, send the claimed value of V_{i + 1}(g_2, v)
         debug_assert!(rhs_reduced.len() == 1);
         transcript_writer.append("Evaluation of V_{i + 1}(g_2, v)", rhs_reduced.first());
 
-        // The concatenation of all of these rounds is the proof resulting from a gate layer.
-        //Ok(sumcheck_rounds.into())
         Ok(())
     }
 
@@ -650,6 +643,51 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             )]),
         }
     }
+
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+        let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
+        let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
+
+        let mut claims = vec![];
+
+        // Grab the claim on the left side.
+        let mut fixed_mle_indices_u: Vec<F> = vec![];
+        for index in lhs_reduced.mle_indices() {
+            fixed_mle_indices_u.push(
+                index
+                    .val()
+                    .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
+            );
+        }
+        let val = lhs_reduced.first();
+        let claim: Claim<F> = Claim::new(
+            fixed_mle_indices_u,
+            val,
+            self.layer_id(),
+            self.lhs.layer_id(),
+        );
+        claims.push(claim);
+
+        // Grab the claim on the right side.
+        let mut fixed_mle_indices_v: Vec<F> = vec![];
+        for index in rhs_reduced.mle_indices() {
+            fixed_mle_indices_v.push(
+                index
+                    .val()
+                    .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
+            );
+        }
+        let val = rhs_reduced.first();
+        let claim: Claim<F> = Claim::new(
+            fixed_mle_indices_v,
+            val,
+            self.layer_id(),
+            self.rhs.layer_id(),
+        );
+        claims.push(claim);
+
+        Ok(claims)
+    }
 }
 
 /// The circuit-description counterpart of a Gate layer description.
@@ -720,7 +758,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
     fn verify_rounds(
         &self,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierLayerEnum<F>, VerificationError> {
         // --- Storing challenges for the sake of claim generation later ---
@@ -729,13 +767,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
         // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
         // --- BITS ---
-        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+        let num_u = self.lhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
         }) - self.num_dataparallel_vars;
-        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+        let num_v = self.rhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
@@ -758,8 +796,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
         // Check: V_i(g_2, g_1) =? g_1(0) + g_1(1)
         // TODO(ryancao): SUPER overloaded notation (in e.g. above comments); fix across the board
-        if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1] != claim.get_result()
-        {
+        if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1] != claim.get_eval() {
             return Err(VerificationError::SumcheckStartFailed);
         }
 
@@ -828,13 +865,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+        let num_u = self.lhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
         }) - self.num_dataparallel_vars;
-        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+        let num_v = self.rhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
@@ -852,13 +889,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
         // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
         // --- BITS ---
-        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+        let num_u = self.lhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
         }) - self.num_dataparallel_vars;
-        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+        let num_v = self.rhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
@@ -1067,7 +1104,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         let output_data = MultilinearExtension::new(res_table);
         assert_eq!(
             output_data.num_vars(),
-            mle_output_necessary.mle_indices().len()
+            mle_output_necessary.var_indices().len()
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
@@ -1076,7 +1113,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
 impl<F: Field> VerifierGateLayer<F> {
     /// Computes the oracle query's value for a given [VerifierGateLayer].
-    pub fn evaluate(&self, claim: &Claim<F>) -> F {
+    pub fn evaluate(&self, claim: &RawClaim<F>) -> F {
         let g2_challenges = claim.get_point()[..self.num_dataparallel_rounds].to_vec();
         let g1_challenges = claim.get_point()[self.num_dataparallel_rounds..].to_vec();
 
@@ -1167,61 +1204,11 @@ impl<F: Field> VerifierLayer<F> for VerifierGateLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
-}
 
-impl<F: Field> YieldClaim<ClaimMle<F>> for GateLayer<F> {
-    /// Get the claims that this layer makes on other layers.
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
-        let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
-        let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
-
-        let mut claims = vec![];
-
-        // Grab the claim on the left side.
-        let mut fixed_mle_indices_u: Vec<F> = vec![];
-        for index in lhs_reduced.mle_indices() {
-            fixed_mle_indices_u.push(
-                index
-                    .val()
-                    .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
-            );
-        }
-        let val = lhs_reduced.first();
-        let claim: ClaimMle<F> = ClaimMle::new(
-            fixed_mle_indices_u,
-            val,
-            Some(self.layer_id()),
-            Some(self.lhs.layer_id()),
-        );
-        claims.push(claim);
-
-        // Grab the claim on the right side.
-        let mut fixed_mle_indices_v: Vec<F> = vec![];
-        for index in rhs_reduced.mle_indices() {
-            fixed_mle_indices_v.push(
-                index
-                    .val()
-                    .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
-            );
-        }
-        let val = rhs_reduced.first();
-        let claim: ClaimMle<F> = ClaimMle::new(
-            fixed_mle_indices_v,
-            val,
-            Some(self.layer_id()),
-            Some(self.rhs.layer_id()),
-        );
-        claims.push(claim);
-
-        Ok(claims)
-    }
-}
-
-impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
         // Grab the claim on the left side.
         // TODO!(ryancao): Do error handling here!
-        let lhs_vars = self.lhs_mle.mle_indices();
+        let lhs_vars = self.lhs_mle.var_indices();
         let lhs_point = lhs_vars
             .iter()
             .map(|idx| match idx {
@@ -1238,16 +1225,12 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
             .collect_vec();
         let lhs_val = self.lhs_mle.value();
 
-        let lhs_claim: ClaimMle<F> = ClaimMle::new(
-            lhs_point,
-            lhs_val,
-            Some(self.layer_id()),
-            Some(self.lhs_mle.layer_id()),
-        );
+        let lhs_claim: Claim<F> =
+            Claim::new(lhs_point, lhs_val, self.layer_id(), self.lhs_mle.layer_id());
 
         // Grab the claim on the right side.
         // TODO!(ryancao): Do error handling here!
-        let rhs_vars: &[MleIndex<F>] = self.rhs_mle.mle_indices();
+        let rhs_vars: &[MleIndex<F>] = self.rhs_mle.var_indices();
         let rhs_point = rhs_vars
             .iter()
             .map(|idx| match idx {
@@ -1264,58 +1247,10 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
             .collect_vec();
         let rhs_val = self.rhs_mle.value();
 
-        let rhs_claim: ClaimMle<F> = ClaimMle::new(
-            rhs_point,
-            rhs_val,
-            Some(self.layer_id()),
-            Some(self.rhs_mle.layer_id()),
-        );
+        let rhs_claim: Claim<F> =
+            Claim::new(rhs_point, rhs_val, self.layer_id(), self.rhs_mle.layer_id());
 
         Ok(vec![lhs_claim, rhs_claim])
-    }
-}
-
-impl<F: Field> YieldWLXEvals<F> for GateLayer<F> {
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &[Vec<F>],
-        claimed_vals: &[F],
-        _claimed_mles: Vec<DenseMle<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, ClaimError> {
-        // Get the number of evaluations.
-        let (num_evals, _, _) = get_num_wlx_evaluations(claim_vecs);
-
-        // We already have the first #claims evaluations, get the next num_evals - #claims evaluations.
-        let next_evals: Vec<F> = (num_claims..num_evals)
-            .map(|idx| {
-                // Get the challenge l(idx).
-                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                    .map(|claim_idx| {
-                        let evals: Vec<F> = cfg_into_iter!(claim_vecs)
-                            .map(|claim| claim[claim_idx])
-                            .collect();
-                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
-                    })
-                    .collect();
-
-                compute_full_gate(
-                    new_chal,
-                    &mut self.lhs.clone(),
-                    &mut self.rhs.clone(),
-                    &self.nonzero_gates,
-                    self.num_dataparallel_vars,
-                )
-            })
-            .collect();
-
-        // Concat this with the first k evaluations from the claims to get num_evals evaluations.
-        let mut claimed_vals = claimed_vals.to_vec();
-
-        claimed_vals.extend(&next_evals);
-        let wlx_evals = claimed_vals;
-        Ok(wlx_evals)
     }
 }
 
@@ -1824,28 +1759,5 @@ impl<F: Field> GateLayer<F> {
         } else {
             Ok(vec![].into())
         }
-    }
-}
-
-/// For circuit serialization to hash the circuit description into the transcript.
-impl<F: std::fmt::Debug + Field> GateLayer<F> {
-    pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
-        // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
-        // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct GateCircuitDesc<'a, F: std::fmt::Debug + Field>(&'a GateLayer<F>);
-
-        impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for GateCircuitDesc<'a, F> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.debug_struct("Gate")
-                    .field("lhs_mle_ref_layer_id", &self.0.lhs.layer_id())
-                    .field("lhs_mle_ref_mle_indices", &self.0.lhs.mle_indices())
-                    .field("rhs_mle_ref_layer_id", &self.0.rhs.layer_id())
-                    .field("rhs_mle_ref_mle_indices", &self.0.rhs.mle_indices())
-                    .field("add_nonzero_gates", &self.0.nonzero_gates)
-                    .field("num_dataparallel_vars", &self.0.num_dataparallel_vars)
-                    .finish()
-            }
-        }
-        GateCircuitDesc(self)
     }
 }

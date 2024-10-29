@@ -10,8 +10,13 @@ use serde::{Deserialize, Serialize};
 pub use halo2curves::ff::Field as ff_field;
 
 pub use halo2curves;
-pub use halo2curves::bn256::Fr;
+pub use halo2curves::bn256::{Fq, Fr};
 pub use poseidon::Poseidon;
+
+use halo2curves::CurveExt;
+pub use halo2curves::{bn256::G1 as Bn256Point, group::Group};
+pub type Scalar = <Bn256Point as Group>::Scalar;
+pub type Base = <Bn256Point as CurveExt>::Base;
 
 /// The primary finite field used within a GKR circuit, as well as within
 /// sumcheck. Note that the field's size should be large enough such that
@@ -56,7 +61,7 @@ pub trait HasByteRepresentation {
     const REPR_NUM_BYTES: usize;
     /// Constructor which creates an instance of the element from a vec of
     /// length `REPR_NUM_BYTES`.
-    fn from_bytes_le(bytes: Vec<u8>) -> Self;
+    fn from_bytes_le(bytes: &[u8]) -> Self;
     /// Function which creates an equivalent representation of the element
     /// in a byte array of length `REPR_NUM_BYTES`.
     fn to_bytes_le(&self) -> Vec<u8>;
