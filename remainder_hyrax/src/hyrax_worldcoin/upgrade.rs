@@ -60,7 +60,6 @@ pub fn verify_upgrade_v2_to_v3(
     for version in [2u8, 3u8] {
         for is_mask in [false, true] {
             for is_left_eye in [false, true] {
-                dbg!(version, is_mask, is_left_eye);
                 let (proof, expected_hash) = proofs_and_hashes
                     .get(&(version, is_mask, is_left_eye))
                     .unwrap();
