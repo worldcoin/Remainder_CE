@@ -421,6 +421,13 @@ pub struct RegularLayerDescription<F: Field> {
     expression: Expression<F, ExprDescription>,
 }
 
+impl<F: Field> std::fmt::Display for RegularLayerDescription<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // FIXME(Ben) expand to include information about the expression
+        write!(f, "{}: Regular Layer", self.id)
+    }
+}
+
 impl<F: Field> RegularLayerDescription<F> {
     /// Generates a new [RegularLayerDescription] given raw data.
     pub fn new_raw(id: LayerId, expression: Expression<F, ExprDescription>) -> Self {

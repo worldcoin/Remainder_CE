@@ -28,6 +28,17 @@ pub enum LayerDescriptionEnum<F: Field> {
     MatMult(MatMultLayerDescription<F>),
 }
 
+impl<F: Field> std::fmt::Display for LayerDescriptionEnum<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            LayerDescriptionEnum::Regular(desc) => desc.fmt(f),
+            LayerDescriptionEnum::Gate(desc) => desc.fmt(f),
+            LayerDescriptionEnum::IdentityGate(desc) => desc.fmt(f),
+            LayerDescriptionEnum::MatMult(desc) => desc.fmt(f),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(bound = "F: Field")]
 /// An enum representing the different types of fully bound layers.
