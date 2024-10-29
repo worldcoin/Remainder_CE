@@ -1,4 +1,5 @@
 #![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
 use std::collections::HashMap;
 
 use crate::utils::vandermonde::VandermondeInverse;
@@ -14,8 +15,10 @@ use remainder::claims::RawClaim;
 use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
 use remainder::layer::LayerId;
 use remainder::layer::{Layer, LayerDescription};
+use remainder::layouter::compiling::CircuitHashType;
 use remainder::mle::evals::MultilinearExtension;
 use remainder::mle::Mle;
+use remainder::prover::helpers::get_circuit_description_hash_as_field_elems;
 use remainder::prover::{GKRCircuitDescription, InstantiatedCircuit};
 
 use remainder_shared_types::curves::PrimeOrderCurve;
@@ -83,7 +86,16 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         mut rng: &mut impl Rng,
         converter: &mut VandermondeInverse<C::Scalar>,
         transcript: &mut impl ECTranscriptTrait<C>,
+        circuit_description_hash_type: CircuitHashType,
     ) -> HyraxProof<C> {
+        // --- Generate circuit description hash and append to transcript ---
+        let hash_value_as_field_elems = get_circuit_description_hash_as_field_elems(
+            circuit_description,
+            circuit_description_hash_type,
+        );
+        transcript
+            .append_scalar_field_elems("Circuit description hash", &hash_value_as_field_elems);
+
         // Add the input values of any public (i.e. non-hyrax) input layers to transcript.
         // Select the public input layers from the input layers, and sort them by layer id, and append
         // their input values to the transcript.
@@ -222,7 +234,19 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         circuit_description: &GKRCircuitDescription<C::Scalar>,
         committer: &PedersenCommitter<C>,
         transcript: &mut impl ECTranscriptTrait<C>,
+        circuit_description_hash_type: CircuitHashType,
     ) {
+        // --- Generate circuit description hash and append to transcript ---
+        // Note that this is different from the GKR case since there we are
+        // checking against the prover-provided transcript elements but here
+        // we are simply building up our own transcript.
+        let hash_value_as_field_elems = get_circuit_description_hash_as_field_elems(
+            circuit_description,
+            circuit_description_hash_type,
+        );
+        transcript
+            .append_scalar_field_elems("Circuit description hash", &hash_value_as_field_elems);
+
         // Append the public inputs to the transcript
         self.public_inputs
             .iter()

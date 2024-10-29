@@ -4,6 +4,7 @@ use std::hash::Hash;
 
 use clap::error;
 use ff::Field;
+use remainder::layouter::compiling::CircuitHashType;
 use remainder::prover::GKRCircuitDescription;
 use remainder::utils::mle::pad_with;
 use remainder::worldcoin::parameters_v2::IRISCODE_LEN as V2_IRISCODE_LEN;
@@ -134,6 +135,7 @@ pub(crate) fn verify_iriscode(
         &proof_desc.circuit_description,
         &committer,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 
     // Check that the correct kernel values, lookup table values and thresholds are being used.
@@ -250,6 +252,7 @@ pub(crate) fn prove_with_image_precommit(
         blinding_rng,
         converter,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     )
 }
 
