@@ -16,9 +16,10 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    claims::{Claim, ClaimError},
-    expression::{circuit_expr::MleDescription, expr_errors::ExpressionError},
+    claims::{Claim, ClaimError, RawClaim},
+    expression::expr_errors::ExpressionError,
     layouter::layouting::CircuitMap,
+    mle::mle_description::MleDescription,
     sumcheck::InterpError,
 };
 use remainder_shared_types::{
@@ -50,6 +51,9 @@ pub enum LayerError {
     #[error("Transcript Error: {0}")]
     /// Transcript Error
     TranscriptError(#[from] TranscriptReaderError),
+    /// Incorrect number of variable bindings
+    #[error("Layer {0} requires {1} variable bindings, but {2} were provided")]
+    NumVarsMismatch(LayerId, usize, usize),
 }
 
 /// Errors to do with verifying a layer while working with a type implementing
@@ -99,6 +103,10 @@ pub trait Layer<F: Field> {
     /// Gets this layer's ID.
     fn layer_id(&self) -> LayerId;
 
+    /// Initialize this layer and perform any necessary pre-computation: beta
+    /// table, number of rounds, etc.
+    fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError>;
+
     /// Tries to prove `claim` for this layer.
     ///
     /// In the process of proving, it mutates itself binding the variables
@@ -106,14 +114,11 @@ pub trait Layer<F: Field> {
     ///
     /// If successful, the proof is implicitly included in the modified
     /// transcript.
-    fn prove_rounds(
+    fn prove(
         &mut self,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         transcript: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError>;
-
-    /// Initialize the sumcheck round by setting the beta table, computing the number of rounds, etc.
-    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError>;
 
     /// Return the evaluations of the univariate polynomial generated during this round of sumcheck.
     ///
@@ -138,6 +143,10 @@ pub trait Layer<F: Field> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F>;
+
+    /// Generates and returns all claims that this layer makes onto previous
+    /// layers.
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError>;
 }
 
 /// A circuit-description counterpart of the GKR [Layer] trait.
@@ -155,14 +164,16 @@ pub trait LayerDescription<F: Field> {
     /// The proof is implicitly included in the `transcript`.
     fn verify_rounds(
         &self,
-        claim: Claim<F>,
+        claim: RawClaim<F>,
         transcript: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierLayerEnum<F>, VerificationError>;
 
     /// The list of sumcheck rounds this layer will prove, by index.
     fn sumcheck_round_indices(&self) -> Vec<usize>;
 
-    /// Turns this [LayerDescription] into a Verifier Layer
+    /// Turns this [LayerDescription] into a [VerifierLayer] by taking the
+    /// `sumcheck_bindings` and `claim_point` and inserting them into the
+    /// expression to become a verifier expression.
     fn convert_into_verifier_layer(
         &self,
         sumcheck_bindings: &[F],
@@ -204,6 +215,9 @@ pub trait LayerDescription<F: Field> {
 pub trait VerifierLayer<F: Field> {
     /// Returns this layer's ID.
     fn layer_id(&self) -> LayerId;
+
+    /// Get the claims that this layer makes on other layers.
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Copy, PartialOrd)]
@@ -211,13 +225,42 @@ pub trait VerifierLayer<F: Field> {
 pub enum LayerId {
     /// An Mle located in the input layer
     Input(usize),
-    /// A layer between the output layer and input layers
-    Layer(usize),
     /// A layer representing values sampled from the verifier via Fiat-Shamir
     FiatShamirChallengeLayer(usize),
+    /// A layer between the output layer and input layers
+    Layer(usize),
+}
+
+/// Implement Display for LayerId, so that we can use it in error messages
+impl std::fmt::Display for LayerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LayerId::Input(id) => write!(f, "Input Layer {}", id),
+            LayerId::Layer(id) => write!(f, "Layer {}", id),
+            LayerId::FiatShamirChallengeLayer(id) => {
+                write!(f, "Fiat-Shamir Challenge Layer {}", id)
+            }
+        }
+    }
 }
 
 impl LayerId {
+    /// Returns the underlying usize if self is a variant of type Input, otherwise panics.
+    pub fn get_raw_input_layer_id(&self) -> usize {
+        match self {
+            LayerId::Input(id) => *id,
+            _ => panic!("Expected LayerId::Input, found {:?}", self),
+        }
+    }
+
+    /// Returns the underlying usize if self is a variant of type Input, otherwise panics.
+    pub fn get_raw_layer_id(&self) -> usize {
+        match self {
+            LayerId::Layer(id) => *id,
+            _ => panic!("Expected LayerId::Layer, found {:?}", self),
+        }
+    }
+
     /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number
     pub fn next(&self) -> LayerId {
         match self {

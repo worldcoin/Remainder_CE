@@ -12,6 +12,9 @@ pub mod data;
 /// IO helpers
 pub mod io;
 
+/// Parameters defining the circuits
+pub mod parameters;
+
 /// Parameters for the v2 circuit
 pub mod parameters_v2;
 
@@ -21,3 +24,6 @@ pub mod parameters_v3;
 /// Tests
 #[cfg(test)]
 pub mod tests;
+
+/// Test helpers (also used in Hyrax tests)
+pub mod test_helpers;

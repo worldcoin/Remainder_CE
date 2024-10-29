@@ -35,12 +35,12 @@ use crate::{
         layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
         nodes::NodeId,
     },
-    mle::MleIndex,
+    mle::{mle_description::MleDescription, MleIndex},
     utils::mle::get_total_mle_indices,
 };
 
 use super::{
-    circuit_expr::{ExprDescription, MleDescription},
+    circuit_expr::ExprDescription,
     generic_expr::{Expression, ExpressionNode, ExpressionType},
 };
 
@@ -382,59 +382,6 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, AbstractE
                 f.debug_tuple("Scaled").field(poly).field(scalar).finish()
             }
         }
-    }
-}
-
-/// describes the circuit given the expression (includes all the info of the data that the expression is instantiated with)
-impl<F: std::fmt::Debug + Field> Expression<F, AbstractExpr> {
-    #[allow(dead_code)]
-    pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
-        struct CircuitDesc<'a, F: Field>(
-            &'a ExpressionNode<F, AbstractExpr>,
-            &'a <AbstractExpr as ExpressionType<F>>::MleVec,
-        );
-
-        impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for CircuitDesc<'a, F> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                match self.0 {
-                    ExpressionNode::Constant(scalar) => {
-                        f.debug_tuple("const").field(scalar).finish()
-                    }
-                    ExpressionNode::Selector(index, a, b) => f.write_fmt(format_args!(
-                        "sel {index:?}; {}; {}",
-                        CircuitDesc(a, self.1),
-                        CircuitDesc(b, self.1)
-                    )),
-                    // Skip enum variant and print query struct directly to maintain backwards compatibility.
-                    ExpressionNode::Mle(node_id) => {
-                        f.debug_struct("node").field("id", node_id).finish()
-                    }
-                    ExpressionNode::Negated(poly) => {
-                        f.write_fmt(format_args!("-{}", CircuitDesc(poly, self.1)))
-                    }
-                    ExpressionNode::Sum(a, b) => f.write_fmt(format_args!(
-                        "+ {}; {}",
-                        CircuitDesc(a, self.1),
-                        CircuitDesc(b, self.1)
-                    )),
-                    ExpressionNode::Product(a) => {
-                        let str = a
-                            .iter()
-                            .map(|node_id| format!("node id: {:?}", node_id))
-                            .reduce(|acc, str| acc + &str)
-                            .unwrap();
-                        f.write_str(&str)
-                    }
-                    ExpressionNode::Scaled(poly, scalar) => f.write_fmt(format_args!(
-                        "* {}; {:?}",
-                        CircuitDesc(poly, self.1),
-                        scalar
-                    )),
-                }
-            }
-        }
-
-        CircuitDesc(&self.expression_node, &self.mle_vec)
     }
 }
 

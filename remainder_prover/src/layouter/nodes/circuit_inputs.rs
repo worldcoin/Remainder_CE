@@ -7,36 +7,28 @@ pub mod compile_inputs;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
-use crate::{input_layer::CommitmentEnum, mle::evals::MultilinearExtension};
+use crate::mle::evals::MultilinearExtension;
 
 use super::{CircuitNode, Context, NodeId};
 
 /// A struct that represents input data that will be used to populate a
 /// [GKRCircuitDescription] in order to generate a full circuit.
 #[derive(Debug, Clone)]
-pub struct InputLayerData<F: Field> {
-    /// The input node ID in the circuit building process that corresponds to
+pub struct InputLayerNodeData<F: Field> {
+    /// The [InputLayerNode] ID in the circuit building process that corresponds to
     /// this data.
     pub corresponding_input_node_id: NodeId,
     /// The vector of data that goes in this input layer, as [InputShredData].
     pub data: Vec<InputShredData<F>>,
-    /// An option that is None if this layer has no precommit, but otherwise
-    /// the precommit of this input layer.
-    pub precommit: Option<CommitmentEnum<F>>,
 }
 
-impl<F: Field> InputLayerData<F> {
+impl<F: Field> InputLayerNodeData<F> {
     /// Constructor for [InputLayerData], using the corresponding fields as
     /// parameters.
-    pub fn new(
-        corresponding_input_node_id: NodeId,
-        data: Vec<InputShredData<F>>,
-        precommit: Option<CommitmentEnum<F>>,
-    ) -> Self {
+    pub fn new(corresponding_input_node_id: NodeId, data: Vec<InputShredData<F>>) -> Self {
         Self {
             corresponding_input_node_id,
             data,
-            precommit,
         }
     }
 }
@@ -115,30 +107,11 @@ pub enum HyraxInputDType {
     I8,
 }
 
-/// An enum representing the different types
-/// of InputLayer an InputLayerNode can be compiled into
-#[derive(Debug, Clone)]
-pub enum InputLayerType {
-    /// An InputLayer that will be compiled into a [LigeroInputLayer], along with
-    /// the rho_inv: u8, and ratio of the matrix (num cols to num rows): f64.
-    LigeroInputLayer((u8, f64)),
-    /// An InputLayer that will be compiled into a [PublicInputLayer].
-    PublicInputLayer,
-    /// The input layer type that represents a [HyraxInputLayer], along with
-    /// the data type of the input (for commitment optimizations), None
-    /// if it is just a scalar field element.
-    HyraxInputLayer,
-}
-
 #[derive(Debug, Clone)]
 /// A node that represents an InputLayer
-///
-/// TODO! probably split this up into more node types
-/// that indicate different things to the layouter
 pub struct InputLayerNode {
     id: NodeId,
     input_shreds: Vec<InputShred>,
-    pub(in crate::layouter) input_layer_type: InputLayerType,
 }
 
 impl CircuitNode for InputLayerNode {
@@ -162,15 +135,10 @@ impl CircuitNode for InputLayerNode {
 impl InputLayerNode {
     /// A constructor for an InputLayerNode. Can either be initialized empty
     /// or with some InputShreds.
-    pub fn new(
-        ctx: &Context,
-        input_shreds: Option<Vec<InputShred>>,
-        input_layer_type: InputLayerType,
-    ) -> Self {
+    pub fn new(ctx: &Context, input_shreds: Option<Vec<InputShred>>) -> Self {
         InputLayerNode {
             id: ctx.get_new_id(),
             input_shreds: input_shreds.unwrap_or_default(),
-            input_layer_type,
         }
     }
 

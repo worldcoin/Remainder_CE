@@ -3,8 +3,8 @@ use remainder_shared_types::Field;
 use crate::{
     layer::LayerId,
     layouter::nodes::{
-        circuit_inputs::{InputLayerNode, InputShred, InputShredData},
-        CircuitNode, Context,
+        circuit_inputs::{InputLayerNode, InputShred},
+        Context,
     },
     mle::Mle,
 };
@@ -47,34 +47,55 @@ pub fn to_slice_of_vectors<F: Field, const N: usize>(inputs: Vec<[F; N]>) -> [Ve
 
 /// A trait for a MLE(s) that are the input(s) to a circuit,
 /// but are bundled together for semantic reasons.
-pub trait BundledInputMle<F: Field, const N: usize> {
-    /// returns the references to all the underlying MLEs
-    fn get_mle_refs(&self) -> &[DenseMle<F>; N];
+// pub trait BundledInputMle<F: Field, const N: usize> {
+//     /// returns the references to all the underlying MLEs
+//     fn get_mle_refs(&self) -> &[DenseMle<F>; N];
 
-    /// returns all the MLEs as InputShreds
-    fn make_input_shred_and_data(
-        &self,
-        ctx: &Context,
-        source: &InputLayerNode,
-    ) -> (Vec<InputShred>, Vec<InputShredData<F>>);
-}
+//     /// returns all the MLEs as InputShreds
+//     fn make_input_shred_and_data(
+//         &self,
+//         ctx: &Context,
+//         source: &InputLayerNode,
+//     ) -> (Vec<InputShred>, Vec<MultilinearExtension<F>>);
+// }
 
 /// A struct that bundles N MLEs together for semantic reasons.
 #[derive(Debug, Clone)]
-pub struct FlatMles<F: Field, const N: usize> {
+pub struct BundledInputMle<F: Field, const N: usize> {
     mles: [DenseMle<F>; N],
 }
 
-impl<F: Field, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
-    fn get_mle_refs(&self) -> &[DenseMle<F>; N] {
+impl<F: Field, const N: usize> BundledInputMle<F, N> {
+    /// Returns copies of the underlying [MultilinearExtension]s.
+    pub fn get_mles(&self) -> [MultilinearExtension<F>; N] {
+        self.mles
+            .iter()
+            .map(|mle| {
+                MultilinearExtension::new_from_evals(Evaluations::<F>::new(
+                    mle.num_free_vars(),
+                    mle.get_padded_evaluations(),
+                ))
+            })
+            .collect_vec()
+            .try_into()
+            .unwrap()
+    }
+}
+
+// Does BundledInputMle need to exist?
+impl<F: Field, const N: usize> BundledInputMle<F, N> {
+    /// Returns the [DenseMle]s contained within the [BundledInputMle].
+    pub fn get_mle_refs(&self) -> &[DenseMle<F>; N] {
         &self.mles
     }
 
-    fn make_input_shred_and_data(
+    /// Creates a vector of [InputShred] and the corresponding data within
+    /// [MultilinearExtension]s for the instance of [BundledInputMle].
+    pub fn make_input_shred_and_data(
         &self,
         ctx: &Context,
         source: &InputLayerNode,
-    ) -> (Vec<InputShred>, Vec<InputShredData<F>>) {
+    ) -> (Vec<InputShred>, Vec<MultilinearExtension<F>>) {
         self.mles
             .clone()
             .into_iter()
@@ -84,15 +105,13 @@ impl<F: Field, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
                     Evaluations::<F>::new(mle.num_free_vars(), mle.get_padded_evaluations()),
                 );
                 let input_shred = InputShred::new(ctx, mle.num_vars(), source);
-                dbg!(&mle.num_vars());
-                let input_shred_data = InputShredData::new(input_shred.id(), mle);
-                (input_shred, input_shred_data)
+                (input_shred, mle)
             })
             .unzip()
     }
 }
 
-impl<F: Field, const N: usize> FlatMles<F, N> {
+impl<F: Field, const N: usize> BundledInputMle<F, N> {
     /// Creates a new [FlatMles] from raw data.
     pub fn new_from_raw(data: [Vec<F>; N], layer_id: LayerId) -> Self {
         let mles = data
@@ -113,7 +132,6 @@ mod tests {
     use remainder_shared_types::Fr;
 
     use crate::mle::bundled_input_mle::BundledInputMle;
-    use crate::mle::bundled_input_mle::FlatMles;
     use crate::mle::Mle;
 
     #[test]
@@ -123,7 +141,8 @@ mod tests {
             vec![Fr::from(1), Fr::from(3), Fr::from(5), Fr::from(7)],
         ];
 
-        let tuple2_mle = FlatMles::<Fr, 2>::new_from_raw(tuple_vec.clone(), LayerId::Input(0));
+        let tuple2_mle =
+            BundledInputMle::<Fr, 2>::new_from_raw(tuple_vec.clone(), LayerId::Input(0));
 
         let mles = tuple2_mle.get_mle_refs();
 

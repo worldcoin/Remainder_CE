@@ -1,19 +1,18 @@
+use std::collections::HashMap;
+
 use super::{BitsAreBinary, ComplementaryRecompChecker, UnsignedRecomposition};
 use crate::components::EqualityChecker;
 use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::layer::LayerId;
-use crate::layouter::compiling::LayouterCircuit;
-use crate::layouter::component::ComponentSet;
-use crate::layouter::nodes::circuit_inputs::{
-    InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
-};
+use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputShred};
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
-use crate::layouter::nodes::CircuitNode;
-use crate::mle::bundled_input_mle::{to_slice_of_vectors, BundledInputMle, FlatMles};
-use crate::prover::helpers::test_circuit;
+use crate::layouter::nodes::{CircuitNode, Context, NodeId};
+use crate::mle::bundled_input_mle::{to_slice_of_vectors, BundledInputMle};
+use crate::mle::evals::MultilinearExtension;
+use crate::prover::generate_circuit_description;
+use crate::prover::helpers::test_circuit_new;
 use crate::utils::arithmetic::i64_to_field;
-use crate::utils::get_input_shred_and_data;
 use ark_std::iterable::Iterable;
 use itertools::Itertools;
 use remainder_shared_types::ff_field;
@@ -28,61 +27,84 @@ fn test_complementary_recomposition_vertical() {
         .unzip();
 
     // FlatMles for the digits
-    let digits: FlatMles<Fr, 2> = FlatMles::new_from_raw(
+    let digits: BundledInputMle<Fr, 2> = BundledInputMle::new_from_raw(
         to_slice_of_vectors(digits_raw.iter().map(digits_to_field).collect_vec()),
         LayerId::Input(0),
     );
 
-    let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let (digits_input_shreds, digits_input_shreds_data) =
-            digits.make_input_shred_and_data(ctx, &input_layer);
-        let digits_refs = digits_input_shreds
+    let ctx = &Context::new();
+    let input_layer = InputLayerNode::new(ctx, None);
+    let (digits_input_shreds, digits_input_shreds_data) =
+        digits.make_input_shred_and_data(ctx, &input_layer);
+
+    let digits_ids = digits_input_shreds
+        .iter()
+        .map(|digit_input_shred| digit_input_shred.id())
+        .collect_vec();
+    let digits_refs = digits_input_shreds
+        .iter()
+        .map(|shred| shred as &dyn CircuitNode)
+        .collect_vec();
+
+    let bits_data = MultilinearExtension::new(
+        bits.iter()
+            .map(|b| if *b { Fr::ONE } else { Fr::ZERO })
+            .collect(),
+    );
+    let bits_input_shred = InputShred::new(ctx, 3, &input_layer);
+    let bits_input_shred_id = bits_input_shred.id();
+
+    let values_data = MultilinearExtension::new(values.iter().map(i64_to_field).collect());
+    let values_input_shred = InputShred::new(ctx, 3, &input_layer);
+    let values_input_shred_id = values_input_shred.id();
+
+    let recomp = UnsignedRecomposition::new(ctx, &digits_refs, 2);
+    let comp_checker = ComplementaryRecompChecker::new(
+        ctx,
+        &values_input_shred,
+        &bits_input_shred,
+        &&recomp.sector,
+        2,
+        2,
+    );
+
+    let output = OutputNode::new_zero(ctx, &comp_checker.sector);
+
+    let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+        input_layer.into(),
+        values_input_shred.into(),
+        bits_input_shred.into(),
+        recomp.sector.into(),
+        comp_checker.sector.into(),
+        output.into(),
+    ];
+    all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
+
+    let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        generate_circuit_description(all_nodes).unwrap();
+
+    let input_builder = move |(digits_data, bits_data, values_data): (
+        Vec<MultilinearExtension<Fr>>,
+        MultilinearExtension<Fr>,
+        MultilinearExtension<Fr>,
+    )| {
+        let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<Fr>> = HashMap::new();
+        assert_eq!(digits_ids.len(), digits_data.len());
+        digits_ids
             .iter()
-            .map(|shred| shred as &dyn CircuitNode)
-            .collect_vec();
-        let (bits_input_shred, bits_input_shred_data) = get_input_shred_and_data(
-            bits.iter()
-                .map(|b| if *b { Fr::ONE } else { Fr::ZERO })
-                .collect(),
-            ctx,
-            &input_layer,
-        );
-        let (values_input_shred, values_input_shred_data) =
-            get_input_shred_and_data(values.iter().map(i64_to_field).collect(), ctx, &input_layer);
+            .zip(digits_data)
+            .for_each(|(digit_input_shred_id, digit_data)| {
+                input_shred_id_to_data.insert(*digit_input_shred_id, digit_data);
+            });
 
-        let recomp = UnsignedRecomposition::new(ctx, &digits_refs, 2);
-        let comp_checker = ComplementaryRecompChecker::new(
-            ctx,
-            &values_input_shred,
-            &bits_input_shred,
-            &&recomp.sector,
-            2,
-            2,
-        );
+        input_shred_id_to_data.insert(bits_input_shred_id, bits_data);
+        input_shred_id_to_data.insert(values_input_shred_id, values_data);
+        input_builder_from_shred_map(input_shred_id_to_data).unwrap()
+    };
 
-        let output = OutputNode::new_zero(ctx, &comp_checker.sector);
+    let inputs = input_builder((digits_input_shreds_data, bits_data, values_data));
 
-        let mut input_shred_data = vec![values_input_shred_data, bits_input_shred_data];
-        input_shred_data.extend(digits_input_shreds_data);
-        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
-        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
-            input_layer.into(),
-            values_input_shred.into(),
-            bits_input_shred.into(),
-            recomp.sector.into(),
-            comp_checker.sector.into(),
-            output.into(),
-        ];
-        all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
-
-        (
-            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-            vec![input_layer_data],
-        )
-    });
-
-    test_circuit(circuit, None);
+    test_circuit_new(&circ_desc, HashMap::new(), &inputs);
 }
 
 #[test]
@@ -108,50 +130,65 @@ fn test_unsigned_recomposition() {
     assert_eq!(digits.len(), num_digits);
     let expected = vec![Fr::from(19), Fr::from(2), Fr::from(33), Fr::from(48)];
 
-    let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let (digits_input_shreds, digits_input_shreds_data): (
-            Vec<InputShred>,
-            Vec<InputShredData<Fr>>,
-        ) = digits
-            .iter()
-            .map(|digits_at_place| {
-                get_input_shred_and_data(digits_at_place.clone(), ctx, &input_layer)
-            })
-            .unzip();
-        let (expected_input_shred, expected_input_shred_data) =
-            get_input_shred_and_data(expected.clone(), ctx, &input_layer);
+    let ctx = &Context::new();
+    let input_layer = InputLayerNode::new(ctx, None);
+    let digits_input_shreds: Vec<InputShred> = digits
+        .iter()
+        .map(|_| InputShred::new(ctx, 2, &input_layer))
+        .collect();
+    let digits_input_shred_ids = digits_input_shreds
+        .iter()
+        .map(|input_shred| input_shred.id())
+        .collect_vec();
+    let expected_input_shred = InputShred::new(ctx, 2, &input_layer);
+    let expected_input_shred_id = expected_input_shred.id();
 
-        let digits_input_refs = digits_input_shreds
-            .iter()
-            .map(|shred| shred as &dyn CircuitNode)
-            .collect_vec();
-        let recomp = UnsignedRecomposition::new(ctx, &digits_input_refs, base);
+    let digits_input_refs = digits_input_shreds
+        .iter()
+        .map(|shred| shred as &dyn CircuitNode)
+        .collect_vec();
+    let recomp = UnsignedRecomposition::new(ctx, &digits_input_refs, base);
 
-        let equality_checker = EqualityChecker::new(ctx, &expected_input_shred, &&recomp.sector);
-        let output = OutputNode::new_zero(ctx, &equality_checker.sector);
+    let equality_checker = EqualityChecker::new(ctx, &expected_input_shred, &&recomp.sector);
+    let output = OutputNode::new_zero(ctx, &equality_checker.sector);
 
-        let mut input_shred_data = vec![expected_input_shred_data];
-        input_shred_data.extend(digits_input_shreds_data);
-        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
+    let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+        input_layer.into(),
+        expected_input_shred.into(),
+        recomp.sector.into(),
+        equality_checker.sector.into(),
+        output.into(),
+    ];
 
-        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
-            input_layer.into(),
-            expected_input_shred.into(),
-            recomp.sector.into(),
-            equality_checker.sector.into(),
-            output.into(),
-        ];
+    all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
+    let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        generate_circuit_description(all_nodes).unwrap();
 
-        all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
+    let input_builder = move |(digits_data, expected_data): (
+        Vec<MultilinearExtension<Fr>>,
+        MultilinearExtension<Fr>,
+    )| {
+        let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<Fr>> = HashMap::new();
+        assert_eq!(digits_input_shred_ids.len(), digits_data.len());
+        digits_input_shred_ids.iter().zip(digits_data).for_each(
+            |(digit_input_shred_id, digit_data)| {
+                input_shred_id_to_data.insert(*digit_input_shred_id, digit_data);
+            },
+        );
 
-        (
-            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-            vec![input_layer_data],
-        )
-    });
+        input_shred_id_to_data.insert(expected_input_shred_id, expected_data);
+        input_builder_from_shred_map(input_shred_id_to_data).unwrap()
+    };
 
-    test_circuit(circuit, None);
+    let inputs = input_builder((
+        digits
+            .into_iter()
+            .map(MultilinearExtension::new)
+            .collect_vec(),
+        MultilinearExtension::new(expected),
+    ));
+
+    test_circuit_new(&circ_desc, HashMap::new(), &inputs);
 }
 
 #[test]
@@ -190,86 +227,112 @@ fn test_complementary_recomposition() {
         Fr::from(48u64).neg(),
     ];
 
-    let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let (digits_input_shreds, digits_input_shreds_data): (
-            Vec<InputShred>,
-            Vec<InputShredData<Fr>>,
-        ) = digits
-            .iter()
-            .map(|digits_at_place| {
-                get_input_shred_and_data(digits_at_place.clone(), ctx, &input_layer)
-            })
-            .unzip();
-        let (bits_input_shred, bits_input_shred_data) =
-            get_input_shred_and_data(bits.clone(), ctx, &input_layer);
-        let (expected_input_shred, expected_input_shred_data) =
-            get_input_shred_and_data(expected.clone(), ctx, &input_layer);
+    let ctx = &Context::new();
+    let input_layer = InputLayerNode::new(ctx, None);
+    let digits_input_shreds: Vec<InputShred> = digits
+        .iter()
+        .map(|_| InputShred::new(ctx, 2, &input_layer))
+        .collect();
+    let digits_input_shred_ids = digits_input_shreds
+        .iter()
+        .map(|input_shred| input_shred.id())
+        .collect_vec();
+    let expected_input_shred = InputShred::new(ctx, 2, &input_layer);
+    let expected_input_shred_id = expected_input_shred.id();
+    let bits_input_shred = InputShred::new(ctx, 2, &input_layer);
+    let bits_input_shred_id = bits_input_shred.id();
 
-        let digits_input_refs = digits_input_shreds
-            .iter()
-            .map(|shred| shred as &dyn CircuitNode)
-            .collect_vec();
-        let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_input_refs, base);
+    let digits_input_refs = digits_input_shreds
+        .iter()
+        .map(|shred| shred as &dyn CircuitNode)
+        .collect_vec();
+    let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_input_refs, base);
 
-        let signed_recomp_checker = ComplementaryRecompChecker::new(
-            ctx,
-            &expected_input_shred,
-            &bits_input_shred,
-            &&unsigned_recomp.sector,
-            base,
-            num_digits,
+    let signed_recomp_checker = ComplementaryRecompChecker::new(
+        ctx,
+        &expected_input_shred,
+        &bits_input_shred,
+        &&unsigned_recomp.sector,
+        base,
+        num_digits,
+    );
+
+    let output = OutputNode::new_zero(ctx, &signed_recomp_checker.sector);
+
+    let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+        input_layer.into(),
+        bits_input_shred.into(),
+        expected_input_shred.into(),
+        unsigned_recomp.sector.into(),
+        signed_recomp_checker.sector.into(),
+        output.into(),
+    ];
+
+    all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
+
+    let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        generate_circuit_description(all_nodes).unwrap();
+
+    let input_builder = move |(digits_data, expected_data, bits_data): (
+        Vec<MultilinearExtension<Fr>>,
+        MultilinearExtension<Fr>,
+        MultilinearExtension<Fr>,
+    )| {
+        let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<Fr>> = HashMap::new();
+        assert_eq!(digits_input_shred_ids.len(), digits_data.len());
+        digits_input_shred_ids.iter().zip(digits_data).for_each(
+            |(digit_input_shred_id, digit_data)| {
+                input_shred_id_to_data.insert(*digit_input_shred_id, digit_data);
+            },
         );
 
-        let output = OutputNode::new_zero(ctx, &signed_recomp_checker.sector);
+        input_shred_id_to_data.insert(expected_input_shred_id, expected_data);
+        input_shred_id_to_data.insert(bits_input_shred_id, bits_data);
+        input_builder_from_shred_map(input_shred_id_to_data).unwrap()
+    };
 
-        let mut input_shred_data = vec![bits_input_shred_data, expected_input_shred_data];
-        input_shred_data.extend(digits_input_shreds_data);
-        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
+    let inputs = input_builder((
+        digits
+            .into_iter()
+            .map(MultilinearExtension::new)
+            .collect_vec(),
+        MultilinearExtension::new(expected),
+        MultilinearExtension::new(bits),
+    ));
 
-        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
-            input_layer.into(),
-            bits_input_shred.into(),
-            expected_input_shred.into(),
-            unsigned_recomp.sector.into(),
-            signed_recomp_checker.sector.into(),
-            output.into(),
-        ];
-
-        all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
-
-        (
-            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-            vec![input_layer_data],
-        )
-    });
-
-    test_circuit(circuit, None);
+    test_circuit_new(&circ_desc, HashMap::new(), &inputs);
 }
 
 #[test]
 #[should_panic]
 fn test_bits_are_binary_soundness() {
     let bits = vec![Fr::from(3u64)];
-    let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let (shred, shred_data) = get_input_shred_and_data(bits.clone(), ctx, &input_layer);
-        let component = BitsAreBinary::new(ctx, &shred);
-        let output = OutputNode::new_zero(ctx, &component.sector);
-        let input_shred_data = vec![shred_data];
-        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
-        let all_nodes: Vec<NodeEnum<Fr>> = vec![
-            input_layer.into(),
-            shred.into(),
-            component.sector.into(),
-            output.into(),
-        ];
-        (
-            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-            vec![input_layer_data],
-        )
-    });
-    test_circuit(circuit, None);
+    let ctx = &Context::new();
+    let input_layer = InputLayerNode::new(ctx, None);
+    let bits_input_shred = InputShred::new(ctx, 0, &input_layer);
+    let bits_input_shred_id = bits_input_shred.id();
+    let component = BitsAreBinary::new(ctx, &bits_input_shred);
+    let output = OutputNode::new_zero(ctx, &component.sector);
+
+    let all_nodes: Vec<NodeEnum<Fr>> = vec![
+        input_layer.into(),
+        bits_input_shred.into(),
+        component.sector.into(),
+        output.into(),
+    ];
+
+    let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        generate_circuit_description(all_nodes).unwrap();
+
+    let input_builder = move |bits_data: MultilinearExtension<Fr>| {
+        let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<Fr>> = HashMap::new();
+        input_shred_id_to_data.insert(bits_input_shred_id, bits_data);
+        input_builder_from_shred_map(input_shred_id_to_data).unwrap()
+    };
+
+    let inputs = input_builder(MultilinearExtension::new(bits));
+
+    test_circuit_new(&circ_desc, HashMap::new(), &inputs);
 }
 
 #[test]
@@ -280,23 +343,28 @@ fn test_bits_are_binary() {
         Fr::from(1u64),
         Fr::from(0u64),
     ];
-    let circuit = LayouterCircuit::new(|ctx| {
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let (shred, shred_data) = get_input_shred_and_data(bits.clone(), ctx, &input_layer);
-        let component = BitsAreBinary::new(ctx, &shred);
-        let output = OutputNode::new_zero(ctx, &component.sector);
-        let input_shred_data = vec![shred_data];
-        let input_layer_data = InputLayerData::new(input_layer.id(), input_shred_data, None);
-        let all_nodes: Vec<NodeEnum<Fr>> = vec![
-            input_layer.into(),
-            shred.into(),
-            component.sector.into(),
-            output.into(),
-        ];
-        (
-            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes),
-            vec![input_layer_data],
-        )
-    });
-    test_circuit(circuit, None);
+    let ctx = &Context::new();
+    let input_layer = InputLayerNode::new(ctx, None);
+    let bits_input_shred = InputShred::new(ctx, 2, &input_layer);
+    let bits_input_shred_id = bits_input_shred.id();
+    let component = BitsAreBinary::new(ctx, &bits_input_shred);
+    let output = OutputNode::new_zero(ctx, &component.sector);
+    let all_nodes: Vec<NodeEnum<Fr>> = vec![
+        input_layer.into(),
+        bits_input_shred.into(),
+        component.sector.into(),
+        output.into(),
+    ];
+    let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        generate_circuit_description(all_nodes).unwrap();
+
+    let input_builder = move |bits_data: MultilinearExtension<Fr>| {
+        let mut input_shred_id_to_data: HashMap<NodeId, MultilinearExtension<Fr>> = HashMap::new();
+        input_shred_id_to_data.insert(bits_input_shred_id, bits_data);
+        input_builder_from_shred_map(input_shred_id_to_data).unwrap()
+    };
+
+    let inputs = input_builder(MultilinearExtension::new(bits));
+
+    test_circuit_new(&circ_desc, HashMap::new(), &inputs);
 }

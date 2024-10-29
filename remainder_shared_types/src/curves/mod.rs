@@ -103,7 +103,7 @@ pub trait PrimeOrderCurve:
 impl HasByteRepresentation for Fr {
     const REPR_NUM_BYTES: usize = 32;
 
-    fn from_bytes_le(bytes: Vec<u8>) -> Self {
+    fn from_bytes_le(bytes: &[u8]) -> Self {
         if bytes.len() != Self::REPR_NUM_BYTES {
             panic!("Error: Attempted to convert from non-32-length byte vector into Fr")
         }
@@ -134,7 +134,7 @@ impl HasByteRepresentation for Fr {
     {
         let mask_8bit = (1_u64 << 8) - 1;
 
-        Self::from_bytes_le(vec![
+        Self::from_bytes_le(&[
             (words[0] & mask_8bit) as u8,
             ((words[0] & (mask_8bit << 8)) >> 8) as u8,
             ((words[0] & (mask_8bit << 16)) >> 16) as u8,
@@ -174,7 +174,7 @@ impl HasByteRepresentation for Fr {
 impl HasByteRepresentation for Fq {
     const REPR_NUM_BYTES: usize = 32;
 
-    fn from_bytes_le(bytes: Vec<u8>) -> Self {
+    fn from_bytes_le(bytes: &[u8]) -> Self {
         if bytes.len() != Self::REPR_NUM_BYTES {
             panic!("Error: Attempted to convert from non-32-length byte vector into Fr")
         }
@@ -205,7 +205,7 @@ impl HasByteRepresentation for Fq {
     {
         let mask_8bit = (1_u64 << 8) - 1;
 
-        Self::from_bytes_le(vec![
+        Self::from_bytes_le(&[
             (words[0] & mask_8bit) as u8,
             ((words[0] & (mask_8bit << 8)) >> 8) as u8,
             ((words[0] & (mask_8bit << 16)) >> 16) as u8,
@@ -387,7 +387,7 @@ impl PrimeOrderCurve for Bn256 {
             let mut x_alloc_bytes = [0_u8; 32];
             x_alloc_bytes.copy_from_slice(&bytes[1..33]);
             let y_sign_byte: u8 = bytes[33];
-            let x_coord = Self::Base::from_bytes(&x_alloc_bytes).unwrap();
+            let x_coord = Self::Base::from_bytes_le(&x_alloc_bytes);
 
             Self::from_x_and_sign_y(x_coord, y_sign_byte)
         }

@@ -12,13 +12,31 @@ pub const NUM_DIGITS: usize = (1 << LOG_NUM_DIGITS) as usize;
 /// The base of the complementary decomposition of the thresholded responses.
 pub const BASE: u64 = 256;
 
-/// Where to look for the thresholds and the kernel values, i.e. the data that is the same for every
-/// run of the circuit.
-/// Contains a file `wirings.npy`, a 2d array of type u16 encoding the input `wirings` of
-/// [remainder::worldcoin::data::CircuitData::build_worldcoin_circuit_data].
-/// Contains two subfolders "iris" and "mask" each containing:
-/// + `thresholds.npy` - (i64) the thresholds for each placement and kernel combination (so has
-///   shape (num_placements, num_kernels)).
-/// + `kernel_values.npy` - (i64) the 3d array of kernel values with dimensions (num_kernels,
-///   num_kernel_rows, num_kernel_cols).
-pub const CONSTANT_DATA_FOLDER: &str = "worldcoin/v3/";
+/// The number of rows in the image
+pub const IM_NUM_ROWS: usize = 128;
+
+/// The number of columns in the image
+pub const IM_NUM_COLS: usize = 1024;
+
+/// The length of the unpadded iris code
+pub const IRISCODE_LEN: usize = 4 * 16 * 256;
+
+/// The number of variables in the MLE getting rerouted (typically the image input)
+pub const TO_REROUTE_NUM_VARS: usize =
+    (IM_NUM_ROWS.next_power_of_two().ilog2() + IM_NUM_COLS.next_power_of_two().ilog2()) as usize;
+
+/// The wirings from the image (2d) to the LH matrix multiplicand (2d), first a flattened u16 array,
+/// then serialized as bytes
+pub static WIRINGS: &[u8] = include_bytes!("constants/v3/wirings.bin");
+
+/// The thresholds for the iris circuit, first flattened as a 1d i64 array, then serialized as bytes.
+pub static IRIS_THRESHOLDS: &[u8] = include_bytes!("constants/v3/iris/thresholds.bin");
+
+/// The thresholds for the mask circuit, first flattened as a 1d i64 array, then serialized as bytes.
+pub static MASK_THRESHOLDS: &[u8] = include_bytes!("constants/v3/mask/thresholds.bin");
+
+/// The RH multiplicand for the iris circuit, first flattened as a 1d i32 array, then serialized as bytes.
+pub static IRIS_RH_MULTIPLICAND: &[u8] = include_bytes!("constants/v3/iris/rh_multiplicand.bin");
+
+/// The RH multiplicand for the mask circuit, first flattened as a 1d i32 array, then serialized as bytes.
+pub static MASK_RH_MULTIPLICAND: &[u8] = include_bytes!("constants/v3/mask/rh_multiplicand.bin");

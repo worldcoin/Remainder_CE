@@ -1,14 +1,11 @@
 //! A wrapper `enum` type around various implementations of [MleRef]s.
 
+use itertools::{repeat_n, Itertools};
 use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::Field;
 
-use crate::{
-    claims::{wlx_eval::ClaimMle, YieldClaim},
-    layer::{LayerError, LayerId},
-    mle::Mle,
-};
+use crate::{layer::LayerId, mle::Mle};
 
 use super::{dense::DenseMle, evals::EvaluationsIterator, zero::ZeroMle, MleIndex};
 
@@ -69,7 +66,7 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         &mut self,
         round_index: usize,
         challenge: F,
-    ) -> Option<crate::claims::Claim<F>> {
+    ) -> Option<crate::claims::RawClaim<F>> {
         match self {
             MleEnum::Dense(item) => item.fix_variable(round_index, challenge),
             MleEnum::Zero(item) => item.fix_variable(round_index, challenge),
@@ -80,7 +77,7 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         &mut self,
         indexed_bit_index: usize,
         point: F,
-    ) -> Option<crate::claims::Claim<F>> {
+    ) -> Option<crate::claims::RawClaim<F>> {
         match self {
             MleEnum::Dense(item) => item.fix_variable_at_index(indexed_bit_index, point),
             MleEnum::Zero(item) => item.fix_variable_at_index(indexed_bit_index, point),
@@ -106,20 +103,14 @@ impl<F: Field> Mle<F> for MleEnum<F> {
     }
 
     fn get_padded_evaluations(&self) -> Vec<F> {
-        todo!()
+        match self {
+            MleEnum::Dense(dense_mle) => dense_mle.mle.f.iter().collect_vec(),
+            MleEnum::Zero(zero_mle) => repeat_n(F::ZERO, 1 << zero_mle.num_vars).collect_vec(),
+        }
     }
 
     fn add_prefix_bits(&mut self, _new_bits: Vec<MleIndex<F>>) {
         todo!()
-    }
-}
-
-impl<F: Field> YieldClaim<ClaimMle<F>> for MleEnum<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
-        match self {
-            MleEnum::Dense(layer) => layer.get_claims(),
-            MleEnum::Zero(layer) => layer.get_claims(),
-        }
     }
 }
 

@@ -47,7 +47,7 @@ mod tests {
     use halo2curves::bn256::Fq;
 
     use crate::transcript::{
-        ec_transcript::{ECProverTranscript, ECTranscriptWriter},
+        ec_transcript::{ECTranscript, ECTranscriptTrait},
         ProverTranscript,
     };
 
@@ -56,7 +56,7 @@ mod tests {
     #[test]
     fn test_keccak() {
         let mut transcript =
-            ECTranscriptWriter::<halo2curves::bn256::G1, KeccakTranscript>::new("new transcript");
+            ECTranscript::<halo2curves::bn256::G1, KeccakTranscript>::new("new transcript");
         // TODO(ryancao): Make this work again
         // transcript.append("test", Fr::from(3));
         transcript.append("test2", Fq::one());

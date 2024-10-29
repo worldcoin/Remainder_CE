@@ -10,10 +10,9 @@ use remainder_shared_types::Field;
 use thiserror::Error;
 
 use crate::{
-    expression::circuit_expr::MleDescription,
     layer::LayerId,
     layouter::nodes::sector::{Sector, SectorGroup},
-    mle::{dense::DenseMle, evals::MultilinearExtension},
+    mle::{dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription},
 };
 
 use super::nodes::{
@@ -132,27 +131,6 @@ impl CircuitDescriptionMap {
         value: (CircuitLocation, usize),
     ) {
         self.0.insert(node, value);
-    }
-}
-
-#[derive(Debug)]
-/// A HashMap that maps layer ID to node ID, used specifically to associate
-/// input layer nodes to input layer IDs for circuit creation.
-pub struct InputNodeMap(pub(crate) HashMap<LayerId, NodeId>);
-
-impl InputNodeMap {
-    pub(crate) fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    /// Get the node ID from a layer ID.
-    pub fn get_node_id(&self, layer_id: LayerId) -> Option<&NodeId> {
-        self.0.get(&layer_id)
-    }
-
-    /// Add a layer ID, node ID correspondence to the map.
-    pub fn add_node_layer_id(&mut self, layer_id: LayerId, node_id: NodeId) {
-        self.0.insert(layer_id, node_id);
     }
 }
 
@@ -341,10 +319,8 @@ type LayouterNodes<F> = (
 /// specific layer size / its constituent nodes's numvars, etc.
 /// Returns a vector of [CompilableNode] in which inputs are first, then intermediates
 /// (topologically sorted), then lookups, then outputs.
-pub fn layout<F: Field>(
-    ctx: Context,
-    nodes: Vec<NodeEnum<F>>,
-) -> Result<LayouterNodes<F>, DAGError> {
+pub fn layout<F: Field>(nodes: Vec<NodeEnum<F>>) -> Result<LayouterNodes<F>, DAGError> {
+    let ctx = Context::new();
     let mut dag = NodeEnumGroup::new(nodes);
 
     // Handle input layers

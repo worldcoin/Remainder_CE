@@ -4,7 +4,7 @@ use remainder::layer::LayerId;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
-use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
+use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use remainder_shared_types::Field;
 
 use super::proof_of_equality::ProofOfEquality;
@@ -33,7 +33,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
         interpolant_coeffs: &[C::Scalar],
         committer: &PedersenCommitter<C>,
         mut rng: &mut impl Rng,
-        transcript: &mut impl ECProverTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) -> (Self, HyraxClaim<C::Scalar, CommittedScalar<C>>) {
         // Check that all claims are on the same layer
         let layer_id = claims[0].to_layer_id;
@@ -53,7 +53,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
 
         // Add the commitments to the coefficients to the transcript
         coeffs.iter().enumerate().for_each(|(i, commit_triple)| {
-            let label = format!("PROVER coeff {}", i);
+            let label = format!("coeff {}", i);
             transcript.append_ec_point(Box::leak(label.into_boxed_str()), commit_triple.commitment);
         });
 
@@ -125,7 +125,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
         // the claims: each being a point (in the clear) and the commitment to the evaluation
         claims: &[HyraxClaim<C::Scalar, C>],
         committer: &PedersenCommitter<C>,
-        transcript: &mut impl ECVerifierTranscript<C>,
+        transcript: &mut impl ECTranscriptTrait<C>,
     ) -> HyraxClaim<C::Scalar, C> {
         // Check the there are the correct number of coefficient commitments (i.e. check the degree
         // of the interpolating polynomial)
@@ -144,11 +144,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
             .enumerate()
             .for_each(|(i, commit)| {
                 let label = format!("coeff {}", i);
-
-                let transcript_commit = transcript
-                    .consume_ec_point(Box::leak(label.into_boxed_str()))
-                    .unwrap();
-                assert_eq!(*commit, transcript_commit);
+                transcript.append_ec_point(Box::leak(label.into_boxed_str()), *commit);
             });
 
         // Verify the proofs of opening for coefficients of the interpolating polynomial
@@ -183,7 +179,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
             });
 
         // A random evaluation point $\tau \in \mathbb{F}$ is sampled from the transcript
-        let tau = transcript.get_scalar_field_challenge("PoCA tau").unwrap();
+        let tau = transcript.get_scalar_field_challenge("PoCA tau");
 
         // Calculate the powers of tau
         let powers_of_tau: Vec<C::Scalar> =

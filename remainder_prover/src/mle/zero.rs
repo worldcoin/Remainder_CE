@@ -3,9 +3,8 @@
 use itertools::{repeat_n, Itertools};
 use serde::{Deserialize, Serialize};
 
-use crate::claims::{wlx_eval::ClaimMle, Claim};
-use crate::claims::{ClaimError, YieldClaim};
-use crate::layer::{LayerError, LayerId};
+use crate::claims::RawClaim;
+use crate::layer::LayerId;
 use remainder_shared_types::Field;
 
 use super::evals::{Evaluations, EvaluationsIterator};
@@ -56,7 +55,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         self.num_vars
     }
 
-    fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<Claim<F>> {
+    fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<RawClaim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::Indexed(round_index) {
                 mle_index.bind_index(challenge);
@@ -67,7 +66,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         self.num_vars -= 1;
 
         if self.num_vars == 0 {
-            let send_claim = Claim::new(
+            let send_claim = RawClaim::new(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())
@@ -80,7 +79,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         }
     }
 
-    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<Claim<F>> {
+    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<RawClaim<F>> {
         self.fix_variable(indexed_bit_index, point)
     }
 
@@ -137,6 +136,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
     }
 }
 
+/*
 impl<F: Field> YieldClaim<ClaimMle<F>> for ZeroMle<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.len() != 1 {
@@ -162,3 +162,4 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for ZeroMle<F> {
         )])
     }
 }
+*/

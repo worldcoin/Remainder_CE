@@ -2,6 +2,7 @@
 
 use itertools::Itertools;
 use remainder_shared_types::{transcript::TranscriptSponge, Field};
+use std::fmt::Debug;
 
 /// A dummy transcript that can have arbitrary values fed into it.
 ///
@@ -10,13 +11,13 @@ use remainder_shared_types::{transcript::TranscriptSponge, Field};
 ///
 /// Will return the values in VALUES in order upon each squeeze request.
 /// Once SIZE is reached values will wrap around.
-#[derive(Clone, Default)]
-pub struct DummySponge<F: Field, const VALUE: i32> {
+#[derive(Clone, Default, Debug)]
+pub struct DummySponge<F: Field + Debug, const VALUE: i32> {
     /// The current position in the values list.
     _marker: std::marker::PhantomData<F>,
 }
 
-impl<F: Field, const VALUE: i32> TranscriptSponge<F> for DummySponge<F, VALUE> {
+impl<F: Field + Debug, const VALUE: i32> TranscriptSponge<F> for DummySponge<F, VALUE> {
     fn absorb(&mut self, _: F) {}
 
     fn absorb_elements(&mut self, _: &[F]) {}

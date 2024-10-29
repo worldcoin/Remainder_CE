@@ -2,7 +2,7 @@ use ark_std::test_rng;
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use halo2curves::bn256::G1 as Bn256Point;
 use rand::Rng;
-use remainder_hyrax::hyrax_pcs::{HyraxPCSProof, MleCoefficientsVector};
+use remainder_hyrax::hyrax_pcs::{HyraxPCSEvaluationProof, MleCoefficientsVector};
 use remainder_shared_types::{
     curves::PrimeOrderCurve, halo2curves, pedersen::PedersenCommitter, Field,
 };
@@ -44,7 +44,7 @@ fn bench_pcs_commit(c: &mut Criterion) {
                         (mle_coeffs_data, committer, blinding_factors)
                     },
                     |(data, committer, blinding_factors)| {
-                        HyraxPCSProof::compute_matrix_commitments(
+                        HyraxPCSEvaluationProof::compute_matrix_commitments(
                             log_num_elems,
                             &data,
                             &committer,
