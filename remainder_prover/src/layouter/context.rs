@@ -3,25 +3,25 @@
 use once_cell::sync::Lazy;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
-/// [CircuitContext] keeps track of the ids of the nodes and layers that are created.
+/// [CircuitBuildingContext] keeps track of the ids of the nodes and layers that are created.
 /// Contains a consistently incrementing counters to prevent id collisions.
 #[derive(Debug, Default)]
-pub struct CircuitContext {
+pub struct CircuitBuildingContext {
     node_id: AtomicU64,
     input_layer_id: AtomicUsize,
     layer_id: AtomicUsize,
     fiat_shamir_challenge_layer_id: AtomicUsize,
 }
 
-static CONTEXT: Lazy<CircuitContext> = Lazy::new(|| CircuitContext {
+static CONTEXT: Lazy<CircuitBuildingContext> = Lazy::new(|| CircuitBuildingContext {
     node_id: AtomicU64::new(0),
     input_layer_id: AtomicUsize::new(0),
     layer_id: AtomicUsize::new(0),
     fiat_shamir_challenge_layer_id: AtomicUsize::new(0),
 });
 
-impl CircuitContext {
-    /// Resets the [CircuitContext] to its initial state, such that the next ids to be issued are all 0.
+impl CircuitBuildingContext {
+    /// Resets the [CircuitBuildingContext] to its initial state, such that the next ids to be issued are all 0.
     pub fn reset() {
         CONTEXT.node_id.store(0, Ordering::SeqCst);
         CONTEXT.input_layer_id.store(0, Ordering::SeqCst);

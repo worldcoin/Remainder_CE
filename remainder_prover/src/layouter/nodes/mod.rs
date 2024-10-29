@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::expression::{abstract_expr::AbstractExpr, generic_expr::Expression};
 use crate::layer::layer_enum::LayerDescriptionEnum;
 
-use super::context::CircuitContext;
+use super::context::CircuitBuildingContext;
 use super::layouting::{CircuitDescriptionMap, DAGError};
 
 pub mod circuit_inputs;
@@ -34,7 +34,7 @@ impl Default for NodeId {
 impl NodeId {
     /// Creates a new NodeId from the global circuit context.
     pub fn new() -> Self {
-        Self(CircuitContext::next_node_id())
+        Self(CircuitBuildingContext::next_node_id())
     }
 
     /// Creates a new NodeId from a u64, for testing only

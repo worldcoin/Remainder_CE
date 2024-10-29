@@ -25,7 +25,7 @@ use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{layer_enum::LayerEnum, LayerError, LayerId};
 use crate::layer::{Layer, LayerDescription, VerifierLayer};
 use crate::layouter::compiling::CircuitHashType;
-use crate::layouter::context::CircuitContext;
+use crate::layouter::context::CircuitBuildingContext;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, CircuitLocation, CircuitMap};
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, NodeId};
@@ -734,7 +734,7 @@ impl<F: Field> GKRCircuitDescription<F> {
 /// Returns a [GKRCircuitDescription], and a function that takes a map of input shred data and returns a
 /// map of input layer data.
 /// The returned circuit description already has indices assigned to the MLEs.
-/// [CircuitContext::reset()] is called, resetting the node- and layer id counters to zero, in
+/// [CircuitBuildingContext::reset()] is called, resetting the node- and layer id counters to zero, in
 /// preparation for the next circuit.
 pub fn generate_circuit_description<F: Field>(
     nodes: Vec<NodeEnum<F>>,
@@ -841,6 +841,6 @@ pub fn generate_circuit_description<F: Field>(
         Ok(input_layer_data)
     };
 
-    CircuitContext::reset();
+    CircuitBuildingContext::reset();
     Ok((circuit_description, input_builder))
 }
