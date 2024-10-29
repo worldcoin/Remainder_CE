@@ -123,7 +123,7 @@ pub trait Layer<F: Field> {
     /// Return the evaluations of the univariate polynomial generated during this round of sumcheck.
     ///
     /// This must be called with a steadily incrementing round_index & with a securely generated challenge.
-    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError>;
+    fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError>;
 
     /// Mutate the underlying bookkeeping tables to "bind" the given `challenge` to the bit.
     /// labeled with that `round_index`.

@@ -4,7 +4,7 @@ use clap::Parser;
 use remainder::{
     prover::helpers::write_circuit_description_to_file,
     worldcoin::{
-        circuits::build_iriscode_circuit_description, data::wirings_to_reroutings,
+        circuits::build_iriscode_proof_description, data::wirings_to_reroutings,
         parameters::decode_wirings,
     },
 };
@@ -33,7 +33,7 @@ fn main() {
         let wirings = &decode_wirings(WIRINGS);
         let reroutings =
             wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
-        let (circuit_description, _, _) = build_iriscode_circuit_description::<
+        let (proof_desc, _) = build_iriscode_proof_description::<
             Fr,
             TO_REROUTE_NUM_VARS,
             MATMULT_ROWS_NUM_VARS,
@@ -43,7 +43,7 @@ fn main() {
             NUM_DIGITS,
         >(reroutings);
         write_circuit_description_to_file(
-            &circuit_description,
+            &proof_desc.circuit_description,
             Path::new(&args.circuit_description_filepath),
         );
     } else if args.version == 3 {
@@ -54,7 +54,7 @@ fn main() {
         let wirings = &decode_wirings(WIRINGS);
         let reroutings =
             wirings_to_reroutings(wirings, IM_NUM_COLS, 1 << MATMULT_INTERNAL_DIM_NUM_VARS);
-        let (circuit_description, _, _) = build_iriscode_circuit_description::<
+        let (proof_desc, _) = build_iriscode_proof_description::<
             Fr,
             TO_REROUTE_NUM_VARS,
             MATMULT_ROWS_NUM_VARS,
@@ -64,7 +64,7 @@ fn main() {
             NUM_DIGITS,
         >(reroutings);
         write_circuit_description_to_file(
-            &circuit_description,
+            &proof_desc.circuit_description,
             Path::new(&args.circuit_description_filepath),
         );
     } else {

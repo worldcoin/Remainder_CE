@@ -114,13 +114,13 @@ impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscriptTrait<
     }
 
     fn append_scalar_field_elem(&mut self, label: &str, elem: C::Scalar) {
-        let base_elem = C::Base::from_bytes_le(elem.to_bytes_le());
+        let base_elem = C::Base::from_bytes_le(&elem.to_bytes_le());
         self.append(label, base_elem);
     }
 
     fn append_scalar_field_elems(&mut self, label: &str, elements: &[C::Scalar]) {
         elements.iter().for_each(|elem| {
-            let base_elem = C::Base::from_bytes_le(elem.to_bytes_le());
+            let base_elem = C::Base::from_bytes_le(&elem.to_bytes_le());
             self.append(label, base_elem);
         });
     }
@@ -130,7 +130,7 @@ impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscriptTrait<
     /// than just panicking) into a scalar field element's representation.
     fn get_scalar_field_challenge(&mut self, label: &str) -> <C as PrimeOrderCurve>::Scalar {
         let base_field_challenge = self.get_challenge(label);
-        C::Scalar::from_bytes_le(base_field_challenge.to_bytes_le())
+        C::Scalar::from_bytes_le(&base_field_challenge.to_bytes_le())
     }
 
     fn get_scalar_field_challenges(
@@ -142,7 +142,7 @@ impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscriptTrait<
         base_field_challenges
             .iter()
             .map(|base_field_challenge| {
-                C::Scalar::from_bytes_le(base_field_challenge.to_bytes_le())
+                C::Scalar::from_bytes_le(&base_field_challenge.to_bytes_le())
             })
             .collect()
     }

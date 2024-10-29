@@ -80,7 +80,7 @@ fn test_byte_repr_identity() {
         let orig_value_u64 = rng.gen::<u64>();
         let orig_value = Fr::from(orig_value_u64);
         let orig_value_bytes = orig_value.to_bytes_le();
-        let new_value = Fr::from_bytes_le(orig_value_bytes);
+        let new_value = Fr::from_bytes_le(&orig_value_bytes);
         assert_eq!(orig_value, new_value);
     })
 }
