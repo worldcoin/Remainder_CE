@@ -25,7 +25,7 @@ use super::nodes::{
     matmult::MatMultNode,
     node_enum::{NodeEnum, NodeEnumGroup},
     split_node::SplitNode,
-    CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode,
+    CircuitNode, CompilableNode, NodeGroup, NodeId, YieldNode,
 };
 
 /// A HashMap that records during circuit compilation where nodes live in the circuit and what data they yield.
@@ -320,7 +320,6 @@ type LayouterNodes<F> = (
 /// Returns a vector of [CompilableNode] in which inputs are first, then intermediates
 /// (topologically sorted), then lookups, then outputs.
 pub fn layout<F: Field>(nodes: Vec<NodeEnum<F>>) -> Result<LayouterNodes<F>, DAGError> {
-    let ctx = Context::new();
     let mut dag = NodeEnumGroup::new(nodes);
 
     // Handle input layers
@@ -389,7 +388,7 @@ pub fn layout<F: Field>(nodes: Vec<NodeEnum<F>>) -> Result<LayouterNodes<F>, DAG
                         sector_group.add_sector(node);
                         Some(sector_group)
                     } else {
-                        Some(SectorGroup::new(&ctx, vec![node]))
+                        Some(SectorGroup::new(vec![node]))
                     }
                 }
             };

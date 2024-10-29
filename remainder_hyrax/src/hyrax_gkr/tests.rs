@@ -24,7 +24,7 @@ use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::nodes::identity_gate::IdentityGateNode;
 use remainder::layouter::nodes::matmult::MatMultNode;
 use remainder::layouter::nodes::sector::Sector;
-use remainder::layouter::nodes::{CircuitNode, Context, NodeId};
+use remainder::layouter::nodes::{CircuitNode, NodeId};
 use remainder::mle::dense::DenseMle;
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
 use remainder::mle::mle_description::MleDescription;
@@ -1968,28 +1968,27 @@ fn small_regular_circuit_hyrax_input_layer_test() {
         Scalar::from(67887),
     ]);
 
-    let ctx = Context::new();
-    let input_layer = InputLayerNode::new(&ctx, None);
-    let input_shred = InputShred::new(&ctx, input_multilinear_extension.num_vars(), &input_layer);
+    let input_layer = InputLayerNode::new(None);
+    let input_shred = InputShred::new(input_multilinear_extension.num_vars(), &input_layer);
 
     // Middle layer 1: square the input.
-    let squaring_sector = Sector::new(&ctx, &[&input_shred], |mle_vec| {
+    let squaring_sector = Sector::new(&[&input_shred], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
         ExprBuilder::products(vec![mle, mle])
     });
 
     // Middle layer 2: subtract middle layer 1 from itself.
-    let subtract_sector = Sector::new(&ctx, &[&&squaring_sector], |mle_vec| {
+    let subtract_sector = Sector::new(&[&&squaring_sector], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
         mle.expr() - mle.expr()
     });
 
     // Make this an output node.
-    let output_node = OutputNode::new_zero(&ctx, &subtract_sector);
+    let output_node = OutputNode::new_zero(&subtract_sector);
 
-    let (circuit_desc, input_builder, _) = generate_circuit_description(vec![
+    let (circuit_desc, input_builder) = generate_circuit_description(vec![
         input_layer.into(),
         input_shred.clone().into(),
         squaring_sector.into(),
@@ -2018,8 +2017,6 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     proof.verify(&HashMap::new(), &circuit_desc, &committer, &mut transcript);
 }
 
-//FIXME restore these tests by converting them as in small_regular_circuit_hyrax_input_layer_test
-
 /// Struct which allows for easy "semantic" feeding of inputs into the circuit proving process.
 struct SmallRegularCircuitTestInputs<F: Field> {
     input_mle: MultilinearExtension<F>,
@@ -2033,35 +2030,32 @@ fn build_small_regular_test_circuit<F: Field>(
     GKRCircuitDescription<F>,
     impl Fn(SmallRegularCircuitTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- All inputs are public inputs ---
-    let public_input_layer_node = InputLayerNode::new(&context, None);
+    let public_input_layer_node = InputLayerNode::new(None);
 
     // --- Circuit inputs ---
-    let input_mle_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);
+    let input_mle_shred = InputShred::new(num_free_vars, &public_input_layer_node);
 
     // --- Save IDs to be used later ---
     let input_mle_id = input_mle_shred.id();
 
     // --- Create the circuit components ---
     // Middle layer 1: square the input.
-    let squaring_sector = Sector::new(&context, &[&input_mle_shred], |mle_vec| {
+    let squaring_sector = Sector::new(&[&input_mle_shred], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
         ExprBuilder::products(vec![mle, mle])
     });
 
     // Middle layer 2: subtract middle layer 1 from itself.
-    let subtract_sector = Sector::new(&context, &[&&squaring_sector], |mle_vec| {
+    let subtract_sector = Sector::new(&[&&squaring_sector], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
         mle.expr() - mle.expr()
     });
 
     // Make this an output node.
-    let output_node = OutputNode::new_zero(&context, &subtract_sector);
+    let output_node = OutputNode::new_zero(&subtract_sector);
 
     let all_circuit_nodes = vec![
         public_input_layer_node.into(),
@@ -2071,7 +2065,7 @@ fn build_small_regular_test_circuit<F: Field>(
         output_node.into(),
     ];
 
-    let (circuit_description, convert_input_shreds_to_input_layers, _) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
@@ -2153,43 +2147,40 @@ fn build_medium_regular_test_circuit<F: Field>(
     impl Fn(MediumRegularCircuitTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
     LayerId,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- There is only one input layer; it can be public or private (for the purposes of testing) ---
-    let input_layer_node = InputLayerNode::new(&context, None);
+    let input_layer_node = InputLayerNode::new(None);
 
     // --- Circuit inputs ---
-    let input_mle_shred = InputShred::new(&context, num_free_vars, &input_layer_node);
+    let input_mle_shred = InputShred::new(num_free_vars, &input_layer_node);
 
     // --- Save IDs to be used later ---
     let input_mle_id = input_mle_shred.id();
-    let input_layer_node_id = input_layer_node.id();
+    let input_layer_id = input_layer_node.input_layer_id();
 
     // --- Create the circuit components ---
     // Middle layer 1: square the input.
-    let squaring_sector = Sector::new(&context, &[&input_mle_shred], |mle_vec| {
+    let squaring_sector = Sector::new(&[&input_mle_shred], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
         ExprBuilder::products(vec![mle, mle])
     });
 
     // Middle layer 2: Create a layer builder which is sel(square_output + square_output, square_output)
-    let selector_squaring_sector = Sector::new(&context, &[&&squaring_sector], |mle_vec| {
+    let selector_squaring_sector = Sector::new(&[&&squaring_sector], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
         (mle.expr() + mle.expr()).select(mle.expr())
     });
 
     // Middle layer 3: subtract middle layer 2 from itself.
-    let subtract_sector = Sector::new(&context, &[&&selector_squaring_sector], |mle_vec| {
+    let subtract_sector = Sector::new(&[&&selector_squaring_sector], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
         mle.expr() - mle.expr()
     });
 
     // Make this an output node.
-    let output_node = OutputNode::new_zero(&context, &subtract_sector);
+    let output_node = OutputNode::new_zero(&subtract_sector);
 
     let all_circuit_nodes = vec![
         input_layer_node.into(),
@@ -2200,7 +2191,7 @@ fn build_medium_regular_test_circuit<F: Field>(
         output_node.into(),
     ];
 
-    let (circuit_description, convert_input_shreds_to_input_layers, input_node_id_to_layer_id_map) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
@@ -2212,14 +2203,7 @@ fn build_medium_regular_test_circuit<F: Field>(
         convert_input_shreds_to_input_layers(input_shred_id_to_data_mapping).unwrap()
     };
 
-    let maybe_private_input_layer_id = *input_node_id_to_layer_id_map
-        .get(&input_layer_node_id)
-        .unwrap();
-    (
-        circuit_description,
-        circuit_data_fn,
-        maybe_private_input_layer_id,
-    )
+    (circuit_description, circuit_data_fn, input_layer_id)
 }
 
 #[test]
@@ -2345,21 +2329,18 @@ fn buld_identity_regular_test_circuit<F: Field>(
     GKRCircuitDescription<F>,
     impl Fn(IdentityRegularCircuitTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- There is only one input layer; it can be public or private (for the purposes of testing) ---
-    let input_layer_node = InputLayerNode::new(&context, None);
+    let input_layer_node = InputLayerNode::new(None);
 
     // --- Circuit inputs ---
-    let input_mle_shred = InputShred::new(&context, num_free_vars, &input_layer_node);
+    let input_mle_shred = InputShred::new(num_free_vars, &input_layer_node);
 
     // --- Save IDs to be used later ---
     let input_mle_id = input_mle_shred.id();
 
     // --- Create the circuit components ---
     // Middle layer 1: square the input.
-    let squaring_sector = Sector::new(&context, &[&input_mle_shred], |mle_vec| {
+    let squaring_sector = Sector::new(&[&input_mle_shred], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
         ExprBuilder::products(vec![mle, mle])
@@ -2367,17 +2348,17 @@ fn buld_identity_regular_test_circuit<F: Field>(
 
     // Create identity gate layer
     let nonzero_gate_wiring = vec![(0, 2), (1, 1)];
-    let id_layer = IdentityGateNode::new(&context, &squaring_sector, nonzero_gate_wiring, None);
+    let id_layer = IdentityGateNode::new(&squaring_sector, nonzero_gate_wiring, None);
 
     // Middle layer 2: subtract middle layer 1 from itself.
-    let subtract_sector = Sector::new(&context, &[&id_layer], |mle_vec| {
+    let subtract_sector = Sector::new(&[&id_layer], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
         mle.expr() - mle.expr()
     });
 
     // Make this an output node.
-    let output_node = OutputNode::new_zero(&context, &subtract_sector);
+    let output_node = OutputNode::new_zero(&subtract_sector);
 
     let all_circuit_nodes = vec![
         input_layer_node.into(),
@@ -2388,7 +2369,7 @@ fn buld_identity_regular_test_circuit<F: Field>(
         output_node.into(),
     ];
 
-    let (circuit_description, convert_input_shreds_to_input_layers, _) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
@@ -2467,21 +2448,17 @@ fn build_matmult_regular_test_circuit<F: Field>(
     GKRCircuitDescription<F>,
     impl Fn(MatmultRegularCircuitTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- There is only one input layer; it can be public or private (for the purposes of testing) ---
-    let input_layer_node = InputLayerNode::new(&context, None);
+    let input_layer_node = InputLayerNode::new(None);
 
     // --- Circuit inputs ---
-    let input_mle_shred = InputShred::new(&context, num_row_vars + num_col_vars, &input_layer_node);
+    let input_mle_shred = InputShred::new(num_row_vars + num_col_vars, &input_layer_node);
 
     // --- Save IDs to be used later ---
     let input_mle_id = input_mle_shred.id();
 
     // --- Create the circuit components ---
     let matmult_layer = MatMultNode::new(
-        &context,
         &input_mle_shred,
         (num_row_vars, num_col_vars),
         &input_mle_shred,
@@ -2489,14 +2466,14 @@ fn build_matmult_regular_test_circuit<F: Field>(
     );
 
     // Middle layer 1: subtract middle layer 0 from itself.
-    let subtract_sector = Sector::new(&context, &[&matmult_layer], |mle_vec| {
+    let subtract_sector = Sector::new(&[&matmult_layer], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
         mle.expr() - mle.expr()
     });
 
     // Make this an output node.
-    let output_node = OutputNode::new_zero(&context, &subtract_sector);
+    let output_node = OutputNode::new_zero(&subtract_sector);
 
     let all_circuit_nodes = vec![
         input_layer_node.into(),
@@ -2506,7 +2483,7 @@ fn build_matmult_regular_test_circuit<F: Field>(
         output_node.into(),
     ];
 
-    let (circuit_description, convert_input_shreds_to_input_layers, _) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
@@ -2587,21 +2564,18 @@ fn build_identity_matmult_regular_test_circuit<F: Field>(
     GKRCircuitDescription<F>,
     impl Fn(MatmultIdentityRegularCircuitTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- There is only one input layer; it can be public or private (for the purposes of testing) ---
-    let input_layer_node = InputLayerNode::new(&context, None);
+    let input_layer_node = InputLayerNode::new(None);
 
     // --- Circuit inputs ---
-    let input_mle_shred = InputShred::new(&context, num_row_vars + num_col_vars, &input_layer_node);
+    let input_mle_shred = InputShred::new(num_row_vars + num_col_vars, &input_layer_node);
 
     // --- Save IDs to be used later ---
     let input_mle_id = input_mle_shred.id();
 
     // --- Create the circuit components ---
     // Middle layer 1: square the input.
-    let squaring_sector = Sector::new(&context, &[&input_mle_shred], |mle_vec| {
+    let squaring_sector = Sector::new(&[&input_mle_shred], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
         ExprBuilder::products(vec![mle, mle])
@@ -2609,24 +2583,24 @@ fn build_identity_matmult_regular_test_circuit<F: Field>(
 
     // Create identity gate layer A
     let nonzero_gate_wiring_a = vec![(0, 2), (1, 1), (2, 0), (3, 1)];
-    let id_layer_a = IdentityGateNode::new(&context, &squaring_sector, nonzero_gate_wiring_a, None);
+    let id_layer_a = IdentityGateNode::new(&squaring_sector, nonzero_gate_wiring_a, None);
 
     // Create identity gate layer B
     let nonzero_gate_wiring_b = vec![(0, 3), (1, 0), (2, 1), (3, 1)];
-    let id_layer_b = IdentityGateNode::new(&context, &squaring_sector, nonzero_gate_wiring_b, None);
+    let id_layer_b = IdentityGateNode::new(&squaring_sector, nonzero_gate_wiring_b, None);
 
     // Create matmult layer, multiply id_output by itself
-    let matmult_layer = MatMultNode::new(&context, &id_layer_a, (1, 1), &id_layer_b, (1, 1));
+    let matmult_layer = MatMultNode::new(&id_layer_a, (1, 1), &id_layer_b, (1, 1));
 
     // Middle layer 5: subtract middle layer 4 from itself.
-    let subtract_sector = Sector::new(&context, &[&matmult_layer], |mle_vec| {
+    let subtract_sector = Sector::new(&[&matmult_layer], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
         mle.expr() - mle.expr()
     });
 
     // Make this an output node.
-    let output_node = OutputNode::new_zero(&context, &subtract_sector);
+    let output_node = OutputNode::new_zero(&subtract_sector);
 
     let all_circuit_nodes = vec![
         input_layer_node.into(),
@@ -2639,7 +2613,7 @@ fn build_identity_matmult_regular_test_circuit<F: Field>(
         output_node.into(),
     ];
 
-    let (circuit_description, convert_input_shreds_to_input_layers, _) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---

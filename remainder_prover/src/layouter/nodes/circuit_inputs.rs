@@ -7,9 +7,9 @@ pub mod compile_inputs;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
-use crate::mle::evals::MultilinearExtension;
+use crate::{layer::LayerId, mle::evals::MultilinearExtension};
 
-use super::{CircuitNode, Context, NodeId};
+use super::{CircuitNode, NodeId};
 
 /// A struct that represents input data that will be used to populate a
 /// [GKRCircuitDescription] in order to generate a full circuit.
@@ -80,8 +80,8 @@ impl InputShred {
     ///
     /// Specifying a source indicates to the layouter that this
     /// InputShred should be appended to the source when laying out
-    pub fn new(ctx: &Context, num_vars: usize, source: &InputLayerNode) -> Self {
-        let id = ctx.get_new_id();
+    pub fn new(num_vars: usize, source: &InputLayerNode) -> Self {
+        let id = NodeId::new();
         let parent = source.id();
 
         InputShred {
@@ -111,6 +111,7 @@ pub enum HyraxInputDType {
 /// A node that represents an InputLayer
 pub struct InputLayerNode {
     id: NodeId,
+    input_layer_id: LayerId,
     input_shreds: Vec<InputShred>,
 }
 
@@ -135,9 +136,10 @@ impl CircuitNode for InputLayerNode {
 impl InputLayerNode {
     /// A constructor for an InputLayerNode. Can either be initialized empty
     /// or with some InputShreds.
-    pub fn new(ctx: &Context, input_shreds: Option<Vec<InputShred>>) -> Self {
+    pub fn new(input_shreds: Option<Vec<InputShred>>) -> Self {
         InputLayerNode {
-            id: ctx.get_new_id(),
+            id: NodeId::new(),
+            input_layer_id: LayerId::next_input_layer_id(),
             input_shreds: input_shreds.unwrap_or_default(),
         }
     }
@@ -145,5 +147,10 @@ impl InputLayerNode {
     /// A method to add an InputShred to this InputLayerNode
     pub fn add_shred(&mut self, shred: InputShred) {
         self.input_shreds.push(shred);
+    }
+
+    /// Get the input layer id of this InputLayerNode.
+    pub fn input_layer_id(&self) -> LayerId {
+        self.input_layer_id
     }
 }

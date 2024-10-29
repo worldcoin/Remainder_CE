@@ -6,7 +6,7 @@ use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     layouter::{
         component::Component,
-        nodes::{circuit_outputs::OutputNode, sector::Sector, CircuitNode, Context},
+        nodes::{circuit_outputs::OutputNode, sector::Sector, CircuitNode},
     },
     worldcoin_mpc::parameters::GR4_MODULUS,
 };
@@ -32,8 +32,8 @@ pub struct MaskedIrisCoder<F: Field> {
 
 impl<F: Field> MaskedIrisCoder<F> {
     /// Create a new [MaskedIrisCoder] component.
-    pub fn new(ctx: &Context, iris_code: &dyn CircuitNode, mask: &dyn CircuitNode) -> Self {
-        let sector = Sector::new(ctx, &[iris_code, mask], |nodes| {
+    pub fn new(iris_code: &dyn CircuitNode, mask: &dyn CircuitNode) -> Self {
+        let sector = Sector::new(&[iris_code, mask], |nodes| {
             assert_eq!(nodes.len(), 2);
             Expression::<F, AbstractExpr>::scaled(nodes[0].expr(), F::from(2)).neg()
                 - nodes[1].expr()
@@ -62,11 +62,10 @@ pub struct Summer<F: Field> {
 impl<F: Field> Summer<F> {
     /// Create a new [Summer] component.
     pub fn new(
-        ctx: &Context,
         iris_code: &dyn CircuitNode,
         slope_times_evaluation_point: &dyn CircuitNode,
     ) -> Self {
-        let sector = Sector::new(ctx, &[iris_code, slope_times_evaluation_point], |nodes| {
+        let sector = Sector::new(&[iris_code, slope_times_evaluation_point], |nodes| {
             assert_eq!(nodes.len(), 2);
             nodes[0].expr() + nodes[1].expr()
         });
@@ -98,13 +97,11 @@ pub struct ModuloEquator<F: Field> {
 impl<F: Field> ModuloEquator<F> {
     /// Create a new [ModuloEquator] component.
     pub fn new(
-        ctx: &Context,
         quotient: &dyn CircuitNode,
         computed_shares: &dyn CircuitNode,
         shares_reduced_modulo_gr4_modulus: &dyn CircuitNode,
     ) -> Self {
         let sector = Sector::new(
-            ctx,
             &[quotient, computed_shares, shares_reduced_modulo_gr4_modulus],
             |nodes| {
                 assert_eq!(nodes.len(), 3);
@@ -114,7 +111,7 @@ impl<F: Field> ModuloEquator<F> {
             },
         );
 
-        let output_node = OutputNode::new_zero(ctx, &sector);
+        let output_node = OutputNode::new_zero(&sector);
 
         Self {
             sector,

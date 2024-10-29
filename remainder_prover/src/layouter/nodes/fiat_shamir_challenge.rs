@@ -10,7 +10,7 @@ use crate::{
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation},
 };
 
-use super::{CircuitNode, Context, NodeId};
+use super::{CircuitNode, NodeId};
 
 #[derive(Debug, Clone)]
 /// The node representing the random challenge that the verifier supplies via Fiat-Shamir.
@@ -39,34 +39,26 @@ impl CircuitNode for FiatShamirChallengeNode {
 
 impl FiatShamirChallengeNode {
     /// Constructor for a [FiatShamirChallengeNode].
-    pub fn new(ctx: &Context, num_challenges: usize) -> Self {
+    pub fn new(num_challenges: usize) -> Self {
         Self {
-            id: ctx.get_new_id(),
+            id: NodeId::new(),
             num_vars: log2(num_challenges) as usize,
         }
     }
 
-    /// Generate a [iatShamirChallengeDescription], which is the
+    /// Generate a [FiatShamirChallengeDescription], which is the
     /// circuit description for a [FiatShamirChallengeNode].
     pub fn generate_circuit_description<F: Field>(
         &self,
-        layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> FiatShamirChallengeDescription<F> {
-        let verifier_challenge_layer_id = layer_id.get_and_inc();
-
-        let verifier_challenge_layer =
-            FiatShamirChallengeDescription::new(verifier_challenge_layer_id, self.get_num_vars());
-
+        let layer_id = LayerId::next_fiat_shamir_challenge_layer_id();
+        let fsc_layer = FiatShamirChallengeDescription::new(layer_id, self.get_num_vars());
         circuit_description_map.add_node_id_and_location_num_vars(
             self.id,
-            (
-                CircuitLocation::new(verifier_challenge_layer_id, vec![]),
-                self.get_num_vars(),
-            ),
+            (CircuitLocation::new(layer_id, vec![]), self.get_num_vars()),
         );
-
-        verifier_challenge_layer
+        fsc_layer
     }
 }
 
@@ -82,7 +74,7 @@ mod test {
             circuit_inputs::{InputLayerNode, InputShred},
             circuit_outputs::OutputNode,
             sector::Sector,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
         mle::evals::MultilinearExtension,
         prover::{generate_circuit_description, helpers::test_circuit_new},
@@ -92,7 +84,6 @@ mod test {
 
     #[test]
     fn test_verifier_challenge_node_in_circuit() {
-        let ctx = &Context::new();
         let input_a_data = MultilinearExtension::new(vec![
             Fr::from(1),
             Fr::from(2),
@@ -104,23 +95,23 @@ mod test {
             Fr::from(10),
         ]);
 
-        let verifier_challenge_node = FiatShamirChallengeNode::new(ctx, 8);
+        let verifier_challenge_node = FiatShamirChallengeNode::new(8);
 
-        let input_layer = InputLayerNode::new(ctx, None);
-        let input_a = InputShred::new(ctx, input_a_data.num_vars(), &input_layer);
+        let input_layer = InputLayerNode::new(None);
+        let input_a = InputShred::new(input_a_data.num_vars(), &input_layer);
         let input_a_id = input_a.id();
 
-        let product_sector = Sector::new(ctx, &[&input_a, &verifier_challenge_node], |inputs| {
+        let product_sector = Sector::new(&[&input_a, &verifier_challenge_node], |inputs| {
             Expression::<Fr, AbstractExpr>::mle(inputs[0])
                 - Expression::<Fr, AbstractExpr>::mle(inputs[1])
         });
 
-        let difference_sector = Sector::new(ctx, &[&product_sector, &product_sector], |inputs| {
+        let difference_sector = Sector::new(&[&product_sector, &product_sector], |inputs| {
             Expression::<Fr, AbstractExpr>::mle(inputs[0])
                 - Expression::<Fr, AbstractExpr>::mle(inputs[1])
         });
 
-        let output_node = OutputNode::new_zero(ctx, &difference_sector);
+        let output_node = OutputNode::new_zero(&difference_sector);
 
         let all_nodes = vec![
             input_layer.into(),
@@ -131,7 +122,7 @@ mod test {
             output_node.into(),
         ];
 
-        let (circ_desc, input_builder_from_shred_map, _input_node_id_to_layer_id) =
+        let (circ_desc, input_builder_from_shred_map) =
             generate_circuit_description(all_nodes).unwrap();
 
         let input_builder = move |input_data: MultilinearExtension<Fr>| {

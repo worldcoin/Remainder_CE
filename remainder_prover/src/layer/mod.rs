@@ -18,7 +18,7 @@ use thiserror::Error;
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
     expression::expr_errors::ExpressionError,
-    layouter::layouting::CircuitMap,
+    layouter::{context::CircuitBuildingContext, layouting::CircuitMap},
     mle::mle_description::MleDescription,
     sumcheck::InterpError,
 };
@@ -245,6 +245,23 @@ impl std::fmt::Display for LayerId {
 }
 
 impl LayerId {
+    /// Creates a new LayerId representing an input layer.
+    pub fn next_input_layer_id() -> Self {
+        LayerId::Input(CircuitBuildingContext::next_input_layer_id())
+    }
+
+    /// Creates a new LayerId representing a layer.
+    pub fn next_layer_id() -> Self {
+        LayerId::Layer(CircuitBuildingContext::next_layer_id())
+    }
+
+    /// Creates a new LayerId representing a Fiat-Shamir challenge layer.
+    pub fn next_fiat_shamir_challenge_layer_id() -> Self {
+        LayerId::FiatShamirChallengeLayer(
+            CircuitBuildingContext::next_fiat_shamir_challenge_layer_id(),
+        )
+    }
+
     /// Returns the underlying usize if self is a variant of type Input, otherwise panics.
     pub fn get_raw_input_layer_id(&self) -> usize {
         match self {
@@ -259,37 +276,5 @@ impl LayerId {
             LayerId::Layer(id) => *id,
             _ => panic!("Expected LayerId::Layer, found {:?}", self),
         }
-    }
-
-    /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number
-    pub fn next(&self) -> LayerId {
-        match self {
-            LayerId::Input(id) => LayerId::Input(id + 1),
-            LayerId::Layer(id) => LayerId::Layer(id + 1),
-            LayerId::FiatShamirChallengeLayer(id) => LayerId::FiatShamirChallengeLayer(id + 1),
-        }
-    }
-
-    /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number.
-    /// Mutates self to store the next layer id.
-    pub fn get_and_inc(&mut self) -> LayerId {
-        let ret = *self;
-        self.increment_self();
-        ret
-    }
-
-    /// Mutates self to store the next layer id.
-    pub fn increment_self(&mut self) {
-        match self {
-            LayerId::Input(ref mut id) => {
-                *id += 1;
-            }
-            LayerId::Layer(ref mut id) => {
-                *id += 1;
-            }
-            LayerId::FiatShamirChallengeLayer(ref mut id) => {
-                *id += 1;
-            }
-        };
     }
 }
