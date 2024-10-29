@@ -24,6 +24,7 @@ ff = "0.13.0"
 ndarray = "0.15.6"
 ndarray-npy = "0.8.1"
 rayon = "1.7"
+sha256 = "1.5.0"
 
 [features]
 parallel = []
@@ -40,3 +41,7 @@ path = "src/bin/run_iriscode_circuit.rs"
 [[bin]]
 name = "get_circuit_description"
 path = "src/bin/get_circuit_description.rs"
+
+[[bin]]
+name = "worldcoin"
+path = "src/bin/worldcoin.rs"

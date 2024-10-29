@@ -176,7 +176,7 @@ macro_rules! layer_enum {
                     }
                 }
 
-                fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, super::LayerError> {
+                fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, super::LayerError> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.compute_round_sumcheck_message(round_index),
