@@ -257,7 +257,9 @@ impl LayerId {
 
     /// Creates a new LayerId representing a Fiat-Shamir challenge layer.
     pub fn next_fiat_shamir_challenge_layer_id() -> Self {
-        LayerId::FiatShamirChallengeLayer(CircuitBuildingContext::next_fiat_shamir_challenge_layer_id())
+        LayerId::FiatShamirChallengeLayer(
+            CircuitBuildingContext::next_fiat_shamir_challenge_layer_id(),
+        )
     }
 
     /// Returns the underlying usize if self is a variant of type Input, otherwise panics.

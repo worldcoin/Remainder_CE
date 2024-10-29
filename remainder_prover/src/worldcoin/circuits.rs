@@ -249,7 +249,9 @@ pub fn build_iriscode_proof_description<
             image_input_layer: get_input_layer_description(to_reroute_input_layer.input_layer_id()),
             digits_input_layer: get_input_layer_description(digits_input_layer.input_layer_id()),
             code_input_layer: get_input_layer_description(sign_bits_input_layer.input_layer_id()),
-            auxiliary_input_layer: get_input_layer_description(auxiliary_input_layer.input_layer_id()),
+            auxiliary_input_layer: get_input_layer_description(
+                auxiliary_input_layer.input_layer_id(),
+            ),
         },
         input_builder,
     )
