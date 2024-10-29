@@ -257,8 +257,8 @@ fn identity_gate_hyrax_layer_test() {
 /// The input MLE has four (two dataparallel) variables. The resulting MLE after the
 /// rerouting only has three (two dataparallel) variables.
 fn dataparallel_uneven_identity_gate_hyrax_layer_test() {
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test claim agg transcript");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let mut blinding_rng = &mut rand::thread_rng();
     const LAYER_DEGREE: usize = 2;
@@ -334,7 +334,7 @@ fn dataparallel_uneven_identity_gate_hyrax_layer_test() {
         &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
-        &mut prover_transcript,
+        &mut transcript,
         &mut VandermondeInverse::new(),
     );
 
@@ -345,14 +345,14 @@ fn dataparallel_uneven_identity_gate_hyrax_layer_test() {
         .collect();
 
     // Verify
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(prover_transcript.get_transcript());
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     HyraxLayerProof::verify(
         &hyrax_layer_proof,
         &layer_desc,
         &claim_commitments,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -361,8 +361,8 @@ fn dataparallel_uneven_identity_gate_hyrax_layer_test() {
 /// Meaning the input MLE has four (two dataparallel) variables. And the resulting MLE
 /// after the rerouting also has four (two dataparallel) variables.
 fn dataparallel_even_identity_gate_hyrax_layer_test() {
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test claim agg transcript");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let mut blinding_rng = &mut rand::thread_rng();
     const LAYER_DEGREE: usize = 2;
@@ -465,7 +465,7 @@ fn dataparallel_even_identity_gate_hyrax_layer_test() {
         &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
-        &mut prover_transcript,
+        &mut transcript,
         &mut VandermondeInverse::new(),
     );
 
@@ -476,14 +476,14 @@ fn dataparallel_even_identity_gate_hyrax_layer_test() {
         .collect();
 
     // Verify
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(prover_transcript.get_transcript());
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     HyraxLayerProof::verify(
         &hyrax_layer_proof,
         &layer_desc,
         &claim_commitments,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -493,8 +493,8 @@ fn dataparallel_even_identity_gate_hyrax_layer_test() {
 /// after the rerouting also has two variables. Its bookkeeping table is the
 /// element-wise sum of the input MLEs
 fn even_add_gate_hyrax_layer_test() {
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test claim agg transcript");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let mut blinding_rng = &mut rand::thread_rng();
     const LAYER_DEGREE: usize = 2;
@@ -575,7 +575,7 @@ fn even_add_gate_hyrax_layer_test() {
         &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
-        &mut prover_transcript,
+        &mut transcript,
         &mut VandermondeInverse::new(),
     );
 
@@ -586,14 +586,14 @@ fn even_add_gate_hyrax_layer_test() {
         .collect();
 
     // Verify
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(prover_transcript.get_transcript());
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     HyraxLayerProof::verify(
         &hyrax_layer_proof,
         &layer_desc,
         &claim_commitments,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -603,8 +603,8 @@ fn even_add_gate_hyrax_layer_test() {
 /// after the rerouting also has two variables. Its bookkeeping table is the
 /// element-wise sum of the input MLEs
 fn even_mul_gate_hyrax_layer_test() {
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test claim agg transcript");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let mut blinding_rng = &mut rand::thread_rng();
     const LAYER_DEGREE: usize = 2;
@@ -685,7 +685,7 @@ fn even_mul_gate_hyrax_layer_test() {
         &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
-        &mut prover_transcript,
+        &mut transcript,
         &mut VandermondeInverse::new(),
     );
 
@@ -696,14 +696,14 @@ fn even_mul_gate_hyrax_layer_test() {
         .collect();
 
     // Verify
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(prover_transcript.get_transcript());
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     HyraxLayerProof::verify(
         &hyrax_layer_proof,
         &layer_desc,
         &claim_commitments,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -713,8 +713,8 @@ fn even_mul_gate_hyrax_layer_test() {
 /// after the rerouting also has one variable. Its bookkeeping table is the
 /// element-wise sum of the input MLEs' firt halves.
 fn uneven_add_gate_hyrax_layer_test() {
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test claim agg transcript");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let mut blinding_rng = &mut rand::thread_rng();
     const LAYER_DEGREE: usize = 2;
@@ -793,7 +793,7 @@ fn uneven_add_gate_hyrax_layer_test() {
         &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
-        &mut prover_transcript,
+        &mut transcript,
         &mut VandermondeInverse::new(),
     );
 
@@ -804,14 +804,14 @@ fn uneven_add_gate_hyrax_layer_test() {
         .collect();
 
     // Verify
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(prover_transcript.get_transcript());
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     HyraxLayerProof::verify(
         &hyrax_layer_proof,
         &layer_desc,
         &claim_commitments,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -821,8 +821,8 @@ fn uneven_add_gate_hyrax_layer_test() {
 /// after the rerouting also has one variable. Its bookkeeping table is the
 /// element-wise sum of the input MLEs' firt halves.
 fn uneven_mul_gate_hyrax_layer_test() {
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test claim agg transcript");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let mut blinding_rng = &mut rand::thread_rng();
     const LAYER_DEGREE: usize = 2;
@@ -901,7 +901,7 @@ fn uneven_mul_gate_hyrax_layer_test() {
         &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
-        &mut prover_transcript,
+        &mut transcript,
         &mut VandermondeInverse::new(),
     );
 
@@ -912,14 +912,14 @@ fn uneven_mul_gate_hyrax_layer_test() {
         .collect();
 
     // Verify
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(prover_transcript.get_transcript());
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     HyraxLayerProof::verify(
         &hyrax_layer_proof,
         &layer_desc,
         &claim_commitments,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -928,8 +928,8 @@ fn uneven_mul_gate_hyrax_layer_test() {
 /// Meaning the input MLE has four (two dataparallel) variables. And the resulting MLE
 /// after the rerouting also has four (two dataparallel) variables.
 fn dataparallel_even_add_gate_hyrax_layer_test() {
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test claim agg transcript");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let mut blinding_rng = &mut rand::thread_rng();
     const LAYER_DEGREE: usize = 2;
@@ -1038,7 +1038,7 @@ fn dataparallel_even_add_gate_hyrax_layer_test() {
         &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
-        &mut prover_transcript,
+        &mut transcript,
         &mut VandermondeInverse::new(),
     );
 
@@ -1049,14 +1049,14 @@ fn dataparallel_even_add_gate_hyrax_layer_test() {
         .collect();
 
     // Verify
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(prover_transcript.get_transcript());
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     HyraxLayerProof::verify(
         &hyrax_layer_proof,
         &layer_desc,
         &claim_commitments,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -1065,8 +1065,8 @@ fn dataparallel_even_add_gate_hyrax_layer_test() {
 /// Meaning the input MLE has four (two dataparallel) variables. And the resulting MLE
 /// after the rerouting also has four (two dataparallel) variables.
 fn dataparallel_even_mul_gate_hyrax_layer_test() {
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test claim agg transcript");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let mut blinding_rng = &mut rand::thread_rng();
     const LAYER_DEGREE: usize = 3;
@@ -1175,7 +1175,7 @@ fn dataparallel_even_mul_gate_hyrax_layer_test() {
         &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
-        &mut prover_transcript,
+        &mut transcript,
         &mut VandermondeInverse::new(),
     );
 
@@ -1186,14 +1186,14 @@ fn dataparallel_even_mul_gate_hyrax_layer_test() {
         .collect();
 
     // Verify
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(prover_transcript.get_transcript());
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     HyraxLayerProof::verify(
         &hyrax_layer_proof,
         &layer_desc,
         &claim_commitments,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -1202,8 +1202,8 @@ fn dataparallel_even_mul_gate_hyrax_layer_test() {
 /// Meaning the input MLE has four (two dataparallel) variables. And the resulting MLE
 /// after the rerouting also has four (two dataparallel) variables.
 fn dataparallel_uneven_add_gate_hyrax_layer_test() {
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test claim agg transcript");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let mut blinding_rng = &mut rand::thread_rng();
     const LAYER_DEGREE: usize = 2;
@@ -1303,7 +1303,7 @@ fn dataparallel_uneven_add_gate_hyrax_layer_test() {
         &vec![mle_producing_claim],
         &committer,
         &mut blinding_rng,
-        &mut prover_transcript,
+        &mut transcript,
         &mut VandermondeInverse::new(),
     );
 
@@ -1314,14 +1314,14 @@ fn dataparallel_uneven_add_gate_hyrax_layer_test() {
         .collect();
 
     // Verify
-    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptReader::new(prover_transcript.get_transcript());
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
     HyraxLayerProof::verify(
         &hyrax_layer_proof,
         &layer_desc,
         &claim_commitments,
         &committer,
-        &mut verifier_transcript,
+        &mut transcript,
     );
 }
 
@@ -1330,8 +1330,8 @@ fn dataparallel_uneven_add_gate_hyrax_layer_test() {
 /// Meaning the input MLE has four (two dataparallel) variables. And the resulting MLE
 /// after the rerouting also has four (two dataparallel) variables.
 fn dataparallel_uneven_mul_gate_hyrax_layer_test() {
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test claim agg transcript");
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
 
     let mut blinding_rng = &mut rand::thread_rng();
     const LAYER_DEGREE: usize = 3;

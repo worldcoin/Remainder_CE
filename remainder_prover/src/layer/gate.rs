@@ -170,7 +170,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         Ok(())
     }
 
-    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
+    fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
         if !LAZY_BETA_EVALUATION {
             let mut beta_g1 = BetaValues::new_beta_equality_mle(
                 claim_point[self.num_dataparallel_vars..].to_vec(),
