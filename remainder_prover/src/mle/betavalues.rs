@@ -26,8 +26,6 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 /// Instead, we choose to store just the individual values in a hash map as we
 /// don't need the entire representation in order to perform the computations
 /// with beta tables.
-///
-// TODO(Makis): Remove `HashMaps`! We can use plain `Vec`s here.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub struct BetaValues<F: Field> {

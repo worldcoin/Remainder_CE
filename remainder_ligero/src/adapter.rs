@@ -25,17 +25,6 @@ pub struct LigeroProof<F> {
     pub col_indices: Vec<usize>,
 }
 
-/// Analogous to `Claim<F>` within `remainder-prover`.
-///
-/// TODO!(ryancao): Deprecate this by just using `Claim<F>`!
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct LigeroClaim<F> {
-    /// The challenge point to evaluate the MLE at
-    pub point: Vec<F>,
-    /// The claimed value of the polynomial evaluated at `self.point`
-    pub eval: F,
-}
-
 /// Converts a lcpc-style Ligero proof/root into the above data structure.
 pub fn convert_lcpc_to_halo<F: Field>(
     root: LigeroRoot<F>,

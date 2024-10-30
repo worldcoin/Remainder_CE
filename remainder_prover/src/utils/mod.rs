@@ -45,8 +45,6 @@ pub fn build_input_shred_and_data<F: Field>(
 }
 
 /// Returns whether a particular file exists in the filesystem
-///
-/// TODO!(ryancao): Shucks does this check a relative path...?
 pub fn file_exists(file_path: &String) -> bool {
     match fs::metadata(file_path) {
         Ok(file_metadata) => file_metadata.is_file(),

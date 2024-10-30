@@ -1130,16 +1130,6 @@ impl<F: Field> VerifierGateLayer<F> {
                 acc + gz * ux * vy
             });
 
-        // --- Finally, grab the claimed values for each of the bound MLEs from transcript ---
-        // // First, the claimed value of V_{i + 1}(g_2, u)
-        // let f2_bound = transcript_reader
-        //     .consume_element("Evaluation of V_{i + 1}(g_2, u)")
-        //     .unwrap();
-        // // Next, the claimed value of V_{i + 1}(g_2, v)
-        // let f3_bound = transcript_reader
-        //     .consume_element("Evaluation of V_{i + 1}(g_2, v)")
-        //     .unwrap();
-
         let beta_bound = BetaValues::compute_beta_over_two_challenges(
             &g2_challenges,
             &self.dataparallel_sumcheck_challenges,

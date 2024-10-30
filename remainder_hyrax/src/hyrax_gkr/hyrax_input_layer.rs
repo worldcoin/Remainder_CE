@@ -248,14 +248,11 @@ fn compute_claim_wlx<F: Field>(mle_vec: &[F], claims: &ClaimGroup<F>) -> Vec<F> 
 
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
     let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
-        // let next_evals: Vec<F> = (num_claims..num_evals).into_iter()
         .map(|idx| {
             // get the challenge l(idx)
             let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                // let new_chal: Vec<F> = (0..num_idx).into_iter()
                 .map(|claim_idx| {
                     let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-                        // let evals: Vec<F> = (&claim_vecs).into_iter()
                         .map(|claim| claim[claim_idx])
                         .collect();
                     evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()

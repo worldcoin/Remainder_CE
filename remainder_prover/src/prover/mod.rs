@@ -68,6 +68,9 @@ pub enum GKRError {
     /// The public input layer values were not as expected by the verifier
     #[error("Values for public input layer {0:?} were not as expected by the verifier.")]
     PublicInputLayerValuesMismatch(LayerId),
+    /// The verifier's claim tracker was not empty at the end of the verification process
+    #[error("Verifier's claim tracker was not empty at the end of the verification process.")]
+    ClaimTrackerNotEmpty,
 
     #[error("Error when verifying output layer")]
     /// Error when verifying output layer
@@ -672,9 +675,9 @@ impl<F: Field> GKRCircuitDescription<F> {
             let claim_aggr_timer =
                 start_timer!(|| format!("Verify aggregated claim for layer {:?}", layer_id));
 
-            let layer_claims = claim_tracker.get(layer_id).unwrap();
+            let layer_claims = claim_tracker.remove(layer_id).unwrap();
             let prev_claim =
-                verifier_aggregate_claims(layer_claims, transcript_reader).map_err(|err| {
+                verifier_aggregate_claims(&layer_claims, transcript_reader).map_err(|err| {
                     GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err))
                 })?;
             debug!("Aggregated claim: {:#?}", prev_claim);
@@ -709,7 +712,7 @@ impl<F: Field> GKRCircuitDescription<F> {
         // --------- Verify claims on the verifier challenges ---------
         let fiat_shamir_challenges_timer = start_timer!(|| "Verifier challenges proof generation");
         for fiat_shamir_challenge in fiat_shamir_challenges {
-            if let Some(claims) = claim_tracker.get(fiat_shamir_challenge.layer_id()) {
+            if let Some(claims) = claim_tracker.remove(fiat_shamir_challenge.layer_id()) {
                 claims.iter().for_each(|claim| {
                     fiat_shamir_challenge.verify(claim.get_raw_claim()).unwrap();
                 });
@@ -722,9 +725,13 @@ impl<F: Field> GKRCircuitDescription<F> {
         let input_layer_claims = self
             .input_layers
             .iter()
-            .flat_map(|input_layer| claim_tracker.get(input_layer.layer_id).unwrap())
-            .cloned()
+            .flat_map(|input_layer| claim_tracker.remove(input_layer.layer_id).unwrap())
             .collect_vec();
+
+        // Verify that there are no claims remaining in the claim tracker.
+        if !claim_tracker.is_empty() {
+            return Err(GKRError::ClaimTrackerNotEmpty);
+        }
 
         Ok(input_layer_claims)
     }
