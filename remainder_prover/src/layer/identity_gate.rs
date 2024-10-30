@@ -555,6 +555,11 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         claim: RawClaim<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError> {
+        self.initialize(claim.get_point());
+        0..(self.num_dataparallel_vars + self.source_mle.num_free_vars()).for_each(|round_idx| {
+            let sumcheck_message = self.compute_round_sumcheck_message(round_idx).;
+        })
+
         let (mut beta_g1, mut beta_g2) = self.compute_beta_tables(claim.get_point());
         let mut beta_g2_fully_bound = F::ONE;
 
@@ -649,8 +654,6 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             );
             self.set_beta_g2(beta_g2);
             self.init_dataparallel_phase(self.g1_challenges.as_ref().unwrap().clone());
-        } else {
-            self.init_phase_1(claim_point.to_vec());
         }
 
         self.source_mle.index_mle_indices(0);
@@ -668,60 +671,25 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
             // init phase 1
             Ordering::Equal => {
-                self.init_phase_1(challenge)
-                let num_vars = self.source_mle.num_free_vars();
-
-                let mut a_hg_mle_ref = vec![F::ZERO; 1 << num_vars];
-
-                self.nonzero_gates
-                    .clone()
-                    .into_iter()
-                    .for_each(|(z_ind, x_ind)| {
-                        let beta_g_at_z = if LAZY_BETA_EVALUATION {
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                self.g1_challenges.as_ref().unwrap(),
-                                z_ind,
-                            )
-                        } else {
-                            self.beta_g1.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO)
-                        };
-
-                        a_hg_mle_ref[x_ind] += beta_g_at_z;
-                    });
-
-                let mut phase_1 = [
-                    DenseMle::new_from_raw(a_hg_mle_ref, LayerId::Input(0)),
-                    self.source_mle.clone(),
-                ];
-
-                index_mle_indices_gate(&mut phase_1, self.num_dataparallel_vars);
-                self.set_phase_1(phase_1.clone());
-
-                let independent_variable = phase_1
-                    .iter()
-                    .map(|mle_ref| {
-                        mle_ref
-                            .mle_indices()
-                            .contains(&MleIndex::Indexed(self.num_dataparallel_vars))
-                    })
-                    .reduce(|acc, item| acc | item)
+                let unscaled_first_round_sumcheck_evals = self
+                    .init_phase_1(self.g1_challenges.as_ref().unwrap().clone())
                     .unwrap();
-                let phase_1_mle_references: Vec<&DenseMle<F>> = phase_1.iter().collect();
-                let evals = evaluate_mle_ref_product_no_beta_table(
-                    &phase_1_mle_references,
-                    independent_variable,
-                    phase_1.len(),
-                )
-                .unwrap();
 
-                assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
-                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
-
-                let SumcheckEvals(mut evaluations) = evals;
-                evaluations
-                    .iter_mut()
-                    .for_each(|eval| *eval *= beta_g2_fully_bound);
-                Ok(evaluations)
+                let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
+                    self.beta_g2
+                        .as_ref()
+                        .unwrap()
+                        .updated_values
+                        .values()
+                        .fold(F::ONE, |acc, val| acc * *val)
+                } else {
+                    F::ONE
+                };
+                let first_round_sumcheck_evals = unscaled_first_round_sumcheck_evals
+                    .iter()
+                    .map(|unscaled_eval| *unscaled_eval * beta_g2_fully_bound)
+                    .collect();
+                Ok(first_round_sumcheck_evals)
             }
 
             // phase 1
@@ -736,18 +704,26 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                     })
                     .reduce(|acc, item| acc | item)
                     .unwrap();
-                let evals =
+                let unscaled_sumcheck_evals =
                     evaluate_mle_ref_product_no_beta_table(&mles, independent_variable, mles.len())
                         .unwrap();
 
-                assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
-                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
-
-                let SumcheckEvals(mut evaluations) = evals;
-                evaluations
-                    .iter_mut()
-                    .for_each(|eval| *eval *= beta_g2_fully_bound);
-                Ok(evaluations)
+                let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
+                    self.beta_g2
+                        .as_ref()
+                        .unwrap()
+                        .updated_values
+                        .values()
+                        .fold(F::ONE, |acc, val| acc * *val)
+                } else {
+                    F::ONE
+                };
+                let sumcheck_evals = unscaled_sumcheck_evals
+                    .0
+                    .iter()
+                    .map(|unscaled_eval| *unscaled_eval * beta_g2_fully_bound)
+                    .collect();
+                Ok(sumcheck_evals)
             }
         }
     }
@@ -757,12 +733,16 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             self.beta_g2
                 .as_mut()
                 .unwrap()
+                .beta_update(round_index, challenge);
+            self.dataparallel_af2_mle
+                .as_mut()
+                .unwrap()
                 .fix_variable(round_index, challenge);
-            self.source_mle.fix_variable(round_index, challenge);
-
             Ok(())
         } else {
-            assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
+            if self.num_dataparallel_vars > 0 {
+                assert!(self.beta_g2.as_ref().unwrap().unbound_values.is_empty());
+            }
             let mles = self.phase_1_mles.as_mut().unwrap();
             mles.iter_mut().for_each(|mle_ref| {
                 mle_ref.fix_variable(round_index, challenge);
@@ -972,27 +952,27 @@ impl<F: Field> IdentityGate<F> {
         (beta_g1, beta_g2)
     }
 
-    // Once the initialization of the dataparallel phase is done, we can perform the dataparallel phase.
-    // This means that we are binding all vars that represent which copy of the circuit we are in.
-    fn perform_dataparallel_phase(
-        &mut self,
-        challenges: &[F],
-        transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<F, LayerError> {
-        // Initialization, first message comes from here.
-        let mut challenges: Vec<F> = vec![];
+    // // Once the initialization of the dataparallel phase is done, we can perform the dataparallel phase.
+    // // This means that we are binding all vars that represent which copy of the circuit we are in.
+    // fn perform_dataparallel_phase(
+    //     &mut self,
+    //     challenges: &[F],
+    //     transcript_writer: &mut impl ProverTranscript<F>,
+    // ) -> Result<F, LayerError> {
+    //     // Initialization, first message comes from here.
+    //     let mut challenges: Vec<F> = vec![];
 
-        self.init_dataparallel_phase(challenges);
+    //     self.init_dataparallel_phase(challenges);
 
-        // Do the first dataparallel vars number sumcheck rounds using libra giraffe.
-        (0..self.num_dataparallel_vars).for_each(|round| {
-            let sumcheck_message = self.compute_round_sumcheck_message(round).unwrap();
-            transcript_writer
-                .append_elements("Sumcheck evaluations DATAPARALLEL", &sumcheck_message);
-            let challenge = transcript_writer.get_challenge("Dataparallel round challenge");
-            self.bind_round_variable(round, challenge);
-        });
-    }
+    //     // Do the first dataparallel vars number sumcheck rounds using libra giraffe.
+    //     (0..self.num_dataparallel_vars).for_each(|round| {
+    //         let sumcheck_message = self.compute_round_sumcheck_message(round).unwrap();
+    //         transcript_writer
+    //             .append_elements("Sumcheck evaluations DATAPARALLEL", &sumcheck_message);
+    //         let challenge = transcript_writer.get_challenge("Dataparallel round challenge");
+    //         self.bind_round_variable(round, challenge);
+    //     });
+    // }
 
     fn set_beta_g1(&mut self, beta_g1: DenseMle<F>) {
         self.beta_g1 = Some(beta_g1);
