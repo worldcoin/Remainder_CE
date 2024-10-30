@@ -78,8 +78,8 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
                 .copy_from_slice(&circuit_description_hash_bytes.to_vec()[16..]);
 
             vec![
-                F::from_bytes_le(circuit_description_hash_bytes_first_half.to_vec()),
-                F::from_bytes_le(circuit_description_hash_bytes_second_half.to_vec()),
+                F::from_bytes_le(circuit_description_hash_bytes_first_half.as_ref()),
+                F::from_bytes_le(circuit_description_hash_bytes_second_half.as_ref()),
             ]
         }
         CircuitHashType::Poseidon => {
@@ -89,7 +89,7 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
             // TODO(ryancao): Update this by using `REPR_NUM_BYTES` after merging with the testing branch
             let circuit_field_elem_desc = serialized
                 .chunks(16)
-                .map(|byte_chunk| F::from_bytes_le(byte_chunk.to_vec()))
+                .map(|byte_chunk| F::from_bytes_le(byte_chunk))
                 .collect_vec();
             let mut poseidon_sponge: PoseidonSponge<F> = PoseidonSponge::default();
             poseidon_sponge.absorb_elements(&circuit_field_elem_desc);

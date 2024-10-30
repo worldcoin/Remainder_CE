@@ -13,7 +13,7 @@ use super::regular_layer::{RegularLayer, RegularLayerDescription, VerifierRegula
 
 layer_enum!(Layer, (Regular: RegularLayer<F>), (Gate: GateLayer<F>), (IdentityGate: IdentityGate<F>), (MatMult: MatMult<F>));
 
-#[derive(Serialize, Deserialize, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 #[serde(bound = "F: Field")]
 /// An enum representing the different types of descriptions for each layer,
 /// each description containing the shape information of the corresponding layer.

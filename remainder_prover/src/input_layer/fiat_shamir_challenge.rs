@@ -31,7 +31,7 @@ pub enum FiatShamirChallengeError {
 #[derive(Debug, Clone)]
 pub struct FiatShamirChallenge<F: Field> {
     /// The data.
-    mle: MultilinearExtension<F>,
+    pub mle: MultilinearExtension<F>,
     /// The layer ID.
     pub(crate) layer_id: LayerId,
 }
@@ -62,9 +62,10 @@ impl<F: Field> FiatShamirChallengeDescription<F> {
 }
 
 impl<F: Field> FiatShamirChallenge<F> {
-    /// Constructor for the [FiatShamirChallenge] using the layer_id
-    /// and the MLE that is stored in this input layer.
-    pub fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
+    /// Create a new [FiatShamirChallenge] from the given MLE allocating the next available FS layer
+    /// ID.
+    pub fn new(mle: MultilinearExtension<F>) -> Self {
+        let layer_id = LayerId::next_fiat_shamir_challenge_layer_id();
         Self { mle, layer_id }
     }
 
@@ -125,7 +126,10 @@ impl<F: Field> FiatShamirChallengeDescription<F> {
     /// Panics if the length of `values` is not equal to the number of evaluations in the MLE.
     pub fn instantiate(&self, values: Vec<F>) -> FiatShamirChallenge<F> {
         assert_eq!(values.len(), 1 << self.num_bits);
-        FiatShamirChallenge::new(MultilinearExtension::new(values), self.layer_id)
+        FiatShamirChallenge {
+            mle: MultilinearExtension::new(values),
+            layer_id: self.layer_id,
+        }
     }
 }
 
@@ -163,7 +167,7 @@ mod tests {
 
         let fs_desc = FiatShamirChallengeDescription::<Fr>::new(layer_id, mle.num_vars());
         // Nothing really to test for FiatShamirChallenge
-        let _fiat_shamir_challenge = FiatShamirChallenge::new(mle, layer_id);
+        let _fiat_shamir_challenge = FiatShamirChallenge::new(mle);
 
         // Verifier phase.
         // 1. Retrieve proof/transcript.
