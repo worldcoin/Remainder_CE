@@ -1096,7 +1096,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
                     .f
                     .get(idx + (y_ind * num_dataparallel_vals))
                     .unwrap_or(zero);
-                res_table[idx + (z_ind * num_dataparallel_vals)] =
+                res_table[idx + (z_ind * num_dataparallel_vals)] +=
                     self.gate_operation.perform_operation(f2_val, f3_val);
             });
         });
@@ -1792,7 +1792,7 @@ pub fn compute_gate_data_outputs<F: Field>(
                 .f
                 .get(idx + (y_ind * num_dataparallel_vals))
                 .unwrap_or(zero);
-            res_table[idx + (z_ind * num_dataparallel_vals)] =
+            res_table[idx + (z_ind * num_dataparallel_vals)] +=
                 gate_operation.perform_operation(f2_val, f3_val);
         });
     });
