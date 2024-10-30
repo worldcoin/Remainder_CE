@@ -176,11 +176,29 @@ impl<F: Field> Evaluations<F> {
         self.num_vars
     }
 
+    /// Returns true if the boolean function has not free variables.
+    /// Equivalent to checking whether that [Self::num_vars] is equal to zero.
+    pub fn is_fully_bound(&self) -> bool {
+        self.num_vars == 0
+    }
+
     /// Returns the first element of the bookkeeping table.
-    /// # Panics
-    /// If the bookkeeping table is empty.
+    /// This operation should always be successful because even in the case that
+    /// [Self::num_vars] is zero, there is a non-zero number of vertices on the
+    /// boolean hypercube and hence there's at least one evaluation stored in
+    /// the bookkeeping table, either explicitly as a value inside
+    /// [Self::evals], or implicitly if it's a `F::ZERO` that has been pruned as
+    /// part of a zero suffix.
     pub fn first(&self) -> F {
-        self.evals.get(0).unwrap()
+        self.evals.get(0).unwrap_or(F::ZERO)
+    }
+
+    /// If `self` represents a fully-bound boolean function (i.e.
+    /// [Self::num_vars] is zero), it returns its value. Otherwise panics.
+    pub fn value(&self) -> F {
+        assert_eq!(self.num_vars(), 0);
+        assert!(self.evals.len() <= 1);
+        self.first()
     }
 
     /// Returns a iterator over the projection of the hypercube on `num_vars -
@@ -432,10 +450,24 @@ impl<F: Field> MultilinearExtension<F> {
         self.f.iter().collect()
     }
 
-    /// Return the first element of the bookkeeping table, assuming
-    /// one exists. Panics if the bookkeeping table is empty.
+    /// Returns true if the MLE has not free variables.
+    /// Equivalent to checking whether that [Self::num_vars] is equal to zero.
+    pub fn is_fully_bound(&self) -> bool {
+        self.f.is_fully_bound()
+    }
+
+    /// Returns the first element of the bookkeeping table of this MLE,
+    /// corresponding to the value of the MLE when all varables are set
+    /// to zero.
+    /// This operation never fails (see [Evaluations::first]).
     pub fn first(&self) -> F {
         self.f.first()
+    }
+
+    /// If `self` represents a fully-bound MLE (i.e. on zero variables), it
+    /// returns its value. Otherwise panics.
+    pub fn value(&self) -> F {
+        self.f.value()
     }
 
     /// Generate a new MultilinearExtension from `evals` and `dim_info`.
@@ -543,15 +575,6 @@ impl<F: Field> MultilinearExtension<F> {
                 });
                 acc + v * beta
             })
-    }
-
-    /// For constant-function MLEs, returns its value.
-    /// # Panics
-    /// If `self.num_vars()` is non-zero.
-    pub fn value(&self) -> F {
-        assert_eq!(self.num_vars(), 0);
-
-        self.f.first()
     }
 
     /// Returns the length of the evaluations vector.

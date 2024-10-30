@@ -619,10 +619,9 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         // --- Finally, send the claimed values for each of the bound MLE to the verifier ---
         // First, send the claimed value of V_{i + 1}(u)
         let source_mle_reduced = self.phase_1_mles.clone().unwrap()[1].clone();
-        debug_assert!(source_mle_reduced.len() == 1);
         transcript_writer.append(
             "Evaluation of V_{i + 1}(g_2, u)",
-            source_mle_reduced.first(),
+            source_mle_reduced.value(),
         );
         Ok(())
     }
@@ -727,8 +726,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 )
                 .unwrap();
 
-                assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
-                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
+                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().value();
 
                 let SumcheckEvals(mut evaluations) = evals;
                 evaluations
@@ -753,8 +751,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                     evaluate_mle_ref_product_no_beta_table(&mles, independent_variable, mles.len())
                         .unwrap();
 
-                assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
-                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
+                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().value();
 
                 let SumcheckEvals(mut evaluations) = evals;
                 evaluations
@@ -896,7 +893,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                         .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
                 );
             }
-            let val = mle_ref.first();
+            let val = mle_ref.value();
             let claim: Claim<F> = Claim::new(
                 fixed_mle_indices_u,
                 val,
@@ -1057,12 +1054,8 @@ impl<F: Field> IdentityGate<F> {
         self.mle_ref
             .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
 
-        if beta_g2.len() == 1 {
-            let beta_g2_fully_bound = beta_g2.first();
-            Ok(beta_g2_fully_bound)
-        } else {
-            Err(LayerError::LayerNotReady)
-        }
+        let beta_g2_fully_bound = beta_g2.value();
+        Ok(beta_g2_fully_bound)
     }
 
     fn set_beta_g1(&mut self, beta_g1: DenseMle<F>) {

@@ -54,9 +54,13 @@ pub mod verifier_mle;
 #[clonable]
 pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     /// Returns the number of free variables this Mle is defined on.
-    /// Equivalently, this is the log_2 of the size of the *whole* bookkeeping
+    /// Equivalently, this is the log_2 of the size of the unpruned bookkeeping
     /// table.
     fn num_free_vars(&self) -> usize;
+
+    /// Returns `true` if the MLE is fully bound.
+    /// Equivalent to checking whether [Self::num_free_vars] is equal to zero.
+    fn is_fully_bound(&self) -> bool;
 
     /// Get the padded set of evaluations over the boolean hypercube; useful for
     /// constructing the input layer.
@@ -82,10 +86,14 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     /// Returns an iterator over the evaluations of the current MLE.
     fn iter(&self) -> EvaluationsIterator<F>;
 
-    /// Returns the first element in the evaluations table represention.
-    /// # Panics
-    /// If the evaluations table is empty.
+    /// Returns the first element in the bookkeeping table corresponding to the
+    /// value of this Dense MLE when all free variables are set to zero. This
+    /// operations never panics (see [evals::MultilinearExtension::first])
     fn first(&self) -> F;
+
+    /// If this is a fully-bound Dense MLE, it returns its value.
+    /// Otherwise panics.
+    fn value(&self) -> F;
 
     /// Returns the first element of the evaluations table (if any).
     fn get(&self, index: usize) -> Option<F>;

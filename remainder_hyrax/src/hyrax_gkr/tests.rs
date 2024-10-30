@@ -54,7 +54,7 @@ pub fn evaluate_mle<F: Field>(mle: &DenseMle<F>, point: &[F]) -> F {
     point.iter().enumerate().for_each(|(i, coord)| {
         mle.fix_variable(i, *coord);
     });
-    mle.first()
+    mle.value()
 }
 
 #[test]
