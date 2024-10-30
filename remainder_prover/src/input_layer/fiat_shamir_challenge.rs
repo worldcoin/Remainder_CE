@@ -6,7 +6,7 @@ use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::Claim,
+    claims::RawClaim,
     layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension},
 };
@@ -31,7 +31,7 @@ pub enum FiatShamirChallengeError {
 #[derive(Debug, Clone)]
 pub struct FiatShamirChallenge<F: Field> {
     /// The data.
-    mle: MultilinearExtension<F>,
+    pub mle: MultilinearExtension<F>,
     /// The layer ID.
     pub(crate) layer_id: LayerId,
 }
@@ -62,9 +62,10 @@ impl<F: Field> FiatShamirChallengeDescription<F> {
 }
 
 impl<F: Field> FiatShamirChallenge<F> {
-    /// Constructor for the [FiatShamirChallenge] using the layer_id
-    /// and the MLE that is stored in this input layer.
-    pub fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
+    /// Create a new [FiatShamirChallenge] from the given MLE allocating the next available FS layer
+    /// ID.
+    pub fn new(mle: MultilinearExtension<F>) -> Self {
+        let layer_id = LayerId::next_fiat_shamir_challenge_layer_id();
         Self { mle, layer_id }
     }
 
@@ -81,7 +82,7 @@ impl<F: Field> FiatShamirChallenge<F> {
     /// On a copy of the underlying data, fix variables for each of the coordinates of the the point
     /// in `claim`, and check whether the single element left in the bookkeeping table is equal to
     /// the claimed value in `claim`.
-    pub fn verify(&self, claim: &Claim<F>) -> Result<(), FiatShamirChallengeError> {
+    pub fn verify(&self, claim: &RawClaim<F>) -> Result<(), FiatShamirChallengeError> {
         let mle_evals = self.mle.to_vec();
         let mut mle = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
         mle.index_mle_indices(0);
@@ -100,14 +101,14 @@ impl<F: Field> FiatShamirChallenge<F> {
             }
             eval.unwrap()
         } else {
-            Claim::new(vec![], mle.first())
+            RawClaim::new(vec![], mle.first())
         };
 
         // This is an internal error as it should never happen.
         assert_eq!(eval.get_point(), claim.get_point());
 
         // Check if the evaluation of the MLE matches the claimed value.
-        if eval.get_result() == claim.get_result() {
+        if eval.get_eval() == claim.get_eval() {
             Ok(())
         } else {
             Err(FiatShamirChallengeError::EvaluationMismatch)
@@ -125,7 +126,10 @@ impl<F: Field> FiatShamirChallengeDescription<F> {
     /// Panics if the length of `values` is not equal to the number of evaluations in the MLE.
     pub fn instantiate(&self, values: Vec<F>) -> FiatShamirChallenge<F> {
         assert_eq!(values.len(), 1 << self.num_bits);
-        FiatShamirChallenge::new(MultilinearExtension::new(values), self.layer_id)
+        FiatShamirChallenge {
+            mle: MultilinearExtension::new(values),
+            layer_id: self.layer_id,
+        }
     }
 }
 
@@ -156,14 +160,14 @@ mod tests {
 
         let claim_point = vec![Fr::ONE, Fr::ZERO];
         let claim_result = Fr::from(1);
-        let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
+        let claim: RawClaim<Fr> = RawClaim::new(claim_point, claim_result);
 
         let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
         let mle = MultilinearExtension::new(mle_vec);
 
         let fs_desc = FiatShamirChallengeDescription::<Fr>::new(layer_id, mle.num_vars());
         // Nothing really to test for FiatShamirChallenge
-        let _fiat_shamir_challenge = FiatShamirChallenge::new(mle, layer_id);
+        let _fiat_shamir_challenge = FiatShamirChallenge::new(mle);
 
         // Verifier phase.
         // 1. Retrieve proof/transcript.

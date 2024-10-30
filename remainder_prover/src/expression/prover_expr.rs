@@ -339,8 +339,8 @@ impl<F: Field> Expression<F, ProverExpr> {
 
     /// this traverses the expression tree to get all of the nonlinear rounds. can only be used after indexing the expression.
     /// returns the indices sorted.
-    pub fn get_all_nonlinear_rounds(&mut self) -> Vec<usize> {
-        let (expression_node, mle_vec) = self.deconstruct_mut();
+    pub fn get_all_nonlinear_rounds(&self) -> Vec<usize> {
+        let (expression_node, mle_vec) = self.deconstruct_ref();
         let mut curr_nonlinear_indices: Vec<usize> = Vec::new();
         let mut nonlinear_rounds =
             expression_node.get_all_nonlinear_rounds(&mut curr_nonlinear_indices, mle_vec);
@@ -350,8 +350,8 @@ impl<F: Field> Expression<F, ProverExpr> {
 
     /// this traverses the expression tree to get all of the linear rounds. can only be used after indexing the expression.
     /// returns the indices sorted.
-    pub fn get_all_linear_rounds(&mut self) -> Vec<usize> {
-        let (expression_node, mle_vec) = self.deconstruct_mut();
+    pub fn get_all_linear_rounds(&self) -> Vec<usize> {
+        let (expression_node, mle_vec) = self.deconstruct_ref();
         let mut linear_rounds = expression_node.get_all_linear_rounds(mle_vec);
         linear_rounds.sort();
         linear_rounds
@@ -1215,66 +1215,5 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, ProverExp
                 f.debug_tuple("Scaled").field(poly).field(scalar).finish()
             }
         }
-    }
-}
-
-/// describes the circuit given the expression (includes all the info of the data that the expression is instantiated with)
-impl<F: std::fmt::Debug + Field> Expression<F, ProverExpr> {
-    pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
-        struct CircuitDesc<'a, F: Field>(
-            &'a ExpressionNode<F, ProverExpr>,
-            &'a <ProverExpr as ExpressionType<F>>::MleVec,
-        );
-
-        impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for CircuitDesc<'a, F> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                match self.0 {
-                    ExpressionNode::Constant(scalar) => {
-                        f.debug_tuple("const").field(scalar).finish()
-                    }
-                    ExpressionNode::Selector(index, a, b) => f.write_fmt(format_args!(
-                        "sel {index:?}; {}; {}",
-                        CircuitDesc(a, self.1),
-                        CircuitDesc(b, self.1)
-                    )),
-                    // Skip enum variant and print query struct directly to maintain backwards compatibility.
-                    ExpressionNode::Mle(mle_vec_idx) => {
-                        let mle_ref = mle_vec_idx.get_mle(self.1);
-
-                        f.debug_struct("mle")
-                            .field("layer", &mle_ref.layer_id())
-                            .field("indices", &mle_ref.mle_indices())
-                            .finish()
-                    }
-                    ExpressionNode::Negated(poly) => {
-                        f.write_fmt(format_args!("-{}", CircuitDesc(poly, self.1)))
-                    }
-                    ExpressionNode::Sum(a, b) => f.write_fmt(format_args!(
-                        "+ {}; {}",
-                        CircuitDesc(a, self.1),
-                        CircuitDesc(b, self.1)
-                    )),
-                    ExpressionNode::Product(a) => {
-                        let str = a
-                            .iter()
-                            .map(|mle_vec_idx| {
-                                let mle = mle_vec_idx.get_mle(self.1);
-
-                                format!("{:?}; {:?}", mle.layer_id(), mle.mle_indices())
-                            })
-                            .reduce(|acc, str| acc + &str)
-                            .unwrap();
-                        f.write_str(&str)
-                    }
-                    ExpressionNode::Scaled(poly, scalar) => f.write_fmt(format_args!(
-                        "* {}; {:?}",
-                        CircuitDesc(poly, self.1),
-                        scalar
-                    )),
-                }
-            }
-        }
-
-        CircuitDesc(&self.expression_node, &self.mle_vec)
     }
 }

@@ -1,9 +1,9 @@
-///This macro generates a layer enum that represents all the possible layers
+/// This macro generates a layer enum that represents all the possible layers
 /// Every layer variant of the enum needs to implement Layer, and the enum will also implement Layer and pass methods to it's variants
 ///
 /// Usage:
 ///
-/// layer_enum(EnumName, (FirstVariant: LayerType), (SecondVariant: SecondLayerType), ..)
+/// layer_enum!(EnumName, (FirstVariant: LayerType), (SecondVariant: SecondLayerType), ..)
 #[macro_export]
 macro_rules! layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
@@ -44,7 +44,7 @@ macro_rules! layer_enum {
 
                 fn verify_rounds(
                     &self,
-                    claim: $crate::claims::Claim<F>,
+                    claim: $crate::claims::RawClaim<F>,
                     transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
                 ) -> Result<VerifierLayerEnum<F>, super::VerificationError> {
                     match self {
@@ -137,6 +137,14 @@ macro_rules! layer_enum {
                         )*
                     }
                 }
+
+                fn get_claims(&self) -> Result<Vec<$crate::claims::Claim<F>>, $crate::layer::LayerError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.get_claims(),
+                        )*
+                    }
+                }
             }
 
             impl<F: Field> $crate::layer::Layer<F> for [<$type_name Enum>]<F> {
@@ -148,27 +156,27 @@ macro_rules! layer_enum {
                     }
                 }
 
-                fn prove_rounds(
+                fn prove(
                     &mut self,
-                    claim: $crate::claims::Claim<F>,
+                    claim: $crate::claims::RawClaim<F>,
                     transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
                 ) -> Result<(), super::LayerError> {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.prove_rounds(claim, transcript),
+                            Self::$var_name(layer) => layer.prove(claim, transcript),
                         )*
                     }
                 }
 
-                fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), super::LayerError> {
+                fn initialize(&mut self, claim_point: &[F]) -> Result<(), super::LayerError> {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.initialize_sumcheck(claim_point),
+                            Self::$var_name(layer) => layer.initialize(claim_point),
                         )*
                     }
                 }
 
-                fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, super::LayerError> {
+                fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, super::LayerError> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.compute_round_sumcheck_message(round_index),
@@ -211,6 +219,15 @@ macro_rules! layer_enum {
                         )*
                     }
                 }
+
+                fn get_claims(&self) -> Result<Vec<$crate::claims::Claim<F>>, $crate::layer::LayerError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.get_claims(),
+                        )*
+                    }
+                }
+
             }
 
         $(
@@ -220,15 +237,6 @@ macro_rules! layer_enum {
                 }
             }
         )*
-            impl<F: Field> YieldClaim<ClaimMle<F>> for [<Verifier $type_name Enum>]<F> {
-                fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
-                    match self {
-                        $(
-                            Self::$var_name(layer) => layer.get_claims(),
-                        )*
-                    }
-                }
-            }
         }
     }
 }

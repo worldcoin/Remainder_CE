@@ -1,11 +1,7 @@
 use crate::input_layer::ligero_input_layer::LigeroInputLayerDescriptionWithPrecommit;
 
 use crate::layer::LayerId;
-use crate::layouter::compiling::{CircuitHashType, LayouterCircuit};
-use crate::layouter::component::Component;
-use crate::layouter::nodes::circuit_inputs::InputLayerNodeData;
-use crate::layouter::nodes::node_enum::NodeEnum;
-use crate::layouter::nodes::Context;
+use crate::layouter::compiling::CircuitHashType;
 use crate::mle::evals::MultilinearExtension;
 use crate::prover::verify;
 use ark_std::{end_timer, start_timer};
@@ -21,7 +17,7 @@ use sha3::Sha3_256;
 use std::collections::HashMap;
 use std::fs::File;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::io::{BufReader, BufWriter};
+use std::io::BufWriter;
 use std::path::Path;
 
 use super::{prove, GKRCircuitDescription};
@@ -82,8 +78,8 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
                 .copy_from_slice(&circuit_description_hash_bytes.to_vec()[16..]);
 
             vec![
-                F::from_bytes_le(circuit_description_hash_bytes_first_half.to_vec()),
-                F::from_bytes_le(circuit_description_hash_bytes_second_half.to_vec()),
+                F::from_bytes_le(circuit_description_hash_bytes_first_half.as_ref()),
+                F::from_bytes_le(circuit_description_hash_bytes_second_half.as_ref()),
             ]
         }
         CircuitHashType::Poseidon => {
@@ -93,7 +89,7 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
             // TODO(ryancao): Update this by using `REPR_NUM_BYTES` after merging with the testing branch
             let circuit_field_elem_desc = serialized
                 .chunks(16)
-                .map(|byte_chunk| F::from_bytes_le(byte_chunk.to_vec()))
+                .map(|byte_chunk| F::from_bytes_le(byte_chunk))
                 .collect_vec();
             let mut poseidon_sponge: PoseidonSponge<F> = PoseidonSponge::default();
             poseidon_sponge.absorb_elements(&circuit_field_elem_desc);
@@ -104,66 +100,6 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
 
 /// TODO(ryancao): Move this into the prover/verifier settings!!! (This is already a TDH ticket)
 const CIRCUIT_DESCRIPTION_HASH_TYPE: CircuitHashType = CircuitHashType::DefaultRustHash;
-
-/// Boilerplate code for testing a circuit with all public inputs
-pub fn test_circuit<
-    F: Field,
-    C: Component<NodeEnum<F>>,
-    Fn: FnMut(&Context) -> (C, Vec<InputLayerNodeData<F>>),
->(
-    mut circuit: LayouterCircuit<F, C, Fn>,
-    path: Option<&Path>,
-) {
-    let transcript_writer = TranscriptWriter::<F, PoseidonSponge<F>>::new("GKR Prover Transcript");
-    let prover_timer = start_timer!(|| "Proof generation");
-
-    match circuit.prove(transcript_writer) {
-        Ok((transcript, gkr_circuit_description, inputs)) => {
-            end_timer!(prover_timer);
-            if let Some(path) = path {
-                let write_out_timer = start_timer!(|| "Writing out proof");
-                let f = File::create(path).unwrap();
-                let writer = BufWriter::new(f);
-                serde_json::to_writer(writer, &transcript).unwrap();
-                end_timer!(write_out_timer);
-            }
-
-            let transcript = if let Some(path) = path {
-                let read_in_timer = start_timer!(|| "Reading in proof");
-                let file = std::fs::File::open(path).unwrap();
-                let reader = BufReader::new(file);
-                let result = serde_json::from_reader(reader).unwrap();
-                end_timer!(read_in_timer);
-                result
-            } else {
-                transcript
-            };
-
-            let mut transcript_reader = TranscriptReader::<F, PoseidonSponge<F>>::new(transcript);
-            let verifier_timer = start_timer!(|| "Proof verification");
-
-            match verify(
-                &inputs,
-                &[],
-                &gkr_circuit_description,
-                CIRCUIT_DESCRIPTION_HASH_TYPE,
-                &mut transcript_reader,
-            ) {
-                Ok(_) => {
-                    end_timer!(verifier_timer);
-                }
-                Err(err) => {
-                    println!("Verify failed! Error: {err}");
-                    panic!();
-                }
-            }
-        }
-        Err(err) => {
-            println!("Proof failed! Error: {err}");
-            panic!();
-        }
-    }
-}
 
 /// Function which instantiates a circuit description with the given inputs
 /// and precommits and both attempts to both prove and verify said circuit.
