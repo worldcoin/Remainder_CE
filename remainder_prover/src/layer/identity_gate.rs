@@ -3,9 +3,6 @@
 
 use std::{cmp::Ordering, collections::HashSet};
 
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
-
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
     layer::{gate::gate_helpers::bind_round_identity, LayerError, VerificationError},
@@ -16,10 +13,12 @@ use crate::{
     },
     sumcheck::*,
 };
+use itertools::Itertools;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::layer::gate::gate_helpers::compute_sumcheck_message_identity;
 
@@ -49,7 +48,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 const LAZY_BETA_EVALUATION: bool = true;
 
 /// The circuit Description for an [IdentityGate].
-#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash)]
 #[serde(bound = "F: Field")]
 pub struct IdentityGateLayerDescription<F: Field> {
     /// The layer id associated with this gate layer.

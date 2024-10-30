@@ -82,7 +82,6 @@ pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) -> DenseMle
 
 /// Helper function to create random MLE with specific number of vars
 pub fn get_range_mle<F: Field>(num_vars: usize) -> DenseMle<F> {
-    // let mut rng = test_rng();
     let capacity = 2_u32.pow(num_vars as u32);
     let bookkeeping_table = (0..capacity)
         .map(|idx| F::from(idx as u64 + 1))

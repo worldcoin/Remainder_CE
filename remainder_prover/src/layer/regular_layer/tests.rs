@@ -78,9 +78,7 @@ fn regular_layer_test_prove_verify_sum() {
     let lhs = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
     let rhs = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
     let mut expression = Expression::<Fr, ProverExpr>::sum(lhs, rhs);
-    // let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
     let claim = RawClaim::<Fr>::new(vec![Fr::from(2), Fr::from(3)], Fr::from(10));
-    dbg!(&claim);
 
     let mut layer = RegularLayer::new_raw(crate::layer::LayerId::Layer(0), expression.clone());
 
@@ -122,8 +120,6 @@ fn regular_layer_test_prove_verify_selector() {
     let lhs = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
     let rhs = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
     let mut expression = lhs.select(rhs);
-    // let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
-    dbg!(&expression);
     let claim = RawClaim::<Fr>::new(vec![Fr::from(4), Fr::from(2), Fr::from(3)], Fr::from(33));
 
     let mut layer = RegularLayer::new_raw(crate::layer::LayerId::Layer(0), expression.clone());

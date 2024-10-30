@@ -181,10 +181,6 @@ fn test_example_with_regular_layer() {
     equality_mle.fix_variable(0, r1);
     mle_ref.fix_variable(0, r1);
 
-    // TODO!(ryancao): Put the `compute_sumcheck_message` back in?
-    // let evaluations = compute_sumcheck_message(&mle_ref.expression(), 0, 2, &equality_mle).unwrap();
-    // assert_eq!(evaluations.0, vec![Fr::from(0), Fr::from(1), Fr::from(2),]);
-
     let evaluations = [Fr::from(0), Fr::from(1), Fr::from(2)];
     let mut converter = VandermondeInverse::<Fr>::new();
     let coefficients = converter.convert_to_coefficients(evaluations.to_vec());

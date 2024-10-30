@@ -179,7 +179,6 @@ impl<F: Field> ClaimGroup<F> {
         });
 
         // Perform claim de-duplication
-        // TODO(Makis): Parallelize.
         let claims = claims
             .into_iter()
             .unique_by(|c| c.get_point().to_vec())
@@ -225,7 +224,6 @@ impl<F: Field> ClaimGroup<F> {
     /// # Requires
     /// `self.claims_points` should be non-empty, otherwise a
     /// [ClaimError::ClaimAggroError] is returned.
-    /// # TODO(Makis)
     /// Using the ClaimGroup abstraction here is not ideal since we are only
     /// operating on the points and not on the results. However, the ClaimGroup API
     /// is convenient for accessing columns and makes the implementation more

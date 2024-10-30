@@ -707,7 +707,6 @@ where
         .collect_vec();
 
     // --- Append column values to transcript ---
-    // let label = format!("Column elements: idx {}", column);
     transcript_writer.append_elements("Column elements", &col);
 
     // Merkle path
@@ -726,7 +725,6 @@ where
     assert_eq!(column, 0);
 
     // --- Append Merkle path to transcript ---
-    // let label = format!("Merkle path: idx {}", column);
     transcript_writer.append_elements("Merkle path", &path);
 
     Ok(LcColumn {
@@ -814,11 +812,9 @@ where
     // step 3: check p_random, p_eval, and col paths
     cols_to_open.iter().try_for_each(|col_idx| {
         // --- Read all column values + Merkle path values from transcript for given column index ---
-        // let column_label = format!("Column elements: idx {}", col_idx);
         let column_vals = transcript_reader
             .consume_elements("Column elements", num_rows)
             .unwrap();
-        // let merkle_label = format!("Merkle path: idx {}", col_idx)
         let merkle_path_vals = transcript_reader
             .consume_elements("Merkle path", log2(encoded_num_cols))
             .unwrap();
