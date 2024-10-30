@@ -56,15 +56,15 @@ jobs:
                 profile: minimal
                 toolchain: stable
             - name: Install cgroup-tools
-                run: sudo apt-get install cgroup-tools
+              run: sudo apt-get install cgroup-tools
             - name: Create memory-limited cgroup
-                run: |
-                  sudo mkdir /sys/fs/cgroup/hook_memory_limited_group
-                  echo 540M | sudo tee /sys/fs/cgroup/hook_memory_limited_group/memory.max
-                  echo 0 | sudo tee /sys/fs/cgroup/hook_memory_limited_group/memory.swap.max
+              run: |
+                sudo mkdir /sys/fs/cgroup/hook_memory_limited_group
+                echo 540M | sudo tee /sys/fs/cgroup/hook_memory_limited_group/memory.max
+                echo 0 | sudo tee /sys/fs/cgroup/hook_memory_limited_group/memory.swap.max
             - name: Compile binary
-                run: cargo build --release --bin worldcoin
+              run: cargo build --release --bin worldcoin
             - name: Run binary under memory limit
-                run: |
-                  sudo cgexec -g memory:hook_memory_limited_group ./target/release/worldcoin
-                continue-on-error: false
+              run: |
+                sudo cgexec -g memory:hook_memory_limited_group ./target/release/worldcoin
+              continue-on-error: false
