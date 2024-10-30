@@ -3,8 +3,6 @@
 
 use std::{cmp::Ordering, collections::HashSet};
 
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
     layer::{gate::gate_helpers::bind_round_identity, LayerError, VerificationError},
@@ -15,10 +13,12 @@ use crate::{
     },
     sumcheck::*,
 };
+use itertools::Itertools;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::layer::gate::gate_helpers::compute_sumcheck_message_identity;
 
