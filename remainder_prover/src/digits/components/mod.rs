@@ -4,7 +4,7 @@ use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     layouter::{
         component::Component,
-        nodes::{sector::Sector, CircuitNode, Context},
+        nodes::{sector::Sector, CircuitNode},
     },
 };
 
@@ -20,9 +20,9 @@ pub struct UnsignedRecomposition<F: Field> {
 impl<F: Field> UnsignedRecomposition<F> {
     /// Each of the Nodes in `mles` specifies the digits for a different "decimal place".  Most
     /// significant digit comes first.
-    pub fn new(ctx: &Context, mles: &[&dyn CircuitNode], base: u64) -> Self {
+    pub fn new(mles: &[&dyn CircuitNode], base: u64) -> Self {
         let num_digits = mles.len();
-        let sector = Sector::new(ctx, mles, |input_nodes| {
+        let sector = Sector::new(mles, |input_nodes| {
             assert_eq!(input_nodes.len(), num_digits);
             let b_s_initial_acc = Expression::<F, AbstractExpr>::constant(F::ZERO);
             input_nodes.into_iter().enumerate().fold(
@@ -65,7 +65,6 @@ impl<F: Field> ComplementaryRecompChecker<F> {
     /// `bits` are the bits of the complementary decomposition.
     /// `unsigned_recomps` are the unsigned recompositions.
     pub fn new(
-        ctx: &Context,
         values: &dyn CircuitNode,
         bits: &dyn CircuitNode,
         unsigned_recomps: &dyn CircuitNode,
@@ -77,7 +76,7 @@ impl<F: Field> ComplementaryRecompChecker<F> {
             pow *= F::from(base);
         }
 
-        let sector = Sector::new(ctx, &[values, bits, unsigned_recomps], |input_nodes| {
+        let sector = Sector::new(&[values, bits, unsigned_recomps], |input_nodes| {
             assert_eq!(input_nodes.len(), 3);
             let values_mle_ref = input_nodes[0];
             let bits_mle_ref = input_nodes[1];
@@ -109,8 +108,8 @@ pub struct BitsAreBinary<F: Field> {
 
 impl<F: Field> BitsAreBinary<F> {
     /// Creates a new BitsAreBinary component.
-    pub fn new(ctx: &Context, values_node: &dyn CircuitNode) -> Self {
-        let sector = Sector::new(ctx, &[values_node], |nodes| {
+    pub fn new(values_node: &dyn CircuitNode) -> Self {
+        let sector = Sector::new(&[values_node], |nodes| {
             assert_eq!(nodes.len(), 1);
             let values_mle_ref = nodes[0];
             Expression::<F, AbstractExpr>::products(vec![values_mle_ref, values_mle_ref])
@@ -140,9 +139,9 @@ pub struct DigitsConcatenator<F: Field> {
 
 impl<F: Field> DigitsConcatenator<F> {
     /// Create a new DigitsConcatenator component.
-    pub fn new(ctx: &Context, mles: &[&dyn CircuitNode]) -> Self {
+    pub fn new(mles: &[&dyn CircuitNode]) -> Self {
         let num_digits = mles.len();
-        let sector = Sector::new(ctx, mles, |digital_places| {
+        let sector = Sector::new(mles, |digital_places| {
             assert_eq!(digital_places.len(), num_digits);
             Expression::<F, AbstractExpr>::selectors(
                 digital_places.iter().map(|node| node.expr()).collect(),

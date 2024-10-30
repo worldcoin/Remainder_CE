@@ -233,7 +233,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         Ok(())
     }
 
-    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
+    fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError> {
         // Grabs the expression/beta table.
         let expression = &self.expression;
         let newbeta = &self.beta_vals;

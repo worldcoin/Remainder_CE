@@ -9,7 +9,7 @@ use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputShred};
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::sector::Sector;
-use remainder::layouter::nodes::{CircuitNode, Context, NodeId};
+use remainder::layouter::nodes::{CircuitNode, NodeId};
 use remainder::mle::evals::MultilinearExtension;
 use remainder::prover::helpers::test_circuit_new;
 use remainder::prover::{generate_circuit_description, GKRCircuitDescription};
@@ -23,12 +23,11 @@ pub struct ProductCheckerComponent<F: Field> {
 impl<F: Field> ProductCheckerComponent<F> {
     /// Checks that factor1 * factor2 - expected_product == 0.
     pub fn new(
-        ctx: &Context,
         factor1: &dyn CircuitNode,
         factor2: &dyn CircuitNode,
         expected_product: &dyn CircuitNode,
     ) -> Self {
-        let sector = Sector::new(ctx, &[factor1, factor2, expected_product], |input_nodes| {
+        let sector = Sector::new(&[factor1, factor2, expected_product], |input_nodes| {
             assert_eq!(input_nodes.len(), 3);
             Expression::<F, AbstractExpr>::products(vec![input_nodes[0], input_nodes[1]])
                 - input_nodes[2].expr()
@@ -64,28 +63,24 @@ fn build_product_checker_test_circuit<F: Field>(
     impl Fn(ProductCheckerTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
     LayerId,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- The multiplicands are public... ---
-    let public_input_layer_node = InputLayerNode::new(&context, None);
-    let mle_1_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);
-    let mle_2_shred = InputShred::new(&context, num_free_vars, &public_input_layer_node);
+    let public_input_layer_node = InputLayerNode::new(None);
+    let mle_1_shred = InputShred::new(num_free_vars, &public_input_layer_node);
+    let mle_2_shred = InputShred::new(num_free_vars, &public_input_layer_node);
 
     // --- ...while the expected output is private ---
-    let ligero_input_layer_node = InputLayerNode::new(&context, None);
-    let mle_expected_shred = InputShred::new(&context, num_free_vars, &ligero_input_layer_node);
+    let ligero_input_layer_node = InputLayerNode::new(None);
+    let mle_expected_shred = InputShred::new(num_free_vars, &ligero_input_layer_node);
 
     // --- Save IDs to be used later ---
     let mle_1_id = mle_1_shred.id();
     let mle_2_id = mle_2_shred.id();
     let mle_expected_id = mle_expected_shred.id();
-    let ligero_input_layer_node_id = ligero_input_layer_node.id();
+    let ligero_input_layer_id = ligero_input_layer_node.input_layer_id();
 
     // --- Create the circuit components ---
-    let checker =
-        ProductCheckerComponent::new(&context, &mle_1_shred, &mle_2_shred, &mle_expected_shred);
-    let output = OutputNode::new_zero(&context, &checker.sector);
+    let checker = ProductCheckerComponent::new(&mle_1_shred, &mle_2_shred, &mle_expected_shred);
+    let output = OutputNode::new_zero(&checker.sector);
 
     let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![
         public_input_layer_node.into(),
@@ -97,11 +92,8 @@ fn build_product_checker_test_circuit<F: Field>(
     ];
     all_circuit_nodes.extend(checker.yield_nodes());
 
-    let (
-        circuit_description,
-        convert_input_shreds_to_input_layers,
-        input_layer_node_ids_to_layer_ids,
-    ) = generate_circuit_description(all_circuit_nodes).unwrap();
+    let (circuit_description, convert_input_shreds_to_input_layers) =
+        generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
     let circuit_data_fn = move |test_inputs: ProductCheckerTestInputs<F>| {
@@ -114,11 +106,6 @@ fn build_product_checker_test_circuit<F: Field>(
         .collect();
         convert_input_shreds_to_input_layers(input_shred_id_to_data_mapping).unwrap()
     };
-
-    // --- Grab Ligero input layer ID for later use ---
-    let ligero_input_layer_id = *input_layer_node_ids_to_layer_ids
-        .get(&ligero_input_layer_node_id)
-        .unwrap();
 
     (circuit_description, circuit_data_fn, ligero_input_layer_id)
 }

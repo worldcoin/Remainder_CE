@@ -9,7 +9,7 @@ use crate::{
     output_layer::OutputLayerDescription,
 };
 
-use super::{CircuitNode, Context, NodeId};
+use super::{CircuitNode, NodeId};
 
 #[derive(Debug, Clone)]
 /// the node that represents the output of a circuit
@@ -35,18 +35,18 @@ impl CircuitNode for OutputNode {
 
 impl OutputNode {
     /// Creates a new OutputNode from a source w/ some data
-    pub fn new(ctx: &Context, source: &impl CircuitNode) -> Self {
+    pub fn new(source: &impl CircuitNode) -> Self {
         Self {
-            id: ctx.get_new_id(),
+            id: NodeId::new(),
             source: source.id(),
             _zero: false,
         }
     }
 
     /// Creates a new ZeroMleRef, which constrains the source to equal a Zero Mle
-    pub fn new_zero(ctx: &Context, source: &impl CircuitNode) -> Self {
+    pub fn new_zero(source: &impl CircuitNode) -> Self {
         Self {
-            id: ctx.get_new_id(),
+            id: NodeId::new(),
             source: source.id(),
             _zero: true,
         }

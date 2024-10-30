@@ -18,6 +18,9 @@ pub const IM_NUM_ROWS: usize = 100;
 /// The number of columns in the image
 pub const IM_NUM_COLS: usize = 400;
 
+/// The length of the unpadded iris code
+pub const IRISCODE_LEN: usize = 4 * 3200;
+
 /// The number of variables in the MLE getting rerouted (typically the image input)
 pub const TO_REROUTE_NUM_VARS: usize =
     (IM_NUM_ROWS.next_power_of_two().ilog2() + IM_NUM_COLS.next_power_of_two().ilog2()) as usize;

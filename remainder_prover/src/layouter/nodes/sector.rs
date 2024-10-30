@@ -11,7 +11,7 @@ use crate::{
     layouter::layouting::{topo_sort, CircuitDescriptionMap, CircuitLocation, DAGError},
 };
 
-use super::{CircuitNode, CompilableNode, Context, NodeId};
+use super::{CircuitNode, CompilableNode, NodeId};
 
 #[derive(Debug, Clone)]
 /// A sector node in the circuit DAG, can have multiple inputs, and a single output
@@ -24,7 +24,6 @@ pub struct Sector<F: Field> {
 impl<F: Field> Sector<F> {
     /// creates a new sector node
     pub fn new(
-        ctx: &Context,
         inputs: &[&dyn CircuitNode],
         expr_builder: impl FnOnce(Vec<NodeId>) -> Expression<F, AbstractExpr>,
     ) -> Self {
@@ -37,7 +36,7 @@ impl<F: Field> Sector<F> {
         let expr_num_vars = expr.num_vars(&num_vars_map).unwrap();
 
         Self {
-            id: ctx.get_new_id(),
+            id: NodeId::new(),
             expr,
             num_vars: expr_num_vars,
         }
@@ -85,10 +84,10 @@ pub struct SectorGroup<F: Field> {
 
 impl<F: Field> SectorGroup<F> {
     /// Creates a new SectorGroup
-    pub fn new(ctx: &Context, children: Vec<Sector<F>>) -> Self {
+    pub fn new(children: Vec<Sector<F>>) -> Self {
         Self {
             children,
-            id: ctx.get_new_id(),
+            id: NodeId::new(),
         }
     }
 
@@ -123,7 +122,6 @@ impl<F: Field> CircuitNode for SectorGroup<F> {
 impl<F: Field> CompilableNode<F> for SectorGroup<F> {
     fn generate_circuit_description(
         &self,
-        layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError> {
         //topo sort the children
@@ -160,7 +158,7 @@ impl<F: Field> CompilableNode<F> for SectorGroup<F> {
             .into_iter()
             .map(|children| {
                 LayerDescriptionEnum::Regular(
-                    compile_layer(children.as_slice(), layer_id, circuit_description_map).unwrap(),
+                    compile_layer(children.as_slice(), circuit_description_map).unwrap(),
                 )
             })
             .collect_vec();
@@ -172,7 +170,6 @@ impl<F: Field> CompilableNode<F> for SectorGroup<F> {
 /// builds the layer/adds their locations to the circuit map
 fn compile_layer<F: Field>(
     children: &[&Sector<F>],
-    layer_id: &mut LayerId,
     circuit_description_map: &mut CircuitDescriptionMap,
 ) -> Result<RegularLayerDescription<F>, DAGError> {
     // This will store all the expression yet to be merged
@@ -233,7 +230,7 @@ fn compile_layer<F: Field>(
 
     let expr = new_expr.build_circuit_expr(circuit_description_map)?;
 
-    let regular_layer_id = layer_id.get_and_inc();
+    let regular_layer_id = LayerId::next_layer_id();
     let layer = RegularLayerDescription::new_raw(regular_layer_id, expr);
 
     // Add the new sectors to the circuit map
@@ -268,7 +265,7 @@ mod tests {
             layouting::{CircuitDescriptionMap, CircuitLocation},
             nodes::{
                 circuit_inputs::{InputLayerNode, InputShred},
-                CircuitNode, CompilableNode, Context,
+                CircuitNode, CompilableNode,
             },
         },
     };
@@ -277,25 +274,24 @@ mod tests {
 
     #[test]
     fn test_sector_group_compile() {
-        let ctx = Context::new();
-        let input_node = InputLayerNode::new(&ctx, None);
-        let input_shred_1: InputShred = InputShred::new(&ctx, 0, &input_node);
-        let input_shred_2 = InputShred::new(&ctx, 0, &input_node);
+        let input_node = InputLayerNode::new(None);
+        let input_shred_1: InputShred = InputShred::new(0, &input_node);
+        let input_shred_2 = InputShred::new(0, &input_node);
 
-        let sector_1: Sector<Fr> = Sector::new(&ctx, &[&input_shred_1, &input_shred_2], |inputs| {
+        let sector_1: Sector<Fr> = Sector::new(&[&input_shred_1, &input_shred_2], |inputs| {
             Expression::<_, AbstractExpr>::mle(inputs[0])
                 + Expression::<_, AbstractExpr>::mle(inputs[1])
         });
-        let sector_2 = Sector::new(&ctx, &[&input_shred_1, &input_shred_2], |inputs| {
+        let sector_2 = Sector::new(&[&input_shred_1, &input_shred_2], |inputs| {
             Expression::<_, AbstractExpr>::mle(inputs[0])
                 - Expression::<_, AbstractExpr>::mle(inputs[1])
         });
 
-        let sector_out = Sector::new(&ctx, &[&sector_1, &&sector_2], |inputs| {
+        let sector_out = Sector::new(&[&sector_1, &&sector_2], |inputs| {
             Expression::<_, AbstractExpr>::products(vec![inputs[0], inputs[1]])
         });
 
-        let sector_group = SectorGroup::new(&ctx, vec![sector_1, sector_2, sector_out]);
+        let sector_group = SectorGroup::new(vec![sector_1, sector_2, sector_out]);
         let mut circuit_description_map = CircuitDescriptionMap::new();
         circuit_description_map.add_node_id_and_location_num_vars(
             input_shred_1.id(),
@@ -312,7 +308,7 @@ mod tests {
             ),
         );
         let _circuit_description = sector_group
-            .generate_circuit_description(&mut LayerId::Input(1), &mut circuit_description_map)
+            .generate_circuit_description(&mut circuit_description_map)
             .unwrap();
     }
 }

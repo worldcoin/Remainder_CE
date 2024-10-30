@@ -13,7 +13,7 @@ use crate::{
     utils::mle::get_total_mle_indices,
 };
 
-use super::{CircuitNode, CompilableNode, Context, NodeId};
+use super::{CircuitNode, CompilableNode, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
@@ -43,7 +43,6 @@ impl CircuitNode for MatMultNode {
 impl MatMultNode {
     /// Constructs a new MatMultNode and computes the data it generates
     pub fn new(
-        ctx: &Context,
         matrix_node_a: &impl CircuitNode,
         rows_cols_num_vars_a: (usize, usize),
         matrix_node_b: &impl CircuitNode,
@@ -53,7 +52,7 @@ impl MatMultNode {
         let num_product_vars = rows_cols_num_vars_a.0 + rows_cols_num_vars_b.1;
 
         Self {
-            id: ctx.get_new_id(),
+            id: NodeId::new(),
             matrix_a: matrix_node_a.id(),
             rows_cols_num_vars_a,
             matrix_b: matrix_node_b.id(),
@@ -66,7 +65,6 @@ impl MatMultNode {
 impl<F: Field> CompilableNode<F> for MatMultNode {
     fn generate_circuit_description(
         &self,
-        layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<Vec<LayerDescriptionEnum<F>>, DAGError> {
         let (matrix_a_location, matrix_a_num_vars) =
@@ -95,7 +93,7 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
             self.rows_cols_num_vars_b.1,
         );
 
-        let matmult_layer_id = layer_id.get_and_inc();
+        let matmult_layer_id = LayerId::next_layer_id();
         let matmult_layer = MatMultLayerDescription::new(matmult_layer_id, matrix_a, matrix_b);
         circuit_description_map.add_node_id_and_location_num_vars(
             self.id,
@@ -121,7 +119,7 @@ mod test {
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
         mle::evals::MultilinearExtension,
     };
@@ -154,25 +152,19 @@ mod test {
         GKRCircuitDescription<F>,
         impl Fn(MatmultTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
     ) {
-        // --- Create global context manager ---
-        let context = Context::new();
-
         // --- All inputs are public inputs ---
-        let public_input_layer_node = InputLayerNode::new(&context, None);
+        let public_input_layer_node = InputLayerNode::new(None);
 
         // --- Inputs to the circuit include the "matrix A MLE" and the "matrix B MLE" ---
         let matrix_a_mle_shred = InputShred::new(
-            &context,
             matrix_a_num_rows_vars + matrix_a_num_cols_vars,
             &public_input_layer_node,
         );
         let matrix_b_mle_shred = InputShred::new(
-            &context,
             matrix_a_num_cols_vars + matrix_b_num_cols_vars,
             &public_input_layer_node,
         );
         let expected_result_mle_shred = InputShred::new(
-            &context,
             matrix_a_num_rows_vars + matrix_b_num_cols_vars,
             &public_input_layer_node,
         );
@@ -184,23 +176,19 @@ mod test {
 
         // --- Create the circuit components ---
         let matmult_sector = MatMultNode::new(
-            &context,
             &matrix_a_mle_shred,
             (matrix_a_num_rows_vars, matrix_a_num_cols_vars),
             &matrix_b_mle_shred,
             (matrix_a_num_cols_vars, matrix_b_num_cols_vars),
         );
 
-        let difference_sector = Sector::new(
-            &context,
-            &[&matmult_sector, &expected_result_mle_shred],
-            |inputs| {
+        let difference_sector =
+            Sector::new(&[&matmult_sector, &expected_result_mle_shred], |inputs| {
                 Expression::<F, AbstractExpr>::mle(inputs[0])
                     - Expression::<F, AbstractExpr>::mle(inputs[1])
-            },
-        );
+            });
 
-        let output_node = OutputNode::new_zero(&context, &difference_sector);
+        let output_node = OutputNode::new_zero(&difference_sector);
 
         // --- Generate the circuit description ---
         let all_circuit_nodes: Vec<NodeEnum<F>> = vec![
@@ -213,7 +201,7 @@ mod test {
             output_node.into(),
         ];
 
-        let (circuit_description, convert_input_shreds_to_input_layers, _) =
+        let (circuit_description, convert_input_shreds_to_input_layers) =
             generate_circuit_description(all_circuit_nodes).unwrap();
 
         // --- Write closure which allows easy usage of circuit inputs ---

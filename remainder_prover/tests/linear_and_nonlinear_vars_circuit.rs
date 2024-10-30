@@ -11,7 +11,7 @@ use remainder::{
             circuit_inputs::{InputLayerNode, InputShred},
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
     },
     mle::evals::MultilinearExtension,
@@ -36,8 +36,8 @@ pub struct LastVarLinearBuilderComponent<F: Field> {
 }
 
 impl<F: Field> LastVarLinearBuilderComponent<F> {
-    pub fn new(ctx: &Context, sel_node: &dyn CircuitNode, prod_node: &dyn CircuitNode) -> Self {
-        let last_bit_linear_sector = Sector::new(ctx, &[sel_node, prod_node], |input_nodes| {
+    pub fn new(sel_node: &dyn CircuitNode, prod_node: &dyn CircuitNode) -> Self {
+        let last_bit_linear_sector = Sector::new(&[sel_node, prod_node], |input_nodes| {
             assert_eq!(input_nodes.len(), 2);
             let sel_mle = input_nodes[0];
             let prod_mle = input_nodes[1];
@@ -78,8 +78,8 @@ pub struct FirstVarLinearBuilderComponent<F: Field> {
 }
 
 impl<F: Field> FirstVarLinearBuilderComponent<F> {
-    pub fn new(ctx: &Context, sel_node: &dyn CircuitNode) -> Self {
-        let last_bit_linear_sector = Sector::new(ctx, &[sel_node], |input_nodes| {
+    pub fn new(sel_node: &dyn CircuitNode) -> Self {
+        let last_bit_linear_sector = Sector::new(&[sel_node], |input_nodes| {
             assert_eq!(input_nodes.len(), 1);
             let sel_mle = input_nodes[0];
 
@@ -120,29 +120,21 @@ fn build_linear_and_nonlinear_vars_test_circuit<F: Field>(
     GKRCircuitDescription<F>,
     impl Fn(LinearNonlinearVarsTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- All inputs are public ---
-    let public_input_layer_node = InputLayerNode::new(&context, None);
+    let public_input_layer_node = InputLayerNode::new(None);
 
     // --- "Semantic" circuit inputs ---
-    let selector_mle_shred =
-        InputShred::new(&context, selector_mle_num_vars, &public_input_layer_node);
-    let product_mle_shred =
-        InputShred::new(&context, product_mle_num_vars, &public_input_layer_node);
+    let selector_mle_shred = InputShred::new(selector_mle_num_vars, &public_input_layer_node);
+    let product_mle_shred = InputShred::new(product_mle_num_vars, &public_input_layer_node);
 
     // --- Save IDs to be used later ---
     let selector_mle_id = selector_mle_shred.id();
     let product_mle_id = product_mle_shred.id();
 
     // --- Create the circuit components ---
-    let component_1 =
-        LastVarLinearBuilderComponent::new(&context, &selector_mle_shred, &product_mle_shred);
-    let component_2 =
-        FirstVarLinearBuilderComponent::new(&context, &component_1.get_output_sector());
-    let output_component =
-        DifferenceBuilderComponent::new(&context, &component_2.get_output_sector());
+    let component_1 = LastVarLinearBuilderComponent::new(&selector_mle_shred, &product_mle_shred);
+    let component_2 = FirstVarLinearBuilderComponent::new(&component_1.get_output_sector());
+    let output_component = DifferenceBuilderComponent::new(&component_2.get_output_sector());
 
     let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![
         public_input_layer_node.into(),
@@ -153,7 +145,7 @@ fn build_linear_and_nonlinear_vars_test_circuit<F: Field>(
     all_circuit_nodes.extend(component_2.yield_nodes());
     all_circuit_nodes.extend(output_component.yield_nodes());
 
-    let (circuit_description, convert_input_shreds_to_input_layers, _) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---
