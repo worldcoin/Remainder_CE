@@ -343,17 +343,6 @@ pub struct MatMultLayerDescription<F: Field> {
     matrix_b: MatrixDescription<F>,
 }
 
-impl<F: Field> std::fmt::Display for MatMultLayerDescription<F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        //FIXME(Ben) expand to include information about which layers the matrices are on.
-        write!(
-            f,
-            "{}: MatMultLayerDescription",
-            self.layer_id
-        )
-    }
-}
-
 impl<F: Field> MatMultLayerDescription<F> {
     /// Constructor for the [MatMultLayerDescription], using the circuit description
     /// of the matrices that make up this layer.

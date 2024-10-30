@@ -49,7 +49,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, info};
 use tracing::{instrument, span, Level};
-use tracing_subscriber::layer;
 
 /// Errors that can be generated during GKR proving.
 #[derive(Error, Debug, Clone)]

@@ -124,11 +124,6 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
                 hyrax_input_commitments.insert(*layer_id, prover_commitment);
             });
 
-        // FIXME(Ben) display the layers
-        for layer in circuit_description.intermediate_layers.iter() {
-            println!("{}", layer);
-        }
-
         // Get the verifier challenges from the transcript.
         let mut challenge_sampler =
             |size| transcript.get_scalar_field_challenges("Verifier challenges", size);
