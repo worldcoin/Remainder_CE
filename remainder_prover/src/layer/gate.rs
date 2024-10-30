@@ -718,12 +718,6 @@ pub struct GateLayerDescription<F: Field> {
     num_dataparallel_vars: usize,
 }
 
-impl<F: Field> std::fmt::Display for GateLayerDescription<F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: GateLayer with #wirings={}, operation {:?}, LHS values from layer {}, RHS values from layer {}", self.id, self.wiring.len(), self.gate_operation, self.lhs_mle.layer_id(), self.rhs_mle.layer_id())
-    }
-}
-
 impl<F: Field> GateLayerDescription<F> {
     /// Constructor for a [GateLayerDescription].
     pub fn new(
