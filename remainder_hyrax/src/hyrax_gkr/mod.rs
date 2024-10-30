@@ -556,7 +556,6 @@ pub fn match_claims<C: PrimeOrderCurve>(
                 // ok, return the claim
                 committed_claim.to_raw_claim()
             } else {
-                // TODO return an error instead of panicking
                 panic!("Claim has not counterpart in committed claims!");
             }
         })

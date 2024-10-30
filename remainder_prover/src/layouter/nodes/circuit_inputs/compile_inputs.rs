@@ -85,8 +85,6 @@ pub fn combine_input_mles<F: Field>(
                 // --- "little-endian" ---
                 let inverted_input_mle = invert_mle_bookkeeping_table(input_mle.iter().collect());
 
-                // --- Fold the new (padded) bookkeeping table with the old ones ---
-                // let padded_bookkeeping_table = input_mle.get_padded_evaluations();
                 current_bookkeeping_table
                     .into_iter()
                     .chain(inverted_input_mle)

@@ -40,11 +40,6 @@ pub struct ExprDescription;
 // The leaves of an expression of this type contain a [MleDescription], an analogue
 // of [crate::mle::dense::DenseMle], storing only metadata related to the MLE,
 // without any evaluations.
-// TODO(Makis): Consider allowing for re-use of MLEs, like in a [ProverExpr]:
-// ```ignore
-//     type MLENodeRepr = usize,
-//     type MleVec = Vec<MleDescription<F>>,
-// ```
 impl<F: Field> ExpressionType<F> for ExprDescription {
     type MLENodeRepr = MleDescription<F>;
     type MleVec = ();
