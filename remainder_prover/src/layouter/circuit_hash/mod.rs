@@ -1,3 +1,5 @@
+//! Defines the [CircuitHashType] enum, which is used to specify the type of hash is used for the
+//! circuit description.
 #[cfg(test)]
 mod tests;
 

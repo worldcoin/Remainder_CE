@@ -24,7 +24,7 @@ use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{layer_enum::LayerEnum, LayerError, LayerId};
 use crate::layer::{Layer, LayerDescription, VerifierLayer};
-use crate::layouter::compiling::CircuitHashType;
+use crate::layouter::circuit_hash::CircuitHashType;
 use crate::layouter::context::CircuitBuildingContext;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, CircuitLocation, CircuitMap};
 use crate::layouter::nodes::node_enum::NodeEnum;
