@@ -255,12 +255,21 @@ impl<F: Field> Evaluations<F> {
     /// missing values are assumed to be zeros. The resulting vector is always
     /// of size `2^num_bits`.
     /// # Example
-    /// ```ignore
-    ///     assert_eq!(flip_endianess(2, &[1, 2, 3, 4], vec![ 1, 3, 2, 4 ]);
-    ///     assert_eq!(flip_endianess(2, &[ 1, 2 ]), vec![ 1, 0, 2, 0 ]);
     /// ```
-    /// TODO(Makis): Benchmark and provide alternative implementations.
-    fn flip_endianess(num_bits: usize, values: &[F]) -> Vec<F> {
+    /// use remainder::mle::evals::Evaluations;
+    /// use remainder_shared_types::Fr;
+    /// assert_eq!(Evaluations::flip_endianess(
+    ///     2,
+    ///     &[Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)]),
+    ///     vec![ Fr::from(1), Fr::from(3), Fr::from(2), Fr::from(4) ]
+    /// );
+    /// assert_eq!(Evaluations::flip_endianess(
+    ///     2,
+    ///     &[ Fr::from(1), Fr::from(2) ]),
+    ///     vec![ Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(0) ]
+    /// );
+    /// ```
+    pub fn flip_endianess(num_bits: usize, values: &[F]) -> Vec<F> {
         let num_evals = values.len();
 
         let result: Vec<F> = cfg_into_iter!(0..(1 << num_bits))
@@ -392,7 +401,7 @@ pub struct MultilinearExtension<F: Field> {
 }
 
 impl<F: Field> MultilinearExtension<F> {
-    /// Create a new MultilinearExtension from a [Vec<F>] of evaluations.
+    /// Create a new MultilinearExtension from a [`Vec<F>`] of evaluations.
     pub fn new(evals_vec: Vec<F>) -> Self {
         let num_vars = log2(evals_vec.len()) as usize;
         let evals = Evaluations::new(num_vars, evals_vec);

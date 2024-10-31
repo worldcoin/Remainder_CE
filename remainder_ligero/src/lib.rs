@@ -57,7 +57,7 @@ pub trait PoseidonFieldHash: Field {
         d.update(&[*self])
     }
 
-    /// Update the [remainder::transcript::Transcript] with label `l` and element `self`
+    /// Update the [TranscriptSponge] with label `l` and element `self`
     fn transcript_update(&self, t: &mut impl TranscriptSponge<Self>, _l: &'static str) {
         t.absorb(*self);
     }
@@ -477,11 +477,13 @@ where
 /// Modifies the `comm.hashes` field within `comm` to contain all of the Merkle
 /// tree nodes, starting from the leaves. In other words, if the Merkle tree
 /// looks like the following:
+/// ```
 ///       [1]
 ///   [2]     [3]
 /// [4] [5] [6] [7]
+/// ```
 /// The resulting flattened hashes within `comm.hashes` will be
-/// (4, 5, 6, 7, 2, 3, 1)
+/// `(4, 5, 6, 7, 2, 3, 1)`.
 ///
 /// ## Arguments
 /// * `comm` - Ligero commitment struct whose `hashes` field is to be populated.
@@ -597,11 +599,13 @@ fn hash_columns<D, E, F>(
 }
 
 /// Computes the remaining Merkle tree layers from the layer of leaves. In other
-/// words, if `ins` is [1] [2] [3] [4], then our Merkle tree appears as follows:
+/// words, if `ins` is `[1, 2, 3, 4]`, then our Merkle tree appears as follows:
+/// ```text
 ///       [hash(hash(1, 2), hash(3, 4))]
 ///   [hash(1, 2)]              [hash(3, 4)]
 /// [1]           [2]           [3]           [4]
-/// and `outs` is [hash(1, 2)] [hash(3, 4)] [hash(hash(1, 2), hash(3, 4))].
+/// ```
+/// and `outs` is `[hash(1, 2), hash(3, 4), hash(hash(1, 2), hash(3, 4))]`.
 ///
 /// ## Arguments
 /// `ins` - The leaves to the Merkle tree
@@ -629,7 +633,7 @@ fn merkle_tree<D, F>(
 }
 
 /// Computes a single layer of Merkle tree from a previous layer. In other words,
-/// if `ins` is [1] [2] [3] [4], then `outs` should be [hash(1, 2)] [hash(3, 4)].
+/// if `ins` is `[1, 2, 3, 4]`, then `outs` should be `[hash(1, 2), hash(3, 4)]`.
 ///
 /// ## Arguments
 /// `ins` - The leaves to the Merkle tree
@@ -906,14 +910,14 @@ where
     &hash == root
 }
 
-/// Checks that the jth index of b_T M' matches the value of b_T * M'[j], where
-/// the b_T M' value is computed via enc(b_T M), and the second via the prover
-/// sending over M'[j] and the verifier manually computing b_T * M'[j].
+/// Checks that the jth index of `b_T M'` matches the value of `b_T * M'[j]`, where
+/// the `b_T M'` value is computed via `enc(b_T M)`, and the second via the prover
+/// sending over `M'[j]` and the verifier manually computing `b_T * M'[j]`.
 ///
 /// ## Arguments
-/// * `column` - The actual Ligero matrix col M_j
-/// * `tensor` - The random b^T we are evaluating at
-/// * `poly_eval` - The RLC'd, evaluated version b^T M'[j]
+/// * `column` - The actual Ligero matrix col `M_j`
+/// * `tensor` - The random `b^T` we are evaluating at
+/// * `poly_eval` - The RLC'd, evaluated version `b^T M'[j]`
 fn verify_column_value<E, F>(column: &LcColumn<E, F>, tensor: &[F], poly_eval: &F) -> bool
 where
     F: Field,
