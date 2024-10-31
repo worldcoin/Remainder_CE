@@ -12,7 +12,7 @@ use remainder_shared_types::Field;
 use crate::mle::{dense::DenseMle, MleIndex};
 use thiserror::Error;
 
-use super::{BinaryOperation, LAZY_BETA_EVALUATION};
+use super::BinaryOperation;
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -586,31 +586,4 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
     Ok(evaluate_mle_ref_product(&[a_f2_x, beta_g2], degree)
         .unwrap()
         .0)
-}
-
-/// Get the evals for an identity gate. Note that this specifically
-/// refers to computing the prover message while binding the dataparallel bits of a `Gate`
-/// expression.
-pub fn compute_sumcheck_message_data_parallel_identity_gate_lazy_beta<F: Field>(
-    a_f2_x: &DenseMle<F>,
-    g2_challenges: Vec<F>,
-    round_index: usize,
-) -> Result<Vec<F>, GateError> {
-    // When we have an identity gate, we have to multiply the beta table over the dataparallel challenges
-    // with the function on the x variables.
-    let degree = 2;
-
-    let beta_values = BetaValues::new(g2_challenges.into_iter().enumerate().collect());
-    let (unbound_beta_values, bound_beta_values) =
-        beta_values.get_relevant_beta_unbound_and_bound(a_f2_x.mle_indices());
-    let evals = beta_cascade(
-        &[a_f2_x],
-        degree,
-        round_index,
-        &unbound_beta_values,
-        &bound_beta_values,
-    )
-    .0;
-
-    Ok(evals)
 }
