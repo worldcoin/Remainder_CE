@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 
 use crate::utils::vandermonde::VandermondeInverse;
+use ark_std::{end_timer, start_timer};
 use hyrax_input_layer::{
     commit_to_input_values, verify_claim, HyraxInputLayerDescription, HyraxInputLayerProof,
     HyraxProverInputCommitment,
@@ -363,6 +364,7 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
             .map(|layer| {
                 let claims = claim_tracker.get(&layer.layer_id()).unwrap().clone();
                 let output_mles_from_layer = layer_map.get(&layer.layer_id()).unwrap();
+                let layer_timer = start_timer!(|| format!("Proving layer {}", layer.layer_id()));
                 let (layer_proof, claims_from_layer) = HyraxLayerProof::prove(
                     layer,
                     &claims,
@@ -380,7 +382,7 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
                         claim_tracker.insert(claim.to_layer_id, vec![claim]);
                     }
                 }
-
+                end_timer!(layer_timer);
                 (layer.layer_id(), layer_proof)
             })
             .collect_vec();
@@ -554,7 +556,6 @@ pub fn match_claims<C: PrimeOrderCurve>(
                 // ok, return the claim
                 committed_claim.to_raw_claim()
             } else {
-                // TODO return an error instead of panicking
                 panic!("Claim has not counterpart in committed claims!");
             }
         })

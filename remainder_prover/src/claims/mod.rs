@@ -207,10 +207,20 @@ impl<F: Field> ClaimTracker<F> {
     pub fn get(&self, layer_id: LayerId) -> Option<&Vec<Claim<F>>> {
         self.claim_map.get(&layer_id)
     }
+
+    /// Removes all claims made on layer with ID `layer_id` and returns them.
+    pub fn remove(&mut self, layer_id: LayerId) -> Option<Vec<Claim<F>>> {
+        self.claim_map.remove(&layer_id)
+    }
+
+    /// Returns whether the claim tracker is empty.
+    pub fn is_empty(&self) -> bool {
+        self.claim_map.is_empty()
+    }
 }
 
 /// Clippy suggested this.
-/// See: https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default.
+/// See: <https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default>.
 impl<F: Field> Default for ClaimTracker<F> {
     fn default() -> Self {
         ClaimTracker::new()

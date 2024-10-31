@@ -65,7 +65,7 @@ pub trait CircuitNode {
 
     /// Return the "sub-nodes" of this node.  These are nodes that are "owned" by this node.  Note
     /// that this is not a relationship in the DAG.
-    /// e.g. [InputLayerNode] owns the [InputShredNode]s that are its subnodes.
+    /// e.g. InputLayerNode owns the InputShreds that are its subnodes.
     fn subnodes(&self) -> Option<Vec<NodeId>> {
         None
     }

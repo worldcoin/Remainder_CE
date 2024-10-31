@@ -53,7 +53,6 @@ fn create_dummy_mle(num_vars: usize) -> MultilinearExtension<Fr> {
     // field elements and we didn't notice any statistically significant
     // regression in performance for `halo2curves::bn256::Fr`.
     let evals: Vec<Fr> = (0..(1 << num_vars)).map(Fr::from).collect();
-    // let evals: Vec<Fr> = (0..(1 << num_vars)).map(|_| Fr::random(OsRng)).collect();
 
     let f = Evaluations::new(num_vars, evals);
 
