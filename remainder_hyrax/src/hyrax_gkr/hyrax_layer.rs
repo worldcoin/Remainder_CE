@@ -13,7 +13,9 @@ use remainder::layer::LayerDescription;
 use remainder::layer::LayerId;
 use remainder::mle::dense::DenseMle;
 use remainder::{claims::claim_aggregation::get_wlx_evaluations, layer::layer_enum::LayerEnum};
-use remainder::{claims::claim_group::ClaimGroup, layer::combine_mle_refs::get_og_mle_refs};
+use remainder::{
+    claims::claim_group::ClaimGroup, layer::combine_mle_refs::get_indexed_layer_mles_to_combine,
+};
 use remainder::{
     claims::RawClaim,
     layer::product::{new_with_values, Product},
@@ -108,7 +110,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             let wlx_evals = get_wlx_evaluations(
                 claim_group.get_claim_points_matrix(),
                 claim_group.get_results(),
-                get_og_mle_refs(output_mles_from_layer),
+                get_indexed_layer_mles_to_combine(output_mles_from_layer),
                 claim_group.get_num_claims(),
                 claim_group.get_num_vars(),
             )
