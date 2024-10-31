@@ -39,6 +39,10 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         self.mle.num_vars()
     }
 
+    fn is_fully_bound(&self) -> bool {
+        self.mle.is_fully_bound()
+    }
+
     fn get_padded_evaluations(&self) -> Vec<F> {
         let size: usize = 1 << self.mle.num_vars();
         let padding = size - self.mle.len();
@@ -170,7 +174,11 @@ impl<F: Field> Mle<F> for DenseMle<F> {
     }
 
     fn first(&self) -> F {
-        self.iter().next().unwrap()
+        self.mle.first()
+    }
+
+    fn value(&self) -> F {
+        self.mle.value()
     }
 }
 

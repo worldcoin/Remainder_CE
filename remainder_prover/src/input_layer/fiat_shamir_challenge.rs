@@ -101,7 +101,7 @@ impl<F: Field> FiatShamirChallenge<F> {
             }
             eval.unwrap()
         } else {
-            RawClaim::new(vec![], mle.first())
+            RawClaim::new(vec![], mle.value())
         };
 
         // This is an internal error as it should never happen.
