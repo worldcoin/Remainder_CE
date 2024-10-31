@@ -573,139 +573,17 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
     Ok(evals)
 }
 
-/// Does all the necessary updates when proving a round for batched gate mles.
-#[allow(clippy::too_many_arguments)]
-pub fn prove_round_identity_gate_dataparallel_phase<F: Field>(
-    src_mle: &mut DenseMle<F>,
-    beta_g1: &DenseMle<F>,
-    beta_g2: &mut DenseMle<F>,
-    round_index: usize,
-    challenge: F,
-    nonzero_gates: &[(usize, usize)],
-    num_dataparallel_bits: usize,
-) -> Result<Vec<F>, GateError> {
-    beta_g2.fix_variable(round_index - 1, challenge);
-    // Need to separately update these because the phase_lhs and phase_rhs has no version of them.
-    src_mle.fix_variable(round_index - 1, challenge);
-    compute_sumcheck_messages_data_parallel_identity_gate(
-        src_mle,
-        beta_g2,
-        beta_g1,
-        nonzero_gates,
-        num_dataparallel_bits,
-    )
-}
-
 /// Get the evals for an identity gate. Note that this specifically
 /// refers to computing the prover message while binding the dataparallel bits of a `Gate`
 /// expression.
-pub fn compute_sumcheck_messages_data_parallel_identity_gate<F: Field>(
-    f2_p2_x: &DenseMle<F>,
+pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
+    a_f2_x: &DenseMle<F>,
     beta_g2: &DenseMle<F>,
-    beta_g1: &DenseMle<F>,
-    nonzero_gates: &[(usize, usize)],
-    num_dataparallel_bits: usize,
 ) -> Result<Vec<F>, GateError> {
     // When we have an identity gate, we have to multiply the beta table over the dataparallel challenges
     // with the function on the x variables.
     let degree = 2;
-
-    // There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`.
-    let eval_count = degree + 1;
-
-    // Iterate across all pairs of evaluations.
-    let evals = cfg_into_iter!((0..1 << (num_dataparallel_bits - 1))).fold(
-        #[cfg(feature = "parallel")]
-        || vec![F::ZERO; eval_count],
-        #[cfg(not(feature = "parallel"))]
-        vec![F::ZERO; eval_count],
-        |mut acc, p2_idx| {
-            // Compute the beta successors the same way it's done for each mle. Do it outside the loop
-            // because it only needs to be done once per product of mles.
-            let first = beta_g2.get(p2_idx * 2).unwrap();
-            let second = if beta_g2.num_free_vars() != 0 {
-                beta_g2.get(p2_idx * 2 + 1).unwrap()
-            } else {
-                first
-            };
-            let step = second - first;
-
-            let beta_successors_snd =
-                std::iter::successors(Some(second), move |item| Some(*item + step));
-            // Iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1.
-            let beta_successors = std::iter::once(first).chain(beta_successors_snd);
-            let beta_iter: Box<dyn Iterator<Item = F>> = Box::new(beta_successors);
-
-            let num_dataparallel_entries = 1 << num_dataparallel_bits;
-            let inner_sum_successors = nonzero_gates
-                .iter()
-                .copied()
-                .map(|(z, x)| {
-                    let g1_z = beta_g1.mle.get(z).unwrap();
-                    let g1_z_successors = std::iter::successors(Some(g1_z), move |_| Some(g1_z));
-
-                    // --- Compute f_2((A, p_2), x) ---
-                    // --- Note that the bookkeeping table is little-endian, so we shift by `x * num_dataparallel_entries` ---
-                    let f2_0_p2_x = f2_p2_x
-                        .get((p2_idx * 2) + x * num_dataparallel_entries)
-                        .unwrap();
-                    let f2_1_p2_x = if f2_p2_x.num_free_vars() != 0 {
-                        f2_p2_x
-                            .get((p2_idx * 2 + 1) + x * num_dataparallel_entries)
-                            .unwrap()
-                    } else {
-                        f2_0_p2_x
-                    };
-                    let linear_diff_f2 = f2_1_p2_x - f2_0_p2_x;
-
-                    let f2_evals_p2_x =
-                        std::iter::successors(Some(f2_1_p2_x), move |f2_prev_p2_x| {
-                            Some(*f2_prev_p2_x + linear_diff_f2)
-                        });
-                    let all_f2_evals_p2_x = std::iter::once(f2_0_p2_x).chain(f2_evals_p2_x);
-
-                    // --- The evals we want are simply the element-wise product of the accessed evals ---
-                    let g1_z_times_f2_evals_p2_x = g1_z_successors
-                        .zip(all_f2_evals_p2_x)
-                        .map(|(g1_z_eval, f2_eval)| g1_z_eval * f2_eval);
-
-                    let evals_iter: Box<dyn Iterator<Item = F>> =
-                        Box::new(g1_z_times_f2_evals_p2_x);
-
-                    evals_iter
-                })
-                .reduce(|acc, successor| {
-                    let add_successors = acc
-                        .zip(successor)
-                        .map(|(acc_eval, successor_eval)| acc_eval + successor_eval);
-
-                    let add_iter: Box<dyn Iterator<Item = F>> = Box::new(add_successors);
-                    add_iter
-                })
-                .unwrap();
-
-            let evals = std::iter::once(inner_sum_successors)
-                // chain the beta successors
-                .chain(std::iter::once(beta_iter))
-                .reduce(|acc, evals| Box::new(acc.zip(evals).map(|(acc, eval)| acc * eval)))
-                .unwrap();
-
-            acc.iter_mut()
-                .zip(evals)
-                .for_each(|(acc, eval)| *acc += eval);
-            acc
-        },
-    );
-
-    #[cfg(feature = "parallel")]
-    let evals = evals.reduce(
-        || vec![F::ZERO; eval_count],
-        |mut acc, partial| {
-            acc.iter_mut()
-                .zip(partial)
-                .for_each(|(acc, partial)| *acc += partial);
-            acc
-        },
-    );
-    Ok(evals)
+    Ok(evaluate_mle_ref_product(&[a_f2_x, beta_g2], degree)
+        .unwrap()
+        .0)
 }

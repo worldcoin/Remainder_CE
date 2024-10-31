@@ -305,33 +305,3 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_all_zero() {
     );
     end_timer!(commit_timer);
 }
-
-#[test]
-/// Test on a 2^9 x 2^9 matrix with all 64 bit field elements (as opposed to the full)
-/// 256-bit width which is the `sanity_check_test_honest_prover_iris_size_symmetric_random`
-/// test.
-fn sanity_check_test_honest_prover_iris_size_symmetric_all_64_bit_rand() {
-    let committer = PedersenCommitter::<Bn256Point>::new(
-        (1 << 9) + 1,
-        "zerozerozerozerozerozerozerozero",
-        None,
-    );
-    let input_layer_mle_coeff_raw_vec = (0..(1 << 18))
-        .map(|_| Scalar::from(rand::random::<u64>()))
-        .collect_vec();
-    let input_layer_mle_coeff =
-        MleCoefficientsVector::ScalarFieldVector(input_layer_mle_coeff_raw_vec.clone());
-
-    let blinding_factors_matrix_rows = (0..(1 << 9))
-        .map(|_| Scalar::from(rand::random::<u64>()))
-        .collect_vec();
-
-    let commit_timer = start_timer!(|| "commit time");
-    HyraxPCSEvaluationProof::compute_matrix_commitments(
-        9,
-        &input_layer_mle_coeff,
-        &committer,
-        &blinding_factors_matrix_rows,
-    );
-    end_timer!(commit_timer);
-}
