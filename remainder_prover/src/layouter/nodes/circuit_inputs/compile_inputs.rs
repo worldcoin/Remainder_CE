@@ -14,7 +14,7 @@ use crate::{
 
 use super::InputLayerNode;
 
-/// Function which returns a vector of [MleIndex::Fixed] for prefix bits according to which
+/// Function which returns a vector of the values for prefix bits according to which
 /// position we are in the range from 0 to `total_num_bits` - `num_free_bits`.
 fn get_prefix_bits_from_capacity(
     capacity: u32,

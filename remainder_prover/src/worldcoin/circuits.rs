@@ -23,7 +23,7 @@ use remainder_shared_types::Field;
 
 use super::data::IriscodeCircuitData;
 
-/// Description of a [HyraxProof] for the iriscode circuit.
+/// Description of a [remainder_hyrax::hyrax_gkr::HyraxProof] for the iriscode circuit.
 pub struct IriscodeProofDescription<F: Field> {
     /// The circuit description.
     pub circuit_description: GKRCircuitDescription<F>,

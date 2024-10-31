@@ -13,7 +13,7 @@ pub struct Subtractor<F: Field> {
 }
 
 impl<F: Field> Subtractor<F> {
-    /// Create a new [Thresholder] component.
+    /// Create a new [Subtractor] component.
     pub fn new(a: &dyn CircuitNode, b: &dyn CircuitNode) -> Self {
         let sector = Sector::new(&[a, b], |nodes| {
             assert_eq!(nodes.len(), 2);

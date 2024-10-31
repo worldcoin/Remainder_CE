@@ -130,7 +130,7 @@ pub fn get_mle_idx_decomp_for_idx<F: Field>(idx: usize, num_bits: usize) -> Vec<
         .collect_vec()
 }
 
-/// Returns the total MLE indices given a Vec<bool>
+/// Returns the total MLE indices given a `Vec<bool>`.
 /// for the prefix bits and then the number of free
 /// bits after.
 pub fn get_total_mle_indices<F: Field>(

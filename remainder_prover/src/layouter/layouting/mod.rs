@@ -43,14 +43,6 @@ impl<F: Field> CircuitMap<F> {
 
     /// Using the circuit location, which is a layer_id and prefix_bits tuple,
     /// get the data that exists here.
-    pub fn get_data_from_location(
-        &self,
-        circuit_location: &CircuitLocation,
-    ) -> Option<&MultilinearExtension<F>> {
-        self.0.get(circuit_location)
-    }
-
-    /// An alias to [get_data_from_location] above,
     pub fn get_data_from_circuit_mle(
         &self,
         circuit_mle: &MleDescription<F>,

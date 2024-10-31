@@ -220,7 +220,7 @@ impl<F: Field> ClaimTracker<F> {
 }
 
 /// Clippy suggested this.
-/// See: https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default.
+/// See: <https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default>.
 impl<F: Field> Default for ClaimTracker<F> {
     fn default() -> Self {
         ClaimTracker::new()

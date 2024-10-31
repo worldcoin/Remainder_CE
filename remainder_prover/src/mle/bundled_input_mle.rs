@@ -94,7 +94,7 @@ impl<F: Field, const N: usize> BundledInputMle<F, N> {
 }
 
 impl<F: Field, const N: usize> BundledInputMle<F, N> {
-    /// Creates a new [FlatMles] from raw data.
+    /// Creates a new [BundledInputMle] from raw data.
     pub fn new_from_raw(data: [Vec<F>; N], layer_id: LayerId) -> Self {
         let mles = data
             .into_iter()

@@ -518,7 +518,8 @@ pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: Field>(
 }
 
 /// this is one step of the beta cascade algorithm. essentially we are doing
-/// (1 - beta_val) * mle[index] + beta_val * mle[index + half_vec_len] (big-endian version of fix variable)
+/// `(1 - beta_val) * mle[index] + beta_val * mle[index + half_vec_len]`
+/// (big-endian version of fix variable)
 pub(crate) fn beta_cascade_step<F: Field>(mle_successor_vec: &mut [F], beta_val: F) -> Vec<F> {
     let (one_minus_beta_val, beta_val) = (F::ONE - beta_val, beta_val);
     let half_vec_len = mle_successor_vec.len() / 2;
