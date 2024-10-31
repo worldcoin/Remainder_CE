@@ -160,12 +160,9 @@ impl<F: Field> MatMult<F> {
     }
 
     fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
-        assert_eq!(self.matrix_a.mle.len(), 1);
-        assert_eq!(self.matrix_b.mle.len(), 1);
-
         transcript_writer.append_elements(
             "Fully bound matrix evaluations",
-            &[self.matrix_a.mle.first(), self.matrix_b.mle.first()],
+            &[self.matrix_a.mle.value(), self.matrix_b.mle.value()],
         );
     }
 }
@@ -281,7 +278,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
                     })
                     .collect_vec();
 
-                let matrix_val = matrix_mle.first();
+                let matrix_val = matrix_mle.value();
                 let claim: Claim<F> = Claim::new(
                     matrix_fixed_indices,
                     matrix_val,
