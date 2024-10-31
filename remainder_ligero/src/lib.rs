@@ -477,7 +477,7 @@ where
 /// Modifies the `comm.hashes` field within `comm` to contain all of the Merkle
 /// tree nodes, starting from the leaves. In other words, if the Merkle tree
 /// looks like the following:
-/// ```
+/// ```text
 ///       [1]
 ///   [2]     [3]
 /// [4] [5] [6] [7]
