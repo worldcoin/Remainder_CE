@@ -238,6 +238,12 @@ impl Iterator for GrayCode {
     }
 }
 
+/// A struct representing lexicographic bit-order in little endian.
+///
+/// The iterator returns elements of the form (u32, Vec<(u32, bool)>) where the
+/// first u32 is the current index, and the Vec<(u32, bool)> represents the
+/// bits that flipped and what they used to be. As opposed to [GrayCode],
+/// these don't have edit distance 1, so the flipped bits go in a Vec.
 pub struct LexicographicLE {
     num_bits: usize,
     current_val: u32,
@@ -276,6 +282,8 @@ impl Iterator for LexicographicLE {
     }
 }
 
+/// This function non-destructively evaluates an MLE at a given point using the
+/// [LexicographicLE] iterator.
 pub fn evaluate_mle_at_a_point_lexicographic_order<F: Field>(
     mle: &MultilinearExtension<F>,
     point: &[F],
@@ -329,8 +337,8 @@ pub fn evaluate_mle_at_a_point_lexicographic_order<F: Field>(
     evaluation
 }
 
-/// This function non-destructively evaluates an MLE at a given point using
-/// the gray codes iterator.
+/// This function non-destructively evaluates an MLE at a given point using the
+/// gray codes iterator.
 pub fn evaluate_mle_at_a_point_gray_codes<F: Field>(
     mle: &MultilinearExtension<F>,
     point: &[F],
