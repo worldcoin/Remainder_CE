@@ -314,7 +314,7 @@ pub fn evaluate_mle_at_a_point_lexicographic_order<F: Field>(
                     // For every bit i that is flipped, if it used to be a 1,
                     // then we multiply by r_i^{-1} and multiply by
                     // (1 - r_i) to account for this bit flip.
-                    let acc = if *flipped_bit_value {
+                    if *flipped_bit_value {
                         acc * inverses[*flipped_bit_index as usize]
                             * (F::ONE - point[*flipped_bit_index as usize])
                     }
@@ -324,8 +324,7 @@ pub fn evaluate_mle_at_a_point_lexicographic_order<F: Field>(
                     else {
                         acc * (one_minus_inverses[*flipped_bit_index as usize])
                             * point[*flipped_bit_index as usize]
-                    };
-                    acc
+                    }
                 },
             );
 

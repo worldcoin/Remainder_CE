@@ -14,7 +14,7 @@ use remainder::layer::LayerId;
 use remainder::mle::dense::DenseMle;
 use remainder::{claims::claim_aggregation::get_wlx_evaluations, layer::layer_enum::LayerEnum};
 use remainder::{
-    claims::claim_group::ClaimGroup, layer::combine_mle_refs::get_indexed_layer_mles_to_combine,
+    claims::claim_group::ClaimGroup, layer::combine_mles::get_indexed_layer_mles_to_combine,
 };
 use remainder::{
     claims::RawClaim,

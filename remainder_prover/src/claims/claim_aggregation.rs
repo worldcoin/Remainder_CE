@@ -11,7 +11,7 @@ use tracing::{debug, info};
 
 use crate::{
     claims::{Claim, RawClaim},
-    layer::combine_mle_refs::{
+    layer::combine_mles::{
         combine_mles_with_aggregate, get_indexed_layer_mles_to_combine, pre_fix_mles,
     },
     mle::dense::DenseMle,
