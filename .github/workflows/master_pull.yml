@@ -60,7 +60,7 @@ jobs:
             - name: Create memory-limited cgroup
               run: |
                 sudo mkdir /sys/fs/cgroup/hook_memory_limited_group
-                echo 540M | sudo tee /sys/fs/cgroup/hook_memory_limited_group/memory.max
+                echo 500M | sudo tee /sys/fs/cgroup/hook_memory_limited_group/memory.max
                 echo 0 | sudo tee /sys/fs/cgroup/hook_memory_limited_group/memory.swap.max
             - name: Compile binary
               run: cargo build --release --bin worldcoin
