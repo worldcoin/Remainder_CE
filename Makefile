@@ -15,8 +15,8 @@ prod-seq:
 	cargo build --release --bin worldcoin
 
 test: test-dev
-	cargo test --release --features parallel --package remainder-hyrax --lib -- --ignored hyrax_worldcoin::test_worldcoin
-	cargo test --release --features parallel --package remainder --lib -- --ignored worldcoin::tests
+	cargo test --release --features parallel  --package remainder-hyrax --lib -- --ignored hyrax_worldcoin::test_worldcoin --test-threads=1
+	cargo test --release --features parallel  --package remainder --lib -- --ignored worldcoin::tests --test-threads=1
 
 test-dev:
 	cargo test --release --features parallel -- --test-threads=1
