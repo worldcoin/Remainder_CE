@@ -31,7 +31,7 @@ impl<F: Field> MleDescription<F> {
     }
 
     /// Replace the current MLE indices stored with custom MLE indices. Most
-    /// useful in [MatMult], where we do index manipulation.
+    /// useful in [crate::layer::matmult::MatMult], where we do index manipulation.
     pub fn set_mle_indices(&mut self, new_mle_indices: Vec<MleIndex<F>>) {
         self.var_indices = new_mle_indices;
     }

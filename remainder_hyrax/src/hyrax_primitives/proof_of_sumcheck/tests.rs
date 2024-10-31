@@ -80,7 +80,7 @@ fn test_completeness() {
     mle_ref.index_mle_indices(0);
     mle_ref.fix_variable(0, r1);
     mle_ref.fix_variable(1, r2);
-    let mle_eval = mle_ref.first();
+    let mle_eval = mle_ref.value();
     // first sumcheck message f1
     let f10 = v00 + v01;
     let f11 = v10 + v11 - v00 - v01;
@@ -181,10 +181,6 @@ fn test_example_with_regular_layer() {
     equality_mle.fix_variable(0, r1);
     mle_ref.fix_variable(0, r1);
 
-    // TODO!(ryancao): Put the `compute_sumcheck_message` back in?
-    // let evaluations = compute_sumcheck_message(&mle_ref.expression(), 0, 2, &equality_mle).unwrap();
-    // assert_eq!(evaluations.0, vec![Fr::from(0), Fr::from(1), Fr::from(2),]);
-
     let evaluations = [Fr::from(0), Fr::from(1), Fr::from(2)];
     let mut converter = VandermondeInverse::<Fr>::new();
     let coefficients = converter.convert_to_coefficients(evaluations.to_vec());
@@ -203,11 +199,11 @@ fn test_example_with_regular_layer() {
     equality_mle.fix_variable(1, r2);
     mle_ref.fix_variable(1, r2);
 
-    let _mle_eval = mle_ref.first() * equality_mle.first();
+    let _mle_eval = mle_ref.value() * equality_mle.value();
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
         &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(
             &vec![mle_ref.clone()],
-            equality_mle.first(),
+            equality_mle.value(),
         )]),
         &committer,
         &mut rand::thread_rng(),

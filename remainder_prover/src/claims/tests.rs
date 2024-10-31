@@ -226,12 +226,6 @@ fn test_aggro_claim_4() {
     let mut expr_copy = expr.clone();
 
     let layer = RegularLayer::new_raw(LayerId::Input(0), expr);
-    // let layer = from_mle(
-    //     (mle1, mle2),
-    //     |mle| Expression::<Fr, ProverExpr>::products(vec![mle.clone().0, mle.clone().1]),
-    //     |_, _, _| unimplemented!(),
-    // );
-    // let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
 
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -338,12 +332,6 @@ fn test_aggro_claim_negative_2() {
     let output_mle_from_layer = vec![mle1.clone()];
 
     let layer = RegularLayer::new_raw(LayerId::Input(0), expr);
-    // let layer = from_mle(
-    //     mle1,
-    //     |mle| mle.clone().expression(),
-    //     |_, _, _| unimplemented!(),
-    // );
-    // let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
 
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
