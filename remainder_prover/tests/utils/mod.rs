@@ -34,7 +34,6 @@ pub fn get_dummy_input_shred_and_data(
     rng: &mut impl Rng,
     input_node: &InputLayerNode,
 ) -> (InputShred, InputShredData<Fr>) {
-    // let input_layer = InputLayerNode::new(ctx, None);
     let mle_vec = (0..(1 << num_vars))
         .map(|_| Fr::from(rng.gen::<u64>()))
         .collect_vec();

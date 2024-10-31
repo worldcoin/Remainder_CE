@@ -3,9 +3,6 @@
 
 use std::{cmp::Ordering, collections::HashSet};
 
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
-
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
     layer::{LayerError, VerificationError},
@@ -16,10 +13,12 @@ use crate::{
     },
     sumcheck::*,
 };
+use itertools::Itertools;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
+use serde::{Deserialize, Serialize};
 
 use thiserror::Error;
 
@@ -31,7 +30,7 @@ use super::{
 };
 
 #[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 /// Controls whether the `beta` optimiation should be enabled. When enabled, all
 /// functions in this module that compute the value of a `beta` function at a
@@ -41,7 +40,7 @@ use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterato
 const LAZY_BETA_EVALUATION: bool = true;
 
 /// The circuit Description for an [IdentityGate].
-#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash)]
 #[serde(bound = "F: Field")]
 pub struct IdentityGateLayerDescription<F: Field> {
     /// The layer id associated with this gate layer.
@@ -511,7 +510,8 @@ impl<F: Field> VerifierLayer<F> for VerifierIdentityGateLayer<F> {
     }
 }
 
-/// implement the layer trait for identitygate struct
+/// The layer trait implementation for [IdentityGate], which has the proving
+/// functionality as well as the modular functions for each round of sumcheck.
 impl<F: Field> Layer<F> for IdentityGate<F> {
     fn prove(
         &mut self,
@@ -558,7 +558,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
     fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError> {
         match round_index.cmp(&self.num_dataparallel_vars) {
-            // data parallel phase
+            // Dataparallel phase.
             Ordering::Less => {
                 let sumcheck_message = self
                     .compute_sumcheck_message_data_parallel_identity_gate_beta_cascade(round_index)
@@ -566,7 +566,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 Ok(sumcheck_message)
             }
 
-            // init phase 1
+            // Initialize phase 1.
             Ordering::Equal => {
                 self.init_phase_1(self.g1_challenges.as_ref().unwrap().clone());
 
@@ -604,7 +604,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 Ok(first_round_sumcheck_evals)
             }
 
-            // phase 1
+            // Phase 1.
             Ordering::Greater => {
                 let mles: Vec<&DenseMle<F>> =
                     vec![&self.a_hg_mle_phase_1.as_ref().unwrap(), &self.source_mle];
@@ -768,7 +768,6 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         let mut claims = vec![];
         let mut fixed_mle_indices_u: Vec<F> = vec![];
 
-        // check the left side of the sum (f2(u)) against the challenges made to bind that variable
         for index in self.source_mle.mle_indices() {
             fixed_mle_indices_u.push(
                 index
@@ -804,12 +803,19 @@ pub struct IdentityGate<F: Field> {
     pub source_mle: DenseMle<F>,
     /// the beta table which enumerates the incoming claim's challenge points on the MLE
     beta_g1: Option<DenseMle<F>>,
-    /// the beta table which enumerates the incoming claim's challenge points on the
+    /// The [BetaValues] struct which enumerates the incoming claim's challenge points on the
     /// dataparallel vars of the MLE
     beta_g2: Option<BetaValues<F>>,
+    /// The MLE initialized in the dataparallel phase which contains the nonzero gate
+    /// evaluations folded into a size 2^(num_dataparallel_bits) bookkeeping table.
     dataparallel_af2_mle: Option<DenseMle<F>>,
+    /// The challenges pertaining to the `x` variables, which are the non-dataparallel
+    /// variables in the source MLE.
     g1_challenges: Option<Vec<F>>,
+    /// The challenges pertaining to the dataparallel variables in the source MLE.
     g2_challenges: Option<Vec<F>>,
+    /// The MLE initialized in phase 1, which contains the beta values over `g1_challenges`
+    /// folded into the wiring function.
     a_hg_mle_phase_1: Option<DenseMle<F>>,
     /// The number of vars representing the number of "dataparallel" copies of the circuit.
     pub num_dataparallel_vars: usize,

@@ -11,8 +11,8 @@ use crate::{layer::LayerId, mle::evals::MultilinearExtension};
 
 use super::{CircuitNode, NodeId};
 
-/// A struct that represents input data that will be used to populate a
-/// [GKRCircuitDescription] in order to generate a full circuit.
+/// A struct that represents input data that will be used to instantiate a
+/// [remainder::prover::GKRCircuitDescription] in order to generate a full circuit.
 #[derive(Debug, Clone)]
 pub struct InputLayerNodeData<F: Field> {
     /// The [InputLayerNode] ID in the circuit building process that corresponds to
@@ -23,7 +23,7 @@ pub struct InputLayerNodeData<F: Field> {
 }
 
 impl<F: Field> InputLayerNodeData<F> {
-    /// Constructor for [InputLayerData], using the corresponding fields as
+    /// Constructor for [InputLayerNodeData], using the corresponding fields as
     /// parameters.
     pub fn new(corresponding_input_node_id: NodeId, data: Vec<InputShredData<F>>) -> Self {
         Self {

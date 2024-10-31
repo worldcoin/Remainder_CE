@@ -26,7 +26,6 @@ pub struct LigeroAuxInfo<F: Field> {
 }
 
 /// Total number of columns to be sent over
-/// TODO(ryancao): Make this more visible/change-able somehow!
 pub const N_COL_OPENS: usize = 200usize;
 
 impl<F> LigeroAuxInfo<F>
@@ -90,7 +89,6 @@ where
         // --- All the coefficients past the original number of cols should be zero-padded ---
         debug_assert!(inp.iter().skip(self.orig_num_cols).all(|&v| v == F::ZERO));
 
-        // --- TODO!(ryancao): This is wasteful (we clone twice!!!) ---
         let evals = halo2_fft(
             inp.iter().copied().take(self.orig_num_cols).collect_vec(),
             self.rho_inv,

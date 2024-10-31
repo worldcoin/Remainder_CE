@@ -443,14 +443,6 @@ fn poseidon_end_to_end_test() {
     let prover_root = transcript_reader.consume_element("polycommit").unwrap();
     assert_eq!(prover_root, root.root);
 
-    // let aux = LcProofAuxiliaryInfo {
-    //     rho_inv,
-    //     encoded_num_cols: enc.encoded_num_cols,
-    //     orig_num_cols: enc.orig_num_cols,
-    //     num_rows: comm.n_rows,
-    //     num_col_opens: enc.get_n_col_opens(),
-    // };
-
     // --- Verify the proof and return the prover-claimed result ---
     let res = verify(
         root.as_ref(),

@@ -226,11 +226,6 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
     }
 }
 
-// TODO we stole the content of this function from `evaluate_at_point` in `remainder_prover`
-// and place it here to avoid a circular dependency.  Note that when integrating with production
-// remainder, it would make sense to remove `evaluate_at_point` from `remainder_prover` and call
-// this function instead, in order to avoid repeatedly recomputing the barycentric weights.
-
 /// Return weights that can be used to interpolate a polynomial at a given point.
 /// Specifically, if f(0), .. , f(n_evals) are the evaluations of a polynomial f,
 /// and `weights` is the return value of this function, then the evaluation of f at `point` is

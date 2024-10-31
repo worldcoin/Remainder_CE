@@ -114,11 +114,13 @@ pub fn combine_mle_refs_with_aggregate<F: Field>(
     if updated_list.len() > 1 {
         return Err(CombineMleRefError::NotFullyCombined);
     }
+
+    // TODO(Makis): Technicalyl wrong. Consider removing.
     if updated_list[0].len() != 1 {
         return Err(CombineMleRefError::MleRefNotFullyFixed);
     }
 
-    Ok(updated_list[0].first())
+    Ok(updated_list[0].value())
 }
 
 /// for input layer stuff, combining refs together
