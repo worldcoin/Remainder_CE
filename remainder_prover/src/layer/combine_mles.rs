@@ -1,6 +1,6 @@
-//! Contains helper functions for working with collections
-//! of `MleRef`s which can be considered part of the same
-//! `Layer`
+//! This module contains the code used to combine parts of a layer and combining
+//! them to determine the evaluation of a layer's layerwise bookkeeping table at
+//! a point.
 
 use crate::{
     mle::{
@@ -21,6 +21,10 @@ use super::LayerId;
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 
+/// Type alias for an MLE evaluation and its prefix bits, as this type is used
+/// throughout the combining code.
+type MleEvaluationAndPrefixBits<F> = (F, Vec<bool>);
+
 /// Error handling for gate mle construction
 #[derive(Error, Debug, Clone)]
 pub enum CombineMleRefError {
@@ -28,11 +32,13 @@ pub enum CombineMleRefError {
     /// We have not fully combined all the mles because the list size is > 1.
     NotFullyCombined,
     #[error("we have an mle that is not fully fixed even after fixing on the challenge point")]
-    /// We have an mle that is not fully fixed even after fixing on the challenge point.
+    /// We have an mle that is not fully fixed even after fixing on the
+    /// challenge point.
     MleRefNotFullyFixed,
 }
 
-/// This fixes mles with shared points in the claims so that we don't repeatedly do so.
+/// This fixes mles with shared points in the claims so that we don't repeatedly
+/// do so.
 pub fn pre_fix_mles<F: Field>(mles: &mut [DenseMle<F>], chal_point: &[F], common_idx: Vec<usize>) {
     cfg_iter_mut!(mles).for_each(|mle| {
         common_idx.iter().for_each(|chal_idx| {
@@ -43,15 +49,16 @@ pub fn pre_fix_mles<F: Field>(mles: &mut [DenseMle<F>], chal_point: &[F], common
     });
 }
 
-/// Function that prepares all the mles to be combined. We simply index all the MLEs
-/// that are to be fixed and combined, and ensure that all fixed bits are always
-/// contiguous.
+/// Function that prepares all the mles to be combined. We simply index all the
+/// MLEs that are to be fixed and combined, and ensure that all fixed bits are
+/// always contiguous.
 pub fn get_indexed_layer_mles_to_combine<F: Field>(mles: Vec<DenseMle<F>>) -> Vec<DenseMle<F>> {
     // We split all the mles with a free bit within the fixed bits. This is in
     // order to ensure that all the fixed bits are truly "prefix" bits.
     let mut mles_split = collapse_mles_with_free_in_prefix(mles);
 
-    // Index all the MLEs as they will be fixed throughout the combining process.
+    // Index all the MLEs as they will be fixed throughout the combining
+    // process.
     cfg_iter_mut!(mles_split).for_each(|mle| {
         mle.index_mle_indices(0);
     });
@@ -68,8 +75,8 @@ pub fn combine_mles_with_aggregate<F: Field>(
     mles: &[DenseMle<F>],
     chal_point: &[F],
 ) -> Result<F, CombineMleRefError> {
-    // We go through all of the mles and fix variable in all of them given
-    // at the correct indices so that they are fully bound.
+    // We go through all of the mles and fix variable in all of them given at
+    // the correct indices so that they are fully bound.
     let fix_var_mles = mles
         .iter()
         .map(|mle| {
@@ -92,8 +99,8 @@ pub fn combine_mles_with_aggregate<F: Field>(
                 .mle_indices
                 .iter()
                 .filter_map(|mle_index| {
-                    if let MleIndex::Fixed(_) = mle_index {
-                        Some(mle_index.clone())
+                    if let MleIndex::Fixed(prefix_bool) = mle_index {
+                        Some(*prefix_bool)
                     } else {
                         None
                     }
@@ -107,21 +114,22 @@ pub fn combine_mles_with_aggregate<F: Field>(
     // Mutable variable that is overwritten every time we combine mles.
     let mut updated_list = fix_var_mles;
 
-    // A loop that breaks when all the mles no longer have any fixed bits and only
-    // have free bits. This means we have fully combined the MLEs to form the
-    // layerwise bookkeeping table (but fully bound to a point).
+    // A loop that breaks when all the mles no longer have any fixed bits and
+    // only have free bits. This means we have fully combined the MLEs to form
+    // the layerwise bookkeeping table (but fully bound to a point).
     loop {
-        // We first get the lsb fixed bit and the evaluation of the MLE that contributes to it.
+        // We first get the lsb fixed bit and the evaluation of the MLE that
+        // contributes to it.
         let (mle_evaluation, mle_prefix_bits) = get_lsb_fixed_var(&updated_list);
 
-        // There are only 0 prefix bits for the MLE contributing to the lsb fixed bit if
-        // the MLEs have been fully combined.
+        // There are only 0 prefix bits for the MLE contributing to the lsb
+        // fixed bit if the MLEs have been fully combined.
         if mle_prefix_bits.is_empty() {
             break;
         }
 
-        // Otherwise, overwrite updated_list to contain the combined MLE
-        // instead of the two MLEs contributing to the lsb fixed bit.
+        // Otherwise, overwrite updated_list to contain the combined MLE instead
+        // of the two MLEs contributing to the lsb fixed bit.
         updated_list =
             find_pair_and_combine(&updated_list, mle_prefix_bits, *mle_evaluation, chal_point);
     }
@@ -142,9 +150,9 @@ pub fn combine_mles_with_aggregate<F: Field>(
     Ok(*full_eval)
 }
 
-/// Takes the individual bookkeeping tables from the MLEs within an MLE
-/// and merges them with padding, using a little-endian representation
-/// merge strategy. Assumes that all MLEs are the same size.
+/// Takes the individual bookkeeping tables from the MLEs within an MLE and
+/// merges them with padding, using a little-endian representation merge
+/// strategy. Assumes that all MLEs are the same size.
 pub fn combine_mles<F: Field>(items: Vec<DenseMle<F>>) -> DenseMle<F> {
     let num_fields = items.len();
 
@@ -260,7 +268,9 @@ fn collapse_mles_with_free_in_prefix<F: Field>(mles: Vec<DenseMle<F>>) -> Vec<De
 ///
 /// In other words, this is the MLE evaluation pertaining to the MLE with the
 /// most fixed bits.
-fn get_lsb_fixed_var<F: Field>(mles: &[(F, Vec<MleIndex<F>>)]) -> &(F, Vec<MleIndex<F>>) {
+fn get_lsb_fixed_var<F: Field>(
+    mles: &[MleEvaluationAndPrefixBits<F>],
+) -> &MleEvaluationAndPrefixBits<F> {
     mles.iter()
         .max_by_key(|(_mle_evaluation, prefix_bits)| prefix_bits.len())
         .unwrap()
@@ -284,9 +294,9 @@ fn get_lsb_fixed_var<F: Field>(mles: &[(F, Vec<MleIndex<F>>)]) -> &(F, Vec<MleIn
 fn combine_pair<F: Field>(
     mle_evaluation_first: F,
     maybe_mle_evaluation_second: Option<F>,
-    prefix_vars_first: &[MleIndex<F>],
+    prefix_vars_first: &[bool],
     chal_point: &[F],
-) -> (F, Vec<MleIndex<F>>) {
+) -> MleEvaluationAndPrefixBits<F> {
     // If the second mle is None, we assume its bookkeeping table is all zeros.
     // We are dealing with fully fixed mles, so we just use F::ZERO.
     let mle_evaluation_second = maybe_mle_evaluation_second.unwrap_or(F::ZERO);
@@ -294,13 +304,14 @@ fn combine_pair<F: Field>(
     // Depending on whether the lsb fixed bit was true or false, we bind it to
     // the correct challenge point at this index this is either the challenge
     // point at the index, or one minus this value.
-    let bound_coord = if let &MleIndex::Fixed(false) = prefix_vars_first.last().unwrap() {
+    let bound_coord = if !prefix_vars_first.last().unwrap() {
         F::ONE - chal_point[prefix_vars_first.len() - 1]
     } else {
         chal_point[prefix_vars_first.len() - 1]
     };
 
-    // We compute the combined evaluation using the according index challenge point.
+    // We compute the combined evaluation using the according index challenge
+    // point.
     let new_eval =
         bound_coord * mle_evaluation_first + (F::ONE - bound_coord) * mle_evaluation_second;
 
@@ -316,12 +327,13 @@ fn combine_pair<F: Field>(
 /// original list of MLEs to contain the combined MLE evaluation and remove the
 /// original ones that were paired.
 fn find_pair_and_combine<F: Field>(
-    all_refs: &[(F, Vec<MleIndex<F>>)],
-    prefix_indices: &[MleIndex<F>],
+    all_refs: &[MleEvaluationAndPrefixBits<F>],
+    prefix_indices: &[bool],
     mle_evaluation: F,
     chal_point: &[F],
-) -> Vec<(F, Vec<MleIndex<F>>)> {
-    // We want to compare all fixed bits except the one at the least significant bit index.
+) -> Vec<MleEvaluationAndPrefixBits<F>> {
+    // We want to compare all fixed bits except the one at the least significant
+    // bit index.
     let indices_to_compare = &prefix_indices[0..prefix_indices.len() - 1];
     let mut mle_eval_pair = None;
     let mut all_refs_updated = Vec::new();
