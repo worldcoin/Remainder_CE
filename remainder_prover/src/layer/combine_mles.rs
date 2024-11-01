@@ -11,13 +11,12 @@ use crate::{
     utils::mle::evaluate_mle_at_a_point_gray_codes,
 };
 use ark_std::cfg_iter_mut;
-use ark_std::log2;
-use itertools::{repeat_n, Itertools};
+
+use itertools::Itertools;
 
 use remainder_shared_types::Field;
 use thiserror::Error;
 
-use super::LayerId;
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 
@@ -148,36 +147,6 @@ pub fn combine_mles_with_aggregate<F: Field>(
     );
 
     Ok(*full_eval)
-}
-
-/// Takes the individual bookkeeping tables from the MLEs within an MLE and
-/// merges them with padding, using a little-endian representation merge
-/// strategy. Assumes that all MLEs are the same size.
-pub fn combine_mles<F: Field>(items: Vec<DenseMle<F>>) -> DenseMle<F> {
-    let num_fields = items.len();
-
-    // --- All the items within should be the same size ---
-    let max_size = items.iter().map(|mle| mle.mle.len()).max().unwrap();
-
-    let part_size = 1 << log2(max_size);
-    let part_count = 2_u32.pow(log2(num_fields)) as usize;
-
-    // --- Number of "part" slots which need to filled with padding ---
-    let padding_count = part_count - num_fields;
-    let total_size = part_size * part_count;
-    let total_padding: usize = total_size - max_size * part_count;
-
-    let result = (0..max_size)
-        .flat_map(|index| {
-            items
-                .iter()
-                .map(move |item| item.get(index).unwrap_or(F::ZERO))
-                .chain(repeat_n(F::ZERO, padding_count))
-        })
-        .chain(repeat_n(F::ZERO, total_padding))
-        .collect_vec();
-
-    DenseMle::new_from_raw(result, LayerId::Input(0))
 }
 
 /// This function takes an MLE that has a free variable in between fixed
