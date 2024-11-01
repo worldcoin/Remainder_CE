@@ -55,6 +55,10 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         self.num_vars
     }
 
+    fn is_fully_bound(&self) -> bool {
+        self.num_vars == 0
+    }
+
     fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<RawClaim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::Indexed(round_index) {
@@ -124,6 +128,11 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
     }
 
     fn first(&self) -> F {
+        F::ZERO
+    }
+
+    fn value(&self) -> F {
+        assert_eq!(self.num_free_vars(), 0);
         F::ZERO
     }
 

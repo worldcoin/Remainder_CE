@@ -250,6 +250,56 @@ fn evals_new_from_big_endian_2_vars() {
 }
 
 #[test]
+fn evals_first() {
+    let f = Evaluations::new(2, vec![Fr::from(42), Fr::ZERO, Fr::ZERO, Fr::ZERO]);
+    assert_eq!(f.first(), Fr::from(42));
+
+    let f = Evaluations::<Fr>::new(2, vec![]);
+    assert_eq!(f.first(), Fr::ZERO);
+
+    let f = Evaluations::new(0, vec![Fr::from(42)]);
+    assert_eq!(f.first(), Fr::from(42));
+}
+
+#[test]
+fn evals_value_successful() {
+    let f = Evaluations::new(0, vec![Fr::from(42)]);
+    assert_eq!(f.value(), Fr::from(42));
+
+    let f = Evaluations::<Fr>::new(0, vec![]);
+    assert_eq!(f.value(), Fr::ZERO);
+}
+
+#[test]
+#[should_panic]
+fn evals_value_failing_1() {
+    let f = Evaluations::new(2, vec![Fr::from(42), Fr::ZERO, Fr::ZERO, Fr::ZERO]);
+    let _val = f.value();
+}
+
+#[test]
+#[should_panic]
+fn evals_value_failing_2() {
+    let f = Evaluations::<Fr>::new(2, vec![]);
+    let _val = f.value();
+}
+
+#[test]
+fn evals_fully_bound() {
+    let f = Evaluations::new(2, vec![Fr::from(42), Fr::ZERO, Fr::ZERO, Fr::ZERO]);
+    assert!(!f.is_fully_bound());
+
+    let f = Evaluations::<Fr>::new(2, vec![]);
+    assert!(!f.is_fully_bound());
+
+    let f = Evaluations::new(0, vec![Fr::from(42)]);
+    assert!(f.is_fully_bound());
+
+    let f = Evaluations::<Fr>::new(0, vec![]);
+    assert!(f.is_fully_bound());
+}
+
+#[test]
 fn test_mirror_bits() {
     assert_eq!(mirror_bits(4, 0b1110), 0b0111);
     assert_eq!(mirror_bits(3, 0b1110), 0b1011);

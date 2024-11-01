@@ -409,13 +409,21 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle_ref = mle_vec_idx.get_mle(mle_vec);
 
+                // TODO(Makis): Technically, this is wrong because a fully-bound
+                // MLE whose value happens to be `F::ZERO`, is allowed to have
+                // an implicit representation with an empty bookeeping table in
+                // the current implementation of
+                // [remainder::mle::evals::Evaluations].  We should probably
+                // remove this test and instead rely on
+                // [remainder::mle::dense::Dense::value] which performs the
+                // necessary checks and panics if the MLE is not fully-bound.
                 if mle_ref.len() != 1 {
                     return Err(ExpressionError::EvaluateNotFullyBoundError);
                 }
 
                 let layer_id = mle_ref.layer_id();
                 let mle_indices = mle_ref.mle_indices().to_vec();
-                let eval = mle_ref.first();
+                let eval = mle_ref.value();
 
                 Ok(ExpressionNode::Mle(VerifierMle::new(
                     layer_id,
@@ -436,6 +444,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                     .collect_vec();
 
+                // TODO(Makis): Same as in the previous case. Should probably
+                // remove.
                 for mle in mles.iter() {
                     if mle.len() != 1 {
                         return Err(ExpressionError::EvaluateNotFullyBoundError);
@@ -448,7 +458,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                             VerifierMle::new(
                                 mle.layer_id(),
                                 mle.mle_indices().to_vec(),
-                                mle.first(),
+                                mle.value(),
                             )
                         })
                         .collect_vec(),

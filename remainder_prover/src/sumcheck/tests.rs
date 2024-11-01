@@ -67,7 +67,6 @@ pub fn dummy_sumcheck<F: Field>(
 
 /// Returns the curr random challenge if verified correctly, otherwise verify error
 /// can change this to take prev round random challenge, and then compute the new random challenge
-/// TODO!(ryancao): Change this to take in the expression as well and do the final sumcheck check
 pub fn verify_sumcheck_messages<F: Field>(
     messages: Vec<(Vec<F>, Option<F>)>,
     mut expression: Expression<F, ProverExpr>,
@@ -110,7 +109,6 @@ pub fn verify_sumcheck_messages<F: Field>(
 
     // Round v, again Thaler book page 34
     let final_chal = F::from(rng.gen::<u64>());
-    // let final_chal = F::ONE;
     challenges.push(final_chal);
 
     // uses the expression to make one single oracle query
@@ -319,7 +317,6 @@ fn test_quadratic_sum_differently_sized_mles2() {
 /// test dummy sumcheck against verifier for product of the same mle
 #[test]
 fn test_dummy_sumcheck_1() {
-    // let layer_claims = (vec![Fr::from(1), Fr::from(-1)], Fr::from(2));
     let mut rng = test_rng();
     let mle_vec = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(2)];
 
@@ -349,7 +346,6 @@ fn test_dummy_sumcheck_1() {
 /// test dummy sumcheck against product of two diff mles
 #[test]
 fn test_dummy_sumcheck_2() {
-    // let layer_claims = (vec![Fr::from(3), Fr::from(4), Fr::from(2)], Fr::one());
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
     let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
@@ -444,7 +440,6 @@ fn test_dummy_sumcheck_sum_small() {
 /// test dummy sumcheck for concatenated expr SMALL
 #[test]
 fn test_dummy_sumcheck_concat() {
-    // let layer_claims = (vec![Fr::from(3), Fr::from(1), Fr::from(2)], Fr::one());
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(5), Fr::from(2)];
     let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
@@ -474,10 +469,6 @@ fn test_dummy_sumcheck_concat() {
 /// test dummy sumcheck for concatenated expr SMALL BUT LESS SMALL
 #[test]
 fn test_dummy_sumcheck_concat_2() {
-    // let layer_claims = (
-    //     vec![Fr::from(2), Fr::from(4), Fr::from(2), Fr::from(3)],
-    //     Fr::one(),
-    // );
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
     let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
@@ -515,10 +506,6 @@ fn test_dummy_sumcheck_concat_2() {
 /// test dummy sumcheck for concatenated expr
 #[test]
 fn test_dummy_sumcheck_concat_aggro() {
-    // let layer_claims = (
-    //     vec![Fr::from(2), Fr::from(4), Fr::from(2), Fr::from(3)],
-    //     Fr::one(),
-    // );
     let mut rng = test_rng();
     let mle_v1 = vec![
         Fr::from(1),
@@ -559,10 +546,6 @@ fn test_dummy_sumcheck_concat_aggro() {
 
 #[test]
 fn test_dummy_sumcheck_concat_aggro_aggro() {
-    // let layer_claims = (
-    //     vec![Fr::from(12190), Fr::from(28912), Fr::from(1)],
-    //     Fr::one(),
-    // );
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(1), Fr::from(2)];
     let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
@@ -613,7 +596,6 @@ fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
 
 #[test]
 fn test_dummy_sumcheck_sum() {
-    // let layer_claims = (vec![Fr::from(2), Fr::from(1), Fr::from(10)], Fr::one());
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(0), Fr::from(2)];
     let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
