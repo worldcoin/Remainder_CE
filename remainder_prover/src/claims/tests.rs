@@ -94,7 +94,7 @@ fn claim_aggregation_wrapper<Sp: TranscriptSponge<Fr>>(
     claims: &[Claim<Fr>],
 ) -> RawClaim<Fr> {
     let mut transcript: TranscriptWriter<_, Sp> = TranscriptWriter::new("Claims Test Transcript");
-    prover_aggregate_claims(claims, &output_mles_from_layer, &mut transcript).unwrap()
+    prover_aggregate_claims(claims, output_mles_from_layer, &mut transcript).unwrap()
 }
 
 /// Compute l* = l(r*).

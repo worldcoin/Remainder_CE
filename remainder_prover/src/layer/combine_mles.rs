@@ -46,7 +46,7 @@ pub fn pre_fix_mles<F: Field>(mles: &mut [DenseMle<F>], chal_point: &[F], common
 /// Function that prepares all the mles to be combined. We simply index all the MLEs
 /// that are to be fixed and combined, and ensure that all fixed bits are always
 /// contiguous.
-pub fn get_indexed_layer_mles_to_combine<F: Field>(mles: &[DenseMle<F>]) -> Vec<DenseMle<F>> {
+pub fn get_indexed_layer_mles_to_combine<F: Field>(mles: Vec<DenseMle<F>>) -> Vec<DenseMle<F>> {
     // We split all the mles with a free bit within the fixed bits. This is in
     // order to ensure that all the fixed bits are truly "prefix" bits.
     let mut mles_split = collapse_mles_with_free_in_prefix(mles);
@@ -232,12 +232,12 @@ fn split_mle<F: Field>(mle: &DenseMle<F>) -> Vec<DenseMle<F>> {
 
 /// This function will take a list of MLEs and updates the list to contain MLEs
 /// where all fixed bits are contiguous
-fn collapse_mles_with_free_in_prefix<F: Field>(mles: &[DenseMle<F>]) -> Vec<DenseMle<F>> {
+fn collapse_mles_with_free_in_prefix<F: Field>(mles: Vec<DenseMle<F>>) -> Vec<DenseMle<F>> {
     mles.into_iter()
         .flat_map(|mle| {
             // This iterates through the mle indices to check whether there is a
             // free bit within the fixed bits.
-            let (_, check_free_within_fixed) = mle.mle_indices().iter().fold(
+            let (_, contains_free_in_fixed) = mle.mle_indices().iter().fold(
                 (false, false),
                 |(free_seen_so_far, fixed_after_free_so_far), mle_idx| match mle_idx {
                     MleIndex::Free => (true, fixed_after_free_so_far),
@@ -246,13 +246,13 @@ fn collapse_mles_with_free_in_prefix<F: Field>(mles: &[DenseMle<F>]) -> Vec<Dens
                 },
             );
             // If true, we split, otherwise, we don't.
-            if check_free_within_fixed {
-                split_mle(mle)
+            if contains_free_in_fixed {
+                split_mle(&mle)
             } else {
-                vec![mle.clone()]
+                vec![mle]
             }
         })
-        .collect_vec()
+        .collect()
 }
 
 /// Gets the index of the least significant bit (lsb) of the fixed bits out of a

@@ -44,7 +44,7 @@ pub const CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION: bool = false;
 ///   evaluations and generate challenges.
 pub fn prover_aggregate_claims<F: Field>(
     claims: &[Claim<F>],
-    output_mles_from_layer: &[DenseMle<F>],
+    output_mles_from_layer: Vec<DenseMle<F>>,
     transcript_writer: &mut impl ProverTranscript<F>,
 ) -> Result<RawClaim<F>, GKRError> {
     let num_claims = claims.len();

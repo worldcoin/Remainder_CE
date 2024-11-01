@@ -89,7 +89,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // The claims on that layer (unaggregated)
         claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],
         // The output MLEs from this layer, whose bookkeeping tables combined make the layerwise bookkeeping table.
-        output_mles_from_layer: &[DenseMle<C::Scalar>],
+        output_mles_from_layer: Vec<DenseMle<C::Scalar>>,
         committer: &PedersenCommitter<C>,
         mut blinding_rng: &mut impl Rng,
         transcript: &mut impl ECTranscriptTrait<C>,
