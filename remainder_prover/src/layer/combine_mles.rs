@@ -179,7 +179,7 @@ pub fn combine_mles<F: Field>(items: Vec<DenseMle<F>>) -> DenseMle<F> {
 /// assume that this function is called on an mle that has a free variable
 /// within a bunch of fixed variables (note how it is used in the
 /// `collapse_mles_with_free_in_prefix` function)
-fn split_mle<F: Field>(mle: DenseMle<F>) -> Vec<DenseMle<F>> {
+fn split_mle<F: Field>(mle: &DenseMle<F>) -> Vec<DenseMle<F>> {
     // Get the index of the first free bit in the mle.
     let first_free_idx: usize = mle.mle_indices().iter().enumerate().fold(
         mle.mle_indices().len(),
@@ -194,13 +194,13 @@ fn split_mle<F: Field>(mle: DenseMle<F>) -> Vec<DenseMle<F>> {
 
     // Compute the correct indices, we have the first one be false, the second
     // one as true instead of the free bit.
-    let first_og_indices = mle.mle_indices()[0..first_free_idx]
+    let first_indices = mle.mle_indices()[0..first_free_idx]
         .iter()
         .cloned()
         .chain(std::iter::once(MleIndex::Fixed(false)))
         .chain(mle.mle_indices()[first_free_idx + 1..].iter().cloned())
         .collect_vec();
-    let second_og_indices = mle.mle_indices()[0..first_free_idx]
+    let second_indices = mle.mle_indices()[0..first_free_idx]
         .iter()
         .cloned()
         .chain(std::iter::once(MleIndex::Fixed(true)))
@@ -213,7 +213,7 @@ fn split_mle<F: Field>(mle: DenseMle<F>) -> Vec<DenseMle<F>> {
             mle.num_free_vars() - 1,
             mle.mle.iter().step_by(2).collect_vec(),
         )),
-        mle_indices: first_og_indices,
+        mle_indices: first_indices,
         layer_id: mle.layer_id,
     };
 
@@ -223,7 +223,7 @@ fn split_mle<F: Field>(mle: DenseMle<F>) -> Vec<DenseMle<F>> {
             mle.num_free_vars() - 1,
             mle.mle.iter().skip(1).step_by(2).collect_vec(),
         )),
-        mle_indices: second_og_indices,
+        mle_indices: second_indices,
         layer_id: mle.layer_id,
     };
 
@@ -233,7 +233,7 @@ fn split_mle<F: Field>(mle: DenseMle<F>) -> Vec<DenseMle<F>> {
 /// This function will take a list of MLEs and updates the list to contain MLEs
 /// where all fixed bits are contiguous
 fn collapse_mles_with_free_in_prefix<F: Field>(mles: &[DenseMle<F>]) -> Vec<DenseMle<F>> {
-    mles.iter()
+    mles.into_iter()
         .flat_map(|mle| {
             // This iterates through the mle indices to check whether there is a
             // free bit within the fixed bits.
@@ -247,7 +247,7 @@ fn collapse_mles_with_free_in_prefix<F: Field>(mles: &[DenseMle<F>]) -> Vec<Dens
             );
             // If true, we split, otherwise, we don't.
             if check_free_within_fixed {
-                split_mle(mle.clone())
+                split_mle(mle)
             } else {
                 vec![mle.clone()]
             }
