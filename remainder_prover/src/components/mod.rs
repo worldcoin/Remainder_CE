@@ -1,7 +1,7 @@
 //! Module for components that can be used to build a circuit.
 use remainder_shared_types::Field;
 
-use crate::layouter::nodes::{sector::Sector, CircuitNode, Context};
+use crate::layouter::nodes::{sector::Sector, CircuitNode};
 
 /// Use this component to check if the values of two ClaimableNodes are equal, by adding self.sector
 /// to the circuit as an output layer.
@@ -12,8 +12,8 @@ pub struct EqualityChecker<F: Field> {
 
 impl<F: Field> EqualityChecker<F> {
     /// Create a new EqualityChecker.
-    pub fn new(ctx: &Context, lhs: &dyn CircuitNode, rhs: &dyn CircuitNode) -> Self {
-        let sector = Sector::new(ctx, &[lhs, rhs], |nodes| {
+    pub fn new(lhs: &dyn CircuitNode, rhs: &dyn CircuitNode) -> Self {
+        let sector = Sector::new(&[lhs, rhs], |nodes| {
             assert_eq!(nodes.len(), 2);
             nodes[0].expr() - nodes[1].expr()
         });

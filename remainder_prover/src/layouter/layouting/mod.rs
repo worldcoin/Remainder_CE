@@ -25,7 +25,7 @@ use super::nodes::{
     matmult::MatMultNode,
     node_enum::{NodeEnum, NodeEnumGroup},
     split_node::SplitNode,
-    CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode,
+    CircuitNode, CompilableNode, NodeGroup, NodeId, YieldNode,
 };
 
 /// A HashMap that records during circuit compilation where nodes live in the circuit and what data they yield.
@@ -43,14 +43,6 @@ impl<F: Field> CircuitMap<F> {
 
     /// Using the circuit location, which is a layer_id and prefix_bits tuple,
     /// get the data that exists here.
-    pub fn get_data_from_location(
-        &self,
-        circuit_location: &CircuitLocation,
-    ) -> Option<&MultilinearExtension<F>> {
-        self.0.get(circuit_location)
-    }
-
-    /// An alias to [get_data_from_location] above,
     pub fn get_data_from_circuit_mle(
         &self,
         circuit_mle: &MleDescription<F>,
@@ -320,7 +312,6 @@ type LayouterNodes<F> = (
 /// Returns a vector of [CompilableNode] in which inputs are first, then intermediates
 /// (topologically sorted), then lookups, then outputs.
 pub fn layout<F: Field>(nodes: Vec<NodeEnum<F>>) -> Result<LayouterNodes<F>, DAGError> {
-    let ctx = Context::new();
     let mut dag = NodeEnumGroup::new(nodes);
 
     // Handle input layers
@@ -389,7 +380,7 @@ pub fn layout<F: Field>(nodes: Vec<NodeEnum<F>>) -> Result<LayouterNodes<F>, DAG
                         sector_group.add_sector(node);
                         Some(sector_group)
                     } else {
-                        Some(SectorGroup::new(&ctx, vec![node]))
+                        Some(SectorGroup::new(vec![node]))
                     }
                 }
             };

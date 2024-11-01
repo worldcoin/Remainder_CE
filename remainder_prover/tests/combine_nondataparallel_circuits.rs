@@ -12,7 +12,7 @@ use remainder::{
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, Context, NodeId,
+            CircuitNode, NodeId,
         },
     },
     mle::evals::MultilinearExtension,
@@ -44,22 +44,17 @@ impl<F: Field> ConstantScaledCircuitComponent<F> {
     /// ## Arguments
     /// * `mle_1` - An MLE vec with arbitrary bookkeeping table values.
     /// * `mle_2` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1`.
-    pub fn new(
-        ctx: &Context,
-        mle_1_input: &dyn CircuitNode,
-        mle_2_input: &dyn CircuitNode,
-    ) -> Self {
+    pub fn new(mle_1_input: &dyn CircuitNode, mle_2_input: &dyn CircuitNode) -> Self {
         let first_layer_component =
-            ConstantScaledSumBuilderComponent::new(ctx, mle_1_input, mle_2_input);
+            ConstantScaledSumBuilderComponent::new(mle_1_input, mle_2_input);
 
         let second_layer_component = ProductScaledBuilderComponent::new(
-            ctx,
             &first_layer_component.get_output_sector(),
             mle_1_input,
         );
 
         let output_component =
-            DifferenceBuilderComponent::new(ctx, &second_layer_component.get_output_sector());
+            DifferenceBuilderComponent::new(&second_layer_component.get_output_sector());
 
         Self {
             first_layer_component,
@@ -100,21 +95,16 @@ impl<F: Field> SumConstantCircuitComponent<F> {
     /// ## Arguments
     /// * `mle_1` - An MLE vec with arbitrary bookkeeping table values.
     /// * `mle_2` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1`.
-    pub fn new(
-        ctx: &Context,
-        mle_1_input: &dyn CircuitNode,
-        mle_2_input: &dyn CircuitNode,
-    ) -> Self {
-        let first_layer_component = ProductSumBuilderComponent::new(ctx, mle_1_input, mle_2_input);
+    pub fn new(mle_1_input: &dyn CircuitNode, mle_2_input: &dyn CircuitNode) -> Self {
+        let first_layer_component = ProductSumBuilderComponent::new(mle_1_input, mle_2_input);
 
         let second_layer_component = ConstantScaledSumBuilderComponent::new(
-            ctx,
             &first_layer_component.get_output_sector(),
             mle_1_input,
         );
 
         let output_component =
-            DifferenceBuilderComponent::new(ctx, &second_layer_component.get_output_sector());
+            DifferenceBuilderComponent::new(&second_layer_component.get_output_sector());
 
         Self {
             first_layer_component,
@@ -155,22 +145,16 @@ impl<F: Field> ProductScaledSumCircuitComponent<F> {
     /// ## Arguments
     /// * `mle_1`  An MLE with arbitrary bookkeeping table values.
     /// * `mle_2` - An MLE with arbitrary bookkeeping table values, same size as `mle_1`.
-    pub fn new(
-        ctx: &Context,
-        mle_1_input: &dyn CircuitNode,
-        mle_2_input: &dyn CircuitNode,
-    ) -> Self {
-        let first_layer_component =
-            ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);
+    pub fn new(mle_1_input: &dyn CircuitNode, mle_2_input: &dyn CircuitNode) -> Self {
+        let first_layer_component = ProductScaledBuilderComponent::new(mle_1_input, mle_2_input);
 
         let second_layer_component = ProductSumBuilderComponent::new(
-            ctx,
             &first_layer_component.get_output_sector(),
             mle_1_input,
         );
 
         let output_component =
-            DifferenceBuilderComponent::new(ctx, &second_layer_component.get_output_sector());
+            DifferenceBuilderComponent::new(&second_layer_component.get_output_sector());
 
         Self {
             first_layer_component,
@@ -209,24 +193,21 @@ fn build_combined_nondataparallel_circuit<F: Field>(
     GKRCircuitDescription<F>,
     impl Fn(CombinedNondataparallelTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
 ) {
-    // --- Create global context manager ---
-    let context = Context::new();
-
     // --- All inputs are public ---
-    let public_input_layer_node = InputLayerNode::new(&context, None);
+    let public_input_layer_node = InputLayerNode::new(None);
 
     // --- "Semantic" circuit inputs ---
-    let mle_1_shred = InputShred::new(&context, mle_1_2_vars, &public_input_layer_node);
-    let mle_2_shred = InputShred::new(&context, mle_1_2_vars, &public_input_layer_node);
+    let mle_1_shred = InputShred::new(mle_1_2_vars, &public_input_layer_node);
+    let mle_2_shred = InputShred::new(mle_1_2_vars, &public_input_layer_node);
 
     // --- Save IDs to be used later ---
     let mle_1_id = mle_1_shred.id();
     let mle_2_id = mle_2_shred.id();
 
     // --- Create the circuit components ---
-    let component_1 = ProductScaledSumCircuitComponent::new(&context, &mle_1_shred, &mle_2_shred);
-    let component_2 = SumConstantCircuitComponent::new(&context, &mle_1_shred, &mle_2_shred);
-    let component_3 = ConstantScaledCircuitComponent::new(&context, &mle_1_shred, &mle_2_shred);
+    let component_1 = ProductScaledSumCircuitComponent::new(&mle_1_shred, &mle_2_shred);
+    let component_2 = SumConstantCircuitComponent::new(&mle_1_shred, &mle_2_shred);
+    let component_3 = ConstantScaledCircuitComponent::new(&mle_1_shred, &mle_2_shred);
 
     let mut all_circuit_nodes: Vec<NodeEnum<F>> = vec![
         public_input_layer_node.into(),
@@ -237,7 +218,7 @@ fn build_combined_nondataparallel_circuit<F: Field>(
     all_circuit_nodes.extend(component_2.yield_nodes());
     all_circuit_nodes.extend(component_3.yield_nodes());
 
-    let (circuit_description, convert_input_shreds_to_input_layers, _) =
+    let (circuit_description, convert_input_shreds_to_input_layers) =
         generate_circuit_description(all_circuit_nodes).unwrap();
 
     // --- Write closure which allows easy usage of circuit inputs ---

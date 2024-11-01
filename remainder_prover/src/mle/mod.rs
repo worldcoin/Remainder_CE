@@ -32,13 +32,13 @@ pub mod evals;
 /// Defines trait/struct relevant for Mles (as input) in circuit.
 pub mod bundled_input_mle;
 
-/// Defines [MleDescription], i.e. the in-circuit-context description of a
-/// [crate::mle::evals::MultilinearExtension] which includes "prefix vars" and
-/// "free vars" but not the actual evaluations of the function over the hypercube.
+/// Defines [crate::mle::mle_description::MleDescription], i.e. the in-circuit-context description
+/// of a [crate::mle::evals::MultilinearExtension] which includes "prefix vars" and "free vars" but
+/// not the actual evaluations of the function over the hypercube.
 pub mod mle_description;
 
-/// Defines [VerifierMle], i.e. the verifier's view of a "fully-bound" MLE with
-/// a prover-claimed value.
+/// Defines [crate::mle::verifier_mle::VerifierMle], i.e. the verifier's view of a "fully-bound" MLE
+/// with a prover-claimed value.
 pub mod verifier_mle;
 
 // TODO!(Maybe this type needs PartialEq, could be easily implemented with a
@@ -54,9 +54,13 @@ pub mod verifier_mle;
 #[clonable]
 pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     /// Returns the number of free variables this Mle is defined on.
-    /// Equivalently, this is the log_2 of the size of the *whole* bookkeeping
+    /// Equivalently, this is the log_2 of the size of the unpruned bookkeeping
     /// table.
     fn num_free_vars(&self) -> usize;
+
+    /// Returns `true` if the MLE is fully bound.
+    /// Equivalent to checking whether [Self::num_free_vars] is equal to zero.
+    fn is_fully_bound(&self) -> bool;
 
     /// Get the padded set of evaluations over the boolean hypercube; useful for
     /// constructing the input layer.
@@ -82,10 +86,14 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     /// Returns an iterator over the evaluations of the current MLE.
     fn iter(&self) -> EvaluationsIterator<F>;
 
-    /// Returns the first element in the evaluations table represention.
-    /// # Panics
-    /// If the evaluations table is empty.
+    /// Returns the first element in the bookkeeping table corresponding to the
+    /// value of this Dense MLE when all free variables are set to zero. This
+    /// operations never panics (see [evals::MultilinearExtension::first])
     fn first(&self) -> F;
+
+    /// If this is a fully-bound Dense MLE, it returns its value.
+    /// Otherwise panics.
+    fn value(&self) -> F;
 
     /// Returns the first element of the evaluations table (if any).
     fn get(&self, index: usize) -> Option<F>;
@@ -103,7 +111,7 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     /// Fix the (indexed) free variable at `indexed_bit_index` with a given
     /// challenge `point`. Mutates `self`` to be the bookeeping table for the
     /// new MLE.  If the new MLE becomes fully bound, returns the evaluation of
-    /// the fully bound MLE in the form of a [Claim].
+    /// the fully bound MLE in the form of a [crate::claims::RawClaim].
     ///
     /// # Panics
     /// If `indexed_bit_index` does not correspond to a

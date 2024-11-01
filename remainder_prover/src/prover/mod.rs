@@ -24,7 +24,8 @@ use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{layer_enum::LayerEnum, LayerError, LayerId};
 use crate::layer::{Layer, LayerDescription, VerifierLayer};
-use crate::layouter::compiling::CircuitHashType;
+use crate::layouter::circuit_hash::CircuitHashType;
+use crate::layouter::context::CircuitBuildingContext;
 use crate::layouter::layouting::{layout, CircuitDescriptionMap, CircuitLocation, CircuitMap};
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, NodeId};
@@ -67,6 +68,9 @@ pub enum GKRError {
     /// The public input layer values were not as expected by the verifier
     #[error("Values for public input layer {0:?} were not as expected by the verifier.")]
     PublicInputLayerValuesMismatch(LayerId),
+    /// The verifier's claim tracker was not empty at the end of the verification process
+    #[error("Verifier's claim tracker was not empty at the end of the verification process.")]
+    ClaimTrackerNotEmpty,
 
     #[error("Error when verifying output layer")]
     /// Error when verifying output layer
@@ -559,10 +563,10 @@ impl<F: Field> GKRCircuitDescription<F> {
                     CircuitLocation::new(fiat_shamir_challenge_description.layer_id(), vec![]),
                     fiat_shamir_challenge_mle.clone(),
                 );
-                fiat_shamir_challenges.push(FiatShamirChallenge::new(
-                    fiat_shamir_challenge_mle,
-                    fiat_shamir_challenge_description.layer_id(),
-                ));
+                fiat_shamir_challenges.push(FiatShamirChallenge {
+                    mle: fiat_shamir_challenge_mle,
+                    layer_id: fiat_shamir_challenge_description.layer_id(),
+                });
             });
 
         // Step 1c: Compute the data outputs, using the map from Layer ID to
@@ -671,9 +675,9 @@ impl<F: Field> GKRCircuitDescription<F> {
             let claim_aggr_timer =
                 start_timer!(|| format!("Verify aggregated claim for layer {:?}", layer_id));
 
-            let layer_claims = claim_tracker.get(layer_id).unwrap();
+            let layer_claims = claim_tracker.remove(layer_id).unwrap();
             let prev_claim =
-                verifier_aggregate_claims(layer_claims, transcript_reader).map_err(|err| {
+                verifier_aggregate_claims(&layer_claims, transcript_reader).map_err(|err| {
                     GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err))
                 })?;
             debug!("Aggregated claim: {:#?}", prev_claim);
@@ -708,7 +712,7 @@ impl<F: Field> GKRCircuitDescription<F> {
         // --------- Verify claims on the verifier challenges ---------
         let fiat_shamir_challenges_timer = start_timer!(|| "Verifier challenges proof generation");
         for fiat_shamir_challenge in fiat_shamir_challenges {
-            if let Some(claims) = claim_tracker.get(fiat_shamir_challenge.layer_id()) {
+            if let Some(claims) = claim_tracker.remove(fiat_shamir_challenge.layer_id()) {
                 claims.iter().for_each(|claim| {
                     fiat_shamir_challenge.verify(claim.get_raw_claim()).unwrap();
                 });
@@ -721,18 +725,24 @@ impl<F: Field> GKRCircuitDescription<F> {
         let input_layer_claims = self
             .input_layers
             .iter()
-            .flat_map(|input_layer| claim_tracker.get(input_layer.layer_id).unwrap())
-            .cloned()
+            .flat_map(|input_layer| claim_tracker.remove(input_layer.layer_id).unwrap())
             .collect_vec();
+
+        // Verify that there are no claims remaining in the claim tracker.
+        if !claim_tracker.is_empty() {
+            return Err(GKRError::ClaimTrackerNotEmpty);
+        }
 
         Ok(input_layer_claims)
     }
 }
 
 /// Generate the circuit description given a set of [NodeEnum]s.
-/// Returns a [GKRCircuitDescription], a function that takes a map of input shred data and returns a
-/// map of input layer data, and a 1:1 mapping of input layer node ids to input layer ids.
-/// Circuit description already has indices assigned to the MLEs.
+/// Returns a [GKRCircuitDescription], and a function that takes a map of input shred data and returns a
+/// map of input layer data.
+/// The returned circuit description already has indices assigned to the MLEs.
+/// [CircuitBuildingContext::reset()] is called, resetting the node- and layer id counters to zero, in
+/// preparation for the next circuit.
 pub fn generate_circuit_description<F: Field>(
     nodes: Vec<NodeEnum<F>>,
 ) -> Result<
@@ -741,7 +751,6 @@ pub fn generate_circuit_description<F: Field>(
         impl Fn(
             HashMap<NodeId, MultilinearExtension<F>>,
         ) -> Result<HashMap<LayerId, MultilinearExtension<F>>, GKRError>,
-        HashMap<NodeId, LayerId>,
     ),
     GKRError,
 > {
@@ -753,29 +762,17 @@ pub fn generate_circuit_description<F: Field>(
         lookup_nodes,
         output_nodes,
     ) = layout(nodes).unwrap();
-
-    // Define counters for the layer ids
-    let mut input_layer_id = LayerId::Input(0);
-    let mut intermediate_layer_id = LayerId::Layer(0);
-    let mut fiat_shamir_challenge_layer_id = LayerId::FiatShamirChallengeLayer(0);
-
     let mut intermediate_layers = Vec::<LayerDescriptionEnum<F>>::new();
     let mut output_layers = Vec::<OutputLayerDescription<F>>::new();
     let mut circuit_description_map = CircuitDescriptionMap::new();
 
     let mut input_layer_id_to_input_shred_ids = HashMap::new();
-    let mut input_node_id_to_layer_id = HashMap::new();
     let input_layers = input_layer_nodes
         .iter()
         .map(|input_layer_node| {
             let input_layer_description = input_layer_node
-                .generate_input_layer_description::<F>(
-                    &mut input_layer_id,
-                    &mut circuit_description_map,
-                )
+                .generate_input_layer_description::<F>(&mut circuit_description_map)
                 .unwrap();
-            input_node_id_to_layer_id
-                .insert(input_layer_node.id(), input_layer_description.layer_id);
             input_layer_id_to_input_shred_ids.insert(
                 input_layer_description.layer_id,
                 input_layer_node.subnodes().unwrap(),
@@ -787,16 +784,14 @@ pub fn generate_circuit_description<F: Field>(
     let fiat_shamir_challenges = fiat_shamir_challenge_nodes
         .iter()
         .map(|fiat_shamir_challenge_node| {
-            fiat_shamir_challenge_node.generate_circuit_description::<F>(
-                &mut fiat_shamir_challenge_layer_id,
-                &mut circuit_description_map,
-            )
+            fiat_shamir_challenge_node
+                .generate_circuit_description::<F>(&mut circuit_description_map)
         })
         .collect_vec();
 
     for node in &intermediate_nodes {
         let node_compiled_intermediate_layers = node
-            .generate_circuit_description(&mut intermediate_layer_id, &mut circuit_description_map)
+            .generate_circuit_description(&mut circuit_description_map)
             .unwrap();
         intermediate_layers.extend(node_compiled_intermediate_layers);
     }
@@ -806,10 +801,7 @@ pub fn generate_circuit_description<F: Field>(
         (intermediate_layers, output_layers),
         |(mut lookup_intermediate_acc, mut lookup_output_acc), lookup_node| {
             let (intermediate_layers, output_layer) = lookup_node
-                .generate_lookup_circuit_description(
-                    &mut intermediate_layer_id,
-                    &mut circuit_description_map,
-                )
+                .generate_lookup_circuit_description(&mut circuit_description_map)
                 .unwrap();
             lookup_intermediate_acc.extend(intermediate_layers);
             lookup_output_acc.push(output_layer);
@@ -856,9 +848,6 @@ pub fn generate_circuit_description<F: Field>(
         Ok(input_layer_data)
     };
 
-    Ok((
-        circuit_description,
-        input_builder,
-        input_node_id_to_layer_id,
-    ))
+    CircuitBuildingContext::reset();
+    Ok((circuit_description, input_builder))
 }

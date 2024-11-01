@@ -7,7 +7,7 @@ use remainder::layouter::component::Component;
 use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputShred, InputShredData};
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::nodes::sector::Sector;
-use remainder::layouter::nodes::{CircuitNode, Context};
+use remainder::layouter::nodes::CircuitNode;
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
 
 use remainder::mle::dense::DenseMle;
@@ -32,15 +32,13 @@ pub fn get_dummy_random_mle(num_vars: usize, rng: &mut impl Rng) -> DenseMle<Fr>
 pub fn get_dummy_input_shred_and_data(
     num_vars: usize,
     rng: &mut impl Rng,
-    ctx: &Context,
     input_node: &InputLayerNode,
 ) -> (InputShred, InputShredData<Fr>) {
-    // let input_layer = InputLayerNode::new(ctx, None);
     let mle_vec = (0..(1 << num_vars))
         .map(|_| Fr::from(rng.gen::<u64>()))
         .collect_vec();
     let data = MultilinearExtension::new_from_evals(Evaluations::new(num_vars, mle_vec));
-    let input_shred = InputShred::new(ctx, data.num_vars(), input_node);
+    let input_shred = InputShred::new(data.num_vars(), input_node);
     let input_shred_data = InputShredData::new(input_shred.id(), data);
     (input_shred, input_shred_data)
 }
@@ -48,12 +46,11 @@ pub fn get_dummy_input_shred_and_data(
 /// Returns an [InputShred] with the appropriate [MultilinearExtension], but given as input an mle_vec
 pub fn get_input_shred_and_data_from_vec(
     mle_vec: Vec<Fr>,
-    ctx: &Context,
     input_node: &InputLayerNode,
 ) -> (InputShred, InputShredData<Fr>) {
     assert!(mle_vec.len().is_power_of_two());
     let data = MultilinearExtension::new(mle_vec);
-    let input_shred = InputShred::new(ctx, data.num_vars(), input_node);
+    let input_shred = InputShred::new(data.num_vars(), input_node);
     let input_shred_data = InputShredData::new(input_shred.id(), data);
     (input_shred, input_shred_data)
 }
@@ -97,13 +94,11 @@ pub struct TripleNestedBuilderComponent<F: Field> {
 
 impl<F: Field> TripleNestedBuilderComponent<F> {
     pub fn new(
-        ctx: &Context,
         inner_inner_sel: &dyn CircuitNode,
         inner_sel: &dyn CircuitNode,
         outer_sel: &dyn CircuitNode,
     ) -> Self {
         let triple_nested_selector_sector = Sector::new(
-            ctx,
             &[inner_inner_sel, inner_sel, outer_sel],
             |triple_sel_nodes| {
                 assert_eq!(triple_sel_nodes.len(), 3);
@@ -151,14 +146,14 @@ pub struct DifferenceBuilderComponent<F: Field> {
 }
 
 impl<F: Field> DifferenceBuilderComponent<F> {
-    pub fn new(ctx: &Context, input: &dyn CircuitNode) -> Self {
-        let zero_output_sector = Sector::new(ctx, &[input], |input_vec| {
+    pub fn new(input: &dyn CircuitNode) -> Self {
+        let zero_output_sector = Sector::new(&[input], |input_vec| {
             assert_eq!(input_vec.len(), 1);
             let input_data = input_vec[0];
             input_data.expr() - input_data.expr()
         });
 
-        let output = OutputNode::new_zero(ctx, &zero_output_sector);
+        let output = OutputNode::new_zero(&zero_output_sector);
 
         Self {
             output_sector: zero_output_sector,
@@ -187,8 +182,8 @@ pub struct ProductScaledBuilderComponent<F: Field> {
 }
 
 impl<F: Field> ProductScaledBuilderComponent<F> {
-    pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
-        let product_scaled_sector = Sector::new(ctx, &[mle_1, mle_2], |product_scaled_nodes| {
+    pub fn new(mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
+        let product_scaled_sector = Sector::new(&[mle_1, mle_2], |product_scaled_nodes| {
             assert_eq!(product_scaled_nodes.len(), 2);
             let mle_1 = product_scaled_nodes[0];
             let mle_2 = product_scaled_nodes[1];
@@ -228,8 +223,8 @@ pub struct ProductSumBuilderComponent<F: Field> {
 }
 
 impl<F: Field> ProductSumBuilderComponent<F> {
-    pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
-        let product_sum_sector = Sector::new(ctx, &[mle_1, mle_2], |product_sum_nodes| {
+    pub fn new(mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
+        let product_sum_sector = Sector::new(&[mle_1, mle_2], |product_sum_nodes| {
             assert_eq!(product_sum_nodes.len(), 2);
             let mle_1 = product_sum_nodes[0];
             let mle_2 = product_sum_nodes[1];
@@ -268,8 +263,8 @@ pub struct ConstantScaledSumBuilderComponent<F: Field> {
 }
 
 impl<F: Field> ConstantScaledSumBuilderComponent<F> {
-    pub fn new(ctx: &Context, mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
-        let constant_scaled_sector = Sector::new(ctx, &[mle_1, mle_2], |constant_scaled_nodes| {
+    pub fn new(mle_1: &dyn CircuitNode, mle_2: &dyn CircuitNode) -> Self {
+        let constant_scaled_sector = Sector::new(&[mle_1, mle_2], |constant_scaled_nodes| {
             assert_eq!(constant_scaled_nodes.len(), 2);
             let mle_1 = constant_scaled_nodes[0];
             let mle_2 = constant_scaled_nodes[1];

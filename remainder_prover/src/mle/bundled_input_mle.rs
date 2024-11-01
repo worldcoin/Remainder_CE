@@ -2,10 +2,7 @@ use remainder_shared_types::Field;
 
 use crate::{
     layer::LayerId,
-    layouter::nodes::{
-        circuit_inputs::{InputLayerNode, InputShred},
-        Context,
-    },
+    layouter::nodes::circuit_inputs::{InputLayerNode, InputShred},
     mle::Mle,
 };
 
@@ -45,20 +42,6 @@ pub fn to_slice_of_vectors<F: Field, const N: usize>(inputs: Vec<[F; N]>) -> [Ve
     result
 }
 
-/// A trait for a MLE(s) that are the input(s) to a circuit,
-/// but are bundled together for semantic reasons.
-// pub trait BundledInputMle<F: Field, const N: usize> {
-//     /// returns the references to all the underlying MLEs
-//     fn get_mle_refs(&self) -> &[DenseMle<F>; N];
-
-//     /// returns all the MLEs as InputShreds
-//     fn make_input_shred_and_data(
-//         &self,
-//         ctx: &Context,
-//         source: &InputLayerNode,
-//     ) -> (Vec<InputShred>, Vec<MultilinearExtension<F>>);
-// }
-
 /// A struct that bundles N MLEs together for semantic reasons.
 #[derive(Debug, Clone)]
 pub struct BundledInputMle<F: Field, const N: usize> {
@@ -93,7 +76,6 @@ impl<F: Field, const N: usize> BundledInputMle<F, N> {
     /// [MultilinearExtension]s for the instance of [BundledInputMle].
     pub fn make_input_shred_and_data(
         &self,
-        ctx: &Context,
         source: &InputLayerNode,
     ) -> (Vec<InputShred>, Vec<MultilinearExtension<F>>) {
         self.mles
@@ -104,7 +86,7 @@ impl<F: Field, const N: usize> BundledInputMle<F, N> {
                 let mle: MultilinearExtension<F> = MultilinearExtension::new_from_evals(
                     Evaluations::<F>::new(mle.num_free_vars(), mle.get_padded_evaluations()),
                 );
-                let input_shred = InputShred::new(ctx, mle.num_vars(), source);
+                let input_shred = InputShred::new(mle.num_vars(), source);
                 (input_shred, mle)
             })
             .unzip()
@@ -112,7 +94,7 @@ impl<F: Field, const N: usize> BundledInputMle<F, N> {
 }
 
 impl<F: Field, const N: usize> BundledInputMle<F, N> {
-    /// Creates a new [FlatMles] from raw data.
+    /// Creates a new [BundledInputMle] from raw data.
     pub fn new_from_raw(data: [Vec<F>; N], layer_id: LayerId) -> Self {
         let mles = data
             .into_iter()

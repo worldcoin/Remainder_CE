@@ -12,16 +12,15 @@ use remainder_shared_types::Fr;
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression, prover_expr::ProverExpr},
     layer::LayerId,
-    layouter::nodes::Context,
+    layouter::nodes::NodeId,
     mle::dense::DenseMle,
 };
 
 #[test]
 fn test_abstract_expr_get_sources() {
-    let ctx = Context::new();
-    let node_id_1 = ctx.get_new_id();
-    let node_id_2 = ctx.get_new_id();
-    let node_id_3 = ctx.get_new_id();
+    let node_id_1 = NodeId::new();
+    let node_id_2 = NodeId::new();
+    let node_id_3 = NodeId::new();
 
     let expression1 = Expression::<Fr, AbstractExpr>::constant(Fr::one());
 

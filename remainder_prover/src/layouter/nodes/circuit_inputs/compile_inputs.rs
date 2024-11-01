@@ -4,7 +4,6 @@ use remainder_shared_types::Field;
 
 use crate::{
     input_layer::InputLayerDescription,
-    layer::LayerId,
     layouter::{
         layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
         nodes::CircuitNode,
@@ -15,7 +14,7 @@ use crate::{
 
 use super::InputLayerNode;
 
-/// Function which returns a vector of [MleIndex::Fixed] for prefix bits according to which
+/// Function which returns a vector of the values for prefix bits according to which
 /// position we are in the range from 0 to `total_num_bits` - `num_free_bits`.
 fn get_prefix_bits_from_capacity(
     capacity: u32,
@@ -86,8 +85,6 @@ pub fn combine_input_mles<F: Field>(
                 // --- "little-endian" ---
                 let inverted_input_mle = invert_mle_bookkeeping_table(input_mle.iter().collect());
 
-                // --- Fold the new (padded) bookkeeping table with the old ones ---
-                // let padded_bookkeeping_table = input_mle.get_padded_evaluations();
                 current_bookkeeping_table
                     .into_iter()
                     .chain(inverted_input_mle)
@@ -144,15 +141,13 @@ impl InputLayerNode {
     /// an input layer, adding the input shreds to the circuit map.
     pub fn generate_input_layer_description<F: Field>(
         &self,
-        layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<InputLayerDescription, DAGError> {
-        let input_layer_id = layer_id.get_and_inc();
         let Self {
             id: _,
+            input_layer_id,
             input_shreds,
         } = &self;
-
         let input_mle_num_vars = input_shreds
             .iter()
             .map(|node| node.get_num_vars())
@@ -163,7 +158,7 @@ impl InputLayerNode {
         debug_assert_eq!(input_shred_indices.len(), input_shreds.len());
 
         let input_layer_description = InputLayerDescription {
-            layer_id: input_layer_id.to_owned(),
+            layer_id: *input_layer_id,
             num_vars: num_vars_combined_mle,
         };
 
@@ -175,7 +170,7 @@ impl InputLayerNode {
                 circuit_description_map.add_node_id_and_location_num_vars(
                     input_shred.id,
                     (
-                        CircuitLocation::new(input_layer_id, prefix_bits),
+                        CircuitLocation::new(*input_layer_id, prefix_bits),
                         input_shred.get_num_vars(),
                     ),
                 );

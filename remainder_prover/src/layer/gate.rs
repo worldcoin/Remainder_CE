@@ -161,11 +161,9 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         // First, send the claimed value of V_{i + 1}(g_2, u)
         let lhs_reduced = &self.phase_1_mles.as_ref().unwrap()[0][1];
         let rhs_reduced = &self.phase_2_mles.as_ref().unwrap()[0][1];
-        debug_assert!(lhs_reduced.len() == 1);
-        transcript_writer.append("Evaluation of V_{i + 1}(g_2, u)", lhs_reduced.first());
+        transcript_writer.append("Evaluation of V_{i + 1}(g_2, u)", lhs_reduced.value());
         // Next, send the claimed value of V_{i + 1}(g_2, v)
-        debug_assert!(rhs_reduced.len() == 1);
-        transcript_writer.append("Evaluation of V_{i + 1}(g_2, v)", rhs_reduced.first());
+        transcript_writer.append("Evaluation of V_{i + 1}(g_2, v)", rhs_reduced.value());
 
         Ok(())
     }
@@ -313,8 +311,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     });
                 let SumcheckEvals(mut final_vec_evals) = final_evals;
 
-                assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
-                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
+                let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().value();
 
                 final_vec_evals
                     .iter_mut()
@@ -357,8 +354,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                         });
                     let SumcheckEvals(mut final_vec_evals) = final_evals;
 
-                    assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
-                    let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
+                    let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().value();
 
                     final_vec_evals
                         .iter_mut()
@@ -373,8 +369,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     assert_eq!(self.u_challenges.len(), self.num_rounds_phase1);
 
                     let f2 = &self.phase_1_mles.as_ref().unwrap()[0][1];
-                    assert_eq!(f2.len(), 1);
-                    let f2_at_u = f2.first();
+                    let f2_at_u = f2.value();
 
                     let beta_g1 = self.beta_g1.as_ref().unwrap();
 
@@ -458,8 +453,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                         });
                     let SumcheckEvals(mut final_vec_evals) = final_evals;
 
-                    assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
-                    let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
+                    let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().value();
 
                     final_vec_evals
                         .iter_mut()
@@ -507,8 +501,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                             });
                         let SumcheckEvals(mut final_vec_evals) = final_evals;
 
-                        assert_eq!(self.beta_g2.as_mut().unwrap().len(), 1);
-                        let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().first();
+                        let beta_g2_fully_bound = self.beta_g2.as_ref().unwrap().value();
 
                         final_vec_evals
                             .iter_mut()
@@ -659,7 +652,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
             );
         }
-        let val = lhs_reduced.first();
+        let val = lhs_reduced.value();
         let claim: Claim<F> = Claim::new(
             fixed_mle_indices_u,
             val,
@@ -677,7 +670,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
             );
         }
-        let val = rhs_reduced.first();
+        let val = rhs_reduced.value();
         let claim: Claim<F> = Claim::new(
             fixed_mle_indices_v,
             val,
@@ -1137,16 +1130,6 @@ impl<F: Field> VerifierGateLayer<F> {
                 acc + gz * ux * vy
             });
 
-        // --- Finally, grab the claimed values for each of the bound MLEs from transcript ---
-        // // First, the claimed value of V_{i + 1}(g_2, u)
-        // let f2_bound = transcript_reader
-        //     .consume_element("Evaluation of V_{i + 1}(g_2, u)")
-        //     .unwrap();
-        // // Next, the claimed value of V_{i + 1}(g_2, v)
-        // let f3_bound = transcript_reader
-        //     .consume_element("Evaluation of V_{i + 1}(g_2, v)")
-        //     .unwrap();
-
         let beta_bound = BetaValues::compute_beta_over_two_challenges(
             &g2_challenges,
             &self.dataparallel_sumcheck_challenges,
@@ -1604,12 +1587,8 @@ impl<F: Field> GateLayer<F> {
         self.rhs
             .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
 
-        if beta_g2.len() == 1 {
-            let beta_g2_fully_bound = beta_g2.first();
-            Ok((sumcheck_rounds.into(), beta_g2_fully_bound))
-        } else {
-            Err(LayerError::LayerNotReady)
-        }
+        let beta_g2_fully_bound = beta_g2.value();
+        Ok((sumcheck_rounds.into(), beta_g2_fully_bound))
     }
 
     // We are binding the "x" variables of the `lhs`. At the end of this, the lhs of the expression
@@ -1679,12 +1658,8 @@ impl<F: Field> GateLayer<F> {
 
         let f_2 = phase_1_mles[0][1].clone();
 
-        if f_2.len() == 1 {
-            let f2_at_u = f_2.first();
-            Ok((sumcheck_rounds.into(), f2_at_u, challenges))
-        } else {
-            Err(LayerError::LayerNotReady)
-        }
+        let f2_at_u = f_2.value();
+        Ok((sumcheck_rounds.into(), f2_at_u, challenges))
     }
 
     // These are the rounds binding the "y" variables of the expression. At the end of this, the entire
