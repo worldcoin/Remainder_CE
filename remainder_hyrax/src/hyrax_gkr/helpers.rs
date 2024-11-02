@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use remainder::{
-    layer::LayerId, layouter::compiling::CircuitHashType, mle::evals::MultilinearExtension,
+    layer::LayerId, layouter::circuit_hash::CircuitHashType, mle::evals::MultilinearExtension,
     prover::GKRCircuitDescription,
 };
 use remainder_shared_types::{
