@@ -4,7 +4,7 @@ use std::hash::Hash;
 
 use clap::error;
 use ff::Field;
-use remainder::layouter::compiling::CircuitHashType;
+use remainder::layouter::circuit_hash::CircuitHashType;
 use remainder::prover::GKRCircuitDescription;
 use remainder::utils::mle::pad_with;
 use remainder::worldcoin::parameters_v2::IRISCODE_LEN as V2_IRISCODE_LEN;

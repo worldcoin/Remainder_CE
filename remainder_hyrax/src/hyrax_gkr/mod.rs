@@ -16,7 +16,7 @@ use remainder::claims::RawClaim;
 use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
 use remainder::layer::LayerId;
 use remainder::layer::{Layer, LayerDescription};
-use remainder::layouter::compiling::CircuitHashType;
+use remainder::layouter::circuit_hash::CircuitHashType;
 use remainder::mle::evals::MultilinearExtension;
 use remainder::mle::Mle;
 use remainder::prover::helpers::get_circuit_description_hash_as_field_elems;

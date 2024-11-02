@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use remainder::{
     layer::LayerId,
-    layouter::compiling::CircuitHashType,
+    layouter::circuit_hash::CircuitHashType,
     mle::evals::MultilinearExtension,
     worldcoin::{circuits::IriscodeProofDescription, test_helpers::circuit_description_and_inputs},
 };
