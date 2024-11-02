@@ -19,6 +19,7 @@ use remainder::layer::layer_enum::{LayerDescriptionEnum, LayerEnum};
 use remainder::layer::matmult::{MatMult, MatMultLayerDescription, Matrix, MatrixDescription};
 use remainder::layer::regular_layer::{RegularLayer, RegularLayerDescription};
 use remainder::layer::{LayerDescription, LayerId};
+use remainder::layouter::circuit_hash::CircuitHashType;
 use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputShred};
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::nodes::identity_gate::IdentityGateNode;
@@ -2009,12 +2010,19 @@ fn small_regular_circuit_hyrax_input_layer_test() {
         &mut blinding_rng,
         converter,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
 
-    proof.verify(&HashMap::new(), &circuit_desc, &committer, &mut transcript);
+    proof.verify(
+        &HashMap::new(),
+        &circuit_desc,
+        &committer,
+        &mut transcript,
+        CircuitHashType::Sha3_256,
+    );
 }
 
 /// Struct which allows for easy "semantic" feeding of inputs into the circuit proving process.
@@ -2113,6 +2121,7 @@ fn small_regular_circuit_public_input_layer_test() {
         &mut blinding_rng,
         converter,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 
     // --- Create new transcript for holistic verifier to follow along with ---
@@ -2127,6 +2136,7 @@ fn small_regular_circuit_public_input_layer_test() {
         &circuit_desc,
         &committer,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 }
 
@@ -2239,6 +2249,7 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
         &mut blinding_rng,
         converter,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 
     // --- Create new transcript for holistic verifier to follow along with ---
@@ -2253,6 +2264,7 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
         &circuit_desc,
         &committer,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 }
 
@@ -2296,6 +2308,7 @@ fn medium_regular_circuit_public_input_layer_test() {
         &mut blinding_rng,
         converter,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 
     // --- Create new transcript for holistic verifier to follow along with ---
@@ -2313,6 +2326,7 @@ fn medium_regular_circuit_public_input_layer_test() {
         &circuit_desc,
         &committer,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 }
 
@@ -2417,6 +2431,7 @@ fn identity_public_input_layer_test() {
         &mut blinding_rng,
         converter,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 
     // --- Create new transcript for holistic verifier to follow along with ---
@@ -2431,6 +2446,7 @@ fn identity_public_input_layer_test() {
         &circuit_desc,
         &committer,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 }
 
@@ -2533,6 +2549,7 @@ fn regular_matmult_hyrax_input_layer_test() {
         &mut blinding_rng,
         converter,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 
     // --- Create new transcript for holistic verifier to follow along with ---
@@ -2547,6 +2564,7 @@ fn regular_matmult_hyrax_input_layer_test() {
         &circuit_desc,
         &committer,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 }
 
@@ -2663,6 +2681,7 @@ fn regular_identity_matmult_public_input_layer_test() {
         &mut blinding_rng,
         converter,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 
     // --- Create new transcript for holistic verifier to follow along with ---
@@ -2677,5 +2696,6 @@ fn regular_identity_matmult_public_input_layer_test() {
         &circuit_desc,
         &committer,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 }

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use remainder::{
     layer::LayerId,
+    layouter::circuit_hash::CircuitHashType,
     mle::evals::MultilinearExtension,
     worldcoin::{circuits::IriscodeProofDescription, test_helpers::circuit_description_and_inputs},
 };
@@ -195,6 +196,7 @@ pub fn test_iriscode_circuit_with_public_layers_helper(
         blinding_rng,
         converter,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
@@ -203,6 +205,7 @@ pub fn test_iriscode_circuit_with_public_layers_helper(
         &proof_desc.circuit_description,
         &committer,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 }
 
@@ -241,6 +244,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
         blinding_rng,
         converter,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
     // Verify.
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -259,5 +263,6 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
         &proof_desc.circuit_description,
         &committer,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 }
