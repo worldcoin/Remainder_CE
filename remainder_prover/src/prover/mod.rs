@@ -848,6 +848,6 @@ pub fn generate_circuit_description<F: Field>(
         Ok(input_layer_data)
     };
 
-    CircuitBuildingContext::reset();
+    // CircuitBuildingContext::reset();
     Ok((circuit_description, input_builder))
 }
