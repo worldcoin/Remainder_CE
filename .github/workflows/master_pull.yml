@@ -26,8 +26,6 @@ jobs:
               with:
                 command: test
                 args: --features parallel
-            - name: Print processor info
-              run: cat /proc/cpuinfo
 
     fmt_and_lint:
         name: Format and Lint Remainder
