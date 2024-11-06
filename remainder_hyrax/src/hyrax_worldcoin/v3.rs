@@ -34,7 +34,7 @@ type Scalar = Fr;
 type Base = Fq;
 
 #[derive(Debug, Error)]
-pub enum UpgradeError {
+pub enum IriscodeError {
     #[error("Non-zero padding bits in iris/mask code in version {0} circuit, is_mask={1}, left_eye={2}.")]
     NonZeroPaddingBits(u8, bool, bool),
     #[error("Non-binary iris/mask code in version {0} circuit, is_mask={1}, left_eye={2}.")]
@@ -47,41 +47,39 @@ pub enum UpgradeError {
     WrongHash(u8, bool, bool),
 }
 
-/// Verify the upgrade from v2 to v3 using the Hyrax proof system. Receives the [HyraxProof] for each combination of
-/// version, type (iris or mask) and eye, and returns, for each such combination, the corresponding mask or iris code.
+/// Verify that the v3 masked iriscode is correct he v3 using the Hyrax proof system. Receives the
+/// [HyraxProof] for each combination of version, type (iris or mask) and eye, and returns, for each
+/// such combination, the corresponding mask or iris code.
 /// Checks that the image commitment matches the expected hash.
-pub fn verify_upgrade_v2_to_v3(
-    proofs_and_hashes: &HashMap<(u8, bool, bool), (HyraxProof<Bn256Point>, String)>,
-) -> Result<HashMap<(u8, bool, bool), Vec<bool>>, UpgradeError> {
+pub fn verify_v3(
+    proofs_and_hashes: &HashMap<(bool, bool), (HyraxProof<Bn256Point>, String)>,
+) -> Result<HashMap<(bool, bool), Vec<bool>>, IriscodeError> {
     // Create the Pedersen committer using the same reference string and parameters as on the Orb
     let committer: PedersenCommitter<Bn256Point> =
         PedersenCommitter::new(1 << IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING, None);
 
+    let version = 3;
     let mut results = HashMap::new();
-    for version in [2u8, 3u8] {
-        for is_mask in [false, true] {
-            for is_left_eye in [false, true] {
-                let (proof, expected_hash) = proofs_and_hashes
-                    .get(&(version, is_mask, is_left_eye))
-                    .unwrap();
-                match verify_iriscode(version, is_mask, is_left_eye, proof, &committer) {
-                    Ok(result) => {
-                        let (code, commitment) = result;
-                        // Check that the image commitment matches the expected hash.
-                        let commitment_hash = sha256_digest(
-                            &commitment
-                                .iter()
-                                .flat_map(|p| p.to_bytes_compressed())
-                                .collect::<Vec<u8>>(),
-                        );
-                        if commitment_hash != *expected_hash {
-                            return Err(UpgradeError::WrongHash(version, is_left_eye, is_mask));
-                        }
-                        results.insert((version, is_mask, is_left_eye), code);
+    for is_mask in [false, true] {
+        for is_left_eye in [false, true] {
+            let (proof, expected_hash) = proofs_and_hashes.get(&(is_mask, is_left_eye)).unwrap();
+            match verify_iriscode(version, is_mask, is_left_eye, proof, &committer) {
+                Ok(result) => {
+                    let (code, commitment) = result;
+                    // Check that the image commitment matches the expected hash.
+                    let commitment_hash = sha256_digest(
+                        &commitment
+                            .iter()
+                            .flat_map(|p| p.to_bytes_compressed())
+                            .collect::<Vec<u8>>(),
+                    );
+                    if commitment_hash != *expected_hash {
+                        return Err(IriscodeError::WrongHash(version, is_left_eye, is_mask));
                     }
-                    Err(e) => {
-                        return Err(e);
-                    }
+                    results.insert((is_mask, is_left_eye), code);
+                }
+                Err(e) => {
+                    return Err(e);
                 }
             }
         }
@@ -96,14 +94,14 @@ pub fn verify_upgrade_v2_to_v3(
 /// * That the correct kernel values and thresholds are being used in the supplied proof.
 /// * That the MLE encoding the iris/mask code has only 0s in the padding region.
 /// * That the unpadded iris/mask code consists only of 0s and 1s.
-/// This is a helper function for the upgrade from v2 to v3.
+/// This is a helper function for verifying the v3 masked iriscode is correct.
 pub(crate) fn verify_iriscode(
     version: u8,
     is_mask: bool,
     is_left_eye: bool,
     proof: &HyraxProof<Bn256Point>,
     committer: &PedersenCommitter<Bn256Point>,
-) -> Result<(Vec<bool>, Vec<Bn256Point>), UpgradeError> {
+) -> Result<(Vec<bool>, Vec<Bn256Point>), IriscodeError> {
     assert!(version == 2 || version == 3);
     // Get the circuit description, as well as the inputs if we were using a test image;
     // we'll use these to ensure that the correct kernel values and thresholds are being
@@ -150,7 +148,7 @@ pub(crate) fn verify_iriscode(
         .1
         .clone();
     if *expected_aux_mle != aux_mle_in_proof {
-        return Err(UpgradeError::IncorrectKernelValuesOrThresholds(
+        return Err(IriscodeError::IncorrectKernelValuesOrThresholds(
             version,
             is_left_eye,
             is_mask,
@@ -170,13 +168,13 @@ pub(crate) fn verify_iriscode(
         .map(|b| match b {
             &Fr::ONE => Ok(true),
             &Fr::ZERO => Ok(false),
-            _ => Err(UpgradeError::NonBinaryIrisMaskCode(
+            _ => Err(IriscodeError::NonBinaryIrisMaskCode(
                 version,
                 is_left_eye,
                 is_mask,
             )),
         })
-        .collect::<Result<Vec<bool>, UpgradeError>>()?;
+        .collect::<Result<Vec<bool>, IriscodeError>>()?;
     // Check that the MLE encoding the code used only 0s in the padding region
     let code_len = if version == 2 {
         V2_IRISCODE_LEN
@@ -185,7 +183,7 @@ pub(crate) fn verify_iriscode(
     };
     for &b in &code[code_len..] {
         if b {
-            return Err(UpgradeError::NonZeroPaddingBits(
+            return Err(IriscodeError::NonZeroPaddingBits(
                 version,
                 is_left_eye,
                 is_mask,
@@ -208,7 +206,8 @@ pub(crate) fn verify_iriscode(
 
 /// Prove a single instance of the iriscode circuit using the Hyrax proof system, using the provided
 /// precommitment for the image.
-/// This is a helper function for the upgrade from v2 to v3.
+/// `version` is the version of the circuit to use (2 or 3).
+/// This is a helper function for proving the v3 masked iriscode is correct.
 pub(crate) fn prove_with_image_precommit(
     version: u8,
     is_mask: bool,
@@ -256,13 +255,13 @@ pub(crate) fn prove_with_image_precommit(
     )
 }
 
-/// Prove the upgrade from v2 to v3 using the Hyrax proof system. Receives a [SerializedImageCommitment]
-/// for each combination of version, type (iris or mask) and eye, and returns, for each
-/// such combination, the corresponding [HyraxProof].
+/// Prove the v3 masked iris code is correct using the Hyrax proof system. Receives a
+/// [SerializedImageCommitment] for each combination of type (iris or mask) and eye, and returns,
+/// for each such combination, the corresponding [HyraxProof].
 /// (This is a convenience function for the mobile app).
-pub fn prove_upgrade_v2_to_v3(
-    data: &HashMap<(u8, bool, bool), SerializedImageCommitment>,
-) -> HashMap<(u8, bool, bool), HyraxProof<Bn256Point>> {
+pub fn prove_v3(
+    data: &HashMap<(bool, bool), SerializedImageCommitment>,
+) -> HashMap<(bool, bool), HyraxProof<Bn256Point>> {
     // Create the Pedersen committer using the same reference string and parameters as on the Orb
     let committer: PedersenCommitter<Bn256Point> =
         PedersenCommitter::new(1 << IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING, None);
@@ -272,20 +271,18 @@ pub fn prove_upgrade_v2_to_v3(
 
     let mut proofs = HashMap::new();
     // We iterate explicitly over the expected keys, to ensure that the HashMap is complete.
-    for version in [2u8, 3u8] {
-        for is_mask in [false, true] {
-            for is_left_eye in [false, true] {
-                let commitment = data.get(&(version, is_mask, is_left_eye)).unwrap();
-                let proof = prove_with_image_precommit(
-                    version,
-                    is_mask,
-                    commitment.clone(),
-                    &committer,
-                    blinding_rng,
-                    converter,
-                );
-                proofs.insert((version, is_mask, is_left_eye), proof);
-            }
+    for is_mask in [false, true] {
+        for is_left_eye in [false, true] {
+            let commitment = data.get(&(is_mask, is_left_eye)).unwrap();
+            let proof = prove_with_image_precommit(
+                3,
+                is_mask,
+                commitment.clone(),
+                &committer,
+                blinding_rng,
+                converter,
+            );
+            proofs.insert((is_mask, is_left_eye), proof);
         }
     }
     proofs
