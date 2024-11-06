@@ -62,9 +62,7 @@ pub fn verify_v3(
     let mut results = HashMap::new();
     for is_mask in [false, true] {
         for is_left_eye in [false, true] {
-            let (proof, expected_hash) = proofs_and_hashes
-                .get(&(is_mask, is_left_eye))
-                .unwrap();
+            let (proof, expected_hash) = proofs_and_hashes.get(&(is_mask, is_left_eye)).unwrap();
             match verify_iriscode(version, is_mask, is_left_eye, proof, &committer) {
                 Ok(result) => {
                     let (code, commitment) = result;

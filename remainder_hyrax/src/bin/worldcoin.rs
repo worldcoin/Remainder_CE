@@ -11,6 +11,5 @@ fn main() {
             commitments.insert((mask, left_eye), serialized_commitment.clone());
         }
     }
-    let _proofs =
-        remainder_hyrax::hyrax_worldcoin::v3::prove_v3(&commitments.clone());
+    let _proofs = remainder_hyrax::hyrax_worldcoin::v3::prove_v3(&commitments.clone());
 }
