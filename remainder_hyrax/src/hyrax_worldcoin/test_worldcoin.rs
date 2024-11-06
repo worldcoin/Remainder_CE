@@ -27,7 +27,7 @@ mod tests {
                 test_iriscode_circuit_with_hyrax_helper,
                 test_iriscode_circuit_with_public_layers_helper,
             },
-            upgrade::{prove_upgrade_v2_to_v3, verify_upgrade_v2_to_v3},
+            v3::{prove_v3, verify_v3},
         },
         utils::vandermonde::VandermondeInverse,
     };
@@ -45,7 +45,7 @@ mod tests {
                 load_image_commitment, SerializedImageCommitment, IMAGE_COMMIT_LOG_NUM_COLS,
                 PUBLIC_STRING,
             },
-            upgrade::{prove_with_image_precommit, verify_iriscode},
+            v3::{prove_with_image_precommit, verify_iriscode},
         },
         test_iriscode_v2_with_hyrax_helper, test_iriscode_v3_with_hyrax_helper,
     };
@@ -92,44 +92,41 @@ mod tests {
 
     #[ignore] // Takes a long time to run
     #[test]
-    fn test_upgrade_v2_v3() {
+    fn test_masked_iriscode_is_correct_v3() {
         use sha256::digest as sha256_digest;
 
-        let mut commitments: HashMap<(u8, bool, bool), SerializedImageCommitment> = HashMap::new();
-        for version in 2..=3 {
-            for mask in [false, true] {
-                for left_eye in [false, true] {
-                    let serialized_commitment = load_image_commitment(version, mask, left_eye);
-                    commitments.insert((version, mask, left_eye), serialized_commitment);
-                }
+        let mut commitments: HashMap<(bool, bool), SerializedImageCommitment> = HashMap::new();
+        let version = 3;
+        for mask in [false, true] {
+            for left_eye in [false, true] {
+                let serialized_commitment = load_image_commitment(version, mask, left_eye);
+                commitments.insert((mask, left_eye), serialized_commitment);
             }
         }
-        let proofs = prove_upgrade_v2_to_v3(&commitments.clone());
+        let proofs = prove_v3(&commitments.clone());
 
         // Get expected hashes for the commitments.
         // In production, the verifier should be obtaining the hashes from the signed hashes.json file.
-        let mut proofs_and_hashes: HashMap<(u8, bool, bool), (HyraxProof<Bn256Point>, String)> =
+        let mut proofs_and_hashes: HashMap<(bool, bool), (HyraxProof<Bn256Point>, String)> =
             HashMap::new();
-        for ((version, mask, left_eye), proof) in proofs {
-            let serialized_commitment = commitments.get(&(version, mask, left_eye)).unwrap();
+        for ((mask, left_eye), proof) in proofs {
+            let serialized_commitment = commitments.get(&(mask, left_eye)).unwrap();
             let hash = sha256_digest(&serialized_commitment.commitment_bytes.clone());
-            proofs_and_hashes.insert((version, mask, left_eye), (proof, hash));
+            proofs_and_hashes.insert((mask, left_eye), (proof, hash));
         }
 
-        let results = verify_upgrade_v2_to_v3(&proofs_and_hashes).unwrap();
-        for version in 2..=3 {
-            for mask in [false, true] {
-                for left_eye in [false, true] {
-                    let code = results.get(&(version, mask, left_eye)).unwrap();
-                    assert_eq!(
-                        code.len(),
-                        if version == 2 {
-                            V2_IRISCODE_LEN
-                        } else {
-                            V3_IRISCODE_LEN
-                        }
-                    );
-                }
+        let results = verify_v3(&proofs_and_hashes).unwrap();
+        for mask in [false, true] {
+            for left_eye in [false, true] {
+                let code = results.get(&(mask, left_eye)).unwrap();
+                assert_eq!(
+                    code.len(),
+                    if version == 2 {
+                        V2_IRISCODE_LEN
+                    } else {
+                        V3_IRISCODE_LEN
+                    }
+                );
             }
         }
     }
