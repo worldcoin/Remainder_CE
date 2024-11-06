@@ -25,7 +25,10 @@ jobs:
             - uses: actions-rs/cargo@v1
               with:
                 command: test
-                args: --features parallel
+                args: --features parallel -- --test-threads=1
+            - uses: actions-rs/cargo@v1
+              with:
+                command: test
 
     fmt_and_lint:
         name: Format and Lint Remainder

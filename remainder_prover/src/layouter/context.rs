@@ -21,16 +21,6 @@ static CONTEXT: Lazy<CircuitBuildingContext> = Lazy::new(|| CircuitBuildingConte
 });
 
 impl CircuitBuildingContext {
-    /// Resets the [CircuitBuildingContext] to its initial state, such that the next ids to be issued are all 0.
-    pub fn reset() {
-        CONTEXT.node_id.store(0, Ordering::SeqCst);
-        CONTEXT.input_layer_id.store(0, Ordering::SeqCst);
-        CONTEXT.layer_id.store(0, Ordering::SeqCst);
-        CONTEXT
-            .fiat_shamir_challenge_layer_id
-            .store(0, Ordering::SeqCst);
-    }
-
     /// Retrieves a new node id that is guaranteed to be unique.
     pub fn next_node_id() -> u64 {
         CONTEXT.node_id.fetch_add(1, Ordering::Relaxed)
