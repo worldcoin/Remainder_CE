@@ -44,7 +44,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use halo2curves::bn256::{Fq, Fr};
+    use halo2curves::bn256::Fq;
 
     use crate::transcript::{
         ec_transcript::{ECTranscript, ECTranscriptTrait},
