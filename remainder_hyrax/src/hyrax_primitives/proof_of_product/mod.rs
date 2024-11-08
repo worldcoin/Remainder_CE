@@ -3,6 +3,7 @@ use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
+use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 /// Tests for proof of product.
@@ -10,6 +11,8 @@ mod tests;
 
 /// "Proof of product" i.e. a proof that if X, Y and Z are commitments, committing to x, y and z,
 /// then x*y = z.  See Appendix A of the Hyrax paper.
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct ProofOfProduct<C: PrimeOrderCurve> {
     pub alpha: C,
     pub beta: C,

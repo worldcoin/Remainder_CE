@@ -19,6 +19,7 @@ use remainder_shared_types::{
     transcript::ec_transcript::ECTranscriptTrait,
 };
 use remainder_shared_types::{ff_field, Field};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     hyrax_pcs::{HyraxPCSEvaluationProof, MleCoefficientsVector},
@@ -35,6 +36,8 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 /// The proof structure for a Hyrax input layer. Includes the [ProofOfClaimAggregation], and
 /// the appropriate opening proof for opening the polynomial commitment at a random evaluation
 /// point.
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
     /// The ID of the layer that this is a proof for
     pub layer_id: LayerId,

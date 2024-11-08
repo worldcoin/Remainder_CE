@@ -6,6 +6,7 @@ use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use remainder_shared_types::Field;
+use serde::{Deserialize, Serialize};
 
 use super::proof_of_equality::ProofOfEquality;
 use super::proof_of_opening::ProofOfOpening;
@@ -14,6 +15,8 @@ use super::proof_of_opening::ProofOfOpening;
 /// Tests for the Pedersen commitment scheme using the BN254 (aka BN256) curve and its scalar field (Fr).
 pub mod tests;
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct ProofOfClaimAggregation<C: PrimeOrderCurve> {
     // the commitments to the coefficients of the interpolating polynomial
     pub interpolant_coeffs: Vec<C>,

@@ -4,6 +4,7 @@ use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
+use serde::{Deserialize, Serialize};
 use std::ops::Neg;
 
 use crate::hyrax_gkr::hyrax_layer::{evaluate_committed_psl, evaluate_committed_scalar};
@@ -15,6 +16,8 @@ use super::proof_of_dot_prod::ProofOfDotProduct;
 mod tests;
 
 /// See Figure 1 of the Hyrax paper.
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct ProofOfSumcheck<C: PrimeOrderCurve> {
     /// the commitment to the purported sum
     pub sum: C,

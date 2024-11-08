@@ -3,6 +3,7 @@ use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
+use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 /// Tests for proof of opening.
@@ -16,6 +17,8 @@ mod tests;
 
 /// "Proof of Opening", i.e. a proof that the prover knows an opening of a scalar commitment.
 /// See Appendix A of the Hyrax paper.
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct ProofOfOpening<C: PrimeOrderCurve> {
     pub z1: C::Scalar,
     pub z2: C::Scalar,

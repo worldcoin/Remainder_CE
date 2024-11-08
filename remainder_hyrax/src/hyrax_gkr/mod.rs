@@ -25,6 +25,7 @@ use remainder::prover::{GKRCircuitDescription, InstantiatedCircuit};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
+use serde::{Deserialize, Serialize};
 
 use self::hyrax_layer::HyraxLayerProof;
 
@@ -43,6 +44,8 @@ pub mod tests;
 
 /// The struct that holds all the respective proofs that the verifier needs in order
 /// to verify a Hyrax proof, i.e. the circuit proof along with the proofs for each input layer.
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxProof<C: PrimeOrderCurve> {
     /// The MLEs of the public inputs, along with their layer ids.
     /// To be appended to transcript in order of LayerId ascending.
@@ -329,6 +332,8 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
 }
 
 /// The struct that holds all the information that the prover sends to the verifier about the circuit proof, i.e. the proof that transforms the claims on the output layers to claims on the input layers.
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxCircuitProof<C: PrimeOrderCurve> {
     /// The [HyraxLayerProof] for each of the intermediate layers in this circuit.
     pub layer_proofs: Vec<(LayerId, HyraxLayerProof<C>)>,

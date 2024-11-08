@@ -4,6 +4,7 @@ use remainder_shared_types::ff_field;
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
+use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 /// Tests for proof of equality.
@@ -14,6 +15,8 @@ mod tests;
 /// or at least add a comment that says what is expected to be in the transcript :D
 
 /// Proof of equality shows that two messages are equal, via their commitments.
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct ProofOfEquality<C: PrimeOrderCurve> {
     pub alpha: C,
     pub z: C::Scalar,
