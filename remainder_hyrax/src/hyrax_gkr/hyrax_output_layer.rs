@@ -6,6 +6,7 @@ use remainder::output_layer::{OutputLayer, OutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
+use serde::{Deserialize, Serialize};
 
 use super::hyrax_layer::HyraxClaim;
 
@@ -13,6 +14,8 @@ use super::hyrax_layer::HyraxClaim;
 /// doesn't need anything other than whether the challenges the
 /// output layer was evaluated on, so that the verifier can check
 /// whether these match the transcript.
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxOutputLayerProof<C: PrimeOrderCurve> {
     /// The commitment to the claim that the output layer is making
     pub claim_commitment: C,
