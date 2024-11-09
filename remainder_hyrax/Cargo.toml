@@ -15,7 +15,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.105"
 thiserror = "1.0.40"
 tracing = "0.1.37"
-ark-std = { version = "0.4.0", features = ["print-trace"] }
+ark-std = { version = "0.4.0" }
 num = "0.4.1"
 num-bigint = "0.4.4"
 sha3 = "0.10.8"
@@ -27,8 +27,12 @@ rayon = "1.7"
 sha256 = "1.5.0"
 
 [features]
-parallel = []
-print-trace = []
+parallel = ["remainder/parallel", "ark-std/parallel"]
+print-trace = [
+  "ark-std/print-trace",
+  "remainder-shared-types/print-trace",
+  "remainder/print-trace",
+]
 
 [[bench]]
 name = "pcs_bench"

@@ -27,6 +27,9 @@ sha3 = "0.10.8"
 pasta_curves = "0.5.1"
 ff = "0.13.0"
 
+[features]
+print-trace = ["ark-std/print-trace"]
+
 [[bench]]
 name = "transcript_bench"
 harness = false

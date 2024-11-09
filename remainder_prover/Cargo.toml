@@ -50,7 +50,12 @@ sha3 = "0.10.8"
 pretty_assertions = "1.4.0"
 
 [features]
-parallel = []
+parallel = ["ark-std/parallel"]
+print-trace = [
+  "ark-std/print-trace",
+  "remainder-ligero/print-trace",
+  "remainder-shared-types/print-trace",
+]
 
 [[bench]]
 name = "fix_variable"
