@@ -409,10 +409,87 @@ mod tests {
 
     use crate::{
         mle::evals::MultilinearExtension,
-        utils::mle::{evaluate_mle_at_a_point_lexicographic_order, evaluate_mle_destructive},
+        utils::mle::{
+            evaluate_mle_at_a_point_lexicographic_order, evaluate_mle_destructive, GrayCode,
+        },
     };
 
     use super::evaluate_mle_at_a_point_gray_codes;
+
+    #[test]
+    fn test_gray_code_0_vars() {
+        let mut gray_code_iterator = GrayCode::new(0);
+
+        assert_eq!(gray_code_iterator.next(), None);
+    }
+
+    #[test]
+    fn test_gray_code_iterator_len() {
+        for n in 1..16 {
+            assert_eq!(GrayCode::new(n).count(), (1 << n) - 1);
+        }
+    }
+
+    // Note that this is the only test we have here that verifies that we're
+    // actually using Gray Codes and not any of the other codes that could
+    // satisfy the properties listed on the `test_gray_code_property` test.
+    #[test]
+    fn test_gray_code_3_vars() {
+        let mut gray_code_iterator = GrayCode::new(3);
+
+        assert_eq!(gray_code_iterator.next(), Some((1, (0, false))));
+        assert_eq!(gray_code_iterator.next(), Some((3, (1, false))));
+        assert_eq!(gray_code_iterator.next(), Some((2, (0, true))));
+        assert_eq!(gray_code_iterator.next(), Some((6, (2, false))));
+        assert_eq!(gray_code_iterator.next(), Some((7, (0, false))));
+        assert_eq!(gray_code_iterator.next(), Some((5, (1, true))));
+        assert_eq!(gray_code_iterator.next(), Some((4, (0, true))));
+        assert_eq!(gray_code_iterator.next(), None);
+    }
+
+    // Property testing of `GrayCode` for values of `num_bits` of up to 15 (for
+    // efficient testing).
+    // This test ensures that:
+    //   1. The Hamming distance between consecutive codes is exactly 1.
+    //   2. The index of the flipped bit correct.
+    //   3. Each of the `2^num_codes` appear exactly once.
+    //
+    // Note that there are multiple codes that satisfy the above properties.
+    // Any code with those properties can be used for computing MLEs in linear
+    // time.
+    #[test]
+    fn test_gray_code_property() {
+        for n in 1..16 {
+            let gray_code_iterator = GrayCode::new(n);
+
+            let mut seen: Vec<bool> = vec![false; 1 << n];
+
+            // Assume we're starting from 0.
+            seen[0] = true;
+
+            gray_code_iterator.fold(0, |prev, (cur, (idx, val))| {
+                // Ensure `cur` has NOT been seen before.
+                assert!(!seen[cur as usize]);
+                seen[cur as usize] = true;
+
+                let mask: u32 = 1 << idx;
+
+                // This ensures that:
+                //   1. The Hamming Distance between `prev` and `cur` is exactly 1,
+                //      because `mask` contains exactly one bit set to 1, and,
+                //   2. The flipped bit is indeed in the `idx`-th position.
+                assert_eq!(prev ^ cur, mask);
+
+                // Ensures `val` is the previous value of the flipped bit.
+                assert_eq!((prev & mask) >> idx, val as u32);
+
+                cur
+            });
+
+            // Ensure all codes have been encountered during the iteration.
+            assert!(seen.iter().all(|x| *x))
+        }
+    }
 
     #[test]
     fn test_evaluate_mle_at_a_point_1_variable_gray_codes() {
@@ -468,5 +545,30 @@ mod tests {
         let computed_evaluation = evaluate_mle_at_a_point_lexicographic_order(&mle, point);
         let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
         assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    /// Ensure that all three methods of computing MLEs at a point produce the
+    /// same result for random MLEs and points of sizes up to 15 bits.
+    #[test]
+    fn test_evaluation_equivalence() {
+        for n in 1..16 {
+            let num_vars = n;
+            let num_evals = 1 << num_vars;
+
+            let mut rng = test_rng();
+            let mut mle =
+                MultilinearExtension::new((0..num_evals).map(|_| Fr::random(&mut rng)).collect());
+            let point = (0..num_vars).map(|_| Fr::random(&mut rng)).collect_vec();
+
+            let gray_code_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, &point);
+            let lexicographic_evaluation =
+                evaluate_mle_at_a_point_lexicographic_order(&mle, &point);
+            let destructive_evaluation = evaluate_mle_destructive(&mut mle, &point);
+
+            assert!(
+                gray_code_evaluation == lexicographic_evaluation
+                    && lexicographic_evaluation == destructive_evaluation
+            );
+        }
     }
 }
