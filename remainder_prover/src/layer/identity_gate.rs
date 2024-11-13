@@ -219,6 +219,8 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
+        dbg!(&round_challenges);
+        dbg!(&claim_challenges);
         let beta_ug = if !LAZY_BETA_EVALUATION {
             Some((
                 BetaValues::new_beta_equality_mle(
@@ -295,6 +297,10 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             F::ONE
         };
 
+        dbg!(&f_1_uv);
+        dbg!(&beta_bound);
+        dbg!(&self.source_mle);
+
         PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
             &[self.source_mle.clone()],
             f_1_uv * beta_bound,
@@ -357,9 +363,12 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             self.wiring.iter().for_each(|(z, x)| {
                 let id_val = source_mle_data
                     .f
-                    .get(idx + (x * num_dataparallel_vals))
+                    .get(
+                        idx * (1 << (self.source_mle.num_free_vars() - self.num_dataparallel_vars))
+                            + x,
+                    )
                     .unwrap_or(F::ZERO);
-                remap_table[idx + z * num_dataparallel_vals] = id_val;
+                remap_table[(max_gate_val + 1).next_power_of_two() * idx + z] = id_val;
             });
         });
         let output_data = MultilinearExtension::new(remap_table);
@@ -378,7 +387,7 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
         let g2_challenges = claim.get_point()[..self.num_dataparallel_rounds].to_vec();
         let g1_challenges = claim.get_point()[self.num_dataparallel_rounds..].to_vec();
 
-        let beta_ug = if LAZY_BETA_EVALUATION {
+        let beta_ug = if !LAZY_BETA_EVALUATION {
             Some((
                 BetaValues::new_beta_equality_mle(self.first_u_challenges.clone()),
                 BetaValues::new_beta_equality_mle(g1_challenges.clone()),
@@ -425,6 +434,8 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
                     beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
                 )
             } else {
+                dbg!("helloooo");
+
                 (
                     BetaValues::compute_beta_over_challenge_and_index(&g1_challenges, *z_ind),
                     BetaValues::compute_beta_over_challenge_and_index(
@@ -441,6 +452,8 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
             &g2_challenges,
             &self.dataparallel_sumcheck_challenges,
         );
+
+        dbg!(&self.source_mle.value());
 
         // get the fully evaluated "expression"
 
@@ -679,6 +692,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F> {
+        dbg!(&round_challenges);
+        dbg!(&claim_challenges);
         let beta_ug = if !LAZY_BETA_EVALUATION {
             Some((
                 BetaValues::new_beta_equality_mle(
@@ -747,6 +762,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
                 acc + gz * ux
             });
+        dbg!(&f_1_uv);
 
         let beta_bound = if self.num_dataparallel_vars != 0 {
             let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
@@ -757,6 +773,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         } else {
             F::ONE
         };
+        dbg!(&beta_bound);
+        dbg!(&self.source_mle.mle.to_vec());
 
         PostSumcheckLayer(vec![Product::<F, F>::new(
             &[self.source_mle.clone()],
@@ -872,6 +890,8 @@ impl<F: Field> IdentityGate<F> {
             Box::new(|idx| BetaValues::compute_beta_over_challenge_and_index(&g1_challenges, idx))
         };
         let num_dataparallel_copies = 1 << self.num_dataparallel_vars;
+        let num_nondataparallel_coeffs =
+            1 << (self.source_mle.num_free_vars() - self.num_dataparallel_vars);
         let mut a_f2 = vec![F::ZERO; 1 << (self.num_dataparallel_vars)];
         (0..num_dataparallel_copies).for_each(|idx| {
             let mut adder_f2 = F::ZERO;
@@ -880,7 +900,7 @@ impl<F: Field> IdentityGate<F> {
                 let f2_val = self
                     .source_mle
                     .mle
-                    .get(idx + (*x * num_dataparallel_copies))
+                    .get(x + (idx * num_nondataparallel_coeffs))
                     .unwrap_or(F::ZERO);
 
                 adder_f2 += gz * f2_val;
@@ -890,6 +910,7 @@ impl<F: Field> IdentityGate<F> {
 
         let mut af2_mle = DenseMle::new_from_raw(a_f2, self.layer_id());
         af2_mle.index_mle_indices(0);
+        dbg!(&af2_mle.mle.to_vec());
         self.dataparallel_af2_mle = Some(af2_mle);
     }
 
@@ -935,6 +956,7 @@ impl<F: Field> IdentityGate<F> {
         // with the function on the x variables.
         let degree = 2;
         let a_f2_x = self.dataparallel_af2_mle.as_ref().unwrap();
+        dbg!(&a_f2_x);
         let beta_values = self.beta_g2.as_ref().unwrap();
         let (unbound_beta_values, bound_beta_values) =
             beta_values.get_relevant_beta_unbound_and_bound(a_f2_x.mle_indices());

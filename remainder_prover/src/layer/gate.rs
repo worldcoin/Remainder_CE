@@ -605,16 +605,15 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         let beta_g = BetaValues::new_beta_equality_mle(g1_challenges);
         // Multiply the corresponding entries of the beta tables to get the full value of the gate function
         // i.e. f1(z, x, y) bound at the challenges f1(g1, u, v).
-        let f_1_uv =
-            self.nonzero_gates
-                .clone()
-                .into_iter()
-                .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
-                    let gz = beta_g.get(z_ind).unwrap_or(F::ZERO);
-                    let ux = beta_u.get(x_ind).unwrap_or(F::ZERO);
-                    let vy = beta_v.get(y_ind).unwrap_or(F::ZERO);
-                    acc + gz * ux * vy
-                });
+        let f_1_uv = self
+            .nonzero_gates
+            .iter()
+            .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
+                let gz = beta_g.get(*z_ind).unwrap_or(F::ZERO);
+                let ux = beta_u.get(*x_ind).unwrap_or(F::ZERO);
+                let vy = beta_v.get(*y_ind).unwrap_or(F::ZERO);
+                acc + gz * ux * vy
+            });
 
         let beta_bound = if self.num_dataparallel_vars != 0 {
             BetaValues::compute_beta_over_two_challenges(
@@ -969,16 +968,15 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         let beta_g = BetaValues::new_beta_equality_mle(g1_challenges);
         // Multiply the corresponding entries of the beta tables to get the full value of the gate function
         // i.e. f1(z, x, y) bound at the challenges f1(g1, u, v).
-        let f_1_uv =
-            self.nonzero_gates
-                .clone()
-                .into_iter()
-                .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
-                    let gz = beta_g.get(z_ind).unwrap_or(F::ZERO);
-                    let ux = beta_u.get(x_ind).unwrap_or(F::ZERO);
-                    let vy = beta_v.get(y_ind).unwrap_or(F::ZERO);
-                    acc + gz * ux * vy
-                });
+        let f_1_uv = self
+            .nonzero_gates
+            .iter()
+            .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
+                let gz = beta_g.get(*z_ind).unwrap_or(F::ZERO);
+                let ux = beta_u.get(*x_ind).unwrap_or(F::ZERO);
+                let vy = beta_v.get(*y_ind).unwrap_or(F::ZERO);
+                acc + gz * ux * vy
+            });
 
         let beta_bound = if self.num_dataparallel_vars != 0 {
             BetaValues::compute_beta_over_two_challenges(
@@ -1083,13 +1081,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
                 let zero = F::ZERO;
                 let f2_val = lhs_data
                     .f
-                    .get(idx + (x_ind * num_dataparallel_vals))
+                    .get(idx * (1 << (lhs_data.num_vars() - self.num_dataparallel_vars)) + x_ind)
                     .unwrap_or(zero);
                 let f3_val = rhs_data
                     .f
-                    .get(idx + (y_ind * num_dataparallel_vals))
+                    .get(idx * (1 << (rhs_data.num_vars() - self.num_dataparallel_vars)) + y_ind)
                     .unwrap_or(zero);
-                res_table[idx + (z_ind * num_dataparallel_vals)] =
+                res_table[(max_gate_val + 1).next_power_of_two() * idx + z_ind] =
                     self.gate_operation.perform_operation(f2_val, f3_val);
             });
         });
@@ -1121,12 +1119,11 @@ impl<F: Field> VerifierGateLayer<F> {
         // i.e. f1(z, x, y) bound at the challenges f1(g1, u, v).
         let f_1_uv = self
             .wiring
-            .clone()
-            .into_iter()
+            .iter()
             .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
-                let gz = beta_g.get(z_ind).unwrap_or(F::ZERO);
-                let ux = beta_u.get(x_ind).unwrap_or(F::ZERO);
-                let vy = beta_v.get(y_ind).unwrap_or(F::ZERO);
+                let gz = beta_g.get(*z_ind).unwrap_or(F::ZERO);
+                let ux = beta_u.get(*x_ind).unwrap_or(F::ZERO);
+                let vy = beta_v.get(*y_ind).unwrap_or(F::ZERO);
                 acc + gz * ux * vy
             });
 
@@ -1379,17 +1376,14 @@ impl<F: Field> GateLayer<F> {
         // of the sparsity of the gate function. if we have the following expression:
         // f1(z, x, y)(f2(x) + f3(y)) then because we are only binding the "x" variables, we can simply
         // distribute over the y variables and construct bookkeeping tables that are size 2^(num_x_variables).
-        self.nonzero_gates
-            .clone()
-            .into_iter()
-            .for_each(|(z_ind, x_ind, y_ind)| {
-                let beta_g_at_z = beta_g1.get(z_ind).unwrap_or(F::ZERO);
-                let f_3_at_y = self.rhs.get(y_ind).unwrap_or(F::ZERO);
-                a_hg_rhs[x_ind] += beta_g_at_z * f_3_at_y;
-                if self.gate_operation == BinaryOperation::Add {
-                    a_hg_lhs[x_ind] += beta_g_at_z;
-                }
-            });
+        self.nonzero_gates.iter().for_each(|(z_ind, x_ind, y_ind)| {
+            let beta_g_at_z = beta_g1.get(*z_ind).unwrap_or(F::ZERO);
+            let f_3_at_y = self.rhs.get(*y_ind).unwrap_or(F::ZERO);
+            a_hg_rhs[*x_ind] += beta_g_at_z * f_3_at_y;
+            if self.gate_operation == BinaryOperation::Add {
+                a_hg_lhs[*x_ind] += beta_g_at_z;
+            }
+        });
 
         let a_hg_rhs_mle_ref = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0));
 

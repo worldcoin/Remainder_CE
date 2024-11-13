@@ -22,6 +22,7 @@ fn initialize_tensor<F: Field>(challenge_coord: &[F]) -> Vec<F> {
     // --- For each of the challenge coordinates ---
     challenge_coord
         .iter()
+        .rev()
         .fold(vec![F::ONE], |current_tensor, challenge| {
             // --- Take first coordinate and double current tensor ---
             current_tensor
@@ -75,15 +76,15 @@ pub fn get_ml_inner_outer_tensors<F: Field>(
     );
 
     // "a" tensor
+    let num_rows_num_vars = log2(num_rows) as usize;
     let orig_num_cols_num_vars = log2(orig_num_cols) as usize;
-    let inner_tensor = initialize_tensor(&challenge_coord[0..orig_num_cols_num_vars]);
+    let inner_tensor = initialize_tensor(
+        &challenge_coord[num_rows_num_vars..orig_num_cols_num_vars + num_rows_num_vars],
+    );
     assert_eq!(inner_tensor.len(), orig_num_cols);
 
     // "b" tensor
-    let num_rows_num_vars = log2(num_rows) as usize;
-    let outer_tensor = initialize_tensor(
-        &challenge_coord[orig_num_cols_num_vars..orig_num_cols_num_vars + num_rows_num_vars],
-    );
+    let outer_tensor = initialize_tensor(&challenge_coord[0..num_rows_num_vars]);
     assert_eq!(outer_tensor.len(), num_rows);
 
     (inner_tensor, outer_tensor)
@@ -100,18 +101,18 @@ pub fn naive_eval_mle_at_challenge_point<F: Field>(mle_coeffs: &[F], challenge_c
     assert_eq!(log2(mle_coeffs.len()), challenge_coord.len() as u32);
 
     let one = F::ONE;
-    let reduced_bookkeeping_table =
-        challenge_coord
-            .iter()
-            .fold(mle_coeffs.to_vec(), |bookkeeping_table, new_challenge| {
-                // --- Grab every pair of elements and use the formula ---
-                bookkeeping_table
-                    .chunks(2)
-                    .map(|elem_tuple| {
-                        elem_tuple[0] * (one - new_challenge) + elem_tuple[1] * new_challenge
-                    })
-                    .collect_vec()
-            });
+    let reduced_bookkeeping_table = challenge_coord.iter().rev().fold(
+        mle_coeffs.to_vec(),
+        |bookkeeping_table, new_challenge| {
+            // --- Grab every pair of elements and use the formula ---
+            bookkeeping_table
+                .chunks(2)
+                .map(|elem_tuple| {
+                    elem_tuple[0] * (one - new_challenge) + elem_tuple[1] * new_challenge
+                })
+                .collect_vec()
+        },
+    );
 
     assert_eq!(reduced_bookkeeping_table.len(), 1);
     reduced_bookkeeping_table[0]
@@ -137,12 +138,12 @@ fn test_initialize_tensor() {
     // NOTE that this is little-endian!!!
     let expected_tensor: Vec<Fr> = vec![
         (one - first) * (one - second) * (one - third),
-        (first) * (one - second) * (one - third),
-        (one - first) * (second) * (one - third),
-        (first) * (second) * (one - third),
         (one - first) * (one - second) * (third),
-        (first) * (one - second) * (third),
+        (one - first) * (second) * (one - third),
         (one - first) * (second) * (third),
+        (first) * (one - second) * (one - third),
+        (first) * (one - second) * (third),
+        (first) * (second) * (one - third),
         (first) * (second) * (third),
     ];
 
@@ -172,21 +173,21 @@ fn test_split_tensor() {
 
     // --- Little-endian ---
     let expected_inner_tensor: Vec<Fr> = vec![
-        (one - first) * (one - second) * (one - third),
-        (first) * (one - second) * (one - third),
-        (one - first) * (second) * (one - third),
-        (first) * (second) * (one - third),
-        (one - first) * (one - second) * (third),
-        (first) * (one - second) * (third),
-        (one - first) * (second) * (third),
-        (first) * (second) * (third),
+        (one - third) * (one - fourth) * (one - fifth),
+        (one - third) * (one - fourth) * (fifth),
+        (one - third) * (fourth) * (one - fifth),
+        (one - third) * (fourth) * (fifth),
+        (third) * (one - fourth) * (one - fifth),
+        (third) * (one - fourth) * (fifth),
+        (third) * (fourth) * (one - fifth),
+        (third) * (fourth) * (fifth),
     ];
 
     let expected_outer_tensor: Vec<Fr> = vec![
-        (one - fourth) * (one - fifth),
-        (fourth) * (one - fifth),
-        (one - fourth) * (fifth),
-        (fourth) * (fifth),
+        (one - first) * (one - second),
+        (one - first) * (second),
+        (first) * (one - second),
+        (first) * (second),
     ];
 
     let inner_tensor_num_vars = 3;

@@ -76,7 +76,7 @@ fn sanity_check_test_honest_prover_small_identity() {
 }
 
 #[test]
-/// test on a 4 x 2 matrix of all identity elements
+/// test on a 2 x 4 matrix of all identity elements
 fn sanity_check_test_honest_prover_small_asymmetric_one() {
     let committer = PedersenCommitter::<Bn256Point>::new(
         9,
@@ -98,7 +98,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
 
-    let blinding_factors_matrix_rows = (0..4).map(|_| Scalar::one()).collect_vec();
+    let blinding_factors_matrix_rows = (0..4).map(|_| Scalar::zero()).collect_vec();
 
     let comm_to_matrix = HyraxPCSEvaluationProof::compute_matrix_commitments(
         log_split_point,
@@ -155,12 +155,12 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
 
     let challenge_vec = vec![
         (Scalar::one() - r_1) * (Scalar::one() - r_2) * (Scalar::one() - r_3),
-        (r_1) * (Scalar::one() - r_2) * (Scalar::one() - r_3),
-        (Scalar::one() - r_1) * (r_2) * (Scalar::one() - r_3),
-        (r_1) * (r_2) * (Scalar::one() - r_3),
         (Scalar::one() - r_1) * (Scalar::one() - r_2) * (r_3),
-        (r_1) * (Scalar::one() - r_2) * (r_3),
+        (Scalar::one() - r_1) * (r_2) * (Scalar::one() - r_3),
         (Scalar::one() - r_1) * (r_2) * (r_3),
+        (r_1) * (Scalar::one() - r_2) * (Scalar::one() - r_3),
+        (r_1) * (Scalar::one() - r_2) * (r_3),
+        (r_1) * (r_2) * (Scalar::one() - r_3),
         (r_1) * (r_2) * (r_3),
     ];
     let mle_evaluation_at_challenge = input_layer_mle_coeff_raw_vec

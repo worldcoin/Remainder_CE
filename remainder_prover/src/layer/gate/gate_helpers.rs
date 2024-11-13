@@ -65,9 +65,10 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
     if independent_variable {
         // There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
         let eval_count = degree + 1;
+        let mle_num_coefficients_mid = 1 << (max_num_vars - 1);
 
         // iterate across all pairs of evaluations
-        let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).fold(
+        let evals = cfg_into_iter!((0..mle_num_coefficients_mid)).fold(
             #[cfg(feature = "parallel")]
             || vec![F::ZERO; eval_count],
             #[cfg(not(feature = "parallel"))]
@@ -79,13 +80,15 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
                     .map(|mle_ref| {
                         let index = if mle_ref.num_free_vars() < max_num_vars {
                             let max = 1 << mle_ref.num_free_vars();
-                            (index * 2) % max
+                            index % max
                         } else {
-                            index * 2
+                            index
                         };
                         let first = mle_ref.get(index).unwrap_or(F::ZERO);
                         let second = if mle_ref.num_free_vars() != 0 {
-                            mle_ref.get(index + 1).unwrap_or(F::ZERO)
+                            mle_ref
+                                .get(index + mle_num_coefficients_mid)
+                                .unwrap_or(F::ZERO)
                         } else {
                             first
                         };
@@ -454,8 +457,10 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
     // There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`.
     let eval_count = degree + 1;
 
+    let num_dataparallel_copies_mid = 1 << (num_dataparallel_bits - 1);
+
     // Iterate across all pairs of evaluations.
-    let evals = cfg_into_iter!((0..1 << (num_dataparallel_bits - 1))).fold(
+    let evals = cfg_into_iter!((0..num_dataparallel_copies_mid)).fold(
         #[cfg(feature = "parallel")]
         || vec![F::ZERO; eval_count],
         #[cfg(not(feature = "parallel"))]
@@ -463,9 +468,9 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
         |mut acc, p2_idx| {
             // Compute the beta successors the same way it's done for each mle. Do it outside the loop
             // because it only needs to be done once per product of mles.
-            let first = beta_g2.get(p2_idx * 2).unwrap();
+            let first = beta_g2.get(p2_idx).unwrap();
             let second = if beta_g2.num_free_vars() != 0 {
-                beta_g2.get(p2_idx * 2 + 1).unwrap()
+                beta_g2.get(p2_idx + num_dataparallel_copies_mid).unwrap()
             } else {
                 first
             };
@@ -477,7 +482,6 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
             let beta_successors = std::iter::once(first).chain(beta_successors_snd);
             let beta_iter: Box<dyn Iterator<Item = F>> = Box::new(beta_successors);
 
-            let num_dataparallel_entries = 1 << num_dataparallel_bits;
             let inner_sum_successors = nonzero_gates
                 .iter()
                 .copied()
@@ -487,12 +491,18 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
 
                     // --- Compute f_2((A, p_2), x) ---
                     // --- Note that the bookkeeping table is little-endian, so we shift by `x * num_dataparallel_entries` ---
+                    // [ 0 0 1 1 2 2 3 3 ]
+                    // [ 0, 2], [0, 2], [1, 3], [1, 3]
                     let f2_0_p2_x = f2_p2_x
-                        .get((p2_idx * 2) + x * num_dataparallel_entries)
+                        .get(p2_idx * (1 << (f2_p2_x.num_free_vars() - num_dataparallel_bits)) + x)
                         .unwrap();
                     let f2_1_p2_x = if f2_p2_x.num_free_vars() != 0 {
                         f2_p2_x
-                            .get((p2_idx * 2 + 1) + x * num_dataparallel_entries)
+                            .get(
+                                (p2_idx + num_dataparallel_copies_mid)
+                                    * (1 << (f2_p2_x.num_free_vars() - num_dataparallel_bits))
+                                    + x,
+                            )
                             .unwrap()
                     } else {
                         f2_0_p2_x
@@ -508,11 +518,17 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                     // --- Compute f_3((A, p_2), y) ---
                     // --- Note that the bookkeeping table is little-endian, so we shift by `y * num_dataparallel_entries` ---
                     let f3_0_p2_y = f3_p2_y
-                        .get((p2_idx * 2) + y * num_dataparallel_entries)
+                        .get(
+                            (p2_idx) * (1 << (f3_p2_y.num_free_vars() - num_dataparallel_bits)) + y,
+                        )
                         .unwrap();
                     let f3_1_p2_y = if f3_p2_y.num_free_vars() != 0 {
                         f3_p2_y
-                            .get((p2_idx * 2 + 1) + y * num_dataparallel_entries)
+                            .get(
+                                (p2_idx + num_dataparallel_copies_mid)
+                                    * (1 << (f3_p2_y.num_free_vars() - num_dataparallel_bits))
+                                    + y,
+                            )
                             .unwrap()
                     } else {
                         f3_0_p2_y
@@ -571,19 +587,4 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
         },
     );
     Ok(evals)
-}
-
-/// Get the evals for an identity gate. Note that this specifically
-/// refers to computing the prover message while binding the dataparallel bits of a `Gate`
-/// expression.
-pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
-    a_f2_x: &DenseMle<F>,
-    beta_g2: &DenseMle<F>,
-) -> Result<Vec<F>, GateError> {
-    // When we have an identity gate, we have to multiply the beta table over the dataparallel challenges
-    // with the function on the x variables.
-    let degree = 2;
-    Ok(evaluate_mle_ref_product(&[a_f2_x, beta_g2], degree)
-        .unwrap()
-        .0)
 }

@@ -133,17 +133,17 @@ impl<F: Field> MatMult<F> {
 
         // Bind the row indices of matrix A to the relevant claim point.
         claim_a.into_iter().enumerate().for_each(|(idx, chal)| {
-            matrix_a_mle.fix_variable_at_index(idx + self.matrix_a.cols_num_vars, chal);
+            matrix_a_mle.fix_variable(idx, chal);
         });
 
         // Bind the column indices of matrix B to the relevant claim point.
         claim_b.into_iter().enumerate().for_each(|(idx, chal)| {
-            matrix_b_mle.fix_variable(idx, chal);
+            matrix_b_mle.fix_variable_at_index(idx + self.matrix_b.rows_num_vars, chal);
         });
-        // We want to re-index the MLE indices in matrix b such that it
+        // We want to re-index the MLE indices in matrix A such that it
         // starts from 0 after the pre-processing, so we do that by first
         // setting them to be free and then re-indexing them.
-        let new_b_indices = matrix_b_mle
+        let new_a_indices = matrix_a_mle
             .clone()
             .mle_indices
             .into_iter()
@@ -155,8 +155,15 @@ impl<F: Field> MatMult<F> {
                 }
             })
             .collect_vec();
-        matrix_b_mle.mle_indices = new_b_indices;
-        matrix_b_mle.index_mle_indices(0);
+        matrix_a_mle.mle_indices = new_a_indices;
+        matrix_a_mle.index_mle_indices(0);
+
+        matrix_a_mle.mle.iter().for_each(|elem| {
+            dbg!(&elem.neg());
+        });
+        matrix_b_mle.mle.iter().for_each(|elem| {
+            dbg!(&elem.neg());
+        });
     }
 
     fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
@@ -194,8 +201,8 @@ impl<F: Field> Layer<F> for MatMult<F> {
             claim.get_point().len(),
             self.matrix_a.rows_num_vars + self.matrix_b.cols_num_vars
         );
-        let mut claim_b = claim.get_point().to_vec();
-        let claim_a = claim_b.split_off(self.matrix_b.cols_num_vars);
+        let mut claim_a = claim.get_point().to_vec();
+        let claim_b = claim_a.split_off(self.matrix_a.rows_num_vars);
         self.pre_processing_step(claim_a, claim_b);
 
         let num_vars_middle = self.num_vars_middle_ab;
@@ -224,8 +231,8 @@ impl<F: Field> Layer<F> for MatMult<F> {
     }
 
     fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
-        let mut claim_b = claim_point.to_vec();
-        let claim_a = claim_b.split_off(self.matrix_b.cols_num_vars);
+        let mut claim_a = claim_point.to_vec();
+        let claim_b = claim_a.split_off(self.matrix_a.rows_num_vars);
         self.pre_processing_step(claim_a, claim_b);
         Ok(())
     }
@@ -475,20 +482,20 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
         // Split the claim into the claims made on matrix A rows and matrix B cols.
-        let mut claim_b = claim_point.to_vec();
-        let claim_a = claim_b.split_off(self.matrix_b.cols_num_vars);
+        let mut claim_a = claim_point.to_vec();
+        let claim_b = claim_a.split_off(self.matrix_a.rows_num_vars);
 
         // Construct the full claim made on A using the claim made on the layer and the sumcheck bindings.
-        let full_claim_chals_a = sumcheck_bindings
-            .iter()
-            .copied()
-            .chain(claim_a)
+        let full_claim_chals_a = claim_a
+            .into_iter()
+            .chain(sumcheck_bindings.to_vec())
             .collect_vec();
 
         // Construct the full claim made on B using the claim made on the layer and the sumcheck bindings.
-        let full_claim_chals_b = claim_b
-            .into_iter()
-            .chain(sumcheck_bindings.to_vec())
+        let full_claim_chals_b = sumcheck_bindings
+            .iter()
+            .copied()
+            .chain(claim_b)
             .collect_vec();
 
         // Shape checks.
@@ -535,7 +542,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
         let mut pre_bound_matrix_a_mle = self.matrix_a.mle.clone();
-        let claim_chals_matrix_a = claim_challenges[self.matrix_b.cols_num_vars..].to_vec();
+        let claim_chals_matrix_a = claim_challenges[..self.matrix_a.rows_num_vars].to_vec();
         let mut indexed_index_counter = 0;
         let mut bound_index_counter = 0;
 
@@ -552,16 +559,16 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
             .iter()
             .map(|mle_idx| match mle_idx {
                 &MleIndex::Indexed(_) => {
-                    if indexed_index_counter < self.matrix_a.cols_num_vars {
-                        let ret = MleIndex::Indexed(indexed_index_counter);
-                        indexed_index_counter += 1;
-                        ret
-                    } else {
+                    if bound_index_counter < self.matrix_a.rows_num_vars {
                         let ret = MleIndex::Bound(
                             claim_chals_matrix_a[bound_index_counter],
                             bound_index_counter,
                         );
                         bound_index_counter += 1;
+                        ret
+                    } else {
+                        let ret = MleIndex::Indexed(indexed_index_counter);
+                        indexed_index_counter += 1;
                         ret
                     }
                 }
@@ -576,7 +583,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         // as Indexed for sumcheck, and keep the rest as bound to their
         // respective claim point in pre-processing.
         let mut pre_bound_matrix_b_mle = self.matrix_b.mle.clone();
-        let claim_chals_matrix_b = claim_challenges[..self.matrix_b.cols_num_vars].to_vec();
+        let claim_chals_matrix_b = claim_challenges[self.matrix_a.rows_num_vars..].to_vec();
         let mut bound_index_counter = 0;
         let mut indexed_index_counter = 0;
         let matrix_b_new_indices = self
@@ -586,16 +593,16 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
             .iter()
             .map(|mle_idx| match mle_idx {
                 &MleIndex::Indexed(_) => {
-                    if bound_index_counter < self.matrix_b.cols_num_vars {
+                    if indexed_index_counter < self.matrix_b.rows_num_vars {
+                        let ret = MleIndex::Indexed(indexed_index_counter);
+                        indexed_index_counter += 1;
+                        ret
+                    } else {
                         let ret = MleIndex::Bound(
                             claim_chals_matrix_b[bound_index_counter],
                             bound_index_counter,
                         );
                         bound_index_counter += 1;
-                        ret
-                    } else {
-                        let ret = MleIndex::Indexed(indexed_index_counter);
-                        indexed_index_counter += 1;
                         ret
                     }
                 }

@@ -262,8 +262,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 Some(MultilinearExtension::new(
                     a_bookkeeping_table
                         .iter()
-                        .zip(b_bookkeeping_table.iter())
-                        .flat_map(|(a, b)| vec![a, b])
+                        .chain(b_bookkeeping_table.iter())
                         .collect_vec(),
                 ))
             }
@@ -806,14 +805,17 @@ pub fn filter_bookkeeping_table<F: Field>(
     unfiltered_prefix_bits: &[bool],
 ) -> MultilinearExtension<F> {
     let current_table = bookkeeping_table.to_vec();
+    let mut current_table_len = current_table.len();
     let filtered_table = unfiltered_prefix_bits
         .iter()
         .fold(current_table, |acc, bit| {
-            if *bit {
-                acc.into_iter().skip(1).step_by(2).collect_vec()
+            let acc = if *bit {
+                acc.into_iter().skip(current_table_len / 2).collect_vec()
             } else {
-                acc.into_iter().step_by(2).collect_vec()
-            }
+                acc.into_iter().take(current_table_len / 2).collect_vec()
+            };
+            current_table_len /= 2;
+            acc
         });
     MultilinearExtension::new(filtered_table)
 }
@@ -838,7 +840,8 @@ fn evaluate_bookkeeping_tables_given_operation<F: Field>(
                 let zero = F::ZERO;
                 let index = if log2(mle_bookkeeping_table.len()) < max_num_vars {
                     let max = 1 << log2(mle_bookkeeping_table.len());
-                    (index) % max
+                    let difference = (1 << max_num_vars) / max;
+                    index / difference
                 } else {
                     index
                 };

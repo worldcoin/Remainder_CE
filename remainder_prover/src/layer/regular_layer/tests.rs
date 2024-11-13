@@ -58,10 +58,10 @@ fn regular_layer_test_prove_verify_product() {
 #[test]
 /// E2E test of Proving/Verifying a `RegularLayer`
 fn regular_layer_test_prove_verify_sum() {
-    let mle_vec = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(2)];
+    let mle_vec = vec![Fr::from(2), Fr::from(1), Fr::from(3), Fr::from(2)];
 
     let mle_new: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
-    let mle_v2 = vec![Fr::from(1), Fr::from(5), Fr::from(1), Fr::from(5)];
+    let mle_v2 = vec![Fr::from(1), Fr::from(1), Fr::from(5), Fr::from(5)];
     let mle_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
     let mle_ref_1 = mle_new;
@@ -100,10 +100,10 @@ fn regular_layer_test_prove_verify_sum() {
 #[test]
 /// E2E test of Proving/Verifying a `RegularLayer`
 fn regular_layer_test_prove_verify_selector() {
-    let mle_vec = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(2)];
+    let mle_vec = vec![Fr::from(2), Fr::from(1), Fr::from(3), Fr::from(2)];
 
     let mle_new: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
-    let mle_v2 = vec![Fr::from(1), Fr::from(5), Fr::from(1), Fr::from(5)];
+    let mle_v2 = vec![Fr::from(1), Fr::from(1), Fr::from(5), Fr::from(5)];
     let mle_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
     let mle_ref_1 = mle_new;
@@ -143,11 +143,11 @@ fn regular_layer_test_prove_verify_selector() {
 #[test]
 fn regular_layer_test_prove_verify_complex() {
     let mle_1: DenseMle<Fr> = DenseMle::new_from_raw(
-        vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(2)],
+        vec![Fr::from(2), Fr::from(1), Fr::from(3), Fr::from(2)],
         LayerId::Input(0),
     );
     let mle_2: DenseMle<Fr> = DenseMle::new_from_raw(
-        vec![Fr::from(1), Fr::from(5), Fr::from(1), Fr::from(5)],
+        vec![Fr::from(1), Fr::from(1), Fr::from(5), Fr::from(5)],
         LayerId::Input(0),
     );
 

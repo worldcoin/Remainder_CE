@@ -36,7 +36,7 @@
 //! `compute_sumcheck_message_beta_cascade` for more information.
 
 use std::{
-    iter::repeat,
+    iter::{repeat, successors},
     ops::{Add, Mul, Neg},
 };
 
@@ -409,31 +409,21 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
 /// the resulting vector will always be size (degree + 1) * (2 ^ (max_num_vars - 1))
 ///
 /// this function assumes that the first variable is an independent variable.
-pub fn successors_from_mle_ref_product<F: Field>(
-    mle_refs: &[&impl Mle<F>],
-    degree: usize,
-) -> Result<Vec<F>, MleError> {
+pub fn successors_from_mle_product<F: Field>(
+    mles: &[&impl Mle<F>],
+) -> Result<Vec<Box<dyn Iterator<Item = F> + Send>>, MleError> {
     // --- Gets the total number of free variables across all MLEs within this product ---
-    let max_num_vars = mle_refs
+    let max_num_vars = mles
         .iter()
         .map(|mle_ref| mle_ref.num_free_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
-    // because there is an independent variable, we need degree + 1 evaluations in order to determine
-    // a unique curve over the evaluations.
-    let eval_count = degree + 1;
-
-    let evals = cfg_into_iter!((0..eval_count * (1 << (max_num_vars - 1))))
-        .map(|index| {
-            mle_refs
-                .iter()
-                .map(|mle_ref| {
-                    // The relevant index into the mle bookkeeping table.
-                    let mle_index = index / eval_count;
-                    // We're computing `eval_count` evaluations of the MLE product.
-                    // This is the `eval_index`-th one.
-                    let eval_index = index % eval_count;
+    let evals = cfg_into_iter!((0..1 << (max_num_vars - 1)))
+        .map(|mle_index| {
+            mles.iter()
+                .map(|mle| {
+                    let num_coefficients_in_mle = 1 << mle.num_free_vars();
 
                     // over here, we perform the wrap-around functionality if we are multiplying
                     // two mle_refs with different number of variables.
@@ -443,31 +433,39 @@ pub fn successors_from_mle_ref_product<F: Field>(
                     // to repeat itself an according number of times when the sum is over a variable
                     // it does not contain. the appropriate index is therefore
                     // determined as follows.
-                    let mle_index = if mle_ref.num_free_vars() < max_num_vars {
+                    let mle_index = if mle.num_free_vars() < max_num_vars {
                         // if we have less than the max number of variables, then we perform this wrap-around
                         // functionality by first rounding to the nearest power of 2, and then taking the mod
                         // of this index as we implicitly pad for powers of 2.
-                        let max = 1 << mle_ref.num_free_vars();
-                        (mle_index * 2) % max
+                        let max = num_coefficients_in_mle;
+                        (mle_index) % max
                     } else {
-                        mle_index * 2
+                        mle_index
                     };
                     // over here, we get the elements in the pair so when index = 0, it's [0] and [1], if index = 1,
                     // it's [2] and [3], etc. because we are extending a function that was originally defined
                     // over the hypercube, each pair corresponds to two points on a line. we grab these two points here
-                    let first = mle_ref.get(mle_index).unwrap_or(F::ZERO);
-                    let second = if mle_ref.num_free_vars() != 0 {
-                        mle_ref.get(mle_index + 1).unwrap_or(F::ZERO)
+                    let first = mle.get(mle_index).unwrap_or(F::ZERO);
+                    let second = if mle.num_free_vars() != 0 {
+                        mle.get(mle_index + (num_coefficients_in_mle / 2))
+                            .unwrap_or(F::ZERO)
                     } else {
                         first
                     };
                     let step = second - first;
 
-                    // and then we use the difference between the points in order to
-                    // generate the `eval_index`-th successor.
-                    first + step * F::from(eval_index as u64)
+                    Box::new(successors(Some(first), move |item| Some(*item + step)))
+                        as Box<dyn Iterator<Item = F> + Send>
                 })
-                .fold(F::ONE, |acc, eval: F| acc * eval)
+                .reduce(|mut a, mut b| {
+                    Box::new(
+                        successors(Some((a.next().unwrap(), b.next().unwrap())), move |_| {
+                            Some((a.next().unwrap(), b.next().unwrap()))
+                        })
+                        .map(|(a_val, b_val)| a_val * b_val),
+                    ) as Box<dyn Iterator<Item = F> + Send>
+                })
+                .unwrap()
         })
         .collect();
 
@@ -477,10 +475,10 @@ pub fn successors_from_mle_ref_product<F: Field>(
 /// this function performs the same funcionality as the above, except it is when the mle refs we
 /// are working with have no independent variable. therefore, we are actually just taking the
 /// sum over all of the variables and do not need evaluations.
-pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: Field>(
-    mle_refs: &[&impl Mle<F>],
+pub(crate) fn successors_from_mle_product_no_ind_var<F: Field>(
+    mles: &[&impl Mle<F>],
 ) -> Result<Vec<F>, MleError> {
-    let max_num_vars = mle_refs
+    let max_num_vars = mles
         .iter()
         .map(|mle_ref| mle_ref.num_free_vars())
         .max()
@@ -489,7 +487,7 @@ pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: Field>(
     let evals_vec = if max_num_vars > 0 {
         let evals = cfg_into_iter!((0..1 << (max_num_vars))).map(|index| {
             // we take the element-wise product at each of the points instead of looking at successors.
-            let successors_product = mle_refs
+            let successors_product = mles
                 .iter()
                 .map(|mle_ref| {
                     let zero = F::ZERO;
@@ -507,7 +505,7 @@ pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: Field>(
         });
         evals.collect()
     } else {
-        let val = mle_refs.iter().fold(F::ONE, |acc, mle_ref| {
+        let val = mles.iter().fold(F::ONE, |acc, mle_ref| {
             assert_eq!(mle_ref.len(), 1);
             acc * mle_ref.first()
         });
@@ -517,18 +515,35 @@ pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: Field>(
     Ok(evals_vec)
 }
 
-/// this is one step of the beta cascade algorithm. essentially we are doing
-/// `(1 - beta_val) * mle[index] + beta_val * mle[index + half_vec_len]`
-/// (big-endian version of fix variable)
-pub(crate) fn beta_cascade_step<F: Field>(mle_successor_vec: &mut [F], beta_val: F) -> Vec<F> {
+/// This is one step of the beta cascade algorithm, performing
+/// `(1 - beta_val) * mle[index] + beta_val * mle[index + 1]`
+pub(crate) fn beta_cascade_step<F: Field>(
+    mut mle_successor_vec: Vec<Box<dyn Iterator<Item = F> + Send>>,
+    beta_val: F,
+) -> Vec<Box<dyn Iterator<Item = F> + Send>> {
     let (one_minus_beta_val, beta_val) = (F::ONE - beta_val, beta_val);
-    let half_vec_len = mle_successor_vec.len() / 2;
-    let new_successor = cfg_into_iter!((0..half_vec_len)).map(|idx| {
-        (mle_successor_vec[idx] * one_minus_beta_val)
-            + (mle_successor_vec[idx + half_vec_len] * beta_val)
-    });
+    let mut result = Vec::with_capacity(mle_successor_vec.len() / 2);
 
-    new_successor.collect()
+    // Consume the `mle_successor_vec` in pairs without cloning or mutable borrowing issues
+    while mle_successor_vec.len() >= 2 {
+        // Pop two iterators from the vector
+        let mut first_iter = mle_successor_vec.remove(0);
+        let mut second_iter = mle_successor_vec.remove(0);
+
+        // Create the new iterator that combines the two using the given operationm
+        let combined_iter = Box::new(
+            successors(
+                Some((first_iter.next().unwrap(), second_iter.next().unwrap())),
+                move |_| Some((first_iter.next().unwrap(), second_iter.next().unwrap())),
+            )
+            .map(move |(a, b)| one_minus_beta_val * a + beta_val * b),
+        ) as Box<dyn Iterator<Item = F> + Send>;
+
+        // Append the combined iterator to the result vector
+        result.push(combined_iter);
+    }
+
+    result
 }
 
 /// This is the final step of beta cascade, where we take all the "bound" beta
@@ -549,20 +564,15 @@ fn apply_updated_beta_values_to_evals<F: Field>(
     SumcheckEvals(evals)
 }
 
-/// if there is no independent variable, beta cascade can be done the little-endian fix variable way
-/// where we go from the most significant --> least significant bit to compute the single evaluation.
-///
-/// regardless of the degree, since there is no independent variable this evaluates to a constant,
-/// so we just repeat this (degree + 1) times.
 fn beta_cascade_no_independent_variable<F: Field>(
     mle_refs: &[&impl Mle<F>],
     beta_vals: &[F],
     degree: usize,
     beta_updated_vals: &[F],
 ) -> SumcheckEvals<F> {
-    let mut mle_successor_vec = successors_from_mle_ref_product_no_ind_var(mle_refs).unwrap();
+    let mut mle_successor_vec = successors_from_mle_product_no_ind_var(mle_refs).unwrap();
     if mle_successor_vec.len() > 1 {
-        beta_vals.iter().for_each(|beta_val| {
+        beta_vals.iter().rev().for_each(|beta_val| {
             let (one_minus_beta_val, beta_val) = (F::ONE - beta_val, beta_val);
             let mle_successor_vec_iter = mle_successor_vec
                 .par_chunks(2)
@@ -602,12 +612,24 @@ pub fn beta_cascade<F: Field>(
         .unwrap();
 
     if mles_have_independent_variable {
-        let mut mle_successor_vec = successors_from_mle_ref_product(mle_refs, degree).unwrap();
-        // we go from the LSB --> MSB for the beta values, and do the big-endian fix variable for each one,
-        // reducing the size of `mle_successor_vec` by half.
-        beta_vals.iter().skip(1).rev().for_each(|val| {
-            mle_successor_vec = beta_cascade_step(&mut mle_successor_vec, *val);
-        });
+        let mle_successor_vec: Vec<Box<dyn Iterator<Item = F> + Send>> =
+            successors_from_mle_product(mle_refs).unwrap();
+        // Apply beta cascade steps, reducing `mle_successor_vec` size progressively.
+        let mut final_successor_vec = beta_vals.iter().skip(1).rev().fold(
+            mle_successor_vec,
+            |current_successor_vec, &val| {
+                // Apply beta cascade step and return the new vector, replacing the previous one
+                beta_cascade_step(current_successor_vec, val)
+            },
+        );
+
+        // Check that mle_successor_vec now contains only one element after cascading
+        assert_eq!(final_successor_vec.len(), 1);
+
+        // Extract the remaining iterator from mle_successor_vec by popping it
+        let folded_mle_successors = final_successor_vec.pop().unwrap();
+        // assert_eq!(mle_successor_vec.len(), 1);
+        // let folded_mle_successors = &mle_successor_vec[0];
         // for the MSB of the beta value, this must be the independent variable. otherwise it would already be
         // bound. therefore we need to compute the successors of this value in order to get its evaluations.
         let evals = if !beta_vals.is_empty() {
@@ -619,8 +641,9 @@ pub fn beta_cascade<F: Field>(
             // the length of the mle successor vec before this last step must be degree + 1. therefore we can
             // just do a zip with the beta successors to get the final degree + 1 evaluations.
             beta_successors
-                .zip(mle_successor_vec)
+                .zip(folded_mle_successors)
                 .map(|(beta_succ, mle_succ)| beta_succ * mle_succ)
+                .take(degree + 1)
                 .collect_vec()
         } else {
             vec![F::ONE]
@@ -713,81 +736,4 @@ pub fn evaluate_at_a_point<F: Field>(given_evals: &[F], point: F) -> Result<F, I
         )
         .reduce(|x, y| x + y);
     eval.ok_or(InterpError::NoInverse)
-}
-
-/// evaluates the product of multiple mle refs (in the evalutaion form),
-/// (the mles could be beta tables as well)
-/// the returned results can be the following expresssion:
-/// sum_{x_2, ..., x_n} V_1(X, x_2, ..., x_n) * V_2(X, x_2, ..., x_n) * V_2(X, x_2, x_3),
-/// evaluated at X = 0, 1, ..., degree
-/// note that when one of the mle_refs have less variables, there's a wrap around: % max
-pub fn evaluate_mle_ref_product<F: Field>(
-    mle_refs: &[&impl Mle<F>],
-    degree: usize,
-) -> Result<SumcheckEvals<F>, MleError> {
-    // --- Gets the total number of free variables across all MLEs within this product ---
-    let max_num_vars = mle_refs
-        .iter()
-        .map(|mle_ref| mle_ref.num_free_vars())
-        .max()
-        .ok_or(MleError::EmptyMleList)?;
-
-    //There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
-    let eval_count = degree + 1;
-
-    //iterate across all pairs of evaluations
-    let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).fold(
-        #[cfg(feature = "parallel")]
-        || vec![F::ZERO; eval_count],
-        #[cfg(not(feature = "parallel"))]
-        vec![F::ZERO; eval_count],
-        |mut acc, index| {
-            //get the product of all evaluations over 0/1/..degree
-            let evals = mle_refs
-                .iter()
-                .map(|mle_ref| {
-                    let zero = F::ZERO;
-                    let index = if mle_ref.num_free_vars() < max_num_vars {
-                        let max = 1 << mle_ref.num_free_vars();
-                        (index * 2) % max
-                    } else {
-                        index * 2
-                    };
-                    let first = mle_ref.get(index).unwrap_or(zero);
-
-                    let second = if mle_ref.num_free_vars() != 0 {
-                        mle_ref.get(index + 1).unwrap_or(zero)
-                    } else {
-                        first
-                    };
-
-                    let step = second - first;
-                    let successors =
-                        std::iter::successors(Some(second), move |item| Some(*item + step));
-                    //iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1
-                    std::iter::once(first).chain(successors)
-                })
-                .map(|item| -> Box<dyn Iterator<Item = F>> { Box::new(item) })
-                .reduce(|acc, evals| Box::new(acc.zip(evals).map(|(acc, eval)| acc * eval)))
-                .unwrap();
-
-            acc.iter_mut()
-                .zip(evals)
-                .for_each(|(acc, eval)| *acc += eval);
-            acc
-        },
-    );
-
-    #[cfg(feature = "parallel")]
-    let evals = evals.reduce(
-        || vec![F::ZERO; eval_count],
-        |mut acc, partial| {
-            acc.iter_mut()
-                .zip(partial)
-                .for_each(|(acc, partial)| *acc += partial);
-            acc
-        },
-    );
-
-    Ok(SumcheckEvals(evals))
 }

@@ -115,8 +115,9 @@ impl<F: Field> BetaValues<F> {
     /// Computes the value of `\beta(challenge; b)`, where `b` is the binary
     /// representation of `idx`.
     pub fn compute_beta_over_challenge_and_index(challenge: &[F], idx: usize) -> F {
+        let n = challenge.len();
         challenge.iter().enumerate().fold(F::ONE, |acc, (i, x_i)| {
-            let mask = 1_usize << i;
+            let mask = 1_usize << (n - 1 - i);
             if idx & mask != 0 {
                 // i-th bit is on, multiply by `x_i`
                 acc * x_i
@@ -132,16 +133,19 @@ impl<F: Field> BetaValues<F> {
     /// do still need the entire beta table.
     pub fn new_beta_equality_mle(layer_claim_vars: Vec<F>) -> DenseMle<F> {
         if !layer_claim_vars.is_empty() {
-            // dynamic programming algorithm where we start from the most significant bit,
+            // dynamic programming algorithm where we start from the least significant bit,
             // which is alternating in (1 - r) or (r) as the base case
-            let (one_minus_r, r) = (F::ONE - layer_claim_vars[0], layer_claim_vars[0]);
+            let (one_minus_r, r) = (
+                F::ONE - layer_claim_vars[layer_claim_vars.len() - 1],
+                layer_claim_vars[layer_claim_vars.len() - 1],
+            );
             let mut cur_table = vec![one_minus_r, r];
 
             // TODO!(vishruti) make this parallelizable
             // we iterate until we get to the least significant bit of the challenge point
             // by multiplying by (1 - r_i) and r_i appropriately as in thaler
             // 13.
-            for claim in layer_claim_vars.iter().skip(1) {
+            for claim in layer_claim_vars.iter().rev().skip(1) {
                 let (one_minus_r, r) = (F::ONE - claim, claim);
                 let mut firsthalf: Vec<F> = cfg_into_iter!(cur_table.clone())
                     .map(|eval| eval * one_minus_r)

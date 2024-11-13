@@ -172,13 +172,15 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         let mut previous_round_message = vec![claim.get_eval()];
         let mut previous_challenge = F::ZERO;
 
+        let layer_id = self.layer_id();
         for round_index in self.nonlinear_rounds.clone() {
             // First compute the appropriate number of univariate evaluations for this round.
             let prover_sumcheck_message = self.compute_round_sumcheck_message(round_index)?;
             // In debug mode, catch sumcheck round errors from the prover side.
             debug_assert_eq!(
                 evaluate_at_a_point(&previous_round_message, previous_challenge).unwrap(),
-                prover_sumcheck_message[0] + prover_sumcheck_message[1]
+                prover_sumcheck_message[0] + prover_sumcheck_message[1],
+                "failed at round {round_index}, layer {layer_id}",
             );
             // Append the evaluations to the transcript.
             transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);

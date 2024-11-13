@@ -575,7 +575,7 @@ impl<F: Field> MultilinearExtension<F> {
             .enumerate()
             .fold(F::ZERO, |acc, (idx, v)| {
                 let beta = (0..n).fold(F::ONE, |acc, i| {
-                    let bit_i = idx & (1 << i);
+                    let bit_i = idx & (1 << (n - 1 - i));
                     if bit_i > 0 {
                         acc * point[i]
                     } else {
@@ -607,9 +607,9 @@ impl<F: Field> MultilinearExtension<F> {
     /// if `var_index` is outside the interval `[0, self.num_vars())`.
     pub fn fix_variable_at_index(&mut self, var_index: usize, point: F) {
         // NEWEST IMPLEMENTATION: manually parallelize.
-        let lsb_mask = (1_usize << var_index) - 1;
-
         let num_vars = self.num_vars();
+        let lsb_mask = (1_usize << (num_vars - 1 - var_index)) - 1;
+
         let num_pairs = 1_usize << (num_vars - 1);
 
         let new_evals: Vec<F> = cfg_into_iter!(0..num_pairs)
@@ -631,8 +631,8 @@ impl<F: Field> MultilinearExtension<F> {
                 let idx1 = lsb_idx | msb_idx;
                 let idx2 = lsb_idx | mid_idx | msb_idx;
 
-                let val1 = self.get(idx1).unwrap();
-                let val2 = self.get(idx2).unwrap();
+                let val1 = self.get(idx1).unwrap_or(F::ZERO);
+                let val2 = self.get(idx2).unwrap_or(F::ZERO);
 
                 val1 + (val2 - val1) * point
             })
@@ -646,45 +646,18 @@ impl<F: Field> MultilinearExtension<F> {
     /// # Panics
     /// If `self.num_vars() == 0`.
     pub fn fix_variable(&mut self, point: F) {
-        // OLD IMPLEMENTATION: Using direct access mechanism.
-        assert!(self.num_vars() > 0);
-
-        let transform = |chunk: &[F]| {
-            let zero = F::ZERO;
-            let first = chunk[0];
-            let second = chunk.get(1).unwrap_or(&zero);
-
-            // (1 - r) * V(i) + r * V(i + 1)
-            first + (*second - first) * point
-        };
-
-        let evals_vec: Vec<F> = self.f.evals.iter().collect();
-
-        // --- So this goes through and applies the formula from [Tha13], bottom ---
-        // --- of page 23 ---
-        #[cfg(feature = "parallel")]
-        let new = evals_vec.par_chunks(2).map(transform);
-
-        #[cfg(not(feature = "parallel"))]
-        let new = evals_vec.chunks(2).map(transform);
-
-        // --- Note that MLE is destructively modified into the new bookkeeping
-        // table here ---
-        self.f = Evaluations::<F>::new(self.num_vars() - 1, new.collect());
+        self.fix_variable_at_index(0, point);
     }
 
     /// interlaces the MLEs into a single MLE, in a little endian fashion.
-    pub fn interlace_mles(mles: Vec<MultilinearExtension<F>>) -> MultilinearExtension<F> {
+    pub fn stack_mles(mles: Vec<MultilinearExtension<F>>) -> MultilinearExtension<F> {
         let first_len = mles[0].len();
 
         if !mles.iter().all(|v| v.len() == first_len) {
             panic!("All mles's underlying bookkeeping table must have the same length");
         }
 
-        let out = (0..first_len)
-            .flat_map(|i| mles.iter().map(move |v| v.get(i).unwrap()))
-            .collect();
-
+        let out = mles.iter().flat_map(|mle| mle.to_vec()).collect();
         Self::new(out)
     }
 }

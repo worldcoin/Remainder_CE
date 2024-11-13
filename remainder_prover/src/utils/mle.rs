@@ -159,7 +159,7 @@ pub fn get_total_mle_indices<F: Field>(
 /// let mle1 = MultilinearExtension::new(vec![Fr::from(2)]);
 /// let mle2 = MultilinearExtension::new(vec![Fr::from(1), Fr::from(3)]);
 /// let result = build_composite_mle(&[(&mle1, &vec![false, true]), (&mle2, &vec![true])]);
-/// assert_eq!(*result.f.iter().collect_vec().clone(), vec![Fr::from(0), Fr::from(1), Fr::from(2), Fr::from(3)]);
+/// assert_eq!(*result.f.iter().collect_vec().clone(), vec![Fr::from(0), Fr::from(2), Fr::from(1), Fr::from(3)]);
 /// ```
 pub fn build_composite_mle<F: Field>(
     mles: &[(&MultilinearExtension<F>, &Vec<bool>)],
@@ -167,19 +167,28 @@ pub fn build_composite_mle<F: Field>(
     assert!(!mles.is_empty());
     let out_num_vars = mles[0].0.num_vars() + mles[0].1.len();
     // Check that all (MLE, prefix bit) pairs require the same total number of variables.
+
     mles.iter().for_each(|(mle, prefix_bits)| {
         assert_eq!(mle.num_vars() + prefix_bits.len(), out_num_vars);
     });
     let mut out = vec![F::ZERO; 1 << out_num_vars];
     for (mle, prefix_bits) in mles {
-        mle.f.iter().enumerate().for_each(|(idx, eval)| {
-            let mut out_idx = 0;
-            for (i, bit) in prefix_bits.iter().enumerate() {
-                out_idx |= (*bit as usize) << i;
-            }
-            out_idx |= idx << prefix_bits.len();
-            out[out_idx] = eval;
+        let mut current_window = 1 << out_num_vars;
+        let starting_index = prefix_bits.iter().fold(0, |acc_index, bit| {
+            let starting_index_acc = if *bit {
+                acc_index + current_window / 2
+            } else {
+                acc_index
+            };
+            current_window /= 2;
+            starting_index_acc
         });
+        assert_eq!(current_window, mle.len());
+        (starting_index..(starting_index + current_window))
+            .enumerate()
+            .for_each(|(mle_idx, out_idx)| {
+                out[out_idx] = mle.get(mle_idx).unwrap_or(F::ZERO);
+            });
     }
     MultilinearExtension::new(out)
 }

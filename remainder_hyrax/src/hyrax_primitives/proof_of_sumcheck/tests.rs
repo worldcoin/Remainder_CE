@@ -65,10 +65,10 @@ fn test_completeness() {
         ECTranscript::new("modulus modulus modulus modulus modulus");
     // the mle
     let v00 = Fr::from(7);
-    let v10 = Fr::from(28);
-    let v01 = Fr::from(4);
+    let v01 = Fr::from(28);
+    let v10 = Fr::from(4);
     let v11 = Fr::from(23);
-    let mut mle_ref = DenseMle::new_from_raw(vec![v00, v10, v01, v11], LayerId::Input(0));
+    let mut mle_ref = DenseMle::new_from_raw(vec![v00, v01, v10, v11], LayerId::Input(0));
     // the sum
     let sum = v00 + v01 + v10 + v11;
     let sum_commit = committer.committed_scalar(&sum, &Fr::from(2));

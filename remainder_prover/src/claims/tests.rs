@@ -370,7 +370,7 @@ fn test_aggro_claim_negative_2() {
 #[test]
 fn test_aggro_claim_common_suffix1() {
     // MLE on 3 variables (2^3 = 8 evals)
-    let mle_evals: Vec<Fr> = vec![1, 2, 42, 4, 5, 6, 7, 17]
+    let mle_evals: Vec<Fr> = vec![1, 5, 42, 7, 2, 6, 4, 17]
         .into_iter()
         .map(Fr::from)
         .collect();
@@ -413,7 +413,7 @@ fn test_aggro_claim_common_suffix1() {
 #[test]
 fn test_aggro_claim_common_suffix2() {
     // MLE on 3 variables (2^3 = 8 evals)
-    let mle_evals: Vec<Fr> = vec![1, 2, 42, 4, 5, 6, 7, 17]
+    let mle_evals: Vec<Fr> = vec![1, 5, 42, 7, 2, 6, 4, 17]
         .into_iter()
         .map(Fr::from)
         .collect();
