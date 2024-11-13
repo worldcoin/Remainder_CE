@@ -49,7 +49,7 @@ use super::{
 /// given index, will compute its value lazily using
 /// [BetaValues::compute_beta_over_challenge_and_index] instead of pre-computing
 /// and storing the entire bookkeeping table.
-const LAZY_BETA_EVALUATION: bool = true;
+pub const LAZY_BETA_EVALUATION: bool = true;
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug, Copy)]
 
