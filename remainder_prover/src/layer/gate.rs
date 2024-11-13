@@ -236,21 +236,20 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 // f1(z, x, y)(f2(x) + f3(y)) then because we are only binding the "x" variables, we can simply
                 // distribute over the y variables and construct bookkeeping tables that are size 2^(num_x_variables).
                 self.nonzero_gates
-                    .clone()
-                    .into_iter()
+                    .iter()
                     .for_each(|(z_ind, x_ind, y_ind)| {
                         let beta_g_at_z = if LAZY_BETA_EVALUATION {
                             BetaValues::compute_beta_over_challenge_and_index(
                                 self.g1.as_ref().unwrap(),
-                                z_ind,
+                                *z_ind,
                             )
                         } else {
-                            self.beta_g1.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO)
+                            self.beta_g1.as_ref().unwrap().get(*z_ind).unwrap_or(F::ZERO)
                         };
-                        let f_3_at_y = self.rhs.get(y_ind).unwrap_or(F::ZERO);
-                        a_hg_rhs[x_ind] += beta_g_at_z * f_3_at_y;
+                        let f_3_at_y = self.rhs.get(*y_ind).unwrap_or(F::ZERO);
+                        a_hg_rhs[*x_ind] += beta_g_at_z * f_3_at_y;
                         if self.gate_operation == BinaryOperation::Add {
-                            a_hg_lhs[x_ind] += beta_g_at_z;
+                            a_hg_lhs[*x_ind] += beta_g_at_z;
                         }
                     });
 

@@ -927,16 +927,15 @@ impl<F: Field> IdentityGate<F> {
         let mut a_hg_mle_vec = vec![F::ZERO; 1 << num_vars];
 
         self.nonzero_gates
-            .clone()
-            .into_iter()
+            .iter()
             .for_each(|(z_ind, x_ind)| {
                 let beta_g_at_z = if LAZY_BETA_EVALUATION {
-                    BetaValues::compute_beta_over_challenge_and_index(&challenge, z_ind)
+                    BetaValues::compute_beta_over_challenge_and_index(&challenge, *z_ind)
                 } else {
-                    self.beta_g1.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO)
+                    self.beta_g1.as_ref().unwrap().get(*z_ind).unwrap_or(F::ZERO)
                 };
 
-                a_hg_mle_vec[x_ind] += beta_g_at_z;
+                a_hg_mle_vec[*x_ind] += beta_g_at_z;
             });
 
         let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
