@@ -20,6 +20,9 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::BufWriter;
 use std::path::Path;
 
+use super::config::{
+    perform_function_under_expected_configs, GKRCircuitProverConfig, GKRCircuitVerifierConfig,
+};
 use super::{prove, GKRCircuitDescription};
 
 /// Writes the circuit description for the provided [GKRCircuitDescription]
@@ -101,15 +104,87 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
 /// TODO(ryancao): Move this into the prover/verifier settings!!! (This is already a TDH ticket)
 const CIRCUIT_DESCRIPTION_HASH_TYPE: CircuitHashType = CircuitHashType::DefaultRustHash;
 
-/// Function which instantiates a circuit description with the given inputs
-/// and precommits and both attempts to both prove and verify said circuit.
-pub fn test_circuit_new<F: Field>(
+/// Function which calls [test_circuit_internal] with the appropriate expected
+/// prover/verifier config.
+pub fn test_circuit_with_config<F: Field>(
     circuit_description: &GKRCircuitDescription<F>,
     private_input_layer_description_and_precommits: HashMap<
         LayerId,
         LigeroInputLayerDescriptionWithPrecommit<F>,
     >,
     inputs: &HashMap<LayerId, MultilinearExtension<F>>,
+    expected_prover_config: &GKRCircuitProverConfig,
+    expected_verifier_config: &GKRCircuitVerifierConfig,
+) {
+    perform_function_under_expected_configs(
+        test_circuit_internal,
+        (
+            circuit_description,
+            private_input_layer_description_and_precommits,
+            inputs,
+        ),
+        expected_prover_config,
+        expected_verifier_config,
+    )
+}
+
+/// Function which calls [test_circuit_internal] with the appropriate expected
+/// prover/verifier config.
+pub fn test_circuit_with_runtime_optimized_config<F: Field>(
+    circuit_description: &GKRCircuitDescription<F>,
+    private_input_layer_description_and_precommits: HashMap<
+        LayerId,
+        LigeroInputLayerDescriptionWithPrecommit<F>,
+    >,
+    inputs: &HashMap<LayerId, MultilinearExtension<F>>,
+) {
+    let expected_prover_config = GKRCircuitProverConfig::runtime_optimized_default();
+    let expected_verifier_config =
+        GKRCircuitVerifierConfig::new_from_prover_config(&expected_prover_config, false);
+    perform_function_under_expected_configs(
+        test_circuit_internal,
+        (
+            circuit_description,
+            private_input_layer_description_and_precommits,
+            inputs,
+        ),
+        &expected_prover_config,
+        &expected_verifier_config,
+    )
+}
+
+/// Function which calls [test_circuit_internal] with a memory-optimized default.
+pub fn test_circuit_with_memory_optimized_config<F: Field>(
+    circuit_description: &GKRCircuitDescription<F>,
+    private_input_layer_description_and_precommits: HashMap<
+        LayerId,
+        LigeroInputLayerDescriptionWithPrecommit<F>,
+    >,
+    inputs: &HashMap<LayerId, MultilinearExtension<F>>,
+) {
+    let expected_prover_config = GKRCircuitProverConfig::memory_optimized_default();
+    let expected_verifier_config =
+        GKRCircuitVerifierConfig::new_from_prover_config(&expected_prover_config, true);
+    perform_function_under_expected_configs(
+        test_circuit_internal,
+        (
+            circuit_description,
+            private_input_layer_description_and_precommits,
+            inputs,
+        ),
+        &expected_prover_config,
+        &expected_verifier_config,
+    )
+}
+
+/// Function which instantiates a circuit description with the given inputs
+/// and precommits and both attempts to both prove and verify said circuit.
+fn test_circuit_internal<F: Field>(
+    (circuit_description, private_input_layer_description_and_precommits, inputs): (
+        &GKRCircuitDescription<F>,
+        HashMap<LayerId, LigeroInputLayerDescriptionWithPrecommit<F>>,
+        &HashMap<LayerId, MultilinearExtension<F>>,
+    ),
 ) {
     let mut transcript_writer =
         TranscriptWriter::<F, PoseidonSponge<F>>::new("GKR Prover Transcript");
