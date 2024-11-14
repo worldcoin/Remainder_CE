@@ -74,7 +74,7 @@ fn claim_aggregation_wrapper<Sp: TranscriptSponge<Fr>>(
     claims: &[Claim<Fr>],
 ) -> RawClaim<Fr> {
     let mut transcript: TranscriptWriter<_, Sp> = TranscriptWriter::new("Claims Test Transcript");
-    prover_aggregate_claims(claims, &output_mles_from_layer, &mut transcript).unwrap()
+    prover_aggregate_claims(claims, output_mles_from_layer, &mut transcript).unwrap()
 }
 
 /// Compute l* = l(r*).
@@ -107,7 +107,7 @@ fn test_aggro_claim_1() {
     let mle_evals = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
     let points = vec![
         vec![Fr::from(3), Fr::from(3)],
-        vec![Fr::from(2), Fr::from(7)],
+        vec![Fr::from(4), Fr::from(7)],
     ];
     let r_star = Fr::from(10);
 
@@ -118,7 +118,7 @@ fn test_aggro_claim_1() {
     let l_star = compute_l_star(&claims, r_star);
 
     // Compare to l(10) computed by hand.
-    assert_eq!(l_star, vec![Fr::from(7).neg(), Fr::from(43)]);
+    assert_eq!(l_star, vec![Fr::from(13), Fr::from(43)]);
 
     let aggregated_claim =
         claim_aggregation_wrapper::<DummySponge<Fr, 10>>(output_mles_for_layer, &claims);

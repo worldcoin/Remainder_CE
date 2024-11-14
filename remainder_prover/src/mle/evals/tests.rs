@@ -11,7 +11,7 @@ use super::*;
 /// See
 /// [https://stackoverflow.com/questions/25413201/how-do-i-implement-a-trait-i-dont-own-for-a-type-i-dont-own].
 #[derive(Debug, Clone, PartialEq)]
-struct Qfr(Fr);
+pub struct Qfr(Fr);
 
 impl Arbitrary for Qfr {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {

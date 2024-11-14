@@ -64,3 +64,7 @@ harness = false
 [[bench]]
 name = "regular_layer"
 harness = false
+
+[[bench]]
+name = "evaluate_mle_full"
+harness = false
