@@ -453,7 +453,7 @@ pub fn evaluate_mle_at_a_point_gray_codes_parallel<F: Field, const K: usize>(
         .collect_vec();
     let starting_gray_code_indices = starting_indices
         .iter()
-        .map(|idx| GrayCode::get_gray_index(mle_num_vars, *idx as u32))
+        .map(|idx| GrayCodeIterator::get_gray_index(mle_num_vars, *idx as u32))
         .collect_vec();
     let starting_beta_values = starting_gray_code_indices
         .iter()
@@ -479,7 +479,7 @@ pub fn evaluate_mle_at_a_point_gray_codes_parallel<F: Field, const K: usize>(
             } else {
                 Some(starting_indices[partition + 1] as u32)
             };
-            GrayCode::new_at_index(mle_num_vars, starting_index as u32, end_iteration)
+            GrayCodeIterator::new_at_index(mle_num_vars, starting_index as u32, end_iteration)
         })
         .collect_vec();
 
