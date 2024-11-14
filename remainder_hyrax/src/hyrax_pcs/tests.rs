@@ -1,10 +1,8 @@
-use ark_std::end_timer;
-use ark_std::start_timer;
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use rand::RngCore;
+use remainder::mle::evals::MultilinearExtension;
 use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
-/// Tests for the Pedersen commitment scheme using the BN254 (aka BN256) curve and its scalar field (Fr).
 use remainder_shared_types::halo2curves::group::Group;
 use remainder_shared_types::halo2curves::CurveExt;
 use remainder_shared_types::pedersen::PedersenCommitter;
@@ -12,7 +10,6 @@ use remainder_shared_types::transcript::ec_transcript::ECTranscript;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 
 use crate::hyrax_pcs::HyraxPCSEvaluationProof;
-use crate::hyrax_pcs::MleCoefficientsVector;
 
 type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
@@ -31,7 +28,7 @@ fn sanity_check_test_honest_prover_small_identity() {
         Some(committer.int_abs_val_bitwidth),
     );
     let input_layer_mle_coeff =
-        MleCoefficientsVector::ScalarFieldVector((0..4).map(|_| Scalar::one()).collect_vec());
+        MultilinearExtension::new((0..4).map(|_| Scalar::one()).collect_vec());
     let challenge_coordinates = (0..2).map(|_| Scalar::one()).collect_vec();
     let mle_evaluation_at_challenge = Scalar::one();
     let log_split_point = 1;
@@ -89,7 +86,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
         Some(committer.int_abs_val_bitwidth),
     );
     let input_layer_mle_coeff =
-        MleCoefficientsVector::ScalarFieldVector((0..8).map(|_| Scalar::one()).collect_vec());
+        MultilinearExtension::new((0..8).map(|_| Scalar::one()).collect_vec());
     let challenge_coordinates = (0..3).map(|_| Scalar::one()).collect_vec();
     let mle_evaluation_at_challenge = Scalar::one();
 
@@ -141,8 +138,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
     let input_layer_mle_coeff_raw_vec = (0..8)
         .map(|_| Scalar::from(rand::random::<u64>()))
         .collect_vec();
-    let input_layer_mle_coeff =
-        MleCoefficientsVector::ScalarFieldVector(input_layer_mle_coeff_raw_vec.clone());
+    let input_layer_mle_coeff = MultilinearExtension::new(input_layer_mle_coeff_raw_vec.clone());
     let challenge_coordinates = (0..3)
         .map(|_| Scalar::from(rand::random::<u64>()))
         .collect_vec();
@@ -224,8 +220,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
     let input_layer_mle_coeff_raw_vec = (0..(1 << 18))
         .map(|_| Scalar::from(rand::random::<u64>()))
         .collect_vec();
-    let input_layer_mle_coeff =
-        MleCoefficientsVector::ScalarFieldVector(input_layer_mle_coeff_raw_vec.clone());
+    let input_layer_mle_coeff = MultilinearExtension::new(input_layer_mle_coeff_raw_vec.clone());
     let challenge_coordinates = (0..18)
         .map(|_| Scalar::from(rand::random::<u64>()))
         .collect_vec();
@@ -277,31 +272,4 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         &challenge_coordinates,
         &mut transcript,
     );
-}
-
-#[test]
-/// Test on a 2^9 x 2^9 matrix with all zeroes to test internal scalar mult optimization,
-/// to see if only doing double-and-add for the significant bits makes a difference.
-fn sanity_check_test_honest_prover_iris_size_symmetric_all_zero() {
-    let committer = PedersenCommitter::<Bn256Point>::new(
-        (1 << 9) + 1,
-        "zerozerozerozerozerozerozerozero",
-        None,
-    );
-    let input_layer_mle_coeff_raw_vec = (0..(1 << 18)).map(|_| Scalar::zero()).collect_vec();
-    let input_layer_mle_coeff =
-        MleCoefficientsVector::ScalarFieldVector(input_layer_mle_coeff_raw_vec.clone());
-
-    let blinding_factors_matrix_rows = (0..(1 << 9))
-        .map(|_| Scalar::from(rand::random::<u64>()))
-        .collect_vec();
-
-    let commit_timer = start_timer!(|| "commit time");
-    HyraxPCSEvaluationProof::compute_matrix_commitments(
-        9,
-        &input_layer_mle_coeff,
-        &committer,
-        &blinding_factors_matrix_rows,
-    );
-    end_timer!(commit_timer);
 }

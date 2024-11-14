@@ -799,7 +799,7 @@ impl<F: Field> Expression<F, ExprDescription> {
 /// Given a bookkeeping table, use the according prefix bits in order
 /// to filter it to the correct "view" that we want to see, assuming
 /// that the prefix bits are the most significant bits, and that
-/// the bookkeeping tables are stored in little endian.
+/// the bookkeeping tables are stored in "big endian" format.
 pub fn filter_bookkeeping_table<F: Field>(
     bookkeeping_table: &MultilinearExtension<F>,
     unfiltered_prefix_bits: &[bool],

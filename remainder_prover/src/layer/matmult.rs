@@ -35,11 +35,11 @@ use crate::{
 /// the nearest power of 2.
 ///
 /// NOTE: the flattened MLE that represents a matrix is in
-/// row major order. Because internal bookkeeping tables are
-/// stored in little-endian, this causes the FIRST "column"
-/// number of variables to represent the columns of the matrix,
-/// and the LAST "row" number of variables to represent the
-/// rows of teh matrix.
+/// row major order. Internal bookkeeping tables are
+/// stored in big-endian, so the FIRST "row"
+/// number of variables to represent the rows of the matrix,
+/// and the LAST "column" number of variables to represent the
+/// columns of the matrix.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: Field")]
 pub struct Matrix<F: Field> {
