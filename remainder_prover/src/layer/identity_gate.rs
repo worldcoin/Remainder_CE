@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{
-    gate::{gate_helpers::evaluate_mle_product_no_beta_table, GateError},
+    gate::{gate_helpers::evaluate_mle_product_no_beta_table, GateError, LAZY_BETA_EVALUATION},
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
     Layer, LayerDescription, LayerId, VerifierLayer,
@@ -37,7 +37,6 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 /// given index, will compute its value lazily using
 /// [BetaValues::compute_beta_over_challenge_and_index] instead of pre-computing
 /// and storing the entire bookkeeping table.
-const LAZY_BETA_EVALUATION: bool = true;
 
 /// The circuit Description for an [IdentityGate].
 #[derive(Serialize, Deserialize, Debug, Clone, Hash)]
