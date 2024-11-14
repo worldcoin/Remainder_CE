@@ -182,33 +182,6 @@ impl<F: Field> Mle<F> for DenseMle<F> {
     }
 }
 
-/*
-impl<F: Field> YieldClaim<ClaimMle<F>> for DenseMle<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
-        if self.len() != 1 {
-            return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
-        }
-        let mle_indices: Result<Vec<F>, _> = self
-            .mle_indices
-            .iter()
-            .map(|index| {
-                index
-                    .val()
-                    .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
-            })
-            .collect();
-        let claim_value = self.first();
-
-        Ok(vec![ClaimMle::new(
-            mle_indices?,
-            claim_value,
-            None,
-            Some(self.layer_id),
-        )])
-    }
-}
-*/
-
 impl<F: Field> DenseMle<F> {
     /// Constructs a new `DenseMle` with specified prefix_bits
     /// todo: change this to create a DenseMle with already specified IndexedBits
