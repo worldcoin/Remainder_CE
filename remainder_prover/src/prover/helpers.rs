@@ -3,6 +3,7 @@ use crate::input_layer::ligero_input_layer::LigeroInputLayerDescriptionWithPreco
 use crate::layer::LayerId;
 use crate::layouter::circuit_hash::CircuitHashType;
 use crate::mle::evals::MultilinearExtension;
+use crate::prover::config::global_verifier_circuit_description_hash_type;
 use crate::prover::verify;
 use ark_std::{end_timer, start_timer};
 
@@ -21,7 +22,8 @@ use std::io::BufWriter;
 use std::path::Path;
 
 use super::config::{
-    perform_function_under_expected_configs, GKRCircuitProverConfig, GKRCircuitVerifierConfig,
+    global_prover_circuit_description_hash_type, perform_function_under_expected_configs,
+    GKRCircuitProverConfig, GKRCircuitVerifierConfig,
 };
 use super::{prove, GKRCircuitDescription};
 
@@ -102,7 +104,7 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
 }
 
 /// TODO(ryancao): Move this into the prover/verifier settings!!! (This is already a TDH ticket)
-const CIRCUIT_DESCRIPTION_HASH_TYPE: CircuitHashType = CircuitHashType::DefaultRustHash;
+// const CIRCUIT_DESCRIPTION_HASH_TYPE: CircuitHashType = CircuitHashType::DefaultRustHash;
 
 /// Function which calls [test_circuit_internal] with the appropriate expected
 /// prover/verifier config.
@@ -194,7 +196,7 @@ fn test_circuit_internal<F: Field>(
         inputs,
         &private_input_layer_description_and_precommits,
         circuit_description,
-        CIRCUIT_DESCRIPTION_HASH_TYPE,
+        global_prover_circuit_description_hash_type(),
         &mut transcript_writer,
     ) {
         Ok(_) => {
@@ -226,7 +228,7 @@ fn test_circuit_internal<F: Field>(
                 &public_input_layers,
                 &private_input_layer_descriptions,
                 circuit_description,
-                CIRCUIT_DESCRIPTION_HASH_TYPE,
+                global_verifier_circuit_description_hash_type(),
                 &mut transcript_reader,
             ) {
                 Ok(_) => {

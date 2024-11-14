@@ -11,6 +11,7 @@ use crate::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
         mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
     },
+    prover::config::{global_prover_lazy_beta_evals, global_verifier_lazy_beta_evals},
     sumcheck::*,
 };
 use itertools::Itertools;
@@ -31,13 +32,6 @@ use super::{
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-
-/// Controls whether the `beta` optimiation should be enabled. When enabled, all
-/// functions in this module that compute the value of a `beta` function at a
-/// given index, will compute its value lazily using
-/// [BetaValues::compute_beta_over_challenge_and_index] instead of pre-computing
-/// and storing the entire bookkeeping table.
-const LAZY_BETA_EVALUATION: bool = true;
 
 /// The circuit Description for an [IdentityGate].
 #[derive(Serialize, Deserialize, Debug, Clone, Hash)]
@@ -219,7 +213,8 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
-        let beta_ug = if !LAZY_BETA_EVALUATION {
+        // TODO(ryancao): Distinguish between the prover and verifier here
+        let beta_ug = if !global_prover_lazy_beta_evals() {
             Some((
                 BetaValues::new_beta_equality_mle(
                     round_challenges[self.num_dataparallel_vars..].to_vec(),
@@ -378,7 +373,8 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
         let g2_challenges = claim.get_point()[..self.num_dataparallel_rounds].to_vec();
         let g1_challenges = claim.get_point()[self.num_dataparallel_rounds..].to_vec();
 
-        let beta_ug = if LAZY_BETA_EVALUATION {
+        // TODO(ryancao): Is this function also used by the prover???
+        let beta_ug = if global_verifier_lazy_beta_evals() {
             Some((
                 BetaValues::new_beta_equality_mle(self.first_u_challenges.clone()),
                 BetaValues::new_beta_equality_mle(g1_challenges.clone()),
@@ -679,7 +675,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F> {
-        let beta_ug = if !LAZY_BETA_EVALUATION {
+        // TODO(ryancao): Distinguish between prover and verifier here
+        let beta_ug = if !global_prover_lazy_beta_evals() {
             Some((
                 BetaValues::new_beta_equality_mle(
                     round_challenges[self.num_dataparallel_vars..].to_vec(),
@@ -865,7 +862,7 @@ impl<F: Field> IdentityGate<F> {
     }
 
     fn init_dataparallel_phase(&mut self, g1_challenges: Vec<F>) {
-        let beta_getter: Box<dyn Fn(usize) -> F> = if !LAZY_BETA_EVALUATION {
+        let beta_getter: Box<dyn Fn(usize) -> F> = if !global_prover_lazy_beta_evals() {
             let beta_g1 = BetaValues::new_beta_equality_mle(g1_challenges);
             Box::new(move |idx| beta_g1.get(idx).unwrap_or(F::ZERO))
         } else {
@@ -895,7 +892,7 @@ impl<F: Field> IdentityGate<F> {
 
     /// initialize necessary bookkeeping tables by traversing the nonzero gates
     pub fn init_phase_1(&mut self, challenge: Vec<F>) {
-        if !LAZY_BETA_EVALUATION {
+        if !global_prover_lazy_beta_evals() {
             let mut beta_g1 = BetaValues::new_beta_equality_mle(challenge.clone());
             beta_g1.index_mle_indices(self.num_dataparallel_vars);
             self.set_beta_g1(beta_g1);
@@ -909,7 +906,7 @@ impl<F: Field> IdentityGate<F> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind)| {
-                let beta_g_at_z = if LAZY_BETA_EVALUATION {
+                let beta_g_at_z = if global_prover_lazy_beta_evals() {
                     BetaValues::compute_beta_over_challenge_and_index(&challenge, z_ind)
                 } else {
                     self.beta_g1.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO)

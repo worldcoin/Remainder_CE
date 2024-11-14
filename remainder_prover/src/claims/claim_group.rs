@@ -12,7 +12,7 @@ use crate::{
         ClaimError,
     },
     mle::dense::DenseMle,
-    prover::{config::verifier_claim_agg_constant_column_optimization, GKRError},
+    prover::{config::global_verifier_claim_agg_constant_column_optimization, GKRError},
     sumcheck::evaluate_at_a_point,
 };
 
@@ -339,7 +339,7 @@ impl<F: Field> ClaimGroup<F> {
         // Aggregate claims by performing the claim aggregation protocol.
         // First retrieve V_i(l(x)).
 
-        let num_wlx_evaluations = if verifier_claim_agg_constant_column_optimization() {
+        let num_wlx_evaluations = if global_verifier_claim_agg_constant_column_optimization() {
             let (num_wlx_evaluations, _, _) =
                 get_num_wlx_evaluations(self.get_claim_points_matrix());
             num_wlx_evaluations

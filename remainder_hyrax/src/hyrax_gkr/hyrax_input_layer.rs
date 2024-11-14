@@ -4,7 +4,7 @@ use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rand::Rng;
 use remainder::claims::claim_aggregation::get_num_wlx_evaluations;
-use remainder::prover::config::prover_claim_agg_constant_column_optimization;
+use remainder::prover::config::global_prover_claim_agg_constant_column_optimization;
 use remainder::{
     claims::{claim_group::ClaimGroup, RawClaim},
     input_layer::InputLayerDescription,
@@ -238,7 +238,7 @@ fn compute_claim_wlx<F: Field>(mle_vec: &[F], claims: &ClaimGroup<F>) -> Vec<F> 
     let num_idx = claims.get_num_vars();
 
     // get the number of evaluations
-    let num_evals = if prover_claim_agg_constant_column_optimization() {
+    let num_evals = if global_prover_claim_agg_constant_column_optimization() {
         let (num_evals, _, _) = get_num_wlx_evaluations(claim_vecs);
         num_evals
     } else {
