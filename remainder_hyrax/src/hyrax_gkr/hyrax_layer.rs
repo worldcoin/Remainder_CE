@@ -25,7 +25,7 @@ use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use remainder_shared_types::Field;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 /// This struct represents what a proof looks like for one layer of GKR, but Hyrax version.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxLayerProof<C: PrimeOrderCurve> {
     /// This is the proof of the sumcheck rounds for that layer.

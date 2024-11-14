@@ -14,7 +14,7 @@ use super::hyrax_layer::HyraxClaim;
 /// doesn't need anything other than whether the challenges the
 /// output layer was evaluated on, so that the verifier can check
 /// whether these match the transcript.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxOutputLayerProof<C: PrimeOrderCurve> {
     /// The commitment to the claim that the output layer is making
