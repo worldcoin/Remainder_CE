@@ -171,9 +171,9 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         _claim_point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
-        // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
-        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
-        // --- vars ---
+        // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
+        // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED
+        // vars
         let num_u = self
             .source_mle
             .var_indices()
@@ -200,7 +200,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             .into_verifier_mle(sumcheck_challenges, transcript_reader)
             .unwrap();
 
-        // --- Create the resulting verifier layer for claim tracking ---
+        // Create the resulting verifier layer for claim tracking
         // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
         let verifier_id_gate_layer = VerifierIdentityGateLayer {
             layer_id: self.layer_id(),
@@ -926,18 +926,19 @@ impl<F: Field> IdentityGate<F> {
 
         let mut a_hg_mle_vec = vec![F::ZERO; 1 << num_vars];
 
-        self.nonzero_gates
-            .clone()
-            .into_iter()
-            .for_each(|(z_ind, x_ind)| {
-                let beta_g_at_z = if LAZY_BETA_EVALUATION {
-                    BetaValues::compute_beta_over_challenge_and_index(&challenge, z_ind)
-                } else {
-                    self.beta_g1.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO)
-                };
+        self.nonzero_gates.iter().for_each(|(z_ind, x_ind)| {
+            let beta_g_at_z = if LAZY_BETA_EVALUATION {
+                BetaValues::compute_beta_over_challenge_and_index(&challenge, *z_ind)
+            } else {
+                self.beta_g1
+                    .as_ref()
+                    .unwrap()
+                    .get(*z_ind)
+                    .unwrap_or(F::ZERO)
+            };
 
-                a_hg_mle_vec[x_ind] += beta_g_at_z;
-            });
+            a_hg_mle_vec[*x_ind] += beta_g_at_z;
+        });
 
         let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
         a_hg_mle.index_mle_indices(self.num_dataparallel_vars);

@@ -5,7 +5,7 @@ use std::error::Error;
 
 use ark_std::{cfg_into_iter, log2};
 use itertools::{EitherOrBoth::*, Itertools};
-use ndarray::{Array, ArrayView, Dimension, IxDyn};
+use ndarray::{Array, Dimension, IxDyn};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::Field;
@@ -480,14 +480,6 @@ impl<F: Field> MultilinearExtension<F> {
     /// Get the dimension information for the MLE.
     pub fn dim_info(&self) -> &Option<DimInfo> {
         &self.dim_info
-    }
-
-    /// Set the MLE as an ndarray.
-    pub fn get_mle_as_ndarray(&mut self) -> Result<ArrayView<F, IxDyn>, Box<dyn Error>> {
-        // This is currently unimplemeted because `ArrayView` requires a valid
-        // reference to an array slice, but with the `BitPackedVector`
-        // implementation we no longer maintain such a representation.
-        unimplemented!();
     }
 
     /// Get the names of the axes of the MLE (multi-dimensional).

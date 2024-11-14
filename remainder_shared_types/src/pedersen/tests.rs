@@ -258,7 +258,7 @@ fn test_against_orb_serialized_generators() {
         serde_json::de::from_slice(&bufreader[..]).unwrap()
     }
 
-    // --- Read and deserialize the generators from file ---
+    // Read and deserialize the generators from file
     const SERIALIZED_GENERATORS_FILENAME: &str = "sample-generators.json";
     let generator_bytes_from_file = read_bytes_from_file(SERIALIZED_GENERATORS_FILENAME);
     let deserialized_generators_from_file = generator_bytes_from_file
@@ -266,13 +266,13 @@ fn test_against_orb_serialized_generators() {
         .map(<Bn256 as PrimeOrderCurve>::from_bytes_compressed)
         .collect_vec();
 
-    // --- These are stolen directly from the `remainder-hyrax-tfh` ---
+    // These are stolen directly from the `remainder-hyrax-tfh`
     pub const PUBLIC_STRING: &str = "Modulus <3 Worldcoin: ZKML Self-Custody Edition";
     pub const LOG_NUM_COLS: usize = 9;
     let committer: PedersenCommitter<Bn256> =
         PedersenCommitter::new(1 << LOG_NUM_COLS, PUBLIC_STRING, None);
 
-    // --- Check the deserialized generators against the ones we live-generated ---
+    // Check the deserialized generators against the ones we live-generated
     deserialized_generators_from_file
         .iter()
         .zip(committer.generators.iter())

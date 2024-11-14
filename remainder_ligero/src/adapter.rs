@@ -85,7 +85,7 @@ where
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
-    // --- Unpacking the Merkle root ---
+    // Unpacking the Merkle root
     let root = LigeroRoot::<F> {
         root: halo2_ligero_proof.merkle_root,
         _p: std::marker::PhantomData,

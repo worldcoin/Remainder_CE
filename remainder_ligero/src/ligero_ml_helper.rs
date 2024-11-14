@@ -74,11 +74,11 @@ pub fn get_ml_inner_outer_tensors<F: Field>(
     num_rows: usize,
     orig_num_cols: usize,
 ) -> (Vec<F>, Vec<F>) {
-    // --- Sanitychecks ---
+    // Sanitychecks
     assert!(num_rows.is_power_of_two());
     assert!(orig_num_cols.is_power_of_two());
 
-    // --- The number of rows + number of columns needs to equal 2^{total number of variables} ---
+    // The number of rows + number of columns needs to equal 2^{total number of variables}
     assert_eq!(
         num_rows * orig_num_cols,
         2_usize.pow(challenge_coord.len() as u32)
@@ -113,7 +113,7 @@ pub fn naive_eval_mle_at_challenge_point<F: Field>(mle_coeffs: &[F], challenge_c
     let reduced_bookkeeping_table = challenge_coord.iter().rev().fold(
         mle_coeffs.to_vec(),
         |bookkeeping_table, new_challenge| {
-            // --- Grab every pair of elements and use the formula ---
+            // Grab every pair of elements and use the formula
             bookkeeping_table
                 .chunks(2)
                 .map(|elem_tuple| {

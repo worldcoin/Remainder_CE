@@ -157,7 +157,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         sumcheck_rounds.extend(phase_1_rounds.0);
         sumcheck_rounds.extend(phase_2_rounds.0);
 
-        // --- Finally, send the claimed values for each of the bound MLEs to the verifier ---
+        // Finally, send the claimed values for each of the bound MLEs to the verifier
         // First, send the claimed value of V_{i + 1}(g_2, u)
         let lhs_reduced = &self.phase_1_mles.as_ref().unwrap()[0][1];
         let rhs_reduced = &self.phase_2_mles.as_ref().unwrap()[0][1];
@@ -235,24 +235,25 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 // of the sparsity of the gate function. if we have the following expression:
                 // f1(z, x, y)(f2(x) + f3(y)) then because we are only binding the "x" variables, we can simply
                 // distribute over the y variables and construct bookkeeping tables that are size 2^(num_x_variables).
-                self.nonzero_gates
-                    .clone()
-                    .into_iter()
-                    .for_each(|(z_ind, x_ind, y_ind)| {
-                        let beta_g_at_z = if LAZY_BETA_EVALUATION {
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                self.g1.as_ref().unwrap(),
-                                z_ind,
-                            )
-                        } else {
-                            self.beta_g1.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO)
-                        };
-                        let f_3_at_y = self.rhs.get(y_ind).unwrap_or(F::ZERO);
-                        a_hg_rhs[x_ind] += beta_g_at_z * f_3_at_y;
-                        if self.gate_operation == BinaryOperation::Add {
-                            a_hg_lhs[x_ind] += beta_g_at_z;
-                        }
-                    });
+                self.nonzero_gates.iter().for_each(|(z_ind, x_ind, y_ind)| {
+                    let beta_g_at_z = if LAZY_BETA_EVALUATION {
+                        BetaValues::compute_beta_over_challenge_and_index(
+                            self.g1.as_ref().unwrap(),
+                            *z_ind,
+                        )
+                    } else {
+                        self.beta_g1
+                            .as_ref()
+                            .unwrap()
+                            .get(*z_ind)
+                            .unwrap_or(F::ZERO)
+                    };
+                    let f_3_at_y = self.rhs.get(*y_ind).unwrap_or(F::ZERO);
+                    a_hg_rhs[*x_ind] += beta_g_at_z * f_3_at_y;
+                    if self.gate_operation == BinaryOperation::Add {
+                        a_hg_lhs[*x_ind] += beta_g_at_z;
+                    }
+                });
 
                 let a_hg_rhs_mle_ref = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0));
 
@@ -400,7 +401,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
                     let a_f1_lhs_mle_ref = DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0));
 
-                    // --- We need to multiply h_g(x) by f_2(x) ---
+                    // We need to multiply h_g(x) by f_2(x)
                     let mut phase_2_mles = match self.gate_operation {
                         BinaryOperation::Add => {
                             vec![
@@ -753,12 +754,12 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         claim: RawClaim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierLayerEnum<F>, VerificationError> {
-        // --- Storing challenges for the sake of claim generation later ---
+        // Storing challenges for the sake of claim generation later
         let mut challenges = vec![];
 
-        // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
-        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
-        // --- BITS ---
+        // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
+        // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED
+        // BITS
         let num_u = self.lhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
@@ -772,7 +773,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             }
         }) - self.num_dataparallel_vars;
 
-        // --- Store all prover sumcheck messages to check against ---
+        // Store all prover sumcheck messages to check against
         let mut sumcheck_messages: Vec<Vec<F>> = vec![];
 
         // First round check against the claim.
@@ -796,16 +797,16 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         // between dataparallel rounds, phase 1 rounds, and phase 2 rounds; instead, the prover's proof reads
         // as a single continuous proof.
         for sumcheck_round_idx in 1..self.num_dataparallel_vars + num_u + num_v {
-            // --- Read challenge r_{i - 1} from transcript ---
+            // Read challenge r_{i - 1} from transcript
             let challenge = transcript_reader
                 .get_challenge("Sumcheck challenge")
                 .unwrap();
             let g_i_minus_1_evals = sumcheck_messages[sumcheck_messages.len() - 1].clone();
 
-            // --- Evaluate g_{i - 1}(r_{i - 1}) ---
+            // Evaluate g_{i - 1}(r_{i - 1})
             let prev_at_r = evaluate_at_a_point(&g_i_minus_1_evals, challenge).unwrap();
 
-            // --- Read off g_i(0), g_i(1), ..., g_i(d) from transcript ---
+            // Read off g_i(0), g_i(1), ..., g_i(d) from transcript
             let univariate_num_evals = match (
                 sumcheck_round_idx < self.num_dataparallel_vars, // 0-indexed, so strictly less-than is correct
                 self.gate_operation,
@@ -820,12 +821,12 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
                 .consume_elements("Sumcheck evaluations", univariate_num_evals)
                 .unwrap();
 
-            // --- Check: g_i(0) + g_i(1) =? g_{i - 1}(r_{i - 1}) ---
+            // Check: g_i(0) + g_i(1) =? g_{i - 1}(r_{i - 1})
             if prev_at_r != curr_evals[0] + curr_evals[1] {
                 return Err(VerificationError::SumcheckFailed);
             };
 
-            // --- Add the prover message to the sumcheck messages ---
+            // Add the prover message to the sumcheck messages
             sumcheck_messages.push(curr_evals);
             // Add the challenge.
             challenges.push(challenge);
@@ -837,7 +838,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             .unwrap();
         challenges.push(final_chal);
 
-        // --- Create the resulting verifier layer for claim tracking ---
+        // Create the resulting verifier layer for claim tracking
         // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
         let verifier_gate_layer = self
             .convert_into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
@@ -878,9 +879,9 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         claim_point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
-        // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
-        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
-        // --- BITS ---
+        // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
+        // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED
+        // BITS
         let num_u = self.lhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
@@ -924,7 +925,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             .into_verifier_mle(&rhs_challenges, transcript_reader)
             .unwrap();
 
-        // --- Create the resulting verifier layer for claim tracking ---
+        // Create the resulting verifier layer for claim tracking
         // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
         let verifier_gate_layer = VerifierGateLayer {
             layer_id: self.layer_id(),
@@ -1476,7 +1477,7 @@ impl<F: Field> GateLayer<F> {
 
         let a_f1_lhs_mle_ref = DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0));
 
-        // --- We need to multiply h_g(x) by f_2(x) ---
+        // We need to multiply h_g(x) by f_2(x)
         let mut phase_2_mles = match self.gate_operation {
             BinaryOperation::Add => {
                 vec![

@@ -230,7 +230,7 @@ impl<F: Field> Expression<F, ProverExpr> {
 
     /// evaluates an expression on the given challenges points, by fixing the variables
     pub fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError> {
-        // --- It's as simple as fixing all variables ---
+        // It's as simple as fixing all variables
         challenges
             .iter()
             .enumerate()
@@ -303,7 +303,7 @@ impl<F: Field> Expression<F, ProverExpr> {
         };
         self.traverse(&mut observer_fn)?;
 
-        // --- Traverse the expression and pick up all the evals ---
+        // Traverse the expression and pick up all the evals
         self.clone()
             .transform_to_verifier_expression()
             .unwrap()

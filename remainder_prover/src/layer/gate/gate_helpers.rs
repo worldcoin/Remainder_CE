@@ -156,7 +156,7 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
                         } else {
                             index
                         };
-                        // --- Access the MLE at that index. Pad with zeros ---
+                        // Access the MLE at that index. Pad with zeros
                         mle_ref.get(index).unwrap_or(F::ZERO)
                     })
                     .reduce(|acc, eval| acc * eval)
@@ -203,7 +203,7 @@ pub fn check_fully_bound<F: Field>(
     }
 
     mle_refs.iter_mut().try_fold(F::ONE, |acc, mle_ref| {
-        // --- Accumulate either errors or multiply ---
+        // Accumulate either errors or multiply
         if mle_ref.len() != 1 {
             return Err(GateError::MleNotFullyBoundError);
         }
