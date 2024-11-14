@@ -8,8 +8,6 @@ use itertools::{EitherOrBoth::*, Itertools};
 use ndarray::{Array, Dimension, IxDyn};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-#[cfg(feature = "parallel")]
-use rayon::prelude::ParallelSlice;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

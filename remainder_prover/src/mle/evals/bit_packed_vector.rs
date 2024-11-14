@@ -20,8 +20,9 @@ pub const ENABLE_BIT_PACKING: bool = false;
 
 // -------------- Helper Functions -----------------
 
-/// Returns `floor(log(n)) + 1` as a usize, aka the number of bits needed to
-/// represent the field element `n` in binary.
+/// Returns the minimum numbers of bits required to represent prime field
+/// elements in the range `[0, n]`. This is equivalent to computing
+/// `ceil(log_2(n+1))`.
 ///
 /// # Complexity
 /// Constant in the size of the representation of `n`.
@@ -31,11 +32,9 @@ pub const ENABLE_BIT_PACKING: bool = false;
 ///     use remainder_shared_types::Fr;
 ///     use remainder::mle::evals::bit_packed_vector::num_bits;
 ///
+///     assert_eq!(num_bits(Fr::from(0)), 0);
 ///     assert_eq!(num_bits(Fr::from(31)), 5);
 ///     assert_eq!(num_bits(Fr::from(32)), 6);
-///     assert_eq!(num_bits(Fr::from(42)), 6);
-///     assert_eq!(num_bits(Fr::from(63)), 6);
-///     assert_eq!(num_bits(Fr::from(64)), 7);
 /// ```
 pub fn num_bits<F: Field>(n: F) -> usize {
     let u64_chunks = n.to_u64s_le();
@@ -254,11 +253,6 @@ impl<F: Field> BitPackedVector<F> {
     pub fn get(&self, index: usize) -> Option<F> {
         // Check for index-out-of-bounds.
         if index >= self.num_elements {
-            return None;
-        }
-
-        // Handle empty vector separately.
-        if self.num_elements == 0 {
             return None;
         }
 

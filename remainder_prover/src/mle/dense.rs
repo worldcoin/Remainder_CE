@@ -39,10 +39,6 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         self.mle.num_vars()
     }
 
-    fn is_fully_bound(&self) -> bool {
-        self.mle.is_fully_bound()
-    }
-
     fn get_padded_evaluations(&self) -> Vec<F> {
         let size: usize = 1 << self.mle.num_vars();
         let padding = size - self.mle.len();
@@ -181,33 +177,6 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         self.mle.value()
     }
 }
-
-/*
-impl<F: Field> YieldClaim<ClaimMle<F>> for DenseMle<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
-        if self.len() != 1 {
-            return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
-        }
-        let mle_indices: Result<Vec<F>, _> = self
-            .mle_indices
-            .iter()
-            .map(|index| {
-                index
-                    .val()
-                    .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
-            })
-            .collect();
-        let claim_value = self.first();
-
-        Ok(vec![ClaimMle::new(
-            mle_indices?,
-            claim_value,
-            None,
-            Some(self.layer_id),
-        )])
-    }
-}
-*/
 
 impl<F: Field> DenseMle<F> {
     /// Constructs a new `DenseMle` with specified prefix_bits

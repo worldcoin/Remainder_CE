@@ -343,18 +343,6 @@ where
     pub fn get_orig_num_cols(&self) -> usize {
         self.p_eval.len()
     }
-
-    // Verify an evaluation proof and return the resulting evaluation
-    // pub fn verify<T: TranscriptSponge<F>>(
-    //     &self,
-    //     root: &F,
-    //     outer_tensor: &[F],
-    //     inner_tensor: &[F],
-    //     enc: &E,
-    //     tr: &mut TranscriptReader<F, T>,
-    // ) -> VerifierResult<F, ErrT<E, F>> {
-    //     verify::<D, E, F, T>(root, outer_tensor, inner_tensor, self, enc, tr)
-    // }
 }
 
 /// Compute number of degree tests required for `lambda`-bit security
