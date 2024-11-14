@@ -185,20 +185,23 @@ pub fn build_composite_mle<F: Field>(
 }
 
 /// A struct representing an iterator that iterates through
-/// the range (0..2^{`num_bits`}) but in the ordering of a
-/// Gray Code, which means that the edit distance between
+/// the range (1..2^{`num_bits`}) but in the ordering of a
+/// Gray Code, which means that the Hamming distance between
 /// the bit representation of any consecutive indices is only 1.
 ///
 /// The iterator is of the type (u32, (u32, bool))
 /// which represents:
 /// (index, (index of the bit that was flipped, the previous value of the flipped bit.))
-pub struct GrayCode {
+pub struct GrayCodeIterator {
     num_bits: usize,
     current_iteration: u32,
 }
 
-impl GrayCode {
+impl GrayCodeIterator {
+    /// Note: `num_bits` cannot be more than 31 because
+    /// we work with u32s in this iterator.
     fn new(num_bits: usize) -> Self {
+        assert!(num_bits < 32);
         Self {
             num_bits,
             current_iteration: 0,
@@ -206,7 +209,7 @@ impl GrayCode {
     }
 }
 
-impl Iterator for GrayCode {
+impl Iterator for GrayCodeIterator {
     type Item = (u32, (u32, bool));
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -243,7 +246,7 @@ impl Iterator for GrayCode {
 /// The iterator returns elements of the form (u32, Vec<(u32, bool)>) where the
 /// first u32 is the current index, and the Vec<(u32, bool)> represents the
 /// bits that flipped and what they used to be. As opposed to [GrayCode],
-/// these don't have edit distance 1, so the flipped bits go in a Vec.
+/// these don't have Hamming distance 1, so the flipped bits go in a Vec.
 pub struct LexicographicLE {
     num_bits: usize,
     current_val: u32,
@@ -338,6 +341,8 @@ pub fn evaluate_mle_at_a_point_lexicographic_order<F: Field>(
 
 /// This function non-destructively evaluates an MLE at a given point using the
 /// gray codes iterator.
+///
+/// Currently does not support for when the value in the point is either 0 or 1.
 pub fn evaluate_mle_at_a_point_gray_codes<F: Field>(
     mle: &MultilinearExtension<F>,
     point: &[F],
@@ -351,7 +356,7 @@ pub fn evaluate_mle_at_a_point_gray_codes<F: Field>(
     // This is the value that gets multiplied to the first MLE coefficient,
     // which is (1 - r_1) * (1 - r_2) * ... * (1 - r_n) where (r_1, ..., r_n) is the point.
     let starting_evaluation_acc = starting_beta_value * mle.first();
-    let gray_code = GrayCode::new(mle_num_vars);
+    let gray_code = GrayCodeIterator::new(mle_num_vars);
     let inverses = point
         .iter()
         .map(|elem| elem.invert().unwrap())
