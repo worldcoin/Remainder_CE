@@ -39,7 +39,7 @@ fn set_mle_dim() {
         get_dummy_random_mle_vec(NUM_VARS, NUM_DATA_PARALLEL_BITS, &mut rng);
 
     let mle_as_vec = DenseMle::combine_mles(mles).get_padded_evaluations();
-    let ndarray_expected = Array::from_shape_vec(
+    let _ndarray_expected = Array::from_shape_vec(
         IxDyn(&[1 << NUM_VARS, 1 << NUM_DATA_PARALLEL_BITS]),
         mle_as_vec.clone(),
     )
