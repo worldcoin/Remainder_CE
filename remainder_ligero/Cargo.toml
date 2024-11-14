@@ -33,6 +33,9 @@ once_cell = "1.18.0"
 tracing = "0.1.37"
 remainder-shared-types = { path = "../remainder_shared_types" }
 
+[features]
+print-trace = ["ark-std/print-trace", "remainder-shared-types/print-trace"]
+
 [dev-dependencies]
 bincode = "1.3"
 blake3 = { version = "1", features = ["traits-preview"] }

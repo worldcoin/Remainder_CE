@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use remainder::{layer::LayerId, mle::evals::MultilinearExtension, prover::GKRCircuitDescription};
+use remainder::{
+    layer::LayerId, layouter::circuit_hash::CircuitHashType, mle::evals::MultilinearExtension,
+    prover::GKRCircuitDescription,
+};
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
     pedersen::PedersenCommitter,
@@ -37,6 +40,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
         blinding_rng,
         converter,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
     let mut transcript: ECTranscript<C, PoseidonSponge<C::Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
@@ -49,5 +53,6 @@ pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
         &circuit_desc,
         &committer,
         &mut transcript,
+        CircuitHashType::Sha3_256,
     );
 }
