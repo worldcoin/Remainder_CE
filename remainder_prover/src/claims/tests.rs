@@ -198,11 +198,11 @@ fn test_aggro_claim_4() {
     let mut mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle2_evals, LayerId::Input(0));
     mle2.add_prefix_bits(vec![MleIndex::Fixed(true)]);
 
-    let mle_ref = mle1.clone();
-    let mle_ref2 = mle2.clone();
+    let mle = mle1.clone();
+    let mle2 = mle2.clone();
 
-    let output_mles_from_layer = vec![mle_ref.clone(), mle_ref2.clone()];
-    let expr = Expression::<Fr, ProverExpr>::products(vec![mle_ref, mle_ref2]);
+    let output_mles_from_layer = vec![mle.clone(), mle2.clone()];
+    let expr = Expression::<Fr, ProverExpr>::products(vec![mle, mle2]);
     let mut expr_copy = expr.clone();
 
     let layer = RegularLayer::new_raw(LayerId::Input(0), expr);
@@ -252,8 +252,8 @@ fn test_aggro_claim_negative_1() {
     let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
     let output_mles_from_layer = vec![mle1.clone()];
 
-    let mle_ref = mle1.clone();
-    let mut expr = Expression::<Fr, ProverExpr>::mle(mle_ref);
+    let mle = mle1.clone();
+    let mut expr = Expression::<Fr, ProverExpr>::mle(mle);
 
     let layer = RegularLayer::new_raw(LayerId::Input(0), expr.clone());
 
@@ -306,8 +306,8 @@ fn test_aggro_claim_negative_2() {
         Fr::from(rng.gen::<u64>()),
     ];
     let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
-    let mle_ref = mle1.clone();
-    let expr = Expression::<Fr, ProverExpr>::mle(mle_ref);
+    let mle = mle1.clone();
+    let expr = Expression::<Fr, ProverExpr>::mle(mle);
     let mut expr_copy = expr.clone();
     let output_mle_from_layer = vec![mle1.clone()];
 

@@ -621,9 +621,9 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 // 1 for the current MLE
                 1
             }
-            ExpressionNode::Product(mle_refs) => {
+            ExpressionNode::Product(mles) => {
                 // max degree is the number of MLEs in a product
-                mle_refs.len()
+                mles.len()
             }
             ExpressionNode::Scaled(a, _) | ExpressionNode::Negated(a) => a.get_max_degree(_mle_vec),
             ExpressionNode::Constant(_) => 1,
@@ -903,9 +903,7 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, ExprDescr
                 .field(b)
                 .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
-            ExpressionNode::Mle(mle_ref) => {
-                f.debug_struct("Circuit Mle").field("mle", mle_ref).finish()
-            }
+            ExpressionNode::Mle(mle) => f.debug_struct("Circuit Mle").field("mle", mle).finish(),
             ExpressionNode::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
             ExpressionNode::Product(a) => f.debug_tuple("Product").field(a).finish(),

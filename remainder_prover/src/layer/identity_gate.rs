@@ -575,11 +575,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                     vec![&self.a_hg_mle_phase_1.as_ref().unwrap(), &self.source_mle];
                 let independent_variable = mles
                     .iter()
-                    .map(|mle_ref| {
-                        mle_ref
-                            .mle_indices()
-                            .contains(&MleIndex::Indexed(round_index))
-                    })
+                    .map(|mle| mle.mle_indices().contains(&MleIndex::Indexed(round_index)))
                     .reduce(|acc, item| acc | item)
                     .unwrap();
                 let unscaled_sumcheck_evals =
@@ -611,11 +607,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                     vec![&self.a_hg_mle_phase_1.as_ref().unwrap(), &self.source_mle];
                 let independent_variable = mles
                     .iter()
-                    .map(|mle_ref| {
-                        mle_ref
-                            .mle_indices()
-                            .contains(&MleIndex::Indexed(round_index))
-                    })
+                    .map(|mle| mle.mle_indices().contains(&MleIndex::Indexed(round_index)))
                     .reduce(|acc, item| acc | item)
                     .unwrap();
                 let unscaled_sumcheck_evals =
@@ -827,13 +819,13 @@ impl<F: Field> IdentityGate<F> {
     pub fn new(
         layer_id: LayerId,
         nonzero_gates: Vec<(usize, usize)>,
-        mle_ref: DenseMle<F>,
+        mle: DenseMle<F>,
         num_dataparallel_vars: Option<usize>,
     ) -> IdentityGate<F> {
         IdentityGate {
             layer_id,
             nonzero_gates,
-            source_mle: mle_ref,
+            source_mle: mle,
             beta_g1: None,
             beta_g2: None,
             dataparallel_af2_mle: None,

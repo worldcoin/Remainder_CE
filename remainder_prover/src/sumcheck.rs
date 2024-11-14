@@ -366,12 +366,12 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     // when we have a product, the node can only contain mle refs. therefore this is similar to the mle
     // evaluation, but instead we have a list of mle refs, and the corresponding unbound and bound
     // beta values for that node.
-    let product = |mle_refs: &[&DenseMle<F>],
+    let product = |mles: &[&DenseMle<F>],
                    unbound_beta_vals: &[F],
                    bound_beta_vals: &[F]|
      -> Result<SumcheckEvals<F>, ExpressionError> {
         Ok(beta_cascade(
-            mle_refs,
+            mles,
             max_degree,
             round_index,
             unbound_beta_vals,
@@ -415,7 +415,7 @@ pub fn successors_from_mle_product<F: Field>(
     // Gets the total number of free variables across all MLEs within this product
     let max_num_vars = mles
         .iter()
-        .map(|mle_ref| mle_ref.num_free_vars())
+        .map(|mle| mle.num_free_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
@@ -426,10 +426,10 @@ pub fn successors_from_mle_product<F: Field>(
                     let num_coefficients_in_mle = 1 << mle.num_free_vars();
 
                     // over here, we perform the wrap-around functionality if we are multiplying
-                    // two mle_refs with different number of variables.
+                    // two mles with different number of variables.
                     // for example if we are multiplying V(b_1, b_2) * V(b_1), and summing over
                     // b_2, then the overall sum is V(b_1, 0) * V(b_1) + V(b_1, 1) * V(b_1).
-                    // it can be seen that the "smaller" mle_ref (the one over less variables) has
+                    // it can be seen that the "smaller" mle (the one over less variables) has
                     // to repeat itself an according number of times when the sum is over a variable
                     // it does not contain. the appropriate index is therefore
                     // determined as follows.
@@ -480,7 +480,7 @@ pub(crate) fn successors_from_mle_product_no_ind_var<F: Field>(
 ) -> Result<Vec<F>, MleError> {
     let max_num_vars = mles
         .iter()
-        .map(|mle_ref| mle_ref.num_free_vars())
+        .map(|mle| mle.num_free_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
@@ -489,15 +489,15 @@ pub(crate) fn successors_from_mle_product_no_ind_var<F: Field>(
             // we take the element-wise product at each of the points instead of looking at successors.
             let successors_product = mles
                 .iter()
-                .map(|mle_ref| {
+                .map(|mle| {
                     let zero = F::ZERO;
-                    let index = if mle_ref.num_free_vars() < max_num_vars {
-                        let max = 1 << mle_ref.num_free_vars();
+                    let index = if mle.num_free_vars() < max_num_vars {
+                        let max = 1 << mle.num_free_vars();
                         (index) % max
                     } else {
                         index
                     };
-                    mle_ref.get(index).unwrap_or(zero)
+                    mle.get(index).unwrap_or(zero)
                 })
                 .reduce(|acc, eval| acc * eval)
                 .unwrap();
@@ -505,9 +505,9 @@ pub(crate) fn successors_from_mle_product_no_ind_var<F: Field>(
         });
         evals.collect()
     } else {
-        let val = mles.iter().fold(F::ONE, |acc, mle_ref| {
-            assert_eq!(mle_ref.len(), 1);
-            acc * mle_ref.first()
+        let val = mles.iter().fold(F::ONE, |acc, mle| {
+            assert_eq!(mle.len(), 1);
+            acc * mle.first()
         });
         vec![val]
     };
@@ -565,12 +565,12 @@ fn apply_updated_beta_values_to_evals<F: Field>(
 }
 
 fn beta_cascade_no_independent_variable<F: Field>(
-    mle_refs: &[&impl Mle<F>],
+    mles: &[&impl Mle<F>],
     beta_vals: &[F],
     degree: usize,
     beta_updated_vals: &[F],
 ) -> SumcheckEvals<F> {
-    let mut mle_successor_vec = successors_from_mle_product_no_ind_var(mle_refs).unwrap();
+    let mut mle_successor_vec = successors_from_mle_product_no_ind_var(mles).unwrap();
     if mle_successor_vec.len() > 1 {
         beta_vals.iter().rev().for_each(|beta_val| {
             let (one_minus_beta_val, beta_val) = (F::ONE - beta_val, beta_val);
@@ -593,7 +593,7 @@ fn beta_cascade_no_independent_variable<F: Field>(
 /// there are (degree + 1) evaluations that are returned which are the evaluations of the univariate
 /// polynomial where the "round_index"-th bit is the independent variable.
 pub fn beta_cascade<F: Field>(
-    mle_refs: &[&impl Mle<F>],
+    mles: &[&impl Mle<F>],
     degree: usize,
     round_index: usize,
     beta_vals: &[F],
@@ -601,19 +601,15 @@ pub fn beta_cascade<F: Field>(
 ) -> SumcheckEvals<F> {
     // determine whether there is an independent variable within these mle refs by iterating through
     // all of their indices and determining whether there is an indexed bit at the round index.
-    let mles_have_independent_variable = mle_refs
+    let mles_have_independent_variable = mles
         .iter()
-        .map(|mle_ref| {
-            mle_ref
-                .mle_indices()
-                .contains(&MleIndex::Indexed(round_index))
-        })
+        .map(|mle| mle.mle_indices().contains(&MleIndex::Indexed(round_index)))
         .reduce(|acc, item| acc | item)
         .unwrap();
 
     if mles_have_independent_variable {
         let mle_successor_vec: Vec<Box<dyn Iterator<Item = F> + Send>> =
-            successors_from_mle_product(mle_refs).unwrap();
+            successors_from_mle_product(mles).unwrap();
         // Apply beta cascade steps, reducing `mle_successor_vec` size progressively.
         let mut final_successor_vec = beta_vals.iter().skip(1).rev().fold(
             mle_successor_vec,
@@ -651,7 +647,7 @@ pub fn beta_cascade<F: Field>(
         // apply the bound beta values as a scalar factor to each of the evaluations
         apply_updated_beta_values_to_evals(evals, beta_updated_vals)
     } else {
-        beta_cascade_no_independent_variable(mle_refs, beta_vals, degree, beta_updated_vals)
+        beta_cascade_no_independent_variable(mles, beta_vals, degree, beta_updated_vals)
     }
 }
 
@@ -673,9 +669,9 @@ pub(crate) fn get_round_degree<F: Field>(
         if let ExpressionNode::Product(mle_vec_indices) = expr {
             let mut product_round_degree: usize = 0;
             for mle_vec_index in mle_vec_indices {
-                let mle_ref = mle_vec_index.get_mle(mle_vec);
+                let mle = mle_vec_index.get_mle(mle_vec);
 
-                let mle_indices = mle_ref.mle_indices();
+                let mle_indices = mle.mle_indices();
                 for mle_index in mle_indices {
                     if *mle_index == MleIndex::Indexed(curr_round) {
                         product_round_degree += 1;

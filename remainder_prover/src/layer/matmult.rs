@@ -259,8 +259,8 @@ impl<F: Field> Layer<F> for MatMult<F> {
         _round_challenges: &[F],
         _claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F> {
-        let mle_refs = vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()];
-        PostSumcheckLayer(vec![Product::<F, F>::new(&mle_refs, F::ONE)])
+        let mles = vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()];
+        PostSumcheckLayer(vec![Product::<F, F>::new(&mles, F::ONE)])
     }
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
@@ -605,10 +605,10 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
             })
             .collect_vec();
         pre_bound_matrix_b_mle.set_mle_indices(matrix_b_new_indices);
-        let mle_refs = vec![pre_bound_matrix_a_mle, pre_bound_matrix_b_mle];
+        let mles = vec![pre_bound_matrix_a_mle, pre_bound_matrix_b_mle];
 
         PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
-            &mle_refs,
+            &mles,
             F::ONE,
             round_challenges,
         )])

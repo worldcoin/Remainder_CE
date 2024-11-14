@@ -329,18 +329,18 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
          -> Result<(), ClaimError> {
             match expr {
                 ExpressionNode::Mle(mle_vec_idx) => {
-                    let mle_ref = mle_vec_idx.get_mle(mle_vec);
+                    let mle = mle_vec_idx.get_mle(mle_vec);
 
-                    let fixed_mle_indices = mle_ref
+                    let fixed_mle_indices = mle
                         .mle_indices
                         .iter()
                         .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
                         .collect::<Result<Vec<_>, _>>()?;
 
-                    // Grab the layer ID (i.e. MLE index) which this mle_ref refers to
-                    let mle_layer_id = mle_ref.layer_id();
+                    // Grab the layer ID (i.e. MLE index) which this mle refers to
+                    let mle_layer_id = mle.layer_id();
 
-                    let claimed_value = mle_ref.value();
+                    let claimed_value = mle.value();
 
                     // Note: No need to append claim values here.
                     // We already appended them when evaluating the
@@ -359,17 +359,17 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                 }
                 ExpressionNode::Product(mle_vec_indices) => {
                     for mle_vec_index in mle_vec_indices {
-                        let mle_ref = mle_vec_index.get_mle(mle_vec);
-                        let fixed_mle_indices = mle_ref
+                        let mle = mle_vec_index.get_mle(mle_vec);
+                        let fixed_mle_indices = mle
                             .mle_indices
                             .iter()
                             .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
                             .collect::<Result<Vec<_>, _>>()?;
 
-                        // Grab the layer ID (i.e. MLE index) which this mle_ref refers to
-                        let mle_layer_id = mle_ref.layer_id();
+                        // Grab the layer ID (i.e. MLE index) which this mle refers to
+                        let mle_layer_id = mle.layer_id();
 
-                        let claimed_value = mle_ref.value();
+                        let claimed_value = mle.value();
 
                         // Note: No need to append the claim value to the transcript here. We
                         // already appended when evaluating the expression for sumcheck.
@@ -736,7 +736,7 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
                         .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
                         .collect::<Result<Vec<_>, _>>()?;
 
-                    // Grab the layer ID (i.e. MLE index) which this mle_ref refers to
+                    // Grab the layer ID (i.e. MLE index) which this mle refers to
                     let mle_layer_id = verifier_mle.layer_id();
 
                     // Grab the actual value that the claim is supposed to evaluate to
@@ -761,7 +761,7 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
                             .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
                             .collect::<Result<Vec<_>, _>>()?;
 
-                        // Grab the layer ID (i.e. MLE index) which this mle_ref refers to
+                        // Grab the layer ID (i.e. MLE index) which this mle refers to
                         let mle_layer_id = verifier_mle.layer_id();
 
                         let claimed_value = verifier_mle.value();

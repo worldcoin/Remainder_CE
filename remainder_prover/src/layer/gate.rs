@@ -251,7 +251,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     }
                 });
 
-                let a_hg_rhs_mle_ref = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0));
+                let a_hg_rhs_mle = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0));
 
                 // The actual mles differ based on whether we are doing a add gate or a mul gate, because
                 // in the case of an add gate, we distribute the gate function whereas in the case of the
@@ -263,11 +263,11 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                                 DenseMle::new_from_raw(a_hg_lhs, LayerId::Input(0)),
                                 self.lhs.clone(),
                             ],
-                            vec![a_hg_rhs_mle_ref],
+                            vec![a_hg_rhs_mle],
                         ]
                     }
                     BinaryOperation::Mul => {
-                        vec![vec![a_hg_rhs_mle_ref, self.lhs.clone()]]
+                        vec![vec![a_hg_rhs_mle, self.lhs.clone()]]
                     }
                 };
 
@@ -281,14 +281,14 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     .iter()
                     .fold(0, |acc, elem| max(acc, elem.len()));
 
-                let init_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_1_mles
+                let init_mles: Vec<Vec<&DenseMle<F>>> = phase_1_mles
                     .iter()
                     .map(|mle_vec| {
-                        let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                        mle_references
+                        let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                        mleerences
                     })
                     .collect();
-                let evals_vec = init_mle_refs
+                let evals_vec = init_mles
                     .iter()
                     .map(|mle_vec| {
                         compute_sumcheck_message_no_beta_table(
@@ -320,21 +320,21 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             Ordering::Greater => match round_index.cmp(&rounds_before_phase_2) {
                 // phase 1
                 Ordering::Less => {
-                    let phase_1_mle_refs: Vec<Vec<&DenseMle<F>>> = self
+                    let phase_1_mles: Vec<Vec<&DenseMle<F>>> = self
                         .phase_1_mles
                         .as_ref()
                         .unwrap()
                         .iter()
                         .map(|mle_vec| {
-                            let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                            mle_references
+                            let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                            mleerences
                         })
                         .collect();
 
-                    let max_deg = phase_1_mle_refs
+                    let max_deg = phase_1_mles
                         .iter()
                         .fold(0, |acc, elem| max(acc, elem.len()));
-                    let evals_vec = phase_1_mle_refs
+                    let evals_vec = phase_1_mles
                         .iter()
                         .map(|mle_vec| {
                             compute_sumcheck_message_no_beta_table(mle_vec, round_index, max_deg)
@@ -395,7 +395,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                             }
                         });
 
-                    let a_f1_lhs_mle_ref = DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0));
+                    let a_f1_lhs_mle = DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0));
 
                     // We need to multiply h_g(x) by f_2(x)
                     let mut phase_2_mles = match self.gate_operation {
@@ -405,11 +405,11 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                                     DenseMle::new_from_raw(a_f1_rhs, LayerId::Input(0)),
                                     self.rhs.clone(),
                                 ],
-                                vec![a_f1_lhs_mle_ref],
+                                vec![a_f1_lhs_mle],
                             ]
                         }
                         BinaryOperation::Mul => {
-                            vec![vec![a_f1_lhs_mle_ref, self.rhs.clone()]]
+                            vec![vec![a_f1_lhs_mle, self.rhs.clone()]]
                         }
                     };
 
@@ -423,14 +423,14 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                         .iter()
                         .fold(0, |acc, elem| max(acc, elem.len()));
 
-                    let init_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_2_mles
+                    let init_mles: Vec<Vec<&DenseMle<F>>> = phase_2_mles
                         .iter()
                         .map(|mle_vec| {
-                            let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                            mle_references
+                            let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                            mleerences
                         })
                         .collect();
-                    let evals_vec = init_mle_refs
+                    let evals_vec = init_mles
                         .iter()
                         .map(|mle_vec| {
                             compute_sumcheck_message_no_beta_table(
@@ -462,22 +462,22 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 // phase 2
                 Ordering::Greater => {
                     if self.phase_2_mles.as_ref().unwrap()[0][1].num_free_vars() > 0 {
-                        let phase_2_mle_refs: Vec<Vec<&DenseMle<F>>> = self
+                        let phase_2_mles: Vec<Vec<&DenseMle<F>>> = self
                             .phase_2_mles
                             .as_ref()
                             .unwrap()
                             .iter()
                             .map(|mle_vec| {
-                                let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                                mle_references
+                                let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                                mleerences
                             })
                             .collect();
 
-                        let max_deg = phase_2_mle_refs
+                        let max_deg = phase_2_mles
                             .iter()
                             .fold(0, |acc, elem| max(acc, elem.len()));
 
-                        let evals_vec = phase_2_mle_refs
+                        let evals_vec = phase_2_mles
                             .iter()
                             .map(|mle_vec| {
                                 compute_sumcheck_message_no_beta_table(
@@ -522,9 +522,9 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             Ok(())
         } else if round_index < self.num_rounds_phase1 + self.num_dataparallel_vars {
             let mles = self.phase_1_mles.as_mut().unwrap();
-            mles.iter_mut().for_each(|mle_ref_vec| {
-                mle_ref_vec.iter_mut().for_each(|mle_ref| {
-                    mle_ref.fix_variable(round_index, challenge);
+            mles.iter_mut().for_each(|mle_vec| {
+                mle_vec.iter_mut().for_each(|mle| {
+                    mle.fix_variable(round_index, challenge);
                 })
             });
             self.add_to_u_challenges(challenge);
@@ -532,9 +532,9 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         } else {
             let round_index = round_index - self.num_rounds_phase1;
             let mles = self.phase_2_mles.as_mut().unwrap();
-            mles.iter_mut().for_each(|mle_ref_vec| {
-                mle_ref_vec.iter_mut().for_each(|mle_ref| {
-                    mle_ref.fix_variable(round_index, challenge);
+            mles.iter_mut().for_each(|mle_vec| {
+                mle_vec.iter_mut().for_each(|mle| {
+                    mle.fix_variable(round_index, challenge);
                 })
             });
             Ok(())
@@ -1291,13 +1291,13 @@ impl<F: Field> GateLayer<F> {
     }
 
     /// bookkeeping tables necessary for binding x
-    fn set_phase_1(&mut self, mle_refs: Vec<Vec<DenseMle<F>>>) {
-        self.phase_1_mles = Some(mle_refs);
+    fn set_phase_1(&mut self, mles: Vec<Vec<DenseMle<F>>>) {
+        self.phase_1_mles = Some(mles);
     }
 
     /// bookkeeping tables necessary for binding y
-    fn set_phase_2(&mut self, mle_refs: Vec<Vec<DenseMle<F>>>) {
-        self.phase_2_mles = Some(mle_refs);
+    fn set_phase_2(&mut self, mles: Vec<Vec<DenseMle<F>>>) {
+        self.phase_2_mles = Some(mles);
     }
 
     /// adding to all the u challenges
@@ -1381,7 +1381,7 @@ impl<F: Field> GateLayer<F> {
             }
         });
 
-        let a_hg_rhs_mle_ref = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0));
+        let a_hg_rhs_mle = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0));
 
         // The actual mles differ based on whether we are doing a add gate or a mul gate, because
         // in the case of an add gate, we distribute the gate function whereas in the case of the
@@ -1393,11 +1393,11 @@ impl<F: Field> GateLayer<F> {
                         DenseMle::new_from_raw(a_hg_lhs, LayerId::Input(0)),
                         self.lhs.clone(),
                     ],
-                    vec![a_hg_rhs_mle_ref],
+                    vec![a_hg_rhs_mle],
                 ]
             }
             BinaryOperation::Mul => {
-                vec![vec![a_hg_rhs_mle_ref, self.lhs.clone()]]
+                vec![vec![a_hg_rhs_mle, self.lhs.clone()]]
             }
         };
 
@@ -1411,14 +1411,14 @@ impl<F: Field> GateLayer<F> {
             .iter()
             .fold(0, |acc, elem| max(acc, elem.len()));
 
-        let init_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_1_mles
+        let init_mles: Vec<Vec<&DenseMle<F>>> = phase_1_mles
             .iter()
             .map(|mle_vec| {
-                let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                mle_references
+                let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                mleerences
             })
             .collect();
-        let evals_vec = init_mle_refs
+        let evals_vec = init_mles
             .iter()
             .map(|mle_vec| {
                 compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_vars, max_deg)
@@ -1470,7 +1470,7 @@ impl<F: Field> GateLayer<F> {
                 }
             });
 
-        let a_f1_lhs_mle_ref = DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0));
+        let a_f1_lhs_mle = DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0));
 
         // We need to multiply h_g(x) by f_2(x)
         let mut phase_2_mles = match self.gate_operation {
@@ -1480,11 +1480,11 @@ impl<F: Field> GateLayer<F> {
                         DenseMle::new_from_raw(a_f1_rhs, LayerId::Input(0)),
                         self.rhs.clone(),
                     ],
-                    vec![a_f1_lhs_mle_ref],
+                    vec![a_f1_lhs_mle],
                 ]
             }
             BinaryOperation::Mul => {
-                vec![vec![a_f1_lhs_mle_ref, self.rhs.clone()]]
+                vec![vec![a_f1_lhs_mle, self.rhs.clone()]]
             }
         };
 
@@ -1498,14 +1498,14 @@ impl<F: Field> GateLayer<F> {
             .iter()
             .fold(0, |acc, elem| max(acc, elem.len()));
 
-        let init_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_2_mles
+        let init_mles: Vec<Vec<&DenseMle<F>>> = phase_2_mles
             .iter()
             .map(|mle_vec| {
-                let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                mle_references
+                let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                mleerences
             })
             .collect();
-        let evals_vec = init_mle_refs
+        let evals_vec = init_mles
             .iter()
             .map(|mle_vec| {
                 compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_vars, max_deg)
@@ -1613,16 +1613,16 @@ impl<F: Field> GateLayer<F> {
                 challenges.push(challenge);
                 // If there are dataparallel bits, we want to start at that index.
                 bind_round_gate(round + self.num_dataparallel_vars, challenge, phase_1_mles);
-                let phase_1_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_1_mles
+                let phase_1_mles: Vec<Vec<&DenseMle<F>>> = phase_1_mles
                     .iter()
                     .map(|mle_vec| {
-                        let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                        mle_references
+                        let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                        mleerences
                     })
                     .collect();
                 let eval = compute_sumcheck_message_gate(
                     round + self.num_dataparallel_vars,
-                    &phase_1_mle_refs,
+                    &phase_1_mles,
                 )
                 .into_iter()
                 .map(|eval| eval * beta_g2_fully_bound)
@@ -1637,9 +1637,9 @@ impl<F: Field> GateLayer<F> {
             transcript_writer.get_challenge("Final Sumcheck challenge for binding x");
         challenges.push(final_chal_u);
 
-        phase_1_mles.iter_mut().for_each(|mle_ref_vec| {
-            mle_ref_vec.iter_mut().for_each(|mle_ref| {
-                mle_ref.fix_variable(
+        phase_1_mles.iter_mut().for_each(|mle_vec| {
+            mle_vec.iter_mut().for_each(|mle| {
+                mle.fix_variable(
                     num_rounds_phase1 - 1 + self.num_dataparallel_vars,
                     final_chal_u,
                 );
@@ -1688,16 +1688,16 @@ impl<F: Field> GateLayer<F> {
                     let challenge = transcript_writer.get_challenge("Sumcheck challenge");
                     challenges.push(challenge);
                     bind_round_gate(round + self.num_dataparallel_vars, challenge, phase_2_mles);
-                    let phase_2_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_2_mles
+                    let phase_2_mles: Vec<Vec<&DenseMle<F>>> = phase_2_mles
                         .iter()
                         .map(|mle_vec| {
-                            let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                            mle_references
+                            let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                            mleerences
                         })
                         .collect();
                     let eval = compute_sumcheck_message_gate(
                         round + self.num_dataparallel_vars,
-                        &phase_2_mle_refs,
+                        &phase_2_mles,
                     )
                     .into_iter()
                     .map(|eval| eval * beta_g2_fully_bound)
@@ -1711,9 +1711,9 @@ impl<F: Field> GateLayer<F> {
             let final_chal = transcript_writer.get_challenge("Final Sumcheck challenge");
             challenges.push(final_chal);
 
-            phase_2_mles.iter_mut().for_each(|mle_ref_vec| {
-                mle_ref_vec.iter_mut().for_each(|mle_ref| {
-                    mle_ref.fix_variable(
+            phase_2_mles.iter_mut().for_each(|mle_vec| {
+                mle_vec.iter_mut().for_each(|mle| {
+                    mle.fix_variable(
                         num_rounds_phase2 - 1 + self.num_dataparallel_vars,
                         final_chal,
                     );

@@ -202,31 +202,27 @@ pub fn check_fully_bound<F: Field>(
         return Err(GateError::EvaluateBoundIndicesDontMatch);
     }
 
-    mles.iter_mut().try_fold(F::ONE, |acc, mle_ref| {
+    mles.iter_mut().try_fold(F::ONE, |acc, mle| {
         // Accumulate either errors or multiply
-        if mle_ref.len() != 1 {
+        if mle.len() != 1 {
             return Err(GateError::MleNotFullyBoundError);
         }
-        Ok(acc * mle_ref.first())
+        Ok(acc * mle.first())
     })
 }
 
 /// Index mle indices for an array of mles.
-pub fn index_mle_indices_gate<F: Field>(mle_refs: &mut [impl Mle<F>], index: usize) {
-    mle_refs.iter_mut().for_each(|mle_ref| {
-        mle_ref.index_mle_indices(index);
+pub fn index_mle_indices_gate<F: Field>(mles: &mut [impl Mle<F>], index: usize) {
+    mles.iter_mut().for_each(|mle| {
+        mle.index_mle_indices(index);
     })
 }
 
 /// Fixes variable for the MLEs of a round of sumcheck for add/mul gates.
-pub fn bind_round_gate<F: Field>(
-    round_index: usize,
-    challenge: F,
-    mle_refs: &mut [Vec<DenseMle<F>>],
-) {
-    mle_refs.iter_mut().for_each(|mle_ref_vec| {
-        mle_ref_vec.iter_mut().for_each(|mle_ref| {
-            mle_ref.fix_variable(round_index - 1, challenge);
+pub fn bind_round_gate<F: Field>(round_index: usize, challenge: F, mles: &mut [Vec<DenseMle<F>>]) {
+    mles.iter_mut().for_each(|mle_vec| {
+        mle_vec.iter_mut().for_each(|mle| {
+            mle.fix_variable(round_index - 1, challenge);
         })
     });
 }
@@ -234,10 +230,10 @@ pub fn bind_round_gate<F: Field>(
 /// Computes a round of the sumcheck protocol on a binary gate layer.
 pub fn compute_sumcheck_message_gate<F: Field>(
     round_index: usize,
-    mle_refs: &[Vec<&DenseMle<F>>],
+    mles: &[Vec<&DenseMle<F>>],
 ) -> Vec<F> {
-    let max_deg = mle_refs.iter().fold(0, |acc, elem| max(acc, elem.len()));
-    let evals_vec = mle_refs
+    let max_deg = mles.iter().fold(0, |acc, elem| max(acc, elem.len()));
+    let evals_vec = mles
         .iter()
         .map(|mle_vec| {
             compute_sumcheck_message_no_beta_table(mle_vec, round_index, max_deg).unwrap()
@@ -256,32 +252,23 @@ pub fn compute_sumcheck_message_gate<F: Field>(
 }
 
 /// Fixes variable for the MLEs of a round of sumcheck for identity gates.
-pub fn bind_round_identity<F: Field>(
-    round_index: usize,
-    challenge: F,
-    mle_refs: &mut [DenseMle<F>],
-) {
-    mle_refs.iter_mut().for_each(|mle_ref| {
-        mle_ref.fix_variable(round_index - 1, challenge);
+pub fn bind_round_identity<F: Field>(round_index: usize, challenge: F, mles: &mut [DenseMle<F>]) {
+    mles.iter_mut().for_each(|mle| {
+        mle.fix_variable(round_index - 1, challenge);
     });
 }
 
 /// Computes a round of sumcheck protocol on a unary gate layer.
 pub fn compute_sumcheck_message_identity<F: Field>(
     round_index: usize,
-    mle_refs: &[&DenseMle<F>],
+    mles: &[&DenseMle<F>],
 ) -> Result<Vec<F>, GateError> {
-    let independent_variable = mle_refs
+    let independent_variable = mles
         .iter()
-        .map(|mle_ref| {
-            mle_ref
-                .mle_indices()
-                .contains(&MleIndex::Indexed(round_index))
-        })
+        .map(|mle| mle.mle_indices().contains(&MleIndex::Indexed(round_index)))
         .reduce(|acc, item| acc | item)
         .ok_or(GateError::EmptyMleList)?;
-    let evals =
-        evaluate_mle_product_no_beta_table(mle_refs, independent_variable, mle_refs.len()).unwrap();
+    let evals = evaluate_mle_product_no_beta_table(mles, independent_variable, mles.len()).unwrap();
     let SumcheckEvals(evaluations) = evals;
     Ok(evaluations)
 }
@@ -351,7 +338,7 @@ pub fn compute_full_gate<F: Field>(
 /// Compute the full value of the gate wiring function for an identity gate.
 pub fn compute_full_gate_identity<F: Field>(
     challenges: Vec<F>,
-    mle_ref: &mut DenseMle<F>,
+    mle: &mut DenseMle<F>,
     nonzero_gates: &[(usize, usize)],
     num_dataparallel_vars: usize,
 ) -> F {
@@ -374,7 +361,7 @@ pub fn compute_full_gate_identity<F: Field>(
     if num_dataparallel_vars == 0 {
         nonzero_gates.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
             let gz = beta_g.get(*z_ind).unwrap_or(F::ZERO);
-            let ux = mle_ref.get(*x_ind).unwrap_or(F::ZERO);
+            let ux = mle.get(*x_ind).unwrap_or(F::ZERO);
             acc + gz * ux
         })
     } else {
@@ -393,7 +380,7 @@ pub fn compute_full_gate_identity<F: Field>(
                         .copied()
                         .fold(F::ZERO, |acc, (z_ind, x_ind)| {
                             let gz = beta_g.get(z_ind).unwrap_or(F::ZERO);
-                            let ux = mle_ref
+                            let ux = mle
                                 .get(idx + (x_ind * num_dataparallel_index))
                                 .unwrap_or(F::ZERO);
                             acc + gz * ux
@@ -414,11 +401,7 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
     // see if any of them contain an IV ---
     let independent_variable = mles
         .iter()
-        .map(|mle_ref| {
-            mle_ref
-                .mle_indices()
-                .contains(&MleIndex::Indexed(round_index))
-        })
+        .map(|mle| mle.mle_indices().contains(&MleIndex::Indexed(round_index)))
         .reduce(|acc, item| acc | item)
         .ok_or(GateError::EmptyMleList)?;
     let eval = evaluate_mle_product_no_beta_table(mles, independent_variable, degree).unwrap();
