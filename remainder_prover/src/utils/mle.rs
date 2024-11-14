@@ -2,7 +2,6 @@
 
 use std::iter::repeat_with;
 
-use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder_shared_types::Field;
@@ -29,21 +28,6 @@ pub fn pad_with<F: Clone>(padding_value: F, data: &[F]) -> Vec<F> {
     padded_data.extend_from_slice(data);
     padded_data.extend(std::iter::repeat(padding_value).take(padded_length - data.len()));
     padded_data
-}
-
-/// Returns a zero-padded version of `coeffs` with length padded
-/// to the nearest power of two.
-///
-/// ## Arguments
-///
-/// * `coeffs` - The coefficients to be padded
-///
-/// ## Returns
-///
-/// * `padded_coeffs` - The coeffients, zero-padded to the nearest power of two
-///   (in length)
-pub fn pad_to_nearest_power_of_two<F: Field>(coeffs: &[F]) -> Vec<F> {
-    pad_with(F::ZERO, coeffs)
 }
 
 /// Returns the argsort (i.e. indices) of the given vector slice.
@@ -76,25 +60,6 @@ pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) -> DenseMle
     let capacity = 2_u32.pow(num_vars as u32);
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()) * F::from(rng.gen::<u64>()))
         .take(capacity as usize)
-        .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
-}
-
-/// Helper function to create random MLE with specific number of vars
-pub fn get_range_mle<F: Field>(num_vars: usize) -> DenseMle<F> {
-    let capacity = 2_u32.pow(num_vars as u32);
-    let bookkeeping_table = (0..capacity)
-        .map(|idx| F::from(idx as u64 + 1))
-        .take(capacity as usize)
-        .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
-}
-
-/// Helper function to create random MLE with specific length
-pub fn get_random_mle_with_capacity<F: Field>(capacity: usize) -> DenseMle<F> {
-    let mut rng = test_rng();
-    let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
-        .take(capacity)
         .collect_vec();
     DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
 }
