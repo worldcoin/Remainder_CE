@@ -33,10 +33,10 @@ pub fn get_random_coeffs_for_multilinear_poly<F: Field>(
 /// ## Returns
 /// * (`num_rows`, `orig_num_cols`, `encoded_num_cols`)
 pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8, ratio: f64) -> (usize, usize, usize) {
-    // --- Compute rho ---
+    // Compute rho
     let rho: f64 = 1. / (rho_inv as f64);
 
-    // --- 0 < rho < 1 ---
+    // 0 < rho < 1
     assert!(rho > 0f64);
     assert!(rho < 1f64);
 
@@ -45,11 +45,11 @@ pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8, ratio: f64) -> (usiz
         .checked_next_power_of_two()
         .unwrap();
 
-    // --- Computes the other dimensions with respect to `encoded_num_cols` ---
+    // Computes the other dimensions with respect to `encoded_num_cols`
     let orig_num_cols = ((encoded_num_cols as f64) * rho).floor() as usize;
     let num_rows = (poly_len + orig_num_cols - 1) / orig_num_cols;
 
-    // --- Sanitycheck that we aren't going overboard or underboard ---
+    // Sanitycheck that we aren't going overboard or underboard
     assert!(orig_num_cols * num_rows >= poly_len);
     assert!(orig_num_cols * (num_rows - 1) < poly_len);
 
@@ -66,7 +66,7 @@ pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8, ratio: f64) -> (usiz
 /// * `evals` - Evaluations over the roots-of-unity subset of polynomial p
 ///     represented by `coeffs`.
 pub fn halo2_fft<F: Field>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
-    // --- Sanitycheck ---
+    // Sanitycheck
     debug_assert!(coeffs.len().is_power_of_two());
     debug_assert!(rho_inv.is_power_of_two());
 
@@ -74,11 +74,11 @@ pub fn halo2_fft<F: Field>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
     let num_evals = coeffs.len() * (rho_inv as usize);
     debug_assert!(num_evals.is_power_of_two());
 
-    // --- Note that `2^{j + 1}` is the total number of evaluations you actually want, and `2^k` is the number of coeffs ---
+    // Note that `2^{j + 1}` is the total number of evaluations you actually want, and `2^k` is the number of coeffs
     let evaluation_domain: EvaluationDomain<F> =
         EvaluationDomain::new(rho_inv as u32, log_num_coeffs as u32);
 
-    // --- Creates the polynomial in coeff form and performs the FFT ---
+    // Creates the polynomial in coeff form and performs the FFT
     let polynomial_coeff = evaluation_domain.coeff_from_vec(coeffs);
     let polynomial_eval_form = evaluation_domain.coeff_to_extended(polynomial_coeff);
     debug_assert_eq!(polynomial_eval_form.len(), num_evals);
@@ -95,7 +95,7 @@ pub fn halo2_fft<F: Field>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
 /// ## Returns
 /// * `coeffs` - Coefficients of univariate polynomial p.
 pub fn halo2_ifft<F: Field>(evals: Vec<F>, rho_inv: u8) -> Vec<F> {
-    // --- Sanitycheck ---
+    // Sanitycheck
     debug_assert!(evals.len().is_power_of_two());
     debug_assert!(rho_inv.is_power_of_two());
 
@@ -104,16 +104,16 @@ pub fn halo2_ifft<F: Field>(evals: Vec<F>, rho_inv: u8) -> Vec<F> {
     debug_assert!(num_coeffs.is_power_of_two());
     let log_num_coeffs = log2(num_coeffs);
 
-    // --- Note that `2^{j + 1}` is the total number of evaluations you actually want, and `2^k` is the number of coeffs ---
+    // Note that `2^{j + 1}` is the total number of evaluations you actually want, and `2^k` is the number of coeffs
     let evaluation_domain: EvaluationDomain<F> =
         EvaluationDomain::new(rho_inv as u32, log_num_coeffs as u32);
 
-    // --- Creates the polynomial in eval form and performs the IFFT ---
+    // Creates the polynomial in eval form and performs the IFFT
     let mut polynomial_eval_form = evaluation_domain.empty_extended();
     polynomial_eval_form.copy_from_slice(&evals);
     let polynomial_coeff_form = evaluation_domain.extended_to_coeff(polynomial_eval_form);
 
-    // --- The polynomial should only have degree evals / rho_inv ---
+    // The polynomial should only have degree evals / rho_inv
     polynomial_coeff_form
         .iter()
         .skip(num_coeffs)
@@ -140,7 +140,7 @@ pub fn get_least_significant_bits_to_usize_little_endian(bytes: Vec<u8>, num_bit
         .into_iter()
         .enumerate()
         .fold(0_usize, |acc, (idx, byte)| {
-            // --- Grab only some during the cutoff... ---
+            // Grab only some during the cutoff...
             if idx * 8 < num_bits && (idx + 1) * 8 > num_bits {
                 let num_remaining = num_bits - idx * 8;
                 (0..num_remaining).fold(acc, |inner_acc, inner_idx| {
@@ -149,7 +149,7 @@ pub fn get_least_significant_bits_to_usize_little_endian(bytes: Vec<u8>, num_bit
                     inner_acc + contributor
                 })
 
-            // --- All bytes before the cutoff... ---
+            // All bytes before the cutoff...
             } else if (idx + 1) * 8 <= num_bits {
                 (0..8).fold(acc, |inner_acc, inner_idx| {
                     let multiplier = 2_usize.pow((8 * idx + inner_idx) as u32);
@@ -157,7 +157,7 @@ pub fn get_least_significant_bits_to_usize_little_endian(bytes: Vec<u8>, num_bit
                     inner_acc + contributor
                 })
 
-            // --- And none after the cutoff ---
+            // And none after the cutoff
             } else {
                 acc
             }
@@ -181,7 +181,7 @@ mod test {
     fn test_get_least_significant_bits() {
         let mut rng = test_rng();
 
-        // --- Everything should be equivalent to taking the remainder against 2^k ---
+        // Everything should be equivalent to taking the remainder against 2^k
         (0..100).for_each(|_| {
             const VALUE_RANGE: std::ops::Range<u64> = 2_u64.pow(30)..2_u64.pow(40);
             let value = rng.gen_range::<u64, Range<u64>>(VALUE_RANGE);

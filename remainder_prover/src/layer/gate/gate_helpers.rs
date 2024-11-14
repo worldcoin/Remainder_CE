@@ -55,7 +55,7 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
     independent_variable: bool,
     degree: usize,
 ) -> Result<SumcheckEvals<F>, MleError> {
-    // --- Gets the total number of free variables across all MLEs within this product ---
+    // Gets the total number of free variables across all MLEs within this product
     let max_num_vars = mle_refs
         .iter()
         .map(|mle_ref| mle_ref.num_free_vars())
@@ -142,13 +142,13 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
                         } else {
                             index
                         };
-                        // --- Access the MLE at that index. Pad with zeros ---
+                        // Access the MLE at that index. Pad with zeros
                         mle_ref.get(index).unwrap_or(F::ZERO)
                     })
                     .reduce(|acc, eval| acc * eval)
                     .unwrap();
 
-                // --- Combine them into the accumulator ---
+                // Combine them into the accumulator
                 // Note that the accumulator stores g(0), g(1), ..., g(d - 1)
                 acc + product
             },
@@ -189,7 +189,7 @@ pub fn check_fully_bound<F: Field>(
     }
 
     mle_refs.iter_mut().try_fold(F::ONE, |acc, mle_ref| {
-        // --- Accumulate either errors or multiply ---
+        // Accumulate either errors or multiply
         if mle_ref.len() != 1 {
             return Err(GateError::MleNotFullyBoundError);
         }
@@ -388,7 +388,7 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
     round_index: usize,
     degree: usize,
 ) -> Result<Vec<F>, GateError> {
-    // --- Go through all of the MLEs being multiplied together on the LHS and see if any of them contain an IV ---
+    // Go through all of the MLEs being multiplied together on the LHS and see if any of them contain an IV
     let independent_variable = mles
         .iter()
         .map(|mle_ref| {
@@ -489,8 +489,8 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                     let g1_z = beta_g1.mle.get(z).unwrap();
                     let g1_z_successors = std::iter::successors(Some(g1_z), move |_| Some(g1_z));
 
-                    // --- Compute f_2((A, p_2), x) ---
-                    // --- Note that the bookkeeping table is little-endian, so we shift by `x * num_dataparallel_entries` ---
+                    // Compute f_2((A, p_2), x)
+                    // Note that the bookkeeping table is little-endian, so we shift by `x * num_dataparallel_entries`
                     // [ 0 0 1 1 2 2 3 3 ]
                     // [ 0, 2], [0, 2], [1, 3], [1, 3]
                     let f2_0_p2_x = f2_p2_x
@@ -515,8 +515,8 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                         });
                     let all_f2_evals_p2_x = std::iter::once(f2_0_p2_x).chain(f2_evals_p2_x);
 
-                    // --- Compute f_3((A, p_2), y) ---
-                    // --- Note that the bookkeeping table is little-endian, so we shift by `y * num_dataparallel_entries` ---
+                    // Compute f_3((A, p_2), y)
+                    // Note that the bookkeeping table is little-endian, so we shift by `y * num_dataparallel_entries`
                     let f3_0_p2_y = f3_p2_y
                         .get(
                             (p2_idx) * (1 << (f3_p2_y.num_free_vars() - num_dataparallel_bits)) + y,
@@ -541,7 +541,7 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                         });
                     let all_f3_evals_p2_y = std::iter::once(f3_0_p2_y).chain(f3_evals_p2_y);
 
-                    // --- The evals we want are simply the element-wise product of the accessed evals ---
+                    // The evals we want are simply the element-wise product of the accessed evals
                     let g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y = g1_z_successors
                         .zip(all_f2_evals_p2_x.zip(all_f3_evals_p2_y))
                         .map(|(g1_z_eval, (f2_eval, f3_eval))| {

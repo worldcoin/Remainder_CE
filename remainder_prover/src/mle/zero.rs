@@ -66,7 +66,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
             }
         }
 
-        // --- One fewer free variable to sumcheck through ---
+        // One fewer free variable to sumcheck through
         self.num_vars -= 1;
 
         if self.num_vars == 0 {

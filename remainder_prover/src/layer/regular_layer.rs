@@ -65,7 +65,7 @@ impl<F: Field> RegularLayer<F> {
     /// The `Expression` is the relationship this `Layer` proves
     /// and the `LayerId` is the location of this `Layer` in the overall circuit
     pub fn new_raw(id: LayerId, mut expression: Expression<F, ProverExpr>) -> Self {
-        // --- Compute nonlinear rounds from `expression` ---
+        // Compute nonlinear rounds from `expression`
         expression.index_mle_indices(0);
         let nonlinear_rounds = expression.get_all_nonlinear_rounds();
         RegularLayer {
@@ -337,7 +337,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                         .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
                         .collect::<Result<Vec<_>, _>>()?;
 
-                    // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
+                    // Grab the layer ID (i.e. MLE index) which this mle_ref refers to
                     let mle_layer_id = mle_ref.layer_id();
 
                     let claimed_value = mle_ref.value();
@@ -346,7 +346,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                     // We already appended them when evaluating the
                     // expression for sumcheck.
 
-                    // --- Construct the claim ---
+                    // Construct the claim
                     let claim = Claim::new(
                         fixed_mle_indices,
                         claimed_value,
@@ -354,7 +354,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                         mle_layer_id,
                     );
 
-                    // --- Push it into the list of claims ---
+                    // Push it into the list of claims
                     claims.push(claim);
                 }
                 ExpressionNode::Product(mle_vec_indices) => {
@@ -366,7 +366,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                             .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
                             .collect::<Result<Vec<_>, _>>()?;
 
-                        // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
+                        // Grab the layer ID (i.e. MLE index) which this mle_ref refers to
                         let mle_layer_id = mle_ref.layer_id();
 
                         let claimed_value = mle_ref.value();
@@ -374,7 +374,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                         // Note: No need to append the claim value to the transcript here. We
                         // already appended when evaluating the expression for sumcheck.
 
-                        // --- Construct the claim ---
+                        // Construct the claim
                         // need to populate the claim with the mle ref we are grabbing the claim from
                         let claim = Claim::new(
                             fixed_mle_indices,
@@ -383,7 +383,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                             mle_layer_id,
                         );
 
-                        // --- Push it into the list of claims ---
+                        // Push it into the list of claims
                         claims.push(claim);
                     }
                 }
@@ -392,7 +392,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
             Ok(())
         };
 
-        // --- Apply the observer function from above onto the expression ---
+        // Apply the observer function from above onto the expression
         layerwise_expr.traverse(&mut observer_fn)?;
 
         Ok(claims)
@@ -719,7 +719,7 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
     fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
         let expr = &self.expression;
 
-        // --- Define how to parse the expression tree ---
+        // Define how to parse the expression tree
         // - Basically we just want to go down it and pass up claims
         // - We can only add a new claim if we see an MLE with all its indices bound
 
@@ -736,13 +736,13 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
                         .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
                         .collect::<Result<Vec<_>, _>>()?;
 
-                    // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
+                    // Grab the layer ID (i.e. MLE index) which this mle_ref refers to
                     let mle_layer_id = verifier_mle.layer_id();
 
-                    // --- Grab the actual value that the claim is supposed to evaluate to ---
+                    // Grab the actual value that the claim is supposed to evaluate to
                     let claimed_value = verifier_mle.value();
 
-                    // --- Construct the claim ---
+                    // Construct the claim
                     let claim: Claim<F> = Claim::new(
                         fixed_mle_indices,
                         claimed_value,
@@ -750,7 +750,7 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
                         mle_layer_id,
                     );
 
-                    // --- Push it into the list of claims ---
+                    // Push it into the list of claims
                     claims.push(claim);
                 }
                 ExpressionNode::Product(verifier_mle_vec) => {
@@ -761,12 +761,12 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
                             .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
                             .collect::<Result<Vec<_>, _>>()?;
 
-                        // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
+                        // Grab the layer ID (i.e. MLE index) which this mle_ref refers to
                         let mle_layer_id = verifier_mle.layer_id();
 
                         let claimed_value = verifier_mle.value();
 
-                        // --- Construct the claim ---
+                        // Construct the claim
                         let claim: Claim<F> = Claim::new(
                             fixed_mle_indices,
                             claimed_value,
@@ -774,7 +774,7 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
                             mle_layer_id,
                         );
 
-                        // --- Push it into the list of claims ---
+                        // Push it into the list of claims
                         claims.push(claim);
                     }
                 }
@@ -783,7 +783,7 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
             Ok(())
         };
 
-        // --- Apply the observer function from above onto the expression ---
+        // Apply the observer function from above onto the expression
         expr.traverse(&mut observer_fn)?;
 
         Ok(claims)

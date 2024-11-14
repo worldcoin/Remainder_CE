@@ -387,7 +387,7 @@ where
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
-    // --- Matrix size params ---
+    // Matrix size params
     let (n_rows, orig_num_cols, encoded_num_cols) = enc.get_dims_for_input_len(coeffs_in.len());
 
     // check that parameters are ok
@@ -395,12 +395,12 @@ where
     assert!((n_rows - 1) * orig_num_cols < coeffs_in.len());
     assert!(enc.dims_ok(orig_num_cols, encoded_num_cols));
 
-    // --- `coeffs` should be the original coefficients ---
+    // `coeffs` should be the original coefficients
     let mut coeffs = vec![F::ZERO; n_rows * orig_num_cols];
-    // --- `comm` should be the matrix of FFT-encoded rows ---
+    // `comm` should be the matrix of FFT-encoded rows
     let mut comm = vec![F::ZERO; n_rows * encoded_num_cols];
 
-    // --- Copy of `coeffs` with padding ---
+    // Copy of `coeffs` with padding
     coeffs
         .par_chunks_mut(orig_num_cols)
         .zip(coeffs_in.par_chunks(orig_num_cols))
@@ -408,8 +408,8 @@ where
             c[..c_in.len()].copy_from_slice(c_in);
         });
 
-    // --- Go through each row of M' (the encoded matrix), as well as each row of M (the unencoded matrix) ---
-    // --- and make a copy, then perform the encoding (i.e. FFT) ---
+    // Go through each row of M' (the encoded matrix), as well as each row of M (the unencoded matrix)
+    // and make a copy, then perform the encoding (i.e. FFT)
     let fft_timer = start_timer!(|| "starting fft".to_string());
     comm.par_chunks_mut(encoded_num_cols)
         .zip(coeffs.par_chunks(orig_num_cols))
@@ -419,7 +419,7 @@ where
         })?;
     end_timer!(fft_timer);
 
-    // --- Compute Merkle tree ---
+    // Compute Merkle tree
     let encoded_num_cols_np2 = encoded_num_cols
         .checked_next_power_of_two()
         .ok_or(ProverError::TooBig)?;
@@ -435,11 +435,11 @@ where
         phantom_data_2: PhantomData,
     };
 
-    // --- A sanitycheck of some sort, I assume? ---
+    // A sanitycheck of some sort, I assume?
     check_comm(&ret, enc)?;
 
-    // --- Computes Merkle commitments for each column using the Digest ---
-    // --- then hashes all the col commitments together using the Digest again ---
+    // Computes Merkle commitments for each column using the Digest
+    // then hashes all the col commitments together using the Digest again
     let merkel_timer = start_timer!(|| "merkelize root".to_string());
     merkleize(&mut ret);
     end_timer!(merkel_timer);
@@ -458,13 +458,13 @@ where
     F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
-    // --- M' total flattened length must be M' rows * M' cols ---
+    // M' total flattened length must be M' rows * M' cols
     let comm_sz = comm.comm.len() != comm.n_rows * comm.encoded_num_cols;
-    // --- M total flattened length must be M rows * M cols ---
+    // M total flattened length must be M rows * M cols
     let coeff_sz = comm.coeffs.len() != comm.n_rows * comm.orig_num_cols;
-    // --- Merkle tree total length must be 2 * M' cols - 1 (since there are M' cols leaves) ---
+    // Merkle tree total length must be 2 * M' cols - 1 (since there are M' cols leaves)
     let hashlen = comm.hashes.len() != 2 * comm.encoded_num_cols.next_power_of_two() - 1;
-    // --- Dimension check of matrix against encoding ---
+    // Dimension check of matrix against encoding
     let dims = !enc.dims_ok(comm.orig_num_cols, comm.encoded_num_cols);
 
     if comm_sz || coeff_sz || hashlen || dims {
@@ -496,7 +496,7 @@ where
     let master_default_poseidon_merkle_hasher = Poseidon::<F, 3, 2>::new(8, 57);
     let master_default_poseidon_column_hasher = Poseidon::<F, 3, 2>::new(8, 57);
 
-    // --- Basically `hashes` is of length 2^h - 1, where h is the height of the Merkle tree ---
+    // Basically `hashes` is of length 2^h - 1, where h is the height of the Merkle tree
     // The idea is that the first 2^{h - 1} items are the leaf nodes (i.e. the column hashes)
     // and the remainder comes from the Merkle tree. Actually the order is EXACTLY as you'd expect,
     // with the layers of the tree being flattened and literally appended from bottom to top
@@ -559,7 +559,7 @@ fn hash_columns<D, E, F>(
         // 2. for each row, update the digests for each column
         for row in 0..n_rows {
             for (col, digest) in digests.iter_mut().enumerate() {
-                // --- Updates the digest with the value at `comm[row * encoded_num_cols + offset + col]` ---
+                // Updates the digest with the value at `comm[row * encoded_num_cols + offset + col]`
                 let com_val: F = comm[row * encoded_num_cols + offset + col];
                 com_val.digest_update(digest);
             }
@@ -619,15 +619,15 @@ fn merkle_tree<D, F>(
     F: Field,
     D: FieldHashFnDigest<F> + Send + Sync,
 {
-    // --- The outs (i.e. rest of the tree) should be 2^{h - 1} - 1 while the ins should be 2^{h - 1} ---
+    // The outs (i.e. rest of the tree) should be 2^{h - 1} - 1 while the ins should be 2^{h - 1}
     assert_eq!(ins.len(), outs.len() + 1);
 
-    // --- Merkle-ize just the next layer ---
+    // Merkle-ize just the next layer
     let (outs, rems) = outs.split_at_mut((outs.len() + 1) / 2);
     merkle_layer::<D, F>(ins, outs, master_default_poseidon_merkle_hasher);
 
     if !rems.is_empty() {
-        // --- Recursively merkleize until we have nothing remaining (i.e. a single element left) ---
+        // Recursively merkleize until we have nothing remaining (i.e. a single element left)
         merkle_tree::<D, F>(outs, rems, master_default_poseidon_merkle_hasher)
     }
 }
@@ -703,14 +703,14 @@ where
     let col = comm
         .comm
         .iter()
-        // --- Start collecting at the `column`th coordinate ---
+        // Start collecting at the `column`th coordinate
         .skip(column)
-        // --- Skip num_cols (i.e. row length) number of elements to grab each column value ---
+        // Skip num_cols (i.e. row length) number of elements to grab each column value
         .step_by(comm.encoded_num_cols)
         .cloned()
         .collect_vec();
 
-    // --- Append column values to transcript ---
+    // Append column values to transcript
     transcript_writer.append_elements("Column elements", &col);
 
     // Merkle path
@@ -718,7 +718,7 @@ where
     let path_len = log2(comm.encoded_num_cols);
     let mut path = Vec::with_capacity(path_len);
     for _ in 0..path_len {
-        // --- A clever way of getting the "other" child, i.e. either n - 1 or n + 1 ---
+        // A clever way of getting the "other" child, i.e. either n - 1 or n + 1
         let other = (column & !1) | (!column & 1);
         assert_eq!(other ^ column, 1);
         path.push(hashes[other]);
@@ -728,7 +728,7 @@ where
     }
     assert_eq!(column, 0);
 
-    // --- Append Merkle path to transcript ---
+    // Append Merkle path to transcript
     transcript_writer.append_elements("Merkle path", &path);
 
     Ok(LcColumn {
@@ -768,7 +768,7 @@ where
     F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
-    // --- Grab ONE global copy of Merkle + column hashing Poseidon ---
+    // Grab ONE global copy of Merkle + column hashing Poseidon
     let master_default_poseidon_merkle_hasher = Poseidon::<F, 3, 2>::new(8, 57);
     let master_default_poseidon_column_hasher = Poseidon::<F, 3, 2>::new(8, 57);
 
@@ -793,7 +793,7 @@ where
         .unwrap();
 
     // step 1d: extract columns to open
-    // --- The verifier does this independently as well ---
+    // The verifier does this independently as well
     let cols_to_open: Vec<usize> = {
         transcript_reader
             .get_challenges("Column openings", aux.get_n_col_opens())
@@ -804,7 +804,7 @@ where
     };
 
     // step 2: p_eval fft for column checks
-    // --- Takes the prover claimed value for b^T M and computes enc(b^T M) = b^T M' ---
+    // Takes the prover claimed value for b^T M and computes enc(b^T M) = b^T M'
     let p_eval_fft = {
         let mut tmp = Vec::with_capacity(encoded_num_cols);
         tmp.extend_from_slice(&p_eval[..]);
@@ -815,7 +815,7 @@ where
 
     // step 3: check p_random, p_eval, and col paths
     cols_to_open.iter().try_for_each(|col_idx| {
-        // --- Read all column values + Merkle path values from transcript for given column index ---
+        // Read all column values + Merkle path values from transcript for given column index
         let column_vals = transcript_reader
             .consume_elements("Column elements", num_rows)
             .unwrap();
@@ -823,7 +823,7 @@ where
             .consume_elements("Merkle path", log2(encoded_num_cols))
             .unwrap();
 
-        // --- Construct `LcColumn` struct for column value + path verification ---
+        // Construct `LcColumn` struct for column value + path verification
         let column = LcColumn {
             col_idx: *col_idx,
             col: column_vals,
@@ -831,10 +831,10 @@ where
             phantom_data: PhantomData,
         };
 
-        // --- Does the RLC evaluation check for b^T as well ---
+        // Does the RLC evaluation check for b^T as well
         let eval = verify_column_value::<E, F>(&column, outer_tensor, &p_eval_fft[*col_idx]);
 
-        // --- Merkle path verification: Does hashing for each column, then Merkle tree hashes ---
+        // Merkle path verification: Does hashing for each column, then Merkle tree hashes
         let path = verify_column_path::<E, F>(
             &column,
             *col_idx,
@@ -851,7 +851,7 @@ where
     })?;
 
     // step 4: evaluate and return
-    // --- Computes dot product between inner_tensor (i.e. a) and proof.p_eval (i.e. b^T M) ---
+    // Computes dot product between inner_tensor (i.e. a) and proof.p_eval (i.e. b^T M)
     Ok(cfg_into_iter!(inner_tensor)
         .zip(&p_eval[..])
         .map(|(t, e)| *t * e)
@@ -882,10 +882,10 @@ where
     F: Field,
     E: LcEncoding<F> + Send + Sync,
 {
-    // --- New Poseidon params + Poseidon hasher ---
+    // New Poseidon params + Poseidon hasher
     let mut digest = PoseidonSpongeHasher::new_column_hasher(master_default_poseidon_column_hasher);
 
-    // --- Just eat up the column elements themselves ---
+    // Just eat up the column elements themselves
     for e in &column.col[..] {
         e.digest_update(&mut digest);
     }
@@ -948,7 +948,7 @@ fn compute_col_idx_from_transcript_challenge<F: Field>(
     challenge: F,
     encoded_num_cols: usize,
 ) -> usize {
-    // --- Get the number of necessary bits ---
+    // Get the number of necessary bits
     let log_col_len = log2(encoded_num_cols);
     debug_assert!(log_col_len < 32);
 
@@ -956,7 +956,7 @@ fn compute_col_idx_from_transcript_challenge<F: Field>(
     let col_idx =
         get_least_significant_bits_to_usize_little_endian(challenge_le_bytes.to_vec(), log_col_len);
 
-    // --- Sanitycheck ---
+    // Sanitycheck
     assert!(col_idx < encoded_num_cols);
     col_idx
 }
@@ -989,7 +989,7 @@ where
     // next, evaluate the polynomial using the supplied tensor
     let p_eval = {
         let mut tmp = vec![F::ZERO; comm.orig_num_cols];
-        // --- Take the vector-matrix product b^T M ---
+        // Take the vector-matrix product b^T M
         collapse_columns::<E, F>(&comm.coeffs, outer_tensor, &mut tmp, comm.orig_num_cols, 0);
         tmp
     };
@@ -999,7 +999,7 @@ where
         .iter()
         .for_each(|coeff| tr.append("LABEL_PE", *coeff));
 
-    // --- Sample the appropriate number of columns to open from the transcript ---
+    // Sample the appropriate number of columns to open from the transcript
     let n_col_opens = enc.get_n_col_opens();
     let _columns: Vec<LcColumn<E, F>> = {
         let cols_to_open: Vec<usize> = tr
@@ -1010,7 +1010,7 @@ where
             })
             .collect();
 
-        // --- Send columns + Merkle paths to verifier ---
+        // Send columns + Merkle paths to verifier
         cfg_into_iter!(&cols_to_open)
             .map(|&col| open_column(tr, comm, col))
             .collect::<ProverResult<Vec<LcColumn<E, F>>, ErrT<E, F>>>()?
@@ -1167,10 +1167,10 @@ where
         return Err(ProverError::OuterTensor);
     }
 
-    // --- Allocate resulting vector ---
+    // Allocate resulting vector
     let mut poly_fft = vec![F::ZERO; comm.encoded_num_cols];
 
-    // --- Compute dot product column-by-column in M' ---
+    // Compute dot product column-by-column in M'
     for (coeffs, tensorval) in comm.comm.chunks(comm.encoded_num_cols).zip(tensor.iter()) {
         for (coeff, polyval) in coeffs.iter().zip(poly_fft.iter_mut()) {
             *polyval += *coeff * tensorval;

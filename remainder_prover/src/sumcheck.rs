@@ -117,7 +117,7 @@ pub struct SumcheckEvals<F: Field>(pub Vec<F>);
 impl<F: Field> Neg for SumcheckEvals<F> {
     type Output = Self;
     fn neg(self) -> Self::Output {
-        // --- Negation for a bunch of eval points is just element-wise negation ---
+        // Negation for a bunch of eval points is just element-wise negation
         SumcheckEvals(self.0.into_iter().map(|eval| eval.neg()).collect_vec())
     }
 }
@@ -353,7 +353,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
         ))
     };
 
-    // --- Just invert ---
+    // Just invert
     let negated = |a: Result<_, _>| a.map(|a: SumcheckEvals<F>| a.neg());
 
     // when we have a sum, we can evaluate both parts of the expression separately and just add the evaluations
@@ -412,7 +412,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
 pub fn successors_from_mle_product<F: Field>(
     mles: &[&impl Mle<F>],
 ) -> Result<Vec<Box<dyn Iterator<Item = F> + Send>>, MleError> {
-    // --- Gets the total number of free variables across all MLEs within this product ---
+    // Gets the total number of free variables across all MLEs within this product
     let max_num_vars = mles
         .iter()
         .map(|mle_ref| mle_ref.num_free_vars())
@@ -661,7 +661,7 @@ pub(crate) fn get_round_degree<F: Field>(
     expr: &Expression<F, ProverExpr>,
     curr_round: usize,
 ) -> usize {
-    // --- By default, all rounds have degree at least 2 (beta table included) ---
+    // By default, all rounds have degree at least 2 (beta table included)
     let mut round_degree = 1;
 
     let mut get_degree_closure = |expr: &ExpressionNode<F, ProverExpr>,
@@ -669,7 +669,7 @@ pub(crate) fn get_round_degree<F: Field>(
      -> Result<(), ()> {
         let round_degree = &mut round_degree;
 
-        // --- The only exception is within a product of MLEs ---
+        // The only exception is within a product of MLEs
         if let ExpressionNode::Product(mle_vec_indices) = expr {
             let mut product_round_degree: usize = 0;
             for mle_vec_index in mle_vec_indices {

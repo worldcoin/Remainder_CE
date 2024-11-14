@@ -19,12 +19,12 @@ use remainder_shared_types::Field;
 /// ## Arguments
 /// * `challenge_coord` - Challenge point to be expanded in little-endian
 fn initialize_tensor<F: Field>(challenge_coord: &[F]) -> Vec<F> {
-    // --- For each of the challenge coordinates ---
+    // For each of the challenge coordinates
     challenge_coord
         .iter()
         .rev()
         .fold(vec![F::ONE], |current_tensor, challenge| {
-            // --- Take first coordinate and double current tensor ---
+            // Take first coordinate and double current tensor
             current_tensor
                 .clone()
                 .into_iter()
@@ -65,11 +65,11 @@ pub fn get_ml_inner_outer_tensors<F: Field>(
     num_rows: usize,
     orig_num_cols: usize,
 ) -> (Vec<F>, Vec<F>) {
-    // --- Sanitychecks ---
+    // Sanitychecks
     assert!(num_rows.is_power_of_two());
     assert!(orig_num_cols.is_power_of_two());
 
-    // --- The number of rows + number of columns needs to equal 2^{total number of variables} ---
+    // The number of rows + number of columns needs to equal 2^{total number of variables}
     assert_eq!(
         num_rows * orig_num_cols,
         2_usize.pow(challenge_coord.len() as u32)
@@ -104,7 +104,7 @@ pub fn naive_eval_mle_at_challenge_point<F: Field>(mle_coeffs: &[F], challenge_c
     let reduced_bookkeeping_table = challenge_coord.iter().rev().fold(
         mle_coeffs.to_vec(),
         |bookkeeping_table, new_challenge| {
-            // --- Grab every pair of elements and use the formula ---
+            // Grab every pair of elements and use the formula
             bookkeeping_table
                 .chunks(2)
                 .map(|elem_tuple| {
@@ -171,7 +171,7 @@ fn test_split_tensor() {
 
     let one = Fr::one();
 
-    // --- Little-endian ---
+    // Little-endian
     let expected_inner_tensor: Vec<Fr> = vec![
         (one - third) * (one - fourth) * (one - fifth),
         (one - third) * (one - fourth) * (fifth),
