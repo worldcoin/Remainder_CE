@@ -16,7 +16,7 @@ use itertools::FoldWhile::{Continue, Done};
 /// `F`, effectively behaving like a regular (immutable) `Vec<F>`. This is
 /// needed because bit-packing incurs a noticable runtime slowdown, and we need
 /// an easy way to turn it off if trading memory for speed is desirable.
-pub const ENABLE_BIT_PACKING: bool = true;
+pub const ENABLE_BIT_PACKING: bool = false;
 
 // -------------- Helper Functions -----------------
 
