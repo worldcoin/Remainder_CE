@@ -1561,6 +1561,7 @@ name = "remainder-hyrax"
 version = "0.1.0"
 dependencies = [
  "ark-std",
+ "bincode",
  "clap",
  "criterion",
  "ff 0.13.0",
