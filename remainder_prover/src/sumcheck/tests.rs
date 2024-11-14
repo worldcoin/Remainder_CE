@@ -29,24 +29,24 @@ pub fn dummy_sumcheck<F: Field>(
         .collect_vec();
     let mut newbeta = BetaValues::new(betavec);
 
-    // --- Does the bit indexing ---
+    // Does the bit indexing
 
-    // --- The prover messages to the verifier...? ---
+    // The prover messages to the verifier...?
     let mut messages: Vec<(Vec<F>, Option<F>)> = vec![];
     let mut challenge: Option<F> = None;
 
     for round_index in expression_nonlinear_indices {
-        // --- First fix the variable representing the challenge from the last round ---
+        // First fix the variable representing the challenge from the last round
         // (This doesn't happen for the first round)
         if let Some(challenge) = challenge {
             expr.fix_variable(round_index - 1, challenge);
             newbeta.beta_update(round_index - 1, challenge);
         }
 
-        // --- Grabs the degree of univariate polynomial we are sending over ---
+        // Grabs the degree of univariate polynomial we are sending over
         let degree = get_round_degree(expr, round_index);
 
-        // --- Gives back the evaluations g(0), g(1), ..., g(d - 1) ---
+        // Gives back the evaluations g(0), g(1), ..., g(d - 1)
         let eval = compute_sumcheck_message_beta_cascade(expr, round_index, degree, &newbeta);
 
         if let Ok(SumcheckEvals(evaluations)) = eval {
@@ -90,16 +90,16 @@ pub fn verify_sumcheck_messages<F: Field>(
     }
     let mut challenges = vec![];
 
-    // --- Go through sumcheck messages + (FS-generated) challenges ---
+    // Go through sumcheck messages + (FS-generated) challenges
     // Round j, 1 < j < v
     for (evals, challenge) in messages.iter().skip(1) {
         let curr_evals = evals;
         chal = (*challenge).unwrap();
-        // --- Evaluate the previous round's polynomial at the random challenge point, i.e. g_{i - 1}(r_i) ---
+        // Evaluate the previous round's polynomial at the random challenge point, i.e. g_{i - 1}(r_i)
         let prev_at_r = evaluate_at_a_point(prev_evals, challenge.unwrap())
             .expect("could not evaluate at challenge point");
 
-        // --- g_{i - 1}(r) should equal g_i(0) + g_i(1) ---
+        // g_{i - 1}(r) should equal g_i(0) + g_i(1)
         if prev_at_r != curr_evals[0] + curr_evals[1] {
             return Err(VerifyError::SumcheckBad);
         };

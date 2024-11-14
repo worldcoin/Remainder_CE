@@ -64,7 +64,7 @@ impl<F: Field> Expression<F, VerifierExpr> {
                                lhs: Result<F, ExpressionError>,
                                rhs: Result<F, ExpressionError>|
          -> Result<F, ExpressionError> {
-            // --- Selector bit must be bound ---
+            // Selector bit must be bound
             if let MleIndex::Bound(val, _) = idx {
                 return Ok(*val * rhs? + (F::ONE - val) * lhs?);
             }

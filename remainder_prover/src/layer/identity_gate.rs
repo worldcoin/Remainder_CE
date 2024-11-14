@@ -171,9 +171,9 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         _claim_point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
-        // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
-        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED ---
-        // --- vars ---
+        // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
+        // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED
+        // vars
         let num_u = self
             .source_mle
             .var_indices()
@@ -200,7 +200,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             .into_verifier_mle(sumcheck_challenges, transcript_reader)
             .unwrap();
 
-        // --- Create the resulting verifier layer for claim tracking ---
+        // Create the resulting verifier layer for claim tracking
         // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
         let verifier_id_gate_layer = VerifierIdentityGateLayer {
             layer_id: self.layer_id(),

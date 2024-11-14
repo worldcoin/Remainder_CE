@@ -55,10 +55,6 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         self.num_vars
     }
 
-    fn is_fully_bound(&self) -> bool {
-        self.num_vars == 0
-    }
-
     fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<RawClaim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::Indexed(round_index) {
@@ -66,7 +62,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
             }
         }
 
-        // --- One fewer free variable to sumcheck through ---
+        // One fewer free variable to sumcheck through
         self.num_vars -= 1;
 
         if self.num_vars == 0 {
@@ -144,31 +140,3 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         }
     }
 }
-
-/*
-impl<F: Field> YieldClaim<ClaimMle<F>> for ZeroMle<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
-        if self.len() != 1 {
-            return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
-        }
-        let mle_indices: Result<Vec<F>, _> = self
-            .mle_indices
-            .iter()
-            .map(|index| {
-                index
-                    .val()
-                    .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
-            })
-            .collect();
-
-        // Note: Claim result is always zero. No need to append to transcript.
-
-        Ok(vec![ClaimMle::new(
-            mle_indices?,
-            F::ZERO,
-            None,
-            Some(self.layer_id),
-        )])
-    }
-}
-*/

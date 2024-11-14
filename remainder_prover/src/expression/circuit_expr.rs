@@ -116,7 +116,7 @@ impl<F: Field> Expression<F, ExprDescription> {
     /// Returns the maximum degree of b_{curr_round} within an expression
     /// (and therefore the number of prover messages we need to send)
     pub fn get_round_degree(&self, curr_round: usize) -> usize {
-        // --- By default, all rounds have degree at least 2 (beta table included) ---
+        // By default, all rounds have degree at least 2 (beta table included)
         let mut round_degree = 1;
 
         let mut get_degree_closure = |expr: &ExpressionNode<F, ExprDescription>,
@@ -124,7 +124,7 @@ impl<F: Field> Expression<F, ExprDescription> {
          -> Result<(), ()> {
             let round_degree = &mut round_degree;
 
-            // --- The only exception is within a product of MLEs ---
+            // The only exception is within a product of MLEs
             if let ExpressionNode::Product(circuit_mles) = expr {
                 let mut product_round_degree: usize = 0;
                 for circuit_mle in circuit_mles {
@@ -691,12 +691,12 @@ impl<F: Field> Expression<F, ExprDescription> {
         let (lhs_node, _) = self.deconstruct();
         let (rhs_node, _) = rhs.deconstruct();
 
-        // --- Compute the difference in number of free variables, to add the appropriate number of selectors ---
+        // Compute the difference in number of free variables, to add the appropriate number of selectors
         let num_left_selectors = max(0, rhs_node.get_num_vars() - lhs_node.get_num_vars());
         let num_right_selectors = max(0, lhs_node.get_num_vars() - rhs_node.get_num_vars());
 
         let lhs_subtree = if num_left_selectors > 0 {
-            // --- Always "go left" and "select" against a constant zero ---
+            // Always "go left" and "select" against a constant zero
             (0..num_left_selectors).fold(lhs_node, |cur_subtree, _| {
                 ExpressionNode::Selector(
                     MleIndex::Free,
@@ -709,7 +709,7 @@ impl<F: Field> Expression<F, ExprDescription> {
         };
 
         let rhs_subtree = if num_right_selectors > 0 {
-            // --- Always "go left" and "select" against a constant zero ---
+            // Always "go left" and "select" against a constant zero
             (0..num_right_selectors).fold(rhs_node, |cur_subtree, _| {
                 ExpressionNode::Selector(
                     MleIndex::Free,
@@ -721,10 +721,10 @@ impl<F: Field> Expression<F, ExprDescription> {
             rhs_node
         };
 
-        // --- Sanitycheck ---
+        // Sanitycheck
         debug_assert_eq!(lhs_subtree.get_num_vars(), rhs_subtree.get_num_vars());
 
-        // --- Finally, a selector against the two (equal-num-vars) sides! ---
+        // Finally, a selector against the two (equal-num-vars) sides!
         let concat_node =
             ExpressionNode::Selector(MleIndex::Free, Box::new(lhs_subtree), Box::new(rhs_subtree));
 
