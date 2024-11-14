@@ -4,9 +4,9 @@ all: prod
 
 # Example: make bench name=hyrax.opt
 bench:
-	cargo build --profile=opt-with-debug --bin worldcoin &&\
-		valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin &&\
-		ms_print massif/massif.$(name).out | less
+	cargo build --profile=opt-with-debug --bin worldcoin
+	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin
+	ms_print massif/massif.$(name).out | less
 
 prod:
 	cargo build --release --features "parallel" --bin worldcoin
