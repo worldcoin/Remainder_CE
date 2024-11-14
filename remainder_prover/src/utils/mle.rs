@@ -415,7 +415,7 @@ mod tests {
     use crate::{
         mle::evals::MultilinearExtension,
         utils::mle::{
-            evaluate_mle_at_a_point_lexicographic_order, evaluate_mle_destructive, GrayCode,
+            evaluate_mle_at_a_point_lexicographic_order, evaluate_mle_destructive, GrayCodeIterator,
         },
     };
 
@@ -423,7 +423,7 @@ mod tests {
 
     #[test]
     fn test_gray_code_0_vars() {
-        let mut gray_code_iterator = GrayCode::new(0);
+        let mut gray_code_iterator = GrayCodeIterator::new(0);
 
         assert_eq!(gray_code_iterator.next(), None);
     }
@@ -431,7 +431,7 @@ mod tests {
     #[test]
     fn test_gray_code_iterator_len() {
         for n in 1..16 {
-            assert_eq!(GrayCode::new(n).count(), (1 << n) - 1);
+            assert_eq!(GrayCodeIterator::new(n).count(), (1 << n) - 1);
         }
     }
 
@@ -440,7 +440,7 @@ mod tests {
     // satisfy the properties listed on the `test_gray_code_property` test.
     #[test]
     fn test_gray_code_3_vars() {
-        let mut gray_code_iterator = GrayCode::new(3);
+        let mut gray_code_iterator = GrayCodeIterator::new(3);
 
         assert_eq!(gray_code_iterator.next(), Some((1, (0, false))));
         assert_eq!(gray_code_iterator.next(), Some((3, (1, false))));
@@ -465,7 +465,7 @@ mod tests {
     #[test]
     fn test_gray_code_property() {
         for n in 1..16 {
-            let gray_code_iterator = GrayCode::new(n);
+            let gray_code_iterator = GrayCodeIterator::new(n);
 
             let mut seen: Vec<bool> = vec![false; 1 << n];
 
