@@ -164,7 +164,6 @@ fn test_example_with_regular_layer() {
 
     // bind the variables
     mle_ref.index_mle_indices(0);
-    equality_mle.index_mle_indices(0);
 
     // first sumcheck message f1
     let f1_padded = vec![
@@ -178,7 +177,7 @@ fn test_example_with_regular_layer() {
     let message1 = committer.committed_vector(&f1_padded, &Fr::one());
 
     // second sumcheck message f2
-    equality_mle.fix_variable(0, r1);
+    equality_mle.fix_variable(r1);
     mle_ref.fix_variable(0, r1);
 
     let evaluations = [Fr::from(0), Fr::from(1), Fr::from(2)];
@@ -196,7 +195,7 @@ fn test_example_with_regular_layer() {
     ];
     let message2 = committer.committed_vector(&f2_padded, &Fr::from(7));
 
-    equality_mle.fix_variable(1, r2);
+    equality_mle.fix_variable(r2);
     mle_ref.fix_variable(1, r2);
 
     let _mle_eval = mle_ref.value() * equality_mle.value();

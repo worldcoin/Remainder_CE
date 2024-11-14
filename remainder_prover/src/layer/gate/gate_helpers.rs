@@ -4,7 +4,7 @@ use itertools::Itertools;
 use std::{cmp::max, fmt::Debug};
 
 use crate::{
-    mle::{betavalues::BetaValues, Mle},
+    mle::{betavalues::BetaValues, evals::MultilinearExtension, Mle},
     sumcheck::*,
 };
 use remainder_shared_types::Field;
@@ -54,21 +54,21 @@ pub enum GateError {
 /// 1}(u_1, ..., u_{k - 1}, x, b_{k + 1}, ..., b_n) at `degree + 1` points.
 ///
 /// ## Arguments
-/// * `mle_refs` - MLEs pointing to the actual bookkeeping tables for the above
+/// * `mles` - MLEs pointing to the actual bookkeeping tables for the above
 /// * `independent_variable` - whether the `x` from above resides within at
-///   least one of the `mle_refs`
+///   least one of the `mles`
 /// * `degree` - degree of `g_k(x)`, i.e. number of evaluations to send (minus
 ///   one!)
-pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
-    mle_refs: &[&impl Mle<F>],
+pub fn evaluate_mle_product_no_beta_table<F: Field>(
+    mles: &[&impl Mle<F>],
     independent_variable: bool,
     degree: usize,
 ) -> Result<SumcheckEvals<F>, MleError> {
     // --- Gets the total number of free variables across all MLEs within this
     // product ---
-    let max_num_vars = mle_refs
+    let max_num_vars = mles
         .iter()
-        .map(|mle_ref| mle_ref.num_free_vars())
+        .map(|mle| mle.num_free_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
@@ -86,20 +86,19 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
             vec![F::ZERO; eval_count],
             |mut acc, index| {
                 //get the product of all evaluations over 0/1/..degree
-                let evals = mle_refs
+                let evals = mles
                     .iter()
-                    .map(|mle_ref| {
-                        let index = if mle_ref.num_free_vars() < max_num_vars {
-                            let max = 1 << mle_ref.num_free_vars();
-                            index % max
+                    .map(|mle| {
+                        let index = if mle.num_free_vars() < max_num_vars {
+                            let max = 1 << mle.num_free_vars();
+                            let difference = (1 << max_num_vars) / max;
+                            index / difference
                         } else {
                             index
                         };
-                        let first = mle_ref.get(index).unwrap_or(F::ZERO);
-                        let second = if mle_ref.num_free_vars() != 0 {
-                            mle_ref
-                                .get(index + mle_num_coefficients_mid)
-                                .unwrap_or(F::ZERO)
+                        let first = mle.get(index).unwrap_or(F::ZERO);
+                        let second = if mle.num_free_vars() != 0 {
+                            mle.get(index + mle_num_coefficients_mid).unwrap_or(F::ZERO)
                         } else {
                             first
                         };
@@ -145,19 +144,20 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
             F::ZERO,
             |acc, index| {
                 // Go through each MLE within the product
-                let product = mle_refs
+                let product = mles
                     .iter()
                     // Result of this `map()`: A list of evaluations of the MLEs
                     // at `index`
-                    .map(|mle_ref| {
-                        let index = if mle_ref.num_free_vars() < max_num_vars {
-                            let max = 1 << mle_ref.num_free_vars();
-                            index % max
+                    .map(|mle| {
+                        let index = if mle.num_free_vars() < max_num_vars {
+                            let max = 1 << mle.num_free_vars();
+                            let difference = (1 << max_num_vars) / max;
+                            index / difference
                         } else {
                             index
                         };
                         // Access the MLE at that index. Pad with zeros
-                        mle_ref.get(index).unwrap_or(F::ZERO)
+                        mle.get(index).unwrap_or(F::ZERO)
                     })
                     .reduce(|acc, eval| acc * eval)
                     .unwrap();
@@ -175,15 +175,15 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
     }
 }
 
-/// checks whether mle was bound correctly to all the challenge points!!!!!!!!!!
+/// Checks whether mle was bound correctly to all the challenge points.
 pub fn check_fully_bound<F: Field>(
-    mle_refs: &mut [impl Mle<F>],
+    mles: &mut [impl Mle<F>],
     challenges: Vec<F>,
 ) -> Result<F, GateError> {
-    let mles_bound: Vec<bool> = mle_refs
+    let mles_bound: Vec<bool> = mles
         .iter()
-        .map(|mle_ref| {
-            let indices = mle_ref
+        .map(|mle| {
+            let indices = mle
                 .mle_indices()
                 .iter()
                 .filter_map(|index| match index {
@@ -202,7 +202,7 @@ pub fn check_fully_bound<F: Field>(
         return Err(GateError::EvaluateBoundIndicesDontMatch);
     }
 
-    mle_refs.iter_mut().try_fold(F::ONE, |acc, mle_ref| {
+    mles.iter_mut().try_fold(F::ONE, |acc, mle_ref| {
         // Accumulate either errors or multiply
         if mle_ref.len() != 1 {
             return Err(GateError::MleNotFullyBoundError);
@@ -281,8 +281,7 @@ pub fn compute_sumcheck_message_identity<F: Field>(
         .reduce(|acc, item| acc | item)
         .ok_or(GateError::EmptyMleList)?;
     let evals =
-        evaluate_mle_ref_product_no_beta_table(mle_refs, independent_variable, mle_refs.len())
-            .unwrap();
+        evaluate_mle_product_no_beta_table(mle_refs, independent_variable, mle_refs.len()).unwrap();
     let SumcheckEvals(evaluations) = evals;
     Ok(evaluations)
 }
@@ -422,7 +421,7 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
         })
         .reduce(|acc, item| acc | item)
         .ok_or(GateError::EmptyMleList)?;
-    let eval = evaluate_mle_ref_product_no_beta_table(mles, independent_variable, degree).unwrap();
+    let eval = evaluate_mle_product_no_beta_table(mles, independent_variable, degree).unwrap();
 
     let SumcheckEvals(evaluations) = eval;
 
@@ -435,15 +434,15 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
 pub fn prove_round_dataparallel_phase<F: Field>(
     lhs: &mut DenseMle<F>,
     rhs: &mut DenseMle<F>,
-    beta_g1: &DenseMle<F>,
-    beta_g2: &mut DenseMle<F>,
+    beta_g1: &MultilinearExtension<F>,
+    beta_g2: &mut MultilinearExtension<F>,
     round_index: usize,
     challenge: F,
     nonzero_gates: &[(usize, usize, usize)],
     num_dataparallel_bits: usize,
     operation: BinaryOperation,
 ) -> Result<Vec<F>, GateError> {
-    beta_g2.fix_variable(round_index - 1, challenge);
+    beta_g2.fix_variable(challenge);
     // Need to separately update these because the phase_lhs and phase_rhs has
     // no version of them.
     lhs.fix_variable(round_index - 1, challenge);
@@ -465,8 +464,8 @@ pub fn prove_round_dataparallel_phase<F: Field>(
 pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
     f2_p2_x: &DenseMle<F>,
     f3_p2_y: &DenseMle<F>,
-    beta_g2: &DenseMle<F>,
-    beta_g1: &DenseMle<F>,
+    beta_g2: &MultilinearExtension<F>,
+    beta_g1: &MultilinearExtension<F>,
     operation: BinaryOperation,
     nonzero_gates: &[(usize, usize, usize)],
     num_dataparallel_bits: usize,
@@ -498,7 +497,7 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
             // Do it outside the loop because it only needs to be done once per
             // product of mles.
             let first = beta_g2.get(p2_idx).unwrap();
-            let second = if beta_g2.num_free_vars() != 0 {
+            let second = if beta_g2.len() > 1 {
                 beta_g2.get(p2_idx + num_dataparallel_copies_mid).unwrap()
             } else {
                 first
@@ -516,7 +515,7 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                 .iter()
                 .copied()
                 .map(|(z, x, y)| {
-                    let g1_z = beta_g1.mle.get(z).unwrap();
+                    let g1_z = beta_g1.get(z).unwrap();
                     let g1_z_successors = std::iter::successors(Some(g1_z), move |_| Some(g1_z));
 
                     // Compute f_2((A, p_2), x) Note that the bookkeeping table

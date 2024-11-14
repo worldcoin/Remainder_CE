@@ -19,13 +19,10 @@ use remainder_shared_types::Field;
 /// ## Arguments
 /// * `challenge_coord` - Challenge point to be expanded in big-endian.
 fn initialize_tensor<F: Field>(challenge_coord: &[F]) -> Vec<F> {
-    // Accounting for the case where we in fact don't want a matrix but just
-    // a row vector or a column vector. then our challenge coordinates might
-    // be empty!
+    let mut cur_table = vec![F::ONE];
     if !challenge_coord.is_empty() {
         // Dynamic programming algorithm in Tha13 for computing these
         // equality values and returning them as a vector.
-        let mut cur_table = vec![F::ONE];
 
         // Iterate through remaining challenge coordinates in reverse,
         // starting with the least significant variable.
@@ -41,10 +38,8 @@ fn initialize_tensor<F: Field>(challenge_coord: &[F]) -> Vec<F> {
                 cur_table[i] *= one_minus_r;
             }
         }
-        cur_table
-    } else {
-        vec![]
     }
+    cur_table
 }
 
 /// Returns `b^T` and `a` vectors for MLE evaluation, such that b^T M a is the

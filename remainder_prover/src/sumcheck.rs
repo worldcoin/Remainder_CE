@@ -340,12 +340,12 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
 
     // the mle evaluation takes in the mle ref, and the corresponding unbound and bound beta values
     // to pass into the `beta_cascade` function
-    let mle_eval = |mle_ref: &DenseMle<F>,
+    let mle_eval = |mle: &DenseMle<F>,
                     unbound_beta_vals: &[F],
                     bound_beta_vals: &[F]|
      -> Result<SumcheckEvals<F>, ExpressionError> {
         Ok(beta_cascade(
-            &[&mle_ref.clone()],
+            &[&mle.clone()],
             max_degree,
             round_index,
             unbound_beta_vals,

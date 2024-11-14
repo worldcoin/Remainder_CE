@@ -1,17 +1,11 @@
 //! Module for dealing with the Beta equality function.
 
-use std::{collections::HashMap, fmt::Debug};
-
-use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, fmt::Debug};
 
-use crate::layer::LayerId;
-
-use super::{dense::DenseMle, MleIndex};
-#[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use super::{evals::MultilinearExtension, MleIndex};
 
 /// A struct that holds the claim and the relevant bound values for the beta
 /// equality MLE. Rather than storing the entire beta table, we simply store the
@@ -130,36 +124,29 @@ impl<F: Field> BetaValues<F> {
 
     /// Returns the full beta equality table as defined in \[Thaler13\], so over
     /// `n` challenge points it returns a table of size `2^n`. This is when we
-    /// do still need the entire beta table.
-    pub fn new_beta_equality_mle(layer_claim_vars: Vec<F>) -> DenseMle<F> {
+    /// do still need the entire beta table. Essentially this is an MLE whose coefficients represent
+    /// whether the index is equal to the random challenge point.
+    pub fn new_beta_equality_mle(layer_claim_vars: Vec<F>) -> MultilinearExtension<F> {
+        let mut cur_table = vec![F::ONE];
         if !layer_claim_vars.is_empty() {
-            // dynamic programming algorithm where we start from the least significant bit,
-            // which is alternating in (1 - r) or (r) as the base case
-            let (one_minus_r, r) = (
-                F::ONE - layer_claim_vars[layer_claim_vars.len() - 1],
-                layer_claim_vars[layer_claim_vars.len() - 1],
-            );
-            let mut cur_table = vec![one_minus_r, r];
+            // Dynamic programming algorithm in Tha13 for computing these
+            // equality values and returning them as a vector.
 
-            // TODO!(vishruti) make this parallelizable
-            // we iterate until we get to the least significant bit of the challenge point
-            // by multiplying by (1 - r_i) and r_i appropriately as in thaler
-            // 13.
-            for claim in layer_claim_vars.iter().rev().skip(1) {
-                let (one_minus_r, r) = (F::ONE - claim, claim);
-                let mut firsthalf: Vec<F> = cfg_into_iter!(cur_table.clone())
-                    .map(|eval| eval * one_minus_r)
-                    .collect();
-                let secondhalf: Vec<F> = cfg_into_iter!(cur_table).map(|eval| eval * r).collect();
-                firsthalf.extend(secondhalf.iter());
-                cur_table = firsthalf;
+            // Iterate through remaining challenge coordinates in reverse,
+            // starting with the least significant variable.
+            for challenge in layer_claim_vars.iter().rev() {
+                let (one_minus_r, r) = (F::ONE - challenge, *challenge);
+
+                // Double the size of `cur_table` to hold new values.
+                let len = cur_table.len();
+                cur_table.resize(len * 2, F::ZERO);
+
+                for i in 0..len {
+                    cur_table[i + len] = cur_table[i] * r;
+                    cur_table[i] *= one_minus_r;
+                }
             }
-
-            let cur_table_mle_ref: DenseMle<F> =
-                DenseMle::new_from_raw(cur_table, LayerId::Input(0));
-            cur_table_mle_ref
-        } else {
-            DenseMle::new_from_raw(vec![F::ONE], LayerId::Input(0))
         }
+        MultilinearExtension::new(cur_table)
     }
 }

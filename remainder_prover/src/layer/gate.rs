@@ -102,10 +102,10 @@ pub struct GateLayer<F: Field> {
     /// Temp for debugging
     u_challenges: Vec<F>,
     /// the beta table which enumerates the incoming claim's challenge points on the MLE
-    beta_g1: Option<DenseMle<F>>,
+    beta_g1: Option<MultilinearExtension<F>>,
     /// the beta table which enumerates the incoming claim's challenge points on the
     /// dataparallel vars of the MLE
-    beta_g2: Option<DenseMle<F>>,
+    beta_g2: Option<MultilinearExtension<F>>,
     /// the incoming claim's challenge points on the MLE
     g1: Option<Vec<F>>,
     /// the incoming claim's challenge points on the dataparallel vars of the MLE
@@ -170,16 +170,14 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
     fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
         if !LAZY_BETA_EVALUATION {
-            let mut beta_g1 = BetaValues::new_beta_equality_mle(
+            let beta_g1 = BetaValues::new_beta_equality_mle(
                 claim_point[self.num_dataparallel_vars..].to_vec(),
             );
-            beta_g1.index_mle_indices(0);
             self.set_beta_g1(beta_g1);
 
-            let mut beta_g2 = BetaValues::new_beta_equality_mle(
+            let beta_g2 = BetaValues::new_beta_equality_mle(
                 claim_point[..self.num_dataparallel_vars].to_vec(),
             );
-            beta_g2.index_mle_indices(0);
             self.set_beta_g2(beta_g2);
         } else {
             self.set_g1(claim_point[self.num_dataparallel_vars..].to_vec());
@@ -197,12 +195,10 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         // it's because fn `compute_sumcheck_messages_data_parallel_identity_gate` cannot lazy
         // evaluate beta's within it yet
         if round_index == 0 && LAZY_BETA_EVALUATION {
-            let (mut beta_g2, mut beta_g1) = (
+            let (beta_g2, beta_g1) = (
                 BetaValues::new_beta_equality_mle(self.g2.as_ref().unwrap().clone()),
                 BetaValues::new_beta_equality_mle(self.g1.as_ref().unwrap().clone()),
             );
-            beta_g2.index_mle_indices(0);
-            beta_g1.index_mle_indices(0);
             self.set_beta_g1(beta_g1);
             self.set_beta_g2(beta_g2);
         }
@@ -519,10 +515,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
     fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
         if round_index < self.num_dataparallel_vars {
-            self.beta_g2
-                .as_mut()
-                .unwrap()
-                .fix_variable(round_index, challenge);
+            self.beta_g2.as_mut().unwrap().fix_variable(challenge);
             self.lhs.fix_variable(round_index, challenge);
             self.rhs.fix_variable(round_index, challenge);
 
@@ -1281,11 +1274,11 @@ impl<F: Field> GateLayer<F> {
         }
     }
 
-    fn set_beta_g1(&mut self, beta_g1: DenseMle<F>) {
+    fn set_beta_g1(&mut self, beta_g1: MultilinearExtension<F>) {
         self.beta_g1 = Some(beta_g1);
     }
 
-    fn set_beta_g2(&mut self, beta_g2: DenseMle<F>) {
+    fn set_beta_g2(&mut self, beta_g2: MultilinearExtension<F>) {
         self.beta_g2 = Some(beta_g2);
     }
 
@@ -1312,7 +1305,10 @@ impl<F: Field> GateLayer<F> {
         self.u_challenges.push(u_challenge);
     }
 
-    fn compute_beta_tables(&mut self, challenges: &[F]) -> (DenseMle<F>, DenseMle<F>) {
+    fn compute_beta_tables(
+        &mut self,
+        challenges: &[F],
+    ) -> (MultilinearExtension<F>, MultilinearExtension<F>) {
         let mut g2_challenges = vec![];
         let mut g1_challenges = vec![];
 
@@ -1328,8 +1324,7 @@ impl<F: Field> GateLayer<F> {
             });
 
         // Create two separate beta tables for each, as they are handled differently.
-        let mut beta_g2 = BetaValues::new_beta_equality_mle(g2_challenges);
-        beta_g2.index_mle_indices(0);
+        let beta_g2 = BetaValues::new_beta_equality_mle(g2_challenges);
         let beta_g1 = BetaValues::new_beta_equality_mle(g1_challenges);
 
         (beta_g1, beta_g2)
@@ -1340,8 +1335,8 @@ impl<F: Field> GateLayer<F> {
     /// correctly bound during the first `num_dataparallel_vars` rounds of sumcheck.
     fn init_dataparallel_phase(
         &mut self,
-        beta_g1: &mut DenseMle<F>,
-        beta_g2: &mut DenseMle<F>,
+        beta_g1: &mut MultilinearExtension<F>,
+        beta_g2: &mut MultilinearExtension<F>,
     ) -> Result<Vec<F>, GateError> {
         // Index original bookkeeping tables.
         self.lhs.index_mle_indices(0);
@@ -1448,7 +1443,7 @@ impl<F: Field> GateLayer<F> {
         &mut self,
         u_claim: Vec<F>,
         f_at_u: F,
-        beta_g1: &DenseMle<F>,
+        beta_g1: &MultilinearExtension<F>,
     ) -> Result<Vec<F>, GateError> {
         // Create a beta table according to the challenges used to bind the x variables.
         let beta_u = BetaValues::new_beta_equality_mle(u_claim);
@@ -1532,8 +1527,8 @@ impl<F: Field> GateLayer<F> {
     // This means that we are binding all bits that represent which copy of the circuit we are in.
     fn perform_dataparallel_phase(
         &mut self,
-        beta_g1: &mut DenseMle<F>,
-        beta_g2: &mut DenseMle<F>,
+        beta_g1: &mut MultilinearExtension<F>,
+        beta_g2: &mut MultilinearExtension<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(SumcheckProof<F>, F), LayerError> {
         // Initialization, first message comes from here.
@@ -1576,7 +1571,7 @@ impl<F: Field> GateLayer<F> {
             transcript_writer.get_challenge("Final Sumcheck challenge DATAPARALLEL");
         // Fix the variable and everything as you would in the last round of sumcheck
         // the evaluations from this is what you return from the first round of sumcheck in the next phase!
-        beta_g2.fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
+        beta_g2.fix_variable(final_chal_copy);
         self.lhs
             .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
         self.rhs
@@ -1663,7 +1658,7 @@ impl<F: Field> GateLayer<F> {
         &mut self,
         f_at_u: F,
         phase_1_challenges: Vec<F>,
-        beta_g1: DenseMle<F>,
+        beta_g1: MultilinearExtension<F>,
         beta_g2_fully_bound: F,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<SumcheckProof<F>, LayerError> {

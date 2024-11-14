@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{
-    gate::{gate_helpers::evaluate_mle_ref_product_no_beta_table, GateError},
+    gate::{gate_helpers::evaluate_mle_product_no_beta_table, GateError},
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
     Layer, LayerDescription, LayerId, VerifierLayer,
@@ -241,8 +241,8 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                         (
-                            beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
-                            beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
+                            beta_g1.f.get(*z_ind).unwrap_or(F::ZERO),
+                            beta_u.f.get(*x_ind).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
@@ -266,8 +266,8 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
             let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                 (
-                    beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
-                    beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
+                    beta_g1.f.get(*z_ind).unwrap_or(F::ZERO),
+                    beta_u.f.get(*x_ind).unwrap_or(F::ZERO),
                 )
             } else {
                 (
@@ -399,8 +399,8 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                         (
-                            beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
-                            beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
+                            beta_g1.f.get(*z_ind).unwrap_or(F::ZERO),
+                            beta_u.f.get(*x_ind).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
@@ -424,8 +424,8 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
         let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
             let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                 (
-                    beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
-                    beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
+                    beta_g1.f.get(*z_ind).unwrap_or(F::ZERO),
+                    beta_u.f.get(*x_ind).unwrap_or(F::ZERO),
                 )
             } else {
                 (
@@ -583,7 +583,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                     .reduce(|acc, item| acc | item)
                     .unwrap();
                 let unscaled_sumcheck_evals =
-                    evaluate_mle_ref_product_no_beta_table(&mles, independent_variable, mles.len())
+                    evaluate_mle_product_no_beta_table(&mles, independent_variable, mles.len())
                         .unwrap();
 
                 let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
@@ -619,7 +619,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                     .reduce(|acc, item| acc | item)
                     .unwrap();
                 let unscaled_sumcheck_evals =
-                    evaluate_mle_ref_product_no_beta_table(&mles, independent_variable, mles.len())
+                    evaluate_mle_product_no_beta_table(&mles, independent_variable, mles.len())
                         .unwrap();
 
                 let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
@@ -702,8 +702,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                         (
-                            beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
-                            beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
+                            beta_g1.f.get(*z_ind).unwrap_or(F::ZERO),
+                            beta_u.f.get(*x_ind).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
@@ -730,8 +730,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             .fold(F::ZERO, |acc, (z_ind, x_ind)| {
                 let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                     (
-                        beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
-                        beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
+                        beta_g1.f.get(*z_ind).unwrap_or(F::ZERO),
+                        beta_u.f.get(*x_ind).unwrap_or(F::ZERO),
                     )
                 } else {
                     (
@@ -803,7 +803,7 @@ pub struct IdentityGate<F: Field> {
     /// the mle ref in question from which we are selecting specific indices
     pub source_mle: DenseMle<F>,
     /// the beta table which enumerates the incoming claim's challenge points on the MLE
-    beta_g1: Option<DenseMle<F>>,
+    beta_g1: Option<MultilinearExtension<F>>,
     /// The [BetaValues] struct which enumerates the incoming claim's challenge points on the
     /// dataparallel vars of the MLE
     beta_g2: Option<BetaValues<F>>,
@@ -844,7 +844,7 @@ impl<F: Field> IdentityGate<F> {
         }
     }
 
-    fn set_beta_g1(&mut self, beta_g1: DenseMle<F>) {
+    fn set_beta_g1(&mut self, beta_g1: MultilinearExtension<F>) {
         self.beta_g1 = Some(beta_g1);
     }
 
@@ -899,8 +899,7 @@ impl<F: Field> IdentityGate<F> {
     /// initialize necessary bookkeeping tables by traversing the nonzero gates
     pub fn init_phase_1(&mut self, challenge: Vec<F>) {
         if !LAZY_BETA_EVALUATION {
-            let mut beta_g1 = BetaValues::new_beta_equality_mle(challenge.clone());
-            beta_g1.index_mle_indices(self.num_dataparallel_vars);
+            let beta_g1 = BetaValues::new_beta_equality_mle(challenge.clone());
             self.set_beta_g1(beta_g1);
         }
 
