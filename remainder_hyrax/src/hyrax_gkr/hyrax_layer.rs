@@ -1,5 +1,3 @@
-use std::ops::Neg;
-
 use crate::{
     hyrax_primitives::{
         proof_of_claim_agg::ProofOfClaimAggregation, proof_of_product::ProofOfProduct,
@@ -61,10 +59,6 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // Convert the evaluations above into coefficients (in Hyrax, it is the coefficients, not
         // the evaluations, that are used)
         // Initial padding for the beginning 0s.
-        dbg!(&round_evaluations);
-        round_evaluations.iter().for_each(|eval| {
-            dbg!(&eval.neg());
-        });
         let mut round_coefficients = vec![C::Scalar::ZERO; (max_degree + 1) * round_number];
         // Pad the coefficients to form the $v^{(`round_index`)}$ vector, so that only the generators for this round are used
         let computed_coeffs = converter.convert_to_coefficients(round_evaluations);
@@ -164,7 +158,6 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
                     &mut blinding_rng,
                     converter,
                 );
-                dbg!(&round_commit.value);
                 messages.push(round_commit.clone());
                 transcript.append_ec_point("sumcheck message commitment", round_commit.commitment);
 

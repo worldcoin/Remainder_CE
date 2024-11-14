@@ -157,13 +157,6 @@ impl<F: Field> MatMult<F> {
             .collect_vec();
         matrix_a_mle.mle_indices = new_a_indices;
         matrix_a_mle.index_mle_indices(0);
-
-        matrix_a_mle.mle.iter().for_each(|elem| {
-            dbg!(&elem.neg());
-        });
-        matrix_b_mle.mle.iter().for_each(|elem| {
-            dbg!(&elem.neg());
-        });
     }
 
     fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
