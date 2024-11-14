@@ -390,48 +390,6 @@ fn test_flip_endianess_3() {
 }
 
 #[test]
-fn test_eval_projection_iterator_1() {
-    let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
-    let f = Evaluations::<Fr>::new(3, evals);
-
-    let mut it = f.project(0);
-
-    assert_eq!(it.next().unwrap(), (Fr::from(0), Fr::from(1)));
-    assert_eq!(it.next().unwrap(), (Fr::from(2), Fr::from(3)));
-    assert_eq!(it.next().unwrap(), (Fr::from(4), Fr::from(5)));
-    assert_eq!(it.next().unwrap(), (Fr::from(6), Fr::from(7)));
-    assert_eq!(it.next(), None);
-}
-
-#[test]
-fn test_eval_projection_iterator_2() {
-    let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
-    let f = Evaluations::<Fr>::new(3, evals);
-
-    let mut it = f.project(1);
-
-    assert_eq!(it.next().unwrap(), (Fr::from(0), Fr::from(2)));
-    assert_eq!(it.next().unwrap(), (Fr::from(1), Fr::from(3)));
-    assert_eq!(it.next().unwrap(), (Fr::from(4), Fr::from(6)));
-    assert_eq!(it.next().unwrap(), (Fr::from(5), Fr::from(7)));
-    assert_eq!(it.next(), None);
-}
-
-#[test]
-fn test_eval_projection_iterator_3() {
-    let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
-    let f = Evaluations::<Fr>::new(3, evals);
-
-    let mut it = f.project(2);
-
-    assert_eq!(it.next().unwrap(), (Fr::from(0), Fr::from(4)));
-    assert_eq!(it.next().unwrap(), (Fr::from(1), Fr::from(5)));
-    assert_eq!(it.next().unwrap(), (Fr::from(2), Fr::from(6)));
-    assert_eq!(it.next().unwrap(), (Fr::from(3), Fr::from(7)));
-    assert_eq!(it.next(), None);
-}
-
-#[test]
 fn test_eval_iterator() {
     let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
     let f = Evaluations::<Fr>::new(3, evals);

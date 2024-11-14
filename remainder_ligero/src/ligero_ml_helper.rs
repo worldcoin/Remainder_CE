@@ -6,41 +6,50 @@ use remainder_shared_types::Field;
 ///
 /// In other words, if `challenge_coord` is [r_1, r_2, r_3] then
 /// `initialize_tensor` should output the following:
-/// (r_1) * (r_2) * (r_3),
-/// (1 - r_1) * (r_2) * (r_3),
-/// (r_1) * (1 - r_2) * (r_3),
-/// (1 - r_1) * (1 - r_2) * (r_3),
-/// (r_1) * (r_2) * (1 - r_3),
-/// (1 - r_1) * (r_2) * (1 - r_3),
-/// (r_1) * (1 - r_2) * (1 - r_3),
+///
 /// (1 - r_1) * (1 - r_2) * (1 - r_3),
-/// (Note that this is in little-endian!)
+/// (1 - r_1) * (1 - r_2) * (r_3),
+/// (1 - r_1) * (r_2) * (1 - r_3),
+/// (1 - r_1) * (r_2) * (r_3),
+/// (r_1) * (1 - r_2) * (1 - r_3),
+/// (r_1) * (1 - r_2) * (r_3),
+/// (r_1) * (r_2) * (1 - r_3),
+/// (r_1) * (r_2) * (r_3),
 ///
 /// ## Arguments
-/// * `challenge_coord` - Challenge point to be expanded in little-endian
+/// * `challenge_coord` - Challenge point to be expanded in big-endian.
 fn initialize_tensor<F: Field>(challenge_coord: &[F]) -> Vec<F> {
-    // --- For each of the challenge coordinates ---
-    challenge_coord
-        .iter()
-        .rev()
-        .fold(vec![F::ONE], |current_tensor, challenge| {
-            // --- Take first coordinate and double current tensor ---
-            current_tensor
-                .clone()
-                .into_iter()
-                .map(|tensor_val| tensor_val * (F::ONE - challenge))
-                .chain(
-                    current_tensor
-                        .into_iter()
-                        .map(|tensor_val| tensor_val * challenge),
-                )
-                .collect_vec()
-        })
+    // Accounting for the case where we in fact don't want a matrix but just
+    // a row vector or a column vector. then our challenge coordinates might
+    // be empty!
+    if !challenge_coord.is_empty() {
+        // Dynamic programming algorithm in Tha13 for computing these
+        // equality values and returning them as a vector.
+        let mut cur_table = vec![F::ONE];
+
+        // Iterate through remaining challenge coordinates in reverse,
+        // starting with the least significant variable.
+        for challenge in challenge_coord.iter().rev() {
+            let (one_minus_r, r) = (F::ONE - challenge, *challenge);
+
+            // Double the size of `cur_table` to hold new values.
+            let len = cur_table.len();
+            cur_table.resize(len * 2, F::ZERO);
+
+            for i in 0..len {
+                cur_table[i + len] = cur_table[i] * r;
+                cur_table[i] *= one_minus_r;
+            }
+        }
+        cur_table
+    } else {
+        vec![]
+    }
 }
 
 /// Returns `b^T` and `a` vectors for MLE evaluation, such that b^T M a is the
 /// evaluation of the MLE over `challenge_coord`. Note that the returned vectors
-/// are in litle-endian.
+/// are in big-endian.
 ///
 /// ## Arguments
 /// * `challenge_coord` - Original challenge point to evaluate MLE at
@@ -56,10 +65,10 @@ fn initialize_tensor<F: Field>(challenge_coord: &[F]) -> Vec<F> {
 /// [a_{04}, a_{05}, a_{06}, a_{07}]
 ///
 /// b:
-/// [(1 - x_2), x_2]
+/// [(1 - x_0), x_0]
 ///
 /// a:
-/// [(1 - x_0)(1 - x_1), x_0(1 - x_1), (1 - x_0)x_1, x_0x_1]
+/// [(1 - x_1)(1 - x_2), (1 - x_1)x_2, x_1(1 - x_2), x_1x_2]
 pub fn get_ml_inner_outer_tensors<F: Field>(
     challenge_coord: &[F],
     num_rows: usize,
@@ -135,7 +144,7 @@ fn test_initialize_tensor() {
 
     let one = Fr::one();
 
-    // NOTE that this is little-endian!!!
+    // This is big-endian!!!
     let expected_tensor: Vec<Fr> = vec![
         (one - first) * (one - second) * (one - third),
         (one - first) * (one - second) * (third),
@@ -171,7 +180,7 @@ fn test_split_tensor() {
 
     let one = Fr::one();
 
-    // --- Little-endian ---
+    // --- Big-endian ---
     let expected_inner_tensor: Vec<Fr> = vec![
         (one - third) * (one - fourth) * (one - fifth),
         (one - third) * (one - fourth) * (fifth),

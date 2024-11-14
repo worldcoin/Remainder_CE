@@ -8,8 +8,6 @@ use itertools::{EitherOrBoth::*, Itertools};
 use ndarray::{Array, ArrayView, Dimension, IxDyn};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-#[cfg(feature = "parallel")]
-use rayon::prelude::ParallelSlice;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -33,9 +31,8 @@ pub enum DimensionError {
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
-/// the dimension information of the MLE.
-/// contains the dim: [IxDyn], see ndarray for more detailed documentation
-/// and the names of the axes.
+/// the dimension information of the MLE. contains the dim: [IxDyn], see ndarray
+/// for more detailed documentation and the names of the axes.
 pub struct DimInfo {
     dims: IxDyn,
     axes_names: Vec<String>,
@@ -87,38 +84,34 @@ fn mirror_bits(num_bits: usize, mut value: usize) -> usize {
 }
 
 /// Stores a boolean function `f: {0, 1}^n -> F` represented as a list of up to
-/// `2^n` evaluations of `f` on the boolean hypercube.
-/// The `n` variables are indexed from `0` to `n-1` throughout the lifetime of
-/// the object.
+/// `2^n` evaluations of `f` on the boolean hypercube. The `n` variables are
+/// indexed from `0` to `n-1` throughout the lifetime of the object.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub struct Evaluations<F: Field> {
     /// To understand how evaluations are stored, let's index `f`'s input bits
     /// as follows: `f(b_0, b_1, ..., b_{n-1})`. Evaluations are ordered using
-    /// the bit-string `b_{n-1}b_{n-2}...b_1b_0` as key, hence the bit `b_{n-1}`
-    /// will be referred to as the Most Significant Bit (MSB) and bit `b_0` as
-    /// Least Significant Bit (LSB). This ordering is sometimes referred to as
-    /// "little-endian" due to its resemblance to little-endian byte ordering.
-    /// A suffix of contiguous evaluations all equal to `F::ZERO` may be
-    /// omitted in this internal representation but this struct is not
-    /// responsible for maintaining this property at all times.
+    /// the bit-string `b_0b_1...b_{n-2}b_{n-1}` as key. This ordering is
+    /// sometimes referred to as "big-endian" due to its resemblance to
+    /// big-endian byte ordering. A suffix of contiguous evaluations all equal
+    /// to `F::ZERO` may be omitted in this internal representation but this
+    /// struct is not responsible for maintaining this property at all times.
     /// # Example
     /// * The evaluations of a 2-dimensional function are stored in the
-    ///   following order: `[ f(0, 0), f(1, 0), f(0, 1), f(1, 1) ]`.
+    ///   following order: `[ f(0, 0), f(0, 1), f(1, 0), f(1, 1) ]`.
     /// * The evaluation table `[ 1, 0, 5, 0 ]` may be stored as `[1, 0, 5]` by
     ///   omitting the trailing zero. Note that both representations are valid.
     evals: BitPackedVector<F>,
 
-    /// Number of input variables to `f`.
-    /// Invariant: `0 <= evals.len() <= 2^num_vars`.
-    /// The length can be zero due to suffix omission.
+    /// Number of input variables to `f`. Invariant: `0 <= evals.len() <=
+    /// 2^num_vars`. The length can be zero due to suffix omission.
     num_vars: usize,
 
-    /// TODO(Makis): Is there a better way to handle this??
-    /// When accessing an element of the bookkeping table, we return a reference
-    /// to a field element. In case the element is stored implicitly as a
-    /// missing entry, we need someone to own the "zero" of the field.
-    /// If I make this a const, I'm not sure how to initialize it.
+    /// TODO(Makis): Is there a better way to handle this?? When accessing an
+    /// element of the bookkeping table, we return a reference to a field
+    /// element. In case the element is stored implicitly as a missing entry, we
+    /// need someone to own the "zero" of the field. If I make this a const, I'm
+    /// not sure how to initialize it.
     zero: F,
 }
 
@@ -176,14 +169,14 @@ impl<F: Field> Evaluations<F> {
         self.num_vars
     }
 
-    /// Returns true if the boolean function has not free variables.
-    /// Equivalent to checking whether that [Self::num_vars] is equal to zero.
+    /// Returns true if the boolean function has not free variables. Equivalent
+    /// to checking whether that [Self::num_vars] is equal to zero.
     pub fn is_fully_bound(&self) -> bool {
         self.num_vars == 0
     }
 
-    /// Returns the first element of the bookkeeping table.
-    /// This operation should always be successful because even in the case that
+    /// Returns the first element of the bookkeeping table. This operation
+    /// should always be successful because even in the case that
     /// [Self::num_vars] is zero, there is a non-zero number of vertices on the
     /// boolean hypercube and hence there's at least one evaluation stored in
     /// the bookkeeping table, either explicitly as a value inside
@@ -201,33 +194,7 @@ impl<F: Field> Evaluations<F> {
         self.first()
     }
 
-    /// Returns a iterator over the projection of the hypercube on `num_vars -
-    /// 1` dimensions by pairing up evaluations on the dimension
-    /// `fixed_variable_index`. For example, if `fix_variable_index == i`, the
-    /// returned iterator returns elements of the form:
-    /// `( f(x0, x_1, ..., x_i = 0, ..., x_{n-1}), f(x0, x1, ..., x_i = 1, ...,
-    /// x_{n-1}) )`.
-    /// The pairs are returned in little-endian order. For example:
-    /// ```text
-    /// [
-    ///     ( f(0, 0, ..., 0, ..., 0), f(0, 0, ..., 1, ..., 0) ),
-    ///     ( f(1, 0, ..., 0, ..., 0), f(1, 0, ..., 1, ..., 0) ),
-    ///     ( f(0, 1, ..., 0, ..., 0), f(0, 1, ..., 1, ..., 0) ),
-    ///      ....
-    ///     ( f(1, 1, ..., 0, ..., 1), f(1, 1, ..., 1, ..., 1) ),
-    /// ]
-    /// ```
-    pub fn project(&self, fixed_variable_index: usize) -> EvaluationsPairIterator<F> {
-        let lsb_mask = (1_usize << fixed_variable_index) - 1;
-
-        EvaluationsPairIterator::<F> {
-            evals: self,
-            lsb_mask,
-            current_pair_index: 0,
-        }
-    }
-
-    /// Returns an iterator that traverses the evaluations in "little-endian"
+    /// Returns an iterator that traverses the evaluations in "big-endian"
     /// order.
     pub fn iter(&self) -> EvaluationsIterator<F> {
         EvaluationsIterator::<F> {
@@ -305,7 +272,7 @@ impl<F: Field> Evaluations<F> {
     }
 }
 
-/// An iterator over evaluations in a "little-endian" order.
+/// An iterator over evaluations in a "big-endian" order.
 pub struct EvaluationsIterator<'a, F: Field> {
     /// Reference to the original `Evaluations` struct.
     evals: &'a Evaluations<F>,
@@ -349,10 +316,9 @@ pub struct EvaluationsPairIterator<'a, F: Field> {
     /// is the dimension on which the original hypercube is projected on.
     lsb_mask: usize,
 
-    /// 0-base index of the next element to be returned.
-    /// Invariant: `current_eval_index \in [0, 2^(evals.num_vars() - 1)]`.
-    /// If equal to `2^(evals.num_vars() - 1)`, the iterator has reached the
-    /// end.
+    /// 0-base index of the next element to be returned. Invariant:
+    /// `current_eval_index \in [0, 2^(evals.num_vars() - 1)]`. If equal to
+    /// `2^(evals.num_vars() - 1)`, the iterator has reached the end.
     current_pair_index: usize,
 }
 
@@ -365,15 +331,15 @@ impl<'a, F: Field> Iterator for EvaluationsPairIterator<'a, F> {
 
         if self.current_pair_index < num_pairs {
             // Compute the two indices by inserting a `0` and a `1` respectively
-            // in the appropriate position of `current_pair_index`.
-            // For example, if this is an Iterator projecting on
-            // `fix_variable_index == 2` for an Evaluations table of `num_vars
-            // == 5`, then `lsb_mask == 0b00011` (the `fix_variable_index` LSBs
-            // are on). When, for example `current_pair_index == 0b1010`, it is
-            // split into a "right part": `lsb_idx == 0b00 0 10`, and a "shifted
-            // left part": `msb_idx == 0b10 0 00`.  The two parts are then
-            // combined with the middle bit on and off respectively: `idx1 ==
-            // 0b10 0 10`, `idx2 == 0b10 1 10`.
+            // in the appropriate position of `current_pair_index`. For example,
+            // if this is an Iterator projecting on `fix_variable_index == 2`
+            // for an Evaluations table of `num_vars == 5`, then `lsb_mask ==
+            // 0b00011` (the `fix_variable_index` LSBs are on). When, for
+            // example `current_pair_index == 0b1010`, it is split into a "right
+            // part": `lsb_idx == 0b00 0 10`, and a "shifted left part":
+            // `msb_idx == 0b10 0 00`.  The two parts are then combined with the
+            // middle bit on and off respectively: `idx1 == 0b10 0 10`, `idx2 ==
+            // 0b10 1 10`.
             let lsb_idx = self.current_pair_index & self.lsb_mask;
             let msb_idx = (self.current_pair_index & (!self.lsb_mask)) << 1;
             let mid_idx = self.lsb_mask + 1;
@@ -393,8 +359,8 @@ impl<'a, F: Field> Iterator for EvaluationsPairIterator<'a, F> {
     }
 }
 
-/// Stores a function `\tilde{f}: F^n -> F`, the unique Multilinear
-/// Extension (MLE) of a given function `f: {0, 1}^n -> F`:
+/// Stores a function `\tilde{f}: F^n -> F`, the unique Multilinear Extension
+/// (MLE) of a given function `f: {0, 1}^n -> F`:
 /// ```text
 ///     \tilde{f}(x_0, ..., x_{n-1})
 ///         = \sum_{b_0, ..., b_{n-1} \in {0, 1}^n}
@@ -407,9 +373,9 @@ impl<'a, F: Field> Iterator for EvaluationsPairIterator<'a, F> {
 ///         = \prod_{i  = 0}^{n-1} ( x_i * b_i + (1 - x_i) * (1 - b_i) )
 /// ```
 /// Internally, `f` is represented as a list of evaluations of `f` on the
-/// boolean hypercube.
-/// The `n` variables are indexed from `0` to `n-1` throughout the lifetime of
-/// the object even if `n` is modified by fixing a variable to a constant value.
+/// boolean hypercube. The `n` variables are indexed from `0` to `n-1`
+/// throughout the lifetime of the object even if `n` is modified by fixing a
+/// variable to a constant value.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub struct MultilinearExtension<F: Field> {
@@ -435,8 +401,8 @@ impl<F: Field> MultilinearExtension<F> {
         }
     }
 
-    /// Creates a new mle which is all zeroes of a specific num_vars.
-    /// In this case the size of the evals and the num_vars will not match up
+    /// Creates a new mle which is all zeroes of a specific num_vars. In this
+    /// case the size of the evals and the num_vars will not match up
     pub fn new_sized_zero(num_vars: usize) -> Self {
         Self {
             f: Evaluations {
@@ -449,7 +415,7 @@ impl<F: Field> MultilinearExtension<F> {
     }
 
     /// Returns an iterator accessing the evaluations defining this MLE in
-    /// "little-endian" order.
+    /// "big-endian" order.
     pub fn iter(&self) -> EvaluationsIterator<F> {
         self.f.iter()
     }
@@ -459,15 +425,14 @@ impl<F: Field> MultilinearExtension<F> {
         self.f.iter().collect()
     }
 
-    /// Returns true if the MLE has not free variables.
-    /// Equivalent to checking whether that [Self::num_vars] is equal to zero.
+    /// Returns true if the MLE has not free variables. Equivalent to checking
+    /// whether that [Self::num_vars] is equal to zero.
     pub fn is_fully_bound(&self) -> bool {
         self.f.is_fully_bound()
     }
 
     /// Returns the first element of the bookkeeping table of this MLE,
-    /// corresponding to the value of the MLE when all varables are set
-    /// to zero.
+    /// corresponding to the value of the MLE when all varables are set to zero.
     /// This operation never fails (see [Evaluations::first]).
     pub fn first(&self) -> F {
         self.f.first()
@@ -544,8 +509,8 @@ impl<F: Field> MultilinearExtension<F> {
         self.f.num_vars()
     }
 
-    /// Returns the `idx`-th element, if `idx` is in the range
-    /// `[0, 2^self.num_vars)`.
+    /// Returns the `idx`-th element, if `idx` is in the range `[0,
+    /// 2^self.num_vars)`.
     pub fn get(&self, idx: usize) -> Option<F> {
         if idx >= (1 << self.num_vars()) {
             // `idx` is out of range.
@@ -614,16 +579,17 @@ impl<F: Field> MultilinearExtension<F> {
 
         let new_evals: Vec<F> = cfg_into_iter!(0..num_pairs)
             .map(|idx| {
-                // Compute the two indices by inserting a `0` and a `1` respectively
-                // in the appropriate position of `current_pair_index`.
-                // For example, if this is an Iterator projecting on
-                // `fix_variable_index == 2` for an Evaluations table of `num_vars
-                // == 5`, then `lsb_mask == 0b00011` (the `fix_variable_index` LSBs
-                // are on). When, for example `current_pair_index == 0b1010`, it is
-                // split into a "right part": `lsb_idx == 0b00 0 10`, and a "shifted
-                // left part": `msb_idx == 0b10 0 00`.  The two parts are then
-                // combined with the middle bit on and off respectively: `idx1 ==
-                // 0b10 0 10`, `idx2 == 0b10 1 10`.
+                // Compute the two indices by inserting a `0` and a `1`
+                // respectively in the appropriate position of
+                // `current_pair_index`. For example, if this is an Iterator
+                // projecting on `fix_variable_index == 2` for an Evaluations
+                // table of `num_vars == 5`, then `lsb_mask == 0b11000` (the
+                // `fix_variable_index` LSBs are on). When, for example
+                // `current_pair_index == 0b1010`, it is split into a "right
+                // part": `lsb_idx == 0b00 0 10`, and a "shifted left part":
+                // `msb_idx == 0b10 0 00`.  The two parts are then combined with
+                // the middle bit on and off respectively: `idx1 == 0b10 0 10`,
+                // `idx2 == 0b10 1 10`.
                 let lsb_idx = idx & lsb_mask;
                 let msb_idx = (idx & (!lsb_mask)) << 1;
                 let mid_idx = lsb_mask + 1;
@@ -649,7 +615,8 @@ impl<F: Field> MultilinearExtension<F> {
         self.fix_variable_at_index(0, point);
     }
 
-    /// interlaces the MLEs into a single MLE, in a little endian fashion.
+    /// Stacks the MLEs into a single MLE, assuming they are stored in a "big
+    /// endian" fashion.
     pub fn stack_mles(mles: Vec<MultilinearExtension<F>>) -> MultilinearExtension<F> {
         let first_len = mles[0].len();
 

@@ -303,8 +303,8 @@ impl<F: Field> DenseMle<F> {
         }
     }
 
-    /// batch merges the MLEs into a single MLE, in a big endian fashion.
-    pub fn batch_mles(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
+    /// Merges the MLEs into a single MLE by simply concatenating them.
+    pub fn combine_mles(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
         let first_mle_num_vars = mles[0].num_free_vars();
         let all_same_num_vars = mles
             .iter()
@@ -316,34 +316,7 @@ impl<F: Field> DenseMle<F> {
         Self::new_from_iter(mle_flattened, layer_id)
     }
 
-    /// batch merges the MLEs into a single MLE, in a lil endian fashion.
-    pub fn batch_mles_lil(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
-        let first_mle_num_vars = mles[0].num_free_vars();
-        let all_same_num_vars = mles
-            .iter()
-            .all(|mle| mle.num_free_vars() == first_mle_num_vars);
-        assert!(all_same_num_vars);
-
-        let super_big_endian_vector = mles
-            .iter()
-            .flat_map(|mle| {
-                let mle_vec = mle.iter().collect::<Vec<_>>();
-                let evals = Evaluations::new_from_big_endian(mle.num_free_vars(), &mle_vec);
-                evals.iter().collect::<Vec<_>>()
-            })
-            .collect_vec();
-
-        let layer_id = mles[0].layer_id;
-
-        let evals = Evaluations::new_from_big_endian(
-            log2(super_big_endian_vector.len()) as usize,
-            &super_big_endian_vector,
-        );
-
-        Self::new_from_raw(evals.iter().collect(), layer_id)
-    }
-
-    /// creates an expression from the current Mle
+    /// Creates an expression from the current MLE.
     pub fn expression(self) -> Expression<F, ProverExpr> {
         Expression::<F, ProverExpr>::mle(self)
     }
@@ -372,60 +345,5 @@ impl<F: Field> IntoIterator for DenseMle<F> {
     fn into_iter(self) -> Self::IntoIter {
         // TEMPORARY: get_evals_vector()
         self.mle.iter().collect::<Vec<F>>().into_iter()
-    }
-}
-
-/// Takes the individual bookkeeping tables from the `MleRefs` within an MLE and
-/// merges them with padding, using a little-endian representation merge
-/// strategy.
-///
-/// # Requires / Panics
-/// *All* MleRefs should be of the same size, otherwise panics.
-pub fn get_padded_evaluations_for_list<F: Field, const L: usize>(items: &[Vec<F>; L]) -> Vec<F> {
-    // All the items within should be the same size.
-    let max_size = items.iter().map(|mle_ref| mle_ref.len()).max().unwrap();
-    assert!(items.iter().all(|mle_ref| mle_ref.len() == max_size));
-
-    let part_size = 1 << log2(max_size);
-    let part_count = 2_u32.pow(log2(L)) as usize;
-
-    // Number of "part" slots which need to filled with padding.
-    let padding_count = part_count - L;
-    let total_size = part_size * part_count;
-    let total_padding: usize = total_size - max_size * part_count;
-
-    (0..max_size)
-        .flat_map(|index| {
-            items
-                .iter()
-                .map(move |item| *item.get(index).unwrap_or(&F::ZERO))
-                .chain(repeat_n(F::ZERO, padding_count))
-        })
-        .chain(repeat_n(F::ZERO, total_padding))
-        .collect()
-}
-
-impl<F: Field> DenseMle<F> {
-    /// Splits the MLE into a new MLE with a tuple of size 2 as its element.
-    pub fn split(self) -> [DenseMle<F>; 2] {
-        let first_iter = self.mle.iter().step_by(2);
-        let second_iter = self.mle.iter().skip(1).step_by(2);
-
-        [
-            DenseMle::new_from_iter(first_iter, self.layer_id),
-            DenseMle::new_from_iter(second_iter, self.layer_id),
-        ]
-    }
-
-    /// Get the point that an MLE is fully bound to.
-    pub fn get_claim_point(&self) -> Vec<F> {
-        self.mle_indices()
-            .iter()
-            .map(|index| match index {
-                MleIndex::Bound(chal, _) => *chal,
-                MleIndex::Fixed(chal) => F::from(*chal as u64),
-                _ => panic!("MLE index not bound"),
-            })
-            .collect()
     }
 }

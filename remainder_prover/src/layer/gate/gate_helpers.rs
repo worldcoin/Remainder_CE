@@ -20,42 +20,52 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 #[derive(Error, Debug, Clone)]
 pub enum GateError {
     #[error("phase 1 not initialized")]
-    /// Error when initializing the first phase, which is when we bind the "x" bits.
+    /// Error when initializing the first phase, which is when we bind the "x"
+    /// bits.
     Phase1InitError,
     #[error("phase 2 not initialized")]
-    /// Error when initializing the second phase, which is when we bind the "y" bits.
+    /// Error when initializing the second phase, which is when we bind the "y"
+    /// bits.
     Phase2InitError,
     #[error("mle not fully bound")]
-    /// We are on the last round of sumcheck and want to grab claims, but the MLE is not fully bound
-    /// which should not be the case for the last round of sumcheck.
+    /// We are on the last round of sumcheck and want to grab claims, but the
+    /// MLE is not fully bound which should not be the case for the last round
+    /// of sumcheck.
     MleNotFullyBoundError,
     #[error("empty list for lhs or rhs")]
-    /// We are initializing a gate on something that does not have either a left or right side of the expression.
+    /// We are initializing a gate on something that does not have either a left
+    /// or right side of the expression.
     EmptyMleList,
     #[error("bound indices fail to match challenge")]
-    /// When checking the last round of sumcheck, the challenges don't match what is bound to the MLE.
+    /// When checking the last round of sumcheck, the challenges don't match
+    /// what is bound to the MLE.
     EvaluateBoundIndicesDontMatch,
     #[error("beta table associated is not indexed")]
-    /// The beta table we are working with doesn't have numbered indices but we need labeled bits!
+    /// The beta table we are working with doesn't have numbered indices but we
+    /// need labeled bits!
     #[allow(dead_code)]
     BetaTableNotIndexed,
 }
 
-/// Given (possibly half-fixed) bookkeeping tables of the MLEs which are multiplied,
-/// e.g. V_i(u_1, ..., u_{k - 1}, x, b_{k + 1}, ..., b_n) * V_{i + 1}(u_1, ..., u_{k - 1}, x, b_{k + 1}, ..., b_n)
-/// computes g_k(x) = \sum_{b_{k + 1}, ..., b_n} V_i(u_1, ..., u_{k - 1}, x, b_{k + 1}, ..., b_n) * V_{i + 1}(u_1, ..., u_{k - 1}, x, b_{k + 1}, ..., b_n)
-/// at `degree + 1` points.
+/// Given (possibly half-fixed) bookkeeping tables of the MLEs which are
+/// multiplied, e.g. V_i(u_1, ..., u_{k - 1}, x, b_{k + 1}, ..., b_n) * V_{i +
+/// 1}(u_1, ..., u_{k - 1}, x, b_{k + 1}, ..., b_n) computes g_k(x) = \sum_{b_{k
+/// + 1}, ..., b_n} V_i(u_1, ..., u_{k - 1}, x, b_{k + 1}, ..., b_n) * V_{i +
+/// 1}(u_1, ..., u_{k - 1}, x, b_{k + 1}, ..., b_n) at `degree + 1` points.
 ///
 /// ## Arguments
 /// * `mle_refs` - MLEs pointing to the actual bookkeeping tables for the above
-/// * `independent_variable` - whether the `x` from above resides within at least one of the `mle_refs`
-/// * `degree` - degree of `g_k(x)`, i.e. number of evaluations to send (minus one!)
+/// * `independent_variable` - whether the `x` from above resides within at
+///   least one of the `mle_refs`
+/// * `degree` - degree of `g_k(x)`, i.e. number of evaluations to send (minus
+///   one!)
 pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
     mle_refs: &[&impl Mle<F>],
     independent_variable: bool,
     degree: usize,
 ) -> Result<SumcheckEvals<F>, MleError> {
-    // --- Gets the total number of free variables across all MLEs within this product ---
+    // --- Gets the total number of free variables across all MLEs within this
+    // product ---
     let max_num_vars = mle_refs
         .iter()
         .map(|mle_ref| mle_ref.num_free_vars())
@@ -63,7 +73,8 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
         .ok_or(MleError::EmptyMleList)?;
 
     if independent_variable {
-        // There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
+        // There is an independent variable, and we must extract `degree`
+        // evaluations of it, over `0..degree`
         let eval_count = degree + 1;
         let mle_num_coefficients_mid = 1 << (max_num_vars - 1);
 
@@ -97,7 +108,9 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
 
                         let successors =
                             std::iter::successors(Some(second), move |item| Some(*item + step));
-                        // iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1
+                        // iterator that represents all evaluations of the MLE
+                        // extended to arbitrarily many linear extrapolations on
+                        // the line of 0/1
                         std::iter::once(first).chain(successors)
                     })
                     .map(|item| -> Box<dyn Iterator<Item = F>> { Box::new(item) })
@@ -134,7 +147,8 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
                 // Go through each MLE within the product
                 let product = mle_refs
                     .iter()
-                    // Result of this `map()`: A list of evaluations of the MLEs at `index`
+                    // Result of this `map()`: A list of evaluations of the MLEs
+                    // at `index`
                     .map(|mle_ref| {
                         let index = if mle_ref.num_free_vars() < max_num_vars {
                             let max = 1 << mle_ref.num_free_vars();
@@ -148,8 +162,8 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
                     .reduce(|acc, eval| acc * eval)
                     .unwrap();
 
-                // --- Combine them into the accumulator ---
-                // Note that the accumulator stores g(0), g(1), ..., g(d - 1)
+                // --- Combine them into the accumulator --- Note that the
+                // accumulator stores g(0), g(1), ..., g(d - 1)
                 acc + product
             },
         );
@@ -273,7 +287,8 @@ pub fn compute_sumcheck_message_identity<F: Field>(
     Ok(evaluations)
 }
 
-/// Fully evaluates a gate expression (for both the batched and non-batched case, add and mul gates).
+/// Fully evaluates a gate expression (for both the batched and non-batched
+/// case, add and mul gates).
 pub fn compute_full_gate<F: Field>(
     challenges: Vec<F>,
     lhs: &mut DenseMle<F>,
@@ -281,7 +296,8 @@ pub fn compute_full_gate<F: Field>(
     nonzero_gates: &[(usize, usize, usize)],
     copy_bits: usize,
 ) -> F {
-    // Split the challenges into which ones are for batched bits, which ones are for others.
+    // Split the challenges into which ones are for batched bits, which ones are
+    // for others.
     let mut copy_chals: Vec<F> = vec![];
     let mut z_chals: Vec<F> = vec![];
     challenges.into_iter().enumerate().for_each(|(idx, chal)| {
@@ -292,7 +308,8 @@ pub fn compute_full_gate<F: Field>(
         }
     });
 
-    // If the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is the beta table for the challenges on z.
+    // If the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is
+    // the beta table for the challenges on z.
     let beta_g = BetaValues::new_beta_equality_mle(z_chals);
 
     // Literally summing over everything else (x, y).
@@ -308,10 +325,12 @@ pub fn compute_full_gate<F: Field>(
             })
     } else {
         let num_copy_idx = 1 << copy_bits;
-        // If the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is the beta table for the challenges on p2.
+        // If the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this
+        // is the beta table for the challenges on p2.
         let beta_g2 = BetaValues::new_beta_equality_mle(copy_chals);
         {
-            // Sum over everything else, outer sum being over p2, inner sum over (x, y).
+            // Sum over everything else, outer sum being over p2, inner sum over
+            // (x, y).
             (0..(1 << num_copy_idx)).fold(F::ZERO, |acc_outer, idx| {
                 let g2 = beta_g2.get(idx).unwrap_or(F::ZERO);
                 let inner_sum =
@@ -337,7 +356,8 @@ pub fn compute_full_gate_identity<F: Field>(
     nonzero_gates: &[(usize, usize)],
     num_dataparallel_vars: usize,
 ) -> F {
-    // Split the challenges into which ones are for batched bits, which ones are for others.
+    // Split the challenges into which ones are for batched bits, which ones are
+    // for others.
     let mut copy_chals: Vec<F> = vec![];
     let mut z_chals: Vec<F> = vec![];
     challenges.into_iter().enumerate().for_each(|(idx, chal)| {
@@ -348,7 +368,8 @@ pub fn compute_full_gate_identity<F: Field>(
         }
     });
 
-    // if the gate looks like f1(z, x)(f2(p2, x)) then this is the beta table for the challenges on z
+    // if the gate looks like f1(z, x)(f2(p2, x)) then this is the beta table
+    // for the challenges on z
     let beta_g = BetaValues::new_beta_equality_mle(z_chals);
 
     if num_dataparallel_vars == 0 {
@@ -359,10 +380,12 @@ pub fn compute_full_gate_identity<F: Field>(
         })
     } else {
         let num_dataparallel_index = 1 << num_dataparallel_vars;
-        // If the gate looks like f1(z, x)f2(p2, x) then this is the beta table for the challenges on p2.
+        // If the gate looks like f1(z, x)f2(p2, x) then this is the beta table
+        // for the challenges on p2.
         let beta_g2 = BetaValues::new_beta_equality_mle(copy_chals);
         {
-            // Sum over everything else, outer sum being over p2, inner sum over x.
+            // Sum over everything else, outer sum being over p2, inner sum over
+            // x.
             (0..(1 << num_dataparallel_index)).fold(F::ZERO, |acc_outer, idx| {
                 let g2 = beta_g2.get(idx).unwrap_or(F::ZERO);
                 let inner_sum =
@@ -388,7 +411,8 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
     round_index: usize,
     degree: usize,
 ) -> Result<Vec<F>, GateError> {
-    // --- Go through all of the MLEs being multiplied together on the LHS and see if any of them contain an IV ---
+    // --- Go through all of the MLEs being multiplied together on the LHS and
+    // see if any of them contain an IV ---
     let independent_variable = mles
         .iter()
         .map(|mle_ref| {
@@ -405,7 +429,8 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
     Ok(evaluations)
 }
 
-/// Does all the necessary updates when proving a round for data parallel gate mles.
+/// Does all the necessary updates when proving a round for data parallel gate
+/// mles.
 #[allow(clippy::too_many_arguments)]
 pub fn prove_round_dataparallel_phase<F: Field>(
     lhs: &mut DenseMle<F>,
@@ -419,7 +444,8 @@ pub fn prove_round_dataparallel_phase<F: Field>(
     operation: BinaryOperation,
 ) -> Result<Vec<F>, GateError> {
     beta_g2.fix_variable(round_index - 1, challenge);
-    // Need to separately update these because the phase_lhs and phase_rhs has no version of them.
+    // Need to separately update these because the phase_lhs and phase_rhs has
+    // no version of them.
     lhs.fix_variable(round_index - 1, challenge);
     rhs.fix_variable(round_index - 1, challenge);
     compute_sumcheck_messages_data_parallel_gate(
@@ -433,9 +459,9 @@ pub fn prove_round_dataparallel_phase<F: Field>(
     )
 }
 
-/// Get the evals for a binary gate specified by the BinaryOperation. Note that this specifically
-/// refers to computing the prover message while binding the dataparallel bits of a `Gate`
-/// expression.
+/// Get the evals for a binary gate specified by the BinaryOperation. Note that
+/// this specifically refers to computing the prover message while binding the
+/// dataparallel bits of a `Gate` expression.
 pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
     f2_p2_x: &DenseMle<F>,
     f3_p2_y: &DenseMle<F>,
@@ -445,16 +471,18 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
     nonzero_gates: &[(usize, usize, usize)],
     num_dataparallel_bits: usize,
 ) -> Result<Vec<F>, GateError> {
-    // When we have an add gate, we can distribute the beta table over the dataparallel challenges
-    // so we only multiply to the function with the x variables or y variables one at a time.
-    // When we have a mul gate, we have to multiply the beta table over the dataparallel challenges
-    // with the function on the x variables and the function on the y variables.
+    // When we have an add gate, we can distribute the beta table over the
+    // dataparallel challenges so we only multiply to the function with the x
+    // variables or y variables one at a time. When we have a mul gate, we have
+    // to multiply the beta table over the dataparallel challenges with the
+    // function on the x variables and the function on the y variables.
     let degree = match operation {
         BinaryOperation::Add => 2,
         BinaryOperation::Mul => 3,
     };
 
-    // There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`.
+    // There is an independent variable, and we must extract `degree`
+    // evaluations of it, over `0..degree`.
     let eval_count = degree + 1;
 
     let num_dataparallel_copies_mid = 1 << (num_dataparallel_bits - 1);
@@ -466,8 +494,9 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
         #[cfg(not(feature = "parallel"))]
         vec![F::ZERO; eval_count],
         |mut acc, p2_idx| {
-            // Compute the beta successors the same way it's done for each mle. Do it outside the loop
-            // because it only needs to be done once per product of mles.
+            // Compute the beta successors the same way it's done for each mle.
+            // Do it outside the loop because it only needs to be done once per
+            // product of mles.
             let first = beta_g2.get(p2_idx).unwrap();
             let second = if beta_g2.num_free_vars() != 0 {
                 beta_g2.get(p2_idx + num_dataparallel_copies_mid).unwrap()
@@ -478,7 +507,8 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
 
             let beta_successors_snd =
                 std::iter::successors(Some(second), move |item| Some(*item + step));
-            // Iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1.
+            // Iterator that represents all evaluations of the MLE extended to
+            // arbitrarily many linear extrapolations on the line of 0/1.
             let beta_successors = std::iter::once(first).chain(beta_successors_snd);
             let beta_iter: Box<dyn Iterator<Item = F>> = Box::new(beta_successors);
 
@@ -489,10 +519,9 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                     let g1_z = beta_g1.mle.get(z).unwrap();
                     let g1_z_successors = std::iter::successors(Some(g1_z), move |_| Some(g1_z));
 
-                    // --- Compute f_2((A, p_2), x) ---
-                    // --- Note that the bookkeeping table is little-endian, so we shift by `x * num_dataparallel_entries` ---
-                    // [ 0 0 1 1 2 2 3 3 ]
-                    // [ 0, 2], [0, 2], [1, 3], [1, 3]
+                    // Compute f_2((A, p_2), x) Note that the bookkeeping table
+                    // is big-endian, so we shift by idx * (number of non
+                    // dataparallel vars) to index into the correct copy.
                     let f2_0_p2_x = f2_p2_x
                         .get(p2_idx * (1 << (f2_p2_x.num_free_vars() - num_dataparallel_bits)) + x)
                         .unwrap();
@@ -515,8 +544,9 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                         });
                     let all_f2_evals_p2_x = std::iter::once(f2_0_p2_x).chain(f2_evals_p2_x);
 
-                    // --- Compute f_3((A, p_2), y) ---
-                    // --- Note that the bookkeeping table is little-endian, so we shift by `y * num_dataparallel_entries` ---
+                    // Compute f_3((A, p_2), y). Note that the bookkeeping table
+                    // is big-endian, so we shift by `idx * (number of non
+                    // dataparallel vars) to index into the correct copy.`
                     let f3_0_p2_y = f3_p2_y
                         .get(
                             (p2_idx) * (1 << (f3_p2_y.num_free_vars() - num_dataparallel_bits)) + y,
@@ -541,7 +571,8 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                         });
                     let all_f3_evals_p2_y = std::iter::once(f3_0_p2_y).chain(f3_evals_p2_y);
 
-                    // --- The evals we want are simply the element-wise product of the accessed evals ---
+                    // --- The evals we want are simply the element-wise product
+                    // of the accessed evals ---
                     let g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y = g1_z_successors
                         .zip(all_f2_evals_p2_x.zip(all_f3_evals_p2_y))
                         .map(|(g1_z_eval, (f2_eval, f3_eval))| {
@@ -564,7 +595,7 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                 .unwrap();
 
             let evals = std::iter::once(inner_sum_successors)
-                // chain the beta successors
+                // Chain the beta successors.
                 .chain(std::iter::once(beta_iter))
                 .reduce(|acc, evals| Box::new(acc.zip(evals).map(|(acc, eval)| acc * eval)))
                 .unwrap();

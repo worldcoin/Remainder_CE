@@ -38,7 +38,7 @@ fn set_mle_dim() {
     let mles: Vec<DenseMle<Fr>> =
         get_dummy_random_mle_vec(NUM_VARS, NUM_DATA_PARALLEL_BITS, &mut rng);
 
-    let mle_as_vec = DenseMle::batch_mles(mles).get_padded_evaluations();
+    let mle_as_vec = DenseMle::combine_mles(mles).get_padded_evaluations();
     let ndarray_expected = Array::from_shape_vec(
         IxDyn(&[1 << NUM_VARS, 1 << NUM_DATA_PARALLEL_BITS]),
         mle_as_vec.clone(),
@@ -68,7 +68,7 @@ fn set_mle_zkdt_dim() {
 
     let mles: Vec<DenseMle<Fr>> = get_dummy_random_mle_vec(NUM_VARS, TREE_BATCH_NUM_VAR, &mut rng);
 
-    let mle_as_vec = DenseMle::batch_mles(mles).get_padded_evaluations();
+    let mle_as_vec = DenseMle::combine_mles(mles).get_padded_evaluations();
     let mle_as_vec: Vec<Fr> = repeat_n(mle_as_vec.clone(), 1 << SAMPLE_BATCH_SIZE_NUM_VAR)
         .flatten()
         .collect();
@@ -115,7 +115,7 @@ fn mle_zkdt_dim_mismatch_with_num_var() {
 
     let mles: Vec<DenseMle<Fr>> = get_dummy_random_mle_vec(NUM_VARS, TREE_BATCH_NUM_VAR, &mut rng);
 
-    let mle_as_vec = DenseMle::batch_mles(mles).get_padded_evaluations();
+    let mle_as_vec = DenseMle::combine_mles(mles).get_padded_evaluations();
     let mle_as_vec = repeat_n(mle_as_vec.clone(), SAMPLE_BATCH_SIZE_NUM_VAR)
         .flatten()
         .collect();
@@ -147,7 +147,7 @@ fn mle_dim_mismatch_with_num_var() {
     let mles: Vec<DenseMle<Fr>> =
         get_dummy_random_mle_vec(NUM_VARS, NUM_DATA_PARALLEL_BITS, &mut rng);
 
-    let mle_as_vec = DenseMle::batch_mles(mles).get_padded_evaluations();
+    let mle_as_vec = DenseMle::combine_mles(mles).get_padded_evaluations();
     let evals = Evaluations::new(NUM_VARS + NUM_DATA_PARALLEL_BITS, mle_as_vec);
 
     let dims = IxDyn(&[1 << 5, 1 << 4]);
