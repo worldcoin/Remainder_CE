@@ -12,17 +12,20 @@ use std::hash::Hash;
 /// of each of the MLEs (this is so that if an expression references the
 /// same MLE multiple times, the data stored therein is not duplicated)
 pub trait ExpressionType<F: Field>: Serialize + for<'de> Deserialize<'de> {
-    /// The type of MLE
-    /// for prover expression, it's over DenseMle
-    /// for verifier expression, it's over Vec<F>
-    /// for abstract expression, it's over [TBD]
+    /// The type of thing representing an MLE within the leaves of an
+    /// expression. Note that for most expression types, this is the
+    /// intuitive thing (e.g. for [CircuitExpr] this is an [MleDescription<F>]),
+    /// but for [ProverExpr] specifically this is an [MleVecIndex], i.e. the
+    /// index within the [MleVec] which contains the unique representation
+    /// of the prover's view of each MLE.
     type MLENodeRepr: Clone + Serialize + for<'de> Deserialize<'de> + Hash;
 
-    /// This is the optional data array of mle_refs
-    /// that can be indexed into by the MleRefIndex defind in the ProverExpr.
-    /// This is either unit type for VerifierExpr or
-    /// Vec<DenseMle> for ProverExpr.
-    /// TODO(Makis): This comment is outdated.
+    /// The idea here is that an expression may have many MLEs (or things
+    /// representing MLEs) in its description, including duplicates, but
+    /// we only wish to store one copy for each instance of a thing
+    /// representing an MLE. The [MleVec] represents that list of unique
+    /// copies.
+    /// For example, this is Vec<DenseMle> for [ProverExpr].
     type MleVec: Serialize + for<'de> Deserialize<'de>;
 }
 

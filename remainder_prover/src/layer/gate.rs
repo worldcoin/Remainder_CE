@@ -49,7 +49,7 @@ use super::{
 /// given index, will compute its value lazily using
 /// [BetaValues::compute_beta_over_challenge_and_index] instead of pre-computing
 /// and storing the entire bookkeeping table.
-pub const LAZY_BETA_EVALUATION: bool = true;
+pub const LAZY_BETA_EVALUATION: bool = false;
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug, Copy)]
 
@@ -235,23 +235,25 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 // of the sparsity of the gate function. if we have the following expression:
                 // f1(z, x, y)(f2(x) + f3(y)) then because we are only binding the "x" variables, we can simply
                 // distribute over the y variables and construct bookkeeping tables that are size 2^(num_x_variables).
-                self.nonzero_gates
-                    .iter()
-                    .for_each(|(z_ind, x_ind, y_ind)| {
-                        let beta_g_at_z = if LAZY_BETA_EVALUATION {
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                self.g1.as_ref().unwrap(),
-                                *z_ind,
-                            )
-                        } else {
-                            self.beta_g1.as_ref().unwrap().get(*z_ind).unwrap_or(F::ZERO)
-                        };
-                        let f_3_at_y = self.rhs.get(*y_ind).unwrap_or(F::ZERO);
-                        a_hg_rhs[*x_ind] += beta_g_at_z * f_3_at_y;
-                        if self.gate_operation == BinaryOperation::Add {
-                            a_hg_lhs[*x_ind] += beta_g_at_z;
-                        }
-                    });
+                self.nonzero_gates.iter().for_each(|(z_ind, x_ind, y_ind)| {
+                    let beta_g_at_z = if LAZY_BETA_EVALUATION {
+                        BetaValues::compute_beta_over_challenge_and_index(
+                            self.g1.as_ref().unwrap(),
+                            *z_ind,
+                        )
+                    } else {
+                        self.beta_g1
+                            .as_ref()
+                            .unwrap()
+                            .get(*z_ind)
+                            .unwrap_or(F::ZERO)
+                    };
+                    let f_3_at_y = self.rhs.get(*y_ind).unwrap_or(F::ZERO);
+                    a_hg_rhs[*x_ind] += beta_g_at_z * f_3_at_y;
+                    if self.gate_operation == BinaryOperation::Add {
+                        a_hg_lhs[*x_ind] += beta_g_at_z;
+                    }
+                });
 
                 let a_hg_rhs_mle_ref = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0));
 
