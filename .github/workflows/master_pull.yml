@@ -29,6 +29,14 @@ jobs:
             - uses: actions-rs/cargo@v1
               with:
                 command: test
+            - uses: actions-rs/cargo@v1
+              with:
+                command: test
+                args: --release --features parallel --package remainder-hyrax --lib -- --ignored hyrax_worldcoin::test_worldcoin
+            - uses: actions-rs/cargo@v1
+              with:
+                command: test
+                args: --release --features parallel --package remainder --lib -- --ignored worldcoin::tests
 
     fmt_and_lint:
         name: Format and Lint Remainder
