@@ -178,7 +178,8 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
             // In debug mode, catch sumcheck round errors from the prover side.
             debug_assert_eq!(
                 evaluate_at_a_point(&previous_round_message, previous_challenge).unwrap(),
-                prover_sumcheck_message[0] + prover_sumcheck_message[1]
+                prover_sumcheck_message[0] + prover_sumcheck_message[1],
+                "sumcheck failed for round {round_index}"
             );
             // Append the evaluations to the transcript.
             transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
