@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use ark_std::cfg_into_iter;
+use ark_std::{cfg_into_iter, end_timer, start_timer};
 use itertools::Itertools;
 use rand::Rng;
 use remainder::claims::claim_aggregation::get_num_wlx_evaluations;
@@ -68,10 +68,15 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                 .collect_vec(),
         )
         .unwrap();
+        let compute_vi_lx_eval_timer = start_timer!(|| "vilx evals for input");
         let wlx_evals =
             compute_claim_wlx(&prover_commitment.mle.convert_to_scalar_field(), &claims);
+        end_timer!(compute_vi_lx_eval_timer);
+        let coeffs_timer = start_timer!(|| "convert to coeffs timer");
         let interpolant_coeffs = converter.convert_to_coefficients(wlx_evals);
+        end_timer!(coeffs_timer);
 
+        let claim_agg_timer = start_timer!(|| "claim agg input");
         let (proof_of_claim_agg, aggregated_claim): (
             ProofOfClaimAggregation<C>,
             HyraxClaim<C::Scalar, CommittedScalar<C>>,
@@ -82,7 +87,9 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             blinding_rng,
             transcript,
         );
+        end_timer!(claim_agg_timer);
 
+        let eval_proof_timer = start_timer!(|| "eval proof timer");
         let evaluation_proof = HyraxPCSEvaluationProof::prove(
             input_layer_desc.log_num_cols,
             &prover_commitment.mle,
@@ -93,6 +100,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             transcript,
             &prover_commitment.blinding_factors_matrix,
         );
+        end_timer!(eval_proof_timer);
 
         let proof_of_equality = ProofOfEquality::prove(
             &aggregated_claim.evaluation,

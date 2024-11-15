@@ -11,7 +11,9 @@ use tracing::{debug, info};
 
 use crate::{
     claims::{Claim, RawClaim},
-    layer::combine_mle_refs::{combine_mle_refs_with_aggregate, get_og_mle_refs, pre_fix_mle_refs},
+    layer::combine_mles::{
+        combine_mles_with_aggregate, get_indexed_layer_mles_to_combine, pre_fix_mles,
+    },
     mle::dense::DenseMle,
     prover::{config::global_prover_claim_agg_constant_column_optimization, GKRError},
     sumcheck::evaluate_at_a_point,
@@ -38,7 +40,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 ///   evaluations and generate challenges.
 pub fn prover_aggregate_claims<F: Field>(
     claims: &[Claim<F>],
-    output_mles_from_layer: &[DenseMle<F>],
+    output_mles_from_layer: Vec<DenseMle<F>>,
     transcript_writer: &mut impl ProverTranscript<F>,
 ) -> Result<RawClaim<F>, GKRError> {
     let num_claims = claims.len();
@@ -47,7 +49,7 @@ pub fn prover_aggregate_claims<F: Field>(
 
     let claim_preproc_timer = start_timer!(|| "Claim preprocessing".to_string());
 
-    let fixed_output_mles = get_og_mle_refs(output_mles_from_layer);
+    let fixed_output_mles = get_indexed_layer_mles_to_combine(output_mles_from_layer);
 
     let claim_groups = ClaimGroup::form_claim_groups(claims.to_vec());
 
@@ -157,7 +159,7 @@ pub fn get_wlx_evaluations<F: Field>(
     let mut claim_mle_refs = claim_mle_refs;
 
     if let Some(common_idx) = common_idx {
-        pre_fix_mle_refs(&mut claim_mle_refs, &claim_vecs[0], common_idx);
+        pre_fix_mles(&mut claim_mle_refs, &claim_vecs[0], common_idx);
     }
 
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
@@ -173,7 +175,7 @@ pub fn get_wlx_evaluations<F: Field>(
                 })
                 .collect();
 
-            let wlx_eval_on_mle_ref = combine_mle_refs_with_aggregate(&claim_mle_refs, &new_chal);
+            let wlx_eval_on_mle_ref = combine_mles_with_aggregate(&claim_mle_refs, &new_chal);
             wlx_eval_on_mle_ref.unwrap()
         })
         .collect();
