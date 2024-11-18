@@ -49,7 +49,7 @@ pub struct IdentityGateLayerDescription<F: Field> {
     /// A vector of tuples representing the "nonzero" gates, especially useful
     /// in the sparse case the format is (z, x) where the gate at label z is
     /// the output of adding all values from labels x.
-    wiring: Vec<(usize, usize)>,
+    wiring: Vec<(u32, u32)>,
 
     /// The source MLE of the expression, i.e. the mle that makes up the "x"
     /// variables.
@@ -65,7 +65,7 @@ impl<F: Field> IdentityGateLayerDescription<F> {
     /// for the rerouting, and the layer_id.
     pub fn new(
         id: LayerId,
-        wiring: Vec<(usize, usize)>,
+        wiring: Vec<(u32, u32)>,
         source_mle: MleDescription<F>,
         num_dataparallel_vars: Option<usize>,
     ) -> Self {
@@ -241,18 +241,18 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                         (
-                            beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
-                            beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
+                            beta_g1.mle.f.get(*z_ind as usize).unwrap_or(F::ZERO),
+                            beta_u.mle.f.get(*x_ind as usize).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
                             BetaValues::compute_beta_over_challenge_and_index(
                                 &claim_challenges[self.num_dataparallel_vars..],
-                                *z_ind,
+                                *z_ind as usize,
                             ),
                             BetaValues::compute_beta_over_challenge_and_index(
                                 &round_challenges[self.num_dataparallel_vars..],
-                                *x_ind,
+                                *x_ind as usize,
                             ),
                         )
                     };
@@ -266,18 +266,18 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
             let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                 (
-                    beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
-                    beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
+                    beta_g1.mle.f.get(*z_ind as usize).unwrap_or(F::ZERO),
+                    beta_u.mle.f.get(*x_ind as usize).unwrap_or(F::ZERO),
                 )
             } else {
                 (
                     BetaValues::compute_beta_over_challenge_and_index(
                         &claim_challenges[self.num_dataparallel_vars..],
-                        *z_ind,
+                        *z_ind as usize,
                     ),
                     BetaValues::compute_beta_over_challenge_and_index(
                         &round_challenges[self.num_dataparallel_vars..],
-                        *x_ind,
+                        *x_ind as usize,
                     ),
                 )
             };
@@ -350,16 +350,16 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         // evaluating over all values in the boolean hypercube which includes dataparallel vars
         let num_dataparallel_vals = 1 << (self.num_dataparallel_vars);
         let res_table_num_entries =
-            ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
+            (((*max_gate_val as usize) + 1) * num_dataparallel_vals).next_power_of_two();
 
         let mut remap_table = vec![F::ZERO; res_table_num_entries];
         (0..num_dataparallel_vals).for_each(|idx| {
             self.wiring.iter().for_each(|(z, x)| {
                 let id_val = source_mle_data
                     .f
-                    .get(idx + (x * num_dataparallel_vals))
+                    .get(idx + ((*x as usize) * num_dataparallel_vals))
                     .unwrap_or(F::ZERO);
-                remap_table[idx + z * num_dataparallel_vals] = id_val;
+                remap_table[idx + (*z as usize) * num_dataparallel_vals] = id_val;
             });
         });
         let output_data = MultilinearExtension::new(remap_table);
@@ -396,18 +396,18 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                         (
-                            beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
-                            beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
+                            beta_g1.mle.f.get(*z_ind as usize).unwrap_or(F::ZERO),
+                            beta_u.mle.f.get(*x_ind as usize).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
                             BetaValues::compute_beta_over_challenge_and_index(
                                 &g1_challenges,
-                                *z_ind,
+                                *z_ind as usize,
                             ),
                             BetaValues::compute_beta_over_challenge_and_index(
                                 &self.first_u_challenges,
-                                *x_ind,
+                                *x_ind as usize,
                             ),
                         )
                     };
@@ -421,15 +421,15 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
         let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
             let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                 (
-                    beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
-                    beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
+                    beta_g1.mle.f.get(*z_ind as usize).unwrap_or(F::ZERO),
+                    beta_u.mle.f.get(*x_ind as usize).unwrap_or(F::ZERO),
                 )
             } else {
                 (
-                    BetaValues::compute_beta_over_challenge_and_index(&g1_challenges, *z_ind),
+                    BetaValues::compute_beta_over_challenge_and_index(&g1_challenges, *z_ind as usize),
                     BetaValues::compute_beta_over_challenge_and_index(
                         &self.first_u_challenges,
-                        *x_ind,
+                        *x_ind as usize,
                     ),
                 )
             };
@@ -458,7 +458,7 @@ pub struct VerifierIdentityGateLayer<F: Field> {
     /// A vector of tuples representing the "nonzero" gates, especially useful
     /// in the sparse case the format is (z, x) where the gate at label z is
     /// the output of adding all values from labels x.
-    wiring: Vec<(usize, usize)>,
+    wiring: Vec<(u32, u32)>,
 
     /// The source MLE of the expression, i.e. the mle that makes up the "x"
     /// variables.
@@ -701,18 +701,18 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                         (
-                            beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
-                            beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
+                            beta_g1.mle.f.get(*z_ind as usize).unwrap_or(F::ZERO),
+                            beta_u.mle.f.get(*x_ind as usize).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
                             BetaValues::compute_beta_over_challenge_and_index(
                                 &claim_challenges[self.num_dataparallel_vars..],
-                                *z_ind,
+                                *z_ind as usize,
                             ),
                             BetaValues::compute_beta_over_challenge_and_index(
                                 &round_challenges[self.num_dataparallel_vars..],
-                                *x_ind,
+                                *x_ind as usize,
                             ),
                         )
                     };
@@ -729,18 +729,18 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             .fold(F::ZERO, |acc, (z_ind, x_ind)| {
                 let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                     (
-                        beta_g1.mle.f.get(*z_ind).unwrap_or(F::ZERO),
-                        beta_u.mle.f.get(*x_ind).unwrap_or(F::ZERO),
+                        beta_g1.mle.f.get(*z_ind as usize).unwrap_or(F::ZERO),
+                        beta_u.mle.f.get(*x_ind as usize).unwrap_or(F::ZERO),
                     )
                 } else {
                     (
                         BetaValues::compute_beta_over_challenge_and_index(
                             &claim_challenges[self.num_dataparallel_vars..],
-                            *z_ind,
+                            *z_ind as usize,
                         ),
                         BetaValues::compute_beta_over_challenge_and_index(
                             &round_challenges[self.num_dataparallel_vars..],
-                            *x_ind,
+                            *x_ind as usize,
                         ),
                     )
                 };
@@ -798,7 +798,7 @@ pub struct IdentityGate<F: Field> {
     pub layer_id: LayerId,
     /// we only need a single incoming gate and a single outgoing gate so this is a
     /// tuple of 2 integers representing which label maps to which
-    pub nonzero_gates: Vec<(usize, usize)>,
+    pub nonzero_gates: Vec<(u32, u32)>,
     /// the mle ref in question from which we are selecting specific indices
     pub source_mle: DenseMle<F>,
     /// the beta table which enumerates the incoming claim's challenge points on the MLE
@@ -825,7 +825,7 @@ impl<F: Field> IdentityGate<F> {
     /// new addgate mle (wrapper constructor)
     pub fn new(
         layer_id: LayerId,
-        nonzero_gates: Vec<(usize, usize)>,
+        nonzero_gates: Vec<(u32, u32)>,
         mle_ref: DenseMle<F>,
         num_dataparallel_vars: Option<usize>,
     ) -> IdentityGate<F> {
@@ -876,11 +876,11 @@ impl<F: Field> IdentityGate<F> {
         (0..num_dataparallel_copies).for_each(|idx| {
             let mut adder_f2 = F::ZERO;
             self.nonzero_gates.iter().for_each(|(z, x)| {
-                let gz = beta_getter(*z);
+                let gz = beta_getter(*z as usize);
                 let f2_val = self
                     .source_mle
                     .mle
-                    .get(idx + (*x * num_dataparallel_copies))
+                    .get(idx + ((*x as usize) * num_dataparallel_copies))
                     .unwrap_or(F::ZERO);
 
                 adder_f2 += gz * f2_val;
@@ -910,12 +910,12 @@ impl<F: Field> IdentityGate<F> {
             .into_iter()
             .for_each(|(z_ind, x_ind)| {
                 let beta_g_at_z = if LAZY_BETA_EVALUATION {
-                    BetaValues::compute_beta_over_challenge_and_index(&challenge, z_ind)
+                    BetaValues::compute_beta_over_challenge_and_index(&challenge, z_ind as usize)
                 } else {
-                    self.beta_g1.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO)
+                    self.beta_g1.as_ref().unwrap().get(z_ind as usize).unwrap_or(F::ZERO)
                 };
 
-                a_hg_mle_vec[x_ind] += beta_g_at_z;
+                a_hg_mle_vec[x_ind as usize] += beta_g_at_z;
             });
 
         let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
