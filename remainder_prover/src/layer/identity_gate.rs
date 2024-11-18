@@ -426,7 +426,10 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
                 )
             } else {
                 (
-                    BetaValues::compute_beta_over_challenge_and_index(&g1_challenges, *z_ind as usize),
+                    BetaValues::compute_beta_over_challenge_and_index(
+                        &g1_challenges,
+                        *z_ind as usize,
+                    ),
                     BetaValues::compute_beta_over_challenge_and_index(
                         &self.first_u_challenges,
                         *x_ind as usize,
@@ -912,7 +915,11 @@ impl<F: Field> IdentityGate<F> {
                 let beta_g_at_z = if LAZY_BETA_EVALUATION {
                     BetaValues::compute_beta_over_challenge_and_index(&challenge, z_ind as usize)
                 } else {
-                    self.beta_g1.as_ref().unwrap().get(z_ind as usize).unwrap_or(F::ZERO)
+                    self.beta_g1
+                        .as_ref()
+                        .unwrap()
+                        .get(z_ind as usize)
+                        .unwrap_or(F::ZERO)
                 };
 
                 a_hg_mle_vec[x_ind as usize] += beta_g_at_z;
