@@ -14,7 +14,7 @@ use crate::utils::vandermonde::VandermondeInverse;
 
 use super::{hyrax_input_layer::HyraxInputLayerDescriptionWithPrecommit, HyraxProof};
 
-/// Helper function for testing an iriscode circuit (of any version, with any
+/// Helper function for testing an iriscode circuit (with any
 /// data) with a Hyrax input layer.
 pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
     circuit_desc: GKRCircuitDescription<C::Scalar>,
