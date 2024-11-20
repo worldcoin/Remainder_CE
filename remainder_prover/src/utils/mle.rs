@@ -5,11 +5,12 @@ use std::iter::repeat_with;
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
+use rayon::prelude::*;
 use remainder_shared_types::Field;
 
 use crate::{
     layer::LayerId,
-    mle::{dense::DenseMle, evals::MultilinearExtension, MleIndex},
+    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, MleIndex},
 };
 
 /// Return a vector containing a padded version of the input data, with the padding value at the end
@@ -182,4 +183,603 @@ pub fn build_composite_mle<F: Field>(
         });
     }
     MultilinearExtension::new(out)
+}
+
+/// A struct representing an iterator that iterates through
+/// the range (1..2^{`num_bits`}) but in the ordering of a
+/// Gray Code, which means that the Hamming distance between
+/// the bit representation of any consecutive indices is only 1.
+///
+/// The iterator is of the type (u32, (u32, bool))
+/// which represents:
+/// (index, (index of the bit that was flipped, the previous value of the flipped bit.))
+
+#[derive(Debug)]
+pub struct GrayCodeIterator {
+    num_bits: usize,
+    current_iteration: u32,
+    end_iteration: Option<u32>,
+}
+
+impl GrayCodeIterator {
+    /// Note: `num_bits` cannot be more than 31 because
+    /// we work with u32s in this iterator.
+    fn new(num_bits: usize) -> Self {
+        assert!(num_bits < 32);
+        Self {
+            num_bits,
+            current_iteration: 0,
+            end_iteration: None,
+        }
+    }
+
+    pub(crate) fn new_at_index(
+        num_bits: usize,
+        current_iteration: u32,
+        end_iteration: Option<u32>,
+    ) -> Self {
+        Self {
+            num_bits,
+            current_iteration,
+            end_iteration,
+        }
+    }
+
+    pub(crate) fn get_gray_index(num_bits: usize, index: u32) -> u32 {
+        let mask = (1 << num_bits) - 1;
+
+        (index ^ (index >> 1)) & mask
+    }
+}
+
+impl Iterator for GrayCodeIterator {
+    type Item = (u32, (u32, bool));
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_iteration >= ((1 << self.num_bits) - 1) {
+            return None;
+        }
+
+        if self.end_iteration.is_some()
+            && self.current_iteration >= (self.end_iteration.unwrap() - 1)
+        {
+            return None;
+        }
+
+        // Mask current value to ensure we only get num_bits
+        // number of bits per result.
+        let mask = (1 << self.num_bits) - 1;
+
+        // Because we don't store the previous value, just calculate it
+        // using the current_val that's stored.
+        let prev_gray = (self.current_iteration ^ (self.current_iteration >> 1)) & mask;
+        // The next value is simply XOR of the counter incremented by 1 and itself
+        // right-shifted.
+        // (source: algorithm in Wikipedia and ChatGPT hehe)
+        self.current_iteration += 1;
+        let new_gray = (self.current_iteration ^ (self.current_iteration >> 1)) & mask;
+
+        // Compute which bit was flipped.
+        let flipped_bit = (prev_gray ^ new_gray).trailing_zeros();
+        let previous_value = (prev_gray & (1 << flipped_bit)) != 0;
+
+        // The new gray code index is already in little endian, so for our
+        // current purposes, this is okay. For big endian, we need to reverse
+        // the bits.
+        Some((new_gray, (flipped_bit, previous_value)))
+    }
+}
+
+/// A struct representing lexicographic bit-order in little endian.
+///
+/// The iterator returns elements of the form (u32, Vec<(u32, bool)>) where the
+/// first u32 is the current index, and the Vec<(u32, bool)> represents the
+/// bits that flipped and what they used to be. As opposed to [GrayCode],
+/// these don't have Hamming distance 1, so the flipped bits go in a Vec.
+pub struct LexicographicLE {
+    num_bits: usize,
+    current_val: u32,
+}
+
+impl LexicographicLE {
+    fn new(num_bits: usize) -> Self {
+        Self {
+            num_bits,
+            current_val: 0,
+        }
+    }
+}
+
+impl Iterator for LexicographicLE {
+    type Item = (u32, Vec<(u32, bool)>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_val >= ((1 << self.num_bits) - 1) {
+            return None;
+        }
+
+        let prev_val = self.current_val;
+        self.current_val += 1;
+        let flipped_bits = prev_val ^ self.current_val;
+
+        let mut flipped_bit_idx_and_values = Vec::<(u32, bool)>::new();
+
+        (0..32).for_each(|idx| {
+            if (flipped_bits & (1 << idx)) != 0 {
+                flipped_bit_idx_and_values.push((idx, (prev_val & (1 << idx)) != 0))
+            }
+        });
+
+        Some((self.current_val, flipped_bit_idx_and_values))
+    }
+}
+
+/// This function non-destructively evaluates an MLE at a given point using the
+/// [LexicographicLE] iterator.
+pub fn evaluate_mle_at_a_point_lexicographic_order<F: Field>(
+    mle: &MultilinearExtension<F>,
+    point: &[F],
+) -> F {
+    let mle_num_vars = mle.num_vars();
+    assert_eq!(point.len(), mle_num_vars);
+
+    let starting_beta_value =
+        BetaValues::compute_beta_over_two_challenges(&vec![F::ZERO; mle_num_vars], point);
+
+    let starting_evaluation_acc = starting_beta_value * mle.first();
+    let lexicographic_le = LexicographicLE::new(mle_num_vars);
+    let inverses = point
+        .iter()
+        .map(|elem| elem.invert().unwrap())
+        .collect_vec();
+    let one_minus_inverses = point
+        .iter()
+        .map(|elem| (F::ONE - elem).invert().unwrap())
+        .collect_vec();
+
+    let (_final_beta_value, evaluation) = lexicographic_le.fold(
+        (starting_beta_value, starting_evaluation_acc),
+        |(prev_beta_value, evaluation_acc), (index, flipped_bit_indices_and_values)| {
+            let next_beta_value = flipped_bit_indices_and_values.iter().fold(
+                prev_beta_value,
+                |acc, (flipped_bit_index, flipped_bit_value)| {
+                    // For every bit i that is flipped, if it used to be a 1,
+                    // then we multiply by r_i^{-1} and multiply by
+                    // (1 - r_i) to account for this bit flip.
+                    if *flipped_bit_value {
+                        acc * inverses[*flipped_bit_index as usize]
+                            * (F::ONE - point[*flipped_bit_index as usize])
+                    }
+                    // For every bit i that is flipped, if it used to be a 0,
+                    // then we multiply by (1 - r_i)^{-1} and multiply by
+                    // r_i to account for this bit flip.
+                    else {
+                        acc * (one_minus_inverses[*flipped_bit_index as usize])
+                            * point[*flipped_bit_index as usize]
+                    }
+                },
+            );
+
+            // Multiply this by the appropriate MLE coefficient.
+            let next_evaluation_acc = next_beta_value * mle.get(index as usize).unwrap();
+            (next_beta_value, evaluation_acc + next_evaluation_acc)
+        },
+    );
+    evaluation
+}
+
+/// This function non-destructively evaluates an MLE at a given point using the
+/// gray codes iterator. Optimized version that uses 2 multiplications instead of 1.
+///
+/// Currently does not support for when the value in the point is either 0 or 1.
+pub fn evaluate_mle_at_a_point_gray_codes<F: Field>(
+    mle: &MultilinearExtension<F>,
+    point: &[F],
+) -> F {
+    let mle_num_vars = mle.num_vars();
+    assert_eq!(point.len(), mle_num_vars);
+    // The gray codes start at index 1, so we start with the first value which
+    // is \widetilde{\beta}(\vec{0}, point).
+    let starting_beta_value =
+        BetaValues::compute_beta_over_two_challenges(&vec![F::ZERO; mle_num_vars], point);
+    // This is the value that gets multiplied to the first MLE coefficient,
+    // which is (1 - r_1) * (1 - r_2) * ... * (1 - r_n) where (r_1, ..., r_n) is the point.
+    let starting_evaluation_acc = starting_beta_value * mle.first();
+    let gray_code = GrayCodeIterator::new(mle_num_vars);
+    let inverses = point
+        .iter()
+        .map(|elem| elem.invert().unwrap())
+        .collect_vec();
+    let one_minus_inverses = point
+        .iter()
+        .map(|elem| (F::ONE - elem).invert().unwrap())
+        .collect_vec();
+
+    // We simply compute the correct inverse and new multiplicative term
+    // for each bit that is flipped in the beta value, and accumulate these
+    // by doing an element-wise multiplication with the correct index
+    // of the MLE coefficients.
+    // We precompute these so that during the scanning we only need to do
+    // one multiplication instead of two
+    let multiplier_if_flipped_bit_is_one = inverses
+        .iter()
+        .zip(point.iter())
+        .map(|(inverse, point_elem)| *inverse * (F::ONE - point_elem))
+        .collect_vec();
+    let multiplier_if_flipped_bit_is_zero = one_minus_inverses
+        .iter()
+        .zip(point.iter())
+        .map(|(one_minus_inverse, point_elem)| *one_minus_inverse * point_elem)
+        .collect_vec();
+
+    let (_final_beta_value, evaluation) = gray_code.fold(
+        (starting_beta_value, starting_evaluation_acc),
+        |(prev_beta_value, evaluation_acc), (index, (flipped_bit_index, flipped_bit_value))| {
+            // For every bit i that is flipped, if it used to be a 1,
+            // then we multiply by r_i^{-1} and multiply by
+            // (1 - r_i) to account for this bit flip.
+            let next_beta_value = if flipped_bit_value {
+                prev_beta_value * multiplier_if_flipped_bit_is_one[flipped_bit_index as usize]
+            }
+            // For every bit i that is flipped, if it used to be a 0,
+            // then we multiply by (1 - r_i)^{-1} and multiply by
+            // r_i to account for this bit flip.
+            else {
+                prev_beta_value * multiplier_if_flipped_bit_is_zero[flipped_bit_index as usize]
+            };
+            // Multiply this by the appropriate MLE coefficient.
+            let next_evaluation_acc = next_beta_value * mle.get(index as usize).unwrap();
+            (next_beta_value, evaluation_acc + next_evaluation_acc)
+        },
+    );
+    evaluation
+}
+
+/// This function non-destructively evaluates an MLE at a given point using the
+/// gray codes iterator. Parallelized version that uses K threads.
+pub fn evaluate_mle_at_a_point_gray_codes_parallel<F: Field, const K: usize>(
+    mle: &MultilinearExtension<F>,
+    point: &[F],
+) -> F {
+    let mle_num_vars = mle.num_vars();
+    assert_eq!(point.len(), mle_num_vars);
+    assert!(
+        (1 << mle_num_vars) >= K,
+        "cannot have more partitions than the length of MLE"
+    );
+
+    let starting_indices = (0..K)
+        .map(|partition| partition * ((1 << mle_num_vars) / K))
+        .collect_vec();
+    let starting_gray_code_indices = starting_indices
+        .iter()
+        .map(|idx| GrayCodeIterator::get_gray_index(mle_num_vars, *idx as u32))
+        .collect_vec();
+    let starting_beta_values = starting_gray_code_indices
+        .iter()
+        .map(|gray_code| {
+            BetaValues::compute_beta_over_challenge_and_index(point, *gray_code as usize)
+        })
+        .collect_vec();
+
+    // This is the value that gets multiplied to the first MLE coefficient,
+    // which is (1 - r_1) * (1 - r_2) * ... * (1 - r_n) where (r_1, ..., r_n) is the point.
+    let starting_evaluation_accs = starting_beta_values
+        .iter()
+        .zip(starting_gray_code_indices.iter())
+        .map(|(beta_value, gray_code)| *beta_value * mle.get(*gray_code as usize).unwrap())
+        .collect_vec();
+
+    let gray_codes = starting_indices
+        .iter()
+        .enumerate()
+        .map(|(partition, &starting_index)| {
+            let end_iteration = if partition == K - 1 {
+                None
+            } else {
+                Some(starting_indices[partition + 1] as u32)
+            };
+            GrayCodeIterator::new_at_index(mle_num_vars, starting_index as u32, end_iteration)
+        })
+        .collect_vec();
+
+    let inverses = point
+        .iter()
+        .map(|elem| elem.invert().unwrap())
+        .collect_vec();
+
+    let one_minus_inverses = point
+        .iter()
+        .map(|elem| (F::ONE - elem).invert().unwrap())
+        .collect_vec();
+
+    // We simply compute the correct inverse and new multiplicative term
+    // for each bit that is flipped in the beta value, and accumulate these
+    // by doing an element-wise multiplication with the correct index
+    // of the MLE coefficients.
+    // We precompute these so that during the scanning we only need to do
+    // one multiplication instead of two
+    let multiplier_if_flipped_bit_is_one = inverses
+        .iter()
+        .zip(point.iter())
+        .map(|(inverse, point_elem)| *inverse * (F::ONE - point_elem))
+        .collect_vec();
+
+    let multiplier_if_flipped_bit_is_zero = one_minus_inverses
+        .iter()
+        .zip(point.iter())
+        .map(|(one_minus_inverse, point_elem)| *one_minus_inverse * point_elem)
+        .collect_vec();
+
+    (0..K)
+        .into_par_iter()
+        .zip(gray_codes.into_par_iter())
+        .map(|(partition, gray_code)| {
+            let starting_beta_value = starting_beta_values[partition];
+            let starting_evaluation_acc = starting_evaluation_accs[partition];
+            let (_final_beta_value, evaluation) = gray_code.fold(
+                (starting_beta_value, starting_evaluation_acc),
+                |(prev_beta_value, evaluation_acc),
+                 (index, (flipped_bit_index, flipped_bit_value))| {
+                    // For every bit i that is flipped, if it used to be a 1,
+                    // then we multiply by r_i^{-1} and multiply by
+                    // (1 - r_i) to account for this bit flip.
+                    let next_beta_value = if flipped_bit_value {
+                        prev_beta_value
+                            * multiplier_if_flipped_bit_is_one[flipped_bit_index as usize]
+                    }
+                    // For every bit i that is flipped, if it used to be a 0,
+                    // then we multiply by (1 - r_i)^{-1} and multiply by
+                    // r_i to account for this bit flip.
+                    else {
+                        prev_beta_value
+                            * multiplier_if_flipped_bit_is_zero[flipped_bit_index as usize]
+                    };
+                    // Multiply this by the appropriate MLE coefficient.
+                    let next_evaluation_acc = next_beta_value * mle.get(index as usize).unwrap();
+                    (next_beta_value, evaluation_acc + next_evaluation_acc)
+                },
+            );
+            evaluation
+        })
+        .reduce(|| F::ZERO, |a, b| a + b)
+}
+
+/// Destructively evaluate an MLE at a point by using the `fix_variable` algorithm
+/// iteratively until all of the variables have been bound.
+pub fn evaluate_mle_destructive<F: Field>(mle: &mut MultilinearExtension<F>, point: &[F]) -> F {
+    point.iter().for_each(|challenge| {
+        mle.fix_variable(*challenge);
+    });
+    assert_eq!(mle.len(), 1);
+    mle.first()
+}
+
+#[cfg(test)]
+mod tests {
+    use ark_std::test_rng;
+    use itertools::Itertools;
+    use remainder_shared_types::{ff_field, Fr};
+
+    use crate::{
+        mle::evals::MultilinearExtension,
+        utils::mle::{
+            evaluate_mle_at_a_point_gray_codes_parallel,
+            evaluate_mle_at_a_point_lexicographic_order, evaluate_mle_destructive,
+            GrayCodeIterator,
+        },
+    };
+
+    use super::evaluate_mle_at_a_point_gray_codes;
+
+    #[test]
+    fn test_gray_code_0_vars() {
+        let mut gray_code_iterator = GrayCodeIterator::new(0);
+
+        assert_eq!(gray_code_iterator.next(), None);
+    }
+
+    #[test]
+    fn test_gray_code_iterator_len() {
+        for n in 1..16 {
+            assert_eq!(GrayCodeIterator::new(n).count(), (1 << n) - 1);
+        }
+    }
+
+    // Note that this is the only test we have here that verifies that we're
+    // actually using Gray Codes and not any of the other codes that could
+    // satisfy the properties listed on the `test_gray_code_property` test.
+    #[test]
+    fn test_gray_code_3_vars() {
+        let mut gray_code_iterator = GrayCodeIterator::new(3);
+
+        assert_eq!(gray_code_iterator.next(), Some((1, (0, false))));
+        assert_eq!(gray_code_iterator.next(), Some((3, (1, false))));
+        assert_eq!(gray_code_iterator.next(), Some((2, (0, true))));
+        assert_eq!(gray_code_iterator.next(), Some((6, (2, false))));
+        assert_eq!(gray_code_iterator.next(), Some((7, (0, false))));
+        assert_eq!(gray_code_iterator.next(), Some((5, (1, true))));
+        assert_eq!(gray_code_iterator.next(), Some((4, (0, true))));
+        assert_eq!(gray_code_iterator.next(), None);
+    }
+
+    // Property testing of `GrayCode` for values of `num_bits` of up to 15 (for
+    // efficient testing).
+    // This test ensures that:
+    //   1. The Hamming distance between consecutive codes is exactly 1.
+    //   2. The index of the flipped bit correct.
+    //   3. Each of the `2^num_codes` appear exactly once.
+    //
+    // Note that there are multiple codes that satisfy the above properties.
+    // Any code with those properties can be used for computing MLEs in linear
+    // time.
+    #[test]
+    fn test_gray_code_property() {
+        for n in 1..16 {
+            let gray_code_iterator = GrayCodeIterator::new(n);
+
+            let mut seen: Vec<bool> = vec![false; 1 << n];
+
+            // Assume we're starting from 0.
+            seen[0] = true;
+
+            gray_code_iterator.fold(0, |prev, (cur, (idx, val))| {
+                // Ensure `cur` has NOT been seen before.
+                assert!(!seen[cur as usize]);
+                seen[cur as usize] = true;
+
+                let mask: u32 = 1 << idx;
+
+                // This ensures that:
+                //   1. The Hamming Distance between `prev` and `cur` is exactly 1,
+                //      because `mask` contains exactly one bit set to 1, and,
+                //   2. The flipped bit is indeed in the `idx`-th position.
+                assert_eq!(prev ^ cur, mask);
+
+                // Ensures `val` is the previous value of the flipped bit.
+                assert_eq!((prev & mask) >> idx, val as u32);
+
+                cur
+            });
+
+            // Ensure all codes have been encountered during the iteration.
+            assert!(seen.iter().all(|x| *x))
+        }
+    }
+
+    /// there cannot be more threads than the length of the MLE
+    #[test]
+    #[should_panic]
+    fn test_evaluate_mle_at_a_point_1_variable_gray_codes_parallel_more_threads_than_mle_length() {
+        const K: usize = 3;
+        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2)]);
+        let point = &[Fr::from(2)];
+        let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
+        let expected_evaluation = evaluate_mle_at_a_point_gray_codes_parallel::<
+            remainder_shared_types::Fr,
+            K,
+        >(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_1_variable_gray_codes_parallel_1_thread() {
+        const K: usize = 1;
+        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2)]);
+        let point = &[Fr::from(2)];
+        let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
+        let expected_evaluation = evaluate_mle_at_a_point_gray_codes_parallel::<
+            remainder_shared_types::Fr,
+            K,
+        >(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_1_variable_gray_codes_parallel_2_threads() {
+        const K: usize = 2;
+        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2)]);
+        let point = &[Fr::from(2)];
+        let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
+        let expected_evaluation = evaluate_mle_at_a_point_gray_codes_parallel::<
+            remainder_shared_types::Fr,
+            K,
+        >(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_1_variable_gray_codes() {
+        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2)]);
+        let point = &[Fr::from(2)];
+        let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
+        let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_2_variable_gray_codes() {
+        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2), Fr::ONE, Fr::from(2)]);
+        let point = &[Fr::from(2), Fr::from(3)];
+        let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
+        let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_3_variable_gray_codes_random_parallel() {
+        const K: usize = 5;
+        let mut rng = test_rng();
+        let mut mle = MultilinearExtension::new((0..8).map(|_| Fr::random(&mut rng)).collect());
+        let point = &(0..3).map(|_| Fr::random(&mut rng)).collect_vec();
+        let computed_evaluation = evaluate_mle_at_a_point_gray_codes_parallel::<
+            remainder_shared_types::Fr,
+            K,
+        >(&mle, point);
+        let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_3_variable_gray_codes_random() {
+        let mut rng = test_rng();
+        let mut mle = MultilinearExtension::new((0..8).map(|_| Fr::random(&mut rng)).collect());
+        let point = &(0..3).map(|_| Fr::random(&mut rng)).collect_vec();
+        let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
+        let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_1_variable_lexicographic() {
+        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2)]);
+        let point = &[Fr::from(2)];
+        let computed_evaluation = evaluate_mle_at_a_point_lexicographic_order(&mle, point);
+        let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_2_variable_lexicographic() {
+        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2), Fr::ONE, Fr::from(2)]);
+        let point = &[Fr::from(2), Fr::from(3)];
+        let computed_evaluation = evaluate_mle_at_a_point_lexicographic_order(&mle, point);
+        let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    #[test]
+    fn test_evaluate_mle_at_a_point_3_variable_lexicographic_random() {
+        let mut rng = test_rng();
+        let mut mle = MultilinearExtension::new((0..8).map(|_| Fr::random(&mut rng)).collect());
+        let point = &(0..3).map(|_| Fr::random(&mut rng)).collect_vec();
+        let computed_evaluation = evaluate_mle_at_a_point_lexicographic_order(&mle, point);
+        let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
+        assert_eq!(computed_evaluation, expected_evaluation);
+    }
+
+    /// Ensure that all three methods of computing MLEs at a point produce the
+    /// same result for random MLEs and points of sizes up to 15 bits.
+    #[test]
+    fn test_evaluation_equivalence() {
+        for n in 1..16 {
+            let num_vars = n;
+            let num_evals = 1 << num_vars;
+
+            let mut rng = test_rng();
+            let mut mle =
+                MultilinearExtension::new((0..num_evals).map(|_| Fr::random(&mut rng)).collect());
+            let point = (0..num_vars).map(|_| Fr::random(&mut rng)).collect_vec();
+
+            let gray_code_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, &point);
+            let lexicographic_evaluation =
+                evaluate_mle_at_a_point_lexicographic_order(&mle, &point);
+            let destructive_evaluation = evaluate_mle_destructive(&mut mle, &point);
+
+            assert!(
+                gray_code_evaluation == lexicographic_evaluation
+                    && lexicographic_evaluation == destructive_evaluation
+            );
+        }
+    }
 }
