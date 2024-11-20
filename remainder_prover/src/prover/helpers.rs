@@ -1,7 +1,7 @@
 use crate::input_layer::ligero_input_layer::LigeroInputLayerDescriptionWithPrecommit;
 
 use crate::layer::LayerId;
-use crate::layouter::compiling::CircuitHashType;
+use crate::layouter::circuit_hash::CircuitHashType;
 use crate::mle::evals::MultilinearExtension;
 use crate::prover::verify;
 use ark_std::{end_timer, start_timer};

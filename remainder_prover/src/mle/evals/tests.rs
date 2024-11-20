@@ -10,7 +10,7 @@ use super::*;
 /// See
 /// [https://stackoverflow.com/questions/25413201/how-do-i-implement-a-trait-i-dont-own-for-a-type-i-dont-own].
 #[derive(Debug, Clone, PartialEq)]
-struct Qfr(Fr);
+pub struct Qfr(Fr);
 
 impl Arbitrary for Qfr {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {
@@ -247,6 +247,56 @@ fn evals_new_from_big_endian_2_vars() {
     let f = Evaluations::new_from_big_endian(2, &evals);
 
     assert_eq!(f.evals, expected_evals);
+}
+
+#[test]
+fn evals_first() {
+    let f = Evaluations::new(2, vec![Fr::from(42), Fr::ZERO, Fr::ZERO, Fr::ZERO]);
+    assert_eq!(f.first(), Fr::from(42));
+
+    let f = Evaluations::<Fr>::new(2, vec![]);
+    assert_eq!(f.first(), Fr::ZERO);
+
+    let f = Evaluations::new(0, vec![Fr::from(42)]);
+    assert_eq!(f.first(), Fr::from(42));
+}
+
+#[test]
+fn evals_value_successful() {
+    let f = Evaluations::new(0, vec![Fr::from(42)]);
+    assert_eq!(f.value(), Fr::from(42));
+
+    let f = Evaluations::<Fr>::new(0, vec![]);
+    assert_eq!(f.value(), Fr::ZERO);
+}
+
+#[test]
+#[should_panic]
+fn evals_value_failing_1() {
+    let f = Evaluations::new(2, vec![Fr::from(42), Fr::ZERO, Fr::ZERO, Fr::ZERO]);
+    let _val = f.value();
+}
+
+#[test]
+#[should_panic]
+fn evals_value_failing_2() {
+    let f = Evaluations::<Fr>::new(2, vec![]);
+    let _val = f.value();
+}
+
+#[test]
+fn evals_fully_bound() {
+    let f = Evaluations::new(2, vec![Fr::from(42), Fr::ZERO, Fr::ZERO, Fr::ZERO]);
+    assert!(!f.is_fully_bound());
+
+    let f = Evaluations::<Fr>::new(2, vec![]);
+    assert!(!f.is_fully_bound());
+
+    let f = Evaluations::new(0, vec![Fr::from(42)]);
+    assert!(f.is_fully_bound());
+
+    let f = Evaluations::<Fr>::new(0, vec![]);
+    assert!(f.is_fully_bound());
 }
 
 #[test]

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use ark_std::cfg_into_iter;
+use ark_std::{cfg_into_iter, end_timer, start_timer};
 use itertools::Itertools;
 use rand::Rng;
 use remainder::claims::claim_aggregation::{
@@ -69,10 +69,15 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                 .collect_vec(),
         )
         .unwrap();
+        let compute_vi_lx_eval_timer = start_timer!(|| "vilx evals for input");
         let wlx_evals =
             compute_claim_wlx(&prover_commitment.mle.convert_to_scalar_field(), &claims);
+        end_timer!(compute_vi_lx_eval_timer);
+        let coeffs_timer = start_timer!(|| "convert to coeffs timer");
         let interpolant_coeffs = converter.convert_to_coefficients(wlx_evals);
+        end_timer!(coeffs_timer);
 
+        let claim_agg_timer = start_timer!(|| "claim agg input");
         let (proof_of_claim_agg, aggregated_claim): (
             ProofOfClaimAggregation<C>,
             HyraxClaim<C::Scalar, CommittedScalar<C>>,
@@ -83,7 +88,9 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             blinding_rng,
             transcript,
         );
+        end_timer!(claim_agg_timer);
 
+        let eval_proof_timer = start_timer!(|| "eval proof timer");
         let evaluation_proof = HyraxPCSEvaluationProof::prove(
             input_layer_desc.log_num_cols,
             &prover_commitment.mle,
@@ -94,6 +101,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             transcript,
             &prover_commitment.blinding_factors_matrix,
         );
+        end_timer!(eval_proof_timer);
 
         let proof_of_equality = ProofOfEquality::prove(
             &aggregated_claim.evaluation,
@@ -248,14 +256,11 @@ fn compute_claim_wlx<F: Field>(mle_vec: &[F], claims: &ClaimGroup<F>) -> Vec<F> 
 
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
     let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
-        // let next_evals: Vec<F> = (num_claims..num_evals).into_iter()
         .map(|idx| {
             // get the challenge l(idx)
             let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                // let new_chal: Vec<F> = (0..num_idx).into_iter()
                 .map(|claim_idx| {
                     let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-                        // let evals: Vec<F> = (&claim_vecs).into_iter()
                         .map(|claim| claim[claim_idx])
                         .collect();
                     evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
@@ -267,8 +272,7 @@ fn compute_claim_wlx<F: Field>(mle_vec: &[F], claims: &ClaimGroup<F>) -> Vec<F> 
                 new_chal
                     .into_iter()
                     .for_each(|chal| fix_mle.fix_variable(chal));
-                assert_eq!(fix_mle.f.len(), 1);
-                fix_mle.first()
+                fix_mle.value()
             }
         })
         .collect();
@@ -292,7 +296,7 @@ pub fn verify_claim<F: Field>(mle_vec: &[F], claim: &RawClaim<F>) {
         debug_assert_eq!(mle.len(), 1);
         eval.unwrap()
     } else {
-        RawClaim::new(vec![], mle.mle.first())
+        RawClaim::new(vec![], mle.mle.value())
     };
 
     assert_eq!(eval.get_point(), claim.get_point());

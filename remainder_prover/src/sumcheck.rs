@@ -106,7 +106,6 @@ pub enum InterpError {
     NoInverse,
 }
 
-/// TODO(Makis): Give this type more structure.
 /// A type representing the univariate polynomial `g_i: F -> F` which the prover
 /// sends to the verifier in each round of sumcheck.
 /// Note that we are using an evaluation representation of polynomials,
@@ -203,7 +202,6 @@ impl<F: Field> Mul<&F> for SumcheckEvals<F> {
 ///                 * P(r_1, ..., r_k, x, b_{k+1}, ..., b_n)
 /// ```
 ///
-/// # TODOs (Makis)
 /// 1. This function should be responsible for mutating `expr` and `beta_values`
 ///    by fixing variables (if any) *after* the sumcheck round. It should
 ///    maintain the invariant that `expr` and `beta_values` are consistent with
@@ -215,7 +213,6 @@ impl<F: Field> Mul<&F> for SumcheckEvals<F> {
 ///
 /// # Beta cascade
 ///
-/// TODO(Makis): Move this paragraph somewhere else.
 /// Instead of using a beta table to linearize an expression, we
 /// utilize the fact that for each specific node in an expression tree, we only
 /// need exactly the beta values corresponding to the indices present in that
@@ -521,7 +518,8 @@ pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: Field>(
 }
 
 /// this is one step of the beta cascade algorithm. essentially we are doing
-/// (1 - beta_val) * mle[index] + beta_val * mle[index + half_vec_len] (big-endian version of fix variable)
+/// `(1 - beta_val) * mle[index] + beta_val * mle[index + half_vec_len]`
+/// (big-endian version of fix variable)
 pub(crate) fn beta_cascade_step<F: Field>(mle_successor_vec: &mut [F], beta_val: F) -> Vec<F> {
     let (one_minus_beta_val, beta_val) = (F::ONE - beta_val, beta_val);
     let half_vec_len = mle_successor_vec.len() / 2;
@@ -684,7 +682,6 @@ pub fn evaluate_at_a_point<F: Field>(given_evals: &[F], point: F) -> Result<F, I
     debug_assert!(given_evals.len() > 1);
 
     // Special cases for `point == 0` and `point == 1`.
-    // TODO(Makis): Treat as special cases all points in the interval `(0..given_evals.len())`.
     if point == F::ZERO {
         return Ok(given_evals[0]);
     }
@@ -764,7 +761,6 @@ pub fn evaluate_mle_ref_product<F: Field>(
                         first
                     };
 
-                    // let second = *mle_ref.mle().get(index + 1).unwrap_or(&zero);
                     let step = second - first;
                     let successors =
                         std::iter::successors(Some(second), move |item| Some(*item + step));

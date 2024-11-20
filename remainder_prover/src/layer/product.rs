@@ -85,8 +85,8 @@ impl<F: Field> Product<F, F> {
         let _ = mle_refs
             .iter()
             .skip(1)
-            .fold(mle_refs[0].first(), |acc, mle_ref| {
-                let prod_val = acc * mle_ref.first();
+            .fold(mle_refs[0].value(), |acc, mle_ref| {
+                let prod_val = acc * mle_ref.value();
                 intermediates.push(Self::build_atom(mle_ref));
                 intermediates.push(Intermediate::Composite { value: prod_val });
                 prod_val
@@ -102,7 +102,7 @@ impl<F: Field> Product<F, F> {
         Intermediate::Atom {
             layer_id: mle_ref.layer_id,
             point: mle_ref.get_bound_point(),
-            value: mle_ref.first(),
+            value: mle_ref.value(),
         }
     }
 

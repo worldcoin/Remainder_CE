@@ -178,7 +178,8 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
             // In debug mode, catch sumcheck round errors from the prover side.
             debug_assert_eq!(
                 evaluate_at_a_point(&previous_round_message, previous_challenge).unwrap(),
-                prover_sumcheck_message[0] + prover_sumcheck_message[1]
+                prover_sumcheck_message[0] + prover_sumcheck_message[1],
+                "sumcheck failed for round {round_index}"
             );
             // Append the evaluations to the transcript.
             transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
@@ -322,13 +323,42 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         // Basically we just want to go down it and pass up claims.
         // We can only add a new claim if we see an MLE with all its indices
         // bound.
-        let mut observer_fn =
-            |expr: &ExpressionNode<F, ProverExpr>,
-             mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec| {
-                match expr {
-                    ExpressionNode::Mle(mle_vec_idx) => {
-                        let mle_ref = mle_vec_idx.get_mle(mle_vec);
+        let mut observer_fn = |expr: &ExpressionNode<F, ProverExpr>,
+                               mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
+         -> Result<(), ClaimError> {
+            match expr {
+                ExpressionNode::Mle(mle_vec_idx) => {
+                    let mle_ref = mle_vec_idx.get_mle(mle_vec);
 
+                    let fixed_mle_indices = mle_ref
+                        .mle_indices
+                        .iter()
+                        .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                    // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
+                    let mle_layer_id = mle_ref.layer_id();
+
+                    let claimed_value = mle_ref.value();
+
+                    // Note: No need to append claim values here.
+                    // We already appended them when evaluating the
+                    // expression for sumcheck.
+
+                    // --- Construct the claim ---
+                    let claim = Claim::new(
+                        fixed_mle_indices,
+                        claimed_value,
+                        self.layer_id(),
+                        mle_layer_id,
+                    );
+
+                    // --- Push it into the list of claims ---
+                    claims.push(claim);
+                }
+                ExpressionNode::Product(mle_vec_indices) => {
+                    for mle_vec_index in mle_vec_indices {
+                        let mle_ref = mle_vec_index.get_mle(mle_vec);
                         let fixed_mle_indices = mle_ref
                             .mle_indices
                             .iter()
@@ -338,20 +368,13 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                         // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
                         let mle_layer_id = mle_ref.layer_id();
 
-                        // --- Grab the actual value that the claim is supposed to evaluate to ---
-                        if mle_ref.len() > 1 {
-                            return Err(ClaimError::MleRefMleError);
-                        }
-                        if mle_ref.is_empty() {
-                            return Err(ClaimError::IntermediateZeroMLERefError);
-                        }
-                        let claimed_value = mle_ref.first();
+                        let claimed_value = mle_ref.value();
 
-                        // Note: No need to append claim values here.
-                        // We already appended them when evaluating the
-                        // expression for sumcheck.
+                        // Note: No need to append the claim value to the transcript here. We
+                        // already appended when evaluating the expression for sumcheck.
 
                         // --- Construct the claim ---
+                        // need to populate the claim with the mle ref we are grabbing the claim from
                         let claim = Claim::new(
                             fixed_mle_indices,
                             claimed_value,
@@ -362,44 +385,11 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                         // --- Push it into the list of claims ---
                         claims.push(claim);
                     }
-                    ExpressionNode::Product(mle_vec_indices) => {
-                        for mle_vec_index in mle_vec_indices {
-                            let mle_ref = mle_vec_index.get_mle(mle_vec);
-                            let fixed_mle_indices = mle_ref
-                                .mle_indices
-                                .iter()
-                                .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
-                                .collect::<Result<Vec<_>, _>>()?;
-
-                            // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
-                            let mle_layer_id = mle_ref.layer_id();
-
-                            // --- Grab the actual value that the claim is supposed to evaluate to ---
-                            if mle_ref.len() != 1 {
-                                return Err(ClaimError::MleRefMleError);
-                            }
-                            let claimed_value = mle_ref.first();
-
-                            // Note: No need to append the claim value to the transcript here. We
-                            // already appended when evaluating the expression for sumcheck.
-
-                            // --- Construct the claim ---
-                            // need to populate the claim with the mle ref we are grabbing the claim from
-                            let claim = Claim::new(
-                                fixed_mle_indices,
-                                claimed_value,
-                                self.layer_id(),
-                                mle_layer_id,
-                            );
-
-                            // --- Push it into the list of claims ---
-                            claims.push(claim);
-                        }
-                    }
-                    _ => {}
                 }
-                Ok(())
-            };
+                _ => {}
+            }
+            Ok(())
+        };
 
         // --- Apply the observer function from above onto the expression ---
         layerwise_expr.traverse(&mut observer_fn)?;

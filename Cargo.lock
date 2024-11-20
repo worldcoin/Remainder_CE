@@ -233,6 +233,7 @@ dependencies = [
  "colored",
  "num-traits",
  "rand",
+ "rayon",
 ]
 
 [[package]]

@@ -94,7 +94,7 @@ fn claim_aggregation_wrapper<Sp: TranscriptSponge<Fr>>(
     claims: &[Claim<Fr>],
 ) -> RawClaim<Fr> {
     let mut transcript: TranscriptWriter<_, Sp> = TranscriptWriter::new("Claims Test Transcript");
-    prover_aggregate_claims(claims, &output_mles_from_layer, &mut transcript).unwrap()
+    prover_aggregate_claims(claims, output_mles_from_layer, &mut transcript).unwrap()
 }
 
 /// Compute l* = l(r*).
@@ -127,7 +127,7 @@ fn test_aggro_claim_1() {
     let mle_evals = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
     let points = vec![
         vec![Fr::from(3), Fr::from(3)],
-        vec![Fr::from(2), Fr::from(7)],
+        vec![Fr::from(4), Fr::from(7)],
     ];
     let r_star = Fr::from(10);
 
@@ -138,7 +138,7 @@ fn test_aggro_claim_1() {
     let l_star = compute_l_star(&claims, r_star);
 
     // Compare to l(10) computed by hand.
-    assert_eq!(l_star, vec![Fr::from(7).neg(), Fr::from(43)]);
+    assert_eq!(l_star, vec![Fr::from(13), Fr::from(43)]);
 
     let aggregated_claim =
         claim_aggregation_wrapper::<DummySponge<Fr, 10>>(output_mles_for_layer, &claims);
@@ -226,12 +226,6 @@ fn test_aggro_claim_4() {
     let mut expr_copy = expr.clone();
 
     let layer = RegularLayer::new_raw(LayerId::Input(0), expr);
-    // let layer = from_mle(
-    //     (mle1, mle2),
-    //     |mle| Expression::<Fr, ProverExpr>::products(vec![mle.clone().0, mle.clone().1]),
-    //     |_, _, _| unimplemented!(),
-    // );
-    // let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
 
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -338,12 +332,6 @@ fn test_aggro_claim_negative_2() {
     let output_mle_from_layer = vec![mle1.clone()];
 
     let layer = RegularLayer::new_raw(LayerId::Input(0), expr);
-    // let layer = from_mle(
-    //     mle1,
-    //     |mle| mle.clone().expression(),
-    //     |_, _, _| unimplemented!(),
-    // );
-    // let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
 
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];

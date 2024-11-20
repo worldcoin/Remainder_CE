@@ -27,6 +27,13 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         }
     }
 
+    fn is_fully_bound(&self) -> bool {
+        match self {
+            MleEnum::Dense(item) => item.is_fully_bound(),
+            MleEnum::Zero(item) => item.is_fully_bound(),
+        }
+    }
+
     fn iter(&self) -> EvaluationsIterator<F> {
         match self {
             MleEnum::Dense(item) => item.iter(),
@@ -38,6 +45,13 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         match self {
             MleEnum::Dense(item) => item.first(),
             MleEnum::Zero(item) => item.first(),
+        }
+    }
+
+    fn value(&self) -> F {
+        match self {
+            MleEnum::Dense(item) => item.value(),
+            MleEnum::Zero(item) => item.value(),
         }
     }
 
