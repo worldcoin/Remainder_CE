@@ -4,7 +4,7 @@ use crate::{
     mle::dense::DenseMle,
 };
 
-use ark_std::test_rng;
+use ark_std::{end_timer, start_timer, test_rng};
 use rand::Rng;
 use remainder_shared_types::Fr;
 
@@ -732,4 +732,36 @@ fn test_beta_cascade_step() {
     ];
 
     assert_eq!(opened_successors, expected_vec);
+}
+
+fn create_random_field_vec<F: Field>(num_items: usize, mut rng: impl Rng) -> Vec<F> {
+    (0..num_items).map(|_| F::random(&mut rng)).collect()
+}
+
+#[test]
+fn beta_cascade_timer() {
+    let mut rng = test_rng();
+    let num_mles = 4;
+    let log_num_variables = 15;
+    let mle_vec = (0..num_mles)
+        .map(|_idx| {
+            let random_mle_vec = create_random_field_vec::<Fr>(1 << log_num_variables, &mut rng);
+            let mut mle = DenseMle::new_from_raw(random_mle_vec, LayerId::Input(0));
+            mle.index_mle_indices(0);
+            mle
+        })
+        .collect_vec();
+    let beta_vals = create_random_field_vec::<Fr>(log_num_variables, &mut rng);
+    let beta_updated_vals: Vec<Fr> = vec![];
+    let round_index = 0;
+    let degree = num_mles + 1;
+    let beta_cascade_timer = start_timer!(|| "beta cascade");
+    beta_cascade(
+        &mle_vec.iter().collect_vec(),
+        degree,
+        round_index,
+        &beta_vals,
+        &beta_updated_vals,
+    );
+    end_timer!(beta_cascade_timer);
 }

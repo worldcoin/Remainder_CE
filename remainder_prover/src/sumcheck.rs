@@ -44,7 +44,7 @@ use std::{
 #[cfg(test)]
 pub mod tests;
 
-use ark_std::cfg_into_iter;
+use ark_std::{cfg_into_iter, end_timer, start_timer};
 use itertools::{repeat_n, Itertools};
 use rayon::prelude::ParallelIterator;
 use rayon::prelude::ParallelSlice;
@@ -599,6 +599,9 @@ pub fn beta_cascade<F: Field>(
     beta_vals: &[F],
     beta_updated_vals: &[F],
 ) -> SumcheckEvals<F> {
+    dbg!(&beta_vals);
+    dbg!(&beta_updated_vals);
+    let thinking_timer = start_timer!(|| "hmm thinking");
     // determine whether there is an independent variable within these mle refs by iterating through
     // all of their indices and determining whether there is an indexed bit at the round index.
     let mles_have_independent_variable = mles
@@ -608,14 +611,19 @@ pub fn beta_cascade<F: Field>(
         .unwrap();
 
     if mles_have_independent_variable {
+        let ruh_roh = start_timer!(|| "hi");
         let mle_successor_vec: Vec<Box<dyn Iterator<Item = F> + Send>> =
             successors_from_mle_product(mles).unwrap();
+        end_timer!(ruh_roh);
         // Apply beta cascade steps, reducing `mle_successor_vec` size progressively.
         let mut final_successor_vec = beta_vals.iter().skip(1).rev().fold(
             mle_successor_vec,
             |current_successor_vec, &val| {
+                let step_timer = start_timer!(|| "step");
                 // Apply beta cascade step and return the new vector, replacing the previous one
-                beta_cascade_step(current_successor_vec, val)
+                let res = beta_cascade_step(current_successor_vec, val);
+                end_timer!(step_timer);
+                res
             },
         );
 
@@ -645,7 +653,9 @@ pub fn beta_cascade<F: Field>(
             vec![F::ONE]
         };
         // apply the bound beta values as a scalar factor to each of the evaluations
-        apply_updated_beta_values_to_evals(evals, beta_updated_vals)
+        let res = apply_updated_beta_values_to_evals(evals, beta_updated_vals);
+        end_timer!(thinking_timer);
+        res
     } else {
         beta_cascade_no_independent_variable(mles, beta_vals, degree, beta_updated_vals)
     }
