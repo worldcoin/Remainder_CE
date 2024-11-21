@@ -684,10 +684,10 @@ fn test_successors_from_mle_product() {
     mle_2.index_mle_indices(0);
     mle_3.index_mle_indices(0);
 
-    let successors_vec = successors_from_mle_product(&[&mle_1, &mle_2, &mle_3]).unwrap();
+    let successors_vec = successors_from_mle_product(&[&mle_1, &mle_2, &mle_3], 4).unwrap();
     let opened_successors = successors_vec
         .into_iter()
-        .flat_map(|succ| succ.take(5))
+        .flat_map(|succ| succ)
         .collect_vec();
     let expected_vec = vec![
         Fr::from(4),
@@ -716,12 +716,12 @@ fn test_beta_cascade_step() {
     mle_2.index_mle_indices(0);
     mle_3.index_mle_indices(0);
 
-    let successors_vec = successors_from_mle_product(&[&mle_1, &mle_2, &mle_3]).unwrap();
+    let successors_vec = successors_from_mle_product(&[&mle_1, &mle_2, &mle_3], 4).unwrap();
 
     let one_step_with_beta_val_3 = beta_cascade_step(successors_vec, Fr::from(3));
     let opened_successors = one_step_with_beta_val_3
         .into_iter()
-        .flat_map(|succ| succ.take(5))
+        .flat_map(|succ| succ)
         .collect_vec();
     let expected_vec = vec![
         Fr::from(28),
@@ -730,7 +730,6 @@ fn test_beta_cascade_step() {
         Fr::from(161).neg(),
         Fr::from(340).neg(),
     ];
-
     assert_eq!(opened_successors, expected_vec);
 }
 

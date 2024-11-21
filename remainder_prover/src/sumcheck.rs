@@ -44,7 +44,7 @@ use std::{
 #[cfg(test)]
 pub mod tests;
 
-use ark_std::{cfg_into_iter, end_timer, start_timer};
+use ark_std::{cfg_chunks, cfg_into_iter, end_timer, start_timer};
 use itertools::{repeat_n, Itertools};
 use rayon::prelude::ParallelIterator;
 use rayon::prelude::ParallelSlice;
@@ -411,16 +411,19 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
 /// this function assumes that the first variable is an independent variable.
 pub fn successors_from_mle_product<F: Field>(
     mles: &[&impl Mle<F>],
-) -> Result<Vec<Box<dyn Iterator<Item = F> + Send>>, MleError> {
+    degree: usize,
+) -> Result<Vec<Vec<F>>, MleError> {
     // Gets the total number of free variables across all MLEs within this product
     let max_num_vars = mles
         .iter()
         .map(|mle| mle.num_free_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
+    let num_elements_successors = (1 << (max_num_vars - 1)) * (degree + 1);
+    let mut successors_vec: Vec<Vec<F>> = Vec::with_capacity(num_elements_successors);
 
-    let evals = cfg_into_iter!((0..1 << (max_num_vars - 1)))
-        .map(|mle_index| {
+    successors_vec.extend(
+        cfg_into_iter!((0..1 << (max_num_vars - 1))).map(|mle_index| {
             mles.iter()
                 .map(|mle| {
                     let num_coefficients_in_mle = 1 << mle.num_free_vars();
@@ -466,10 +469,12 @@ pub fn successors_from_mle_product<F: Field>(
                     ) as Box<dyn Iterator<Item = F> + Send>
                 })
                 .unwrap()
-        })
-        .collect();
+                .take(degree + 1)
+                .collect()
+        }),
+    );
 
-    Ok(evals)
+    Ok(successors_vec)
 }
 
 /// this function performs the same funcionality as the above, except it is when the mle refs we
@@ -518,31 +523,24 @@ pub(crate) fn successors_from_mle_product_no_ind_var<F: Field>(
 /// This is one step of the beta cascade algorithm, performing
 /// `(1 - beta_val) * mle[index] + beta_val * mle[index + 1]`
 pub(crate) fn beta_cascade_step<F: Field>(
-    mut mle_successor_vec: Vec<Box<dyn Iterator<Item = F> + Send>>,
+    mle_successor_vec: Vec<Vec<F>>,
     beta_val: F,
-) -> Vec<Box<dyn Iterator<Item = F> + Send>> {
+) -> Vec<Vec<F>> {
     let (one_minus_beta_val, beta_val) = (F::ONE - beta_val, beta_val);
     let mut result = Vec::with_capacity(mle_successor_vec.len() / 2);
 
-    // Consume the `mle_successor_vec` in pairs without cloning or mutable borrowing issues
-    while mle_successor_vec.len() >= 2 {
-        // Pop two iterators from the vector
-        let mut first_iter = mle_successor_vec.remove(0);
-        let mut second_iter = mle_successor_vec.remove(0);
-
-        // Create the new iterator that combines the two using the given operationm
-        let combined_iter = Box::new(
-            successors(
-                Some((first_iter.next().unwrap(), second_iter.next().unwrap())),
-                move |_| Some((first_iter.next().unwrap(), second_iter.next().unwrap())),
-            )
-            .map(move |(a, b)| one_minus_beta_val * a + beta_val * b),
-        ) as Box<dyn Iterator<Item = F> + Send>;
-
-        // Append the combined iterator to the result vector
-        result.push(combined_iter);
-    }
-
+    result.extend(cfg_chunks!(mle_successor_vec, 2).map(|successor_pair| {
+        let first_evals = &successor_pair[0];
+        let second_evals = &successor_pair[1];
+        let mut inner_result = Vec::with_capacity(first_evals.len());
+        inner_result.extend(
+            first_evals
+                .into_iter()
+                .zip(second_evals)
+                .map(|(fold_a, fold_b)| one_minus_beta_val * fold_a + beta_val * fold_b),
+        );
+        inner_result
+    }));
     result
 }
 
@@ -612,8 +610,7 @@ pub fn beta_cascade<F: Field>(
 
     if mles_have_independent_variable {
         let ruh_roh = start_timer!(|| "hi");
-        let mle_successor_vec: Vec<Box<dyn Iterator<Item = F> + Send>> =
-            successors_from_mle_product(mles).unwrap();
+        let mle_successor_vec = successors_from_mle_product(mles, degree).unwrap();
         end_timer!(ruh_roh);
         // Apply beta cascade steps, reducing `mle_successor_vec` size progressively.
         let mut final_successor_vec = beta_vals.iter().skip(1).rev().fold(
