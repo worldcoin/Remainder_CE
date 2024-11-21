@@ -597,8 +597,6 @@ pub fn beta_cascade<F: Field>(
     beta_vals: &[F],
     beta_updated_vals: &[F],
 ) -> SumcheckEvals<F> {
-    dbg!(&beta_vals);
-    dbg!(&beta_updated_vals);
     let thinking_timer = start_timer!(|| "hmm thinking");
     // determine whether there is an independent variable within these mle refs by iterating through
     // all of their indices and determining whether there is an indexed bit at the round index.
