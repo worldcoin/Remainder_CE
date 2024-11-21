@@ -11,7 +11,7 @@ on:
 jobs:
     check_and_test:
         name: Check and Test Remainder
-        runs-on: ubuntu-latest
+        runs-on: Remainder_CI
         steps:
             - uses: actions/checkout@v2
             - uses: actions-rs/toolchain@v1
@@ -29,10 +29,18 @@ jobs:
             - uses: actions-rs/cargo@v1
               with:
                 command: test
+            - uses: actions-rs/cargo@v1
+              with:
+                command: test
+                args: --release --features parallel --package remainder-hyrax --lib -- --ignored hyrax_worldcoin::test_worldcoin
+            - uses: actions-rs/cargo@v1
+              with:
+                command: test
+                args: --release --features parallel --package remainder --lib -- --ignored worldcoin::tests
 
     fmt_and_lint:
         name: Format and Lint Remainder
-        runs-on: ubuntu-latest
+        runs-on: Remainder_CI
         steps:
             - uses: actions/checkout@v2
             - uses: actions-rs/toolchain@v1
@@ -51,7 +59,7 @@ jobs:
 
     mem_limit_test:
         name: Memory Limit Test
-        runs-on: ubuntu-latest
+        runs-on: Remainder_CI
         steps:
             - uses: actions/checkout@v2
             - uses: actions-rs/toolchain@v1
