@@ -5,7 +5,7 @@ all: bin
 # Example: make bench name=hyrax.opt
 bench:
 	cargo build --profile=opt-with-debug --bin worldcoin
-	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin
+	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin prove worldcoin.circuit iriscode_pcp_example worldcoin.zkp
 	ms_print massif/massif.$(name).out | less
 
 prod:
