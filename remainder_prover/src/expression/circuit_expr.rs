@@ -840,8 +840,8 @@ fn evaluate_bookkeeping_tables_given_operation<F: Field>(
                 let zero = F::ZERO;
                 let index = if log2(mle_bookkeeping_table.len()) < max_num_vars {
                     let max = 1 << log2(mle_bookkeeping_table.len());
-                    let difference = (1 << max_num_vars) / max;
-                    index / difference
+                    let multiple = (1 << max_num_vars) / max;
+                    index / multiple
                 } else {
                     index
                 };

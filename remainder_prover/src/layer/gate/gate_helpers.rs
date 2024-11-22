@@ -91,8 +91,8 @@ pub fn evaluate_mle_product_no_beta_table<F: Field>(
                     .map(|mle| {
                         let index = if mle.num_free_vars() < max_num_vars {
                             let max = 1 << mle.num_free_vars();
-                            let difference = (1 << max_num_vars) / max;
-                            index / difference
+                            let multiple = (1 << max_num_vars) / max;
+                            index / multiple
                         } else {
                             index
                         };
@@ -151,8 +151,8 @@ pub fn evaluate_mle_product_no_beta_table<F: Field>(
                     .map(|mle| {
                         let index = if mle.num_free_vars() < max_num_vars {
                             let max = 1 << mle.num_free_vars();
-                            let difference = (1 << max_num_vars) / max;
-                            index / difference
+                            let multiple = (1 << max_num_vars) / max;
+                            index / multiple
                         } else {
                             index
                         };
