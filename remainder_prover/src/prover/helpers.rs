@@ -1,9 +1,10 @@
+#![allow(clippy::type_complexity)]
 use crate::input_layer::ligero_input_layer::LigeroInputLayerDescriptionWithPrecommit;
 
 use crate::layer::LayerId;
 use crate::layouter::circuit_hash::CircuitHashType;
 use crate::mle::evals::MultilinearExtension;
-use crate::prover::config::global_verifier_circuit_description_hash_type;
+use crate::prover::global_config::global_verifier_circuit_description_hash_type;
 use crate::prover::verify;
 use ark_std::{end_timer, start_timer};
 
@@ -21,9 +22,9 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::BufWriter;
 use std::path::Path;
 
-use super::config::{
+use super::config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig};
+use super::global_config::{
     global_prover_circuit_description_hash_type, perform_function_under_expected_configs,
-    GKRCircuitProverConfig, GKRCircuitVerifierConfig,
 };
 use super::{prove, GKRCircuitDescription};
 
@@ -102,9 +103,6 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
         }
     }
 }
-
-/// TODO(ryancao): Move this into the prover/verifier settings!!! (This is already a TDH ticket)
-// const CIRCUIT_DESCRIPTION_HASH_TYPE: CircuitHashType = CircuitHashType::DefaultRustHash;
 
 /// Function which calls [test_circuit_internal] with the appropriate expected
 /// prover/verifier config.
@@ -199,7 +197,7 @@ fn test_circuit_internal<F: Field>(
         global_prover_circuit_description_hash_type(),
         &mut transcript_writer,
     ) {
-        Ok(_) => {
+        Ok(proof_config) => {
             end_timer!(prover_timer);
             let transcript = transcript_writer.get_transcript();
             let mut transcript_reader = TranscriptReader::<F, PoseidonSponge<F>>::new(transcript);
@@ -230,6 +228,7 @@ fn test_circuit_internal<F: Field>(
                 circuit_description,
                 global_verifier_circuit_description_hash_type(),
                 &mut transcript_reader,
+                &proof_config,
             ) {
                 Ok(_) => {
                     end_timer!(verifier_timer);

@@ -36,3 +36,6 @@ scripts-upshot/
 /flame-graphs/
 /massif/
 /output-dumps/
+
+# ignore test coverage reports
+lcov.info

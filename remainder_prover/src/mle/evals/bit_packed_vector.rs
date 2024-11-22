@@ -11,7 +11,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use itertools::FoldWhile::{Continue, Done};
 
-use crate::prover::config::global_prover_enable_bit_packing;
+use crate::prover::global_config::global_prover_enable_bit_packing;
 
 // -------------- Helper Functions -----------------
 

@@ -5,10 +5,8 @@ use remainder::{
     layouter::circuit_hash::CircuitHashType,
     mle::evals::MultilinearExtension,
     prover::{
-        config::{
-            perform_function_under_expected_configs, GKRCircuitProverConfig,
-            GKRCircuitVerifierConfig,
-        },
+        config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
+        global_config::perform_function_under_expected_configs,
         GKRCircuitDescription,
     },
 };
@@ -49,7 +47,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
     // --- Compute actual Hyrax proof ---
-    let proof = perform_function_under_expected_configs(
+    let (proof, proof_config) = perform_function_under_expected_configs(
         HyraxProof::prove,
         (
             &inputs,
@@ -81,6 +79,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
             &committer,
             &mut transcript,
             CircuitHashType::Sha3_256,
+            &proof_config,
         ),
         &gkr_circuit_prover_config,
         &gkr_circuit_verifier_config,

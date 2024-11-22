@@ -15,7 +15,7 @@ use crate::{
         combine_mles_with_aggregate, get_indexed_layer_mles_to_combine, pre_fix_mles,
     },
     mle::dense::DenseMle,
-    prover::{config::global_prover_claim_agg_constant_column_optimization, GKRError},
+    prover::{global_config::global_prover_claim_agg_constant_column_optimization, GKRError},
     sumcheck::evaluate_at_a_point,
 };
 

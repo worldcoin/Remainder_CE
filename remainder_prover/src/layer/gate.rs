@@ -29,7 +29,7 @@ use crate::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
         mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
     },
-    prover::{config::global_prover_lazy_beta_evals, SumcheckProof},
+    prover::{global_config::global_prover_lazy_beta_evals, SumcheckProof},
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
 

@@ -12,7 +12,7 @@ use crate::{
         ClaimError,
     },
     mle::dense::DenseMle,
-    prover::{config::global_verifier_claim_agg_constant_column_optimization, GKRError},
+    prover::{global_config::global_verifier_claim_agg_constant_column_optimization, GKRError},
     sumcheck::evaluate_at_a_point,
 };
 

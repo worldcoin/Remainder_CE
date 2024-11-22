@@ -4,7 +4,7 @@ use ark_std::{cfg_into_iter, end_timer, start_timer};
 use itertools::Itertools;
 use rand::Rng;
 use remainder::claims::claim_aggregation::get_num_wlx_evaluations;
-use remainder::prover::config::global_prover_claim_agg_constant_column_optimization;
+use remainder::prover::global_config::global_prover_claim_agg_constant_column_optimization;
 use remainder::{
     claims::{claim_group::ClaimGroup, RawClaim},
     input_layer::InputLayerDescription,
