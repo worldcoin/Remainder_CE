@@ -19,7 +19,8 @@ use remainder_shared_types::Field;
 /// ## Arguments
 /// * `challenge_coord` - Challenge point to be expanded in big-endian.
 fn initialize_tensor<F: Field>(challenge_coord: &[F]) -> Vec<F> {
-    let mut cur_table = vec![F::ONE];
+    let mut cur_table = Vec::with_capacity(1 << challenge_coord.len());
+    cur_table.push(F::ONE);
     if !challenge_coord.is_empty() {
         // Dynamic programming algorithm in Tha13 for computing these
         // equality values and returning them as a vector.

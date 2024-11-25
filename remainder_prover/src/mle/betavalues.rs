@@ -127,7 +127,8 @@ impl<F: Field> BetaValues<F> {
     /// do still need the entire beta table. Essentially this is an MLE whose coefficients represent
     /// whether the index is equal to the random challenge point.
     pub fn new_beta_equality_mle(layer_claim_vars: Vec<F>) -> MultilinearExtension<F> {
-        let mut cur_table = vec![F::ONE];
+        let mut cur_table = Vec::with_capacity(1 << layer_claim_vars.len());
+        cur_table.push(F::ONE);
         if !layer_claim_vars.is_empty() {
             // Dynamic programming algorithm in Tha13 for computing these
             // equality values and returning them as a vector.
