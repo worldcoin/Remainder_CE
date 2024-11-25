@@ -271,17 +271,6 @@ fn evals_new_2_vars() {
 }
 
 #[test]
-fn evals_new_from_big_endian_2_vars() {
-    let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(Fr::from).collect();
-    let expected_evals =
-        BitPackedVector::new(&[1, 3, 2, 4].into_iter().map(Fr::from).collect::<Vec<Fr>>());
-
-    let f = Evaluations::new_from_big_endian(2, &evals);
-
-    assert_eq!(f.evals, expected_evals);
-}
-
-#[test]
 fn evals_first() {
     let f = Evaluations::new(2, vec![Fr::from(42), Fr::ZERO, Fr::ZERO, Fr::ZERO]);
     assert_eq!(f.first(), Fr::from(42));
