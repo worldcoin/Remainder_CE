@@ -1069,6 +1069,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             .get_data_from_circuit_mle(&self.rhs_mle)
             .unwrap();
 
+        let num_gate_outputs_per_dataparallel_instance = (max_gate_val + 1).next_power_of_two();
         let mut res_table = vec![F::ZERO; res_table_num_entries];
         (0..num_dataparallel_vals).for_each(|idx| {
             self.nonzero_gates.iter().for_each(|(z_ind, x_ind, y_ind)| {
@@ -1081,7 +1082,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
                     .f
                     .get(idx * (1 << (rhs_data.num_vars() - self.num_dataparallel_vars)) + y_ind)
                     .unwrap_or(zero);
-                res_table[(max_gate_val + 1).next_power_of_two() * idx + z_ind] =
+                res_table[num_gate_outputs_per_dataparallel_instance * idx + z_ind] =
                     self.gate_operation.perform_operation(f2_val, f3_val);
             });
         });

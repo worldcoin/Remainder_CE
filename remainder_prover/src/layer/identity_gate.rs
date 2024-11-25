@@ -351,6 +351,8 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         let res_table_num_entries =
             (((*max_gate_val as usize) + 1) * num_dataparallel_vals).next_power_of_two();
 
+        let num_gate_outputs_per_dataparallel_instance =
+            (*max_gate_val as usize + 1).next_power_of_two();
         let mut remap_table = vec![F::ZERO; res_table_num_entries];
         (0..num_dataparallel_vals).for_each(|idx| {
             self.wiring.iter().for_each(|(z, x)| {
@@ -361,8 +363,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
                             + (*x as usize),
                     )
                     .unwrap_or(F::ZERO);
-                remap_table
-                    [(*max_gate_val as usize + 1).next_power_of_two() * idx + (*z as usize)] =
+                remap_table[num_gate_outputs_per_dataparallel_instance * idx + (*z as usize)] =
                     id_val;
             });
         });
@@ -400,8 +401,8 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                         (
-                            beta_g1.f.get(*z_ind).unwrap_or(F::ZERO),
-                            beta_u.f.get(*x_ind).unwrap_or(F::ZERO),
+                            beta_g1.f.get(*z_ind as usize).unwrap_or(F::ZERO),
+                            beta_u.f.get(*x_ind as usize).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
@@ -698,8 +699,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 |acc, (z_ind, x_ind)| {
                     let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
                         (
-                            beta_g1.f.get(*z_ind).unwrap_or(F::ZERO),
-                            beta_u.f.get(*x_ind).unwrap_or(F::ZERO),
+                            beta_g1.f.get(*z_ind as usize).unwrap_or(F::ZERO),
+                            beta_u.f.get(*x_ind as usize).unwrap_or(F::ZERO),
                         )
                     } else {
                         (
