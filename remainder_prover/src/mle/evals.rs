@@ -104,7 +104,8 @@ pub struct Evaluations<F: Field> {
     evals: BitPackedVector<F>,
 
     /// Number of input variables to `f`. Invariant: `0 <= evals.len() <=
-    /// 2^num_vars`. The length can be zero due to suffix omission.
+    /// 2^num_vars`. The length can be less than `2^num_vars` due to suffix
+    /// omission.
     num_vars: usize,
 
     /// TODO(Makis): Is there a better way to handle this?? When accessing an
@@ -123,14 +124,17 @@ impl<F: Field> Evaluations<F> {
     }
 
     /// Builds an evaluation representation for a function `f: {0, 1}^num_vars
-    /// -> F` from a vector of evaluations which are ordered by MSB first (see
-    /// documentation comment for `self.evals` for explanation).
+    /// -> F` from a vector of evaluations in big-endian order (see
+    /// documentation comment for [Self::evals] for explanation).
+    ///
     /// # Example
     /// For a function `f: {0, 1}^2 -> F`, an evaluations table may be built as:
-    /// `Evaluations::new(2, vec![ f(0, 0), f(1, 0), f(0, 1), f(1, 1) ])`.  In
-    /// case, for example,`f(0, 1) == f(1, 1) == F::ZERO`, those values may be
-    /// omitted and the following will generate an equivalent representation:
-    /// `Evaluations::new(2, vec![ f(0, 0), f(1, 0) ])`.
+    /// `Evaluations::new(2, vec![ f(0, 0), f(0, 1), f(1, 0), f(1, 1) ])`.
+    ///
+    /// An example of suffix omission is when `f(1, 0) == f(1, 1) == F::ZERO`.
+    /// In that case those zero values may be omitted and the following
+    /// statement generates an equivalent representation: `Evaluations::new(2,
+    /// vec![ f(0, 0), f(0, 1) ])`.
     pub fn new(num_vars: usize, evals: Vec<F>) -> Self {
         debug_assert!(evals.len() <= (1 << num_vars));
 
@@ -144,15 +148,14 @@ impl<F: Field> Evaluations<F> {
     }
 
     /// Builds an evaluation representation for a function `f: {0, 1}^num_vars
-    /// -> F` from a vector of evaluations which are ordered by LSB first, in
-    /// contrast to `new` which assumes an MSB-first representation.
+    /// -> F` from a vector of evaluations in _little-endian_ order (see
+    /// documentation comment for [Self::evals] for explanation).
+    ///
     /// # Example
     /// For a function `f: {0, 1}^2 -> F`, an evaluations table may be built as:
-    /// `Evaluations::new(2, &[ f(0, 0), f(0, 1), f(1, 0), f(1, 1) ])`.  In
-    /// case, for example,`f(1, 0) == f(1, 1) == F::ZERO`, those values may be
-    /// omitted and the following will generate an equivalent representation:
-    /// `Evaluations::new(2, &[ f(0, 0), f(0, 1) ])`.
-    pub fn new_from_big_endian(num_vars: usize, evals: &[F]) -> Self {
+    /// `Evaluations::new_from_little_endian(2, vec![ f(0, 0), f(1, 0), f(0, 1),
+    /// f(1, 1) ])`.
+    pub fn new_from_little_endian(num_vars: usize, evals: &[F]) -> Self {
         debug_assert!(evals.len() <= (1 << num_vars));
 
         println!("New MLE (big-endian) on {} entries.", evals.len());
@@ -164,7 +167,7 @@ impl<F: Field> Evaluations<F> {
         }
     }
 
-    /// returns the number of variables of the current Evalations.
+    /// Returns the number of variables of the current `Evalations`.
     pub fn num_vars(&self) -> usize {
         self.num_vars
     }
