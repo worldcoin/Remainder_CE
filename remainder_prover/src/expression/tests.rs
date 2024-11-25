@@ -273,7 +273,7 @@ fn test_mle_different_length_eval() {
     expression_expect.index_mle_indices(0);
 
     let eval_sum = expression.evaluate_expr(challenge.clone()).unwrap();
-    let expect_sum = expression.evaluate_expr(challenge).unwrap();
+    let expect_sum = expression_expect.evaluate_expr(challenge).unwrap();
 
     assert_eq!(eval_sum, expect_sum);
 }
