@@ -68,3 +68,7 @@ harness = false
 [[bench]]
 name = "evaluate_mle_full"
 harness = false
+
+[[bench]]
+name = "beta_cascade"
+harness = false

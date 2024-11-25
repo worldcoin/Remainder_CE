@@ -53,19 +53,4 @@ impl<F: Field> VerifierMle<F> {
     pub fn value(&self) -> F {
         self.eval
     }
-
-    /// Returns the evaluation challenges for a fully-bound MLE.
-    ///
-    /// Note that this function panics if a particular challenge is neither
-    /// fixed nor bound!
-    pub fn get_bound_point(&self) -> Vec<F> {
-        self.var_indices()
-            .iter()
-            .map(|index| match index {
-                MleIndex::Bound(chal, _) => *chal,
-                MleIndex::Fixed(chal) => F::from(*chal as u64),
-                _ => panic!("MLE index not bound"),
-            })
-            .collect()
-    }
 }

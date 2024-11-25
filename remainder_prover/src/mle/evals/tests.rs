@@ -1,4 +1,5 @@
 use ark_std::log2;
+use bit_packed_vector::{num_bits, ENABLE_BIT_PACKING};
 use quickcheck::{Arbitrary, TestResult};
 use remainder_shared_types::{halo2curves::ff::Field, Fr, HasByteRepresentation};
 
@@ -40,6 +41,20 @@ impl From<Qfr> for Fr {
     fn from(val: Qfr) -> Self {
         val.0
     }
+}
+
+#[test]
+fn test_num_bits() {
+    assert_eq!(num_bits(Fr::from(0)), 0);
+    assert_eq!(num_bits(Fr::from(1)), 1);
+    assert_eq!(num_bits(Fr::from(2)), 2);
+    assert_eq!(num_bits(Fr::from(3)), 2);
+    assert_eq!(num_bits(Fr::from(4)), 3);
+    assert_eq!(num_bits(Fr::from(31)), 5);
+    assert_eq!(num_bits(Fr::from(32)), 6);
+    assert_eq!(num_bits(Fr::from(42)), 6);
+    assert_eq!(num_bits(Fr::from(63)), 6);
+    assert_eq!(num_bits(Fr::from(64)), 7);
 }
 
 #[test]
@@ -122,6 +137,28 @@ fn test_bit_packed_vector_get_large_2() {
     }
 
     assert!(bpv.get(n).is_none());
+}
+
+#[test]
+fn test_bit_packed_vector_get_bits_per_element() {
+    let data1: Vec<Fr> = vec![Fr::from(42), Fr::from(42)];
+    let bpv1 = BitPackedVector::new(&data1);
+
+    let data2: Vec<Fr> = vec![Fr::from(0), Fr::from(1)];
+    let bpv2 = BitPackedVector::new(&data2);
+
+    let data3: Vec<Fr> = vec![Fr::from(0), Fr::from(1), Fr::from(2), Fr::from(3)];
+    let bpv3 = BitPackedVector::new(&data3);
+
+    if ENABLE_BIT_PACKING {
+        assert_eq!(bpv1.get_bits_per_element(), 0);
+        assert_eq!(bpv2.get_bits_per_element(), 1);
+        assert_eq!(bpv3.get_bits_per_element(), 2);
+    } else {
+        assert_eq!(bpv1.get_bits_per_element(), 256);
+        assert_eq!(bpv2.get_bits_per_element(), 256);
+        assert_eq!(bpv3.get_bits_per_element(), 256);
+    }
 }
 
 #[test]
@@ -210,11 +247,6 @@ fn test_bit_packed_vector_get_all_bits(offset: Qfr) -> bool {
         for i in 0..num_elements {
             let x = bpv.get(i);
             if x.is_none() || x.unwrap() != data[i] {
-                println!(
-                    "Num bits: {num_bits}\nIdx: {i}\nExp: {:?}\nGot: {:?}",
-                    data[i],
-                    x.unwrap()
-                );
                 return false;
             }
         }
@@ -236,17 +268,6 @@ fn evals_new_1_var() {
 #[test]
 fn evals_new_2_vars() {
     let _f = Evaluations::new(2, vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]);
-}
-
-#[test]
-fn evals_new_from_big_endian_2_vars() {
-    let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(Fr::from).collect();
-    let expected_evals =
-        BitPackedVector::new(&[1, 3, 2, 4].into_iter().map(Fr::from).collect::<Vec<Fr>>());
-
-    let f = Evaluations::new_from_big_endian(2, &evals);
-
-    assert_eq!(f.evals, expected_evals);
 }
 
 #[test]
@@ -390,48 +411,6 @@ fn test_flip_endianess_3() {
 }
 
 #[test]
-fn test_eval_projection_iterator_1() {
-    let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
-    let f = Evaluations::<Fr>::new(3, evals);
-
-    let mut it = f.project(0);
-
-    assert_eq!(it.next().unwrap(), (Fr::from(0), Fr::from(1)));
-    assert_eq!(it.next().unwrap(), (Fr::from(2), Fr::from(3)));
-    assert_eq!(it.next().unwrap(), (Fr::from(4), Fr::from(5)));
-    assert_eq!(it.next().unwrap(), (Fr::from(6), Fr::from(7)));
-    assert_eq!(it.next(), None);
-}
-
-#[test]
-fn test_eval_projection_iterator_2() {
-    let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
-    let f = Evaluations::<Fr>::new(3, evals);
-
-    let mut it = f.project(1);
-
-    assert_eq!(it.next().unwrap(), (Fr::from(0), Fr::from(2)));
-    assert_eq!(it.next().unwrap(), (Fr::from(1), Fr::from(3)));
-    assert_eq!(it.next().unwrap(), (Fr::from(4), Fr::from(6)));
-    assert_eq!(it.next().unwrap(), (Fr::from(5), Fr::from(7)));
-    assert_eq!(it.next(), None);
-}
-
-#[test]
-fn test_eval_projection_iterator_3() {
-    let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
-    let f = Evaluations::<Fr>::new(3, evals);
-
-    let mut it = f.project(2);
-
-    assert_eq!(it.next().unwrap(), (Fr::from(0), Fr::from(4)));
-    assert_eq!(it.next().unwrap(), (Fr::from(1), Fr::from(5)));
-    assert_eq!(it.next().unwrap(), (Fr::from(2), Fr::from(6)));
-    assert_eq!(it.next().unwrap(), (Fr::from(3), Fr::from(7)));
-    assert_eq!(it.next(), None);
-}
-
-#[test]
 fn test_eval_iterator() {
     let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
     let f = Evaluations::<Fr>::new(3, evals);
@@ -525,7 +504,7 @@ fn fix_variable_at_index_equivalence(evals: Vec<Qfr>, r: Qfr) -> TestResult {
 #[test]
 fn evaluate_mle_at_point_2_vars() {
     // f(x, y) = 5(1 - x)(1-y) + 2x(1-y) + (1-x)y + 3xy
-    let input: Vec<Fr> = [5, 2, 1, 3].into_iter().map(Fr::from).collect();
+    let input: Vec<Fr> = [5, 1, 2, 3].into_iter().map(Fr::from).collect();
     let f = Evaluations::new(2, input);
     let f_tilde = MultilinearExtension::new_from_evals(f);
 
@@ -539,7 +518,7 @@ fn evaluate_mle_at_point_2_vars() {
 #[test]
 fn fix_variable_2_vars() {
     // f(x, y) = 5(1 - x)(1-y) + 2x(1-y) + (1-x)y + 3xy
-    let input: Vec<Fr> = [5, 2, 1, 3].into_iter().map(Fr::from).collect();
+    let input: Vec<Fr> = [5, 1, 2, 3].into_iter().map(Fr::from).collect();
     let f = Evaluations::new(2, input);
     let mut f_tilde = MultilinearExtension::new_from_evals(f);
 
@@ -559,7 +538,7 @@ fn fix_variable_2_vars() {
 #[test]
 fn fix_variable_at_index_two_vars_fix_first() {
     // f(x, y) = 5(1 - x)(1-y) + 2x(1-y) + (1-x)y + 3xy
-    let input: Vec<Fr> = [5, 2, 1, 3].into_iter().map(Fr::from).collect();
+    let input: Vec<Fr> = [5, 1, 2, 3].into_iter().map(Fr::from).collect();
     let f = Evaluations::new(2, input);
     let mut f_tilde = MultilinearExtension::new_from_evals(f);
 
@@ -573,7 +552,7 @@ fn fix_variable_at_index_two_vars_fix_first() {
 #[test]
 fn fix_variable_at_index_two_vars_fix_second() {
     // f(x, y) = 5(1 - x)(1-y) + 2x(1-y) + (1-x)y + 3xy
-    let input: Vec<Fr> = [5, 2, 1, 3].into_iter().map(Fr::from).collect();
+    let input: Vec<Fr> = [5, 1, 2, 3].into_iter().map(Fr::from).collect();
     let f = Evaluations::new(2, input);
     let mut f_tilde = MultilinearExtension::new_from_evals(f);
 
@@ -590,12 +569,12 @@ fn fix_variable_at_index_3_vars_fix_first() {
     // f(x, y, z) = 2x(1-y)(1-z) + 2xy(1-z) + 3x(1-y)z + (1-x)yz + 4xyz
     let evals = vec![
         Fr::from(0),
-        Fr::from(2),
         Fr::from(0),
-        Fr::from(2),
         Fr::from(0),
-        Fr::from(3),
         Fr::from(1),
+        Fr::from(2),
+        Fr::from(3),
+        Fr::from(2),
         Fr::from(4),
     ];
     let f = Evaluations::new(3, evals);
@@ -604,7 +583,7 @@ fn fix_variable_at_index_3_vars_fix_first() {
     // Fix x = 3:
     // f(3, y, z) = ... = 6(1-y)(1-z) + 6y(1-z) + 9(1-y)z + 10yz.
     f_tilde.fix_variable_at_index(0, Fr::from(3));
-    let expected_output = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
+    let expected_output = vec![Fr::from(6), Fr::from(9), Fr::from(6), Fr::from(10)];
 
     assert_eq!(f_tilde.f.evals.to_vec(), expected_output);
 }
@@ -614,12 +593,12 @@ fn fix_variable_at_index_3_vars_fix_second() {
     // f(x, y, z) = 2x(1-y)(1-z) + 2xy(1-z) + 3x(1-y)z + (1-x)yz + 4xyz
     let evals = vec![
         Fr::from(0),
-        Fr::from(2),
         Fr::from(0),
-        Fr::from(2),
         Fr::from(0),
-        Fr::from(3),
         Fr::from(1),
+        Fr::from(2),
+        Fr::from(3),
+        Fr::from(2),
         Fr::from(4),
     ];
     let f = Evaluations::new(3, evals);
@@ -628,7 +607,7 @@ fn fix_variable_at_index_3_vars_fix_second() {
     // Fix y = 4:
     // f(x, 4, z) = ... = 2x(1-z) + 4(1-x)z + 7xz.
     f_tilde.fix_variable_at_index(1, Fr::from(4));
-    let expected_output = vec![Fr::from(0), Fr::from(2), Fr::from(4), Fr::from(7)];
+    let expected_output = vec![Fr::from(0), Fr::from(4), Fr::from(2), Fr::from(7)];
 
     assert_eq!(f_tilde.f.evals.to_vec(), expected_output);
 }
@@ -638,12 +617,12 @@ fn fix_variable_at_index_3_vars_fix_third() {
     // f(x, y, z) = 2x(1-y)(1-z) + 2xy(1-z) + 3x(1-y)z + (1-x)yz + 4xyz
     let evals = vec![
         Fr::from(0),
-        Fr::from(2),
         Fr::from(0),
-        Fr::from(2),
         Fr::from(0),
-        Fr::from(3),
         Fr::from(1),
+        Fr::from(2),
+        Fr::from(3),
+        Fr::from(2),
         Fr::from(4),
     ];
     let f = Evaluations::new(3, evals);
@@ -652,13 +631,13 @@ fn fix_variable_at_index_3_vars_fix_third() {
     // Fix z = 5:
     // f(x, y, 5) = 7x(1-y) + 5(1-x)y + 12xy.
     f_tilde.fix_variable_at_index(2, Fr::from(5));
-    let expected_output = vec![Fr::from(0), Fr::from(7), Fr::from(5), Fr::from(12)];
+    let expected_output = vec![Fr::from(0), Fr::from(5), Fr::from(7), Fr::from(12)];
 
     assert_eq!(f_tilde.f.evals.to_vec(), expected_output);
 }
 
 #[test]
-fn test_interlace_mles() {
+fn test_stack_mles() {
     let mles = vec![
         vec![Fr::from(0), Fr::from(4), Fr::from(8), Fr::from(2)],
         vec![Fr::from(1), Fr::from(5), Fr::from(9), Fr::from(3)],
@@ -669,26 +648,26 @@ fn test_interlace_mles() {
     .map(MultilinearExtension::new)
     .collect::<Vec<_>>();
 
-    let interlaced_mle = MultilinearExtension::interlace_mles(mles);
+    let stacked_mle = MultilinearExtension::stack_mles(mles);
 
     assert_eq!(
-        *interlaced_mle.iter().collect::<Vec<_>>(),
+        *stacked_mle.iter().collect::<Vec<_>>(),
         vec![
             Fr::from(0),
-            Fr::from(1),
-            Fr::from(2),
-            Fr::from(3),
             Fr::from(4),
-            Fr::from(5),
-            Fr::from(6),
-            Fr::from(7),
             Fr::from(8),
-            Fr::from(9),
-            Fr::from(0),
-            Fr::from(1),
             Fr::from(2),
+            Fr::from(1),
+            Fr::from(5),
+            Fr::from(9),
             Fr::from(3),
+            Fr::from(2),
+            Fr::from(6),
+            Fr::from(0),
             Fr::from(4),
+            Fr::from(3),
+            Fr::from(7),
+            Fr::from(1),
             Fr::from(5)
         ]
     );
