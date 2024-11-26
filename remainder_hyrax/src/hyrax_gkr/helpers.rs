@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use remainder::{
     layer::LayerId,
-    layouter::circuit_hash::CircuitHashType,
     mle::evals::MultilinearExtension,
     prover::{
         config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
@@ -57,7 +56,6 @@ pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
             blinding_rng,
             converter,
             &mut transcript,
-            CircuitHashType::Sha3_256,
         ),
         &gkr_circuit_prover_config,
         &gkr_circuit_verifier_config,
@@ -78,7 +76,6 @@ pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
             &circuit_desc,
             &committer,
             &mut transcript,
-            CircuitHashType::Sha3_256,
             &proof_config,
         ),
         &gkr_circuit_prover_config,
