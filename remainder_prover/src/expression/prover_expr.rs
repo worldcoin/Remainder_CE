@@ -55,17 +55,14 @@ impl MleVecIndex {
         self.0 += offset;
     }
 
-    /// return the actual mle_ref in the vec within the prover expression
-    pub fn get_mle<'a, F: Field>(&self, mle_ref_vec: &'a [DenseMle<F>]) -> &'a DenseMle<F> {
-        &mle_ref_vec[self.0]
+    /// return the actual mle in the vec within the prover expression
+    pub fn get_mle<'a, F: Field>(&self, mle_vec: &'a [DenseMle<F>]) -> &'a DenseMle<F> {
+        &mle_vec[self.0]
     }
 
-    /// return the actual mle_ref in the vec within the prover expression
-    pub fn get_mle_mut<'a, F: Field>(
-        &self,
-        mle_ref_vec: &'a mut [DenseMle<F>],
-    ) -> &'a mut DenseMle<F> {
-        &mut mle_ref_vec[self.0]
+    /// return the actual mle in the vec within the prover expression
+    pub fn get_mle_mut<'a, F: Field>(&self, mle_vec: &'a mut [DenseMle<F>]) -> &'a mut DenseMle<F> {
+        &mut mle_vec[self.0]
     }
 }
 
@@ -84,7 +81,7 @@ impl<F: Field> Expression<F, ProverExpr> {
     /// See documentation in [super::circuit_expr::ExprDescription]'s `select()`
     /// function for more details!
     pub fn select(self, mut rhs: Expression<F, ProverExpr>) -> Self {
-        let offset = self.num_mle_ref();
+        let offset = self.num_mle();
         rhs.increment_mle_vec_indices(offset);
         let (lhs_node, lhs_mle_vec) = self.deconstruct();
         let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
@@ -140,7 +137,7 @@ impl<F: Field> Expression<F, ProverExpr> {
 
     /// Create a Sum Expression that contains two MLEs
     pub fn sum(lhs: Self, mut rhs: Self) -> Self {
-        let offset = lhs.num_mle_ref();
+        let offset = lhs.num_mle();
         rhs.increment_mle_vec_indices(offset);
 
         let (lhs_node, lhs_mle_vec) = lhs.deconstruct();
@@ -160,7 +157,7 @@ impl<F: Field> Expression<F, ProverExpr> {
     }
 
     /// returns the number of MleRefs in the expression
-    pub fn num_mle_ref(&self) -> usize {
+    pub fn num_mle(&self) -> usize {
         self.mle_vec.len()
     }
 
@@ -230,7 +227,7 @@ impl<F: Field> Expression<F, ProverExpr> {
 
     /// evaluates an expression on the given challenges points, by fixing the variables
     pub fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError> {
-        // --- It's as simple as fixing all variables ---
+        // It's as simple as fixing all variables
         challenges
             .iter()
             .enumerate()
@@ -244,9 +241,9 @@ impl<F: Field> Expression<F, ProverExpr> {
          -> Result<(), ExpressionError> {
             match exp {
                 ExpressionNode::Mle(mle_vec_idx) => {
-                    let mle_ref = mle_vec_idx.get_mle(mle_vec);
+                    let mle = mle_vec_idx.get_mle(mle_vec);
 
-                    let indices = mle_ref
+                    let indices = mle
                         .mle_indices()
                         .iter()
                         .filter_map(|index| match index {
@@ -267,15 +264,14 @@ impl<F: Field> Expression<F, ProverExpr> {
                     }
                 }
                 ExpressionNode::Product(mle_vec_indices) => {
-                    let mle_refs = mle_vec_indices
+                    let mles = mle_vec_indices
                         .iter()
                         .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                         .collect_vec();
 
-                    mle_refs
-                        .iter()
-                        .map(|mle_ref| {
-                            let indices = mle_ref
+                    mles.iter()
+                        .map(|mle| {
+                            let indices = mle
                                 .mle_indices()
                                 .iter()
                                 .filter_map(|index| match index {
@@ -303,7 +299,7 @@ impl<F: Field> Expression<F, ProverExpr> {
         };
         self.traverse(&mut observer_fn)?;
 
-        // --- Traverse the expression and pick up all the evals ---
+        // Traverse the expression and pick up all the evals
         self.clone()
             .transform_to_verifier_expression()
             .unwrap()
@@ -407,7 +403,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 Box::new(b.transform_to_verifier_expression_node(mle_vec)?),
             )),
             ExpressionNode::Mle(mle_vec_idx) => {
-                let mle_ref = mle_vec_idx.get_mle(mle_vec);
+                let mle = mle_vec_idx.get_mle(mle_vec);
 
                 // TODO(Makis): Technically, this is wrong because a fully-bound
                 // MLE whose value happens to be `F::ZERO`, is allowed to have
@@ -417,13 +413,13 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 // remove this test and instead rely on
                 // [remainder::mle::dense::Dense::value] which performs the
                 // necessary checks and panics if the MLE is not fully-bound.
-                if mle_ref.len() != 1 {
+                if mle.len() != 1 {
                     return Err(ExpressionError::EvaluateNotFullyBoundError);
                 }
 
-                let layer_id = mle_ref.layer_id();
-                let mle_indices = mle_ref.mle_indices().to_vec();
-                let eval = mle_ref.value();
+                let layer_id = mle.layer_id();
+                let mle_indices = mle.mle_indices().to_vec();
+                let eval = mle.value();
 
                 Ok(ExpressionNode::Mle(VerifierMle::new(
                     layer_id,
@@ -488,13 +484,10 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 }
             }
             ExpressionNode::Mle(mle_vec_idx) => {
-                let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
+                let mle = mle_vec_idx.get_mle_mut(mle_vec);
 
-                if mle_ref
-                    .mle_indices()
-                    .contains(&MleIndex::Indexed(round_index))
-                {
-                    mle_ref.fix_variable(round_index, challenge);
+                if mle.mle_indices().contains(&MleIndex::Indexed(round_index)) {
+                    mle.fix_variable(round_index, challenge);
                 }
             }
             ExpressionNode::Negated(a) => a.fix_variable_node(round_index, challenge, mle_vec),
@@ -506,13 +499,10 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 mle_vec_indices
                     .iter_mut()
                     .map(|mle_vec_index| {
-                        let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+                        let mle = mle_vec_index.get_mle_mut(mle_vec);
 
-                        if mle_ref
-                            .mle_indices()
-                            .contains(&MleIndex::Indexed(round_index))
-                        {
-                            mle_ref.fix_variable(round_index, challenge);
+                        if mle.mle_indices().contains(&MleIndex::Indexed(round_index)) {
+                            mle.fix_variable(round_index, challenge);
                         }
                     })
                     .collect_vec();
@@ -541,13 +531,10 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 }
             }
             ExpressionNode::Mle(mle_vec_idx) => {
-                let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
+                let mle = mle_vec_idx.get_mle_mut(mle_vec);
 
-                if mle_ref
-                    .mle_indices()
-                    .contains(&MleIndex::Indexed(round_index))
-                {
-                    mle_ref.fix_variable_at_index(round_index, challenge);
+                if mle.mle_indices().contains(&MleIndex::Indexed(round_index)) {
+                    mle.fix_variable_at_index(round_index, challenge);
                 }
             }
             ExpressionNode::Negated(a) => {
@@ -561,13 +548,10 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 mle_vec_indices
                     .iter_mut()
                     .map(|mle_vec_index| {
-                        let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+                        let mle = mle_vec_index.get_mle_mut(mle_vec);
 
-                        if mle_ref
-                            .mle_indices()
-                            .contains(&MleIndex::Indexed(round_index))
-                        {
-                            mle_ref.fix_variable_at_index(round_index, challenge);
+                        if mle.mle_indices().contains(&MleIndex::Indexed(round_index)) {
+                            mle.fix_variable_at_index(round_index, challenge);
                         }
                     })
                     .collect_vec();
@@ -622,10 +606,10 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 beta,
             ),
             ExpressionNode::Mle(mle_vec_idx) => {
-                let mle_ref = mle_vec_idx.get_mle(mle_vec);
+                let mle = mle_vec_idx.get_mle(mle_vec);
                 let (unbound_beta_vec, bound_beta_vec) =
-                    beta.get_relevant_beta_unbound_and_bound(mle_ref.mle_indices());
-                mle_eval(mle_ref, &unbound_beta_vec, &bound_beta_vec)
+                    beta.get_relevant_beta_unbound_and_bound(mle.mle_indices());
+                mle_eval(mle, &unbound_beta_vec, &bound_beta_vec)
             }
             ExpressionNode::Negated(a) => {
                 let a = a.evaluate_sumcheck_node_beta_cascade(
@@ -667,23 +651,23 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 sum(a, b)
             }
             ExpressionNode::Product(mle_vec_indices) => {
-                let mle_refs = mle_vec_indices
+                let mles = mle_vec_indices
                     .iter()
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                     .collect_vec();
 
                 let mut unique_mle_indices = HashSet::new();
 
-                let mle_ref_indices_vec = mle_refs
+                let mle_indices_vec = mles
                     .iter()
-                    .flat_map(|mle_ref| mle_ref.mle_indices.clone())
+                    .flat_map(|mle| mle.mle_indices.clone())
                     .filter(move |mle_index| unique_mle_indices.insert(mle_index.clone()))
                     .collect_vec();
 
                 let (unbound_beta_vec, bound_beta_vec) =
-                    beta.get_relevant_beta_unbound_and_bound(&mle_ref_indices_vec);
+                    beta.get_relevant_beta_unbound_and_bound(&mle_indices_vec);
 
-                product(&mle_refs, &unbound_beta_vec, &bound_beta_vec)
+                product(&mles, &unbound_beta_vec, &bound_beta_vec)
             }
             ExpressionNode::Scaled(a, f) => {
                 let a = a.evaluate_sumcheck_node_beta_cascade(
@@ -722,8 +706,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 max(a_bits, b_bits)
             }
             ExpressionNode::Mle(mle_vec_idx) => {
-                let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
-                mle_ref.index_mle_indices(curr_index)
+                let mle = mle_vec_idx.get_mle_mut(mle_vec);
+                mle.index_mle_indices(curr_index)
             }
             ExpressionNode::Sum(a, b) => {
                 let a_bits = a.index_mle_indices_node(curr_index, mle_vec);
@@ -733,8 +717,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             ExpressionNode::Product(mle_vec_indices) => mle_vec_indices
                 .iter_mut()
                 .map(|mle_vec_index| {
-                    let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
-                    mle_ref.index_mle_indices(curr_index)
+                    let mle = mle_vec_index.get_mle_mut(mle_vec);
+                    mle.index_mle_indices(curr_index)
                 })
                 .reduce(max)
                 .unwrap_or(curr_index),
@@ -755,13 +739,13 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             match self {
                 // in a product, we need the union of all the indices in each of the individual mle refs.
                 ExpressionNode::Product(mle_vec_indices) => {
-                    let mle_refs = mle_vec_indices
+                    let mles = mle_vec_indices
                         .iter()
                         .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                         .collect_vec();
                     let mut product_indices: HashSet<usize> = HashSet::new();
-                    mle_refs.into_iter().for_each(|mle_ref| {
-                        mle_ref.mle_indices.iter().for_each(|mle_index| {
+                    mles.into_iter().for_each(|mle| {
+                        mle.mle_indices.iter().for_each(|mle_index| {
                             if let MleIndex::Indexed(i) = mle_index {
                                 product_indices.insert(*i);
                             }
@@ -771,9 +755,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 }
                 // in an mle, we need all of the mle indices in the mle.
                 ExpressionNode::Mle(mle_vec_idx) => {
-                    let mle_ref = mle_vec_idx.get_mle(mle_vec);
-                    mle_ref
-                        .mle_indices
+                    let mle = mle_vec_idx.get_mle(mle_vec);
+                    mle.mle_indices
                         .clone()
                         .into_iter()
                         .filter_map(|mle_index| match mle_index {
@@ -849,14 +832,14 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 // that are part of a product. we iterate through all the indices in the product nodes
                 // to look for repeated indices within a single node.
                 ExpressionNode::Product(mle_vec_indices) => {
-                    let mle_refs = mle_vec_indices
+                    let mles = mle_vec_indices
                         .iter()
                         .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                         .collect_vec();
                     let mut product_nonlinear_indices: HashSet<usize> = HashSet::new();
                     let mut product_indices_counts: HashMap<MleIndex<F>, usize> = HashMap::new();
-                    mle_refs.into_iter().for_each(|mle_ref| {
-                        mle_ref.mle_indices.iter().for_each(|mle_index| {
+                    mles.into_iter().for_each(|mle| {
+                        mle.mle_indices.iter().for_each(|mle_index| {
                             let curr_count = {
                                 if product_indices_counts.contains_key(mle_index) {
                                     product_indices_counts.get(mle_index).unwrap()
@@ -973,10 +956,9 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 max(a_bits, b_bits)
             }
             ExpressionNode::Mle(mle_vec_idx) => {
-                let mle_ref = mle_vec_idx.get_mle(mle_vec);
+                let mle = mle_vec_idx.get_mle(mle_vec);
 
-                mle_ref
-                    .mle_indices()
+                mle.mle_indices()
                     .iter()
                     .filter(|item| {
                         matches!(
@@ -994,16 +976,14 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 max(a_bits, b_bits)
             }
             ExpressionNode::Product(mle_vec_indices) => {
-                let mle_refs = mle_vec_indices
+                let mles = mle_vec_indices
                     .iter()
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                     .collect_vec();
 
-                mle_refs
-                    .iter()
-                    .map(|mle_ref| {
-                        mle_ref
-                            .mle_indices()
+                mles.iter()
+                    .map(|mle| {
+                        mle.mle_indices()
                             .iter()
                             .filter(|item| {
                                 matches!(
@@ -1049,10 +1029,9 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 max(a_bits, b_bits)
             }
             ExpressionNode::Mle(mle_vec_idx) => {
-                let mle_ref = mle_vec_idx.get_mle(mle_vec);
+                let mle = mle_vec_idx.get_mle(mle_vec);
 
-                mle_ref
-                    .mle_indices()
+                mle.mle_indices()
                     .iter()
                     .filter(|item| matches!(item, &&MleIndex::Free))
                     .collect_vec()
@@ -1065,16 +1044,14 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 max(a_bits, b_bits)
             }
             ExpressionNode::Product(mle_vec_indices) => {
-                let mle_refs = mle_vec_indices
+                let mles = mle_vec_indices
                     .iter()
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                     .collect_vec();
 
-                mle_refs
-                    .iter()
-                    .map(|mle_ref| {
-                        mle_ref
-                            .mle_indices()
+                mles.iter()
+                    .map(|mle| {
+                        mle.mle_indices()
                             .iter()
                             .filter(|item| matches!(item, &&MleIndex::Free))
                             .collect_vec()
@@ -1115,16 +1092,16 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 products.extend(b.get_post_sumcheck_layer(multiplier, mle_vec).0);
             }
             ExpressionNode::Mle(mle_vec_idx) => {
-                let mle_ref = mle_vec_idx.get_mle(mle_vec);
-                assert_eq!(mle_ref.len(), 1);
-                products.push(Product::<F, F>::new(&[mle_ref.clone()], multiplier));
+                let mle = mle_vec_idx.get_mle(mle_vec);
+                assert_eq!(mle.len(), 1);
+                products.push(Product::<F, F>::new(&[mle.clone()], multiplier));
             }
             ExpressionNode::Product(mle_vec_indices) => {
-                let mle_refs = mle_vec_indices
+                let mles = mle_vec_indices
                     .iter()
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec).clone())
                     .collect_vec();
-                let product = Product::<F, F>::new(&mle_refs, multiplier);
+                let product = Product::<F, F>::new(&mles, multiplier);
                 products.push(product);
             }
             ExpressionNode::Scaled(a, scale_factor) => {
@@ -1154,9 +1131,9 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 // 1 for the current MLE
                 1
             }
-            ExpressionNode::Product(mle_refs) => {
+            ExpressionNode::Product(mles) => {
                 // max degree is the number of MLEs in a product
-                mle_refs.len()
+                mles.len()
             }
             ExpressionNode::Scaled(a, _) | ExpressionNode::Negated(a) => a.get_max_degree(_mle_vec),
             ExpressionNode::Constant(_) => 1,
@@ -1215,9 +1192,7 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, ProverExp
                 .field(b)
                 .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
-            ExpressionNode::Mle(_mle_ref) => {
-                f.debug_struct("Mle").field("mle_ref", _mle_ref).finish()
-            }
+            ExpressionNode::Mle(_mle) => f.debug_struct("Mle").field("mle", _mle).finish(),
             ExpressionNode::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
             ExpressionNode::Product(a) => f.debug_tuple("Product").field(a).finish(),

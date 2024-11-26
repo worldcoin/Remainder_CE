@@ -64,7 +64,7 @@ impl<F: Field> Expression<F, VerifierExpr> {
                                lhs: Result<F, ExpressionError>,
                                rhs: Result<F, ExpressionError>|
          -> Result<F, ExpressionError> {
-            // --- Selector bit must be bound ---
+            // Selector bit must be bound
             if let MleIndex::Bound(val, _) = idx {
                 return Ok(*val * rhs? + (F::ONE - val) * lhs?);
             }
@@ -301,9 +301,7 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, VerifierE
                 .field(b)
                 .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
-            ExpressionNode::Mle(mle_ref) => {
-                f.debug_struct("Circuit Mle").field("mle", mle_ref).finish()
-            }
+            ExpressionNode::Mle(mle) => f.debug_struct("Circuit Mle").field("mle", mle).finish(),
             ExpressionNode::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
             ExpressionNode::Product(a) => f.debug_tuple("Product").field(a).finish(),

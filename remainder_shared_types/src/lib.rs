@@ -74,3 +74,18 @@ pub trait HasByteRepresentation {
     where
         Self: Sized;
 }
+
+/// Simple trait which allows for ease of converting e.g. a `Vec<u64>`
+/// into a `Vec<F>`.
+pub trait IntoVecF<F: Field> {
+    fn into_vec_f(self) -> Vec<F>;
+}
+
+impl<F: Field, T> IntoVecF<F> for Vec<T>
+where
+    F: From<T>,
+{
+    fn into_vec_f(self) -> Vec<F> {
+        self.into_iter().map(F::from).collect()
+    }
+}

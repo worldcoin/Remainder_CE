@@ -30,18 +30,18 @@ pub fn remainder_ligero_commit<F: Field>(
     input_mle_bookkeeping_table: &[F],
     aux: &LigeroAuxInfo<F>,
 ) -> (LigeroCommit<PoseidonSpongeHasher<F>, F>, LigeroRoot<F>) {
-    // --- Sanitycheck ---
+    // Sanitycheck
     assert!(input_mle_bookkeeping_table.len().is_power_of_two());
 
-    // --- Create commitment ---
+    // Create commitment
     let comm =
         commit::<PoseidonSpongeHasher<F>, LigeroAuxInfo<F>, F>(input_mle_bookkeeping_table, aux)
             .unwrap();
 
-    // --- Only component of commitment which needs to be sent to the verifier is the commitment root ---
+    // Only component of commitment which needs to be sent to the verifier is the commitment root
     let root: LigeroRoot<F> = comm.get_root();
 
-    // --- Return the auxiliaries + commitment ---
+    // Return the auxiliaries + commitment
     (comm, root)
 }
 
@@ -64,14 +64,14 @@ pub fn remainder_ligero_eval_prove<F: Field>(
     aux: &LigeroAuxInfo<F>,
     comm: &LigeroCommit<PoseidonSpongeHasher<F>, F>,
 ) -> Result<(), ProverError<&'static str>> {
-    // --- Sanitycheck ---
+    // Sanitycheck
     assert!(input_layer_bookkeeping_table.len().is_power_of_two());
 
-    // --- Compute "a" and "b" from `challenge_coord` ---
+    // Compute "a" and "b" from `challenge_coord`
     let (_, outer_tensor) =
         get_ml_inner_outer_tensors(challenge_coord, aux.num_rows, aux.orig_num_cols);
 
-    // --- Compute evaluation proof and write to `transcript_writer`
+    // Compute evaluation proof and write to `transcript_writer`
     prove(comm, &outer_tensor[..], aux, transcript_writer)
 }
 
@@ -92,10 +92,10 @@ pub fn remainder_ligero_verify<F: Field>(
     challenge_coord: &[F],
     claimed_value: F,
 ) {
-    // --- Sanitycheck ---
+    // Sanitycheck
     assert_eq!(aux.num_rows * aux.orig_num_cols, 1 << challenge_coord.len());
 
-    // --- Grab the inner/outer tensors from the challenge point ---
+    // Grab the inner/outer tensors from the challenge point
     let (inner_tensor, outer_tensor) =
         get_ml_inner_outer_tensors(challenge_coord, aux.num_rows, aux.orig_num_cols);
 
@@ -132,17 +132,17 @@ mod tests {
     /// * Verify that proof using the Remainder API for verification.
     #[test]
     fn test_remainder_flow() {
-        // --- Setup stuff ---
+        // Setup stuff
         let ml_num_vars = 8;
         let rho_inv = 4;
         let ratio = 1_f64;
         let mut rng = test_rng();
 
-        // --- Generate random polynomial ---
+        // Generate random polynomial
         let ml_coeffs = get_random_coeffs_for_multilinear_poly(ml_num_vars, &mut rng);
         let mut rng = test_rng();
 
-        // --- Grab challenge point and claimed value ---
+        // Grab challenge point and claimed value
         let challenge_coord: Vec<Fr> = repeat_with(|| Fr::from(rng.gen::<u64>()))
             .take(ml_num_vars)
             .collect_vec();
@@ -150,11 +150,11 @@ mod tests {
         let mut transcript_writer =
             TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("Test transcript");
 
-        // --- Commit ---
+        // Commit
         let aux = LigeroAuxInfo::new(ml_coeffs.len().next_power_of_two(), rho_inv, ratio, None);
         let (comm, root) = remainder_ligero_commit(&ml_coeffs, &aux);
 
-        // --- Add commitment to transcript ---
+        // Add commitment to transcript
         transcript_writer.append("root", root.root);
 
         let _prove_result = remainder_ligero_eval_prove(
@@ -167,7 +167,7 @@ mod tests {
 
         let transcript = transcript_writer.get_transcript();
 
-        // --- Grab new Poseidon transcript + verify ---
+        // Grab new Poseidon transcript + verify
         let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript);
         let transcript_commit_result = transcript_reader.consume_element("root").unwrap();
 

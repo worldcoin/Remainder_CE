@@ -65,10 +65,10 @@ fn test_completeness() {
         ECTranscript::new("modulus modulus modulus modulus modulus");
     // the mle
     let v00 = Fr::from(7);
-    let v10 = Fr::from(28);
-    let v01 = Fr::from(4);
+    let v01 = Fr::from(28);
+    let v10 = Fr::from(4);
     let v11 = Fr::from(23);
-    let mut mle_ref = DenseMle::new_from_raw(vec![v00, v10, v01, v11], LayerId::Input(0));
+    let mut mle = DenseMle::new_from_raw(vec![v00, v01, v10, v11], LayerId::Input(0));
     // the sum
     let sum = v00 + v01 + v10 + v11;
     let sum_commit = committer.committed_scalar(&sum, &Fr::from(2));
@@ -77,10 +77,10 @@ fn test_completeness() {
     let r2 = Fr::from(2);
     let bindings = vec![r1, r2];
     // bind the variables
-    mle_ref.index_mle_indices(0);
-    mle_ref.fix_variable(0, r1);
-    mle_ref.fix_variable(1, r2);
-    let mle_eval = mle_ref.value();
+    mle.index_mle_indices(0);
+    mle.fix_variable(0, r1);
+    mle.fix_variable(1, r2);
+    let mle_eval = mle.value();
     // first sumcheck message f1
     let f10 = v00 + v01;
     let f11 = v10 + v11 - v00 - v01;
@@ -95,7 +95,7 @@ fn test_completeness() {
     let message2 = committer.committed_vector(&f2_padded, &Fr::from(7));
     assert_eq!(f20 + r2 * f21, mle_eval); // f2(r2) = mle_eval
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
-        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(&[mle_ref.clone()], Fr::one())]),
+        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(&[mle.clone()], Fr::one())]),
         &committer,
         &mut rand::thread_rng(),
     );
@@ -148,7 +148,7 @@ fn test_example_with_regular_layer() {
     let v10 = Fr::from(1);
     let v01 = Fr::from(1);
     let v11 = Fr::from(1);
-    let mut mle_ref = DenseMle::new_from_raw(vec![v00, v10, v01, v11], LayerId::Input(0));
+    let mut mle = DenseMle::new_from_raw(vec![v00, v10, v01, v11], LayerId::Input(0));
     let layer_claim_for_beta = vec![Fr::one(), Fr::one()];
     let mut equality_mle = BetaValues::new_beta_equality_mle(layer_claim_for_beta);
     let mut constant_rng = ConstantRng::new(1);
@@ -163,8 +163,7 @@ fn test_example_with_regular_layer() {
     let bindings = vec![r1, r2];
 
     // bind the variables
-    mle_ref.index_mle_indices(0);
-    equality_mle.index_mle_indices(0);
+    mle.index_mle_indices(0);
 
     // first sumcheck message f1
     let f1_padded = vec![
@@ -178,8 +177,8 @@ fn test_example_with_regular_layer() {
     let message1 = committer.committed_vector(&f1_padded, &Fr::one());
 
     // second sumcheck message f2
-    equality_mle.fix_variable(0, r1);
-    mle_ref.fix_variable(0, r1);
+    equality_mle.fix_variable(r1);
+    mle.fix_variable(0, r1);
 
     let evaluations = [Fr::from(0), Fr::from(1), Fr::from(2)];
     let mut converter = VandermondeInverse::<Fr>::new();
@@ -196,13 +195,13 @@ fn test_example_with_regular_layer() {
     ];
     let message2 = committer.committed_vector(&f2_padded, &Fr::from(7));
 
-    equality_mle.fix_variable(1, r2);
-    mle_ref.fix_variable(1, r2);
+    equality_mle.fix_variable(r2);
+    mle.fix_variable(1, r2);
 
-    let _mle_eval = mle_ref.value() * equality_mle.value();
+    let _mle_eval = mle.value() * equality_mle.value();
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
         &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(
-            &vec![mle_ref.clone()],
+            &vec![mle.clone()],
             equality_mle.value(),
         )]),
         &committer,
@@ -254,12 +253,12 @@ fn test_soundness() {
     let v01 = Fr::from(4);
     let v10 = Fr::from(28);
     let v11 = Fr::from(23);
-    let mut mle_ref = DenseMle::new_from_raw(vec![v00, v10, v01, v11], LayerId::Input(0));
+    let mut mle = DenseMle::new_from_raw(vec![v00, v10, v01, v11], LayerId::Input(0));
     let bindings = vec![Fr::from(3), Fr::from(2)];
-    mle_ref.fix_variable(1, bindings[0]);
-    mle_ref.fix_variable(2, bindings[1]);
+    mle.fix_variable(1, bindings[0]);
+    mle.fix_variable(2, bindings[1]);
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
-        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(&[mle_ref.clone()], Fr::one())]),
+        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(&[mle.clone()], Fr::one())]),
         &committer,
         &mut rand::thread_rng(),
     );

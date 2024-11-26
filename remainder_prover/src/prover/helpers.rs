@@ -203,7 +203,7 @@ fn test_circuit_internal<F: Field>(
             let mut transcript_reader = TranscriptReader::<F, PoseidonSponge<F>>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
-            // --- Extract the public inputs (i.e. those which do not appear in the `private_input_layer_description_and_precommits`) ---
+            // Extract the public inputs (i.e. those which do not appear in the `private_input_layer_description_and_precommits`)
             let public_input_layers = inputs
                 .clone()
                 .into_iter()
@@ -216,7 +216,7 @@ fn test_circuit_internal<F: Field>(
                 })
                 .collect();
 
-            // --- Additionally, extract the ligero input layer descriptions ---
+            // Additionally, extract the ligero input layer descriptions
             let private_input_layer_descriptions = private_input_layer_description_and_precommits
                 .into_values()
                 .map(|(layer_description, _)| layer_description)
