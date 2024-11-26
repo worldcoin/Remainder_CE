@@ -22,7 +22,7 @@ use remainder_shared_types::{ff_field, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    hyrax_pcs::{HyraxPCSEvaluationProof, MleCoefficientsVector},
+    hyrax_pcs::HyraxPCSEvaluationProof,
     hyrax_primitives::{
         proof_of_claim_agg::ProofOfClaimAggregation, proof_of_equality::ProofOfEquality,
     },
@@ -33,9 +33,9 @@ use super::hyrax_layer::HyraxClaim;
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-/// The proof structure for a Hyrax input layer. Includes the [ProofOfClaimAggregation], and
-/// the appropriate opening proof for opening the polynomial commitment at a random evaluation
-/// point.
+/// The proof structure for a Hyrax input layer. Includes the
+/// [ProofOfClaimAggregation], and the appropriate opening proof for opening the
+/// polynomial commitment at a random evaluation point.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
@@ -47,8 +47,8 @@ pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
     pub input_commitment: Vec<C>,
     /// The evaluation proof for the polynomial evaluated at a random point
     pub evaluation_proof: HyraxPCSEvaluationProof<C>,
-    /// The proof of equality that the aggregated claim point and the
-    /// commitment in the evaluation proof are indeed to the same value
+    /// The proof of equality that the aggregated claim point and the commitment
+    /// in the evaluation proof are indeed to the same value
     pub proof_of_equality: ProofOfEquality<C>,
 }
 
@@ -62,9 +62,10 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         transcript: &mut impl ECTranscriptTrait<C>,
         converter: &mut VandermondeInverse<C::Scalar>,
     ) -> Self {
-        // Calculate the coefficients of the polynomial that interpolates the claims
-        // NB we don't use aggregate_claims here because the sampling of the evaluation
-        // point for the aggregate claim needs to happen elsewhere in Hyrax.
+        // Calculate the coefficients of the polynomial that interpolates the
+        // claims NB we don't use aggregate_claims here because the sampling of
+        // the evaluation point for the aggregate claim needs to happen
+        // elsewhere in Hyrax.
         let claims = ClaimGroup::new_from_raw_claims(
             committed_claims
                 .iter()
@@ -73,8 +74,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         )
         .unwrap();
         let compute_vi_lx_eval_timer = start_timer!(|| "vilx evals for input");
-        let wlx_evals =
-            compute_claim_wlx(&prover_commitment.mle.convert_to_scalar_field(), &claims);
+        let wlx_evals = compute_claim_wlx(&prover_commitment.mle.to_vec(), &claims);
         end_timer!(compute_vi_lx_eval_timer);
         let coeffs_timer = start_timer!(|| "convert to coeffs timer");
         let interpolant_coeffs = converter.convert_to_coefficients(wlx_evals);
@@ -123,8 +123,8 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         }
     }
 
-    /// Verify a Hyrax Input Layer proof by verifying the inner proof of claim aggregation,
-    /// and then verifying the opening proof by checking the claim.
+    /// Verify a Hyrax Input Layer proof by verifying the inner proof of claim
+    /// aggregation, and then verifying the opening proof by checking the claim.
     pub fn verify(
         &self,
         input_layer_desc: &HyraxInputLayerDescription,
@@ -137,7 +137,8 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             .claim_agg_proof
             .verify(claim_commitments, committer, transcript);
 
-        // Verify the actual "evaluation" polynomial committed to at the random point
+        // Verify the actual "evaluation" polynomial committed to at the random
+        // point
         self.evaluation_proof.verify(
             input_layer_desc.log_num_cols,
             committer,
@@ -146,7 +147,8 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             transcript,
         );
 
-        // Proof of equality for the aggregated claim and the evaluation proof commitment
+        // Proof of equality for the aggregated claim and the evaluation proof
+        // commitment
         self.proof_of_equality.verify(
             agg_claim.evaluation,
             self.evaluation_proof.commitment_to_evaluation.commitment,
@@ -157,16 +159,17 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-/// The circuit description of a Hyrax input layer. Stores the shape information of this layer.
-/// All of the functionality of Hyrax input layers are taken care of in `remainder_hyrax/`, so
-/// this is meant just to generate a circuit description.
+/// The circuit description of a Hyrax input layer. Stores the shape information
+/// of this layer. All of the functionality of Hyrax input layers are taken care
+/// of in `remainder_hyrax/`, so this is meant just to generate a circuit
+/// description.
 pub struct HyraxInputLayerDescription {
     /// The input layer ID.
     pub layer_id: LayerId,
     /// The number of variables this Hyrax Input Layer is on.
     pub num_bits: usize,
-    /// The log number of columns in the matrix form of the data that
-    /// will be committed to in this input layer.
+    /// The log number of columns in the matrix form of the data that will be
+    /// committed to in this input layer.
     pub log_num_cols: usize,
 }
 
@@ -180,8 +183,8 @@ pub type HyraxInputLayerDescriptionWithPrecommit<C> = HashMap<
 >;
 
 impl HyraxInputLayerDescription {
-    /// Create a [HyraxInputLayerDescription] specifying the use of a square matrix ("default
-    /// setup"; build the struct directly for custom setup).
+    /// Create a [HyraxInputLayerDescription] specifying the use of a square
+    /// matrix ("default setup"; build the struct directly for custom setup).
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         let log_num_cols = num_bits / 2;
         Self {
@@ -193,14 +196,15 @@ impl HyraxInputLayerDescription {
 }
 
 impl From<InputLayerDescription> for HyraxInputLayerDescription {
-    /// Convert an [InputLayerDescription] into a [HyraxInputLayerDescription] with a square matrix.
+    /// Convert an [InputLayerDescription] into a [HyraxInputLayerDescription]
+    /// with a square matrix.
     fn from(input_layer_desc: InputLayerDescription) -> Self {
         HyraxInputLayerDescription::new(input_layer_desc.layer_id, input_layer_desc.num_vars)
     }
 }
 
-/// Given a [HyraxInputLayerDescription] and values for its MLE, compute the [HyraxInputCommitment]
-/// for the input layer.
+/// Given a [HyraxInputLayerDescription] and values for its MLE, compute the
+/// [HyraxInputCommitment] for the input layer.
 pub fn commit_to_input_values<C: PrimeOrderCurve>(
     input_layer_desc: &HyraxInputLayerDescription,
     input_mle: &MultilinearExtension<C::Scalar>,
@@ -216,7 +220,7 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
         .for_each(|blinding_factor| {
             *blinding_factor = C::Scalar::random(&mut rng);
         });
-    let mle_coeffs_vec = MleCoefficientsVector::ScalarFieldVector(input_mle.f.iter().collect_vec());
+    let mle_coeffs_vec = MultilinearExtension::new(input_mle.f.iter().collect_vec());
     let commitment_values = HyraxPCSEvaluationProof::compute_matrix_commitments(
         input_layer_desc.log_num_cols,
         &mle_coeffs_vec,
@@ -230,18 +234,20 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
     }
 }
 
-/// The prover's view of the commitment to the input layer, which includes the blinding factors and the plaintext values.
+/// The prover's view of the commitment to the input layer, which includes the
+/// blinding factors and the plaintext values.
 #[derive(Clone)]
 pub struct HyraxProverInputCommitment<C: PrimeOrderCurve> {
     /// The plaintext values
-    pub mle: MleCoefficientsVector<C>,
+    pub mle: MultilinearExtension<C::Scalar>,
     /// The verifier's view of the commitment
     pub commitment: Vec<C>,
     /// The blinding factors used in the commitment
     pub blinding_factors_matrix: Vec<C::Scalar>,
 }
 
-/// Computes the V_d(l(x)) evaluations for this input layer V_d for claim aggregation.
+/// Computes the V_d(l(x)) evaluations for this input layer V_d for claim
+/// aggregation.
 fn compute_claim_wlx<F: Field>(mle_vec: &[F], claims: &ClaimGroup<F>) -> Vec<F> {
     let mle = MultilinearExtension::new(mle_vec.to_owned());
     let num_claims = claims.get_num_claims();
@@ -257,7 +263,8 @@ fn compute_claim_wlx<F: Field>(mle_vec: &[F], claims: &ClaimGroup<F>) -> Vec<F> 
         ((num_claims - 1) * num_idx) + 1
     };
 
-    // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
+    // we already have the first #claims evaluations, get the next num_evals -
+    // #claims evaluations
     let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
         .map(|idx| {
             // get the challenge l(idx)
@@ -280,13 +287,15 @@ fn compute_claim_wlx<F: Field>(mle_vec: &[F], claims: &ClaimGroup<F>) -> Vec<F> 
         })
         .collect();
 
-    // concat this with the first k evaluations from the claims to get num_evals evaluations
+    // concat this with the first k evaluations from the claims to get num_evals
+    // evaluations
     let mut wlx_evals = claimed_vals.clone();
     wlx_evals.extend(&next_evals);
     wlx_evals
 }
 
-/// Verifies a claim by evaluating the MLE at the challenge point and checking that the result.
+/// Verifies a claim by evaluating the MLE at the challenge point and checking
+/// that the result.
 pub fn verify_claim<F: Field>(mle_vec: &[F], claim: &RawClaim<F>) {
     let mut mle = DenseMle::new_from_raw(mle_vec.to_vec(), LayerId::Input(0));
     mle.index_mle_indices(0);

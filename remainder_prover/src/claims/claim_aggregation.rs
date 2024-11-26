@@ -146,7 +146,7 @@ pub fn get_num_wlx_evaluations<F: Field>(
 pub fn get_wlx_evaluations<F: Field>(
     claim_vecs: &[Vec<F>],
     claimed_vals: &[F],
-    claim_mle_refs: Vec<DenseMle<F>>,
+    claim_mles: Vec<DenseMle<F>>,
     num_claims: usize,
     num_idx: usize,
 ) -> Result<Vec<F>, ClaimError> {
@@ -160,10 +160,10 @@ pub fn get_wlx_evaluations<F: Field>(
         (((num_claims - 1) * num_idx) + 1, None)
     };
 
-    let mut claim_mle_refs = claim_mle_refs;
+    let mut claim_mles = claim_mles;
 
     if let Some(common_idx) = common_idx {
-        pre_fix_mles(&mut claim_mle_refs, &claim_vecs[0], common_idx);
+        pre_fix_mles(&mut claim_mles, &claim_vecs[0], common_idx);
     }
 
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
@@ -179,8 +179,8 @@ pub fn get_wlx_evaluations<F: Field>(
                 })
                 .collect();
 
-            let wlx_eval_on_mle_ref = combine_mles_with_aggregate(&claim_mle_refs, &new_chal);
-            wlx_eval_on_mle_ref.unwrap()
+            let wlx_eval_on_mle = combine_mles_with_aggregate(&claim_mles, &new_chal);
+            wlx_eval_on_mle.unwrap()
         })
         .collect();
 

@@ -25,16 +25,16 @@ fn regular_layer_test_prove_verify_product() {
     let mle_v2 = vec![Fr::from(1), Fr::from(5), Fr::from(1), Fr::from(5)];
     let mle_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mle_ref_1 = mle_new;
-    let mle_ref_2 = mle_2;
+    let mle_1 = mle_new;
+    let mle_2 = mle_2;
 
-    let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_ref_1.mle_indices());
-    let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_ref_2.mle_indices());
+    let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_1.mle_indices());
+    let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_2.mle_indices());
     let mut circuit_expression =
         Expression::<Fr, ExprDescription>::products(vec![circuit_mle_1, circuit_mle_2]);
     circuit_expression.index_mle_vars(0);
 
-    let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_ref_1, mle_ref_2]);
+    let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_1, mle_2]);
     let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
 
     let mut layer = RegularLayer::new_raw(crate::layer::LayerId::Layer(0), expression.clone());
@@ -58,25 +58,25 @@ fn regular_layer_test_prove_verify_product() {
 #[test]
 /// E2E test of Proving/Verifying a `RegularLayer`
 fn regular_layer_test_prove_verify_sum() {
-    let mle_vec = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(2)];
+    let mle_vec = vec![Fr::from(2), Fr::from(1), Fr::from(3), Fr::from(2)];
 
     let mle_new: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
-    let mle_v2 = vec![Fr::from(1), Fr::from(5), Fr::from(1), Fr::from(5)];
+    let mle_v2 = vec![Fr::from(1), Fr::from(1), Fr::from(5), Fr::from(5)];
     let mle_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mle_ref_1 = mle_new;
-    let mle_ref_2 = mle_2;
+    let mle_1 = mle_new;
+    let mle_2 = mle_2;
 
-    let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_ref_1.mle_indices());
-    let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_ref_2.mle_indices());
+    let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_1.mle_indices());
+    let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_2.mle_indices());
     let mut circuit_expression = Expression::<Fr, ExprDescription>::sum(
         Expression::from_mle_desc(circuit_mle_1),
         Expression::from_mle_desc(circuit_mle_2),
     );
     circuit_expression.index_mle_vars(0);
 
-    let lhs = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
-    let rhs = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
+    let lhs = Expression::<Fr, ProverExpr>::mle(mle_1);
+    let rhs = Expression::<Fr, ProverExpr>::mle(mle_2);
     let mut expression = Expression::<Fr, ProverExpr>::sum(lhs, rhs);
     let claim = RawClaim::<Fr>::new(vec![Fr::from(2), Fr::from(3)], Fr::from(10));
 
@@ -100,25 +100,25 @@ fn regular_layer_test_prove_verify_sum() {
 #[test]
 /// E2E test of Proving/Verifying a `RegularLayer`
 fn regular_layer_test_prove_verify_selector() {
-    let mle_vec = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(2)];
+    let mle_vec = vec![Fr::from(2), Fr::from(1), Fr::from(3), Fr::from(2)];
 
     let mle_new: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
-    let mle_v2 = vec![Fr::from(1), Fr::from(5), Fr::from(1), Fr::from(5)];
+    let mle_v2 = vec![Fr::from(1), Fr::from(1), Fr::from(5), Fr::from(5)];
     let mle_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mle_ref_1 = mle_new;
-    let mle_ref_2 = mle_2;
+    let mle_1 = mle_new;
+    let mle_2 = mle_2;
 
-    let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_ref_1.mle_indices());
-    let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_ref_2.mle_indices());
+    let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_1.mle_indices());
+    let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_2.mle_indices());
     let mut circuit_expression = Expression::<Fr, ExprDescription>::selectors(vec![
         Expression::from_mle_desc(circuit_mle_1),
         Expression::from_mle_desc(circuit_mle_2),
     ]);
     circuit_expression.index_mle_vars(0);
 
-    let lhs = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
-    let rhs = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
+    let lhs = Expression::<Fr, ProverExpr>::mle(mle_1);
+    let rhs = Expression::<Fr, ProverExpr>::mle(mle_2);
     let mut expression = lhs.select(rhs);
     let claim = RawClaim::<Fr>::new(vec![Fr::from(4), Fr::from(2), Fr::from(3)], Fr::from(33));
 
@@ -143,11 +143,11 @@ fn regular_layer_test_prove_verify_selector() {
 #[test]
 fn regular_layer_test_prove_verify_complex() {
     let mle_1: DenseMle<Fr> = DenseMle::new_from_raw(
-        vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(2)],
+        vec![Fr::from(2), Fr::from(1), Fr::from(3), Fr::from(2)],
         LayerId::Input(0),
     );
     let mle_2: DenseMle<Fr> = DenseMle::new_from_raw(
-        vec![Fr::from(1), Fr::from(5), Fr::from(1), Fr::from(5)],
+        vec![Fr::from(1), Fr::from(1), Fr::from(5), Fr::from(5)],
         LayerId::Input(0),
     );
 
