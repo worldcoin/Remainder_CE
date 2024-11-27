@@ -1,7 +1,7 @@
 //! Identity gate id(z, x) determines whether the xth gate from the
 //! i + 1th layer contributes to the zth gate in the ith layer.
 
-use std::{cmp::Ordering, collections::HashSet};
+use std::{cmp::Ordering, collections::HashSet, fmt::{Debug, Formatter}};
 
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
@@ -39,7 +39,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 /// and storing the entire bookkeeping table.
 
 /// The circuit Description for an [IdentityGate].
-#[derive(Serialize, Deserialize, Debug, Clone, Hash)]
+#[derive(Serialize, Deserialize, Clone, Hash)]
 #[serde(bound = "F: Field")]
 pub struct IdentityGateLayerDescription<F: Field> {
     /// The layer id associated with this gate layer.
@@ -57,6 +57,17 @@ pub struct IdentityGateLayerDescription<F: Field> {
     /// The number of vars representing the number of "dataparallel" copies of
     /// the circuit.
     num_dataparallel_vars: usize,
+}
+
+impl<F: Field> std::fmt::Debug for IdentityGateLayerDescription<F> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IdentityGateLayerDescription")
+            .field("id", &self.id)
+            .field("wiring.len()", &self.wiring.len())
+            .field("source_mle", &self.source_mle)
+            .field("num_dataparallel_vars", &self.num_dataparallel_vars)
+            .finish()
+    }
 }
 
 impl<F: Field> IdentityGateLayerDescription<F> {
