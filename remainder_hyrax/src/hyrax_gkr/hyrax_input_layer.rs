@@ -4,14 +4,14 @@ use ark_std::{cfg_into_iter, end_timer, start_timer};
 use itertools::Itertools;
 use rand::Rng;
 use remainder::claims::claim_aggregation::{
-    get_num_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
+    get_num_wlx_evaluations, get_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
 };
+use remainder::sumcheck::evaluate_at_a_point;
 use remainder::{
     claims::{claim_group::ClaimGroup, RawClaim},
     input_layer::InputLayerDescription,
     layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
-    sumcheck::evaluate_at_a_point,
 };
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
@@ -71,10 +71,29 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         )
         .unwrap();
         let compute_vi_lx_eval_timer = start_timer!(|| "vilx evals for input");
-        let wlx_evals = compute_claim_wlx(&prover_commitment.mle.to_vec(), &claims);
+
+        let wlx_evals = get_wlx_evaluations(
+            claims.get_claim_points_matrix(),
+            claims.get_results(),
+            vec![DenseMle::new_from_multilinear_extension(
+                prover_commitment.mle.clone(),
+                input_layer_desc.layer_id,
+                None,
+            )],
+            claims.get_num_claims(),
+            claims.get_num_vars(),
+        )
+        .unwrap();
+        dbg!(&wlx_evals.len());
+
+        let fake_wlx_evals = compute_claim_wlx(&prover_commitment.mle.to_vec(), &claims);
+        dbg!(&fake_wlx_evals.len());
+
         end_timer!(compute_vi_lx_eval_timer);
+
         let coeffs_timer = start_timer!(|| "convert to coeffs timer");
-        let interpolant_coeffs = converter.convert_to_coefficients(wlx_evals);
+        let interpolant_coeffs = converter.convert_to_coefficients(fake_wlx_evals);
+
         end_timer!(coeffs_timer);
 
         let claim_agg_timer = start_timer!(|| "claim agg input");

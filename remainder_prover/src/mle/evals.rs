@@ -311,6 +311,7 @@ impl<'a, F: Field> Clone for EvaluationsIterator<'a, F> {
 /// An iterator over evaluations indexed by vertices of a projection of the
 /// boolean hypercube on `num_vars - 1` dimensions. See documentation for
 /// `Evaluations::project` for more information.
+#[allow(dead_code)]
 pub struct EvaluationsPairIterator<'a, F: Field> {
     /// Reference to original bookkeeping table.
     evals: &'a Evaluations<F>,

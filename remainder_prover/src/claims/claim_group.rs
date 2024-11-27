@@ -280,6 +280,7 @@ impl<F: Field> ClaimGroup<F> {
             debug!("Received 1 claim. Doing nothing.");
             return Ok(self.claims[0].clone());
         }
+        assert!(self.get_claim_points_matrix().len() > 1);
 
         // Aggregate claims by performing the claim aggregation protocol.
         // First compute V_i(l(x)).

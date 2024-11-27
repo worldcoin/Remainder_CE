@@ -156,7 +156,6 @@ pub fn get_wlx_evaluations<F: Field>(
         let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
         (num_evals, common_idx)
     } else {
-        assert!(claim_vecs.len() > 1);
         (((num_claims - 1) * num_idx) + 1, None)
     };
 

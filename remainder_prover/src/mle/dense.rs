@@ -272,6 +272,26 @@ impl<F: Field> DenseMle<F> {
         }
     }
 
+    /// Constructs a new [DenseMle] from a [MultilinearExtension], additionally
+    /// being able to specify the prefix vars and layer ID.
+    pub fn new_from_multilinear_extension(
+        mle: MultilinearExtension<F>,
+        layer_id: LayerId,
+        prefix_vars: Option<Vec<bool>>,
+    ) -> Self {
+        let mle_indices: Vec<MleIndex<F>> = prefix_vars
+            .unwrap_or_default()
+            .into_iter()
+            .map(|prefix_var| MleIndex::Fixed(prefix_var))
+            .chain((0..mle.num_vars()).map(|_| MleIndex::Free))
+            .collect();
+        Self {
+            layer_id,
+            mle,
+            mle_indices,
+        }
+    }
+
     /// Merges the MLEs into a single MLE by simply concatenating them.
     pub fn combine_mles(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
         let first_mle_num_vars = mles[0].num_free_vars();
