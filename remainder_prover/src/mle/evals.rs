@@ -308,61 +308,6 @@ impl<'a, F: Field> Clone for EvaluationsIterator<'a, F> {
     }
 }
 
-/// An iterator over evaluations indexed by vertices of a projection of the
-/// boolean hypercube on `num_vars - 1` dimensions. See documentation for
-/// `Evaluations::project` for more information.
-#[allow(dead_code)]
-pub struct EvaluationsPairIterator<'a, F: Field> {
-    /// Reference to original bookkeeping table.
-    evals: &'a Evaluations<F>,
-
-    /// A mask for isolating the `k` LSBs of the `current_eval_index` where `k`
-    /// is the dimension on which the original hypercube is projected on.
-    lsb_mask: usize,
-
-    /// 0-base index of the next element to be returned. Invariant:
-    /// `current_eval_index \in [0, 2^(evals.num_vars() - 1)]`. If equal to
-    /// `2^(evals.num_vars() - 1)`, the iterator has reached the end.
-    current_pair_index: usize,
-}
-
-impl<'a, F: Field> Iterator for EvaluationsPairIterator<'a, F> {
-    type Item = (F, F);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let num_vars = self.evals.num_vars();
-        let num_pairs = 1_usize << (num_vars - 1);
-
-        if self.current_pair_index < num_pairs {
-            // Compute the two indices by inserting a `0` and a `1` respectively
-            // in the appropriate position of `current_pair_index`. For example,
-            // if this is an Iterator projecting on `fix_variable_index == 2`
-            // for an Evaluations table of `num_vars == 5`, then `lsb_mask ==
-            // 0b00011` (the `fix_variable_index` LSBs are on). When, for
-            // example `current_pair_index == 0b1010`, it is split into a "right
-            // part": `lsb_idx == 0b00 0 10`, and a "shifted left part":
-            // `msb_idx == 0b10 0 00`.  The two parts are then combined with the
-            // middle bit on and off respectively: `idx1 == 0b10 0 10`, `idx2 ==
-            // 0b10 1 10`.
-            let lsb_idx = self.current_pair_index & self.lsb_mask;
-            let msb_idx = (self.current_pair_index & (!self.lsb_mask)) << 1;
-            let mid_idx = self.lsb_mask + 1;
-
-            let idx1 = lsb_idx | msb_idx;
-            let idx2 = lsb_idx | mid_idx | msb_idx;
-
-            self.current_pair_index += 1;
-
-            let val1 = self.evals.get(idx1).unwrap();
-            let val2 = self.evals.get(idx2).unwrap();
-
-            Some((val1, val2))
-        } else {
-            None
-        }
-    }
-}
-
 /// Stores a function `\tilde{f}: F^n -> F`, the unique Multilinear Extension
 /// (MLE) of a given function `f: {0, 1}^n -> F`:
 /// ```text
@@ -567,7 +512,6 @@ impl<F: Field> MultilinearExtension<F> {
     /// # Panics
     /// if `var_index` is outside the interval `[0, self.num_vars())`.
     pub fn fix_variable_at_index(&mut self, var_index: usize, point: F) {
-        // NEWEST IMPLEMENTATION: manually parallelize.
         let num_vars = self.num_vars();
         let lsb_mask = (1_usize << (num_vars - 1 - var_index)) - 1;
 
@@ -575,17 +519,26 @@ impl<F: Field> MultilinearExtension<F> {
 
         let new_evals: Vec<F> = cfg_into_iter!(0..num_pairs)
             .map(|idx| {
+                // This iteration computes the value of
+                // `f'(idx[0], ..., idx[var_index-1], idx[var_index+1], ..., idx[num_vars - 1])`
+                // where `f'` is the resulting function after fixing the
+                // the `var_index`-th variable.
+                // To do this, we must combine the values of:
+                // `f(idx1) = f(idx[0], ..., idx[var_index-1], 0, idx[var_index+1], ..., idx[num_vars-1])`
+                // and
+                // `f(idx2) = f(idx[0], ..., idx[var_index-1], 1, idx[var_index+1], ..., idx[num_vars-1])`
+                // Below we compute `idx1` and `idx2` corresponding to the two
+                // indices above.
+
                 // Compute the two indices by inserting a `0` and a `1`
-                // respectively in the appropriate position of
-                // `current_pair_index`. For example, if this is an Iterator
-                // projecting on `fix_variable_index == 2` for an Evaluations
-                // table of `num_vars == 5`, then `lsb_mask == 0b11000` (the
-                // `fix_variable_index` LSBs are on). When, for example
-                // `current_pair_index == 0b1010`, it is split into a "right
-                // part": `lsb_idx == 0b00 0 10`, and a "shifted left part":
-                // `msb_idx == 0b10 0 00`.  The two parts are then combined with
-                // the middle bit on and off respectively: `idx1 == 0b10 0 10`,
-                // `idx2 == 0b10 1 10`.
+                // respectively in the appropriate position of `idx`. For
+                // example, if `var_index == 2` and `self.num_vars == 5`, then
+                // `lsb_mask == 0b0011` (the `num_var - 1 - var_index` LSBs are
+                // on). When, for example `idx == 0b1010`, it is split into a
+                // "right part": `lsb_idx == 0b00 0 10`, and a "shifted left
+                // part": `msb_idx == 0b10 0 00`.  The two parts are then
+                // combined with the middle bit on and off respectively: `idx1
+                // == 0b10 0 10`, `idx2 == 0b10 1 10`.
                 let lsb_idx = idx & lsb_mask;
                 let msb_idx = (idx & (!lsb_mask)) << 1;
                 let mid_idx = lsb_mask + 1;
