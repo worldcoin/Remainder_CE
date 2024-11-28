@@ -334,7 +334,10 @@ pub struct MultilinearExtension<F: Field> {
 
 impl<F: Field> From<Vec<bool>> for MultilinearExtension<F> {
     fn from(bools: Vec<bool>) -> Self {
-        let evals = bools.into_iter().map(|b| if b { F::ONE } else { F::ZERO }).collect();
+        let evals = bools
+            .into_iter()
+            .map(|b| if b { F::ONE } else { F::ZERO })
+            .collect();
         MultilinearExtension::new(evals)
     }
 }
