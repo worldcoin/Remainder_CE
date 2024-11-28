@@ -1,11 +1,9 @@
 #[cfg(test)]
 mod tests;
 
-use std::error::Error;
-
 use ark_std::{cfg_into_iter, log2};
 use itertools::{EitherOrBoth::*, Itertools};
-use ndarray::{Array, Dimension, IxDyn};
+use ndarray::{Dimension, IxDyn};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::Field;
@@ -330,7 +328,6 @@ impl<'a, F: Field> Clone for EvaluationsIterator<'a, F> {
 pub struct MultilinearExtension<F: Field> {
     /// The bookkeeping table with the evaluations of `f` on the hypercube.
     pub f: Evaluations<F>,
-    dim_info: Option<DimInfo>,
 }
 
 impl<F: Field> MultilinearExtension<F> {
@@ -344,10 +341,7 @@ impl<F: Field> MultilinearExtension<F> {
     /// Generate a new MultilinearExtension from a representation `evals` of a
     /// function `f`.
     pub fn new_from_evals(evals: Evaluations<F>) -> Self {
-        Self {
-            f: evals,
-            dim_info: None,
-        }
+        Self { f: evals }
     }
 
     /// Creates a new mle which is all zeroes of a specific num_vars. In this
@@ -359,7 +353,6 @@ impl<F: Field> MultilinearExtension<F> {
                 num_vars,
                 zero: F::ZERO,
             },
-            dim_info: None,
         }
     }
 
@@ -391,51 +384,6 @@ impl<F: Field> MultilinearExtension<F> {
     /// returns its value. Otherwise panics.
     pub fn value(&self) -> F {
         self.f.value()
-    }
-
-    /// Generate a new MultilinearExtension from `evals` and `dim_info`.
-    pub fn new_with_dim_info(evals: Evaluations<F>, dim_info: DimInfo) -> Self {
-        let mut mle = Self::new_from_evals(evals);
-        mle.set_dim_info(dim_info).unwrap();
-        mle
-    }
-
-    /// Generate a new MultilinearExtension from a representation of `ndarray`
-    pub fn new_from_ndarray(
-        ndarray: Array<F, IxDyn>,
-        axes_names: Vec<String>,
-    ) -> Result<Self, Box<dyn Error>> {
-        let dim_info = DimInfo::new(ndarray.raw_dim(), axes_names)?;
-        let evals_vec = ndarray.into_raw_vec();
-        let evals = Evaluations::new(log2(evals_vec.len()) as usize, evals_vec);
-        let mle = Self::new_with_dim_info(evals, dim_info);
-        Ok(mle)
-    }
-
-    /// Set the dimension information for the MLE.
-    pub fn set_dim_info(&mut self, dim_info: DimInfo) -> Result<(), DimensionError> {
-        let num_var_from_dim: u32 = dim_info.dims.slice().iter().map(|dim| log2(*dim)).sum();
-        if num_var_from_dim as usize != self.num_vars() {
-            return Err(DimensionError::DimensionNumVarError(
-                num_var_from_dim as usize,
-                self.num_vars(),
-            ));
-        }
-
-        self.dim_info = Some(dim_info);
-        Ok(())
-    }
-
-    /// Get the dimension information for the MLE.
-    pub fn dim_info(&self) -> &Option<DimInfo> {
-        &self.dim_info
-    }
-
-    /// Get the names of the axes of the MLE (multi-dimensional).
-    pub fn get_axes_names(&mut self) -> Option<Vec<String>> {
-        self.dim_info()
-            .as_ref()
-            .map(|dim_info| dim_info.axes_names.clone())
     }
 
     /// Generates a representation for the MLE of the zero function on zero
