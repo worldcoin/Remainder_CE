@@ -14,6 +14,8 @@ pub mod bit_packed_vector;
 
 use bit_packed_vector::BitPackedVector;
 
+use crate::utils::arithmetic::i64_to_field;
+
 #[derive(Error, Debug, Clone)]
 /// the errors associated with the dimension of the MLE.
 pub enum DimensionError {
@@ -328,6 +330,41 @@ impl<'a, F: Field> Clone for EvaluationsIterator<'a, F> {
 pub struct MultilinearExtension<F: Field> {
     /// The bookkeeping table with the evaluations of `f` on the hypercube.
     pub f: Evaluations<F>,
+}
+
+impl<F: Field> From<Vec<bool>> for MultilinearExtension<F> {
+    fn from(bools: Vec<bool>) -> Self {
+        let evals = bools.into_iter().map(|b| if b { F::ONE } else { F::ZERO }).collect();
+        MultilinearExtension::new(evals)
+    }
+}
+
+impl<F: Field> From<Vec<u32>> for MultilinearExtension<F> {
+    fn from(uints: Vec<u32>) -> Self {
+        let evals = uints.into_iter().map(|v| F::from(v as u64)).collect();
+        MultilinearExtension::new(evals)
+    }
+}
+
+impl<F: Field> From<Vec<u64>> for MultilinearExtension<F> {
+    fn from(uints: Vec<u64>) -> Self {
+        let evals = uints.into_iter().map(F::from).collect();
+        MultilinearExtension::new(evals)
+    }
+}
+
+impl<F: Field> From<Vec<i32>> for MultilinearExtension<F> {
+    fn from(ints: Vec<i32>) -> Self {
+        let evals = ints.into_iter().map(|v| i64_to_field(v as i64)).collect();
+        MultilinearExtension::new(evals)
+    }
+}
+
+impl<F: Field> From<Vec<i64>> for MultilinearExtension<F> {
+    fn from(ints: Vec<i64>) -> Self {
+        let evals = ints.into_iter().map(i64_to_field).collect();
+        MultilinearExtension::new(evals)
+    }
 }
 
 impl<F: Field> MultilinearExtension<F> {
