@@ -1,6 +1,7 @@
 pub mod curves;
 pub mod pedersen;
 pub mod transcript;
+pub mod utils;
 
 use std::hash::Hash;
 
