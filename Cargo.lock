@@ -1619,6 +1619,7 @@ dependencies = [
  "ndarray-npy",
  "num",
  "num-bigint",
+ "parking_lot",
  "pasta_curves",
  "rand",
  "rand_chacha",
