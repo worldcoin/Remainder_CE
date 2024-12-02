@@ -60,7 +60,9 @@ pub trait HasByteRepresentation {
     /// Number of bytes within the element's representation.
     const REPR_NUM_BYTES: usize;
     /// Constructor which creates an instance of the element from a vec of
-    /// length `REPR_NUM_BYTES`.
+    /// less than or equal to length `REPR_NUM_BYTES`.
+    /// If length less than `REPR_NUM_BYTES`, pads the most significant
+    /// bits with 0s until it is of equal length to `REPR_NUM_BYTES`.
     fn from_bytes_le(bytes: &[u8]) -> Self;
     /// Function which creates an equivalent representation of the element
     /// in a byte array of length `REPR_NUM_BYTES`.
@@ -71,6 +73,12 @@ pub trait HasByteRepresentation {
 
     /// Similar to `from_bytes_le` but takes chunks of `u64`s.
     fn from_u64s_le(words: Vec<u64>) -> Self
+    where
+        Self: Sized;
+
+    /// Creates a Vec of elements from an arbitrary string
+    /// of bytes.
+    fn vec_from_bytes_le(bytes: &[u8]) -> Vec<Self>
     where
         Self: Sized;
 }
