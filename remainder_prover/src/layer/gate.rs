@@ -1739,6 +1739,23 @@ impl<F: Field> GateLayer<F> {
 
 /// Computest the correct result of a gate layer,
 /// Used for data generation and testing.
+
+/// Arguments:
+/// - wiring: A vector of tuples representing the "nonzero" gates, especially useful
+/// in the sparse case the format is (z, x, y) where the gate at label z is
+/// the output of performing an operation on gates with labels x and y.
+///
+/// - num_dataparallel_bits: The number of bits representing the number of "dataparallel"
+/// copies of the circuit.
+///
+/// - lhs_data: The left side of the expression, i.e. the mle that makes up the "x"
+/// variables.
+///
+/// - rhs_data: The mles that are constructed when initializing phase 2 (binding the y
+/// variables).
+///
+/// - gate_operation: The gate operation representing the fan-in-two relationship.
+
 pub fn compute_gate_data_outputs<F: Field>(
     wiring: Vec<(usize, usize, usize)>,
     num_dataparallel_bits: usize,
@@ -1756,6 +1773,7 @@ pub fn compute_gate_data_outputs<F: Field>(
     let res_table_num_entries = ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
 
     let mut res_table = vec![F::ZERO; res_table_num_entries];
+    // TDH(ende): investigate if this can be parallelized (and if it's a bottleneck)
     (0..num_dataparallel_vals).for_each(|idx| {
         wiring.iter().for_each(|(z_ind, x_ind, y_ind)| {
             let zero = F::ZERO;
