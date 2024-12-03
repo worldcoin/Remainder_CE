@@ -1,8 +1,6 @@
 use std::fmt::Display;
 
 use crate::HasByteRepresentation;
-use ff::PrimeField;
-use itertools::Itertools;
 
 use crate::curves::PrimeOrderCurve;
 
@@ -64,7 +62,7 @@ pub struct ECTranscript<C: PrimeOrderCurve, T> {
 
     /// A mutable transcript which keeps a record of all the append/squeeze
     /// operations.
-    transcript: Transcript<<C::Base as PrimeField>::Repr>,
+    transcript: Transcript<C::Base>,
 
     /// Whether to print debug information.
     debug: bool,
@@ -73,7 +71,7 @@ pub struct ECTranscript<C: PrimeOrderCurve, T> {
 impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscript<C, Tr> {
     /// Destructively extract the transcript produced by this writer.
     /// This should be the last operation performed on a `TranscriptWriter`.
-    pub fn get_transcript(self) -> Transcript<<C::Base as PrimeField>::Repr> {
+    pub fn get_transcript(self) -> Transcript<C::Base> {
         self.transcript
     }
 
@@ -209,12 +207,11 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
             println!("Appending element (\"{}\"): {:?}", label, elem);
         }
         self.sponge.absorb(elem);
-        self.transcript.append_elements(label, &[elem.to_repr()]);
+        self.transcript.append_elements(label, &[elem]);
     }
 
     fn append_elements(&mut self, label: &str, elements: &[C::Base]) {
         if !elements.is_empty() {
-            let elements_repr = elements.iter().map(|elem| elem.to_repr()).collect_vec();
             if self.debug {
                 println!(
                     "Appending {} elements (\"{}\"): [{:?}, .., ]",
@@ -224,7 +221,7 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
                 );
             }
             self.sponge.absorb_elements(elements);
-            self.transcript.append_elements(label, &elements_repr);
+            self.transcript.append_elements(label, elements);
         }
     }
 
