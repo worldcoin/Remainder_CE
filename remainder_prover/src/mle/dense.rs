@@ -25,9 +25,6 @@ use remainder_shared_types::Field;
 pub struct DenseMle<F: Field> {
     /// The ID of the layer this data belongs to.
     pub layer_id: LayerId,
-
-    /// below are fields originally belonging to DenseMle
-
     /// A representation of the MLE on its current state.
     pub mle: MultilinearExtension<F>,
     /// The MleIndices `current_mle`.

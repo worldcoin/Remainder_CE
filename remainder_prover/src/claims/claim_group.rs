@@ -322,7 +322,6 @@ impl<F: Field> ClaimGroup<F> {
     ///
     /// # Returns
     /// If successful, returns a single aggregated claim.
-
     pub fn verifier_aggregate(
         &self,
         transcript_reader: &mut impl VerifierTranscript<F>,

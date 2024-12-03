@@ -44,6 +44,7 @@ pub mod ligero_ml_helper;
 pub mod ligero_structs;
 /// For Poseidon hashing (implementation with respect to Digest and Transcript)
 pub mod poseidon_ligero;
+/// Tests for Ligero PCS functionality
 #[cfg(test)]
 pub mod tests;
 /// Helper functions
