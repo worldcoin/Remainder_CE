@@ -990,7 +990,15 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         };
 
         let lhs_challenges = &round_challenges[..self.num_dataparallel_vars + num_rounds_phase1];
-        let rhs_challenges = &round_challenges[self.num_dataparallel_vars + num_rounds_phase1..];
+        let rhs_challenges = &round_challenges[..self.num_dataparallel_vars]
+            .to_vec()
+            .into_iter()
+            .chain(
+                round_challenges[self.num_dataparallel_vars + num_rounds_phase1..]
+                    .to_vec()
+                    .into_iter(),
+            )
+            .collect_vec();
 
         match self.gate_operation {
             BinaryOperation::Add => PostSumcheckLayer(vec![
