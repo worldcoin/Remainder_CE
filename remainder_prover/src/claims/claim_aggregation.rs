@@ -161,10 +161,14 @@ pub fn get_wlx_evaluations<F: Field>(
 
     let mut claim_mles = claim_mles;
 
+    dbg!(&common_idx);
     if let Some(common_idx) = common_idx {
         pre_fix_mles(&mut claim_mles, &claim_vecs[0], common_idx);
     }
 
+    dbg!(num_claims, num_evals);
+    dbg!(num_evals);
+    dbg!(claim_vecs);
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
     let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
         .map(|idx| {
@@ -178,7 +182,11 @@ pub fn get_wlx_evaluations<F: Field>(
                 })
                 .collect();
 
+            dbg!(&new_chal);
+            dbg!(&claim_mles);
+
             let wlx_eval_on_mle = combine_mles_with_aggregate(&claim_mles, &new_chal);
+            dbg!(&wlx_eval_on_mle);
             wlx_eval_on_mle.unwrap()
         })
         .collect();

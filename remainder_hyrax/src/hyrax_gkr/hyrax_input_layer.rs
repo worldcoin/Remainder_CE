@@ -79,20 +79,17 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                 prover_commitment.mle.clone(),
                 input_layer_desc.layer_id,
                 None,
+                Some(0),
             )],
             claims.get_num_claims(),
             claims.get_num_vars(),
         )
         .unwrap();
-        dbg!(&wlx_evals.len());
-
-        let fake_wlx_evals = compute_claim_wlx(&prover_commitment.mle.to_vec(), &claims);
-        dbg!(&fake_wlx_evals.len());
 
         end_timer!(compute_vi_lx_eval_timer);
 
         let coeffs_timer = start_timer!(|| "convert to coeffs timer");
-        let interpolant_coeffs = converter.convert_to_coefficients(fake_wlx_evals);
+        let interpolant_coeffs = converter.convert_to_coefficients(wlx_evals);
 
         end_timer!(coeffs_timer);
 
@@ -130,6 +127,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             transcript,
         );
 
+        dbg!("Got to the end of prove");
         HyraxInputLayerProof {
             layer_id: input_layer_desc.layer_id,
             input_commitment: prover_commitment.commitment.clone(),
