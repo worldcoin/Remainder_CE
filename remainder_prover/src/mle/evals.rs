@@ -1,11 +1,9 @@
 #[cfg(test)]
 mod tests;
 
-use std::error::Error;
-
 use ark_std::{cfg_into_iter, log2};
 use itertools::{EitherOrBoth::*, Itertools};
-use ndarray::{Array, Dimension, IxDyn};
+use ndarray::{Dimension, IxDyn};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::Field;
@@ -15,6 +13,8 @@ use thiserror::Error;
 pub mod bit_packed_vector;
 
 use bit_packed_vector::BitPackedVector;
+
+use crate::utils::arithmetic::i64_to_field;
 
 #[derive(Error, Debug, Clone)]
 /// the errors associated with the dimension of the MLE.
@@ -308,60 +308,6 @@ impl<'a, F: Field> Clone for EvaluationsIterator<'a, F> {
     }
 }
 
-/// An iterator over evaluations indexed by vertices of a projection of the
-/// boolean hypercube on `num_vars - 1` dimensions. See documentation for
-/// `Evaluations::project` for more information.
-pub struct EvaluationsPairIterator<'a, F: Field> {
-    /// Reference to original bookkeeping table.
-    evals: &'a Evaluations<F>,
-
-    /// A mask for isolating the `k` LSBs of the `current_eval_index` where `k`
-    /// is the dimension on which the original hypercube is projected on.
-    lsb_mask: usize,
-
-    /// 0-base index of the next element to be returned. Invariant:
-    /// `current_eval_index \in [0, 2^(evals.num_vars() - 1)]`. If equal to
-    /// `2^(evals.num_vars() - 1)`, the iterator has reached the end.
-    current_pair_index: usize,
-}
-
-impl<'a, F: Field> Iterator for EvaluationsPairIterator<'a, F> {
-    type Item = (F, F);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let num_vars = self.evals.num_vars();
-        let num_pairs = 1_usize << (num_vars - 1);
-
-        if self.current_pair_index < num_pairs {
-            // Compute the two indices by inserting a `0` and a `1` respectively
-            // in the appropriate position of `current_pair_index`. For example,
-            // if this is an Iterator projecting on `fix_variable_index == 2`
-            // for an Evaluations table of `num_vars == 5`, then `lsb_mask ==
-            // 0b00011` (the `fix_variable_index` LSBs are on). When, for
-            // example `current_pair_index == 0b1010`, it is split into a "right
-            // part": `lsb_idx == 0b00 0 10`, and a "shifted left part":
-            // `msb_idx == 0b10 0 00`.  The two parts are then combined with the
-            // middle bit on and off respectively: `idx1 == 0b10 0 10`, `idx2 ==
-            // 0b10 1 10`.
-            let lsb_idx = self.current_pair_index & self.lsb_mask;
-            let msb_idx = (self.current_pair_index & (!self.lsb_mask)) << 1;
-            let mid_idx = self.lsb_mask + 1;
-
-            let idx1 = lsb_idx | msb_idx;
-            let idx2 = lsb_idx | mid_idx | msb_idx;
-
-            self.current_pair_index += 1;
-
-            let val1 = self.evals.get(idx1).unwrap();
-            let val2 = self.evals.get(idx2).unwrap();
-
-            Some((val1, val2))
-        } else {
-            None
-        }
-    }
-}
-
 /// Stores a function `\tilde{f}: F^n -> F`, the unique Multilinear Extension
 /// (MLE) of a given function `f: {0, 1}^n -> F`:
 /// ```text
@@ -384,7 +330,44 @@ impl<'a, F: Field> Iterator for EvaluationsPairIterator<'a, F> {
 pub struct MultilinearExtension<F: Field> {
     /// The bookkeeping table with the evaluations of `f` on the hypercube.
     pub f: Evaluations<F>,
-    dim_info: Option<DimInfo>,
+}
+
+impl<F: Field> From<Vec<bool>> for MultilinearExtension<F> {
+    fn from(bools: Vec<bool>) -> Self {
+        let evals = bools
+            .into_iter()
+            .map(|b| if b { F::ONE } else { F::ZERO })
+            .collect();
+        MultilinearExtension::new(evals)
+    }
+}
+
+impl<F: Field> From<Vec<u32>> for MultilinearExtension<F> {
+    fn from(uints: Vec<u32>) -> Self {
+        let evals = uints.into_iter().map(|v| F::from(v as u64)).collect();
+        MultilinearExtension::new(evals)
+    }
+}
+
+impl<F: Field> From<Vec<u64>> for MultilinearExtension<F> {
+    fn from(uints: Vec<u64>) -> Self {
+        let evals = uints.into_iter().map(F::from).collect();
+        MultilinearExtension::new(evals)
+    }
+}
+
+impl<F: Field> From<Vec<i32>> for MultilinearExtension<F> {
+    fn from(ints: Vec<i32>) -> Self {
+        let evals = ints.into_iter().map(|v| i64_to_field(v as i64)).collect();
+        MultilinearExtension::new(evals)
+    }
+}
+
+impl<F: Field> From<Vec<i64>> for MultilinearExtension<F> {
+    fn from(ints: Vec<i64>) -> Self {
+        let evals = ints.into_iter().map(i64_to_field).collect();
+        MultilinearExtension::new(evals)
+    }
 }
 
 impl<F: Field> MultilinearExtension<F> {
@@ -398,10 +381,7 @@ impl<F: Field> MultilinearExtension<F> {
     /// Generate a new MultilinearExtension from a representation `evals` of a
     /// function `f`.
     pub fn new_from_evals(evals: Evaluations<F>) -> Self {
-        Self {
-            f: evals,
-            dim_info: None,
-        }
+        Self { f: evals }
     }
 
     /// Creates a new mle which is all zeroes of a specific num_vars. In this
@@ -413,7 +393,6 @@ impl<F: Field> MultilinearExtension<F> {
                 num_vars,
                 zero: F::ZERO,
             },
-            dim_info: None,
         }
     }
 
@@ -445,51 +424,6 @@ impl<F: Field> MultilinearExtension<F> {
     /// returns its value. Otherwise panics.
     pub fn value(&self) -> F {
         self.f.value()
-    }
-
-    /// Generate a new MultilinearExtension from `evals` and `dim_info`.
-    pub fn new_with_dim_info(evals: Evaluations<F>, dim_info: DimInfo) -> Self {
-        let mut mle = Self::new_from_evals(evals);
-        mle.set_dim_info(dim_info).unwrap();
-        mle
-    }
-
-    /// Generate a new MultilinearExtension from a representation of `ndarray`
-    pub fn new_from_ndarray(
-        ndarray: Array<F, IxDyn>,
-        axes_names: Vec<String>,
-    ) -> Result<Self, Box<dyn Error>> {
-        let dim_info = DimInfo::new(ndarray.raw_dim(), axes_names)?;
-        let evals_vec = ndarray.into_raw_vec();
-        let evals = Evaluations::new(log2(evals_vec.len()) as usize, evals_vec);
-        let mle = Self::new_with_dim_info(evals, dim_info);
-        Ok(mle)
-    }
-
-    /// Set the dimension information for the MLE.
-    pub fn set_dim_info(&mut self, dim_info: DimInfo) -> Result<(), DimensionError> {
-        let num_var_from_dim: u32 = dim_info.dims.slice().iter().map(|dim| log2(*dim)).sum();
-        if num_var_from_dim as usize != self.num_vars() {
-            return Err(DimensionError::DimensionNumVarError(
-                num_var_from_dim as usize,
-                self.num_vars(),
-            ));
-        }
-
-        self.dim_info = Some(dim_info);
-        Ok(())
-    }
-
-    /// Get the dimension information for the MLE.
-    pub fn dim_info(&self) -> &Option<DimInfo> {
-        &self.dim_info
-    }
-
-    /// Get the names of the axes of the MLE (multi-dimensional).
-    pub fn get_axes_names(&mut self) -> Option<Vec<String>> {
-        self.dim_info()
-            .as_ref()
-            .map(|dim_info| dim_info.axes_names.clone())
     }
 
     /// Generates a representation for the MLE of the zero function on zero
@@ -566,7 +500,6 @@ impl<F: Field> MultilinearExtension<F> {
     /// # Panics
     /// if `var_index` is outside the interval `[0, self.num_vars())`.
     pub fn fix_variable_at_index(&mut self, var_index: usize, point: F) {
-        // NEWEST IMPLEMENTATION: manually parallelize.
         let num_vars = self.num_vars();
         let lsb_mask = (1_usize << (num_vars - 1 - var_index)) - 1;
 
@@ -574,17 +507,26 @@ impl<F: Field> MultilinearExtension<F> {
 
         let new_evals: Vec<F> = cfg_into_iter!(0..num_pairs)
             .map(|idx| {
+                // This iteration computes the value of
+                // `f'(idx[0], ..., idx[var_index-1], idx[var_index+1], ..., idx[num_vars - 1])`
+                // where `f'` is the resulting function after fixing the
+                // the `var_index`-th variable.
+                // To do this, we must combine the values of:
+                // `f(idx1) = f(idx[0], ..., idx[var_index-1], 0, idx[var_index+1], ..., idx[num_vars-1])`
+                // and
+                // `f(idx2) = f(idx[0], ..., idx[var_index-1], 1, idx[var_index+1], ..., idx[num_vars-1])`
+                // Below we compute `idx1` and `idx2` corresponding to the two
+                // indices above.
+
                 // Compute the two indices by inserting a `0` and a `1`
-                // respectively in the appropriate position of
-                // `current_pair_index`. For example, if this is an Iterator
-                // projecting on `fix_variable_index == 2` for an Evaluations
-                // table of `num_vars == 5`, then `lsb_mask == 0b11000` (the
-                // `fix_variable_index` LSBs are on). When, for example
-                // `current_pair_index == 0b1010`, it is split into a "right
-                // part": `lsb_idx == 0b00 0 10`, and a "shifted left part":
-                // `msb_idx == 0b10 0 00`.  The two parts are then combined with
-                // the middle bit on and off respectively: `idx1 == 0b10 0 10`,
-                // `idx2 == 0b10 1 10`.
+                // respectively in the appropriate position of `idx`. For
+                // example, if `var_index == 2` and `self.num_vars == 5`, then
+                // `lsb_mask == 0b0011` (the `num_var - 1 - var_index` LSBs are
+                // on). When, for example `idx == 0b1010`, it is split into a
+                // "right part": `lsb_idx == 0b00 0 10`, and a "shifted left
+                // part": `msb_idx == 0b10 0 00`.  The two parts are then
+                // combined with the middle bit on and off respectively: `idx1
+                // == 0b10 0 10`, `idx2 == 0b10 1 10`.
                 let lsb_idx = idx & lsb_mask;
                 let msb_idx = (idx & (!lsb_mask)) << 1;
                 let mid_idx = lsb_mask + 1;
