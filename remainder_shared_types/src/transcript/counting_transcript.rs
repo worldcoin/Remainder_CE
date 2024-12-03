@@ -29,4 +29,6 @@ impl<F: Field + Debug> TranscriptSponge<F> for CountingSponge<F> {
     fn squeeze_elements(&mut self, num_elements: usize) -> Vec<F> {
         (0..num_elements).map(|_| self.squeeze()).collect_vec()
     }
+
+    fn absorb_initialization_label(&mut self, _label: &str) {}
 }

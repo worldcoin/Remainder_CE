@@ -40,6 +40,12 @@ where
             })
             .collect_vec()
     }
+
+    fn absorb_initialization_label(&mut self, label: &str) {
+        let label_as_bytes = label.as_bytes();
+        let label_as_field_elems = F::vec_from_bytes_le(label_as_bytes);
+        self.absorb_elements(&label_as_field_elems);
+    }
 }
 
 #[cfg(test)]

@@ -3,9 +3,8 @@ use std::collections::HashMap;
 use ark_std::{cfg_into_iter, end_timer, start_timer};
 use itertools::Itertools;
 use rand::Rng;
-use remainder::claims::claim_aggregation::{
-    get_num_wlx_evaluations, CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
-};
+use remainder::claims::claim_aggregation::get_num_wlx_evaluations;
+use remainder::prover::global_config::global_prover_claim_agg_constant_column_optimization;
 use remainder::{
     claims::{claim_group::ClaimGroup, RawClaim},
     input_layer::InputLayerDescription,
@@ -22,9 +21,7 @@ use remainder_shared_types::{ff_field, Field};
 
 use crate::{
     hyrax_pcs::HyraxPCSEvaluationProof,
-    hyrax_primitives::{
-        proof_of_claim_agg::ProofOfClaimAggregation, proof_of_equality::ProofOfEquality,
-    },
+    hyrax_primitives::proof_of_claim_agg::ProofOfClaimAggregation,
     utils::vandermonde::VandermondeInverse,
 };
 
@@ -44,9 +41,6 @@ pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
     pub input_commitment: Vec<C>,
     /// The evaluation proof for the polynomial evaluated at a random point
     pub evaluation_proof: HyraxPCSEvaluationProof<C>,
-    /// The proof of equality that the aggregated claim point and the commitment
-    /// in the evaluation proof are indeed to the same value
-    pub proof_of_equality: ProofOfEquality<C>,
 }
 
 impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
@@ -95,7 +89,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             input_layer_desc.log_num_cols,
             &prover_commitment.mle,
             &aggregated_claim.point,
-            &aggregated_claim.evaluation.value,
+            &aggregated_claim.evaluation,
             committer,
             blinding_rng,
             transcript,
@@ -103,20 +97,11 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         );
         end_timer!(eval_proof_timer);
 
-        let proof_of_equality = ProofOfEquality::prove(
-            &aggregated_claim.evaluation,
-            &evaluation_proof.commitment_to_evaluation,
-            committer,
-            blinding_rng,
-            transcript,
-        );
-
         HyraxInputLayerProof {
             layer_id: input_layer_desc.layer_id,
             input_commitment: prover_commitment.commitment.clone(),
             claim_agg_proof: proof_of_claim_agg,
             evaluation_proof,
-            proof_of_equality,
         }
     }
 
@@ -141,15 +126,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             committer,
             &self.input_commitment,
             &agg_claim.point,
-            transcript,
-        );
-
-        // Proof of equality for the aggregated claim and the evaluation proof
-        // commitment
-        self.proof_of_equality.verify(
-            agg_claim.evaluation,
-            self.evaluation_proof.commitment_to_evaluation.commitment,
-            committer,
             transcript,
         );
     }
@@ -253,7 +229,7 @@ fn compute_claim_wlx<F: Field>(mle_vec: &[F], claims: &ClaimGroup<F>) -> Vec<F> 
     let num_idx = claims.get_num_vars();
 
     // get the number of evaluations
-    let num_evals = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
+    let num_evals = if global_prover_claim_agg_constant_column_optimization() {
         let (num_evals, _, _) = get_num_wlx_evaluations(claim_vecs);
         num_evals
     } else {

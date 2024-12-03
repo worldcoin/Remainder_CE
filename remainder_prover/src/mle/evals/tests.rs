@@ -1,7 +1,12 @@
 use ark_std::log2;
-use bit_packed_vector::{num_bits, ENABLE_BIT_PACKING};
+use bit_packed_vector::num_bits;
 use quickcheck::{Arbitrary, TestResult};
 use remainder_shared_types::{halo2curves::ff::Field, Fr, HasByteRepresentation};
+
+use crate::prover::{
+    config::GKRCircuitProverConfig,
+    global_config::{global_prover_enable_bit_packing, perform_function_under_prover_config},
+};
 
 use super::*;
 
@@ -139,8 +144,11 @@ fn test_bit_packed_vector_get_large_2() {
     assert!(bpv.get(n).is_none());
 }
 
-#[test]
-fn test_bit_packed_vector_get_bits_per_element() {
+/// This function tests whether the [BitPackedVector] is creating the
+/// correct representation re: number of bits of representation per
+/// element. The function is intended to be run under both "memory"-
+/// and "runtime"-optimized defaults.
+fn test_bit_packed_vector_get_bits_per_element(_: ()) {
     let data1: Vec<Fr> = vec![Fr::from(42), Fr::from(42)];
     let bpv1 = BitPackedVector::new(&data1);
 
@@ -150,7 +158,7 @@ fn test_bit_packed_vector_get_bits_per_element() {
     let data3: Vec<Fr> = vec![Fr::from(0), Fr::from(1), Fr::from(2), Fr::from(3)];
     let bpv3 = BitPackedVector::new(&data3);
 
-    if ENABLE_BIT_PACKING {
+    if global_prover_enable_bit_packing() {
         assert_eq!(bpv1.get_bits_per_element(), 0);
         assert_eq!(bpv2.get_bits_per_element(), 1);
         assert_eq!(bpv3.get_bits_per_element(), 2);
@@ -159,6 +167,22 @@ fn test_bit_packed_vector_get_bits_per_element() {
         assert_eq!(bpv2.get_bits_per_element(), 256);
         assert_eq!(bpv3.get_bits_per_element(), 256);
     }
+}
+
+#[test]
+fn test_bit_packed_vector_get_bits_per_element_wrapper() {
+    let memory_optimized_prover_config = GKRCircuitProverConfig::memory_optimized_default();
+    perform_function_under_prover_config(
+        test_bit_packed_vector_get_bits_per_element,
+        (),
+        &memory_optimized_prover_config,
+    );
+    let runtime_optimized_prover_config = GKRCircuitProverConfig::runtime_optimized_default();
+    perform_function_under_prover_config(
+        test_bit_packed_vector_get_bits_per_element,
+        (),
+        &runtime_optimized_prover_config,
+    );
 }
 
 #[test]
