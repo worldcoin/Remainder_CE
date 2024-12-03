@@ -1,7 +1,7 @@
 //! Module for dealing with the Beta equality function.
 
 use itertools::Itertools;
-use remainder_shared_types::Field;
+use remainder_shared_types::{utils::bookkeeping_table::initialize_tensor, Field};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Debug};
 
@@ -127,27 +127,6 @@ impl<F: Field> BetaValues<F> {
     /// do still need the entire beta table. Essentially this is an MLE whose coefficients represent
     /// whether the index is equal to the random challenge point.
     pub fn new_beta_equality_mle(layer_claim_vars: Vec<F>) -> MultilinearExtension<F> {
-        let mut cur_table = Vec::with_capacity(1 << layer_claim_vars.len());
-        cur_table.push(F::ONE);
-        if !layer_claim_vars.is_empty() {
-            // Dynamic programming algorithm in Tha13 for computing these
-            // equality values and returning them as a vector.
-
-            // Iterate through remaining challenge coordinates in reverse,
-            // starting with the least significant variable.
-            for challenge in layer_claim_vars.iter().rev() {
-                let (one_minus_r, r) = (F::ONE - challenge, *challenge);
-
-                // Double the size of `cur_table` to hold new values.
-                let len = cur_table.len();
-                cur_table.resize(len * 2, F::ZERO);
-
-                for i in 0..len {
-                    cur_table[i + len] = cur_table[i] * r;
-                    cur_table[i] *= one_minus_r;
-                }
-            }
-        }
-        MultilinearExtension::new(cur_table)
+        MultilinearExtension::new(initialize_tensor(&layer_claim_vars))
     }
 }

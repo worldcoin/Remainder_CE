@@ -15,7 +15,7 @@ use crate::{
         combine_mles_with_aggregate, get_indexed_layer_mles_to_combine, pre_fix_mles,
     },
     mle::dense::DenseMle,
-    prover::GKRError,
+    prover::{global_config::global_prover_claim_agg_constant_column_optimization, GKRError},
     sumcheck::evaluate_at_a_point,
 };
 
@@ -23,10 +23,6 @@ use super::{claim_group::ClaimGroup, ClaimError};
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-
-/// A flag representing whether we are using the constant
-/// column optimization for claim aggregation in Regular Layers.
-pub const CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION: bool = false;
 
 /// Performs claim aggregation on the prover side and, if successful, returns a
 /// single, raw aggregated claim.
@@ -152,7 +148,7 @@ pub fn get_wlx_evaluations<F: Field>(
 ) -> Result<Vec<F>, ClaimError> {
     // get the number of evaluations
 
-    let (num_evals, common_idx) = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
+    let (num_evals, common_idx) = if global_prover_claim_agg_constant_column_optimization() {
         let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
         (num_evals, common_idx)
     } else {
