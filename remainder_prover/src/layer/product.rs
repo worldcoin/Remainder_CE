@@ -59,6 +59,31 @@ impl<F: Field> Product<F, Option<F>> {
         }
     }
 
+    /// Creates a new Product from a vector of [MleDescriptions].
+    pub fn new_from_mul_gate(
+        mles: &[MleDescription<F>],
+        coefficient: F,
+        bindings: &[&[F]],
+    ) -> Self {
+        if mles.is_empty() {
+            return Product {
+                intermediates: vec![Intermediate::Composite {
+                    value: Some(F::ONE),
+                }],
+                coefficient,
+            };
+        }
+        let mut intermediates = vec![Self::build_atom(&mles[0], bindings[0])];
+        mles.iter().enumerate().skip(1).for_each(|(idx, mle_ref)| {
+            intermediates.push(Self::build_atom(mle_ref, bindings[idx]));
+            intermediates.push(Intermediate::Composite { value: None });
+        });
+        Product {
+            intermediates,
+            coefficient,
+        }
+    }
+
     // Helper function for new
     fn build_atom(mle: &MleDescription<F>, bindings: &[F]) -> Intermediate<F, Option<F>> {
         Intermediate::Atom {

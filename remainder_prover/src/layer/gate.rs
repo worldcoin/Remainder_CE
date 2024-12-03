@@ -989,24 +989,29 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             F::ONE
         };
 
+        let lhs_challenges = &round_challenges[..self.num_dataparallel_vars + num_rounds_phase1];
+        let rhs_challenges = &round_challenges[self.num_dataparallel_vars + num_rounds_phase1..];
+
         match self.gate_operation {
             BinaryOperation::Add => PostSumcheckLayer(vec![
                 Product::<F, Option<F>>::new(
                     &[self.lhs_mle.clone()],
                     f_1_uv * beta_bound,
-                    round_challenges,
+                    lhs_challenges,
                 ),
                 Product::<F, Option<F>>::new(
                     &[self.rhs_mle.clone()],
                     f_1_uv * beta_bound,
-                    round_challenges,
+                    rhs_challenges,
                 ),
             ]),
-            BinaryOperation::Mul => PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
-                &[self.lhs_mle.clone(), self.rhs_mle.clone()],
-                f_1_uv * beta_bound,
-                round_challenges,
-            )]),
+            BinaryOperation::Mul => {
+                PostSumcheckLayer(vec![Product::<F, Option<F>>::new_from_mul_gate(
+                    &[self.lhs_mle.clone(), self.rhs_mle.clone()],
+                    f_1_uv * beta_bound,
+                    &[lhs_challenges, rhs_challenges],
+                )])
+            }
         }
     }
 
