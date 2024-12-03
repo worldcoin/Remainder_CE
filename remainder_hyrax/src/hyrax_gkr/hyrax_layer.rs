@@ -254,7 +254,6 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // made on that layer, we take the max of the number of variables in the expression and
         // the number of variables in the beta table.
         let num_sumcheck_rounds_expected = layer_desc.sumcheck_round_indices().len();
-        let _sumcheck_round_indices = layer_desc.sumcheck_round_indices();
 
         // Verify the proof of sumcheck
         // Append first sumcheck message to transcript, which is the proported sum.
