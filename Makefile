@@ -8,6 +8,16 @@ bench:
 	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin
 	ms_print massif/massif.$(name).out | less
 
+bench-single:
+	cargo build --profile=opt-with-debug --bin run_iriscode_circuit
+	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/run_iriscode_circuit
+	ms_print massif/massif.$(name).out | less
+
+bench-single-split:
+	cargo build --profile=opt-with-debug --bin run_iriscode_split_circuit
+	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/run_iriscode_split_circuit
+	ms_print massif/massif.$(name).out | less
+
 prod:
 	cargo build --release --features parallel --bin worldcoin
 

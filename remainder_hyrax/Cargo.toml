@@ -40,6 +40,10 @@ name = "pcs_bench"
 harness = false
 
 [[bin]]
+name = "run_iriscode_split_circuit"
+path = "src/bin/run_iriscode_split_circuit.rs"
+
+[[bin]]
 name = "run_iriscode_circuit"
 path = "src/bin/run_iriscode_circuit.rs"
 
