@@ -37,4 +37,6 @@ impl<F: Field + Debug, const VALUE: i32> TranscriptSponge<F> for DummySponge<F, 
     fn squeeze_elements(&mut self, num_elements: usize) -> Vec<F> {
         (0..num_elements).map(|_| self.squeeze()).collect_vec()
     }
+
+    fn absorb_initialization_label(&mut self, _label: &str) {}
 }

@@ -29,7 +29,7 @@ use crate::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
         mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
     },
-    prover::SumcheckProof,
+    prover::{global_config::global_prover_lazy_beta_evals, SumcheckProof},
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
 
@@ -43,13 +43,6 @@ use super::{
     layer_enum::{LayerEnum, VerifierLayerEnum},
     LayerDescription, VerifierLayer,
 };
-
-/// Controls whether the `beta` optimiation should be enabled. When enabled, all
-/// functions in this module that compute the value of a `beta` function at a
-/// given index, will compute its value lazily using
-/// [BetaValues::compute_beta_over_challenge_and_index] instead of pre-computing
-/// and storing the entire bookkeeping table.
-pub const LAZY_BETA_EVALUATION: bool = true;
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug, Copy)]
 
@@ -169,7 +162,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
     }
 
     fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
-        if !LAZY_BETA_EVALUATION {
+        if !global_prover_lazy_beta_evals() {
             let beta_g1 = BetaValues::new_beta_equality_mle(
                 claim_point[self.num_dataparallel_vars..].to_vec(),
             );
@@ -194,7 +187,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         // TODO!(ende): right now we still initializes the beta even the LAZY_BETA_EVALUATION flag is on
         // it's because fn `compute_sumcheck_messages_data_parallel_identity_gate` cannot lazy
         // evaluate beta's within it yet
-        if round_index == 0 && LAZY_BETA_EVALUATION {
+        if round_index == 0 && global_prover_lazy_beta_evals() {
             let (beta_g2, beta_g1) = (
                 BetaValues::new_beta_equality_mle(self.g2.as_ref().unwrap().clone()),
                 BetaValues::new_beta_equality_mle(self.g1.as_ref().unwrap().clone()),
@@ -232,7 +225,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 // f1(z, x, y)(f2(x) + f3(y)) then because we are only binding the "x" variables, we can simply
                 // distribute over the y variables and construct bookkeeping tables that are size 2^(num_x_variables).
                 self.nonzero_gates.iter().for_each(|(z_ind, x_ind, y_ind)| {
-                    let beta_g_at_z = if LAZY_BETA_EVALUATION {
+                    let beta_g_at_z = if global_prover_lazy_beta_evals() {
                         BetaValues::compute_beta_over_challenge_and_index(
                             self.g1.as_ref().unwrap(),
                             *z_ind,
