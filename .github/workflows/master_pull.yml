@@ -57,25 +57,25 @@ jobs:
           command: clippy
           args: --no-deps -- -D warnings
 
-  mem_limit_test:
-    name: Memory Limit Test
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-      - name: Install cgroup-tools
-        run: sudo apt-get install cgroup-tools
-      - name: Create memory-limited cgroup
-        run: |
-          sudo mkdir /sys/fs/cgroup/hook_memory_limited_group
-          echo 500M | sudo tee /sys/fs/cgroup/hook_memory_limited_group/memory.max
-          echo 0 | sudo tee /sys/fs/cgroup/hook_memory_limited_group/memory.swap.max
-      - name: Compile binary
-        run: cargo build --release --bin worldcoin
-      - name: Run binary under memory limit
-        run: |
-          sudo cgexec -g memory:hook_memory_limited_group ./target/release/worldcoin
-        continue-on-error: false
+    mem_limit_test:
+      name: Memory Limit Test
+      runs-on: self-hosted
+      steps:
+        - uses: actions/checkout@v2
+        - uses: actions-rs/toolchain@v1
+          with:
+            profile: minimal
+            toolchain: stable
+        - name: Install cgroup-tools
+          run: sudo apt-get install cgroup-tools
+        - name: Create memory-limited cgroup
+          run: |
+            sudo mkdir -p /sys/fs/cgroup/hook_memory_limited_group
+            echo 500M | sudo tee /sys/fs/cgroup/hook_memory_limited_group/memory.max
+            echo 0 | sudo tee /sys/fs/cgroup/hook_memory_limited_group/memory.swap.max
+        - name: Compile binary
+          run: cargo build --release --bin worldcoin
+        - name: Run binary under memory limit
+          run: |
+            sudo cgexec -g memory:hook_memory_limited_group ./target/release/worldcoin
+          continue-on-error: false
