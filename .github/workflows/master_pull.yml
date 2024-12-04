@@ -70,7 +70,7 @@ jobs:
               run: sudo apt-get install cgroup-tools
             - name: Create memory-limited cgroup
               run: |
-                sudo mkdir /sys/fs/cgroup/hook_memory_limited_group
+                sudo mkdir -p /sys/fs/cgroup/hook_memory_limited_group
                 echo 500M | sudo tee /sys/fs/cgroup/hook_memory_limited_group/memory.max
                 echo 0 | sudo tee /sys/fs/cgroup/hook_memory_limited_group/memory.swap.max
             - name: Compile binary
