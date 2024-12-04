@@ -13,7 +13,7 @@ check:  ## GitHub Action #1 - compile, run formatter and linter.
 	cargo fmt --all -- --check
 	cargo clippy --no-deps -- -D warnings
 
-test:  ## GitHub Action #2: Slow but Comprehensive testing.
+test:  ## GitHub Action #2 - Slow but Comprehensive testing.
 	cargo test
 	cargo test --features parallel
 	cargo test --release --features parallel --package remainder-hyrax --lib -- --ignored hyrax_worldcoin::test_worldcoin
@@ -41,7 +41,7 @@ bin:  ## Build worldcoin binary for efficient debugging; optimizations + rayon p
 bin-seq:  ## Similar to "make bin", but NO rayon parallelism.
 	cargo build --bin worldcoin --release --features "parallel, print-trace"
 
-bench:  ## Use Valgrind to profile memory usage. Example: make bench name=v2.0
+bench:  ## Use Valgrind to profile memory usage. Example - make bench name=v2.0
 	cargo build --profile=opt-with-debug --bin worldcoin
 	mkdir -p massif
 	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin
@@ -55,5 +55,5 @@ clean:  ## Equivalent to "cargo clean"
 
 # Got the idea from https://stackoverflow.com/a/47107132.
 help:  ## Show this help message.
-	@sed -ne '/@sed/!s/## //p' $(MAKEFILE_LIST) | column -tl 2
+	@sed -ne '/@sed/!s/## //p' $(MAKEFILE_LIST) | column -t -s':'
 
