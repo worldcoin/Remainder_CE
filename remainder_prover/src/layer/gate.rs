@@ -976,13 +976,9 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
         let lhs_challenges = &round_challenges[..self.num_dataparallel_vars + num_rounds_phase1];
         let rhs_challenges = &round_challenges[..self.num_dataparallel_vars]
-            .to_vec()
-            .into_iter()
-            .chain(
-                round_challenges[self.num_dataparallel_vars + num_rounds_phase1..]
-                    .to_vec()
-                    .into_iter(),
-            )
+            .iter()
+            .copied()
+            .chain(round_challenges[self.num_dataparallel_vars + num_rounds_phase1..].to_vec())
             .collect_vec();
 
         match self.gate_operation {
@@ -1739,17 +1735,17 @@ impl<F: Field> GateLayer<F> {
 
 /// Arguments:
 /// - wiring: A vector of tuples representing the "nonzero" gates, especially useful
-/// in the sparse case the format is (z, x, y) where the gate at label z is
-/// the output of performing an operation on gates with labels x and y.
+///   in the sparse case the format is (z, x, y) where the gate at label z is
+///   the output of performing an operation on gates with labels x and y.
 ///
 /// - num_dataparallel_bits: The number of bits representing the number of "dataparallel"
-/// copies of the circuit.
+///   copies of the circuit.
 ///
 /// - lhs_data: The left side of the expression, i.e. the mle that makes up the "x"
-/// variables.
+///   variables.
 ///
 /// - rhs_data: The mles that are constructed when initializing phase 2 (binding the y
-/// variables).
+///   variables).
 ///
 /// - gate_operation: The gate operation representing the fan-in-two relationship.
 
