@@ -1750,7 +1750,7 @@ impl<F: Field> GateLayer<F> {
     }
 }
 
-/// Computest the correct result of a gate layer,
+/// Computes the correct result of a gate layer,
 /// Used for data generation and testing.
 
 /// Arguments:
