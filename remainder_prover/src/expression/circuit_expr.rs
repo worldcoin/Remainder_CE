@@ -116,7 +116,7 @@ impl<F: Field> Expression<F, ExprDescription> {
     /// Returns the maximum degree of b_{curr_round} within an expression
     /// (and therefore the number of prover messages we need to send)
     pub fn get_round_degree(&self, curr_round: usize) -> usize {
-        // --- By default, all rounds have degree at least 2 (beta table included) ---
+        // By default, all rounds have degree at least 2 (beta table included)
         let mut round_degree = 1;
 
         let mut get_degree_closure = |expr: &ExpressionNode<F, ExprDescription>,
@@ -124,7 +124,7 @@ impl<F: Field> Expression<F, ExprDescription> {
          -> Result<(), ()> {
             let round_degree = &mut round_degree;
 
-            // --- The only exception is within a product of MLEs ---
+            // The only exception is within a product of MLEs
             if let ExpressionNode::Product(circuit_mles) = expr {
                 let mut product_round_degree: usize = 0;
                 for circuit_mle in circuit_mles {
@@ -262,8 +262,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 Some(MultilinearExtension::new(
                     a_bookkeeping_table
                         .iter()
-                        .zip(b_bookkeeping_table.iter())
-                        .flat_map(|(a, b)| vec![a, b])
+                        .chain(b_bookkeeping_table.iter())
                         .collect_vec(),
                 ))
             }
@@ -622,9 +621,9 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 // 1 for the current MLE
                 1
             }
-            ExpressionNode::Product(mle_refs) => {
+            ExpressionNode::Product(mles) => {
                 // max degree is the number of MLEs in a product
-                mle_refs.len()
+                mles.len()
             }
             ExpressionNode::Scaled(a, _) | ExpressionNode::Negated(a) => a.get_max_degree(_mle_vec),
             ExpressionNode::Constant(_) => 1,
@@ -692,12 +691,12 @@ impl<F: Field> Expression<F, ExprDescription> {
         let (lhs_node, _) = self.deconstruct();
         let (rhs_node, _) = rhs.deconstruct();
 
-        // --- Compute the difference in number of free variables, to add the appropriate number of selectors ---
+        // Compute the difference in number of free variables, to add the appropriate number of selectors
         let num_left_selectors = max(0, rhs_node.get_num_vars() - lhs_node.get_num_vars());
         let num_right_selectors = max(0, lhs_node.get_num_vars() - rhs_node.get_num_vars());
 
         let lhs_subtree = if num_left_selectors > 0 {
-            // --- Always "go left" and "select" against a constant zero ---
+            // Always "go left" and "select" against a constant zero
             (0..num_left_selectors).fold(lhs_node, |cur_subtree, _| {
                 ExpressionNode::Selector(
                     MleIndex::Free,
@@ -710,7 +709,7 @@ impl<F: Field> Expression<F, ExprDescription> {
         };
 
         let rhs_subtree = if num_right_selectors > 0 {
-            // --- Always "go left" and "select" against a constant zero ---
+            // Always "go left" and "select" against a constant zero
             (0..num_right_selectors).fold(rhs_node, |cur_subtree, _| {
                 ExpressionNode::Selector(
                     MleIndex::Free,
@@ -722,10 +721,10 @@ impl<F: Field> Expression<F, ExprDescription> {
             rhs_node
         };
 
-        // --- Sanitycheck ---
+        // Sanitycheck
         debug_assert_eq!(lhs_subtree.get_num_vars(), rhs_subtree.get_num_vars());
 
-        // --- Finally, a selector against the two (equal-num-vars) sides! ---
+        // Finally, a selector against the two (equal-num-vars) sides!
         let concat_node =
             ExpressionNode::Selector(MleIndex::Free, Box::new(lhs_subtree), Box::new(rhs_subtree));
 
@@ -800,20 +799,23 @@ impl<F: Field> Expression<F, ExprDescription> {
 /// Given a bookkeeping table, use the according prefix bits in order
 /// to filter it to the correct "view" that we want to see, assuming
 /// that the prefix bits are the most significant bits, and that
-/// the bookkeeping tables are stored in little endian.
+/// the bookkeeping tables are stored in "big endian" format.
 pub fn filter_bookkeeping_table<F: Field>(
     bookkeeping_table: &MultilinearExtension<F>,
     unfiltered_prefix_bits: &[bool],
 ) -> MultilinearExtension<F> {
     let current_table = bookkeeping_table.to_vec();
+    let mut current_table_len = current_table.len();
     let filtered_table = unfiltered_prefix_bits
         .iter()
         .fold(current_table, |acc, bit| {
-            if *bit {
-                acc.into_iter().skip(1).step_by(2).collect_vec()
+            let acc = if *bit {
+                acc.into_iter().skip(current_table_len / 2).collect_vec()
             } else {
-                acc.into_iter().step_by(2).collect_vec()
-            }
+                acc.into_iter().take(current_table_len / 2).collect_vec()
+            };
+            current_table_len /= 2;
+            acc
         });
     MultilinearExtension::new(filtered_table)
 }
@@ -838,7 +840,8 @@ fn evaluate_bookkeeping_tables_given_operation<F: Field>(
                 let zero = F::ZERO;
                 let index = if log2(mle_bookkeeping_table.len()) < max_num_vars {
                     let max = 1 << log2(mle_bookkeeping_table.len());
-                    (index) % max
+                    let multiple = (1 << max_num_vars) / max;
+                    index / multiple
                 } else {
                     index
                 };
@@ -900,9 +903,7 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, ExprDescr
                 .field(b)
                 .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
-            ExpressionNode::Mle(mle_ref) => {
-                f.debug_struct("Circuit Mle").field("mle", mle_ref).finish()
-            }
+            ExpressionNode::Mle(mle) => f.debug_struct("Circuit Mle").field("mle", mle).finish(),
             ExpressionNode::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
             ExpressionNode::Product(a) => f.debug_tuple("Product").field(a).finish(),

@@ -6,7 +6,6 @@ use remainder_shared_types::Field;
 use super::LayerId;
 use crate::mle::dense::DenseMle;
 use crate::mle::mle_description::MleDescription;
-use crate::mle::verifier_mle::VerifierMle;
 use crate::mle::Mle;
 
 /// Represents a normal form for a layer expression in which the layer is represented as a linear
@@ -49,8 +48,8 @@ impl<F: Field> Product<F, Option<F>> {
             };
         }
         let mut intermediates = vec![Self::build_atom(&mles[0], bindings)];
-        mles.iter().skip(1).for_each(|mle_ref| {
-            intermediates.push(Self::build_atom(mle_ref, bindings));
+        mles.iter().skip(1).for_each(|mle| {
+            intermediates.push(Self::build_atom(mle, bindings));
             intermediates.push(Intermediate::Composite { value: None });
         });
         Product {
@@ -97,25 +96,22 @@ impl<F: Field> Product<F, Option<F>> {
 impl<F: Field> Product<F, F> {
     /// Creates a new Product from a vector of fully bound MleRefs.
     /// Panics if any are not fully bound.
-    pub fn new(mle_refs: &[DenseMle<F>], coefficient: F) -> Self {
+    pub fn new(mles: &[DenseMle<F>], coefficient: F) -> Self {
         // ensure all MLEs are fully bound
-        assert!(mle_refs.iter().all(|mle_ref| mle_ref.len() == 1));
-        if mle_refs.is_empty() {
+        assert!(mles.iter().all(|mle| mle.len() == 1));
+        if mles.is_empty() {
             return Product {
                 intermediates: vec![Intermediate::Composite { value: F::ONE }],
                 coefficient,
             };
         }
-        let mut intermediates = vec![Self::build_atom(&mle_refs[0])];
-        let _ = mle_refs
-            .iter()
-            .skip(1)
-            .fold(mle_refs[0].value(), |acc, mle_ref| {
-                let prod_val = acc * mle_ref.value();
-                intermediates.push(Self::build_atom(mle_ref));
-                intermediates.push(Intermediate::Composite { value: prod_val });
-                prod_val
-            });
+        let mut intermediates = vec![Self::build_atom(&mles[0])];
+        let _ = mles.iter().skip(1).fold(mles[0].value(), |acc, mle| {
+            let prod_val = acc * mle.value();
+            intermediates.push(Self::build_atom(mle));
+            intermediates.push(Intermediate::Composite { value: prod_val });
+            prod_val
+        });
         Product {
             intermediates,
             coefficient,
@@ -123,44 +119,11 @@ impl<F: Field> Product<F, F> {
     }
 
     // Helper function for new
-    fn build_atom(mle_ref: &DenseMle<F>) -> Intermediate<F, F> {
+    fn build_atom(mle: &DenseMle<F>) -> Intermediate<F, F> {
         Intermediate::Atom {
-            layer_id: mle_ref.layer_id,
-            point: mle_ref.get_bound_point(),
-            value: mle_ref.value(),
-        }
-    }
-
-    /// Creates a new Product from a vector of fully bound Mles, which are represented as a [VerifierMle]
-    pub fn new_from_verifier_mle(verifier_mles: &[VerifierMle<F>], coefficient: F) -> Self {
-        if verifier_mles.is_empty() {
-            return Product {
-                intermediates: vec![Intermediate::Composite { value: F::ONE }],
-                coefficient,
-            };
-        }
-        let mut intermediates = vec![Self::build_atom_from_verifier_mle(&verifier_mles[0])];
-        let _ = verifier_mles
-            .iter()
-            .skip(1)
-            .fold(verifier_mles[0].value(), |acc, verifier_mle| {
-                let prod_val = acc * verifier_mle.value();
-                intermediates.push(Self::build_atom_from_verifier_mle(verifier_mle));
-                intermediates.push(Intermediate::Composite { value: prod_val });
-                prod_val
-            });
-        Product {
-            intermediates,
-            coefficient,
-        }
-    }
-
-    // Helper function for `new_from_verifier_mle`
-    fn build_atom_from_verifier_mle(verifier_mle: &VerifierMle<F>) -> Intermediate<F, F> {
-        Intermediate::Atom {
-            layer_id: verifier_mle.layer_id(),
-            point: verifier_mle.get_bound_point(),
-            value: verifier_mle.value(),
+            layer_id: mle.layer_id,
+            point: mle.get_bound_point(),
+            value: mle.value(),
         }
     }
 }

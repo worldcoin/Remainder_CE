@@ -16,11 +16,11 @@ use crate::{
     verify_column_path, verify_column_value, LcColumn,
 };
 
-// --- For serialization/deserialization of the various structs ---
+// For serialization/deserialization of the various structs
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
 use halo2_proofs::poly::EvaluationDomain;
-// --- For BN-254 ---
+// For BN-254
 use itertools::{iterate, Itertools};
 use rand::Rng;
 use remainder_shared_types::transcript::{
@@ -210,7 +210,7 @@ fn arkworks_serialize_test() {
     assert_eq!(one_deserialized, one);
     assert_eq!(two_deserialized, two);
 
-    // --- With derive for a struct ---
+    // With derive for a struct
     #[derive(CanonicalSerialize, CanonicalDeserialize, PartialEq, Debug)]
     struct TestStruct {
         one: Fr,
@@ -233,7 +233,7 @@ fn arkworks_bn_fft_test() {
     use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, Polynomial};
     use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 
-    // --- IFFT a polynomial, then FFT the evaluations, and ensure the result is the same as the original thing ---
+    // IFFT a polynomial, then FFT the evaluations, and ensure the result is the same as the original thing
     let orig_coeffs = vec![Fr::from(1u8), Fr::from(2u8), Fr::from(3u8), Fr::from(4u8)];
     let small_domain = GeneralEvaluationDomain::<Fr>::new(8).unwrap();
     let fft_evals: Vec<Fr> = small_domain.ifft(&orig_coeffs);
@@ -265,21 +265,21 @@ fn halo2_bn_fft_test() {
         .take(num_coeffs)
         .collect_vec();
 
-    // --- Note that `2^{j + 1}` is the total number of evaluations you actually want, and `2^k` is the number of coeffs ---
+    // Note that `2^{j + 1}` is the total number of evaluations you actually want, and `2^k` is the number of coeffs
     let evaluation_domain: EvaluationDomain<Fr> =
         EvaluationDomain::new(rho_inv as u32, log_num_coeffs);
 
-    // --- Creates the polynomial in coeff form and performs the FFT from 2^3 coeffs --> 2^3 evals ---
+    // Creates the polynomial in coeff form and performs the FFT from 2^3 coeffs --> 2^3 evals
     let polynomial_coeff = evaluation_domain.coeff_from_vec(coeffs);
     let polynomial_eval_form = evaluation_domain.coeff_to_extended(polynomial_coeff.clone());
     assert_eq!(polynomial_eval_form.len(), 2_usize.pow(log_num_evals));
 
-    // --- Perform the IFFT and assert that the resulting polynomial has degree 7 ---
+    // Perform the IFFT and assert that the resulting polynomial has degree 7
     let ifft_coeffs = evaluation_domain.extended_to_coeff(polynomial_eval_form);
     let orig_raw_coeffs = polynomial_coeff.iter().collect_vec();
     let ifft_raw_coeffs = ifft_coeffs.into_iter().collect_vec();
 
-    // --- All coefficients past the original should be zero ---
+    // All coefficients past the original should be zero
     ifft_raw_coeffs
         .clone()
         .into_iter()
@@ -288,7 +288,7 @@ fn halo2_bn_fft_test() {
             assert_eq!(coeff, Fr::zero());
         });
 
-    // --- IFFT'd coefficients should match the original ---
+    // IFFT'd coefficients should match the original
     orig_raw_coeffs
         .into_iter()
         .zip(ifft_raw_coeffs)
@@ -311,35 +311,35 @@ fn poseidon_commit_test() {
     use ark_std::test_rng;
     use remainder_shared_types::Fr;
 
-    // --- Grabs random (univariate poly!) coefficients and the rho value ---
+    // Grabs random (univariate poly!) coefficients and the rho value
     const MLE_NUM_VARS: usize = 4;
     const RHO_INV: u8 = 4;
     const RATIO: f64 = 4.0;
     let mut rng = test_rng();
     let random_mle_coeffs = get_random_coeffs_for_multilinear_poly(MLE_NUM_VARS, &mut rng);
 
-    // --- Preps the FFT encoding and grabs the matrix size, then computes the commitment ---
+    // Preps the FFT encoding and grabs the matrix size, then computes the commitment
     let enc = LigeroAuxInfo::<Fr>::new(random_mle_coeffs.len(), RHO_INV, RATIO, None);
     let comm =
         commit::<PoseidonSpongeHasher<Fr>, LigeroAuxInfo<_>, Fr>(&random_mle_coeffs, &enc).unwrap();
 
-    // --- For a univariate commitment, `x` is the eval point ---
+    // For a univariate commitment, `x` is the eval point
     let x = Fr::from(rng.gen::<u64>());
 
-    // --- Zipping the coefficients against 1, x, x^2, ... ---
+    // Zipping the coefficients against 1, x, x^2, ...
     let eval = comm
         .coeffs
         .iter()
-        // --- Just computing 1, x, x^2, ... ---
+        // Just computing 1, x, x^2, ...
         .zip(iterate(Fr::from(1), |&v| v * x).take(random_mle_coeffs.len()))
         .fold(Fr::from(0), |acc, (c, r)| acc + *c * r);
 
-    // --- The "a" vector in b^T M a (the one which increments by ones) ---
+    // The "a" vector in b^T M a (the one which increments by ones)
     let roots_lo: Vec<Fr> = iterate(Fr::from(1), |&v| v * x)
         .take(comm.orig_num_cols)
         .collect();
 
-    // --- The "b" vector in b^T M a (the one which increments by sqrt(N)) ---
+    // The "b" vector in b^T M a (the one which increments by sqrt(N))
     let roots_hi: Vec<Fr> = {
         let xr = x * roots_lo.last().unwrap(); // x * x^{sqrt(N) - 1} --> x^{sqrt(N)}
         iterate(Fr::from(1), |&v| v * xr)
@@ -347,30 +347,30 @@ fn poseidon_commit_test() {
             .collect()
     };
 
-    // --- Literally does b^T M (I'm pretty sure) ---
+    // Literally does b^T M (I'm pretty sure)
     let coeffs_flattened = eval_outer(&comm, &roots_hi[..]).unwrap();
 
-    // --- Then does (b^T M) a (I'm pretty sure) ---
+    // Then does (b^T M) a (I'm pretty sure)
     let eval2 = coeffs_flattened
         .iter()
         .zip(roots_lo.iter())
         .fold(Fr::from(0), |acc, (c, r)| acc + *c * r);
 
-    // --- Basically the big tensor product and the actual polynomial evaluation should be the same ---
+    // Basically the big tensor product and the actual polynomial evaluation should be the same
     assert_eq!(eval, eval2);
 
-    // --- Compute b^T M' (RLC of the columns in encoded M'), which should be a codeword as well ---
+    // Compute b^T M' (RLC of the columns in encoded M'), which should be a codeword as well
     let poly_fft = eval_outer_fft(&comm, &roots_hi[..]).unwrap();
     let coeffs = halo2_ifft(poly_fft, RHO_INV);
 
-    // --- So after the IFFT, we should receive a univariate polynomial of degree (num cols in M) ---
+    // So after the IFFT, we should receive a univariate polynomial of degree (num cols in M)
     assert!(coeffs
         .iter()
         .skip(comm.orig_num_cols)
         .all(|&v| v == Fr::from(0)));
 
-    // --- And if we "evaluate" this polynomial (b^T M, in theory) against `a`, we should still ---
-    // --- get the same evaluation ---
+    // And if we "evaluate" this polynomial (b^T M, in theory) against `a`, we should still
+    // get the same evaluation
     let eval3 = coeffs
         .iter()
         .zip(roots_lo.iter())
@@ -392,7 +392,7 @@ fn poseidon_end_to_end_test() {
     use ark_std::test_rng;
     use remainder_shared_types::Fr;
 
-    // --- RNG for testing ---
+    // RNG for testing
     let mut rng = test_rng();
     let ml_num_vars = 8;
 
@@ -406,23 +406,23 @@ fn poseidon_end_to_end_test() {
     // this is the polynomial commitment
     let root: LcRoot<LigeroAuxInfo<Fr>, Fr> = comm.get_root();
 
-    // --- For a univariate commitment, `x` is the eval point ---
+    // For a univariate commitment, `x` is the eval point
     let x = Fr::from(rng.gen::<u64>());
 
-    // --- Zipping the coefficients against 1, x, x^2, ... to compute the evaluation. ---
+    // Zipping the coefficients against 1, x, x^2, ... to compute the evaluation.
     let eval = comm
         .coeffs
         .iter()
-        // --- Just computing 1, x, x^2, ... ---
+        // Just computing 1, x, x^2, ...
         .zip(iterate(Fr::from(1), |&v| v * x).take(coeffs.len()))
         .fold(Fr::from(0), |acc, (c, r)| acc + *c * r);
 
-    // --- The "a" vector in b^T M a (the one which increments by ones) ---
+    // The "a" vector in b^T M a (the one which increments by ones)
     let inner_tensor: Vec<Fr> = iterate(Fr::from(1), |&v| v * x)
         .take(comm.orig_num_cols)
         .collect();
 
-    // --- The "b" vector in b^T M a (the one which increments by sqrt(N)) ---
+    // The "b" vector in b^T M a (the one which increments by sqrt(N))
     let outer_tensor: Vec<Fr> = {
         let xr = x * inner_tensor.last().unwrap(); // x * x^{sqrt(N) - 1} --> x^{sqrt(N)}
         iterate(Fr::from(1), |&v| v * xr)
@@ -430,10 +430,10 @@ fn poseidon_end_to_end_test() {
             .collect()
     };
 
-    // --- Replacing the old transcript with the Remainder one ---
+    // Replacing the old transcript with the Remainder one
     let mut transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("test transcript");
 
-    // --- Transcript includes the Merkle root, the code rate, and the number of columns to be sampled ---
+    // Transcript includes the Merkle root, the code rate, and the number of columns to be sampled
     transcript_writer.append("polycommit", root.root);
 
     prove(&comm, &outer_tensor[..], &enc, &mut transcript_writer).unwrap();
@@ -443,7 +443,7 @@ fn poseidon_end_to_end_test() {
     let prover_root = transcript_reader.consume_element("polycommit").unwrap();
     assert_eq!(prover_root, root.root);
 
-    // --- Verify the proof and return the prover-claimed result ---
+    // Verify the proof and return the prover-claimed result
     let res = verify(
         root.as_ref(),
         &outer_tensor[..],
@@ -453,6 +453,6 @@ fn poseidon_end_to_end_test() {
     )
     .unwrap();
 
-    // --- Checks that both evaluations are correct ---
+    // Checks that both evaluations are correct
     assert_eq!(res, eval);
 }

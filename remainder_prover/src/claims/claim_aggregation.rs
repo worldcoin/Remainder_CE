@@ -15,7 +15,7 @@ use crate::{
         combine_mles_with_aggregate, get_indexed_layer_mles_to_combine, pre_fix_mles,
     },
     mle::dense::DenseMle,
-    prover::GKRError,
+    prover::{global_config::global_prover_claim_agg_constant_column_optimization, GKRError},
     sumcheck::evaluate_at_a_point,
 };
 
@@ -23,10 +23,6 @@ use super::{claim_group::ClaimGroup, ClaimError};
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-
-/// A flag representing whether we are using the constant
-/// column optimization for claim aggregation in Regular Layers.
-pub const CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION: bool = false;
 
 /// Performs claim aggregation on the prover side and, if successful, returns a
 /// single, raw aggregated claim.
@@ -146,24 +142,23 @@ pub fn get_num_wlx_evaluations<F: Field>(
 pub fn get_wlx_evaluations<F: Field>(
     claim_vecs: &[Vec<F>],
     claimed_vals: &[F],
-    claim_mle_refs: Vec<DenseMle<F>>,
+    claim_mles: Vec<DenseMle<F>>,
     num_claims: usize,
     num_idx: usize,
 ) -> Result<Vec<F>, ClaimError> {
     // get the number of evaluations
 
-    let (num_evals, common_idx) = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
+    let (num_evals, common_idx) = if global_prover_claim_agg_constant_column_optimization() {
         let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
         (num_evals, common_idx)
     } else {
-        assert!(claim_vecs.len() > 1);
         (((num_claims - 1) * num_idx) + 1, None)
     };
 
-    let mut claim_mle_refs = claim_mle_refs;
+    let mut claim_mles = claim_mles;
 
     if let Some(common_idx) = common_idx {
-        pre_fix_mles(&mut claim_mle_refs, &claim_vecs[0], common_idx);
+        pre_fix_mles(&mut claim_mles, &claim_vecs[0], common_idx);
     }
 
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
@@ -179,8 +174,8 @@ pub fn get_wlx_evaluations<F: Field>(
                 })
                 .collect();
 
-            let wlx_eval_on_mle_ref = combine_mles_with_aggregate(&claim_mle_refs, &new_chal);
-            wlx_eval_on_mle_ref.unwrap()
+            let wlx_eval_on_mle = combine_mles_with_aggregate(&claim_mles, &new_chal);
+            wlx_eval_on_mle.unwrap()
         })
         .collect();
 

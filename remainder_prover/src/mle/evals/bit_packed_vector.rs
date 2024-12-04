@@ -1,6 +1,6 @@
 //! Implements [BitPackedVector], a version of an immutable vector optimized for
 //! storing field elements compactly.
-
+#![allow(clippy::needless_lifetimes)]
 use ::serde::{Deserialize, Serialize};
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
@@ -11,17 +11,13 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use itertools::FoldWhile::{Continue, Done};
 
-/// Controls whether bit-packing is actually enabled. If set to `false`, the
-/// [BitPackedVector] will default to storing each field element using the type
-/// `F`, effectively behaving like a regular (immutable) `Vec<F>`. This is
-/// needed because bit-packing incurs a noticable runtime slowdown, and we need
-/// an easy way to turn it off if trading memory for speed is desirable.
-pub const ENABLE_BIT_PACKING: bool = true;
+use crate::prover::global_config::global_prover_enable_bit_packing;
 
 // -------------- Helper Functions -----------------
 
-/// Returns `floor(log(n)) + 1` as a usize, aka the number of bits needed to
-/// represent the field element `n` in binary.
+/// Returns the minimum numbers of bits required to represent prime field
+/// elements in the range `[0, n]`. This is equivalent to computing
+/// `ceil(log_2(n+1))`.
 ///
 /// # Complexity
 /// Constant in the size of the representation of `n`.
@@ -31,11 +27,9 @@ pub const ENABLE_BIT_PACKING: bool = true;
 ///     use remainder_shared_types::Fr;
 ///     use remainder::mle::evals::bit_packed_vector::num_bits;
 ///
+///     assert_eq!(num_bits(Fr::from(0)), 0);
 ///     assert_eq!(num_bits(Fr::from(31)), 5);
 ///     assert_eq!(num_bits(Fr::from(32)), 6);
-///     assert_eq!(num_bits(Fr::from(42)), 6);
-///     assert_eq!(num_bits(Fr::from(63)), 6);
-///     assert_eq!(num_bits(Fr::from(64)), 7);
 /// ```
 pub fn num_bits<F: Field>(n: F) -> usize {
     let u64_chunks = n.to_u64s_le();
@@ -136,7 +130,8 @@ pub(in crate::mle::evals) struct BitPackedVector<F: Field> {
 impl<F: Field> BitPackedVector<F> {
     /// Generates a bit-packed vector initialized with `data`.
     pub fn new(data: &[F]) -> Self {
-        if !ENABLE_BIT_PACKING {
+        // TODO(ryancao): Distinguish between prover and verifier here
+        if !global_prover_enable_bit_packing() {
             return Self {
                 buf: vec![],
                 naive_buf: data.to_vec(),
@@ -215,7 +210,7 @@ impl<F: Field> BitPackedVector<F> {
             }
         } else {
             // Compute an upper bound to the number of buffer entries needed.
-            let buf_len = (bits_per_element * num_elements + entry_width - 1) / entry_width;
+            let buf_len = (bits_per_element * num_elements).div_ceil(entry_width);
 
             let mut buf = vec![0_u64; buf_len];
 
@@ -254,11 +249,6 @@ impl<F: Field> BitPackedVector<F> {
     pub fn get(&self, index: usize) -> Option<F> {
         // Check for index-out-of-bounds.
         if index >= self.num_elements {
-            return None;
-        }
-
-        // Handle empty vector separately.
-        if self.num_elements == 0 {
             return None;
         }
 

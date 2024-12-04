@@ -51,7 +51,7 @@ where
         ratio: f64,
         maybe_num_col_opens: Option<usize>,
     ) -> Self {
-        // --- Computes the matrix size for the commitment ---
+        // Computes the matrix size for the commitment
         let (num_rows, orig_num_cols, encoded_num_cols) =
             Self::get_dims(num_coeffs, rho_inv, ratio);
         assert!(Self::_dims_ok(orig_num_cols, encoded_num_cols));
@@ -85,8 +85,8 @@ where
     ///     `self.orig_num_cols`. Note that only the first `self.orig_num_cols`
     ///     values should be nonzero.
     fn encode(&self, inp: &mut [F]) -> Result<(), Self::Err> {
-        // --- So we need to convert num_cols(M) coefficients into num_cols(M) * (1 / rho) evaluations ---
-        // --- All the coefficients past the original number of cols should be zero-padded ---
+        // So we need to convert num_cols(M) coefficients into num_cols(M) * (1 / rho) evaluations
+        // All the coefficients past the original number of cols should be zero-padded
         debug_assert!(inp.iter().skip(self.orig_num_cols).all(|&v| v == F::ZERO));
 
         let evals = halo2_fft(
@@ -104,7 +104,7 @@ where
     /// ## Arguments
     /// * `num_coeffs` - Total number of coefficients in the polynomial.
     fn get_dims_for_input_len(&self, num_coeffs: usize) -> (usize, usize, usize) {
-        let n_rows = (num_coeffs + self.orig_num_cols - 1) / self.orig_num_cols;
+        let n_rows = num_coeffs.div_ceil(self.orig_num_cols);
         (n_rows, self.orig_num_cols, self.encoded_num_cols)
     }
 
