@@ -1732,7 +1732,6 @@ impl<F: Field> GateLayer<F> {
 
 /// Computes the correct result of a gate layer,
 /// Used for data generation and testing.
-
 /// Arguments:
 /// - wiring: A vector of tuples representing the "nonzero" gates, especially useful
 ///   in the sparse case the format is (z, x, y) where the gate at label z is
@@ -1748,7 +1747,6 @@ impl<F: Field> GateLayer<F> {
 ///   variables).
 ///
 /// - gate_operation: The gate operation representing the fan-in-two relationship.
-
 pub fn compute_gate_data_outputs<F: Field>(
     wiring: Vec<(usize, usize, usize)>,
     num_dataparallel_bits: usize,
