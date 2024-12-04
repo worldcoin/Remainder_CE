@@ -11,12 +11,12 @@ on:
 jobs:
   check_and_test:
     name: Check and Test Remainder
-    runs-on: Remainder_CI
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          profile: default
+          profile: minimal
           toolchain: stable
       - uses: actions-rs/cargo@v1
         with:
@@ -40,12 +40,12 @@ jobs:
 
   fmt_and_lint:
     name: Format and Lint Remainder
-    runs-on: Remainder_CI
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          profile: default
+          profile: minimal
           toolchain: stable
       - run: rustup component add rustfmt clippy
       - uses: actions-rs/cargo@v1
@@ -59,12 +59,12 @@ jobs:
 
   mem_limit_test:
     name: Memory Limit Test
-    runs-on: Remainder_CI
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          profile: default
+          profile: minimal
           toolchain: stable
       - name: Install cgroup-tools
         run: sudo apt-get install cgroup-tools
