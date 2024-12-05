@@ -44,6 +44,7 @@ pub mod ligero_ml_helper;
 pub mod ligero_structs;
 /// For Poseidon hashing (implementation with respect to Digest and Transcript)
 pub mod poseidon_ligero;
+/// Tests for Ligero PCS functionality
 #[cfg(test)]
 pub mod tests;
 /// Helper functions
@@ -355,7 +356,7 @@ pub fn n_degree_tests(lambda: usize, len: usize, flog2: usize) -> usize {
 
     // -- The expression below simplifies to: (λ+den-1)/den = (λ-1)/den + 1
     // -- This implies that (λ-1)/den will always be >= 1
-    (lambda + den - 1) / den
+    lambda.div_ceil(den)
 }
 
 // parallelization limit when working on columns

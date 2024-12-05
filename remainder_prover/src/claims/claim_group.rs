@@ -8,14 +8,11 @@ use tracing::{debug, info};
 
 use crate::{
     claims::{
-        claim_aggregation::{
-            get_num_wlx_evaluations, get_wlx_evaluations,
-            CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
-        },
+        claim_aggregation::{get_num_wlx_evaluations, get_wlx_evaluations},
         ClaimError,
     },
     mle::dense::DenseMle,
-    prover::GKRError,
+    prover::{global_config::global_verifier_claim_agg_constant_column_optimization, GKRError},
     sumcheck::evaluate_at_a_point,
 };
 
@@ -280,6 +277,7 @@ impl<F: Field> ClaimGroup<F> {
             debug!("Received 1 claim. Doing nothing.");
             return Ok(self.claims[0].clone());
         }
+        assert!(self.get_claim_points_matrix().len() > 1);
 
         // Aggregate claims by performing the claim aggregation protocol.
         // First compute V_i(l(x)).
@@ -324,7 +322,6 @@ impl<F: Field> ClaimGroup<F> {
     ///
     /// # Returns
     /// If successful, returns a single aggregated claim.
-
     pub fn verifier_aggregate(
         &self,
         transcript_reader: &mut impl VerifierTranscript<F>,
@@ -342,7 +339,7 @@ impl<F: Field> ClaimGroup<F> {
         // Aggregate claims by performing the claim aggregation protocol.
         // First retrieve V_i(l(x)).
 
-        let num_wlx_evaluations = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
+        let num_wlx_evaluations = if global_verifier_claim_agg_constant_column_optimization() {
             let (num_wlx_evaluations, _, _) =
                 get_num_wlx_evaluations(self.get_claim_points_matrix());
             num_wlx_evaluations

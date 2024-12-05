@@ -9,7 +9,7 @@ use rand::Rng;
 use remainder_shared_types::Fr;
 
 /// Does a dummy version of sumcheck with a testing RNG.
-pub fn dummy_sumcheck<F: Field>(
+pub(crate) fn dummy_sumcheck<F: Field>(
     expr: &mut Expression<F, ProverExpr>,
     rng: &mut impl Rng,
     layer_claim: RawClaim<F>,
@@ -126,7 +126,7 @@ pub fn verify_sumcheck_messages<F: Field>(
     Ok(chal)
 }
 
-pub fn get_dummy_claim<F: Field>(
+pub(crate) fn get_dummy_claim<F: Field>(
     mle: DenseMle<F>,
     rng: &mut impl Rng,
     challenges: Option<Vec<F>>,

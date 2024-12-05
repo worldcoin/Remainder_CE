@@ -1,6 +1,6 @@
 //! Implements [BitPackedVector], a version of an immutable vector optimized for
 //! storing field elements compactly.
-
+#![allow(clippy::needless_lifetimes)]
 use ::serde::{Deserialize, Serialize};
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
@@ -11,12 +11,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use itertools::FoldWhile::{Continue, Done};
 
-/// Controls whether bit-packing is actually enabled. If set to `false`, the
-/// [BitPackedVector] will default to storing each field element using the type
-/// `F`, effectively behaving like a regular (immutable) `Vec<F>`. This is
-/// needed because bit-packing incurs a noticable runtime slowdown, and we need
-/// an easy way to turn it off if trading memory for speed is desirable.
-pub const ENABLE_BIT_PACKING: bool = true;
+use crate::prover::global_config::global_prover_enable_bit_packing;
 
 // -------------- Helper Functions -----------------
 
@@ -135,7 +130,8 @@ pub(in crate::mle::evals) struct BitPackedVector<F: Field> {
 impl<F: Field> BitPackedVector<F> {
     /// Generates a bit-packed vector initialized with `data`.
     pub fn new(data: &[F]) -> Self {
-        if !ENABLE_BIT_PACKING {
+        // TODO(ryancao): Distinguish between prover and verifier here
+        if !global_prover_enable_bit_packing() {
             return Self {
                 buf: vec![],
                 naive_buf: data.to_vec(),
@@ -214,7 +210,7 @@ impl<F: Field> BitPackedVector<F> {
             }
         } else {
             // Compute an upper bound to the number of buffer entries needed.
-            let buf_len = (bits_per_element * num_elements + entry_width - 1) / entry_width;
+            let buf_len = (bits_per_element * num_elements).div_ceil(entry_width);
 
             let mut buf = vec![0_u64; buf_len];
 
