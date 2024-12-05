@@ -25,9 +25,6 @@ use remainder_shared_types::Field;
 pub struct DenseMle<F: Field> {
     /// The ID of the layer this data belongs to.
     pub layer_id: LayerId,
-
-    /// below are fields originally belonging to DenseMle
-
     /// A representation of the MLE on its current state.
     pub mle: MultilinearExtension<F>,
     /// The MleIndices `current_mle`.
@@ -270,6 +267,33 @@ impl<F: Field> DenseMle<F> {
             mle: current_mle,
             mle_indices,
         }
+    }
+
+    /// Constructs a new [DenseMle] from a [MultilinearExtension], additionally
+    /// being able to specify the prefix vars and layer ID.
+    ///
+    /// Optionally gives back an indexed [DenseMle].
+    pub fn new_from_multilinear_extension(
+        mle: MultilinearExtension<F>,
+        layer_id: LayerId,
+        prefix_vars: Option<Vec<bool>>,
+        maybe_starting_var_index: Option<usize>,
+    ) -> Self {
+        let mle_indices: Vec<MleIndex<F>> = prefix_vars
+            .unwrap_or_default()
+            .into_iter()
+            .map(|prefix_var| MleIndex::Fixed(prefix_var))
+            .chain((0..mle.num_vars()).map(|_| MleIndex::Free))
+            .collect();
+        let mut ret = Self {
+            layer_id,
+            mle,
+            mle_indices,
+        };
+        if let Some(starting_var_index) = maybe_starting_var_index {
+            ret.index_mle_indices(starting_var_index);
+        }
+        ret
     }
 
     /// Merges the MLEs into a single MLE by simply concatenating them.

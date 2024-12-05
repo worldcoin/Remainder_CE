@@ -47,7 +47,7 @@ pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8, ratio: f64) -> (usiz
 
     // Computes the other dimensions with respect to `encoded_num_cols`
     let orig_num_cols = ((encoded_num_cols as f64) * rho).floor() as usize;
-    let num_rows = (poly_len + orig_num_cols - 1) / orig_num_cols;
+    let num_rows = poly_len.div_ceil(orig_num_cols);
 
     // Sanitycheck that we aren't going overboard or underboard
     assert!(orig_num_cols * num_rows >= poly_len);

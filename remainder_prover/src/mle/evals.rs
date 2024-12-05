@@ -284,7 +284,7 @@ pub struct EvaluationsIterator<'a, F: Field> {
     current_index: usize,
 }
 
-impl<'a, F: Field> Iterator for EvaluationsIterator<'a, F> {
+impl<F: Field> Iterator for EvaluationsIterator<'_, F> {
     type Item = F;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -299,7 +299,7 @@ impl<'a, F: Field> Iterator for EvaluationsIterator<'a, F> {
     }
 }
 
-impl<'a, F: Field> Clone for EvaluationsIterator<'a, F> {
+impl<F: Field> Clone for EvaluationsIterator<'_, F> {
     fn clone(&self) -> Self {
         Self {
             evals: self.evals,
@@ -326,7 +326,7 @@ pub struct EvaluationsPairIterator<'a, F: Field> {
     current_pair_index: usize,
 }
 
-impl<'a, F: Field> Iterator for EvaluationsPairIterator<'a, F> {
+impl<F: Field> Iterator for EvaluationsPairIterator<'_, F> {
     type Item = (F, F);
 
     fn next(&mut self) -> Option<Self::Item> {

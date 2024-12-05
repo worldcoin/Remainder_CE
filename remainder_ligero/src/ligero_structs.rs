@@ -104,7 +104,7 @@ where
     /// ## Arguments
     /// * `num_coeffs` - Total number of coefficients in the polynomial.
     fn get_dims_for_input_len(&self, num_coeffs: usize) -> (usize, usize, usize) {
-        let n_rows = (num_coeffs + self.orig_num_cols - 1) / self.orig_num_cols;
+        let n_rows = num_coeffs.div_ceil(self.orig_num_cols);
         (n_rows, self.orig_num_cols, self.encoded_num_cols)
     }
 

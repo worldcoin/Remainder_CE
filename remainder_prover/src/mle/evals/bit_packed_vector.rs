@@ -1,6 +1,6 @@
 //! Implements [BitPackedVector], a version of an immutable vector optimized for
 //! storing field elements compactly.
-
+#![allow(clippy::needless_lifetimes)]
 use ::serde::{Deserialize, Serialize};
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
@@ -210,7 +210,7 @@ impl<F: Field> BitPackedVector<F> {
             }
         } else {
             // Compute an upper bound to the number of buffer entries needed.
-            let buf_len = (bits_per_element * num_elements + entry_width - 1) / entry_width;
+            let buf_len = (bits_per_element * num_elements).div_ceil(entry_width);
 
             let mut buf = vec![0_u64; buf_len];
 

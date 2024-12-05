@@ -1,12 +1,11 @@
-.PHONY: all bench prod prod-seq bin bin-seq test test-dev mobile clean
+.PHONY: all pr check test mem-lim test-dev prod prod-seq bin bin-seq bench mobile clean help
 
-all: bin
+all: help
 
-# Example: make bench name=hyrax.opt
-bench:
-	cargo build --profile=opt-with-debug --bin worldcoin
-	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin
-	ms_print massif/massif.$(name).out | less
+pr:  ## Prepare for a PR; run all GitHub CI Actions.
+	$(MAKE) check
+	$(MAKE) test
+	$(MAKE) mem-lim
 
 bench-single:
 	cargo build --profile=opt-with-debug --bin run_iriscode_circuit
@@ -18,28 +17,59 @@ bench-single-split:
 	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/run_iriscode_split_circuit --image-filepath remainder_prover/src/worldcoin/constants/v3/iris/test_image.bin
 	ms_print massif/massif.$(name).out | less
 
-prod:
-	cargo build --release --features parallel --bin worldcoin
+check:  ## GitHub Action #1 - compile, run formatter and linter.
+	cargo check
+	cargo check --features parallel
+	cargo fmt --all -- --check
+	cargo clippy --no-deps -- -D warnings
 
-prod-seq:
-	cargo build --release --bin worldcoin
-
-bin:
-	cargo build --bin worldcoin --release --features "parallel, print-trace"
-
-bin-seq:
-	cargo build --bin worldcoin --release --features "parallel, print-trace"
-
-test: test-dev
+test:  ## GitHub Action #2 - Slow but Comprehensive testing.
+	cargo test
+	cargo test --features parallel
 	cargo test --release --features parallel --package remainder-hyrax --lib -- --ignored hyrax_worldcoin::test_worldcoin
 	cargo test --release --features parallel --package remainder --lib -- --ignored worldcoin::tests
 
-test-dev:
+mem-lim:  ## GitHub Action #3 - run sequential worldcoin binary with a memory limit.
+	$(MAKE) prod-seq
+	echo 500M | sudo tee /sys/fs/cgroup/makefile_memory_limited_group/memory.max
+	echo 0 | sudo tee /sys/fs/cgroup/makefile_memory_limited_group/memory.swap.max
+	sudo cgexec -g memory:makefile_memory_limited_group ./target/release/worldcoin
+
+test-dev:  ## Faster alternative to "make test"; uses `--release` flag and ignores slow tests.
 	cargo test --release
 	cargo test --release --features parallel
 
-mobile:
+prod:  ## Build worldcoin binary for production; optimizations + rayon parallelism, NO print-trace.
+	cargo build --release --features parallel --bin worldcoin
+
+prod-seq:  ## Similar to 'prod', but NO rayon parallelism.
+	cargo build --release --bin worldcoin
+
+bin:  ## Build worldcoin binary for efficient debugging; optimizations + rayon parallelism + print-trace.
+	cargo build --bin worldcoin --release --features "parallel, print-trace"
+
+bin-seq:  ## Similar to "make bin", but NO rayon parallelism.
+	cargo build --bin worldcoin --release --features "parallel, print-trace"
+
+bench:  ## Use Valgrind to profile memory usage. Example - make bench name=v2.0
+	cargo build --profile=opt-with-debug --bin worldcoin
+	mkdir -p massif
+	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin
+	ms_print massif/massif.$(name).out | less
+
+bench-single:  ## Use Valgrind to profile memory usage of the proving and verifying of a single iriscode circuit (i.e. just one eye, just iris).
+	cargo build --profile=opt-with-debug --bin run_iriscode_circuit
+	mkdir -p massif
+	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/run_iriscode_circuit  --image-filepath remainder_prover/src/worldcoin/constants/v3/iris/test_image.bin --version 3
+	ms_print massif/massif.$(name).out | less
+
+mobile:  ## Compile worldcoin binary optimized for binary size.
 	cargo build --profile mobile --bin worldcoin
 
-clean:
+clean:  ## Equivalent to "cargo clean"
 	cargo clean
+
+# Got the idea from https://stackoverflow.com/a/47107132.
+help:  ## Show this help message.
+	@sed -ne '/@sed/!s/## //p' $(MAKEFILE_LIST) | column -t -s':'
+
