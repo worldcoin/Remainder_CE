@@ -22,6 +22,7 @@ Cargo.lock
 *.json
 # EXCEPT worldcoin data. We need them for testing.
 !remainder_hyrax/sample-generators.json
+!remainder_hyrax/iriscode_pcp_example/hashes.json
 
 # Scripts for specific customers
 scripts-ion/
