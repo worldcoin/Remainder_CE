@@ -3,9 +3,8 @@ use std::collections::HashMap;
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use rand::Rng;
-use remainder::claims::claim_aggregation::get_wlx_evaluations;
 use remainder::{
-    claims::{claim_group::ClaimGroup, RawClaim},
+    claims::RawClaim,
     input_layer::InputLayerDescription,
     layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
@@ -17,29 +16,26 @@ use remainder_shared_types::{
 };
 use remainder_shared_types::{ff_field, Field};
 
-use crate::{
-    hyrax_pcs::HyraxPCSEvaluationProof,
-    hyrax_primitives::proof_of_claim_agg::ProofOfClaimAggregation,
-    utils::vandermonde::VandermondeInverse,
-};
+use crate::hyrax_pcs::HyraxPCSEvaluationProof;
 
 use super::hyrax_layer::HyraxClaim;
 
-/// The proof structure for a Hyrax input layer. Includes the
-/// [ProofOfClaimAggregation], and the appropriate opening proof for opening the
-/// polynomial commitment at a random evaluation point.
+/// The proof structure for a Hyrax input layer.
 pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
     /// The ID of the layer that this is a proof for
     pub layer_id: LayerId,
-    /// The proof of claim aggregation for this layer
-    pub claim_agg_proof: ProofOfClaimAggregation<C>,
     /// The commitment to the input polynomial
     pub input_commitment: Vec<C>,
-    /// The evaluation proof for the polynomial evaluated at a random point
-    pub evaluation_proof: HyraxPCSEvaluationProof<C>,
+    /// The evaluation points and evaluation proofs for the input layer claims, sorted by evaluation point.
+    pub evaluation_proofs: Vec<(Vec<C::Scalar>, HyraxPCSEvaluationProof<C>)>,
 }
 
 impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
+    /// Create a proof of the claims on a Hyrax input layer.
+    /// # Arguments:
+    /// * `input_layer_desc` - The description of the input layer
+    /// * `prover_commitment` - The commitment to the input layer
+    /// * `committed_claims` - The claims made on this layer (in any order)
     pub fn prove(
         input_layer_desc: &HyraxInputLayerDescription,
         prover_commitment: &HyraxProverInputCommitment<C>,
@@ -47,78 +43,40 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         committer: &PedersenCommitter<C>,
         blinding_rng: &mut impl Rng,
         transcript: &mut impl ECTranscriptTrait<C>,
-        converter: &mut VandermondeInverse<C::Scalar>,
     ) -> Self {
-        // Calculate the coefficients of the polynomial that interpolates the
-        // claims NB we don't use aggregate_claims here because the sampling of
-        // the evaluation point for the aggregate claim needs to happen
-        // elsewhere in Hyrax.
-        let claims = ClaimGroup::new_from_raw_claims(
-            committed_claims
-                .iter()
-                .map(|committed_claim| committed_claim.to_raw_claim())
-                .collect_vec(),
-        )
-        .unwrap();
-        let compute_vi_lx_eval_timer = start_timer!(|| "vilx evals for input");
-
-        let wlx_evals = get_wlx_evaluations(
-            claims.get_claim_points_matrix(),
-            claims.get_results(),
-            vec![DenseMle::new_from_multilinear_extension(
-                prover_commitment.mle.clone(),
-                input_layer_desc.layer_id,
-                None,
-                Some(0),
-            )],
-            claims.get_num_claims(),
-            claims.get_num_vars(),
-        )
-        .unwrap();
-
-        end_timer!(compute_vi_lx_eval_timer);
-
-        let coeffs_timer = start_timer!(|| "convert to coeffs timer");
-        let interpolant_coeffs = converter.convert_to_coefficients(wlx_evals);
-
-        end_timer!(coeffs_timer);
-
-        let claim_agg_timer = start_timer!(|| "claim agg input");
-        let (proof_of_claim_agg, aggregated_claim): (
-            ProofOfClaimAggregation<C>,
-            HyraxClaim<C::Scalar, CommittedScalar<C>>,
-        ) = ProofOfClaimAggregation::prove(
-            committed_claims,
-            &interpolant_coeffs,
-            committer,
-            blinding_rng,
-            transcript,
-        );
-        end_timer!(claim_agg_timer);
-
         let eval_proof_timer = start_timer!(|| "eval proof timer");
-        let evaluation_proof = HyraxPCSEvaluationProof::prove(
-            input_layer_desc.log_num_cols,
-            &prover_commitment.mle,
-            &aggregated_claim.point,
-            &aggregated_claim.evaluation,
-            committer,
-            blinding_rng,
-            transcript,
-            &prover_commitment.blinding_factors_matrix,
-        );
+        // Sort the claims by evaluation point
+        let mut committed_claims = committed_claims.to_vec();
+        committed_claims.sort_by(|a, b| a.point.cmp(&b.point));
+        let evaluation_proofs = committed_claims
+            .iter()
+            .map(|claim| {
+                let proof = HyraxPCSEvaluationProof::prove(
+                    input_layer_desc.log_num_cols,
+                    &prover_commitment.mle,
+                    &claim.point,
+                    &claim.evaluation,
+                    committer,
+                    blinding_rng,
+                    transcript,
+                    &prover_commitment.blinding_factors_matrix,
+                );
+                (claim.point.clone(), proof)
+            })
+            .collect_vec();
         end_timer!(eval_proof_timer);
 
         HyraxInputLayerProof {
             layer_id: input_layer_desc.layer_id,
             input_commitment: prover_commitment.commitment.clone(),
-            claim_agg_proof: proof_of_claim_agg,
-            evaluation_proof,
+            evaluation_proofs,
         }
     }
 
-    /// Verify a Hyrax Input Layer proof by verifying the inner proof of claim
-    /// aggregation, and then verifying the opening proof by checking the claim.
+    /// Verify a Hyrax Input Layer proof, establishing all the provided claims on the input layer.
+    /// # Arguments:
+    /// * `input_layer_desc` - The description of the input layer
+    /// * `claim_commitments` - The commitments to the claims, in any order
     pub fn verify(
         &self,
         input_layer_desc: &HyraxInputLayerDescription,
@@ -126,20 +84,32 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         committer: &PedersenCommitter<C>,
         transcript: &mut impl ECTranscriptTrait<C>,
     ) {
-        // Verify the proof of claim aggregation
-        let agg_claim = self
-            .claim_agg_proof
-            .verify(claim_commitments, committer, transcript);
+        // Sort the claims by evaluation point
+        let mut claim_commitments = claim_commitments.to_vec();
+        claim_commitments.sort_by(|a, b| a.point.cmp(&b.point));
 
-        // Verify the actual "evaluation" polynomial committed to at the random
-        // point
-        self.evaluation_proof.verify(
-            input_layer_desc.log_num_cols,
-            committer,
-            &self.input_commitment,
-            &agg_claim.point,
-            transcript,
-        );
+        // Check there are the same number of claims as evaluation proofs
+        assert_eq!(self.evaluation_proofs.len(), claim_commitments.len());
+
+        // Verify each evaluation proof
+        claim_commitments
+            .iter()
+            .zip(&self.evaluation_proofs)
+            .for_each(|(claim, (eval_point, eval_proof))| {
+                assert_eq!(claim.point, *eval_point);
+                eval_proof.commitment_to_evaluation.verify(&committer);
+                assert_eq!(
+                    claim.evaluation,
+                    eval_proof.commitment_to_evaluation.commitment
+                );
+                eval_proof.verify(
+                    input_layer_desc.log_num_cols,
+                    committer,
+                    &self.input_commitment,
+                    &claim.point,
+                    transcript,
+                );
+            });
     }
 }
 
