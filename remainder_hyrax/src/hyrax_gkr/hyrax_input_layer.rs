@@ -97,10 +97,9 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             .zip(&self.evaluation_proofs)
             .for_each(|(claim, (eval_point, eval_proof))| {
                 assert_eq!(claim.point, *eval_point);
-                eval_proof.commitment_to_evaluation.verify(&committer);
                 assert_eq!(
                     claim.evaluation,
-                    eval_proof.commitment_to_evaluation.commitment
+                    eval_proof.commitment_to_evaluation
                 );
                 eval_proof.verify(
                     input_layer_desc.log_num_cols,

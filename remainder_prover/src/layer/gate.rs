@@ -974,24 +974,33 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             F::ONE
         };
 
+        let lhs_challenges = &round_challenges[..self.num_dataparallel_vars + num_rounds_phase1];
+        let rhs_challenges = &round_challenges[..self.num_dataparallel_vars]
+            .iter()
+            .copied()
+            .chain(round_challenges[self.num_dataparallel_vars + num_rounds_phase1..].to_vec())
+            .collect_vec();
+
         match self.gate_operation {
             BinaryOperation::Add => PostSumcheckLayer(vec![
                 Product::<F, Option<F>>::new(
                     &[self.lhs_mle.clone()],
                     f_1_uv * beta_bound,
-                    round_challenges,
+                    lhs_challenges,
                 ),
                 Product::<F, Option<F>>::new(
                     &[self.rhs_mle.clone()],
                     f_1_uv * beta_bound,
-                    round_challenges,
+                    rhs_challenges,
                 ),
             ]),
-            BinaryOperation::Mul => PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
-                &[self.lhs_mle.clone(), self.rhs_mle.clone()],
-                f_1_uv * beta_bound,
-                round_challenges,
-            )]),
+            BinaryOperation::Mul => {
+                PostSumcheckLayer(vec![Product::<F, Option<F>>::new_from_mul_gate(
+                    &[self.lhs_mle.clone(), self.rhs_mle.clone()],
+                    f_1_uv * beta_bound,
+                    &[lhs_challenges, rhs_challenges],
+                )])
+            }
         }
     }
 
@@ -1075,7 +1084,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
                     .f
                     .get(idx * (1 << (rhs_data.num_vars() - self.num_dataparallel_vars)) + y_ind)
                     .unwrap_or(zero);
-                res_table[num_gate_outputs_per_dataparallel_instance * idx + z_ind] =
+                res_table[num_gate_outputs_per_dataparallel_instance * idx + z_ind] +=
                     self.gate_operation.perform_operation(f2_val, f3_val);
             });
         });
@@ -1719,4 +1728,58 @@ impl<F: Field> GateLayer<F> {
             Ok(vec![].into())
         }
     }
+}
+
+/// Computes the correct result of a gate layer,
+/// Used for data generation and testing.
+/// Arguments:
+/// - wiring: A vector of tuples representing the "nonzero" gates, especially useful
+///   in the sparse case the format is (z, x, y) where the gate at label z is
+///   the output of performing an operation on gates with labels x and y.
+///
+/// - num_dataparallel_bits: The number of bits representing the number of "dataparallel"
+///   copies of the circuit.
+///
+/// - lhs_data: The left side of the expression, i.e. the mle that makes up the "x"
+///   variables.
+///
+/// - rhs_data: The mles that are constructed when initializing phase 2 (binding the y
+///   variables).
+///
+/// - gate_operation: The gate operation representing the fan-in-two relationship.
+pub fn compute_gate_data_outputs<F: Field>(
+    wiring: Vec<(usize, usize, usize)>,
+    num_dataparallel_bits: usize,
+    lhs_data: &MultilinearExtension<F>,
+    rhs_data: &MultilinearExtension<F>,
+    gate_operation: BinaryOperation,
+) -> MultilinearExtension<F> {
+    let max_gate_val = wiring
+        .iter()
+        .fold(&0, |acc, (z, _, _)| std::cmp::max(acc, z));
+
+    // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
+    // evaluating over all values in the boolean hypercube which includes dataparallel bits
+    let num_dataparallel_vals = 1 << num_dataparallel_bits;
+    let res_table_num_entries = ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
+
+    let mut res_table = vec![F::ZERO; res_table_num_entries];
+    // TDH(ende): investigate if this can be parallelized (and if it's a bottleneck)
+    (0..num_dataparallel_vals).for_each(|idx| {
+        wiring.iter().for_each(|(z_ind, x_ind, y_ind)| {
+            let zero = F::ZERO;
+            let f2_val = lhs_data
+                .f
+                .get(idx + (x_ind * num_dataparallel_vals))
+                .unwrap_or(zero);
+            let f3_val = rhs_data
+                .f
+                .get(idx + (y_ind * num_dataparallel_vals))
+                .unwrap_or(zero);
+            res_table[idx + (z_ind * num_dataparallel_vals)] +=
+                gate_operation.perform_operation(f2_val, f3_val);
+        });
+    });
+
+    MultilinearExtension::new(res_table)
 }
