@@ -5,17 +5,17 @@ use itertools::Itertools;
 use rand::Rng;
 use remainder::claims::claim_aggregation::get_wlx_evaluations;
 use remainder::{
-    claims::{claim_group::ClaimGroup, RawClaim},
+    claims::claim_group::ClaimGroup,
     input_layer::InputLayerDescription,
     layer::LayerId,
-    mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
+    mle::{dense::DenseMle, evals::MultilinearExtension},
 };
+use remainder_shared_types::ff_field;
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
     pedersen::{CommittedScalar, PedersenCommitter},
     transcript::ec_transcript::ECTranscriptTrait,
 };
-use remainder_shared_types::{ff_field, Field};
 
 use crate::{
     hyrax_pcs::HyraxPCSEvaluationProof,
@@ -252,25 +252,4 @@ pub struct HyraxProverInputCommitment<C: PrimeOrderCurve> {
     pub commitment: Vec<C>,
     /// The blinding factors used in the commitment
     pub blinding_factors_matrix: Vec<C::Scalar>,
-}
-
-/// Verifies a claim by evaluating the MLE at the challenge point and checking
-/// that the result.
-pub fn verify_claim<F: Field>(mle_vec: &[F], claim: &RawClaim<F>) {
-    let mut mle = DenseMle::new_from_raw(mle_vec.to_vec(), LayerId::Input(0));
-    mle.index_mle_indices(0);
-
-    let eval = if mle.num_free_vars() != 0 {
-        let mut eval = None;
-        for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
-            eval = mle.fix_variable(curr_bit, chal);
-        }
-        debug_assert_eq!(mle.len(), 1);
-        eval.unwrap()
-    } else {
-        RawClaim::new(vec![], mle.mle.value())
-    };
-
-    assert_eq!(eval.get_point(), claim.get_point());
-    assert_eq!(eval.get_eval(), claim.get_eval());
 }
