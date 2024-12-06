@@ -11,11 +11,11 @@ use crate::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
         mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
     },
-    prover::global_config::{global_prover_lazy_beta_evals, global_verifier_lazy_beta_evals},
     sumcheck::*,
 };
 use itertools::Itertools;
 use remainder_shared_types::{
+    config::global_config::{global_prover_lazy_beta_evals, global_verifier_lazy_beta_evals},
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
