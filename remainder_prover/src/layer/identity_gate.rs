@@ -1,7 +1,11 @@
 //! Identity gate id(z, x) determines whether the xth gate from the
 //! i + 1th layer contributes to the zth gate in the ith layer.
 
-use std::{cmp::Ordering, collections::HashSet, fmt::{Debug, Formatter}};
+use std::{
+    cmp::Ordering,
+    collections::HashSet,
+    fmt::{Debug, Formatter},
+};
 
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
