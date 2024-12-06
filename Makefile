@@ -7,16 +7,6 @@ pr:  ## Prepare for a PR; run all GitHub CI Actions.
 	$(MAKE) test
 	$(MAKE) mem-lim
 
-bench-single:
-	cargo build --profile=opt-with-debug --bin run_iriscode_circuit
-	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/run_iriscode_circuit --image-filepath remainder_prover/src/worldcoin/constants/v3/iris/test_image.bin
-	ms_print massif/massif.$(name).out | less
-
-bench-single-split:
-	cargo build --profile=opt-with-debug --bin run_iriscode_split_circuit
-	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/run_iriscode_split_circuit --image-filepath remainder_prover/src/worldcoin/constants/v3/iris/test_image.bin
-	ms_print massif/massif.$(name).out | less
-
 check:  ## GitHub Action #1 - compile, run formatter and linter.
 	cargo check
 	cargo check --features parallel
@@ -60,7 +50,7 @@ bench:  ## Use Valgrind to profile memory usage. Example - make bench name=v2.0
 bench-single:  ## Use Valgrind to profile memory usage of the proving and verifying of a single iriscode circuit (i.e. just one eye, just iris).
 	cargo build --profile=opt-with-debug --bin run_iriscode_circuit
 	mkdir -p massif
-	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/run_iriscode_circuit --image-filepath remainder_prover/src/worldcoin/constants/v3/iris/test_image.bin
+	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/run_iriscode_circuit --image-filepath remainder_prover/src/worldcoin/constants/v3-split-images/iris/test_image.bin
 	ms_print massif/massif.$(name).out | less
 
 mobile:  ## Compile worldcoin binary optimized for binary size.
