@@ -26,6 +26,7 @@ ndarray-npy = "0.8.1"
 rayon = "1.7"
 sha256 = "1.5.0"
 parking_lot = "0.12"
+zeroize = "1.8.1"
 
 [features]
 parallel = ["remainder/parallel", "ark-std/parallel"]

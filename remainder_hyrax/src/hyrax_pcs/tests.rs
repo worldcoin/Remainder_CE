@@ -1,6 +1,4 @@
 use itertools::Itertools;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use remainder::mle::evals::MultilinearExtension;
 use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
 use remainder_shared_types::halo2curves::group::Group;
@@ -36,12 +34,7 @@ fn sanity_check_test_honest_prover_small_identity() {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
 
-    let blinding_factors_matrix_rows = (0..2).map(|_| Scalar::one()).collect_vec();
-
-    let mut seed_matrix = [0u8; 32];
-    OsRng.fill_bytes(&mut seed_matrix);
-    let mut seed_eval = [0u8; 32];
-    OsRng.fill_bytes(&mut seed_eval);
+    let mut blinding_factors_matrix_rows = (0..2).map(|_| Scalar::one()).collect_vec();
 
     let comm_to_matrix = HyraxPCSEvaluationProof::compute_matrix_commitments(
         log_split_point,
@@ -58,7 +51,7 @@ fn sanity_check_test_honest_prover_small_identity() {
         &committer_copy,
         prover_random_generator,
         &mut transcript,
-        &blinding_factors_matrix_rows,
+        &mut blinding_factors_matrix_rows,
     );
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -95,7 +88,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
 
-    let blinding_factors_matrix_rows = (0..4).map(|_| Scalar::zero()).collect_vec();
+    let mut blinding_factors_matrix_rows = (0..4).map(|_| Scalar::zero()).collect_vec();
 
     let comm_to_matrix = HyraxPCSEvaluationProof::compute_matrix_commitments(
         log_split_point,
@@ -112,7 +105,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
         &committer_copy,
         prover_random_generator,
         &mut transcript,
-        &blinding_factors_matrix_rows,
+        &mut blinding_factors_matrix_rows,
     );
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -170,7 +163,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
 
-    let blinding_factors_matrix_rows = (0..4)
+    let mut blinding_factors_matrix_rows = (0..4)
         .map(|_| Scalar::from(rand::random::<u64>()))
         .collect_vec();
 
@@ -189,7 +182,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         &committer_copy,
         prover_random_generator,
         &mut transcript,
-        &blinding_factors_matrix_rows,
+        &mut blinding_factors_matrix_rows,
     );
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -241,7 +234,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
 
-    let blinding_factors_matrix_rows = (0..(1 << 9))
+    let mut blinding_factors_matrix_rows = (0..(1 << 9))
         .map(|_| Scalar::from(rand::random::<u64>()))
         .collect_vec();
 
@@ -260,7 +253,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         &committer_copy,
         prover_random_generator,
         &mut transcript,
-        &blinding_factors_matrix_rows,
+        &mut blinding_factors_matrix_rows,
     );
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =

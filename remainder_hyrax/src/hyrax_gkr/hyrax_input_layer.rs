@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
-use rand::Rng;
+use rand::{CryptoRng, Rng, RngCore};
 use remainder::claims::claim_aggregation::get_wlx_evaluations;
 use remainder::{
     claims::{claim_group::ClaimGroup, RawClaim},
@@ -47,10 +47,10 @@ pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
 impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
     pub fn prove(
         input_layer_desc: &HyraxInputLayerDescription,
-        prover_commitment: &HyraxProverInputCommitment<C>,
+        prover_commitment: &mut HyraxProverInputCommitment<C>,
         committed_claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],
         committer: &PedersenCommitter<C>,
-        blinding_rng: &mut impl Rng,
+        blinding_rng: &mut (impl CryptoRng + RngCore),
         transcript: &mut impl ECTranscriptTrait<C>,
         converter: &mut VandermondeInverse<C::Scalar>,
     ) -> Self {
@@ -110,7 +110,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             committer,
             blinding_rng,
             transcript,
-            &prover_commitment.blinding_factors_matrix,
+            &mut prover_commitment.blinding_factors_matrix,
         );
         end_timer!(eval_proof_timer);
 

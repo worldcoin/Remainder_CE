@@ -6,7 +6,7 @@ use crate::{
     utils::vandermonde::VandermondeInverse,
 };
 use itertools::Itertools;
-use rand::Rng;
+use rand::{CryptoRng, Rng, RngCore};
 use remainder::layer::product::{Intermediate, PostSumcheckLayer};
 use remainder::layer::Layer;
 use remainder::layer::LayerDescription;
@@ -91,7 +91,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // The output MLEs from this layer, whose bookkeeping tables combined make the layerwise bookkeeping table.
         output_mles_from_layer: Vec<DenseMle<C::Scalar>>,
         committer: &PedersenCommitter<C>,
-        mut blinding_rng: &mut impl Rng,
+        mut blinding_rng: &mut (impl CryptoRng + RngCore),
         transcript: &mut impl ECTranscriptTrait<C>,
         converter: &mut VandermondeInverse<C::Scalar>,
     ) -> (Self, Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>) {
