@@ -69,7 +69,7 @@ pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) -> DenseMle
 /// Helper function to create random MLE with specific number of vars
 pub fn get_random_mle_from_capacity<F: Field>(capacity: usize, rng: &mut impl Rng) -> DenseMle<F> {
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()) * F::from(rng.gen::<u64>()))
-        .take(capacity as usize)
+        .take(capacity)
         .collect_vec();
     DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
 }
