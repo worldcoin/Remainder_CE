@@ -19,7 +19,9 @@ use remainder_shared_types::{ff_field, Field};
 
 use crate::{
     hyrax_pcs::HyraxPCSEvaluationProof,
-    hyrax_primitives::proof_of_claim_agg::ProofOfClaimAggregation,
+    hyrax_primitives::{
+        proof_of_claim_agg::ProofOfClaimAggregation, proof_of_equality::ProofOfEquality,
+    },
     utils::vandermonde::VandermondeInverse,
 };
 
@@ -37,6 +39,9 @@ pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
     pub input_commitment: Vec<C>,
     /// The evaluation proof for the polynomial evaluated at a random point
     pub evaluation_proof: HyraxPCSEvaluationProof<C>,
+    /// The proof of equality that the aggregated claim point and the commitment
+    /// in the evaluation proof are indeed to the same value
+    pub proof_of_equality: ProofOfEquality<C>,
 }
 
 impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
@@ -101,7 +106,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             input_layer_desc.log_num_cols,
             &prover_commitment.mle,
             &aggregated_claim.point,
-            &aggregated_claim.evaluation,
+            &aggregated_claim.evaluation.value,
             committer,
             blinding_rng,
             transcript,
@@ -109,11 +114,20 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         );
         end_timer!(eval_proof_timer);
 
+        let proof_of_equality = ProofOfEquality::prove(
+            &aggregated_claim.evaluation,
+            &evaluation_proof.commitment_to_evaluation,
+            committer,
+            blinding_rng,
+            transcript,
+        );
+
         HyraxInputLayerProof {
             layer_id: input_layer_desc.layer_id,
             input_commitment: prover_commitment.commitment.clone(),
             claim_agg_proof: proof_of_claim_agg,
             evaluation_proof,
+            proof_of_equality,
         }
     }
 
@@ -138,6 +152,15 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             committer,
             &self.input_commitment,
             &agg_claim.point,
+            transcript,
+        );
+
+        // Proof of equality for the aggregated claim and the evaluation proof
+        // commitment
+        self.proof_of_equality.verify(
+            agg_claim.evaluation,
+            self.evaluation_proof.commitment_to_evaluation.commitment,
+            committer,
             transcript,
         );
     }
