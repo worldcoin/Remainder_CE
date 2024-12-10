@@ -51,7 +51,7 @@ bench-mpc:  ## Use Valgrind to profile memory usage, for worldcoin mpc circuit. 
 	cargo build --profile=opt-with-debug --bin worldcoin_mpc
 	mkdir -p massif
 	valgrind --tool=massif --massif-out-file=massif/massif.mpc.out --pages-as-heap=yes ./target/opt-with-debug/worldcoin_mpc
-	ms_print massif/massif.$(name).out | less
+	ms_print massif/massif.mpc.out | less
 
 mobile:  ## Compile worldcoin binary optimized for binary size.
 	cargo build --profile mobile --bin worldcoin
