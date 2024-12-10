@@ -1762,6 +1762,7 @@ pub fn compute_gate_data_outputs<F: Field>(
     // evaluating over all values in the boolean hypercube which includes dataparallel bits
     let num_dataparallel_vals = 1 << num_dataparallel_bits;
     let res_table_num_entries = ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
+    let num_gate_outputs_per_dataparallel_instance = (max_gate_val + 1).next_power_of_two();
 
     let mut res_table = vec![F::ZERO; res_table_num_entries];
     // TDH(ende): investigate if this can be parallelized (and if it's a bottleneck)
@@ -1770,13 +1771,13 @@ pub fn compute_gate_data_outputs<F: Field>(
             let zero = F::ZERO;
             let f2_val = lhs_data
                 .f
-                .get(idx + (x_ind * num_dataparallel_vals))
+                .get(idx * (1 << (lhs_data.num_vars() - num_dataparallel_bits)) + x_ind)
                 .unwrap_or(zero);
             let f3_val = rhs_data
                 .f
-                .get(idx + (y_ind * num_dataparallel_vals))
+                .get(idx * (1 << (rhs_data.num_vars() - num_dataparallel_bits)) + y_ind)
                 .unwrap_or(zero);
-            res_table[idx + (z_ind * num_dataparallel_vals)] +=
+            res_table[num_gate_outputs_per_dataparallel_instance * idx + z_ind] +=
                 gate_operation.perform_operation(f2_val, f3_val);
         });
     });
