@@ -48,6 +48,7 @@ fn sanity_check_test_honest_prover_small_identity() {
         &input_layer_mle_coeff,
         &committer,
         &blinding_factors_matrix_rows,
+        Some(1),
     );
 
     let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
@@ -102,6 +103,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
         &input_layer_mle_coeff,
         &committer,
         &blinding_factors_matrix_rows,
+        Some(1),
     );
 
     let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
@@ -179,6 +181,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         &input_layer_mle_coeff,
         &committer,
         &blinding_factors_matrix_rows,
+        Some(64),
     );
 
     let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
@@ -203,7 +206,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
     );
 }
 
-#[ignore] // takes a long time to run!
+// #[ignore] // takes a long time to run!
 #[test]
 /// test on a 2^9 x 2^9 matrix with all random elements
 fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
@@ -250,6 +253,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         &input_layer_mle_coeff,
         &committer,
         &blinding_factors_matrix_rows,
+        Some(64),
     );
 
     let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(

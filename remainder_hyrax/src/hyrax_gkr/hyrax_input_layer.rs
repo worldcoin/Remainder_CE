@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
-use ark_std::{end_timer, start_timer};
+use ark_std::{cfg_iter, end_timer, start_timer};
 use itertools::Itertools;
 use rand::Rng;
+#[cfg(feature = "parallel")]
+use rayon::iter::ParallelIterator;
 use remainder::claims::claim_aggregation::get_wlx_evaluations;
+use remainder::mle::evals::bit_packed_vector::num_bits;
 use remainder::{
     claims::{claim_group::ClaimGroup, RawClaim},
     input_layer::InputLayerDescription,
@@ -228,12 +231,22 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
         .for_each(|blinding_factor| {
             *blinding_factor = C::Scalar::random(&mut rng);
         });
+
+    let max_input_mle_value = cfg_iter!(input_mle.f).max().unwrap();
+    let max_num_bits_needed = num_bits(max_input_mle_value);
+    let maybe_optimized_num_bits = if max_num_bits_needed <= 128 {
+        Some(max_num_bits_needed)
+    } else {
+        None
+    };
+
     let mle_coeffs_vec = MultilinearExtension::new(input_mle.f.iter().collect_vec());
     let commitment_values = HyraxPCSEvaluationProof::compute_matrix_commitments(
         input_layer_desc.log_num_cols,
         &mle_coeffs_vec,
         committer,
         &blinding_factors_matrix,
+        maybe_optimized_num_bits,
     );
     HyraxProverInputCommitment {
         mle: mle_coeffs_vec,
