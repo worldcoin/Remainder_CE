@@ -10,7 +10,7 @@ use remainder_shared_types::Field;
 use crate::{
     claims::RawClaim,
     layer::LayerId,
-    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
+    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, MleIndex},
 };
 
 /// Return a vector containing a padded version of the input data, with the
@@ -165,26 +165,11 @@ pub fn build_composite_mle<F: Field>(
 
 /// Verifies a claim by evaluating the MLE at the challenge point and checking
 /// that the result.
-pub fn verify_claim<F: Field>(mle_vec: &[F], claim: &RawClaim<F>) {
-    let mut mle = DenseMle::new_from_raw(mle_vec.to_vec(), LayerId::Input(0));
-    mle.index_mle_indices(0);
-
-    assert_eq!(mle.num_free_vars(), claim.get_num_vars());
-
-    let num_free_vars = mle.num_free_vars();
-    let eval = if num_free_vars != 0 {
-        let mut eval = None;
-        for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
-            eval = mle.fix_variable(curr_bit, chal);
-        }
-        debug_assert_eq!(mle.len(), 1);
-        eval.unwrap()
-    } else {
-        RawClaim::new(vec![], mle.mle.value())
-    };
-
-    assert_eq!(eval.get_point(), claim.get_point());
-    assert_eq!(eval.get_eval(), claim.get_eval());
+pub fn verify_claim<F: Field>(mle_unpadded_evaluations: &[F], claim: &RawClaim<F>) {
+    let mle = MultilinearExtension::new(mle_unpadded_evaluations.to_vec());
+    assert_eq!(mle.num_vars(), claim.get_num_vars());
+    let eval = evaluate_mle_at_a_point_gray_codes(&mle, claim.get_point());
+    assert_eq!(eval, claim.get_eval());
 }
 
 /// A struct representing an iterator that iterates through the range

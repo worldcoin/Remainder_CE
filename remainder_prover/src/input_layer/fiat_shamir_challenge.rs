@@ -88,7 +88,6 @@ mod tests {
     use crate::utils::mle::verify_claim;
 
     use super::*;
-    use remainder_shared_types::ff_field;
     use remainder_shared_types::{
         transcript::{
             test_transcript::TestSponge, ProverTranscript, TranscriptReader, TranscriptWriter,
@@ -110,7 +109,7 @@ mod tests {
         let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
             TranscriptWriter::new("Test Transcript Writer");
 
-        let claim_point = vec![Fr::ONE, Fr::ZERO];
+        let claim_point = vec![Fr::from(2), Fr::from(2)];
         let claim_result = Fr::from(1);
         let claim: RawClaim<Fr> = RawClaim::new(claim_point, claim_result);
 
