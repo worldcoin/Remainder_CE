@@ -232,8 +232,13 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
             *blinding_factor = C::Scalar::random(&mut rng);
         });
 
+    // We take the largest value in the MLE and compute the bits needed to
+    // represent it.
     let max_input_mle_value = cfg_iter!(input_mle.f).max().unwrap();
     let max_num_bits_needed = num_bits(max_input_mle_value);
+    // If it is <= 128, then we can use an optimized version of the vector
+    // commitment. Every element will be padded to fit to the next power of two
+    // to the max number of bits needed.
     let maybe_optimized_num_bits = if max_num_bits_needed <= 128 {
         Some(max_num_bits_needed)
     } else {

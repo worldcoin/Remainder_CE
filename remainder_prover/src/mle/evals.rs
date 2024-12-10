@@ -621,6 +621,7 @@ impl<F: Field> MultilinearExtension<F> {
     }
 
     /// Convert a [MultilinearExtension] into a vector of u8s.
+    /// Every element is padded to contain 8 bits.
     pub fn convert_into_u8_vec(&self) -> Vec<u8> {
         self.f
             .iter()
@@ -634,6 +635,7 @@ impl<F: Field> MultilinearExtension<F> {
     }
 
     /// Convert a [MultilinearExtension] into a vector of u16s.
+    /// Every element is padded to contain 16 bits.
     pub fn convert_into_u16_vec(&self) -> Vec<u16> {
         self.f
             .iter()
@@ -647,6 +649,7 @@ impl<F: Field> MultilinearExtension<F> {
     }
 
     /// Convert a [MultilinearExtension] into a vector of u32s.
+    /// Every element is padded to contain 32 bits.
     pub fn convert_into_u32_vec(&self) -> Vec<u32> {
         self.f
             .iter()
@@ -660,6 +663,7 @@ impl<F: Field> MultilinearExtension<F> {
     }
 
     /// Convert a [MultilinearExtension] into a vector of u64s.
+    /// Every element is padded to contain 64 bits.
     pub fn convert_into_u64_vec(&self) -> Vec<u64> {
         self.f
             .iter()
@@ -673,6 +677,7 @@ impl<F: Field> MultilinearExtension<F> {
     }
 
     /// Convert a [MultilinearExtension] into a vector of u128s.
+    /// Every element is padded to contain 128 bits.
     pub fn convert_into_u128_vec(&self) -> Vec<u128> {
         self.f
             .iter()
