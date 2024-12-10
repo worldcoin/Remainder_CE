@@ -4,7 +4,7 @@ use ark_std::{cfg_iter, end_timer, start_timer};
 use itertools::Itertools;
 use rand::Rng;
 #[cfg(feature = "parallel")]
-use rayon::iter::ParallelIterator;
+use rayon::prelude::*;
 use remainder::claims::claim_aggregation::get_wlx_evaluations;
 use remainder::mle::evals::bit_packed_vector::num_bits;
 use remainder::{
@@ -234,8 +234,9 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
 
     // We take the largest value in the MLE and compute the bits needed to
     // represent it.
-    let max_input_mle_value = cfg_iter!(input_mle.f).max().unwrap();
-    let max_num_bits_needed = num_bits(max_input_mle_value);
+    let input_mle_vec = input_mle.to_vec();
+    let max_input_mle_value = cfg_iter!(input_mle_vec).max().unwrap();
+    let max_num_bits_needed = num_bits(*max_input_mle_value);
     // If it is <= 128, then we can use an optimized version of the vector
     // commitment. Every element will be padded to fit to the next power of two
     // to the max number of bits needed.

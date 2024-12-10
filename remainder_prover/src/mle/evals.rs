@@ -684,7 +684,6 @@ impl<F: Field> MultilinearExtension<F> {
             .map(|field_element| {
                 let field_element_le_bytes = field_element.to_bytes_le();
                 let mut padded_u128 = [0u8; 16];
-                assert!(field_element_le_bytes.len() <= 16);
                 padded_u128.copy_from_slice(&field_element_le_bytes[..16]);
                 u128::from_le_bytes(padded_u128)
             })
