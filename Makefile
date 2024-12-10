@@ -21,9 +21,9 @@ test:  ## GitHub Action #2 - Slow but Comprehensive testing.
 
 mem-lim:  ## GitHub Action #3 - run sequential worldcoin binary with a memory limit.
 	$(MAKE) prod-seq
-	echo 500M | sudo tee /sys/fs/cgroup/makefile_memory_limited_group/memory.max
+	echo 350M | sudo tee /sys/fs/cgroup/makefile_memory_limited_group/memory.max
 	echo 0 | sudo tee /sys/fs/cgroup/makefile_memory_limited_group/memory.swap.max
-	sudo cgexec -g memory:makefile_memory_limited_group ./target/release/worldcoin
+	sudo cgexec -g memory:makefile_memory_limited_group ./target/release/worldcoin prove worldcoin.circuit iriscode_pcp_example worldcoin.zkp
 
 test-dev:  ## Faster alternative to "make test"; uses `--release` flag and ignores slow tests.
 	cargo test --release
