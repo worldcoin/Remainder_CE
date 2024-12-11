@@ -2,7 +2,7 @@
 
 use std::iter::repeat_with;
 
-use itertools::{repeat_n, Itertools};
+use itertools::{repeat_n, FoldWhile, Itertools};
 use rand::Rng;
 use rayon::prelude::*;
 use remainder_shared_types::Field;
@@ -176,9 +176,30 @@ pub fn build_composite_mle<F: Field>(
 /// Verifies a claim by evaluating the MLE at the challenge point and checking
 /// that the result.
 pub fn verify_claim<F: Field>(mle_unpadded_evaluations: &[F], claim: &RawClaim<F>) {
-    let mle = MultilinearExtension::new(mle_unpadded_evaluations.to_vec());
-    assert_eq!(mle.num_vars(), claim.get_num_vars());
-    let eval = evaluate_mle_at_a_point_gray_codes(&mle, claim.get_point());
+    let mle_evaluations = claim
+        .get_point()
+        .iter()
+        .fold_while(mle_unpadded_evaluations, |acc, elem| {
+            if elem == &F::ZERO {
+                let sliced_acc = &acc[..(acc.len() / 2)];
+                FoldWhile::Continue(sliced_acc)
+            } else if elem == &F::ONE {
+                let sliced_acc = &acc[(acc.len() / 2)..];
+                FoldWhile::Continue(sliced_acc)
+            } else {
+                FoldWhile::Done(acc)
+            }
+        })
+        .into_inner();
+    let filtered_claim = claim
+        .get_point()
+        .iter()
+        .skip_while(|x| (x == &&F::ZERO || x == &&F::ONE))
+        .copied()
+        .collect_vec();
+    let mle = MultilinearExtension::new(mle_evaluations.to_vec());
+    assert_eq!(mle.num_vars(), filtered_claim.len());
+    let eval = evaluate_mle_at_a_point_gray_codes(&mle, &filtered_claim);
     assert_eq!(eval, claim.get_eval());
 }
 
