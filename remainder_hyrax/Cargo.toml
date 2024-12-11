@@ -50,3 +50,7 @@ path = "src/bin/get_circuit_description.rs"
 [[bin]]
 name = "worldcoin"
 path = "src/bin/worldcoin.rs"
+
+[[bin]]
+name = "worldcoin_mpc"
+path = "src/bin/worldcoin_mpc.rs"

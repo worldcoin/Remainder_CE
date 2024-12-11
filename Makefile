@@ -1,4 +1,4 @@
-.PHONY: all pr check test mem-lim test-dev prod prod-seq bin bin-seq bench mobile clean help
+.PHONY: all pr check test mem-lim test-dev prod prod-seq bin bin-seq bench bench-mpc mobile clean help
 
 all: help
 
@@ -41,11 +41,17 @@ bin:  ## Build the binaries for efficient debugging; optimizations + rayon paral
 bin-seq:  ## Similar to "make bin", but NO rayon parallelism.
 	cargo build --bins --release --features "parallel, print-trace"
 
-bench:  ## Use Valgrind to profile memory usage. Example - make bench name=v2.0
+bench:  ## Use Valgrind to profile memory usage, for worldcoin ic circuit. Example - make bench name=v2.0
 	cargo build --profile=opt-with-debug --bin worldcoin
 	mkdir -p massif
 	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin
 	ms_print massif/massif.$(name).out | less
+
+bench-mpc:  ## Use Valgrind to profile memory usage, for worldcoin mpc circuit. Example - make bench-mpc
+	cargo build --profile=opt-with-debug --bin worldcoin_mpc
+	mkdir -p massif
+	valgrind --tool=massif --massif-out-file=massif/massif.mpc.out --pages-as-heap=yes ./target/opt-with-debug/worldcoin_mpc
+	ms_print massif/massif.mpc.out | less
 
 bench-single:  ## Use Valgrind to profile memory usage of the proving and verifying of a single iriscode circuit (i.e. just one eye, just iris).
 	cargo build --profile=opt-with-debug --bin run_iriscode_circuit
