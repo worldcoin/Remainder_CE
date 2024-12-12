@@ -32,6 +32,8 @@ use super::{
     verifier_expr::VerifierExpr,
 };
 
+use anyhow::{Context, Ok, Result};
+
 /// Type for defining [Expression<F, ExprDescription>], the type used
 /// for representing expressions in the circuit description.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
@@ -53,7 +55,7 @@ impl<F: Field> Expression<F, ExprDescription> {
         &self,
         point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Expression<F, VerifierExpr>, ExpressionError> {
+    ) -> Result<Expression<F, VerifierExpr>> {
         Ok(Expression::new(
             self.expression_node
                 .into_verifier_node(point, transcript_reader)?,
@@ -121,7 +123,7 @@ impl<F: Field> Expression<F, ExprDescription> {
 
         let mut get_degree_closure = |expr: &ExpressionNode<F, ExprDescription>,
                                       _mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec|
-         -> Result<(), ()> {
+         -> Result<()> {
             let round_degree = &mut round_degree;
 
             // The only exception is within a product of MLEs
@@ -156,7 +158,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
         &self,
         point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<ExpressionNode<F, VerifierExpr>, ExpressionError> {
+    ) -> Result<ExpressionNode<F>> {
         match self {
             ExpressionNode::Constant(scalar) => Ok(ExpressionNode::Constant(*scalar)),
             ExpressionNode::Selector(index, lhs, rhs) => match index {
@@ -165,7 +167,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                     Box::new(lhs.into_verifier_node(point, transcript_reader)?),
                     Box::new(rhs.into_verifier_node(point, transcript_reader)?),
                 )),
-                _ => Err(ExpressionError::SelectorBitNotBoundError),
+                _ => Err(ExpressionError::SelectorBitNotBoundError).with_context(|| ""),
             },
             ExpressionNode::Mle(circuit_mle) => Ok(ExpressionNode::Mle(
                 circuit_mle.into_verifier_mle(point, transcript_reader)?,
@@ -181,7 +183,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 let verifier_mles: Vec<VerifierMle<F>> = circuit_mles
                     .iter()
                     .map(|circuit_mle| circuit_mle.into_verifier_mle(point, transcript_reader))
-                    .collect::<Result<Vec<VerifierMle<F>>, ExpressionError>>()?;
+                    .collect::<Result<Vec<VerifierMle<F>>>>()?;
 
                 Ok(ExpressionNode::Product(verifier_mles))
             }
@@ -216,7 +218,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                             .get_data_from_circuit_mle(circuit_mle) // Returns Result
                             .map(|data| data.to_vec()) // Map Ok value to slice
                     })
-                    .collect::<Result<Vec<Vec<F>>, _>>() // Collect all into a Result
+                    .collect::<Result<Vec<Vec<F>>>>() // Collect all into a Result
                     .ok()?;
                 Some(evaluate_bookkeeping_tables_given_operation(
                     &mle_bookkeeping_tables,

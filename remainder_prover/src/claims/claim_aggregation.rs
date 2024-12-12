@@ -21,6 +21,8 @@ use crate::{
 
 use super::{claim_group::ClaimGroup, ClaimError};
 
+use anyhow::{anyhow, Context, Ok, Result};
+
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -42,7 +44,7 @@ pub fn prover_aggregate_claims<F: Field>(
     claims: &[Claim<F>],
     output_mles_from_layer: Vec<DenseMle<F>>,
     transcript_writer: &mut impl ProverTranscript<F>,
-) -> Result<RawClaim<F>, GKRError> {
+) -> Result<RawClaim<F>> {
     let num_claims = claims.len();
     debug_assert!(num_claims > 0);
     info!("High-level claim aggregation on {num_claims} claims.");
@@ -64,7 +66,7 @@ pub fn prover_aggregate_claims<F: Field>(
     let intermediate_claims = claim_groups
         .into_iter()
         .map(|claim_group| claim_group.prover_aggregate(&fixed_output_mles, transcript_writer))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     end_timer!(intermediate_timer);
     let final_timer = start_timer!(|| "Final stage aggregation.".to_string());
@@ -145,7 +147,7 @@ pub fn get_wlx_evaluations<F: Field>(
     claim_mles: Vec<DenseMle<F>>,
     num_claims: usize,
     num_idx: usize,
-) -> Result<Vec<F>, ClaimError> {
+) -> Result<Vec<F>> {
     // get the number of evaluations
 
     let (num_evals, common_idx) = if global_prover_claim_agg_constant_column_optimization() {
@@ -198,7 +200,7 @@ pub fn get_wlx_evaluations<F: Field>(
 pub fn verifier_aggregate_claims<F: Field>(
     claims: &[Claim<F>],
     transcript_reader: &mut impl VerifierTranscript<F>,
-) -> Result<RawClaim<F>, TranscriptReaderError> {
+) -> Result<RawClaim<F>> {
     let num_claims = claims.len();
     debug_assert!(num_claims > 0);
     info!("High-level claim aggregation on {num_claims} claims.");
@@ -221,7 +223,7 @@ pub fn verifier_aggregate_claims<F: Field>(
     let intermediate_claims = claim_groups
         .into_iter()
         .map(|claim_group| claim_group.verifier_aggregate(transcript_reader))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     end_timer!(intermediate_timer);
     let final_timer = start_timer!(|| "Final stage aggregation.".to_string());

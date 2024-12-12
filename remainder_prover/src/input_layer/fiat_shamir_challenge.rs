@@ -14,6 +14,8 @@ use crate::{
 use crate::mle::Mle;
 use thiserror::Error;
 
+use anyhow::{Context, Ok, Result};
+
 #[derive(Error, Clone, Debug)]
 /// The errors which can be encountered when constructing an input layer.
 pub enum FiatShamirChallengeError {
@@ -82,7 +84,7 @@ impl<F: Field> FiatShamirChallenge<F> {
     /// On a copy of the underlying data, fix variables for each of the coordinates of the the point
     /// in `claim`, and check whether the single element left in the bookkeeping table is equal to
     /// the claimed value in `claim`.
-    pub fn verify(&self, claim: &RawClaim<F>) -> Result<(), FiatShamirChallengeError> {
+    pub fn verify(&self, claim: &RawClaim<F>) -> Result<()> {
         let mle_evals = self.mle.to_vec();
         let mut mle = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
         mle.index_mle_indices(0);
@@ -91,7 +93,8 @@ impl<F: Field> FiatShamirChallenge<F> {
             return Err(FiatShamirChallengeError::NumVarsMismatch(
                 claim.get_point().len(),
                 mle.num_free_vars(),
-            ));
+            ))
+            .with_context(|| "");
         }
 
         let eval = if mle.num_free_vars() != 0 {
@@ -111,7 +114,7 @@ impl<F: Field> FiatShamirChallenge<F> {
         if eval.get_eval() == claim.get_eval() {
             Ok(())
         } else {
-            Err(FiatShamirChallengeError::EvaluationMismatch)
+            Err(FiatShamirChallengeError::EvaluationMismatch).with_context(|| "")
         }
     }
 }

@@ -44,6 +44,7 @@ use std::{
 #[cfg(test)]
 pub mod tests;
 
+use anyhow::{anyhow, Context, Ok, Result};
 use ark_std::{cfg_chunks, cfg_into_iter};
 use itertools::{repeat_n, Itertools};
 use rayon::prelude::ParallelIterator;
@@ -219,7 +220,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     round_index: usize,
     max_degree: usize,
     beta_values: &BetaValues<F>,
-) -> Result<SumcheckEvals<F>, ExpressionError> {
+) -> Result<SumcheckEvals<F>> {
     // Each different type of expression node (constant, selector, product, sum,
     // neg, scaled, mle) is treated differently, so we create closures for each
     // which are then evaluated by the `evaluate_sumcheck_beta_cascade`
@@ -317,13 +318,15 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
 
                         Ok(first_evals + second_evals)
                     } else {
-                        Err(ExpressionError::EvaluationError("Expression returns two evals that do not have the same length on a selector bit"))
+                        Err(ExpressionError::EvaluationError("Expression returns two evals that do not have the same length on a selector bit")).with_context(|| "")
                     }
                 }
                 // we cannot have an indexed bit for the selector bit that is
                 // less than the current sumcheck round. therefore this is an
                 // error
-                std::cmp::Ordering::Greater => Err(ExpressionError::InvalidMleIndex),
+                std::cmp::Ordering::Greater => {
+                    Err(ExpressionError::InvalidMleIndex).with_context(|| "")
+                }
             }
         }
         // if the selector bit has already been bound, that means the beta value
@@ -342,7 +345,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
             // the evaluation is just scaled by the beta bound value
             Ok(((b * coeff) + (a * coeff_neg)) * *beta_bound_val)
         }
-        _ => Err(ExpressionError::InvalidMleIndex),
+        _ => Err(ExpressionError::InvalidMleIndex).with_context(|| ""),
     };
 
     // the mle evaluation takes in the mle ref, and the corresponding unbound
@@ -350,7 +353,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     let mle_eval = |mle: &DenseMle<F>,
                     unbound_beta_vals: &[F],
                     bound_beta_vals: &[F]|
-     -> Result<SumcheckEvals<F>, ExpressionError> {
+     -> Result<SumcheckEvals<F>> {
         Ok(beta_cascade(
             &[&mle.clone()],
             max_degree,
@@ -361,7 +364,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     };
 
     // Just invert
-    let negated = |a: Result<_, _>| a.map(|a: SumcheckEvals<F>| a.neg());
+    let negated = |a: Result<_>| a.map(|a: SumcheckEvals<F>| a.neg());
 
     // when we have a sum, we can evaluate both parts of the expression
     // separately and just add the evaluations
@@ -377,7 +380,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     let product = |mles: &[&DenseMle<F>],
                    unbound_beta_vals: &[F],
                    bound_beta_vals: &[F]|
-     -> Result<SumcheckEvals<F>, ExpressionError> {
+     -> Result<SumcheckEvals<F>> {
         Ok(beta_cascade(
             mles,
             max_degree,
@@ -422,7 +425,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
 pub fn successors_from_mle_product<F: Field>(
     mles: &[&impl Mle<F>],
     degree: usize,
-) -> Result<Vec<Vec<F>>, MleError> {
+) -> Result<Vec<Vec<F>>> {
     // Gets the total number of free variables across all MLEs within this
     // product
     let max_num_vars = mles
@@ -501,7 +504,7 @@ pub fn successors_from_mle_product<F: Field>(
 /// evaluations.
 pub(crate) fn successors_from_mle_product_no_ind_var<F: Field>(
     mles: &[&impl Mle<F>],
-) -> Result<Vec<F>, MleError> {
+) -> Result<Vec<F>> {
     let max_num_vars = mles
         .iter()
         .map(|mle| mle.num_free_vars())
@@ -686,7 +689,7 @@ pub(crate) fn get_round_degree<F: Field>(
 
     let mut get_degree_closure = |expr: &ExpressionNode<F, ProverExpr>,
                                   mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
-     -> Result<(), ()> {
+     -> Result<()> {
         let round_degree = &mut round_degree;
 
         // The only exception is within a product of MLEs
@@ -718,7 +721,7 @@ pub(crate) fn get_round_degree<F: Field>(
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary
 /// point
-pub fn evaluate_at_a_point<F: Field>(given_evals: &[F], point: F) -> Result<F, InterpError> {
+pub fn evaluate_at_a_point<F: Field>(given_evals: &[F], point: F) -> Result<F> {
     // Special case for the constant polynomial.
     if given_evals.len() == 1 {
         return Ok(given_evals[0]);
@@ -757,5 +760,5 @@ pub fn evaluate_at_a_point<F: Field>(given_evals: &[F], point: F) -> Result<F, I
             |(x, (num, denom))| given_evals[x] * num * denom.invert().unwrap(),
         )
         .reduce(|x, y| x + y);
-    eval.ok_or(InterpError::NoInverse)
+    eval.ok_or(anyhow!("Interpretation Error: No Inverse"))
 }

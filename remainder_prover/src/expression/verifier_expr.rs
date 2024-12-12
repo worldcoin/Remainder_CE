@@ -32,6 +32,8 @@ use super::{
     generic_expr::{Expression, ExpressionNode, ExpressionType},
 };
 
+use anyhow::{Context, Ok, Result};
+
 /// Placeholder type for defining `Expression<F, VerifierExpr>`, the type used
 /// for representing expressions for the Verifier.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -58,30 +60,24 @@ impl<F: Field> Expression<F, VerifierExpr> {
     }
 
     /// Evaluate this fully bound expression.
-    pub fn evaluate(&self) -> Result<F, ExpressionError> {
+    pub fn evaluate(&self) -> Result<F> {
         let constant = |c| Ok(c);
-        let selector_column = |idx: &MleIndex<F>,
-                               lhs: Result<F, ExpressionError>,
-                               rhs: Result<F, ExpressionError>|
-         -> Result<F, ExpressionError> {
+        let selector_column = |idx: &MleIndex<F>, lhs: Result<F>, rhs: Result<F>| -> Result<F> {
             // Selector bit must be bound
             if let MleIndex::Bound(val, _) = idx {
                 return Ok(*val * rhs? + (F::ONE - val) * lhs?);
             }
-            Err(ExpressionError::SelectorBitNotBoundError)
+            Err(ExpressionError::SelectorBitNotBoundError).with_context(|| "")
         };
-        let mle_eval = |verifier_mle: &VerifierMle<F>| -> Result<F, ExpressionError> {
-            Ok(verifier_mle.value())
-        };
-        let negated = |val: Result<F, ExpressionError>| Ok((val?).neg());
-        let sum =
-            |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
-        let product = |verifier_mles: &[VerifierMle<F>]| -> Result<F, ExpressionError> {
+        let mle_eval = |verifier_mle: &VerifierMle<F>| -> Result<F> { Ok(verifier_mle.value()) };
+        let negated = |val: Result<F>| Ok((val?).neg());
+        let sum = |lhs: Result<F>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
+        let product = |verifier_mles: &[VerifierMle<F>]| -> Result<F> {
             verifier_mles
                 .iter()
                 .try_fold(F::ONE, |acc, verifier_mle| Ok(acc * verifier_mle.value()))
         };
-        let scaled = |val: Result<F, ExpressionError>, scalar: F| Ok(val? * scalar);
+        let scaled = |val: Result<F>, scalar: F| Ok(val? * scalar);
 
         self.expression_node.reduce(
             &constant,

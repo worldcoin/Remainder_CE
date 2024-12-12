@@ -1,7 +1,7 @@
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use remainder_shared_types::{
-    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
+    transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
 use tracing::{debug, info};
@@ -12,11 +12,13 @@ use crate::{
         ClaimError,
     },
     mle::dense::DenseMle,
-    prover::{global_config::global_verifier_claim_agg_constant_column_optimization, GKRError},
+    prover::global_config::global_verifier_claim_agg_constant_column_optimization,
     sumcheck::evaluate_at_a_point,
 };
 
 use super::{Claim, RawClaim};
+
+use anyhow::{Context, Ok, Result};
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -49,7 +51,7 @@ impl<F: Field> ClaimGroup<F> {
     /// [ClaimError::LayerIdMismatch] otherwise.  Returns
     /// [ClaimError::NumVarsMismatch] if the collection of claims do not all
     /// agree on the number of variables.
-    pub fn new(claims: Vec<Claim<F>>) -> Result<Self, ClaimError> {
+    pub fn new(claims: Vec<Claim<F>>) -> Result<Self> {
         let num_claims = claims.len();
         if num_claims == 0 {
             return Ok(Self {
@@ -65,7 +67,7 @@ impl<F: Field> ClaimGroup<F> {
             .iter()
             .all(|claim| claim.get_to_layer_id() == layer_id)
         {
-            return Err(ClaimError::LayerIdMismatch);
+            return Err(ClaimError::LayerIdMismatch).with_context(|| "");
         }
 
         Self::new_from_raw_claims(claims.into_iter().map(Into::into).collect())
@@ -74,7 +76,7 @@ impl<F: Field> ClaimGroup<F> {
     /// Generates a new [ClaimGroup] from a collection of [RawClaim]s.
     /// Returns [ClaimError::NumVarsMismatch] if the collection of claims
     /// do not all agree on the number of variables.
-    pub fn new_from_raw_claims(claims: Vec<RawClaim<F>>) -> Result<Self, ClaimError> {
+    pub fn new_from_raw_claims(claims: Vec<RawClaim<F>>) -> Result<Self> {
         let num_claims = claims.len();
 
         if num_claims == 0 {
@@ -90,7 +92,7 @@ impl<F: Field> ClaimGroup<F> {
 
         // Check all claims match on the number of variables.
         if !claims.iter().all(|claim| claim.get_num_vars() == num_vars) {
-            return Err(ClaimError::NumVarsMismatch);
+            return Err(ClaimError::NumVarsMismatch).with_context(|| "");
         }
 
         // Populate the points_matrix
@@ -225,9 +227,9 @@ impl<F: Field> ClaimGroup<F> {
     /// operating on the points and not on the results. However, the ClaimGroup API
     /// is convenient for accessing columns and makes the implementation more
     /// readable. We should consider alternative designs.
-    fn compute_aggregated_challenges(&self, r_star: F) -> Result<Vec<F>, ClaimError> {
+    fn compute_aggregated_challenges(&self, r_star: F) -> Result<Vec<F>> {
         if self.is_empty() {
-            return Err(ClaimError::ClaimAggroError);
+            return Err(ClaimError::ClaimAggroError).with_context(|| "");
         }
 
         let num_vars = self.get_num_vars();
@@ -267,7 +269,7 @@ impl<F: Field> ClaimGroup<F> {
         &self,
         layer_mles: &[DenseMle<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<RawClaim<F>, GKRError> {
+    ) -> Result<RawClaim<F>> {
         let num_claims = self.get_num_claims();
         debug_assert!(num_claims > 0);
         info!("ClaimGroup aggregation on {num_claims} claims.");
@@ -325,7 +327,7 @@ impl<F: Field> ClaimGroup<F> {
     pub fn verifier_aggregate(
         &self,
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<RawClaim<F>, TranscriptReaderError> {
+    ) -> Result<RawClaim<F>> {
         let num_claims = self.get_num_claims();
         debug_assert!(num_claims > 0);
         info!("Low-level claim aggregation on {num_claims} claims.");
