@@ -66,6 +66,14 @@ pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) -> DenseMle
     DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
 }
 
+/// Helper function to create random MLE with specific number of vars
+pub fn get_random_mle_from_capacity<F: Field>(capacity: usize, rng: &mut impl Rng) -> DenseMle<F> {
+    let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()) * F::from(rng.gen::<u64>()))
+        .take(capacity)
+        .collect_vec();
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
+}
+
 /// Returns a vector of MLEs for dataparallel testing according to the number of
 /// variables and number of dataparallel bits.
 pub fn get_dummy_random_mle_vec<F: Field>(
@@ -152,7 +160,9 @@ pub fn build_composite_mle<F: Field>(
             current_window /= 2;
             starting_index_acc
         });
-        assert_eq!(current_window, mle.len());
+        // REMARK: Modifying this check so that the input mles can be non-
+        // powers of 2.
+        assert_eq!(current_window, mle.len().next_power_of_two());
         (starting_index..(starting_index + current_window))
             .enumerate()
             .for_each(|(mle_idx, out_idx)| {

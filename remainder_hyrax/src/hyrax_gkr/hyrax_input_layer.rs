@@ -1,16 +1,14 @@
 use std::collections::HashMap;
 
-use ark_std::{cfg_into_iter, end_timer, start_timer};
+use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use rand::Rng;
-use remainder::claims::claim_aggregation::get_num_wlx_evaluations;
-use remainder::prover::global_config::global_prover_claim_agg_constant_column_optimization;
+use remainder::claims::claim_aggregation::get_wlx_evaluations;
 use remainder::{
     claims::{claim_group::ClaimGroup, RawClaim},
     input_layer::InputLayerDescription,
     layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
-    sumcheck::evaluate_at_a_point,
 };
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
@@ -21,13 +19,13 @@ use remainder_shared_types::{ff_field, Field};
 
 use crate::{
     hyrax_pcs::HyraxPCSEvaluationProof,
-    hyrax_primitives::proof_of_claim_agg::ProofOfClaimAggregation,
+    hyrax_primitives::{
+        proof_of_claim_agg::ProofOfClaimAggregation, proof_of_equality::ProofOfEquality,
+    },
     utils::vandermonde::VandermondeInverse,
 };
 
 use super::hyrax_layer::HyraxClaim;
-#[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// The proof structure for a Hyrax input layer. Includes the
 /// [ProofOfClaimAggregation], and the appropriate opening proof for opening the
@@ -41,6 +39,9 @@ pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
     pub input_commitment: Vec<C>,
     /// The evaluation proof for the polynomial evaluated at a random point
     pub evaluation_proof: HyraxPCSEvaluationProof<C>,
+    /// The proof of equality that the aggregated claim point and the commitment
+    /// in the evaluation proof are indeed to the same value
+    pub proof_of_equality: ProofOfEquality<C>,
 }
 
 impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
@@ -65,10 +66,26 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         )
         .unwrap();
         let compute_vi_lx_eval_timer = start_timer!(|| "vilx evals for input");
-        let wlx_evals = compute_claim_wlx(&prover_commitment.mle.to_vec(), &claims);
+
+        let wlx_evals = get_wlx_evaluations(
+            claims.get_claim_points_matrix(),
+            claims.get_results(),
+            vec![DenseMle::new_from_multilinear_extension(
+                prover_commitment.mle.clone(),
+                input_layer_desc.layer_id,
+                None,
+                Some(0),
+            )],
+            claims.get_num_claims(),
+            claims.get_num_vars(),
+        )
+        .unwrap();
+
         end_timer!(compute_vi_lx_eval_timer);
+
         let coeffs_timer = start_timer!(|| "convert to coeffs timer");
         let interpolant_coeffs = converter.convert_to_coefficients(wlx_evals);
+
         end_timer!(coeffs_timer);
 
         let claim_agg_timer = start_timer!(|| "claim agg input");
@@ -89,7 +106,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             input_layer_desc.log_num_cols,
             &prover_commitment.mle,
             &aggregated_claim.point,
-            &aggregated_claim.evaluation,
+            &aggregated_claim.evaluation.value,
             committer,
             blinding_rng,
             transcript,
@@ -97,11 +114,20 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         );
         end_timer!(eval_proof_timer);
 
+        let proof_of_equality = ProofOfEquality::prove(
+            &aggregated_claim.evaluation,
+            &evaluation_proof.commitment_to_evaluation,
+            committer,
+            blinding_rng,
+            transcript,
+        );
+
         HyraxInputLayerProof {
             layer_id: input_layer_desc.layer_id,
             input_commitment: prover_commitment.commitment.clone(),
             claim_agg_proof: proof_of_claim_agg,
             evaluation_proof,
+            proof_of_equality,
         }
     }
 
@@ -130,6 +156,15 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             committer,
             &self.input_commitment,
             &agg_claim.point,
+            transcript,
+        );
+
+        // Proof of equality for the aggregated claim and the evaluation proof
+        // commitment
+        self.proof_of_equality.verify(
+            agg_claim.evaluation,
+            self.evaluation_proof.commitment_to_evaluation.commitment,
+            committer,
             transcript,
         );
     }
@@ -221,54 +256,6 @@ pub struct HyraxProverInputCommitment<C: PrimeOrderCurve> {
     pub commitment: Vec<C>,
     /// The blinding factors used in the commitment
     pub blinding_factors_matrix: Vec<C::Scalar>,
-}
-
-/// Computes the V_d(l(x)) evaluations for this input layer V_d for claim
-/// aggregation.
-fn compute_claim_wlx<F: Field>(mle_vec: &[F], claims: &ClaimGroup<F>) -> Vec<F> {
-    let mle = MultilinearExtension::new(mle_vec.to_owned());
-    let num_claims = claims.get_num_claims();
-    let claim_vecs = claims.get_claim_points_matrix();
-    let claimed_vals = claims.get_results();
-    let num_idx = claims.get_num_vars();
-
-    // get the number of evaluations
-    let num_evals = if global_prover_claim_agg_constant_column_optimization() {
-        let (num_evals, _, _) = get_num_wlx_evaluations(claim_vecs);
-        num_evals
-    } else {
-        ((num_claims - 1) * num_idx) + 1
-    };
-
-    // we already have the first #claims evaluations, get the next num_evals -
-    // #claims evaluations
-    let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
-        .map(|idx| {
-            // get the challenge l(idx)
-            let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                .map(|claim_idx| {
-                    let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-                        .map(|claim| claim[claim_idx])
-                        .collect();
-                    evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
-                })
-                .collect();
-
-            let mut fix_mle = mle.clone();
-            {
-                new_chal
-                    .into_iter()
-                    .for_each(|chal| fix_mle.fix_variable(chal));
-                fix_mle.value()
-            }
-        })
-        .collect();
-
-    // concat this with the first k evaluations from the claims to get num_evals
-    // evaluations
-    let mut wlx_evals = claimed_vals.clone();
-    wlx_evals.extend(&next_evals);
-    wlx_evals
 }
 
 /// Verifies a claim by evaluating the MLE at the challenge point and checking
