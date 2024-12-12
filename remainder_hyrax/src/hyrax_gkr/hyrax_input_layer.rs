@@ -121,6 +121,10 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
 
         // Verify the actual "evaluation" polynomial committed to at the random
         // point
+        assert_eq!(
+            self.input_commitment.len().next_power_of_two(),
+            1 << input_layer_desc.num_vars
+        );
         self.evaluation_proof.verify(
             input_layer_desc.log_num_cols,
             committer,
@@ -140,7 +144,7 @@ pub struct HyraxInputLayerDescription {
     /// The input layer ID.
     pub layer_id: LayerId,
     /// The number of variables this Hyrax Input Layer is on.
-    pub num_bits: usize,
+    pub num_vars: usize,
     /// The log number of columns in the matrix form of the data that will be
     /// committed to in this input layer.
     pub log_num_cols: usize,
@@ -162,7 +166,7 @@ impl HyraxInputLayerDescription {
         let log_num_cols = num_bits / 2;
         Self {
             layer_id,
-            num_bits,
+            num_vars: num_bits,
             log_num_cols,
         }
     }
@@ -184,7 +188,7 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
     committer: &PedersenCommitter<C>,
     mut rng: &mut impl Rng,
 ) -> HyraxProverInputCommitment<C> {
-    let num_rows = 1 << (input_layer_desc.num_bits - input_layer_desc.log_num_cols);
+    let num_rows = 1 << (input_layer_desc.num_vars - input_layer_desc.log_num_cols);
     // Sample the blinding factors
     let mut blinding_factors_matrix = vec![C::Scalar::ZERO; num_rows];
     blinding_factors_matrix

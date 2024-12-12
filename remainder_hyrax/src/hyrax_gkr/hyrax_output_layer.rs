@@ -55,6 +55,10 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     /// This verify method does not do much: it takes the commitment to the evaluation provided by
     /// the prover, adds it to the transcript, and then returns a [HyraxClaim] that contains the
     /// challenges that it ITSELF draws from the transcript.
+    ///
+    /// Note that claims are generated from the `layer_desc`, not the `proof`!
+    /// This ensures that a prover cannot cheat by creating a valid proof whose
+    /// "shape" does not match that of the circuit description.
     pub fn verify(
         proof: &HyraxOutputLayerProof<C>,
         layer_desc: &OutputLayerDescription<C::Scalar>,
