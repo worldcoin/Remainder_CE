@@ -145,12 +145,12 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             .claim_agg_proof
             .verify(claim_commitments, committer, transcript);
 
+        // Ensure that size of claim challenge point and input layer description
+        // length are equal.
+        assert_eq!(agg_claim.point.len(), input_layer_desc.num_vars);
+
         // Verify the actual "evaluation" polynomial committed to at the random
         // point
-        assert_eq!(
-            self.input_commitment.len().next_power_of_two(),
-            1 << input_layer_desc.num_vars
-        );
         self.evaluation_proof.verify(
             input_layer_desc.log_num_cols,
             committer,
