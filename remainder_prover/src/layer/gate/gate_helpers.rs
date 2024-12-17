@@ -6,7 +6,6 @@ use std::{cmp::max, fmt::Debug};
 use crate::{
     mle::{betavalues::BetaValues, evals::MultilinearExtension, Mle},
     sumcheck::*,
-    utils::mle::LexicographicLE,
 };
 use remainder_shared_types::Field;
 
@@ -336,8 +335,30 @@ pub fn compute_full_gate<F: Field>(
     }
 }
 
-/// This function non-destructively evaluates an MLE at a given point using the
-/// [LexicographicLE] iterator.
+/// When `dataparallel_aux` is None, this function computes the coefficients of
+/// the MLE representing f_1(g, x) where f_1 is the multilinear extension of our
+/// gate function (which on the boolean hypercube, f_1(a, b) = 1 if there exists
+/// a gate such that the label b is the input routing to the label a, and 0
+/// otherwise). The resulting vector should have num_nondataparallel_copies
+/// entries.
+///
+/// When `dataparallel_aux` is Some(..), this function computes the coefficients
+/// of the MLE representing \sum_{nonzero_gates}{f_2(p_2, x) * f_1(g, x)} where
+/// p_2 is the dataparallel index. The resulting vector should have
+/// num_dataparallel_copies entries.
+///
+/// The folding occurs by first iterating through the nonzero gates, and
+/// computing the value \beta(g, z) for each output label z and the challenge
+/// point g. Instead of computing the \beta value from scratch, we take
+/// inspiration from the Rothblum sumcheck trick to just multiply by the
+/// inverses and points necessary to go from one beta value to the next. This
+/// conserves memory by not having to store the entire table (which is done to
+/// achieve linear computation) while continuing to achieve amortized linear
+/// computation for each progressive beta value as opposed to the O(log(n))
+/// method used to compute it from scratch.
+///
+/// We have multiple `claim_points` when using RLC claim agg, and in this
+/// case, the beta values are added for each of the `g` coordinates.
 pub fn fold_nonzero_gates_into_beta_mle_identity_gate<F: Field>(
     nonzero_gates: &[(u32, u32)],
     claim_points: &[&[F]],
@@ -345,6 +366,7 @@ pub fn fold_nonzero_gates_into_beta_mle_identity_gate<F: Field>(
     dataparallel_aux: Option<&DenseMle<F>>,
 ) -> Vec<F> {
     let n = claim_points[0].len();
+    // Precompute all the inverses necessary for each of the claim points.
     let inverses_vec = claim_points
         .iter()
         .map(|claim_point| {
@@ -364,7 +386,11 @@ pub fn fold_nonzero_gates_into_beta_mle_identity_gate<F: Field>(
         })
         .collect_vec();
 
+    // Initialize the folded vector of coefficients, whose size is dependent
+    // on whether we are in the dataparallel case.
     let mut folded_vec = vec![F::ZERO; 1 << num_vars_folded_vec];
+    // We start at the first nonzero gate and first beta value for each claim
+    // challenge.
     let (mut current_nonzero_output_gate_label, mut current_nonzero_input_gate_label) =
         nonzero_gates[0];
     let mut current_beta_values = claim_points
@@ -376,10 +402,13 @@ pub fn fold_nonzero_gates_into_beta_mle_identity_gate<F: Field>(
             )
         })
         .collect_vec();
-
     let first_nonzero_gate_beta_sum = current_beta_values
         .iter()
         .fold(F::ZERO, |acc, elem| acc + elem);
+
+    // If it is dataparallel, we add the value of the source MLE over all of the
+    // copies in order to compute the appropriate sum. Each of these are
+    // multiplied by the same beta value.
     if let Some(source_mle) = dataparallel_aux {
         let num_nondataparallel_coeffs = 1 << (source_mle.num_free_vars() - num_vars_folded_vec);
         (0..(1 << num_vars_folded_vec)).for_each(|dataparallel_copy_idx| {
@@ -399,6 +428,9 @@ pub fn fold_nonzero_gates_into_beta_mle_identity_gate<F: Field>(
 
     nonzero_gates.iter().skip(1).for_each(
         |(next_nonzero_output_gate_label, next_nonzero_input_gate_label)| {
+            // Between the previous output label and the next one, compute the
+            // flipped bits and their values in order to decide which inverses
+            // to multiply by.
             let flipped_bits = current_nonzero_output_gate_label ^ next_nonzero_output_gate_label;
             let mut flipped_bit_idx_and_values = Vec::<(u32, bool)>::new();
             (0..32).for_each(|idx| {
@@ -413,18 +445,22 @@ pub fn fold_nonzero_gates_into_beta_mle_identity_gate<F: Field>(
                 .zip(claim_points)
                 .map(
                     |((current_beta_value, (inverses, one_minus_inverses)), claim_point)| {
-                        *current_beta_value
-                            * flipped_bit_idx_and_values
-                                .iter()
-                                .fold(F::ONE, |acc, (idx, value)| {
-                                    if *value {
-                                        acc * inverses[n - 1 - *idx as usize]
-                                            * (F::ONE - claim_point[n - 1 - *idx as usize])
-                                    } else {
-                                        acc * (one_minus_inverses[n - 1 - *idx as usize])
-                                            * claim_point[n - 1 - *idx as usize]
-                                    }
-                                })
+                        let beta_val = flipped_bit_idx_and_values.iter().fold(
+                            // For each of the flipped bits, multiply by the
+                            // appropriate inverse depending on if the value was
+                            // previously 0 or 1.
+                            *current_beta_value,
+                            |acc, (idx, value)| {
+                                if *value {
+                                    acc * inverses[n - 1 - *idx as usize]
+                                        * (F::ONE - claim_point[n - 1 - *idx as usize])
+                                } else {
+                                    acc * (one_minus_inverses[n - 1 - *idx as usize])
+                                        * claim_point[n - 1 - *idx as usize]
+                                }
+                            },
+                        );
+                        beta_val
                     },
                 )
                 .collect_vec();
@@ -433,6 +469,8 @@ pub fn fold_nonzero_gates_into_beta_mle_identity_gate<F: Field>(
                 .iter()
                 .fold(F::ZERO, |acc, elem| acc + elem);
 
+            // If dataparallel, add all of the values of the source_mle over
+            // each of the copies.
             if let Some(source_mle) = dataparallel_aux {
                 let num_nondataparallel_coeffs =
                     1 << (source_mle.num_free_vars() - num_vars_folded_vec);
@@ -449,9 +487,8 @@ pub fn fold_nonzero_gates_into_beta_mle_identity_gate<F: Field>(
                         source_mle_at_nonzero_gate_for_copy * beta_values_sum;
                 })
             } else {
-                folded_vec[*next_nonzero_input_gate_label as usize] = beta_values_sum;
+                folded_vec[*next_nonzero_input_gate_label as usize] += beta_values_sum;
             }
-
             current_nonzero_input_gate_label = *next_nonzero_input_gate_label;
             current_nonzero_output_gate_label = *next_nonzero_output_gate_label;
             current_beta_values = next_beta_values;

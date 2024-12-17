@@ -909,7 +909,6 @@ impl<F: Field> IdentityGate<F> {
             num_vars,
             None,
         );
-
         let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
         a_hg_mle.index_mle_indices(self.num_dataparallel_vars);
 
