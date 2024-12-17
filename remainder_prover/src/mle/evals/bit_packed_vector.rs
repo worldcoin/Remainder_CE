@@ -4,14 +4,12 @@
 use ::serde::{Deserialize, Serialize};
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
-use remainder_shared_types::Field;
+use remainder_shared_types::{config::global_config::global_prover_enable_bit_packing, Field};
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use itertools::FoldWhile::{Continue, Done};
-
-use crate::prover::global_config::global_prover_enable_bit_packing;
 
 // -------------- Helper Functions -----------------
 
