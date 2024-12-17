@@ -24,7 +24,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{
-    gate::{gate_helpers::evaluate_mle_product_no_beta_table, GateError},
+    gate::{
+        gate_helpers::{
+            evaluate_mle_product_no_beta_table, fold_nonzero_gates_into_beta_mle_identity_gate,
+        },
+        GateError,
+    },
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
     Layer, LayerDescription, LayerId, VerifierLayer,
@@ -556,7 +561,34 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         }
 
         self.source_mle.index_mle_indices(0);
+        self.init_phase_1(g1_challenges);
         Ok(())
+    }
+
+    fn initialize_rlc(&mut self, random_coefficients: &[F], claims: &[&RawClaim<F>]) {
+        claims.iter().for_each(|claim| {
+            let claim_point = claim.get_point();
+            let (g2_challenges, g1_challenges) = claim_point.split_at(self.num_dataparallel_vars);
+            self.set_g1_challenges(g1_challenges.to_vec());
+            self.set_g2_challenges(g2_challenges.to_vec());
+
+            if self.num_dataparallel_vars > 0 {
+                let beta_g2 = BetaValues::new(
+                    self.g2_challenges
+                        .as_ref()
+                        .unwrap()
+                        .clone()
+                        .into_iter()
+                        .enumerate()
+                        .collect(),
+                );
+                self.set_beta_g2(beta_g2);
+                self.init_dataparallel_phase(self.g1_challenges.as_ref().unwrap().clone());
+            }
+
+            self.source_mle.index_mle_indices(0);
+            self.init_phase_1(g1_challenges);
+        });
     }
 
     fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError> {
@@ -571,8 +603,6 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
             // Initialize phase 1.
             Ordering::Equal => {
-                self.init_phase_1(self.g1_challenges.as_ref().unwrap().clone());
-
                 let mles: Vec<&DenseMle<F>> =
                     vec![&self.a_hg_mle_phase_1.as_ref().unwrap(), &self.source_mle];
                 let independent_variable = mles
@@ -839,10 +869,6 @@ impl<F: Field> IdentityGate<F> {
         }
     }
 
-    fn set_beta_g1(&mut self, beta_g1: MultilinearExtension<F>) {
-        self.beta_g1 = Some(beta_g1);
-    }
-
     fn set_beta_g2(&mut self, beta_g2: BetaValues<F>) {
         self.beta_g2 = Some(beta_g2);
     }
@@ -861,60 +887,28 @@ impl<F: Field> IdentityGate<F> {
     }
 
     fn init_dataparallel_phase(&mut self, g1_challenges: Vec<F>) {
-        let beta_getter: Box<dyn Fn(usize) -> F> = if !global_prover_lazy_beta_evals() {
-            let beta_g1 = BetaValues::new_beta_equality_mle(g1_challenges);
-            Box::new(move |idx| beta_g1.get(idx).unwrap_or(F::ZERO))
-        } else {
-            Box::new(|idx| BetaValues::compute_beta_over_challenge_and_index(&g1_challenges, idx))
-        };
-        let num_dataparallel_copies = 1 << self.num_dataparallel_vars;
-        let num_nondataparallel_coeffs =
-            1 << (self.source_mle.num_free_vars() - self.num_dataparallel_vars);
-        let mut a_f2 = vec![F::ZERO; 1 << (self.num_dataparallel_vars)];
-        (0..num_dataparallel_copies).for_each(|idx| {
-            let mut adder_f2 = F::ZERO;
-            self.nonzero_gates.iter().for_each(|(z, x)| {
-                let gz = beta_getter(*z as usize);
-                let f2_val = self
-                    .source_mle
-                    .mle
-                    .get((*x as usize) + (idx * num_nondataparallel_coeffs))
-                    .unwrap_or(F::ZERO);
+        let a_f2_mle_vec = fold_nonzero_gates_into_beta_mle_identity_gate(
+            &self.nonzero_gates,
+            &[&g1_challenges],
+            self.num_dataparallel_vars,
+            Some(&self.source_mle),
+        );
 
-                adder_f2 += gz * f2_val;
-            });
-            a_f2[idx] += adder_f2;
-        });
-
-        let mut af2_mle = DenseMle::new_from_raw(a_f2, self.layer_id());
+        let mut af2_mle = DenseMle::new_from_raw(a_f2_mle_vec, self.layer_id());
         af2_mle.index_mle_indices(0);
         self.dataparallel_af2_mle = Some(af2_mle);
     }
 
     /// initialize necessary bookkeeping tables by traversing the nonzero gates
-    pub fn init_phase_1(&mut self, challenge: Vec<F>) {
-        if !global_prover_lazy_beta_evals() {
-            let beta_g1 = BetaValues::new_beta_equality_mle(challenge.clone());
-            self.set_beta_g1(beta_g1);
-        }
+    pub fn init_phase_1(&mut self, challenge: &[F]) {
+        let num_vars = self.source_mle.num_free_vars() - self.num_dataparallel_vars;
 
-        let num_vars = self.source_mle.num_free_vars();
-
-        let mut a_hg_mle_vec = vec![F::ZERO; 1 << num_vars];
-
-        self.nonzero_gates.iter().for_each(|(z_ind, x_ind)| {
-            let beta_g_at_z = if global_prover_lazy_beta_evals() {
-                BetaValues::compute_beta_over_challenge_and_index(&challenge, *z_ind as usize)
-            } else {
-                self.beta_g1
-                    .as_ref()
-                    .unwrap()
-                    .get(*z_ind as usize)
-                    .unwrap_or(F::ZERO)
-            };
-
-            a_hg_mle_vec[*x_ind as usize] += beta_g_at_z;
-        });
+        let a_hg_mle_vec = fold_nonzero_gates_into_beta_mle_identity_gate(
+            &self.nonzero_gates,
+            &[challenge],
+            num_vars,
+            None,
+        );
 
         let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
         a_hg_mle.index_mle_indices(self.num_dataparallel_vars);

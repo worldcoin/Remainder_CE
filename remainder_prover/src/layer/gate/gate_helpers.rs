@@ -6,6 +6,7 @@ use std::{cmp::max, fmt::Debug};
 use crate::{
     mle::{betavalues::BetaValues, evals::MultilinearExtension, Mle},
     sumcheck::*,
+    utils::mle::LexicographicLE,
 };
 use remainder_shared_types::Field;
 
@@ -335,60 +336,129 @@ pub fn compute_full_gate<F: Field>(
     }
 }
 
-/// Compute the full value of the gate wiring function for an identity gate.
-pub fn compute_full_gate_identity<F: Field>(
-    challenges: Vec<F>,
-    mle: &mut DenseMle<F>,
-    nonzero_gates: &[(usize, usize)],
-    num_dataparallel_vars: usize,
-) -> F {
-    // Split the challenges into which ones are for batched bits, which ones are
-    // for others.
-    let mut copy_chals: Vec<F> = vec![];
-    let mut z_chals: Vec<F> = vec![];
-    challenges.into_iter().enumerate().for_each(|(idx, chal)| {
-        if (0..num_dataparallel_vars).contains(&idx) {
-            copy_chals.push(chal);
-        } else {
-            z_chals.push(chal);
-        }
-    });
+/// This function non-destructively evaluates an MLE at a given point using the
+/// [LexicographicLE] iterator.
+pub fn fold_nonzero_gates_into_beta_mle_identity_gate<F: Field>(
+    nonzero_gates: &[(u32, u32)],
+    claim_points: &[&[F]],
+    num_vars_folded_vec: usize,
+    dataparallel_aux: Option<&DenseMle<F>>,
+) -> Vec<F> {
+    let n = claim_points[0].len();
+    let inverses_vec = claim_points
+        .iter()
+        .map(|claim_point| {
+            claim_point
+                .iter()
+                .map(|elem| elem.invert().unwrap())
+                .collect_vec()
+        })
+        .collect_vec();
+    let one_minus_inverses_vec = claim_points
+        .iter()
+        .map(|claim_point| {
+            claim_point
+                .iter()
+                .map(|elem| (F::ONE - elem).invert().unwrap())
+                .collect_vec()
+        })
+        .collect_vec();
 
-    // if the gate looks like f1(z, x)(f2(p2, x)) then this is the beta table
-    // for the challenges on z
-    let beta_g = BetaValues::new_beta_equality_mle(z_chals);
+    let mut folded_vec = vec![F::ZERO; 1 << num_vars_folded_vec];
+    let (mut current_nonzero_output_gate_label, mut current_nonzero_input_gate_label) =
+        nonzero_gates[0];
+    let mut current_beta_values = claim_points
+        .iter()
+        .map(|claim_point| {
+            BetaValues::compute_beta_over_challenge_and_index(
+                claim_point,
+                current_nonzero_output_gate_label as usize,
+            )
+        })
+        .collect_vec();
 
-    if num_dataparallel_vars == 0 {
-        nonzero_gates.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
-            let gz = beta_g.get(*z_ind).unwrap_or(F::ZERO);
-            let ux = mle.get(*x_ind).unwrap_or(F::ZERO);
-            acc + gz * ux
+    let first_nonzero_gate_beta_sum = current_beta_values
+        .iter()
+        .fold(F::ZERO, |acc, elem| acc + elem);
+    if let Some(source_mle) = dataparallel_aux {
+        let num_nondataparallel_coeffs = 1 << (source_mle.num_free_vars() - num_vars_folded_vec);
+        (0..(1 << num_vars_folded_vec)).for_each(|dataparallel_copy_idx| {
+            let source_mle_at_nonzero_gate_for_copy = source_mle
+                .mle
+                .get(
+                    (current_nonzero_input_gate_label as usize)
+                        + dataparallel_copy_idx * num_nondataparallel_coeffs,
+                )
+                .unwrap_or(F::ZERO);
+            folded_vec[dataparallel_copy_idx] +=
+                source_mle_at_nonzero_gate_for_copy * first_nonzero_gate_beta_sum;
         })
     } else {
-        let num_dataparallel_index = 1 << num_dataparallel_vars;
-        // If the gate looks like f1(z, x)f2(p2, x) then this is the beta table
-        // for the challenges on p2.
-        let beta_g2 = BetaValues::new_beta_equality_mle(copy_chals);
-        {
-            // Sum over everything else, outer sum being over p2, inner sum over
-            // x.
-            (0..(1 << num_dataparallel_index)).fold(F::ZERO, |acc_outer, idx| {
-                let g2 = beta_g2.get(idx).unwrap_or(F::ZERO);
-                let inner_sum =
-                    nonzero_gates
-                        .iter()
-                        .copied()
-                        .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                            let gz = beta_g.get(z_ind).unwrap_or(F::ZERO);
-                            let ux = mle
-                                .get(idx + (x_ind * num_dataparallel_index))
-                                .unwrap_or(F::ZERO);
-                            acc + gz * ux
-                        });
-                acc_outer + (g2 * inner_sum)
-            })
-        }
+        folded_vec[current_nonzero_input_gate_label as usize] = first_nonzero_gate_beta_sum;
     }
+
+    nonzero_gates.iter().skip(1).for_each(
+        |(next_nonzero_output_gate_label, next_nonzero_input_gate_label)| {
+            let flipped_bits = current_nonzero_output_gate_label ^ next_nonzero_output_gate_label;
+            let mut flipped_bit_idx_and_values = Vec::<(u32, bool)>::new();
+            (0..32).for_each(|idx| {
+                if (flipped_bits & (1 << idx)) != 0 {
+                    flipped_bit_idx_and_values
+                        .push((idx, (current_nonzero_output_gate_label & (1 << idx)) != 0))
+                }
+            });
+            let next_beta_values = current_beta_values
+                .iter()
+                .zip(inverses_vec.iter().zip(one_minus_inverses_vec.iter()))
+                .zip(claim_points)
+                .map(
+                    |((current_beta_value, (inverses, one_minus_inverses)), claim_point)| {
+                        *current_beta_value
+                            * flipped_bit_idx_and_values
+                                .iter()
+                                .fold(F::ONE, |acc, (idx, value)| {
+                                    if *value {
+                                        acc * inverses[n - 1 - *idx as usize]
+                                            * (F::ONE - claim_point[n - 1 - *idx as usize])
+                                    } else {
+                                        acc * (one_minus_inverses[n - 1 - *idx as usize])
+                                            * claim_point[n - 1 - *idx as usize]
+                                    }
+                                })
+                    },
+                )
+                .collect_vec();
+
+            let beta_values_sum = next_beta_values
+                .iter()
+                .fold(F::ZERO, |acc, elem| acc + elem);
+
+            if let Some(source_mle) = dataparallel_aux {
+                let num_nondataparallel_coeffs =
+                    1 << (source_mle.num_free_vars() - num_vars_folded_vec);
+                (0..(1 << num_vars_folded_vec)).for_each(|dataparallel_copy_idx| {
+                    let source_mle_at_nonzero_gate_for_copy = source_mle
+                        .mle
+                        .get(
+                            (*next_nonzero_input_gate_label as usize)
+                                + dataparallel_copy_idx * num_nondataparallel_coeffs,
+                        )
+                        .unwrap_or(F::ZERO);
+
+                    folded_vec[dataparallel_copy_idx] +=
+                        source_mle_at_nonzero_gate_for_copy * beta_values_sum;
+                })
+            } else {
+                folded_vec[*next_nonzero_input_gate_label as usize] = beta_values_sum;
+            }
+
+            current_nonzero_input_gate_label = *next_nonzero_input_gate_label;
+            current_nonzero_output_gate_label = *next_nonzero_output_gate_label;
+            current_beta_values = next_beta_values;
+        },
+    );
+
+    folded_vec
 }
 
 /// Compute sumcheck message without a beta table.

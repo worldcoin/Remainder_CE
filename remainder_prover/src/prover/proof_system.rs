@@ -228,6 +228,14 @@ macro_rules! layer_enum {
                     }
                 }
 
+                fn initialize_rlc(&mut self, random_coefficients: &[F], claims: &[&$crate::claims::RawClaim<F>]) {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.initialize_rlc(random_coefficients, claims),
+                        )*
+                    }
+                }
+
             }
 
         $(

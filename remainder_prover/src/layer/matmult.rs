@@ -186,17 +186,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
             self.matrix_b.cols_num_vars
         );
 
-        // Split the claim on the MLE representing the output of this layer
-        // accordingly.
-        // We need to make sure the number of variables in the claim is the
-        // sum of the outer dimensions of this matrix product.
-        assert_eq!(
-            claim.get_point().len(),
-            self.matrix_a.rows_num_vars + self.matrix_b.cols_num_vars
-        );
-        let mut claim_a = claim.get_point().to_vec();
-        let claim_b = claim_a.split_off(self.matrix_a.rows_num_vars);
-        self.pre_processing_step(claim_a, claim_b);
+        self.initialize(claim.get_point());
 
         let num_vars_middle = self.num_vars_middle_ab;
 
@@ -224,6 +214,14 @@ impl<F: Field> Layer<F> for MatMult<F> {
     }
 
     fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
+        // Split the claim on the MLE representing the output of this layer
+        // accordingly.
+        // We need to make sure the number of variables in the claim is the
+        // sum of the outer dimensions of this matrix product.
+        assert_eq!(
+            claim_point.len(),
+            self.matrix_a.rows_num_vars + self.matrix_b.cols_num_vars
+        );
         let mut claim_a = claim_point.to_vec();
         let claim_b = claim_a.split_off(self.matrix_a.rows_num_vars);
         self.pre_processing_step(claim_a, claim_b);
@@ -290,6 +288,10 @@ impl<F: Field> Layer<F> for MatMult<F> {
             .collect_vec();
 
         Ok(claims)
+    }
+
+    fn initialize_rlc(&mut self, random_coefficients: &[F], claims: &[&RawClaim<F>]) {
+        todo!()
     }
 }
 

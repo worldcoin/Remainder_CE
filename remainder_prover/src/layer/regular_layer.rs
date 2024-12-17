@@ -397,6 +397,10 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
 
         Ok(claims)
     }
+
+    fn initialize_rlc(&mut self, random_coefficients: &[F], claims: &[&RawClaim<F>]) {
+        todo!()
+    }
 }
 
 /// The circuit description counterpart of a [RegularLayer].
