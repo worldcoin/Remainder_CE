@@ -5,7 +5,10 @@ use std::{cmp::Ordering, collections::HashSet};
 
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
-    layer::{LayerError, VerificationError},
+    layer::{
+        gate::gate_helpers::compute_fully_bound_identity_gate_function, LayerError,
+        VerificationError,
+    },
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
@@ -26,7 +29,7 @@ use thiserror::Error;
 use super::{
     gate::{
         gate_helpers::{
-            evaluate_mle_product_no_beta_table, fold_nonzero_gates_into_beta_mle_identity_gate,
+            evaluate_mle_product_no_beta_table, fold_wiring_into_beta_mle_identity_gate,
         },
         GateError,
     },
@@ -218,72 +221,11 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
-        // TODO(ryancao): Distinguish between the prover and verifier here
-        let beta_ug = if !global_prover_lazy_beta_evals() {
-            Some((
-                BetaValues::new_beta_equality_mle(
-                    round_challenges[self.num_dataparallel_vars..].to_vec(),
-                ),
-                BetaValues::new_beta_equality_mle(
-                    claim_challenges[self.num_dataparallel_vars..].to_vec(),
-                ),
-            ))
-        } else {
-            None
-        };
-
-        #[cfg(feature = "parallel")]
-        let f_1_uv = self
-            .wiring
-            .par_iter()
-            .fold(
-                || F::ZERO,
-                |acc, (z_ind, x_ind)| {
-                    let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
-                        (
-                            beta_g1.get(*z_ind as usize).unwrap_or(F::ZERO),
-                            beta_u.get(*x_ind as usize).unwrap_or(F::ZERO),
-                        )
-                    } else {
-                        (
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                &claim_challenges[self.num_dataparallel_vars..],
-                                *z_ind as usize,
-                            ),
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                &round_challenges[self.num_dataparallel_vars..],
-                                *x_ind as usize,
-                            ),
-                        )
-                    };
-
-                    acc + gz * ux
-                },
-            )
-            .sum::<F>();
-
-        #[cfg(not(feature = "parallel"))]
-        let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
-            let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
-                (
-                    beta_g1.get(*z_ind as usize).unwrap_or(F::ZERO),
-                    beta_u.get(*x_ind as usize).unwrap_or(F::ZERO),
-                )
-            } else {
-                (
-                    BetaValues::compute_beta_over_challenge_and_index(
-                        &claim_challenges[self.num_dataparallel_vars..],
-                        *z_ind as usize,
-                    ),
-                    BetaValues::compute_beta_over_challenge_and_index(
-                        &round_challenges[self.num_dataparallel_vars..],
-                        *x_ind as usize,
-                    ),
-                )
-            };
-
-            acc + gz * ux
-        });
+        let f_1_uv = compute_fully_bound_identity_gate_function(
+            &round_challenges[self.num_dataparallel_vars..],
+            &[&claim_challenges[self.num_dataparallel_vars..]],
+            &self.wiring,
+        );
 
         let beta_bound = if self.num_dataparallel_vars != 0 {
             let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
@@ -384,69 +326,11 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
         let g2_challenges = claim.get_point()[..self.num_dataparallel_rounds].to_vec();
         let g1_challenges = claim.get_point()[self.num_dataparallel_rounds..].to_vec();
 
-        // TODO(ryancao): Is this function also used by the prover???
-        let beta_ug = if !global_verifier_lazy_beta_evals() {
-            Some((
-                BetaValues::new_beta_equality_mle(self.first_u_challenges.clone()),
-                BetaValues::new_beta_equality_mle(g1_challenges.clone()),
-            ))
-        } else {
-            None
-        };
-
-        #[cfg(feature = "parallel")]
-        let f_1_uv = self
-            .wiring
-            .par_iter()
-            .fold(
-                || F::ZERO,
-                |acc, (z_ind, x_ind)| {
-                    let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
-                        (
-                            beta_g1.f.get(*z_ind as usize).unwrap_or(F::ZERO),
-                            beta_u.f.get(*x_ind as usize).unwrap_or(F::ZERO),
-                        )
-                    } else {
-                        (
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                &g1_challenges,
-                                *z_ind as usize,
-                            ),
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                &self.first_u_challenges,
-                                *x_ind as usize,
-                            ),
-                        )
-                    };
-
-                    acc + gz * ux
-                },
-            )
-            .sum::<F>();
-
-        #[cfg(not(feature = "parallel"))]
-        let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
-            let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
-                (
-                    beta_g1.f.get(*z_ind as usize).unwrap_or(F::ZERO),
-                    beta_u.f.get(*x_ind as usize).unwrap_or(F::ZERO),
-                )
-            } else {
-                (
-                    BetaValues::compute_beta_over_challenge_and_index(
-                        &g1_challenges,
-                        *z_ind as usize,
-                    ),
-                    BetaValues::compute_beta_over_challenge_and_index(
-                        &self.first_u_challenges,
-                        *x_ind as usize,
-                    ),
-                )
-            };
-
-            acc + gz * ux
-        });
-
+        let f_1_uv = compute_fully_bound_identity_gate_function(
+            &self.first_u_challenges,
+            &[&g1_challenges],
+            &self.wiring,
+        );
         let beta_bound = BetaValues::compute_beta_over_two_challenges(
             &g2_challenges,
             &self.dataparallel_sumcheck_challenges,
@@ -704,76 +588,11 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F> {
-        // TODO(ryancao): Distinguish between prover and verifier here
-        let beta_ug = if !global_prover_lazy_beta_evals() {
-            Some((
-                BetaValues::new_beta_equality_mle(
-                    round_challenges[self.num_dataparallel_vars..].to_vec(),
-                ),
-                BetaValues::new_beta_equality_mle(
-                    claim_challenges[self.num_dataparallel_vars..].to_vec(),
-                ),
-            ))
-        } else {
-            None
-        };
-
-        #[cfg(feature = "parallel")]
-        let f_1_uv = self
-            .nonzero_gates
-            .par_iter()
-            .fold(
-                || F::ZERO,
-                |acc, (z_ind, x_ind)| {
-                    let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
-                        (
-                            beta_g1.f.get(*z_ind as usize).unwrap_or(F::ZERO),
-                            beta_u.f.get(*x_ind as usize).unwrap_or(F::ZERO),
-                        )
-                    } else {
-                        (
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                &claim_challenges[self.num_dataparallel_vars..],
-                                *z_ind as usize,
-                            ),
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                &round_challenges[self.num_dataparallel_vars..],
-                                *x_ind as usize,
-                            ),
-                        )
-                    };
-
-                    acc + gz * ux
-                },
-            )
-            .sum::<F>();
-
-        #[cfg(not(feature = "parallel"))]
-        let f_1_uv = self
-            .nonzero_gates
-            .iter()
-            .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
-                    (
-                        beta_g1.f.get(*z_ind as usize).unwrap_or(F::ZERO),
-                        beta_u.f.get(*x_ind as usize).unwrap_or(F::ZERO),
-                    )
-                } else {
-                    (
-                        BetaValues::compute_beta_over_challenge_and_index(
-                            &claim_challenges[self.num_dataparallel_vars..],
-                            *z_ind as usize,
-                        ),
-                        BetaValues::compute_beta_over_challenge_and_index(
-                            &round_challenges[self.num_dataparallel_vars..],
-                            *x_ind as usize,
-                        ),
-                    )
-                };
-
-                acc + gz * ux
-            });
-
+        let f_1_uv = compute_fully_bound_identity_gate_function(
+            &round_challenges[self.num_dataparallel_vars..],
+            &[&claim_challenges[self.num_dataparallel_vars..]],
+            &self.wiring,
+        );
         let beta_bound = if self.num_dataparallel_vars != 0 {
             let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
             BetaValues::compute_beta_over_two_challenges(
@@ -824,7 +643,7 @@ pub struct IdentityGate<F: Field> {
     pub layer_id: LayerId,
     /// we only need a single incoming gate and a single outgoing gate so this is a
     /// tuple of 2 integers representing which label maps to which
-    pub nonzero_gates: Vec<(u32, u32)>,
+    pub wiring: Vec<(u32, u32)>,
     /// the mle ref in question from which we are selecting specific indices
     pub source_mle: DenseMle<F>,
     /// the beta table which enumerates the incoming claim's challenge points on the MLE
@@ -851,13 +670,13 @@ impl<F: Field> IdentityGate<F> {
     /// new addgate mle (wrapper constructor)
     pub fn new(
         layer_id: LayerId,
-        nonzero_gates: Vec<(u32, u32)>,
+        wiring: Vec<(u32, u32)>,
         mle: DenseMle<F>,
         num_dataparallel_vars: Option<usize>,
     ) -> IdentityGate<F> {
         IdentityGate {
             layer_id,
-            nonzero_gates,
+            wiring,
             source_mle: mle,
             beta_g1: None,
             beta_g2: None,
@@ -887,8 +706,8 @@ impl<F: Field> IdentityGate<F> {
     }
 
     fn init_dataparallel_phase(&mut self, g1_challenges: Vec<F>) {
-        let a_f2_mle_vec = fold_nonzero_gates_into_beta_mle_identity_gate(
-            &self.nonzero_gates,
+        let a_f2_mle_vec = fold_wiring_into_beta_mle_identity_gate(
+            &self.wiring,
             &[&g1_challenges],
             self.num_dataparallel_vars,
             Some(&self.source_mle),
@@ -899,16 +718,12 @@ impl<F: Field> IdentityGate<F> {
         self.dataparallel_af2_mle = Some(af2_mle);
     }
 
-    /// initialize necessary bookkeeping tables by traversing the nonzero gates
+    /// initialize necessary bookkeeping tables by traversing the wiring
     pub fn init_phase_1(&mut self, challenge: &[F]) {
         let num_vars = self.source_mle.num_free_vars() - self.num_dataparallel_vars;
 
-        let a_hg_mle_vec = fold_nonzero_gates_into_beta_mle_identity_gate(
-            &self.nonzero_gates,
-            &[challenge],
-            num_vars,
-            None,
-        );
+        let a_hg_mle_vec =
+            fold_wiring_into_beta_mle_identity_gate(&self.wiring, &[challenge], num_vars, None);
         let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
         a_hg_mle.index_mle_indices(self.num_dataparallel_vars);
 
