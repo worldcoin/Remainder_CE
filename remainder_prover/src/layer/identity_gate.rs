@@ -14,7 +14,6 @@ use crate::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
         mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
     },
-    prover::global_config::{global_prover_lazy_beta_evals, global_verifier_lazy_beta_evals},
     sumcheck::*,
 };
 use itertools::Itertools;
@@ -225,6 +224,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             &round_challenges[self.num_dataparallel_vars..],
             &[&claim_challenges[self.num_dataparallel_vars..]],
             &self.wiring,
+            &[F::ONE],
         );
 
         let beta_bound = if self.num_dataparallel_vars != 0 {
@@ -330,6 +330,7 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
             &self.first_u_challenges,
             &[&g1_challenges],
             &self.wiring,
+            &[F::ONE],
         );
         let beta_bound = BetaValues::compute_beta_over_two_challenges(
             &g2_challenges,
@@ -427,21 +428,11 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
     fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
         let (g2_challenges, g1_challenges) = claim_point.split_at(self.num_dataparallel_vars);
-        self.set_g1_challenges(g1_challenges.to_vec());
-        self.set_g2_challenges(g2_challenges.to_vec());
 
         if self.num_dataparallel_vars > 0 {
-            let beta_g2 = BetaValues::new(
-                self.g2_challenges
-                    .as_ref()
-                    .unwrap()
-                    .clone()
-                    .into_iter()
-                    .enumerate()
-                    .collect(),
-            );
+            let beta_g2 = BetaValues::new(g2_challenges.to_vec().into_iter().enumerate().collect());
             self.set_beta_g2(beta_g2);
-            self.init_dataparallel_phase(self.g1_challenges.as_ref().unwrap().clone());
+            self.init_dataparallel_phase(g1_challenges.to_vec());
         }
 
         self.source_mle.index_mle_indices(0);
@@ -450,29 +441,43 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
     }
 
     fn initialize_rlc(&mut self, random_coefficients: &[F], claims: &[&RawClaim<F>]) {
-        claims.iter().for_each(|claim| {
-            let claim_point = claim.get_point();
-            let (g2_challenges, g1_challenges) = claim_point.split_at(self.num_dataparallel_vars);
-            self.set_g1_challenges(g1_challenges.to_vec());
-            self.set_g2_challenges(g2_challenges.to_vec());
+        assert_eq!(random_coefficients.len(), claims.len());
 
-            if self.num_dataparallel_vars > 0 {
-                let beta_g2 = BetaValues::new(
-                    self.g2_challenges
-                        .as_ref()
-                        .unwrap()
-                        .clone()
-                        .into_iter()
-                        .enumerate()
-                        .collect(),
-                );
-                self.set_beta_g2(beta_g2);
-                self.init_dataparallel_phase(self.g1_challenges.as_ref().unwrap().clone());
-            }
+        // Split all of the claimed challenges into whether they are claimed
+        // challenges on the dataparallel variables or not.
+        let (g2_challenges_vec, g1_challenges_vec): (Vec<&[F]>, Vec<&[F]>) = claims
+            .iter()
+            .map(|claim| claim.get_point().split_at(self.num_dataparallel_vars))
+            .unzip();
 
-            self.source_mle.index_mle_indices(0);
-            self.init_phase_1(g1_challenges);
-        });
+        // Similar to [init_dataparallel_phase], except with the appropriate
+        // vector of claims on the output gate label variables.
+        let a_f2_mle_vec = fold_wiring_into_beta_mle_identity_gate(
+            &self.wiring,
+            &g1_challenges_vec,
+            self.num_dataparallel_vars,
+            Some(&self.source_mle),
+            &[F::ONE],
+        );
+        let mut af2_mle = DenseMle::new_from_raw(a_f2_mle_vec, self.layer_id());
+        af2_mle.index_mle_indices(0);
+        self.dataparallel_af2_mle = Some(af2_mle);
+
+        let num_vars = self.source_mle.num_free_vars() - self.num_dataparallel_vars;
+
+        // Similar to [init_phase_1], except with the appropriate
+        // vector of claims on the output gate label variables.
+        let a_hg_mle_vec = fold_wiring_into_beta_mle_identity_gate(
+            &self.wiring,
+            &g1_challenges_vec,
+            num_vars,
+            None,
+            &[F::ONE],
+        );
+        let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
+        a_hg_mle.index_mle_indices(self.num_dataparallel_vars);
+
+        self.a_hg_mle_phase_1 = Some(a_hg_mle);
     }
 
     fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError> {
@@ -592,6 +597,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             &round_challenges[self.num_dataparallel_vars..],
             &[&claim_challenges[self.num_dataparallel_vars..]],
             &self.wiring,
+            &[F::ONE],
         );
         let beta_bound = if self.num_dataparallel_vars != 0 {
             let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
@@ -654,11 +660,6 @@ pub struct IdentityGate<F: Field> {
     /// The MLE initialized in the dataparallel phase which contains the nonzero gate
     /// evaluations folded into a size 2^(num_dataparallel_bits) bookkeeping table.
     dataparallel_af2_mle: Option<DenseMle<F>>,
-    /// The challenges pertaining to the `x` variables, which are the non-dataparallel
-    /// variables in the source MLE.
-    g1_challenges: Option<Vec<F>>,
-    /// The challenges pertaining to the dataparallel variables in the source MLE.
-    g2_challenges: Option<Vec<F>>,
     /// The MLE initialized in phase 1, which contains the beta values over `g1_challenges`
     /// folded into the wiring function.
     a_hg_mle_phase_1: Option<DenseMle<F>>,
@@ -683,21 +684,11 @@ impl<F: Field> IdentityGate<F> {
             dataparallel_af2_mle: None,
             a_hg_mle_phase_1: None,
             num_dataparallel_vars: num_dataparallel_vars.unwrap_or(0),
-            g1_challenges: None,
-            g2_challenges: None,
         }
     }
 
     fn set_beta_g2(&mut self, beta_g2: BetaValues<F>) {
         self.beta_g2 = Some(beta_g2);
-    }
-
-    fn set_g1_challenges(&mut self, g1: Vec<F>) {
-        self.g1_challenges = Some(g1);
-    }
-
-    fn set_g2_challenges(&mut self, g2: Vec<F>) {
-        self.g2_challenges = Some(g2);
     }
 
     fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
@@ -711,6 +702,7 @@ impl<F: Field> IdentityGate<F> {
             &[&g1_challenges],
             self.num_dataparallel_vars,
             Some(&self.source_mle),
+            &[F::ONE],
         );
 
         let mut af2_mle = DenseMle::new_from_raw(a_f2_mle_vec, self.layer_id());
@@ -722,8 +714,13 @@ impl<F: Field> IdentityGate<F> {
     pub fn init_phase_1(&mut self, challenge: &[F]) {
         let num_vars = self.source_mle.num_free_vars() - self.num_dataparallel_vars;
 
-        let a_hg_mle_vec =
-            fold_wiring_into_beta_mle_identity_gate(&self.wiring, &[challenge], num_vars, None);
+        let a_hg_mle_vec = fold_wiring_into_beta_mle_identity_gate(
+            &self.wiring,
+            &[challenge],
+            num_vars,
+            None,
+            &[F::ONE],
+        );
         let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
         a_hg_mle.index_mle_indices(self.num_dataparallel_vars);
 

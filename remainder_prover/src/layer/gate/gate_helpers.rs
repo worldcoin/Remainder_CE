@@ -1,5 +1,6 @@
 use ark_std::{cfg_into_iter, cfg_iter};
 use itertools::Itertools;
+use rand::random;
 
 use std::{cmp::max, fmt::Debug};
 
@@ -351,6 +352,7 @@ pub fn compute_fully_bound_identity_gate_function<F: Field>(
     nondataparallel_round_challenges: &[F],
     nondataparallel_claim_challenges_vec: &[&[F]],
     wiring: &[(u32, u32)],
+    random_coefficients: &[F],
 ) -> F {
     let (inverses_round_challenges, one_minus_elem_inverted_round_challenges): (Vec<F>, Vec<F>) =
         nondataparallel_round_challenges
@@ -487,14 +489,17 @@ pub fn compute_fully_bound_identity_gate_function<F: Field>(
                         },
                     )
                     .collect_vec();
-                let sum_over_claim_beta_values = next_beta_values_claim
+                let rlc_over_claim_beta_values = next_beta_values_claim
                     .iter()
-                    .fold(F::ZERO, |acc, elem| (acc + elem));
+                    .zip(random_coefficients)
+                    .fold(F::ZERO, |acc, (elem, random_coeff)| {
+                        (acc + (*elem * random_coeff))
+                    });
 
                 // We accumulate by adding the previous value of \beta(g, z)
                 // * \beta(u, x) to the current one.
                 let accumulation_of_gate_value_vec = current_accumulation_of_gate_value
-                    + next_beta_value_round * sum_over_claim_beta_values;
+                    + next_beta_value_round * rlc_over_claim_beta_values;
 
                 (
                     (
@@ -526,9 +531,12 @@ pub fn compute_fully_bound_identity_gate_function<F: Field>(
                     })
                     .collect_vec();
 
-                let sum_over_claim_beta_values = next_beta_values_claim
+                let rlc_over_claim_beta_values = next_beta_values_claim
                     .iter()
-                    .fold(F::ZERO, |acc, elem| acc + elem);
+                    .zip(random_coefficients)
+                    .fold(F::ZERO, |acc, (elem, random_coeff)| {
+                        acc + (*elem * random_coeff)
+                    });
 
                 (
                     (
@@ -538,7 +546,7 @@ pub fn compute_fully_bound_identity_gate_function<F: Field>(
                         ),
                         (Some(next_beta_values_claim), Some(next_beta_value_round)),
                     ),
-                    next_beta_value_round * sum_over_claim_beta_values,
+                    next_beta_value_round * rlc_over_claim_beta_values,
                 )
             }
         },
@@ -566,8 +574,8 @@ pub fn compute_fully_bound_identity_gate_function<F: Field>(
 /// entries.
 ///
 /// When `dataparallel_aux` is Some(..), this function computes the coefficients
-/// of the MLE representing \sum_{wiring}{f_2(p_2, x) * f_1(g, x)} where
-/// p_2 is the dataparallel index. The resulting vector should have
+/// of the MLE representing \sum_{wiring}{f_2(p_2, x) * f_1(g, x)} where p_2 is
+/// the dataparallel index. The resulting vector should have
 /// num_dataparallel_copies entries.
 ///
 /// The folding occurs by first iterating through the nonzero gates, and
@@ -580,13 +588,15 @@ pub fn compute_fully_bound_identity_gate_function<F: Field>(
 /// computation for each progressive beta value as opposed to the O(log(n))
 /// method used to compute it from scratch.
 ///
-/// We have multiple `claim_points` when using RLC claim agg, and in this
-/// case, the beta values are added for each of the `g` coordinates.
+/// We have multiple `claim_points` when using RLC claim agg, and in this case,
+/// we compute the random linear combination of the `random_coefficients` and
+/// the `g` variables.
 pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
     wiring: &[(u32, u32)],
     claim_points: &[&[F]],
     num_vars_folded_vec: usize,
     dataparallel_aux: Option<&DenseMle<F>>,
+    random_coefficients: &[F],
 ) -> Vec<F> {
     let n = claim_points[0].len();
     // Precompute all the inverses necessary for each of the claim points.
@@ -624,9 +634,12 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
             )
         })
         .collect_vec();
-    let first_nonzero_gate_beta_sum = current_beta_values
+    let first_nonzero_gate_beta_rlc = current_beta_values
         .iter()
-        .fold(F::ZERO, |acc, elem| acc + elem);
+        .zip(random_coefficients)
+        .fold(F::ZERO, |acc, (elem, random_coeff)| {
+            acc + (*elem * random_coeff)
+        });
 
     // If it is dataparallel, we add the value of the source MLE over all of the
     // copies in order to compute the appropriate sum. Each of these are
@@ -642,10 +655,10 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
                 )
                 .unwrap_or(F::ZERO);
             folded_vec[dataparallel_copy_idx] +=
-                source_mle_at_nonzero_gate_for_copy * first_nonzero_gate_beta_sum;
+                source_mle_at_nonzero_gate_for_copy * first_nonzero_gate_beta_rlc;
         })
     } else {
-        folded_vec[current_nonzero_input_gate_label as usize] = first_nonzero_gate_beta_sum;
+        folded_vec[current_nonzero_input_gate_label as usize] = first_nonzero_gate_beta_rlc;
     }
 
     wiring.iter().skip(1).for_each(
@@ -687,9 +700,12 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
                 )
                 .collect_vec();
 
-            let beta_values_sum = next_beta_values
+            let beta_values_rlc = next_beta_values
                 .iter()
-                .fold(F::ZERO, |acc, elem| acc + elem);
+                .zip(random_coefficients)
+                .fold(F::ZERO, |acc, (elem, random_coeff)| {
+                    acc + (*elem * random_coeff)
+                });
 
             // If dataparallel, add all of the values of the source_mle over
             // each of the copies.
@@ -706,10 +722,10 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
                         .unwrap_or(F::ZERO);
 
                     folded_vec[dataparallel_copy_idx] +=
-                        source_mle_at_nonzero_gate_for_copy * beta_values_sum;
+                        source_mle_at_nonzero_gate_for_copy * beta_values_rlc;
                 })
             } else {
-                folded_vec[*next_nonzero_input_gate_label as usize] += beta_values_sum;
+                folded_vec[*next_nonzero_input_gate_label as usize] += beta_values_rlc;
             }
             current_nonzero_input_gate_label = *next_nonzero_input_gate_label;
             current_nonzero_output_gate_label = *next_nonzero_output_gate_label;
