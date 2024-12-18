@@ -1,25 +1,20 @@
 use std::collections::HashMap;
 
-use remainder::{
-    layer::LayerId,
-    mle::evals::MultilinearExtension,
-    prover::{
-        config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
-        global_config::perform_function_under_expected_configs,
-        GKRCircuitDescription,
-    },
-};
+use remainder::{layer::LayerId, mle::evals::MultilinearExtension, prover::GKRCircuitDescription};
 use remainder_shared_types::{
+    config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
     curves::PrimeOrderCurve,
     pedersen::PedersenCommitter,
+    perform_function_under_expected_configs,
     transcript::{ec_transcript::ECTranscript, poseidon_transcript::PoseidonSponge},
 };
 
-use crate::utils::vandermonde::VandermondeInverse;
-
-use super::{
-    hyrax_input_layer::HyraxInputLayerDescriptionWithPrecommit, verify_hyrax_proof, HyraxProof,
+use crate::{
+    hyrax_gkr::{verify_hyrax_proof, HyraxProof},
+    utils::vandermonde::VandermondeInverse,
 };
+
+use super::hyrax_input_layer::HyraxInputLayerDescriptionWithPrecommit;
 
 /// Helper function for testing an iriscode circuit (of any version, with any
 /// data) with a Hyrax input layer.
@@ -46,19 +41,17 @@ pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
     // --- Compute actual Hyrax proof ---
-    let (proof, proof_config) = perform_function_under_expected_configs(
+    let (proof, proof_config) = perform_function_under_expected_configs!(
         HyraxProof::prove,
-        (
-            &inputs,
-            &private_layer_descriptions,
-            &circuit_desc,
-            &committer,
-            blinding_rng,
-            converter,
-            &mut transcript,
-        ),
         &gkr_circuit_prover_config,
         &gkr_circuit_verifier_config,
+        &inputs,
+        &private_layer_descriptions,
+        &circuit_desc,
+        &committer,
+        blinding_rng,
+        converter,
+        &mut transcript
     );
 
     let mut transcript: ECTranscript<C, PoseidonSponge<C::Base>> =
@@ -68,17 +61,15 @@ pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
         .map(|(k, v)| (k, v.0))
         .collect();
 
-    perform_function_under_expected_configs(
+    perform_function_under_expected_configs!(
         verify_hyrax_proof,
-        (
-            &proof,
-            &verifier_hyrax_input_layers,
-            &circuit_desc,
-            &committer,
-            &mut transcript,
-            &proof_config,
-        ),
         &gkr_circuit_prover_config,
         &gkr_circuit_verifier_config,
+        &proof,
+        &verifier_hyrax_input_layers,
+        &circuit_desc,
+        &committer,
+        &mut transcript,
+        &proof_config
     );
 }

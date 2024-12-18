@@ -21,9 +21,9 @@ test:  ## GitHub Action #2 - Slow but Comprehensive testing.
 
 mem-lim:  ## GitHub Action #3 - run sequential worldcoin binary with a memory limit.
 	$(MAKE) prod-seq
-	echo 500M | sudo tee /sys/fs/cgroup/makefile_memory_limited_group/memory.max
+	echo 350M | sudo tee /sys/fs/cgroup/makefile_memory_limited_group/memory.max
 	echo 0 | sudo tee /sys/fs/cgroup/makefile_memory_limited_group/memory.swap.max
-	sudo cgexec -g memory:makefile_memory_limited_group ./target/release/worldcoin
+	sudo cgexec -g memory:makefile_memory_limited_group ./target/release/worldcoin prove worldcoin.circuit iriscode_pcp_example worldcoin.zkp
 
 test-dev:  ## Faster alternative to "make test"; uses `--release` flag and ignores slow tests.
 	cargo test --release
@@ -44,7 +44,7 @@ bin-seq:  ## Similar to "make bin", but NO rayon parallelism.
 bench:  ## Use Valgrind to profile memory usage, for worldcoin ic circuit. Example - make bench name=v2.0
 	cargo build --profile=opt-with-debug --bin worldcoin
 	mkdir -p massif
-	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin
+	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin prove worldcoin.circuit iriscode_pcp_example worldcoin.zkp
 	ms_print massif/massif.$(name).out | less
 
 bench-mpc:  ## Use Valgrind to profile memory usage, for worldcoin mpc circuit. Example - make bench-mpc

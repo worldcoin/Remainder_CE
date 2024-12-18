@@ -18,6 +18,7 @@ use crate::{
 };
 use itertools::Itertools;
 use remainder_shared_types::{
+    config::global_config::{global_prover_lazy_beta_evals, global_verifier_lazy_beta_evals},
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
