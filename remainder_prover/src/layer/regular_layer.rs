@@ -56,7 +56,7 @@ pub struct RegularLayer<F: Field> {
 
     /// Stores the beta values associated with the `expression`.
     /// Initially set to `None`. Computed during initialization.
-    beta_vals: Option<BetaValues<F>>,
+    beta_vals_vec: Option<Vec<BetaValues<F>>>,
 }
 
 impl<F: Field> RegularLayer<F> {
@@ -72,48 +72,13 @@ impl<F: Field> RegularLayer<F> {
             id,
             expression,
             nonlinear_rounds,
-            beta_vals: None,
+            beta_vals_vec: None,
         }
     }
 
     /// Returns a reference to the expression that this layer is proving.
     pub fn get_expression(&self) -> &Expression<F, ProverExpr> {
         &self.expression
-    }
-
-    /// Performs a round of the sumcheck protocol on this Layer.
-    #[allow(dead_code)]
-    fn prove_nonlinear_round(
-        &mut self,
-        transcript_writer: &mut impl ProverTranscript<F>,
-        round_index: usize,
-    ) -> Result<(), LayerError> {
-        println!("Proving round: {round_index}");
-
-        // Grabs the degree of univariate polynomial we are sending over.
-        let degree = get_round_degree(&self.expression, round_index);
-
-        // Compute the sumcheck message for this round.
-        let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
-            &self.expression,
-            round_index,
-            degree,
-            self.beta_vals.as_ref().unwrap(),
-        )?
-        .0;
-
-        transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
-
-        let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-
-        self.expression.fix_variable(round_index, challenge);
-
-        self.beta_vals
-            .as_mut()
-            .unwrap()
-            .beta_update(round_index, challenge);
-
-        Ok(())
     }
 
     /// Traverse the fully-bound `self.expression` and append all MLE values
@@ -163,6 +128,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         &mut self,
         claim: RawClaim<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
+        random_coefficients: &[F],
     ) -> Result<(), LayerError> {
         info!("Proving a GKR Layer.");
 
@@ -175,7 +141,8 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         let layer_id = self.layer_id();
         for round_index in self.nonlinear_rounds.clone() {
             // First compute the appropriate number of univariate evaluations for this round.
-            let prover_sumcheck_message = self.compute_round_sumcheck_message(round_index)?;
+            let prover_sumcheck_message =
+                self.compute_round_sumcheck_message(round_index, random_coefficients)?;
             // In debug mode, catch sumcheck round errors from the prover side.
             debug_assert_eq!(
                 evaluate_at_a_point(&previous_round_message, previous_challenge).unwrap(),
@@ -230,15 +197,37 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
             .map(|idx| (*idx, claim_point[*idx]))
             .collect_vec();
         let newbeta = BetaValues::new(betavec);
-        self.beta_vals = Some(newbeta);
+        self.beta_vals_vec = Some(vec![newbeta]);
 
         Ok(())
     }
 
-    fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError> {
+    fn initialize_rlc(&mut self, _random_coefficients: &[F], claims: &[&RawClaim<F>]) {
+        // We need the beta values over all the indices of the expression, as we
+        // cannot perform the linear round optimization with RLC claim agg since
+        // we have multiple points to bind each MLE to.
+        let expression = &mut self.expression;
+        let expression_all_indices = expression.get_all_rounds();
+
+        claims.iter().map(|claim| {
+            let claim_point = claim.get_point();
+            let betavec = expression_all_indices
+                .iter()
+                .map(|idx| (*idx, claim_point[*idx]))
+                .collect_vec();
+            let newbeta = BetaValues::new(betavec);
+            self.beta_vals_vec = Some(vec![newbeta]);
+        });
+    }
+
+    fn compute_round_sumcheck_message(
+        &mut self,
+        round_index: usize,
+        random_coefficients: &[F],
+    ) -> Result<Vec<F>, LayerError> {
         // Grabs the expression/beta table.
         let expression = &self.expression;
-        let newbeta = &self.beta_vals;
+        let newbeta = &self.beta_vals_vec;
 
         // Grabs the degree of univariate polynomial we are sending over.
         let degree = get_round_degree(expression, round_index);
@@ -249,6 +238,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
             round_index,
             degree,
             newbeta.as_ref().unwrap(),
+            random_coefficients,
         )
         .unwrap();
 
@@ -258,14 +248,17 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
     fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
         // Grabs the expression/beta table.
         let expression = &mut self.expression;
-        let newbeta = &mut self.beta_vals;
+        let beta_vals_vec = &mut self.beta_vals_vec;
 
         // Update the bookkeeping tables as necessary.
         expression.fix_variable(round_index, challenge);
-        newbeta
+        beta_vals_vec
             .as_mut()
             .unwrap()
-            .beta_update(round_index, challenge);
+            .iter_mut()
+            .for_each(|beta_vals| {
+                beta_vals.beta_update(round_index, challenge);
+            });
 
         Ok(())
     }
@@ -396,10 +389,6 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         layerwise_expr.traverse(&mut observer_fn)?;
 
         Ok(claims)
-    }
-
-    fn initialize_rlc(&mut self, random_coefficients: &[F], claims: &[&RawClaim<F>]) {
-        todo!()
     }
 }
 

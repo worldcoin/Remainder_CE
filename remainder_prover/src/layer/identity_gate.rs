@@ -18,7 +18,6 @@ use crate::{
 };
 use itertools::Itertools;
 use remainder_shared_types::{
-    config::global_config::{global_prover_lazy_beta_evals, global_verifier_lazy_beta_evals},
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
@@ -411,10 +410,13 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         &mut self,
         claim: RawClaim<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
+        random_coefficients: &[F],
     ) -> Result<(), LayerError> {
         self.initialize(claim.get_point())?;
         (0..self.source_mle.num_free_vars()).for_each(|round_idx| {
-            let sumcheck_message = self.compute_round_sumcheck_message(round_idx).unwrap();
+            let sumcheck_message = self
+                .compute_round_sumcheck_message(round_idx, random_coefficients)
+                .unwrap();
             transcript_writer.append_elements("Round sumcheck message", &sumcheck_message);
             let challenge = transcript_writer.get_challenge("Sumcheck challenge");
             self.bind_round_variable(round_idx, challenge).unwrap();
@@ -432,7 +434,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
         if self.num_dataparallel_vars > 0 {
             let beta_g2 = BetaValues::new(g2_challenges.to_vec().into_iter().enumerate().collect());
-            self.set_beta_g2(beta_g2);
+            self.set_beta_g2(vec![beta_g2]);
             self.init_dataparallel_phase(g1_challenges.to_vec());
         }
 
@@ -450,24 +452,34 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             .iter()
             .map(|claim| claim.get_point().split_at(self.num_dataparallel_vars))
             .unzip();
+        self.source_mle.index_mle_indices(0);
 
-        // Similar to [init_dataparallel_phase], except with the appropriate
-        // vector of claims on the output gate label variables.
-        let a_f2_mle_vec = fold_wiring_into_beta_mle_identity_gate(
-            &self.wiring,
-            &g1_challenges_vec,
-            self.num_dataparallel_vars,
-            Some(&self.source_mle),
-            &[F::ONE],
-        );
-        let mut af2_mle = DenseMle::new_from_raw(a_f2_mle_vec, self.layer_id());
-        af2_mle.index_mle_indices(0);
-        self.dataparallel_af2_mle = Some(af2_mle);
+        if self.num_dataparallel_vars > 0 {
+            let beta_g2_vec = g2_challenges_vec
+                .iter()
+                .map(|g2_challenges| {
+                    BetaValues::new(g2_challenges.to_vec().into_iter().enumerate().collect())
+                })
+                .collect();
+            self.set_beta_g2(beta_g2_vec);
 
-        let num_vars = self.source_mle.num_free_vars() - self.num_dataparallel_vars;
+            // Similar to [init_dataparallel_phase], except with the appropriate
+            // vector of claims on the output gate label variables.
+            let a_f2_mle_vec = fold_wiring_into_beta_mle_identity_gate(
+                &self.wiring,
+                &g1_challenges_vec,
+                self.num_dataparallel_vars,
+                Some(&self.source_mle),
+                &[F::ONE],
+            );
+            let mut af2_mle = DenseMle::new_from_raw(a_f2_mle_vec, self.layer_id());
+            af2_mle.index_mle_indices(0);
+            self.dataparallel_af2_mle = Some(af2_mle);
+        }
 
         // Similar to [init_phase_1], except with the appropriate
         // vector of claims on the output gate label variables.
+        let num_vars = self.source_mle.num_free_vars() - self.num_dataparallel_vars;
         let a_hg_mle_vec = fold_wiring_into_beta_mle_identity_gate(
             &self.wiring,
             &g1_challenges_vec,
@@ -481,12 +493,36 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         self.a_hg_mle_phase_1 = Some(a_hg_mle);
     }
 
-    fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError> {
+    fn compute_round_sumcheck_message(
+        &mut self,
+        round_index: usize,
+        random_coefficients: &[F],
+    ) -> Result<Vec<F>, LayerError> {
+        let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
+            self.beta_g2_vec
+                .as_ref()
+                .unwrap()
+                .iter()
+                .zip(random_coefficients)
+                .fold(F::ZERO, |rlc_acc, (beta_values, random_coeff)| {
+                    rlc_acc
+                        + (beta_values
+                            .updated_values
+                            .values()
+                            .fold(F::ONE, |acc, val| acc * *val)
+                            * random_coeff)
+                })
+        } else {
+            F::ONE
+        };
         match round_index.cmp(&self.num_dataparallel_vars) {
             // Dataparallel phase.
             Ordering::Less => {
                 let sumcheck_message = self
-                    .compute_sumcheck_message_data_parallel_identity_gate_beta_cascade(round_index)
+                    .compute_sumcheck_message_data_parallel_identity_gate_beta_cascade(
+                        round_index,
+                        random_coefficients,
+                    )
                     .unwrap();
                 Ok(sumcheck_message)
             }
@@ -503,18 +539,6 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 let unscaled_sumcheck_evals =
                     evaluate_mle_product_no_beta_table(&mles, independent_variable, mles.len())
                         .unwrap();
-
-                let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
-                    self.beta_g2
-                        .as_ref()
-                        .unwrap()
-                        .updated_values
-                        .values()
-                        .fold(F::ONE, |acc, val| acc * *val)
-                } else {
-                    F::ONE
-                };
-
                 let first_round_sumcheck_evals = unscaled_sumcheck_evals
                     .0
                     .iter()
@@ -536,16 +560,6 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                     evaluate_mle_product_no_beta_table(&mles, independent_variable, mles.len())
                         .unwrap();
 
-                let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
-                    self.beta_g2
-                        .as_ref()
-                        .unwrap()
-                        .updated_values
-                        .values()
-                        .fold(F::ONE, |acc, val| acc * *val)
-                } else {
-                    F::ONE
-                };
                 let sumcheck_evals = unscaled_sumcheck_evals
                     .0
                     .iter()
@@ -558,10 +572,14 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
     fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
         if round_index < self.num_dataparallel_vars {
-            self.beta_g2
+            self.beta_g2_vec
                 .as_mut()
                 .unwrap()
-                .beta_update(round_index, challenge);
+                .iter_mut()
+                .for_each(|beta| {
+                    beta.beta_update(round_index, challenge);
+                });
+
             self.dataparallel_af2_mle
                 .as_mut()
                 .unwrap()
@@ -570,7 +588,9 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             Ok(())
         } else {
             if self.num_dataparallel_vars > 0 {
-                assert!(self.beta_g2.as_ref().unwrap().unbound_values.is_empty());
+                self.beta_g2_vec.as_ref().unwrap().iter().for_each(|beta| {
+                    assert!(beta.unbound_values.is_empty());
+                })
             }
             let a_hg_mle = self.a_hg_mle_phase_1.as_mut().unwrap();
 
@@ -657,7 +677,7 @@ pub struct IdentityGate<F: Field> {
     beta_g1: Option<MultilinearExtension<F>>,
     /// The [BetaValues] struct which enumerates the incoming claim's challenge points on the
     /// dataparallel vars of the MLE
-    beta_g2: Option<BetaValues<F>>,
+    beta_g2_vec: Option<Vec<BetaValues<F>>>,
     /// The MLE initialized in the dataparallel phase which contains the nonzero gate
     /// evaluations folded into a size 2^(num_dataparallel_bits) bookkeeping table.
     dataparallel_af2_mle: Option<DenseMle<F>>,
@@ -681,15 +701,15 @@ impl<F: Field> IdentityGate<F> {
             wiring,
             source_mle: mle,
             beta_g1: None,
-            beta_g2: None,
+            beta_g2_vec: None,
             dataparallel_af2_mle: None,
             a_hg_mle_phase_1: None,
             num_dataparallel_vars: num_dataparallel_vars.unwrap_or(0),
         }
     }
 
-    fn set_beta_g2(&mut self, beta_g2: BetaValues<F>) {
-        self.beta_g2 = Some(beta_g2);
+    fn set_beta_g2(&mut self, beta_g2_vec: Vec<BetaValues<F>>) {
+        self.beta_g2_vec = Some(beta_g2_vec);
     }
 
     fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
@@ -734,20 +754,28 @@ impl<F: Field> IdentityGate<F> {
     fn compute_sumcheck_message_data_parallel_identity_gate_beta_cascade(
         &self,
         round_index: usize,
+        random_coefficients: &[F],
     ) -> Result<Vec<F>, GateError> {
         // When we have an identity gate, we have to multiply the beta table over the dataparallel challenges
         // with the function on the x variables.
         let degree = 2;
         let a_f2_x = self.dataparallel_af2_mle.as_ref().unwrap();
-        let beta_values = self.beta_g2.as_ref().unwrap();
-        let (unbound_beta_values, bound_beta_values) =
-            beta_values.get_relevant_beta_unbound_and_bound(a_f2_x.mle_indices());
+        let beta_values_vec = self.beta_g2_vec.as_ref().unwrap();
+        let (unbound_beta_values_vec, bound_beta_values_vec): (Vec<Vec<F>>, Vec<Vec<F>>) =
+            beta_values_vec
+                .iter()
+                .map(|beta_values| {
+                    beta_values.get_relevant_beta_unbound_and_bound(a_f2_x.mle_indices())
+                })
+                .unzip();
+
         let evals = beta_cascade(
             &[a_f2_x],
             degree,
             round_index,
-            &unbound_beta_values,
-            &bound_beta_values,
+            &unbound_beta_values_vec,
+            &bound_beta_values_vec,
+            random_coefficients,
         )
         .0;
 

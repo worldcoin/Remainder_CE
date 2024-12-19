@@ -218,7 +218,8 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     expr: &Expression<F, ProverExpr>,
     round_index: usize,
     max_degree: usize,
-    beta_values: &BetaValues<F>,
+    beta_values: &[BetaValues<F>],
+    random_coefficients: &[F],
 ) -> Result<SumcheckEvals<F>, ExpressionError> {
     // Each different type of expression node (constant, selector, product, sum,
     // neg, scaled, mle) is treated differently, so we create closures for each
@@ -228,19 +229,26 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     // A constant does not have any variables, so we do not need a beta table at
     // all. Therefore we just repeat the constant evaluation for the `degree +
     // 1` number of times as this is how many evaluations we need.
-    let constant = |constant, beta_table: &BetaValues<F>| {
-        let constant_updated_vals = beta_values.updated_values.values().copied().collect_vec();
-        let index_claim = beta_table.unbound_values.get(&round_index).unwrap();
-        let one_minus_index_claim = F::ONE - index_claim;
-        let beta_step = *index_claim - one_minus_index_claim;
-        let evals = std::iter::successors(Some(one_minus_index_claim), move |item| {
-            Some(*item + beta_step)
-        })
-        .take(max_degree + 1)
-        .map(|elem| constant * elem)
-        .collect_vec();
-        let updated_evals = apply_updated_beta_values_to_evals(evals, &constant_updated_vals);
-        Ok(updated_evals)
+    let constant = |constant, beta_tables: &[BetaValues<F>]| {
+        let sumcheck_eval_not_scaled_by_constant = beta_tables
+            .iter()
+            .zip(random_coefficients)
+            .map(|(beta_table, random_coeff)| {
+                let constant_updated_vals =
+                    beta_table.updated_values.values().copied().collect_vec();
+                let index_claim = beta_table.unbound_values.get(&round_index).unwrap();
+                let one_minus_index_claim = F::ONE - index_claim;
+                let beta_step = *index_claim - one_minus_index_claim;
+                let evals = std::iter::successors(Some(one_minus_index_claim), move |item| {
+                    Some(*item + beta_step)
+                })
+                .take(max_degree + 1)
+                .collect_vec();
+                apply_updated_beta_values_to_evals(evals, &constant_updated_vals) * random_coeff
+            })
+            .reduce(|acc, elem| acc + elem)
+            .unwrap();
+        Ok(sumcheck_eval_not_scaled_by_constant * constant)
     };
 
     // the selector is split into three cases:
@@ -250,113 +258,153 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     // - when the selector bit has already been bound we determine which case we
     // are in by comparing the round_index to the selector index which is an
     // argument to the closure.
-    let selector = |index: &MleIndex<F>, a, b, beta_table: &BetaValues<F>| match index {
-        MleIndex::Indexed(indexed_bit) => {
-            // because the selector bit itself only has one variable (1 - b_i) *
-            // (a) + b_i * b we only need one value within the beta table in
-            // order to evaluate the selector at this point.
-            let index_claim = beta_table.unbound_values.get(indexed_bit).unwrap();
-            match Ord::cmp(&round_index, indexed_bit) {
-                std::cmp::Ordering::Less => {
-                    // when the selector bit is not the independent variable and
-                    // has not been bound yet, we are simply summing over
-                    // everything. in order to take the beta values into account
-                    // this means for everything on the "left" side of the
-                    // selector we want to multiply by (1 - g_i) and for
-                    // everything on the "right" side of the selector we want to
-                    // multiply by g_i. we can then add these!
-                    let a_with_sel = a? * (F::ONE - index_claim);
-                    let b_with_sel = b? * index_claim;
-                    Ok(a_with_sel + b_with_sel)
-                }
-                std::cmp::Ordering::Equal => {
-                    // this is when the selector index is the independent
-                    // variable! this means the beta value at this index also
-                    // has an independent variable.
-                    let first = a?;
-                    let second: SumcheckEvals<F> = b?;
-
-                    let (SumcheckEvals(first_evals), SumcheckEvals(second_evals)) = (first, second);
-                    if first_evals.len() == second_evals.len() {
-                        // therefore we compute the successors of the beta
-                        // values as well, as the successors correspond to
-                        // evaluations at the points 0, 1, ... for the
-                        // independent variable.
-                        let eval_len = first_evals.len();
-                        let one_minus_index_claim = F::ONE - index_claim;
-                        let beta_step = *index_claim - one_minus_index_claim;
-                        let beta_evals =
-                            std::iter::successors(Some(one_minus_index_claim), move |item| {
-                                Some(*item + beta_step)
+    let selector = |index: &MleIndex<F>,
+                    a: Result<_, _>,
+                    b: Result<_, _>,
+                    beta_tables: &[BetaValues<F>]| {
+        let a_eval: SumcheckEvals<F> = a?;
+        let b_eval: SumcheckEvals<F> = b?;
+        match index {
+            MleIndex::Indexed(indexed_bit) => {
+                // because the selector bit itself only has one variable (1 - b_i) *
+                // (a) + b_i * b we only need one value within the beta table in
+                // order to evaluate the selector at this point.
+                match Ord::cmp(&round_index, indexed_bit) {
+                    std::cmp::Ordering::Less => {
+                        let sumcheck_eval = beta_tables
+                            .iter()
+                            .zip(random_coefficients)
+                            .map(|(beta_table, random_coeff)| {
+                                let index_claim =
+                                    beta_table.unbound_values.get(indexed_bit).unwrap();
+                                // when the selector bit is not the independent variable and
+                                // has not been bound yet, we are simply summing over
+                                // everything. in order to take the beta values into account
+                                // this means for everything on the "left" side of the
+                                // selector we want to multiply by (1 - g_i) and for
+                                // everything on the "right" side of the selector we want to
+                                // multiply by g_i. we can then add these!
+                                let a_with_sel: SumcheckEvals<F> =
+                                    a_eval.clone() * (F::ONE - index_claim);
+                                let b_with_sel: SumcheckEvals<F> = b_eval.clone() * index_claim;
+                                (a_with_sel + b_with_sel) * random_coeff
                             })
-                            .take(eval_len)
-                            .collect_vec();
-
-                        // the selector index also has an independent variable
-                        // so we factor this as well as the corresponding beta
-                        // successor at this index.
-                        let first_evals = SumcheckEvals(
-                            first_evals
-                                .into_iter()
-                                .enumerate()
-                                .map(|(idx, first_eval)| {
-                                    first_eval * (F::ONE - F::from(idx as u64)) * beta_evals[idx]
-                                })
-                                .collect(),
-                        );
-
-                        let second_evals = SumcheckEvals(
-                            second_evals
-                                .into_iter()
-                                .enumerate()
-                                .map(|(idx, second_eval)| {
-                                    second_eval * F::from(idx as u64) * beta_evals[idx]
-                                })
-                                .collect(),
-                        );
-
-                        Ok(first_evals + second_evals)
-                    } else {
-                        Err(ExpressionError::EvaluationError("Expression returns two evals that do not have the same length on a selector bit"))
+                            .reduce(|acc, elem| acc + elem)
+                            .unwrap();
+                        Ok(sumcheck_eval)
                     }
-                }
-                // we cannot have an indexed bit for the selector bit that is
-                // less than the current sumcheck round. therefore this is an
-                // error
-                std::cmp::Ordering::Greater => Err(ExpressionError::InvalidMleIndex),
-            }
-        }
-        // if the selector bit has already been bound, that means the beta value
-        // at this index has also already been bound, if it exists! otherwise we
-        // just treat it as the identity
-        MleIndex::Bound(coeff, bound_round_idx) => {
-            let coeff_neg = F::ONE - coeff;
-            let one = &F::ONE;
-            let beta_bound_val = beta_table
-                .updated_values
-                .get(bound_round_idx)
-                .unwrap_or(one);
-            let a: SumcheckEvals<F> = a?;
-            let b: SumcheckEvals<F> = b?;
+                    std::cmp::Ordering::Equal => {
+                        // this is when the selector index is the independent
+                        // variable! this means the beta value at this index also
+                        // has an independent variable.
 
-            // the evaluation is just scaled by the beta bound value
-            Ok(((b * coeff) + (a * coeff_neg)) * *beta_bound_val)
+                        let (SumcheckEvals(first_evals), SumcheckEvals(second_evals)) =
+                            (a_eval, b_eval);
+                        if first_evals.len() == second_evals.len() {
+                            let sumcheck_eval = beta_tables
+                                .iter()
+                                .zip(random_coefficients)
+                                .map(|(beta_table, random_coeff)| {
+                                    let index_claim =
+                                        beta_table.unbound_values.get(indexed_bit).unwrap();
+                                    // therefore we compute the successors of the beta
+                                    // values as well, as the successors correspond to
+                                    // evaluations at the points 0, 1, ... for the
+                                    // independent variable.
+                                    let eval_len = first_evals.len();
+                                    let one_minus_index_claim = F::ONE - index_claim;
+                                    let beta_step = *index_claim - one_minus_index_claim;
+                                    let beta_evals = std::iter::successors(
+                                        Some(one_minus_index_claim),
+                                        move |item| Some(*item + beta_step),
+                                    )
+                                    .take(eval_len)
+                                    .collect_vec();
+
+                                    // the selector index also has an independent variable
+                                    // so we factor this as well as the corresponding beta
+                                    // successor at this index.
+                                    let first_evals = SumcheckEvals(
+                                        first_evals
+                                            .clone()
+                                            .into_iter()
+                                            .enumerate()
+                                            .map(|(idx, first_eval)| {
+                                                first_eval
+                                                    * (F::ONE - F::from(idx as u64))
+                                                    * beta_evals[idx]
+                                            })
+                                            .collect(),
+                                    );
+
+                                    let second_evals = SumcheckEvals(
+                                        second_evals
+                                            .clone()
+                                            .into_iter()
+                                            .enumerate()
+                                            .map(|(idx, second_eval)| {
+                                                second_eval * F::from(idx as u64) * beta_evals[idx]
+                                            })
+                                            .collect(),
+                                    );
+
+                                    (first_evals + second_evals) * random_coeff
+                                })
+                                .reduce(|acc, elem| acc + elem)
+                                .unwrap();
+                            Ok(sumcheck_eval)
+                        } else {
+                            Err(ExpressionError::EvaluationError("Expression returns two evals that do not have the same length on a selector bit"))
+                        }
+                    }
+                    // we cannot have an indexed bit for the selector bit that is
+                    // less than the current sumcheck round. therefore this is an
+                    // error
+                    std::cmp::Ordering::Greater => Err(ExpressionError::InvalidMleIndex),
+                }
+            }
+            // if the selector bit has already been bound, that means the beta value
+            // at this index has also already been bound, if it exists! otherwise we
+            // just treat it as the identity
+            MleIndex::Bound(coeff, bound_round_idx) => {
+                let coeff_neg = F::ONE - coeff;
+                let one = &F::ONE;
+
+                let sumcheck_eval = beta_tables
+                    .iter()
+                    .zip(random_coefficients)
+                    .map(|(beta_table, random_coeff)| {
+                        let beta_bound_val = beta_table
+                            .updated_values
+                            .get(bound_round_idx)
+                            .unwrap_or(one);
+                        // the evaluation is just scaled by the beta bound value
+                        ((b_eval.clone() * coeff) + (a_eval.clone() * coeff_neg))
+                            * *beta_bound_val
+                            * random_coeff
+                    })
+                    .reduce(|acc, elem| acc + elem)
+                    .unwrap();
+
+                Ok(sumcheck_eval)
+            }
+            _ => Err(ExpressionError::InvalidMleIndex),
         }
-        _ => Err(ExpressionError::InvalidMleIndex),
     };
 
     // the mle evaluation takes in the mle ref, and the corresponding unbound
     // and bound beta values to pass into the `beta_cascade` function
     let mle_eval = |mle: &DenseMle<F>,
-                    unbound_beta_vals: &[F],
-                    bound_beta_vals: &[F]|
+                    unbound_beta_vals_vec: &[Vec<F>],
+                    bound_beta_vals_vec: &[Vec<F>]|
      -> Result<SumcheckEvals<F>, ExpressionError> {
         Ok(beta_cascade(
             &[&mle.clone()],
             max_degree,
             round_index,
-            unbound_beta_vals,
-            bound_beta_vals,
+            unbound_beta_vals_vec,
+            bound_beta_vals_vec,
+            random_coefficients,
         ))
     };
 
@@ -375,15 +423,16 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     // this is similar to the mle evaluation, but instead we have a list of mle
     // refs, and the corresponding unbound and bound beta values for that node.
     let product = |mles: &[&DenseMle<F>],
-                   unbound_beta_vals: &[F],
-                   bound_beta_vals: &[F]|
+                   unbound_beta_vals_vec: &[Vec<F>],
+                   bound_beta_vals_vec: &[Vec<F>]|
      -> Result<SumcheckEvals<F>, ExpressionError> {
         Ok(beta_cascade(
             mles,
             max_degree,
             round_index,
-            unbound_beta_vals,
-            bound_beta_vals,
+            unbound_beta_vals_vec,
+            bound_beta_vals_vec,
+            random_coefficients,
         ))
     };
 
@@ -543,7 +592,7 @@ pub(crate) fn successors_from_mle_product_no_ind_var<F: Field>(
 /// This is one step of the beta cascade algorithm, performing `(1 - beta_val) *
 /// mle[index] + beta_val * mle[index + 1]`
 pub(crate) fn beta_cascade_step<F: Field>(
-    mle_successor_vec: Vec<Vec<F>>,
+    mle_successor_vec: &Vec<Vec<F>>,
     beta_val: F,
 ) -> Vec<Vec<F>> {
     let (one_minus_beta_val, beta_val) = (F::ONE - beta_val, beta_val);
@@ -584,25 +633,36 @@ fn apply_updated_beta_values_to_evals<F: Field>(
 
 fn beta_cascade_no_independent_variable<F: Field>(
     mles: &[&impl Mle<F>],
-    beta_vals: &[F],
+    beta_vals_vec: &[Vec<F>],
     degree: usize,
-    beta_updated_vals: &[F],
+    beta_updated_vals: &[Vec<F>],
+    random_coefficients: &[F],
 ) -> SumcheckEvals<F> {
     let mut mle_successor_vec = successors_from_mle_product_no_ind_var(mles).unwrap();
-    if mle_successor_vec.len() > 1 {
-        beta_vals.iter().rev().for_each(|beta_val| {
-            let (one_minus_beta_val, beta_val) = (F::ONE - beta_val, beta_val);
-            let mle_successor_vec_iter = mle_successor_vec
-                .par_chunks(2)
-                .map(|bits| bits[0] * one_minus_beta_val + bits[1] * beta_val);
-            mle_successor_vec = mle_successor_vec_iter.collect();
+
+    let evals_iter = (beta_vals_vec.iter().zip(beta_updated_vals))
+        .zip(random_coefficients)
+        .map(|((beta_vals, beta_updated_vals), random_coeff)| {
+            // We can simply fold in the natural ordering as there is no
+            // independent variable, so computing the linear interpolations of
+            // the beta MLE is not necessary.
+            if mle_successor_vec.len() > 1 {
+                beta_vals.iter().rev().for_each(|beta_val| {
+                    let (one_minus_beta_val, beta_val) = (F::ONE - beta_val, beta_val);
+                    let mle_successor_vec_iter = mle_successor_vec
+                        .par_chunks(2)
+                        .map(|bits| bits[0] * one_minus_beta_val + bits[1] * beta_val);
+                    mle_successor_vec = mle_successor_vec_iter.collect();
+                });
+            }
+            assert_eq!(mle_successor_vec.len(), 1);
+            let eval_vec: Vec<F> = repeat_n(mle_successor_vec[0], degree + 1).collect();
+
+            // Multiply by the random coefficients to combine all evals at
+            // the end by summing.
+            apply_updated_beta_values_to_evals(eval_vec, beta_updated_vals) * random_coeff
         });
-    }
-
-    assert_eq!(mle_successor_vec.len(), 1);
-    let eval_vec: Vec<F> = repeat_n(mle_successor_vec[0], degree + 1).collect();
-
-    apply_updated_beta_values_to_evals(eval_vec, beta_updated_vals)
+    evals_iter.reduce(|acc, elem| acc + elem).unwrap()
 }
 
 /// this is how we compute the evaluations of a product of mle refs along with a
@@ -615,9 +675,15 @@ pub fn beta_cascade<F: Field>(
     mles: &[&impl Mle<F>],
     degree: usize,
     round_index: usize,
-    beta_vals: &[F],
-    beta_updated_vals: &[F],
+    beta_vals_vec: &[Vec<F>],
+    beta_updated_vals_vec: &[Vec<F>],
+    random_coefficients: &[F],
 ) -> SumcheckEvals<F> {
+    // Check that the number of beta values that we have is equal to the number
+    // of random coefficients, which must be the same because these are the
+    // number of claims we are aggregating over.
+    assert_eq!(beta_vals_vec.len(), beta_updated_vals_vec.len());
+    assert_eq!(beta_vals_vec.len(), random_coefficients.len());
     // determine whether there is an independent variable within these mle refs
     // by iterating through all of their indices and determining whether there
     // is an indexed bit at the round index.
@@ -629,49 +695,76 @@ pub fn beta_cascade<F: Field>(
 
     if mles_have_independent_variable {
         let mle_successor_vec = successors_from_mle_product(mles, degree).unwrap();
-        // Apply beta cascade steps, reducing `mle_successor_vec` size
-        // progressively.
-        let mut final_successor_vec = beta_vals.iter().skip(1).rev().fold(
-            mle_successor_vec,
-            |current_successor_vec, &val| {
-                // Apply beta cascade step and return the new vector, replacing
-                // the previous one
-                beta_cascade_step(current_successor_vec, val)
-            },
-        );
+        // We compute the sumcheck evaluations using beta cascade for the same
+        // set of MLE successors, but different beta values. All of these are
+        // stored in the iterator.
+        let evals_iter = (beta_vals_vec.iter().zip(beta_updated_vals_vec))
+            .zip(random_coefficients)
+            .map(|((beta_vals, beta_updated_vals), random_coeff)| {
+                // Apply beta cascade steps, reducing `mle_successor_vec` size
+                // progressively.
+                let final_successor_vec = if beta_vals.len() > 1 {
+                    let mut current_successor_vec =
+                        beta_cascade_step(&mle_successor_vec, *beta_vals.last().unwrap());
+                    // All the skips, a really gross way of making sure we
+                    // don't clone all of mle_successor_vec each time.
+                    for val in beta_vals.iter().skip(1).rev().skip(1) {
+                        // Apply beta cascade step and return the new vector, replacing
+                        // the previous one
+                        current_successor_vec = beta_cascade_step(&current_successor_vec, *val);
+                    }
+                    current_successor_vec
+                } else {
+                    // Only clone if this is going to be the final one we fold to get evaluations.
+                    mle_successor_vec.clone()
+                };
 
-        // Check that mle_successor_vec now contains only one element after
-        // cascading
-        assert_eq!(final_successor_vec.len(), 1);
+                // Check that mle_successor_vec now contains only one element after
+                // cascading
+                assert_eq!(final_successor_vec.len(), 1);
 
-        // Extract the remaining iterator from mle_successor_vec by popping it
-        let folded_mle_successors = final_successor_vec.pop().unwrap();
-        // for the MSB of the beta value, this must be
-        // the independent variable. otherwise it would already be bound.
-        // therefore we need to compute the successors of this value in order to
-        // get its evaluations.
-        let evals = if !beta_vals.is_empty() {
-            let second_beta_successor = beta_vals[0];
-            let first_beta_successor = F::ONE - second_beta_successor;
-            let step = second_beta_successor - first_beta_successor;
-            let beta_successors =
-                std::iter::successors(Some(first_beta_successor), move |item| Some(*item + step));
-            // the length of the mle successor vec before this last step must be
-            // degree + 1. therefore we can just do a zip with the beta
-            // successors to get the final degree + 1 evaluations.
-            beta_successors
-                .zip(folded_mle_successors)
-                .map(|(beta_succ, mle_succ)| beta_succ * mle_succ)
-                .take(degree + 1)
-                .collect_vec()
-        } else {
-            vec![F::ONE]
-        };
-        // apply the bound beta values as a scalar factor to each of the
-        // evaluations
-        apply_updated_beta_values_to_evals(evals, beta_updated_vals)
+                // Extract the remaining iterator from mle_successor_vec by popping it
+                let folded_mle_successors = &final_successor_vec[0];
+                // for the MSB of the beta value, this must be
+                // the independent variable. otherwise it would already be bound.
+                // therefore we need to compute the successors of this value in order to
+                // get its evaluations.
+                let evals = if !beta_vals.is_empty() {
+                    let second_beta_successor = beta_vals[0];
+                    let first_beta_successor = F::ONE - second_beta_successor;
+                    let step = second_beta_successor - first_beta_successor;
+                    let beta_successors =
+                        std::iter::successors(Some(first_beta_successor), move |item| {
+                            Some(*item + step)
+                        });
+                    // the length of the mle successor vec before this last step must be
+                    // degree + 1. therefore we can just do a zip with the beta
+                    // successors to get the final degree + 1 evaluations.
+                    beta_successors
+                        .zip(folded_mle_successors)
+                        .map(|(beta_succ, mle_succ)| beta_succ * mle_succ)
+                        .take(degree + 1)
+                        .collect_vec()
+                } else {
+                    vec![F::ONE]
+                };
+                // apply the bound beta values as a scalar factor to each of the
+                // evaluations Multiply by the random coefficient to get the
+                // random linear combination by summing at the end.
+                apply_updated_beta_values_to_evals(evals, beta_updated_vals) * random_coeff
+            });
+        // Combine all the evaluations using a random linear combination. We
+        // simply sum because all evaluations are already multiplied by their
+        // random coefficient.
+        evals_iter.reduce(|acc, elem| acc + elem).unwrap()
     } else {
-        beta_cascade_no_independent_variable(mles, beta_vals, degree, beta_updated_vals)
+        beta_cascade_no_independent_variable(
+            mles,
+            beta_vals_vec,
+            degree,
+            beta_updated_vals_vec,
+            random_coefficients,
+        )
     }
 }
 

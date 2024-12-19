@@ -118,6 +118,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         &mut self,
         claim: RawClaim<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
+        random_coefficients: &[F],
     ) -> Result<(), LayerError> {
         let mut sumcheck_rounds = vec![];
         let (mut beta_g1, mut beta_g2) = self.compute_beta_tables(claim.get_point());
@@ -184,7 +185,11 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         Ok(())
     }
 
-    fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError> {
+    fn compute_round_sumcheck_message(
+        &mut self,
+        round_index: usize,
+        random_coefficients: &[F],
+    ) -> Result<Vec<F>, LayerError> {
         // TODO!(ende): right now we still initializes the beta even the LAZY_BETA_EVALUATION flag is on
         // it's because fn `compute_sumcheck_messages_data_parallel_identity_gate` cannot lazy
         // evaluate beta's within it yet

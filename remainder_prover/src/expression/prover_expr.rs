@@ -311,14 +311,14 @@ impl<F: Field> Expression<F, ProverExpr> {
     /// node of the expression tree.
     pub fn evaluate_sumcheck_beta_cascade<T>(
         &self,
-        constant: &impl Fn(F, &BetaValues<F>) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T, &BetaValues<F>) -> T,
-        mle_eval: &impl Fn(&DenseMle<F>, &[F], &[F]) -> T,
+        constant: &impl Fn(F, &[BetaValues<F>]) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T, &[BetaValues<F>]) -> T,
+        mle_eval: &impl Fn(&DenseMle<F>, &[Vec<F>], &[Vec<F>]) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[&DenseMle<F>], &[F], &[F]) -> T, // changed signature here, note to modify caller's calling code
+        product: &impl Fn(&[&DenseMle<F>], &[Vec<F>], &[Vec<F>]) -> T, // changed signature here, note to modify caller's calling code
         scaled: &impl Fn(T, F) -> T,
-        beta: &BetaValues<F>,
+        beta: &[BetaValues<F>],
     ) -> T {
         self.expression_node.evaluate_sumcheck_node_beta_cascade(
             constant,
@@ -331,6 +331,16 @@ impl<F: Field> Expression<F, ProverExpr> {
             beta,
             &self.mle_vec,
         )
+    }
+
+    /// Traverses the expression tree to return all indices within the
+    /// expression. Can only be used after indexing the expression.
+    pub fn get_all_rounds(&self) -> Vec<usize> {
+        let (expression_node, mle_vec) = self.deconstruct_ref();
+        let mut curr_indices: Vec<usize> = Vec::new();
+        let mut all_rounds = expression_node.get_all_rounds(&mut curr_indices, mle_vec);
+        all_rounds.sort();
+        all_rounds
     }
 
     /// this traverses the expression tree to get all of the nonlinear rounds. can only be used after indexing the expression.
@@ -567,18 +577,18 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     #[allow(clippy::too_many_arguments)]
     pub fn evaluate_sumcheck_node_beta_cascade<T>(
         &self,
-        constant: &impl Fn(F, &BetaValues<F>) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T, &BetaValues<F>) -> T,
-        mle_eval: &impl Fn(&DenseMle<F>, &[F], &[F]) -> T,
+        constant: &impl Fn(F, &[BetaValues<F>]) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T, &[BetaValues<F>]) -> T,
+        mle_eval: &impl Fn(&DenseMle<F>, &[Vec<F>], &[Vec<F>]) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[&DenseMle<F>], &[F], &[F]) -> T,
+        product: &impl Fn(&[&DenseMle<F>], &[Vec<F>], &[Vec<F>]) -> T,
         scaled: &impl Fn(T, F) -> T,
-        beta: &BetaValues<F>,
+        beta_vec: &[BetaValues<F>],
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
     ) -> T {
         match self {
-            ExpressionNode::Constant(scalar) => constant(*scalar, beta),
+            ExpressionNode::Constant(scalar) => constant(*scalar, beta_vec),
             ExpressionNode::Selector(index, a, b) => selector_column(
                 index,
                 a.evaluate_sumcheck_node_beta_cascade(
@@ -589,7 +599,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     sum,
                     product,
                     scaled,
-                    beta,
+                    beta_vec,
                     mle_vec,
                 ),
                 b.evaluate_sumcheck_node_beta_cascade(
@@ -600,15 +610,18 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     sum,
                     product,
                     scaled,
-                    beta,
+                    beta_vec,
                     mle_vec,
                 ),
-                beta,
+                beta_vec,
             ),
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
-                let (unbound_beta_vec, bound_beta_vec) =
-                    beta.get_relevant_beta_unbound_and_bound(mle.mle_indices());
+                let (unbound_beta_vec, bound_beta_vec): (Vec<Vec<F>>, Vec<Vec<F>>) = beta_vec
+                    .iter()
+                    .map(|beta| beta.get_relevant_beta_unbound_and_bound(mle.mle_indices()))
+                    .unzip();
+
                 mle_eval(mle, &unbound_beta_vec, &bound_beta_vec)
             }
             ExpressionNode::Negated(a) => {
@@ -620,7 +633,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     sum,
                     product,
                     scaled,
-                    beta,
+                    beta_vec,
                     mle_vec,
                 );
                 negated(a)
@@ -634,7 +647,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     sum,
                     product,
                     scaled,
-                    beta,
+                    beta_vec,
                     mle_vec,
                 );
                 let b = b.evaluate_sumcheck_node_beta_cascade(
@@ -645,7 +658,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     sum,
                     product,
                     scaled,
-                    beta,
+                    beta_vec,
                     mle_vec,
                 );
                 sum(a, b)
@@ -664,8 +677,10 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .filter(move |mle_index| unique_mle_indices.insert(mle_index.clone()))
                     .collect_vec();
 
-                let (unbound_beta_vec, bound_beta_vec) =
-                    beta.get_relevant_beta_unbound_and_bound(&mle_indices_vec);
+                let (unbound_beta_vec, bound_beta_vec): (Vec<Vec<F>>, Vec<Vec<F>>) = beta_vec
+                    .iter()
+                    .map(|beta| beta.get_relevant_beta_unbound_and_bound(&mle_indices_vec))
+                    .unzip();
 
                 product(&mles, &unbound_beta_vec, &bound_beta_vec)
             }
@@ -678,7 +693,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     sum,
                     product,
                     scaled,
-                    beta,
+                    beta_vec,
                     mle_vec,
                 );
                 scaled(a, *f)

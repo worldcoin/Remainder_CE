@@ -177,6 +177,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
         &mut self,
         claim: RawClaim<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
+        random_coefficients: &[F],
     ) -> Result<(), LayerError> {
         println!(
             "MatMul::prove_rounds() for a product ({} x {}) * ({} x {}) matrix.",
@@ -192,7 +193,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
 
         for round in 0..num_vars_middle {
             // Compute the round's sumcheck message.
-            let message = self.compute_round_sumcheck_message(round)?;
+            let message = self.compute_round_sumcheck_message(round, random_coefficients)?;
             // Add to transcript.
             transcript_writer.append_elements("Sumcheck evaluations", &message);
             // Sample the challenge to bind the round's MatMult expression to.
@@ -228,7 +229,11 @@ impl<F: Field> Layer<F> for MatMult<F> {
         Ok(())
     }
 
-    fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError> {
+    fn compute_round_sumcheck_message(
+        &mut self,
+        round_index: usize,
+        random_coefficients: &[F],
+    ) -> Result<Vec<F>, LayerError> {
         let mles = vec![&self.matrix_a.mle, &self.matrix_b.mle];
         let sumcheck_message =
             compute_sumcheck_message_no_beta_table(&mles, round_index, 2).unwrap();
