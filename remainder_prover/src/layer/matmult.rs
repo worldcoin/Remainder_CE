@@ -436,7 +436,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
 
     /// Compute the evaluations of the MLE that represents the
     /// product of the two matrices over the boolean hypercube.
-    /// Panics is the MLEs for the two matrices provided by the circuit map are of the wrong size.
+    /// Panics if the MLEs for the two matrices provided by the circuit map are of the wrong size.
     fn compute_data_outputs(
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,

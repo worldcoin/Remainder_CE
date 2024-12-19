@@ -22,6 +22,7 @@ use crate::hyrax_pcs::HyraxPCSEvaluationProof;
 use super::hyrax_layer::HyraxClaim;
 
 /// The proof structure for a Hyrax input layer.
+/// Proves multiple claims without claim aggregation.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
