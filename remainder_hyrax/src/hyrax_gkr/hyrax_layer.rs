@@ -25,7 +25,10 @@ use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use remainder_shared_types::Field;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 /// This struct represents what a proof looks like for one layer of GKR, but Hyrax version.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxLayerProof<C: PrimeOrderCurve> {
     /// This is the proof of the sumcheck rounds for that layer.
     pub proof_of_sumcheck: ProofOfSumcheck<C>,
@@ -390,7 +393,7 @@ pub fn evaluate_committed_psl<C: PrimeOrderCurve>(
 }
 
 /// Return the claims made on other layers by the atomic factors of this product.
-pub fn get_claims_from_product<F: Field, T: Clone>(
+pub fn get_claims_from_product<F: Field, T: Clone + Serialize + for<'de> Deserialize<'de>>(
     product: &Product<F, T>,
 ) -> Vec<HyraxClaim<F, T>> {
     product
@@ -434,8 +437,9 @@ impl<C: PrimeOrderCurve> HyraxClaim<C::Scalar, CommittedScalar<C>> {
 ///     CommittedScalar<C> (if used by the prover)
 ///     to interface with claim aggregation code in remainder
 ///     C (this is the verifier's view, i.e. just the commitment)
-#[derive(Clone, Debug)]
-pub struct HyraxClaim<F: Field, T> {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "F: Field, T: DeserializeOwned")]
+pub struct HyraxClaim<F: Field, T: Serialize + DeserializeOwned> {
     /// Id of the layer upon which the claim is made
     pub to_layer_id: LayerId,
     /// The evaluation point

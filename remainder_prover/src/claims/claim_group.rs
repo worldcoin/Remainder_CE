@@ -1,6 +1,7 @@
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use remainder_shared_types::{
+    config::global_config::global_verifier_claim_agg_constant_column_optimization,
     transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
     Field,
 };
@@ -12,7 +13,7 @@ use crate::{
         ClaimError,
     },
     mle::dense::DenseMle,
-    prover::{global_config::global_verifier_claim_agg_constant_column_optimization, GKRError},
+    prover::GKRError,
     sumcheck::evaluate_at_a_point,
 };
 

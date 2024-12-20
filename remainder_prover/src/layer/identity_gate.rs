@@ -1,7 +1,11 @@
 //! Identity gate id(z, x) determines whether the xth gate from the
 //! i + 1th layer contributes to the zth gate in the ith layer.
 
-use std::{cmp::Ordering, collections::HashSet};
+use std::{
+    cmp::Ordering,
+    collections::HashSet,
+    fmt::{Debug, Formatter},
+};
 
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
@@ -11,11 +15,11 @@ use crate::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
         mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
     },
-    prover::global_config::{global_prover_lazy_beta_evals, global_verifier_lazy_beta_evals},
     sumcheck::*,
 };
 use itertools::Itertools;
 use remainder_shared_types::{
+    config::global_config::{global_prover_lazy_beta_evals, global_verifier_lazy_beta_evals},
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
@@ -34,7 +38,7 @@ use super::{
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 /// The circuit Description for an [IdentityGate].
-#[derive(Serialize, Deserialize, Debug, Clone, Hash)]
+#[derive(Serialize, Deserialize, Clone, Hash)]
 #[serde(bound = "F: Field")]
 pub struct IdentityGateLayerDescription<F: Field> {
     /// The layer id associated with this gate layer.
@@ -49,24 +53,45 @@ pub struct IdentityGateLayerDescription<F: Field> {
     /// variables.
     source_mle: MleDescription<F>,
 
+    /// The total number of variables in the layer.
+    total_num_vars: usize,
+
     /// The number of vars representing the number of "dataparallel" copies of
     /// the circuit.
     num_dataparallel_vars: usize,
 }
 
+impl<F: Field> std::fmt::Debug for IdentityGateLayerDescription<F> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IdentityGateLayerDescription")
+            .field("id", &self.id)
+            .field("wiring.len()", &self.wiring.len())
+            .field("source_mle", &self.source_mle)
+            .field("num_dataparallel_vars", &self.num_dataparallel_vars)
+            .finish()
+    }
+}
+
 impl<F: Field> IdentityGateLayerDescription<F> {
-    /// Constructor for the [IdentityGateLayerDescription] using the gate wiring, the source mle
-    /// for the rerouting, and the layer_id.
+    /// Constructor for [IdentityGateLayerDescription].
+    /// Arguments:
+    /// * `id`: The layer id associated with this layer.
+    /// * `source_mle`: The Mle that is being routed to this layer.
+    /// * `nonzero_gates`: A list of tuples representing the gates that are nonzero, in the form `(dest_idx, src_idx)`.
+    /// * `total_num_vars`: The total number of variables in the layer.
+    /// * `num_dataparallel_vars`: The number of dataparallel variables to use in this layer.
     pub fn new(
         id: LayerId,
         wiring: Vec<(u32, u32)>,
         source_mle: MleDescription<F>,
+        total_num_vars: usize,
         num_dataparallel_vars: Option<usize>,
     ) -> Self {
         Self {
             id,
             wiring,
             source_mle,
+            total_num_vars,
             num_dataparallel_vars: num_dataparallel_vars.unwrap_or(0),
         }
     }
@@ -201,6 +226,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             wiring: self.wiring.clone(),
             source_mle: src_verifier_mle,
             first_u_challenges,
+            total_num_vars: self.total_num_vars,
             num_dataparallel_rounds: self.num_dataparallel_vars,
             dataparallel_sumcheck_challenges,
         };
@@ -307,16 +333,12 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
     fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
         let source_mle = self.source_mle.into_dense_mle(circuit_map);
-        let num_dataparallel_vars = if self.num_dataparallel_vars == 0 {
-            None
-        } else {
-            Some(self.num_dataparallel_vars)
-        };
         let id_gate_layer = IdentityGate::new(
             self.layer_id(),
             self.wiring.clone(),
             source_mle,
-            num_dataparallel_vars,
+            self.total_num_vars,
+            self.num_dataparallel_vars,
         );
         id_gate_layer.into()
     }
@@ -336,31 +358,23 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             .get_data_from_circuit_mle(&self.source_mle)
             .unwrap();
 
-        let max_gate_val = self
-            .wiring
-            .iter()
-            .fold(&0, |acc, (z, _)| std::cmp::max(acc, z));
-
-        // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel vars, as we are
-        // evaluating over all values in the boolean hypercube which includes dataparallel vars
-        let num_dataparallel_vals = 1 << (self.num_dataparallel_vars);
-        let res_table_num_entries =
-            (((*max_gate_val as usize) + 1) * num_dataparallel_vals).next_power_of_two();
-
-        let num_gate_outputs_per_dataparallel_instance =
-            (*max_gate_val as usize + 1).next_power_of_two();
+        let res_table_num_entries = 1 << self.total_num_vars;
+        let num_entries_per_dataparallel_instance =
+            1 << (self.total_num_vars - self.num_dataparallel_vars);
         let mut remap_table = vec![F::ZERO; res_table_num_entries];
-        (0..num_dataparallel_vals).for_each(|idx| {
-            self.wiring.iter().for_each(|(z, x)| {
+
+        (0..(1 << self.num_dataparallel_vars)).for_each(|data_parallel_idx| {
+            self.wiring.iter().for_each(|(dest_idx, src_idx)| {
                 let id_val = source_mle_data
                     .f
                     .get(
-                        idx * (1 << (self.source_mle.num_free_vars() - self.num_dataparallel_vars))
-                            + (*x as usize),
+                        data_parallel_idx
+                            * (1 << (self.source_mle.num_free_vars() - self.num_dataparallel_vars))
+                            + (*src_idx as usize),
                     )
                     .unwrap_or(F::ZERO);
-                remap_table[num_gate_outputs_per_dataparallel_instance * idx + (*z as usize)] =
-                    id_val;
+                remap_table[num_entries_per_dataparallel_instance * data_parallel_idx
+                    + (*dest_idx as usize)] = id_val;
             });
         });
         let output_data = MultilinearExtension::new(remap_table);
@@ -470,6 +484,9 @@ pub struct VerifierIdentityGateLayer<F: Field> {
     /// The challenges for `x`, as derived from sumcheck.
     first_u_challenges: Vec<F>,
 
+    /// The total number of variables in the layer.
+    total_num_vars: usize,
+
     /// The number of dataparallel rounds.
     num_dataparallel_rounds: usize,
 
@@ -484,7 +501,6 @@ impl<F: Field> VerifierLayer<F> for VerifierIdentityGateLayer<F> {
 
     fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
         // Grab the claim on the left side.
-        // TODO!(ryancao): Do error handling here!
         let source_vars = self.source_mle.var_indices();
         let source_point = source_vars
             .iter()
@@ -794,6 +810,7 @@ pub struct IdentityGate<F: Field> {
     pub layer_id: LayerId,
     /// we only need a single incoming gate and a single outgoing gate so this is a
     /// tuple of 2 integers representing which label maps to which
+    /// Tuples are of form `(dest_idx, src_idx)`.
     pub nonzero_gates: Vec<(u32, u32)>,
     /// the mle ref in question from which we are selecting specific indices
     pub source_mle: DenseMle<F>,
@@ -813,17 +830,20 @@ pub struct IdentityGate<F: Field> {
     /// The MLE initialized in phase 1, which contains the beta values over `g1_challenges`
     /// folded into the wiring function.
     a_hg_mle_phase_1: Option<DenseMle<F>>,
+    /// The total number of variables in the layer.
+    pub total_num_vars: usize,
     /// The number of vars representing the number of "dataparallel" copies of the circuit.
     pub num_dataparallel_vars: usize,
 }
 
 impl<F: Field> IdentityGate<F> {
-    /// new addgate mle (wrapper constructor)
+    /// Create a new [IdentityGate] struct.
     pub fn new(
         layer_id: LayerId,
         nonzero_gates: Vec<(u32, u32)>,
         mle: DenseMle<F>,
-        num_dataparallel_vars: Option<usize>,
+        total_num_vars: usize,
+        num_dataparallel_vars: usize,
     ) -> IdentityGate<F> {
         IdentityGate {
             layer_id,
@@ -833,7 +853,8 @@ impl<F: Field> IdentityGate<F> {
             beta_g2: None,
             dataparallel_af2_mle: None,
             a_hg_mle_phase_1: None,
-            num_dataparallel_vars: num_dataparallel_vars.unwrap_or(0),
+            total_num_vars,
+            num_dataparallel_vars,
             g1_challenges: None,
             g2_challenges: None,
         }
