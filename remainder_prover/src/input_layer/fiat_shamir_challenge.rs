@@ -6,24 +6,9 @@ use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::RawClaim,
     layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension},
 };
-
-use crate::mle::Mle;
-use thiserror::Error;
-
-#[derive(Error, Clone, Debug)]
-/// The errors which can be encountered when constructing an input layer.
-pub enum FiatShamirChallengeError {
-    /// The point of the claim is too short.
-    #[error("Claim binds {0} variables, but MLE has only {1} variables")]
-    NumVarsMismatch(usize, usize),
-    /// The [FiatShamirChallenge] evaluation does not equal the claimed value.
-    #[error("Evaluation of MLE does not match the claimed value")]
-    EvaluationMismatch,
-}
 
 /// Represents a verifier challenge, where we generate random constants in the
 /// form of coefficients of an MLE that can be used e.g. for packing constants, or in logup, or
@@ -78,42 +63,6 @@ impl<F: Field> FiatShamirChallenge<F> {
     pub fn layer_id(&self) -> LayerId {
         self.layer_id
     }
-
-    /// On a copy of the underlying data, fix variables for each of the coordinates of the the point
-    /// in `claim`, and check whether the single element left in the bookkeeping table is equal to
-    /// the claimed value in `claim`.
-    pub fn verify(&self, claim: &RawClaim<F>) -> Result<(), FiatShamirChallengeError> {
-        let mle_evals = self.mle.to_vec();
-        let mut mle = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
-        mle.index_mle_indices(0);
-
-        if mle.num_free_vars() != claim.get_point().len() {
-            return Err(FiatShamirChallengeError::NumVarsMismatch(
-                claim.get_point().len(),
-                mle.num_free_vars(),
-            ));
-        }
-
-        let eval = if mle.num_free_vars() != 0 {
-            let mut eval = None;
-            for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
-                eval = mle.fix_variable(curr_bit, chal);
-            }
-            eval.unwrap()
-        } else {
-            RawClaim::new(vec![], mle.value())
-        };
-
-        // This is an internal error as it should never happen.
-        assert_eq!(eval.get_point(), claim.get_point());
-
-        // Check if the evaluation of the MLE matches the claimed value.
-        if eval.get_eval() == claim.get_eval() {
-            Ok(())
-        } else {
-            Err(FiatShamirChallengeError::EvaluationMismatch)
-        }
-    }
 }
 
 impl<F: Field> FiatShamirChallengeDescription<F> {
@@ -135,8 +84,10 @@ impl<F: Field> FiatShamirChallengeDescription<F> {
 
 #[cfg(test)]
 mod tests {
+    use crate::claims::RawClaim;
+    use crate::utils::mle::verify_claim;
+
     use super::*;
-    use remainder_shared_types::ff_field;
     use remainder_shared_types::{
         transcript::{
             test_transcript::TestSponge, ProverTranscript, TranscriptReader, TranscriptWriter,
@@ -158,7 +109,7 @@ mod tests {
         let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
             TranscriptWriter::new("Test Transcript Writer");
 
-        let claim_point = vec![Fr::ONE, Fr::ZERO];
+        let claim_point = vec![Fr::from(2), Fr::from(2)];
         let claim_result = Fr::from(1);
         let claim: RawClaim<Fr> = RawClaim::new(claim_point, claim_result);
 
@@ -184,6 +135,6 @@ mod tests {
         // 3. ... [skip] verify other layers.
 
         // 4. Verify this layer's commitment.
-        fiat_shamir_challenge.verify(&claim).unwrap();
+        verify_claim(&fiat_shamir_challenge.mle.to_vec(), &claim);
     }
 }

@@ -49,7 +49,6 @@ fn bench_pcs_commit(c: &mut Criterion) {
                             &data,
                             &committer,
                             &blinding_factors,
-                            None,
                         )
                     },
                     BatchSize::SmallInput,

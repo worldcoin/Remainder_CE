@@ -1,11 +1,10 @@
 use ark_std::log2;
 use bit_packed_vector::num_bits;
 use quickcheck::{Arbitrary, TestResult};
-use remainder_shared_types::{halo2curves::ff::Field, Fr, HasByteRepresentation};
-
-use crate::prover::{
-    config::GKRCircuitProverConfig,
-    global_config::{global_prover_enable_bit_packing, perform_function_under_prover_config},
+use remainder_shared_types::{
+    config::{global_config::global_prover_enable_bit_packing, GKRCircuitProverConfig},
+    halo2curves::ff::Field,
+    perform_function_under_prover_config, Fr, HasByteRepresentation,
 };
 
 use super::*;
@@ -148,7 +147,7 @@ fn test_bit_packed_vector_get_large_2() {
 /// correct representation re: number of bits of representation per
 /// element. The function is intended to be run under both "memory"-
 /// and "runtime"-optimized defaults.
-fn test_bit_packed_vector_get_bits_per_element(_: ()) {
+fn test_bit_packed_vector_get_bits_per_element() {
     let data1: Vec<Fr> = vec![Fr::from(42), Fr::from(42)];
     let bpv1 = BitPackedVector::new(&data1);
 
@@ -172,15 +171,13 @@ fn test_bit_packed_vector_get_bits_per_element(_: ()) {
 #[test]
 fn test_bit_packed_vector_get_bits_per_element_wrapper() {
     let memory_optimized_prover_config = GKRCircuitProverConfig::memory_optimized_default();
-    perform_function_under_prover_config(
+    perform_function_under_prover_config!(
         test_bit_packed_vector_get_bits_per_element,
-        (),
         &memory_optimized_prover_config,
     );
     let runtime_optimized_prover_config = GKRCircuitProverConfig::runtime_optimized_default();
-    perform_function_under_prover_config(
+    perform_function_under_prover_config!(
         test_bit_packed_vector_get_bits_per_element,
-        (),
         &runtime_optimized_prover_config,
     );
 }

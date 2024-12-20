@@ -2,12 +2,13 @@
 
 use std::iter::repeat_with;
 
-use itertools::{repeat_n, Itertools};
+use itertools::{repeat_n, FoldWhile, Itertools};
 use rand::Rng;
 use rayon::prelude::*;
 use remainder_shared_types::Field;
 
 use crate::{
+    claims::RawClaim,
     layer::LayerId,
     mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, MleIndex},
 };
@@ -62,6 +63,14 @@ pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) -> DenseMle
     let capacity = 2_u32.pow(num_vars as u32);
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()) * F::from(rng.gen::<u64>()))
         .take(capacity as usize)
+        .collect_vec();
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
+}
+
+/// Helper function to create random MLE with specific number of vars
+pub fn get_random_mle_from_capacity<F: Field>(capacity: usize, rng: &mut impl Rng) -> DenseMle<F> {
+    let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()) * F::from(rng.gen::<u64>()))
+        .take(capacity)
         .collect_vec();
     DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
 }
@@ -152,7 +161,9 @@ pub fn build_composite_mle<F: Field>(
             current_window /= 2;
             starting_index_acc
         });
-        assert_eq!(current_window, mle.len());
+        // REMARK: Modifying this check so that the input mles can be non-
+        // powers of 2.
+        assert_eq!(current_window, mle.len().next_power_of_two());
         (starting_index..(starting_index + current_window))
             .enumerate()
             .for_each(|(mle_idx, out_idx)| {
@@ -160,6 +171,36 @@ pub fn build_composite_mle<F: Field>(
             });
     }
     MultilinearExtension::new(out)
+}
+
+/// Verifies a claim by evaluating the MLE at the challenge point and checking
+/// that the result.
+pub fn verify_claim<F: Field>(mle_unpadded_evaluations: &[F], claim: &RawClaim<F>) {
+    let mle_evaluations = claim
+        .get_point()
+        .iter()
+        .fold_while(mle_unpadded_evaluations, |acc, elem| {
+            if elem == &F::ZERO {
+                let sliced_acc = &acc[..(acc.len() / 2)];
+                FoldWhile::Continue(sliced_acc)
+            } else if elem == &F::ONE {
+                let sliced_acc = &acc[(acc.len() / 2)..];
+                FoldWhile::Continue(sliced_acc)
+            } else {
+                FoldWhile::Done(acc)
+            }
+        })
+        .into_inner();
+    let filtered_claim = claim
+        .get_point()
+        .iter()
+        .skip_while(|x| (x == &&F::ZERO || x == &&F::ONE))
+        .copied()
+        .collect_vec();
+    let mle = MultilinearExtension::new(mle_evaluations.to_vec());
+    assert_eq!(mle.num_vars(), filtered_claim.len());
+    let eval = evaluate_mle_at_a_point_gray_codes(&mle, &filtered_claim);
+    assert_eq!(eval, claim.get_eval());
 }
 
 /// A struct representing an iterator that iterates through the range

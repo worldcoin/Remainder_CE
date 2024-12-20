@@ -2,17 +2,20 @@
 use crate::input_layer::ligero_input_layer::LigeroInputLayerDescriptionWithPrecommit;
 
 use crate::layer::LayerId;
-use crate::layouter::circuit_hash::CircuitHashType;
 use crate::mle::evals::MultilinearExtension;
-use crate::prover::global_config::global_verifier_circuit_description_hash_type;
 use crate::prover::verify;
 use ark_std::{end_timer, start_timer};
 
 use itertools::Itertools;
 
+use remainder_shared_types::circuit_hash::CircuitHashType;
+use remainder_shared_types::config::global_config::{
+    global_prover_circuit_description_hash_type, global_verifier_circuit_description_hash_type,
+};
+use remainder_shared_types::config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig};
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
-use remainder_shared_types::Field;
+use remainder_shared_types::{perform_function_under_expected_configs, Field};
 use serde_json;
 use sha3::Digest;
 use sha3::Sha3_256;
@@ -22,10 +25,6 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::BufWriter;
 use std::path::Path;
 
-use super::config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig};
-use super::global_config::{
-    global_prover_circuit_description_hash_type, perform_function_under_expected_configs,
-};
 use super::{prove, GKRCircuitDescription};
 
 /// Writes the circuit description for the provided [GKRCircuitDescription]
@@ -116,15 +115,13 @@ pub fn test_circuit_with_config<F: Field>(
     expected_prover_config: &GKRCircuitProverConfig,
     expected_verifier_config: &GKRCircuitVerifierConfig,
 ) {
-    perform_function_under_expected_configs(
+    perform_function_under_expected_configs!(
         test_circuit_internal,
-        (
-            circuit_description,
-            private_input_layer_description_and_precommits,
-            inputs,
-        ),
         expected_prover_config,
         expected_verifier_config,
+        circuit_description,
+        private_input_layer_description_and_precommits,
+        inputs
     )
 }
 
@@ -141,15 +138,13 @@ pub fn test_circuit_with_runtime_optimized_config<F: Field>(
     let expected_prover_config = GKRCircuitProverConfig::runtime_optimized_default();
     let expected_verifier_config =
         GKRCircuitVerifierConfig::new_from_prover_config(&expected_prover_config, false);
-    perform_function_under_expected_configs(
+    perform_function_under_expected_configs!(
         test_circuit_internal,
-        (
-            circuit_description,
-            private_input_layer_description_and_precommits,
-            inputs,
-        ),
         &expected_prover_config,
         &expected_verifier_config,
+        circuit_description,
+        private_input_layer_description_and_precommits,
+        inputs
     )
 }
 
@@ -165,26 +160,25 @@ pub fn test_circuit_with_memory_optimized_config<F: Field>(
     let expected_prover_config = GKRCircuitProverConfig::memory_optimized_default();
     let expected_verifier_config =
         GKRCircuitVerifierConfig::new_from_prover_config(&expected_prover_config, true);
-    perform_function_under_expected_configs(
+    perform_function_under_expected_configs!(
         test_circuit_internal,
-        (
-            circuit_description,
-            private_input_layer_description_and_precommits,
-            inputs,
-        ),
         &expected_prover_config,
         &expected_verifier_config,
+        circuit_description,
+        private_input_layer_description_and_precommits,
+        inputs
     )
 }
 
 /// Function which instantiates a circuit description with the given inputs
 /// and precommits and both attempts to both prove and verify said circuit.
 fn test_circuit_internal<F: Field>(
-    (circuit_description, private_input_layer_description_and_precommits, inputs): (
-        &GKRCircuitDescription<F>,
-        HashMap<LayerId, LigeroInputLayerDescriptionWithPrecommit<F>>,
-        &HashMap<LayerId, MultilinearExtension<F>>,
-    ),
+    circuit_description: &GKRCircuitDescription<F>,
+    private_input_layer_description_and_precommits: HashMap<
+        LayerId,
+        LigeroInputLayerDescriptionWithPrecommit<F>,
+    >,
+    inputs: &HashMap<LayerId, MultilinearExtension<F>>,
 ) {
     let mut transcript_writer =
         TranscriptWriter::<F, PoseidonSponge<F>>::new("GKR Prover Transcript");

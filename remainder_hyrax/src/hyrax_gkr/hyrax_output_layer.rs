@@ -6,6 +6,7 @@ use remainder::output_layer::{OutputLayer, OutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
+use serde::{Deserialize, Serialize};
 
 use super::hyrax_layer::HyraxClaim;
 
@@ -13,6 +14,8 @@ use super::hyrax_layer::HyraxClaim;
 /// doesn't need anything other than whether the challenges the
 /// output layer was evaluated on, so that the verifier can check
 /// whether these match the transcript.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxOutputLayerProof<C: PrimeOrderCurve> {
     /// The commitment to the claim that the output layer is making
     pub claim_commitment: C,
@@ -55,6 +58,10 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     /// This verify method does not do much: it takes the commitment to the evaluation provided by
     /// the prover, adds it to the transcript, and then returns a [HyraxClaim] that contains the
     /// challenges that it ITSELF draws from the transcript.
+    ///
+    /// Note that claims are generated from the `layer_desc`, not the `proof`!
+    /// This ensures that a prover cannot cheat by creating a valid proof whose
+    /// "shape" does not match that of the circuit description.
     pub fn verify(
         proof: &HyraxOutputLayerProof<C>,
         layer_desc: &OutputLayerDescription<C::Scalar>,
