@@ -95,15 +95,12 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         // Check there are the same number of claims as evaluation proofs
         assert_eq!(self.evaluation_proofs.len(), claim_commitments.len());
 
-        // Ensure that size of claim challenge point and input layer description
-        // length are equal.
-        assert_eq!(agg_claim.point.len(), input_layer_desc.num_vars);
-
         // Verify each evaluation proof
         claim_commitments
             .iter()
             .zip(&self.evaluation_proofs)
             .for_each(|(claim, (eval_point, eval_proof))| {
+                assert_eq!(claim.point.len(), input_layer_desc.num_vars);
                 assert_eq!(claim.point, *eval_point);
                 assert_eq!(claim.evaluation, eval_proof.commitment_to_evaluation);
                 eval_proof.verify(
