@@ -2,19 +2,16 @@ use std::collections::HashMap;
 
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
-use rand::Rng;
+use rand::{CryptoRng, Rng, RngCore};
 use remainder::{
-    claims::RawClaim,
-    input_layer::InputLayerDescription,
-    layer::LayerId,
-    mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
+    input_layer::InputLayerDescription, layer::LayerId, mle::evals::MultilinearExtension,
 };
+use remainder_shared_types::ff_field;
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
     pedersen::{CommittedScalar, PedersenCommitter},
     transcript::ec_transcript::ECTranscriptTrait,
 };
-use remainder_shared_types::{ff_field, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::hyrax_pcs::HyraxPCSEvaluationProof;
@@ -42,10 +39,10 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
     /// * `committed_claims` - The claims made on this layer (in any order)
     pub fn prove(
         input_layer_desc: &HyraxInputLayerDescription,
-        prover_commitment: &HyraxProverInputCommitment<C>,
+        prover_commitment: &mut HyraxProverInputCommitment<C>,
         committed_claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],
         committer: &PedersenCommitter<C>,
-        blinding_rng: &mut impl Rng,
+        blinding_rng: &mut (impl CryptoRng + RngCore),
         transcript: &mut impl ECTranscriptTrait<C>,
     ) -> Self {
         let eval_proof_timer = start_timer!(|| "eval proof timer");
@@ -63,7 +60,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                     committer,
                     blinding_rng,
                     transcript,
-                    &prover_commitment.blinding_factors_matrix,
+                    &mut prover_commitment.blinding_factors_matrix,
                 );
                 (claim.point.clone(), proof)
             })
@@ -100,6 +97,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             .iter()
             .zip(&self.evaluation_proofs)
             .for_each(|(claim, (eval_point, eval_proof))| {
+                assert_eq!(claim.point.len(), input_layer_desc.num_vars);
                 assert_eq!(claim.point, *eval_point);
                 assert_eq!(claim.evaluation, eval_proof.commitment_to_evaluation);
                 eval_proof.verify(
@@ -122,7 +120,7 @@ pub struct HyraxInputLayerDescription {
     /// The input layer ID.
     pub layer_id: LayerId,
     /// The number of variables this Hyrax Input Layer is on.
-    pub num_bits: usize,
+    pub num_vars: usize,
     /// The log number of columns in the matrix form of the data that will be
     /// committed to in this input layer.
     pub log_num_cols: usize,
@@ -144,7 +142,7 @@ impl HyraxInputLayerDescription {
         let log_num_cols = num_bits / 2;
         Self {
             layer_id,
-            num_bits,
+            num_vars: num_bits,
             log_num_cols,
         }
     }
@@ -166,7 +164,7 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
     committer: &PedersenCommitter<C>,
     mut rng: &mut impl Rng,
 ) -> HyraxProverInputCommitment<C> {
-    let num_rows = 1 << (input_layer_desc.num_bits - input_layer_desc.log_num_cols);
+    let num_rows = 1 << (input_layer_desc.num_vars - input_layer_desc.log_num_cols);
     // Sample the blinding factors
     let mut blinding_factors_matrix = vec![C::Scalar::ZERO; num_rows];
     blinding_factors_matrix
@@ -175,6 +173,7 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
         .for_each(|blinding_factor| {
             *blinding_factor = C::Scalar::random(&mut rng);
         });
+
     let mle_coeffs_vec = MultilinearExtension::new(input_mle.f.iter().collect_vec());
     let commitment_values = HyraxPCSEvaluationProof::compute_matrix_commitments(
         input_layer_desc.log_num_cols,
@@ -199,25 +198,4 @@ pub struct HyraxProverInputCommitment<C: PrimeOrderCurve> {
     pub commitment: Vec<C>,
     /// The blinding factors used in the commitment
     pub blinding_factors_matrix: Vec<C::Scalar>,
-}
-
-/// Verifies a claim by evaluating the MLE at the challenge point and checking
-/// that the result.
-pub fn verify_claim<F: Field>(mle_vec: &[F], claim: &RawClaim<F>) {
-    let mut mle = DenseMle::new_from_raw(mle_vec.to_vec(), LayerId::Input(0));
-    mle.index_mle_indices(0);
-
-    let eval = if mle.num_free_vars() != 0 {
-        let mut eval = None;
-        for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
-            eval = mle.fix_variable(curr_bit, chal);
-        }
-        debug_assert_eq!(mle.len(), 1);
-        eval.unwrap()
-    } else {
-        RawClaim::new(vec![], mle.mle.value())
-    };
-
-    assert_eq!(eval.get_point(), claim.get_point());
-    assert_eq!(eval.get_eval(), claim.get_eval());
 }

@@ -6,7 +6,7 @@ use crate::{
     utils::vandermonde::VandermondeInverse,
 };
 use itertools::Itertools;
-use rand::Rng;
+use rand::{CryptoRng, Rng, RngCore};
 use remainder::layer::product::{Intermediate, PostSumcheckLayer};
 use remainder::layer::Layer;
 use remainder::layer::LayerDescription;
@@ -94,7 +94,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // The output MLEs from this layer, whose bookkeeping tables combined make the layerwise bookkeeping table.
         output_mles_from_layer: Vec<DenseMle<C::Scalar>>,
         committer: &PedersenCommitter<C>,
-        mut blinding_rng: &mut impl Rng,
+        mut blinding_rng: &mut (impl CryptoRng + RngCore),
         transcript: &mut impl ECTranscriptTrait<C>,
         converter: &mut VandermondeInverse<C::Scalar>,
     ) -> (Self, Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>) {
@@ -257,7 +257,6 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // made on that layer, we take the max of the number of variables in the expression and
         // the number of variables in the beta table.
         let num_sumcheck_rounds_expected = layer_desc.sumcheck_round_indices().len();
-        let _sumcheck_round_indices = layer_desc.sumcheck_round_indices();
 
         // Verify the proof of sumcheck
         // Append first sumcheck message to transcript, which is the proported sum.

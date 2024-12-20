@@ -41,6 +41,7 @@ ff_field
     + Serialize
     + for<'de> Deserialize<'de>
     + HasByteRepresentation
+    + Zeroizable
 {
 }
 
@@ -52,7 +53,8 @@ impl<
             + Ord
             + Serialize
             + for<'de> Deserialize<'de>
-            + HasByteRepresentation,
+            + HasByteRepresentation
+            + Zeroizable,
     > Field for F
 {
 }
@@ -84,6 +86,11 @@ pub trait HasByteRepresentation {
     fn vec_from_bytes_le(bytes: &[u8]) -> Vec<Self>
     where
         Self: Sized;
+}
+
+/// A trait which allows zeroizing of Field elements.
+pub trait Zeroizable {
+    fn zeroize(&mut self);
 }
 
 /// Simple trait which allows for ease of converting e.g. a `Vec<u64>`
