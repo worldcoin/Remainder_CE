@@ -1,12 +1,15 @@
 use ark_std::{cfg_into_iter, cfg_iter};
 use itertools::Itertools;
-use rand::random;
 
 use std::{cmp::max, fmt::Debug};
 
 use crate::{
     mle::{betavalues::BetaValues, evals::MultilinearExtension, Mle},
     sumcheck::*,
+    utils::mle::{
+        compute_flipped_bit_idx_and_values_lexicographic, compute_next_beta_value_from_current,
+        compute_next_beta_values_vec_from_current,
+    },
 };
 use remainder_shared_types::Field;
 
@@ -411,89 +414,50 @@ pub fn compute_fully_bound_identity_gate_function<F: Field>(
                 // Between the previous input label and the next one, compute the
                 // flipped bits and their values in order to decide which inverses
                 // to multiply by.
-                let flipped_bits_round =
-                    current_nonzero_input_gate_label ^ next_nonzero_input_gate_label;
-                let mut flipped_bit_idx_and_values_round = Vec::<(u32, bool)>::new();
-                (0..32).for_each(|idx| {
-                    if (flipped_bits_round & (1 << idx)) != 0 {
-                        flipped_bit_idx_and_values_round
-                            .push((idx, (current_nonzero_input_gate_label & (1 << idx)) != 0))
-                    }
-                });
+                let flipped_bit_idx_and_values_round =
+                    compute_flipped_bit_idx_and_values_lexicographic(
+                        *current_nonzero_input_gate_label,
+                        *next_nonzero_input_gate_label,
+                    );
 
                 // We do the same thing for the previous output gate label and
                 // the next one.
-                let flipped_bits_claim =
-                    current_nonzero_output_gate_label ^ next_nonzero_output_gate_label;
-                let mut flipped_bit_idx_and_values_claim = Vec::<(u32, bool)>::new();
-                (0..32).for_each(|idx| {
-                    if (flipped_bits_claim & (1 << idx)) != 0 {
-                        flipped_bit_idx_and_values_claim
-                            .push((idx, (current_nonzero_output_gate_label & (1 << idx)) != 0))
-                    }
-                });
+                let flipped_bit_idx_and_values_claim =
+                    compute_flipped_bit_idx_and_values_lexicographic(
+                        *current_nonzero_output_gate_label,
+                        *next_nonzero_output_gate_label,
+                    );
 
                 // Compute the next beta value by multiplying the current ones
                 // by the appropriate inverses and elements -- this is
                 // specifically for the round challenges over the input labels
-                // as indices.
-                let n = nondataparallel_round_challenges.len();
-                let next_beta_value_round = flipped_bit_idx_and_values_round.iter().fold(
-                    // For each of the flipped bits, multiply by the
-                    // appropriate inverse depending on if the value was
-                    // previously 0 or 1.
-                    current_beta_value_round_challenges,
-                    |acc, (idx, value)| {
-                        if *value {
-                            acc * inverses_round_challenges[n - 1 - *idx as usize]
-                                * (F::ONE - nondataparallel_round_challenges[n - 1 - *idx as usize])
-                        } else {
-                            acc * (one_minus_elem_inverted_round_challenges[n - 1 - *idx as usize])
-                                * nondataparallel_round_challenges[n - 1 - *idx as usize]
-                        }
-                    },
+                // as indices. We know there is only one, so we directly index
+                // into our function.
+                let next_beta_value_round = compute_next_beta_value_from_current(
+                    &current_beta_value_round_challenges,
+                    &inverses_round_challenges,
+                    &one_minus_elem_inverted_round_challenges,
+                    nondataparallel_round_challenges,
+                    &flipped_bit_idx_and_values_round,
                 );
 
                 // Compute the next beta values by multiplying the current ones
                 // by the appropriate inverses and elements -- this is
                 // specifically for the claim challenges over the output labels
                 // as indices.
-                let next_beta_values_claim = current_beta_values_claim_challenges
-                    .iter()
-                    .zip(
-                        inverses_vec_claim_challenges
-                            .iter()
-                            .zip(one_minus_elem_inverted_vec_claim_challenges.iter()),
-                    )
-                    .zip(nondataparallel_claim_challenges_vec)
-                    .map(
-                        |((current_beta_value, (inverses, one_minus_inverses)), claim_point)| {
-                            let n = claim_point.len();
-                            let beta_val = flipped_bit_idx_and_values_claim.iter().fold(
-                                // For each of the flipped bits, multiply by the
-                                // appropriate inverse depending on if the value was
-                                // previously 0 or 1.
-                                *current_beta_value,
-                                |acc, (idx, value)| {
-                                    if *value {
-                                        acc * inverses[n - 1 - *idx as usize]
-                                            * (F::ONE - claim_point[n - 1 - *idx as usize])
-                                    } else {
-                                        dbg!(&one_minus_inverses[n - 1 - *idx as usize]);
-                                        acc * (one_minus_inverses[n - 1 - *idx as usize])
-                                            * claim_point[n - 1 - *idx as usize]
-                                    }
-                                },
-                            );
-                            beta_val
-                        },
-                    )
-                    .collect_vec();
+                let next_beta_values_claim = compute_next_beta_values_vec_from_current(
+                    &current_beta_values_claim_challenges,
+                    &inverses_vec_claim_challenges,
+                    &one_minus_elem_inverted_vec_claim_challenges,
+                    nondataparallel_claim_challenges_vec,
+                    &flipped_bit_idx_and_values_claim,
+                );
+
                 let rlc_over_claim_beta_values = next_beta_values_claim
                     .iter()
                     .zip(random_coefficients)
                     .fold(F::ZERO, |acc, (elem, random_coeff)| {
-                        (acc + (*elem * random_coeff))
+                        acc + (*elem * random_coeff)
                     });
 
                 // We accumulate by adding the previous value of \beta(g, z)
@@ -666,39 +630,17 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
             // Between the previous output label and the next one, compute the
             // flipped bits and their values in order to decide which inverses
             // to multiply by.
-            let flipped_bits = current_nonzero_output_gate_label ^ next_nonzero_output_gate_label;
-            let mut flipped_bit_idx_and_values = Vec::<(u32, bool)>::new();
-            (0..32).for_each(|idx| {
-                if (flipped_bits & (1 << idx)) != 0 {
-                    flipped_bit_idx_and_values
-                        .push((idx, (current_nonzero_output_gate_label & (1 << idx)) != 0))
-                }
-            });
-            let next_beta_values = current_beta_values
-                .iter()
-                .zip(inverses_vec.iter().zip(one_minus_inverses_vec.iter()))
-                .zip(claim_points)
-                .map(
-                    |((current_beta_value, (inverses, one_minus_inverses)), claim_point)| {
-                        let beta_val = flipped_bit_idx_and_values.iter().fold(
-                            // For each of the flipped bits, multiply by the
-                            // appropriate inverse depending on if the value was
-                            // previously 0 or 1.
-                            *current_beta_value,
-                            |acc, (idx, value)| {
-                                if *value {
-                                    acc * inverses[n - 1 - *idx as usize]
-                                        * (F::ONE - claim_point[n - 1 - *idx as usize])
-                                } else {
-                                    acc * (one_minus_inverses[n - 1 - *idx as usize])
-                                        * claim_point[n - 1 - *idx as usize]
-                                }
-                            },
-                        );
-                        beta_val
-                    },
-                )
-                .collect_vec();
+            let flipped_bit_idx_and_values = compute_flipped_bit_idx_and_values_lexicographic(
+                current_nonzero_output_gate_label,
+                *next_nonzero_output_gate_label,
+            );
+            let next_beta_values = compute_next_beta_values_vec_from_current(
+                &current_beta_values,
+                &inverses_vec,
+                &one_minus_inverses_vec,
+                claim_points,
+                &flipped_bit_idx_and_values,
+            );
 
             let beta_values_rlc = next_beta_values
                 .iter()
