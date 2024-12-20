@@ -29,6 +29,8 @@ fn sanity_check_test_honest_prover_small_identity() {
         MultilinearExtension::new((0..4).map(|_| Scalar::one()).collect_vec());
     let challenge_coordinates = (0..2).map(|_| Scalar::one()).collect_vec();
     let mle_evaluation_at_challenge = Scalar::one();
+    let mle_eval_commit =
+        committer.committed_scalar(&mle_evaluation_at_challenge, &Scalar::from(2089139));
     let log_split_point = 1;
     let prover_random_generator = &mut rand::thread_rng();
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -47,7 +49,7 @@ fn sanity_check_test_honest_prover_small_identity() {
         log_split_point,
         &input_layer_mle_coeff,
         &challenge_coordinates,
-        &mle_evaluation_at_challenge,
+        &mle_eval_commit,
         &committer_copy,
         prover_random_generator,
         &mut transcript,
@@ -82,6 +84,8 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
         MultilinearExtension::new((0..8).map(|_| Scalar::one()).collect_vec());
     let challenge_coordinates = (0..3).map(|_| Scalar::one()).collect_vec();
     let mle_evaluation_at_challenge = Scalar::one();
+    let mle_eval_commit =
+        committer.committed_scalar(&mle_evaluation_at_challenge, &Scalar::from(2089139));
 
     let log_split_point = 1;
     let prover_random_generator = &mut rand::thread_rng();
@@ -101,7 +105,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
         log_split_point,
         &input_layer_mle_coeff,
         &challenge_coordinates,
-        &mle_evaluation_at_challenge,
+        &mle_eval_commit,
         &committer_copy,
         prover_random_generator,
         &mut transcript,
@@ -158,6 +162,10 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         .fold(Scalar::zero(), |acc, (mle_coeff, challenge_eval)| {
             acc + (*mle_coeff * challenge_eval)
         });
+    let mle_eval_commit = committer.committed_scalar(
+        &mle_evaluation_at_challenge,
+        &Scalar::from(rand::random::<u64>()),
+    );
     let log_split_point = 1;
     let prover_random_generator = &mut rand::thread_rng();
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -178,7 +186,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         log_split_point,
         &input_layer_mle_coeff,
         &challenge_coordinates,
-        &mle_evaluation_at_challenge,
+        &mle_eval_commit,
         &committer_copy,
         prover_random_generator,
         &mut transcript,
@@ -196,7 +204,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
     );
 }
 
-#[ignore] // takes a long time to run!
+// #[ignore] // takes a long time to run!
 #[test]
 /// test on a 2^9 x 2^9 matrix with all random elements
 fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
@@ -229,6 +237,10 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         .fold(Scalar::zero(), |acc, (mle_coeff, challenge_eval)| {
             acc + (*mle_coeff * challenge_eval)
         });
+    let mle_eval_commit = committer.committed_scalar(
+        &mle_evaluation_at_challenge,
+        &Scalar::from(rand::random::<u64>()),
+    );
     let log_split_point = 9;
     let prover_random_generator = &mut rand::thread_rng();
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -249,7 +261,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         log_split_point,
         &input_layer_mle_coeff,
         &challenge_coordinates,
-        &mle_evaluation_at_challenge,
+        &mle_eval_commit,
         &committer_copy,
         prover_random_generator,
         &mut transcript,
