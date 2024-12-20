@@ -35,11 +35,11 @@ prod:  ## Build worldcoin binary for production; optimizations + rayon paralleli
 prod-seq:  ## Similar to 'prod', but NO rayon parallelism.
 	cargo build --release --bin worldcoin
 
-bin:  ## Build worldcoin binary for efficient debugging; optimizations + rayon parallelism + print-trace.
-	cargo build --bin worldcoin --release --features "parallel, print-trace"
+bin:  ## Build the binaries for efficient debugging; optimizations + rayon parallelism + print-trace.
+	cargo build --bins --release --features "parallel, print-trace"
 
 bin-seq:  ## Similar to "make bin", but NO rayon parallelism.
-	cargo build --bin worldcoin --release --features "parallel, print-trace"
+	cargo build --bins --release --features "parallel, print-trace"
 
 bench:  ## Use Valgrind to profile memory usage, for worldcoin ic circuit. Example - make bench name=v2.0
 	cargo build --profile=opt-with-debug --bin worldcoin
@@ -52,6 +52,12 @@ bench-mpc:  ## Use Valgrind to profile memory usage, for worldcoin mpc circuit. 
 	mkdir -p massif
 	valgrind --tool=massif --massif-out-file=massif/massif.mpc.out --pages-as-heap=yes ./target/opt-with-debug/worldcoin_mpc
 	ms_print massif/massif.mpc.out | less
+
+bench-single:  ## Use Valgrind to profile memory usage of the proving and verifying of a single iriscode circuit (i.e. just one eye, just iris).
+	cargo build --profile=opt-with-debug --bin run_iriscode_circuit
+	mkdir -p massif
+	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/run_iriscode_circuit --image-filepath remainder_prover/src/worldcoin/constants/v3-split-images/iris/test_image.bin
+	ms_print massif/massif.$(name).out | less
 
 mobile:  ## Compile worldcoin binary optimized for binary size.
 	cargo build --profile mobile --bin worldcoin
