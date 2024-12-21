@@ -1,5 +1,6 @@
 use ark_std::{cfg_into_iter, cfg_iter};
 use itertools::Itertools;
+use rand::random;
 
 use std::{cmp::max, fmt::Debug};
 
@@ -739,7 +740,30 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
     operation: BinaryOperation,
     wiring: &[(usize, usize, usize)],
     num_dataparallel_bits: usize,
+    g2_challenges_vec: &[&[F]],
+    g1_challenges_vec: &[&[F]],
+    random_coefficients: &[F],
 ) -> Result<Vec<F>, GateError> {
+    let (g2_inverses_vec, g2_one_minus_elem_inverted_vec): (Vec<Vec<F>>, Vec<Vec<F>>) =
+        g2_challenges_vec
+            .iter()
+            .map(|g2_challenge_vec| {
+                g2_challenge_vec
+                    .iter()
+                    .map(|elem| (elem.invert().unwrap(), (F::ONE - elem).invert().unwrap()))
+                    .unzip()
+            })
+            .unzip();
+    let (g1_inverses_vec, g1_one_minus_elem_inverted_vec): (Vec<Vec<F>>, Vec<Vec<F>>) =
+        g1_challenges_vec
+            .iter()
+            .map(|g1_challenge_vec| {
+                g1_challenge_vec
+                    .iter()
+                    .map(|elem| (elem.invert().unwrap(), (F::ONE - elem).invert().unwrap()))
+                    .unzip()
+            })
+            .unzip();
     // When we have an add gate, we can distribute the beta table over the
     // dataparallel challenges so we only multiply to the function with the x
     // variables or y variables one at a time. When we have a mul gate, we have
@@ -759,32 +783,97 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
     // Iterate across all pairs of evaluations.
     let evals = cfg_into_iter!((0..num_dataparallel_copies_mid)).fold(
         #[cfg(feature = "parallel")]
-        || vec![F::ZERO; eval_count],
+        || (vec![F::ZERO; eval_count], None::<(Vec<F>, Vec<F>, usize)>),
         #[cfg(not(feature = "parallel"))]
-        vec![F::ZERO; eval_count],
-        |mut acc, p2_idx| {
+        (vec![F::ZERO; eval_count], None::<(Vec<F>, Vec<F>, usize)>),
+        |(mut acc, maybe_current_beta_aux), p2_idx| {
+            let next_beta_g2_values = if maybe_current_beta_aux.is_some() {
+                let (_, current_beta_g2_values, curr_p2_idx) =
+                    maybe_current_beta_aux.as_ref().unwrap();
+                let flipped_bit_idx_and_values =
+                    compute_flipped_bit_idx_and_values_lexicographic(*curr_p2_idx as u32, p2_idx);
+                compute_next_beta_values_vec_from_current(
+                    current_beta_g2_values,
+                    &g2_inverses_vec,
+                    &g2_one_minus_elem_inverted_vec,
+                    g2_challenges_vec,
+                    &flipped_bit_idx_and_values,
+                )
+            } else {
+                g2_challenges_vec
+                    .iter()
+                    .map(|g2_challenges| {
+                        BetaValues::compute_beta_over_challenge_and_index(
+                            g2_challenges,
+                            p2_idx as usize,
+                        )
+                    })
+                    .collect_vec()
+            };
             // Compute the beta successors the same way it's done for each mle.
             // Do it outside the loop because it only needs to be done once per
             // product of mles.
-            let first = beta_g2.get(p2_idx).unwrap();
-            let second = if beta_g2.len() > 1 {
-                beta_g2.get(p2_idx + num_dataparallel_copies_mid).unwrap()
+            let first_rlc_of_beta_g2 = next_beta_g2_values
+                .iter()
+                .zip(random_coefficients)
+                .fold(F::ZERO, |acc, (curr_beta, random_coeff)| {
+                    acc + *curr_beta * random_coeff
+                });
+            let second_rlc_of_beta_g2 = if !g2_challenges_vec[0].is_empty() {
+                next_beta_g2_values
+                    .iter()
+                    .zip(random_coefficients)
+                    .zip(g2_one_minus_elem_inverted_vec.iter().zip(g2_challenges_vec))
+                    .fold(
+                        F::ZERO,
+                        |acc, ((curr_beta, random_coeff), (one_minus_elem_inverted, g2_chal))| {
+                            let multiplier = *curr_beta * one_minus_elem_inverted[0] * g2_chal[0];
+                            acc + *curr_beta * random_coeff * multiplier
+                        },
+                    )
             } else {
-                first
+                first_rlc_of_beta_g2
             };
-            let step = second - first;
+            let step = second_rlc_of_beta_g2 - first_rlc_of_beta_g2;
 
-            let beta_successors_snd =
-                std::iter::successors(Some(second), move |item| Some(*item + step));
             // Iterator that represents all evaluations of the MLE extended to
             // arbitrarily many linear extrapolations on the line of 0/1.
-            let beta_successors = std::iter::once(first).chain(beta_successors_snd);
+            let beta_successors =
+                std::iter::successors(Some(first_rlc_of_beta_g2), move |item| Some(*item + step));
             let beta_iter: Box<dyn Iterator<Item = F>> = Box::new(beta_successors);
 
             let inner_sum_successors = wiring
                 .iter()
                 .copied()
                 .map(|(z, x, y)| {
+                    let mut curr_z_idx = z;
+                    let next_beta_g1_values = if maybe_current_beta_aux.is_some() {
+                        let (current_beta_g1_values, _, _) =
+                            maybe_current_beta_aux.as_ref().unwrap();
+                        let flipped_bit_idx_and_values =
+                            compute_flipped_bit_idx_and_values_lexicographic(
+                                curr_z_idx as u32,
+                                z as u32,
+                            );
+                        compute_next_beta_values_vec_from_current(
+                            current_beta_g1_values,
+                            &g1_inverses_vec,
+                            &g1_one_minus_elem_inverted_vec,
+                            g1_challenges_vec,
+                            &flipped_bit_idx_and_values,
+                        )
+                    } else {
+                        g1_challenges_vec
+                            .iter()
+                            .map(|g1_challenges| {
+                                BetaValues::compute_beta_over_challenge_and_index(
+                                    g1_challenges,
+                                    z as usize,
+                                )
+                            })
+                            .collect_vec()
+                    };
+
                     let g1_z = beta_g1.get(z).unwrap();
                     let g1_z_successors = std::iter::successors(Some(g1_z), move |_| Some(g1_z));
 
@@ -792,12 +881,16 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                     // is big-endian, so we shift by idx * (number of non
                     // dataparallel vars) to index into the correct copy.
                     let f2_0_p2_x = f2_p2_x
-                        .get(p2_idx * (1 << (f2_p2_x.num_free_vars() - num_dataparallel_bits)) + x)
+                        .get(
+                            (p2_idx as usize)
+                                * (1 << (f2_p2_x.num_free_vars() - num_dataparallel_bits))
+                                + x,
+                        )
                         .unwrap();
                     let f2_1_p2_x = if f2_p2_x.num_free_vars() != 0 {
                         f2_p2_x
                             .get(
-                                (p2_idx + num_dataparallel_copies_mid)
+                                ((p2_idx + num_dataparallel_copies_mid) as usize)
                                     * (1 << (f2_p2_x.num_free_vars() - num_dataparallel_bits))
                                     + x,
                             )

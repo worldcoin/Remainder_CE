@@ -120,37 +120,16 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         transcript_writer: &mut impl ProverTranscript<F>,
         random_coefficients: &[F],
     ) -> Result<(), LayerError> {
-        let mut sumcheck_rounds = vec![];
-        let (mut beta_g1, mut beta_g2) = self.compute_beta_tables(claim.get_point());
-        let mut beta_g2_fully_bound = F::ONE;
-        // We perform the dataparallel initialization only if there is at least one variable
-        // representing which copy we are in.
-        if self.num_dataparallel_vars > 0 {
-            let (dataparallel_rounds, beta_g2_bound) = self
-                .perform_dataparallel_phase(&mut beta_g1, &mut beta_g2, transcript_writer)
+        self.initialize(claim.get_point())?;
+        let sumcheck_indices = self.sumcheck_round_indices();
+        (sumcheck_indices.iter()).for_each(|round_idx| {
+            let sumcheck_message = self
+                .compute_round_sumcheck_message(*round_idx, random_coefficients)
                 .unwrap();
-            beta_g2_fully_bound = beta_g2_bound;
-            sumcheck_rounds.extend(dataparallel_rounds.0);
-        }
-        // We perform the rounds binding "x" variables (phase 1) and the rounds binding "y" variables (phase 2) in sequence.
-        let (phase_1_rounds, f2_at_u, u_challenges) = self
-            .perform_phase_1(
-                claim.get_point()[self.num_dataparallel_vars..].to_vec(),
-                beta_g2_fully_bound,
-                transcript_writer,
-            )
-            .unwrap();
-        let phase_2_rounds = self
-            .perform_phase_2(
-                f2_at_u,
-                u_challenges,
-                beta_g1,
-                beta_g2_fully_bound,
-                transcript_writer,
-            )
-            .unwrap();
-        sumcheck_rounds.extend(phase_1_rounds.0);
-        sumcheck_rounds.extend(phase_2_rounds.0);
+            transcript_writer.append_elements("Round sumcheck message", &sumcheck_message);
+            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            self.bind_round_variable(*round_idx, challenge).unwrap();
+        });
 
         // Finally, send the claimed values for each of the bound MLEs to the verifier
         // First, send the claimed value of V_{i + 1}(g_2, u)
@@ -283,8 +262,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 let init_mles: Vec<Vec<&DenseMle<F>>> = phase_1_mles
                     .iter()
                     .map(|mle_vec| {
-                        let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                        mleerences
+                        let mle_reference: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                        mle_reference
                     })
                     .collect();
                 let evals_vec = init_mles
@@ -325,8 +304,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                         .unwrap()
                         .iter()
                         .map(|mle_vec| {
-                            let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                            mleerences
+                            let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                            mle_references
                         })
                         .collect();
 
@@ -425,8 +404,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     let init_mles: Vec<Vec<&DenseMle<F>>> = phase_2_mles
                         .iter()
                         .map(|mle_vec| {
-                            let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                            mleerences
+                            let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                            mle_references
                         })
                         .collect();
                     let evals_vec = init_mles
@@ -467,8 +446,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                             .unwrap()
                             .iter()
                             .map(|mle_vec| {
-                                let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                                mleerences
+                                let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                                mle_references
                             })
                             .collect();
 
@@ -1427,8 +1406,8 @@ impl<F: Field> GateLayer<F> {
         let init_mles: Vec<Vec<&DenseMle<F>>> = phase_1_mles
             .iter()
             .map(|mle_vec| {
-                let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                mleerences
+                let mle_referen: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                mle_referen
             })
             .collect();
         let evals_vec = init_mles
@@ -1514,8 +1493,8 @@ impl<F: Field> GateLayer<F> {
         let init_mles: Vec<Vec<&DenseMle<F>>> = phase_2_mles
             .iter()
             .map(|mle_vec| {
-                let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                mleerences
+                let mle_referen: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                mle_referen
             })
             .collect();
         let evals_vec = init_mles
@@ -1629,8 +1608,8 @@ impl<F: Field> GateLayer<F> {
                 let phase_1_mles: Vec<Vec<&DenseMle<F>>> = phase_1_mles
                     .iter()
                     .map(|mle_vec| {
-                        let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                        mleerences
+                        let mle_reference: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                        mle_reference
                     })
                     .collect();
                 let eval = compute_sumcheck_message_gate(
@@ -1704,8 +1683,8 @@ impl<F: Field> GateLayer<F> {
                     let phase_2_mles: Vec<Vec<&DenseMle<F>>> = phase_2_mles
                         .iter()
                         .map(|mle_vec| {
-                            let mleerences: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                            mleerences
+                            let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                            mle_references
                         })
                         .collect();
                     let eval = compute_sumcheck_message_gate(

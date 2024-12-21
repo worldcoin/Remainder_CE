@@ -209,15 +209,18 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         let expression = &mut self.expression;
         let expression_all_indices = expression.get_all_rounds();
 
-        claims.iter().map(|claim| {
-            let claim_point = claim.get_point();
-            let betavec = expression_all_indices
-                .iter()
-                .map(|idx| (*idx, claim_point[*idx]))
-                .collect_vec();
-            let newbeta = BetaValues::new(betavec);
-            self.beta_vals_vec = Some(vec![newbeta]);
-        });
+        let beta_vals_vec = claims
+            .iter()
+            .map(|claim| {
+                let claim_point = claim.get_point();
+                let betavec = expression_all_indices
+                    .iter()
+                    .map(|idx| (*idx, claim_point[*idx]))
+                    .collect_vec();
+                BetaValues::new(betavec)
+            })
+            .collect();
+        self.beta_vals_vec = Some(beta_vals_vec);
     }
 
     fn compute_round_sumcheck_message(

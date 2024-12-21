@@ -429,13 +429,14 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         random_coefficients: &[F],
     ) -> Result<(), LayerError> {
         self.initialize(claim.get_point())?;
-        (0..self.source_mle.num_free_vars()).for_each(|round_idx| {
+        let sumcheck_indices = self.sumcheck_round_indices();
+        (sumcheck_indices.iter()).for_each(|round_idx| {
             let sumcheck_message = self
-                .compute_round_sumcheck_message(round_idx, random_coefficients)
+                .compute_round_sumcheck_message(*round_idx, random_coefficients)
                 .unwrap();
             transcript_writer.append_elements("Round sumcheck message", &sumcheck_message);
             let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-            self.bind_round_variable(round_idx, challenge).unwrap();
+            self.bind_round_variable(*round_idx, challenge).unwrap();
         });
         self.append_leaf_mles_to_transcript(transcript_writer);
         Ok(())
@@ -514,23 +515,6 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         round_index: usize,
         random_coefficients: &[F],
     ) -> Result<Vec<F>, LayerError> {
-        let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
-            self.beta_g2_vec
-                .as_ref()
-                .unwrap()
-                .iter()
-                .zip(random_coefficients)
-                .fold(F::ZERO, |rlc_acc, (beta_values, random_coeff)| {
-                    rlc_acc
-                        + (beta_values
-                            .updated_values
-                            .values()
-                            .fold(F::ONE, |acc, val| acc * *val)
-                            * random_coeff)
-                })
-        } else {
-            F::ONE
-        };
         match round_index.cmp(&self.num_dataparallel_vars) {
             // Dataparallel phase.
             Ordering::Less => {
@@ -545,6 +529,23 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
             // Initialize phase 1.
             Ordering::Equal => {
+                let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
+                    self.beta_g2_vec
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .zip(random_coefficients)
+                        .fold(F::ZERO, |rlc_acc, (beta_values, random_coeff)| {
+                            rlc_acc
+                                + (beta_values
+                                    .updated_values
+                                    .values()
+                                    .fold(F::ONE, |acc, val| acc * *val)
+                                    * random_coeff)
+                        })
+                } else {
+                    F::ONE
+                };
                 let mles: Vec<&DenseMle<F>> =
                     vec![&self.a_hg_mle_phase_1.as_ref().unwrap(), &self.source_mle];
                 let independent_variable = mles
@@ -565,6 +566,23 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
             // Phase 1.
             Ordering::Greater => {
+                let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
+                    self.beta_g2_vec
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .zip(random_coefficients)
+                        .fold(F::ZERO, |rlc_acc, (beta_values, random_coeff)| {
+                            rlc_acc
+                                + (beta_values
+                                    .updated_values
+                                    .values()
+                                    .fold(F::ONE, |acc, val| acc * *val)
+                                    * random_coeff)
+                        })
+                } else {
+                    F::ONE
+                };
                 let mles: Vec<&DenseMle<F>> =
                     vec![&self.a_hg_mle_phase_1.as_ref().unwrap(), &self.source_mle];
                 let independent_variable = mles
