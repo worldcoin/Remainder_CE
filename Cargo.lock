@@ -1633,6 +1633,7 @@ dependencies = [
  "sha3 0.10.8",
  "thiserror",
  "tracing",
+ "zeroize",
 ]
 
 [[package]]

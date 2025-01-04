@@ -436,6 +436,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
 
     /// Compute the evaluations of the MLE that represents the
     /// product of the two matrices over the boolean hypercube.
+    /// Panics if the MLEs for the two matrices provided by the circuit map are of the wrong size.
     fn compute_data_outputs(
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
@@ -447,9 +448,19 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         let matrix_a_data = circuit_map
             .get_data_from_circuit_mle(&self.matrix_a.mle)
             .unwrap();
+        assert_eq!(
+            matrix_a_data.num_vars(),
+            self.matrix_a.rows_num_vars + self.matrix_a.cols_num_vars
+        );
+
         let matrix_b_data = circuit_map
             .get_data_from_circuit_mle(&self.matrix_b.mle)
             .unwrap();
+        assert_eq!(
+            matrix_b_data.num_vars(),
+            self.matrix_b.rows_num_vars + self.matrix_b.cols_num_vars
+        );
+
         let product = product_two_matrices_from_flattened_vectors(
             &matrix_a_data.to_vec(),
             &matrix_b_data.to_vec(),
