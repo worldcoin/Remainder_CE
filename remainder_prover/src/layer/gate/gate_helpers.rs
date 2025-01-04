@@ -712,6 +712,9 @@ pub fn prove_round_dataparallel_phase<F: Field>(
     wiring: &[(usize, usize, usize)],
     num_dataparallel_bits: usize,
     operation: BinaryOperation,
+    g2_challenges_vec: &[&[F]],
+    g1_challenges_vec: &[&[F]],
+    random_coefficients: &[F],
 ) -> Result<Vec<F>, GateError> {
     beta_g2.fix_variable(challenge);
     // Need to separately update these because the phase_lhs and phase_rhs has
@@ -726,6 +729,9 @@ pub fn prove_round_dataparallel_phase<F: Field>(
         operation,
         wiring,
         num_dataparallel_bits,
+        g2_challenges_vec,
+        g1_challenges_vec,
+        random_coefficients,
     )
 }
 
