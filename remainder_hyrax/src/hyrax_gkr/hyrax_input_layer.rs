@@ -6,12 +6,12 @@ use rand::{CryptoRng, Rng, RngCore};
 use remainder::{
     input_layer::InputLayerDescription, layer::LayerId, mle::evals::MultilinearExtension,
 };
-use remainder_shared_types::ff_field;
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
     pedersen::{CommittedScalar, PedersenCommitter},
     transcript::ec_transcript::ECTranscriptTrait,
 };
+use remainder_shared_types::{ff_field, Zeroizable};
 use serde::{Deserialize, Serialize};
 
 use crate::hyrax_pcs::HyraxPCSEvaluationProof;
@@ -65,6 +65,13 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                 (claim.point.clone(), proof)
             })
             .collect_vec();
+        // Zeroize each of the blinding factors once we have committed to all of the claims.
+        prover_commitment
+            .blinding_factors_matrix
+            .iter_mut()
+            .for_each(|blinding_factor| {
+                blinding_factor.zeroize();
+            });
         end_timer!(eval_proof_timer);
 
         HyraxInputLayerProof {
@@ -173,7 +180,6 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
         .for_each(|blinding_factor| {
             *blinding_factor = C::Scalar::random(&mut rng);
         });
-
     let mle_coeffs_vec = MultilinearExtension::new(input_mle.f.iter().collect_vec());
     let commitment_values = HyraxPCSEvaluationProof::compute_matrix_commitments(
         input_layer_desc.log_num_cols,
