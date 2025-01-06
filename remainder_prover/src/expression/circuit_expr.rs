@@ -158,7 +158,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
         &self,
         point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<ExpressionNode<F>> {
+    ) -> Result<ExpressionNode<F, _>> {
         match self {
             ExpressionNode::Constant(scalar) => Ok(ExpressionNode::Constant(*scalar)),
             ExpressionNode::Selector(index, lhs, rhs) => match index {
