@@ -17,7 +17,7 @@ use itertools::Itertools;
 use remainder_shared_types::Field;
 use thiserror::Error;
 
-use anyhow::{Context, Ok, Result};
+use anyhow::{anyhow, Ok, Result};
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -136,7 +136,7 @@ pub fn combine_mles_with_aggregate<F: Field>(mles: &[DenseMle<F>], chal_point: &
     // should only have one value in it since we were binding variables as we
     // were combining.
     if updated_list.len() > 1 {
-        return Err(CombineMleRefError::NotFullyCombined).with_context(|| "");
+        return Err(anyhow!(CombineMleRefError::NotFullyCombined));
     }
     let (full_eval, prefix_bits) = &updated_list[0];
     assert_eq!(

@@ -32,7 +32,7 @@ use super::{
     generic_expr::{Expression, ExpressionNode, ExpressionType},
 };
 
-use anyhow::{Context, Ok, Result};
+use anyhow::{anyhow, Ok, Result};
 
 /// Placeholder type for defining `Expression<F, VerifierExpr>`, the type used
 /// for representing expressions for the Verifier.
@@ -67,7 +67,7 @@ impl<F: Field> Expression<F, VerifierExpr> {
             if let MleIndex::Bound(val, _) = idx {
                 return Ok(*val * rhs? + (F::ONE - val) * lhs?);
             }
-            Err(ExpressionError::SelectorBitNotBoundError).with_context(|| "")
+            Err(anyhow!(ExpressionError::SelectorBitNotBoundError))
         };
         let mle_eval = |verifier_mle: &VerifierMle<F>| -> Result<F> { Ok(verifier_mle.value()) };
         let negated = |val: Result<F>| Ok((val?).neg());

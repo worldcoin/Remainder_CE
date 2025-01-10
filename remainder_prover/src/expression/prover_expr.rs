@@ -30,7 +30,7 @@ use std::{
     ops::{Add, Mul, Neg, Sub},
 };
 
-use anyhow::{Context, Ok, Result};
+use anyhow::{anyhow, Ok, Result};
 
 /// mid-term solution for deduplication of DenseMleRefs
 /// basically a wrapper around usize, which denotes the index
@@ -260,7 +260,7 @@ impl<F: Field> Expression<F, ProverExpr> {
                     if indices.as_slice() == &challenges[start..=end] {
                         Ok(())
                     } else {
-                        Err(ExpressionError::EvaluateBoundIndicesDontMatch).with_context(|| "")
+                        Err(anyhow!(ExpressionError::EvaluateBoundIndicesDontMatch))
                     }
                 }
                 ExpressionNode::Product(mle_vec_indices) => {
@@ -288,8 +288,7 @@ impl<F: Field> Expression<F, ProverExpr> {
                             if indices.as_slice() == &challenges[start..=end] {
                                 Ok(())
                             } else {
-                                Err(ExpressionError::EvaluateBoundIndicesDontMatch)
-                                    .with_context(|| "")
+                                Err(anyhow!(ExpressionError::EvaluateBoundIndicesDontMatch))
                             }
                         })
                         .try_collect()
@@ -415,7 +414,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 // [remainder::mle::dense::Dense::value] which performs the
                 // necessary checks and panics if the MLE is not fully-bound.
                 if mle.len() != 1 {
-                    return Err(ExpressionError::EvaluateNotFullyBoundError).with_context(|| "");
+                    return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
                 }
 
                 let layer_id = mle.layer_id();
@@ -445,8 +444,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 // remove.
                 for mle in mles.iter() {
                     if mle.len() != 1 {
-                        return Err(ExpressionError::EvaluateNotFullyBoundError)
-                            .with_context(|| "");
+                        return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
                     }
                 }
 

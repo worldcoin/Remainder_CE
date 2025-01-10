@@ -26,7 +26,7 @@ use crate::{
     sumcheck::evaluate_at_a_point,
 };
 
-use anyhow::{Ok, Result};
+use anyhow::{anyhow, Ok, Result};
 
 /// Used to represent a matrix; basically an MLE which is the
 /// flattened version of this matrix along with the log2
@@ -404,7 +404,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
             let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
 
             if g_i_zero + g_i_one != g_prev_r_prev {
-                return Err(VerificationError::SumcheckFailed)?;
+                return Err(anyhow!(VerificationError::SumcheckFailed));
             }
 
             g_prev_round = g_cur_round;
@@ -424,7 +424,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         let matrix_product = verifier_layer.evaluate();
 
         if g_final_r_final != matrix_product {
-            return Err(VerificationError::FinalSumcheckFailed)?;
+            return Err(anyhow!(VerificationError::FinalSumcheckFailed));
         }
 
         Ok(VerifierLayerEnum::MatMult(verifier_layer))

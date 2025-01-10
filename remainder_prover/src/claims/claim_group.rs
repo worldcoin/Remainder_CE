@@ -18,7 +18,7 @@ use crate::{
 
 use super::{Claim, RawClaim};
 
-use anyhow::{Context, Ok, Result};
+use anyhow::{anyhow, Ok, Result};
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -67,7 +67,7 @@ impl<F: Field> ClaimGroup<F> {
             .iter()
             .all(|claim| claim.get_to_layer_id() == layer_id)
         {
-            return Err(ClaimError::LayerIdMismatch).with_context(|| "");
+            return Err(anyhow!(ClaimError::LayerIdMismatch));
         }
 
         Self::new_from_raw_claims(claims.into_iter().map(Into::into).collect())
@@ -92,7 +92,7 @@ impl<F: Field> ClaimGroup<F> {
 
         // Check all claims match on the number of variables.
         if !claims.iter().all(|claim| claim.get_num_vars() == num_vars) {
-            return Err(ClaimError::NumVarsMismatch).with_context(|| "");
+            return Err(anyhow!(ClaimError::NumVarsMismatch));
         }
 
         // Populate the points_matrix
@@ -229,7 +229,7 @@ impl<F: Field> ClaimGroup<F> {
     /// readable. We should consider alternative designs.
     fn compute_aggregated_challenges(&self, r_star: F) -> Result<Vec<F>> {
         if self.is_empty() {
-            return Err(ClaimError::ClaimAggroError).with_context(|| "");
+            return Err(anyhow!(ClaimError::ClaimAggroError));
         }
 
         let num_vars = self.get_num_vars();

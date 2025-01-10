@@ -44,7 +44,7 @@ use std::{
 #[cfg(test)]
 pub mod tests;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use ark_std::{cfg_chunks, cfg_into_iter};
 use itertools::{repeat_n, Itertools};
 use rayon::prelude::ParallelIterator;
@@ -318,14 +318,14 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
 
                         Ok(first_evals + second_evals)
                     } else {
-                        Err(ExpressionError::EvaluationError("Expression returns two evals that do not have the same length on a selector bit")).with_context(|| "")
+                        Err(anyhow!(ExpressionError::EvaluationError("Expression returns two evals that do not have the same length on a selector bit")))
                     }
                 }
                 // we cannot have an indexed bit for the selector bit that is
                 // less than the current sumcheck round. therefore this is an
                 // error
                 std::cmp::Ordering::Greater => {
-                    Err(ExpressionError::InvalidMleIndex).with_context(|| "")
+                    Err(anyhow!(ExpressionError::InvalidMleIndex))
                 }
             }
         }
@@ -345,7 +345,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
             // the evaluation is just scaled by the beta bound value
             Ok(((b * coeff) + (a * coeff_neg)) * *beta_bound_val)
         }
-        _ => Err(ExpressionError::InvalidMleIndex).with_context(|| ""),
+        _ => Err(anyhow!(ExpressionError::InvalidMleIndex)),
     };
 
     // the mle evaluation takes in the mle ref, and the corresponding unbound

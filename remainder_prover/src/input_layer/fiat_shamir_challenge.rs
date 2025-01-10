@@ -14,7 +14,7 @@ use crate::{
 use crate::mle::Mle;
 use thiserror::Error;
 
-use anyhow::{Context, Ok, Result};
+use anyhow::{anyhow, Ok, Result};
 
 #[derive(Error, Clone, Debug)]
 /// The errors which can be encountered when constructing an input layer.
@@ -90,11 +90,10 @@ impl<F: Field> FiatShamirChallenge<F> {
         mle.index_mle_indices(0);
 
         if mle.num_free_vars() != claim.get_point().len() {
-            return Err(FiatShamirChallengeError::NumVarsMismatch(
+            return Err(anyhow!(FiatShamirChallengeError::NumVarsMismatch(
                 claim.get_point().len(),
                 mle.num_free_vars(),
-            ))
-            .with_context(|| "");
+            )));
         }
 
         let eval = if mle.num_free_vars() != 0 {
@@ -114,7 +113,7 @@ impl<F: Field> FiatShamirChallenge<F> {
         if eval.get_eval() == claim.get_eval() {
             Ok(())
         } else {
-            Err(FiatShamirChallengeError::EvaluationMismatch).with_context(|| "")
+            Err(anyhow!(FiatShamirChallengeError::EvaluationMismatch))
         }
     }
 }

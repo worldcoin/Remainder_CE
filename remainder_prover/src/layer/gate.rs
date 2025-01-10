@@ -33,7 +33,7 @@ use crate::{
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
 
-use anyhow::{Ok, Result};
+use anyhow::{anyhow, Ok, Result};
 
 pub use self::gate_helpers::{
     check_fully_bound, compute_full_gate, compute_sumcheck_message_gate,
@@ -778,7 +778,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         // Check: V_i(g_2, g_1) =? g_1(0) + g_1(1)
         // TODO(ryancao): SUPER overloaded notation (in e.g. above comments); fix across the board
         if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1] != claim.get_eval() {
-            return Err(VerificationError::SumcheckStartFailed)?;
+            return Err(anyhow!(VerificationError::SumcheckStartFailed));
         }
 
         // Check each of the messages -- note that here the verifier doesn't actually see the difference
@@ -811,7 +811,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
             // Check: g_i(0) + g_i(1) =? g_{i - 1}(r_{i - 1})
             if prev_at_r != curr_evals[0] + curr_evals[1] {
-                return Err(VerificationError::SumcheckFailed)?;
+                return Err(anyhow!(VerificationError::SumcheckFailed));
             };
 
             // Add the prover message to the sumcheck messages
@@ -839,7 +839,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
         // Final check in sumcheck.
         if final_result != prev_at_r {
-            return Err(VerificationError::FinalSumcheckFailed)?;
+            return Err(anyhow!(VerificationError::FinalSumcheckFailed));
         }
 
         Ok(VerifierLayerEnum::Gate(verifier_gate_layer))

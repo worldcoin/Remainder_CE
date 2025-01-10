@@ -30,7 +30,7 @@ use super::{
     Layer, LayerDescription, LayerId, VerifierLayer,
 };
 
-use anyhow::{Ok, Result};
+use anyhow::{anyhow, Ok, Result};
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -121,7 +121,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
             if g_i_zero + g_i_one != g_prev_r_prev {
                 dbg!(_round);
-                return Err(VerificationError::SumcheckFailed)?;
+                return Err(anyhow!(VerificationError::SumcheckFailed));
             }
 
             g_prev_round = g_cur_round;
@@ -140,7 +140,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         let final_result = verifier_id_gate_layer.evaluate(&claim);
 
         if g_final_r_final != final_result {
-            return Err(VerificationError::FinalSumcheckFailed)?;
+            return Err(anyhow!(VerificationError::FinalSumcheckFailed));
         }
 
         Ok(VerifierLayerEnum::IdentityGate(verifier_id_gate_layer))

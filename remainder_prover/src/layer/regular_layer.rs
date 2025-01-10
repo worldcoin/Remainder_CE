@@ -336,7 +336,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                     let fixed_mle_indices = mle
                         .mle_indices
                         .iter()
-                        .map(|index| index.val().ok_or(Err(ClaimError::MleRefMleError)?))
+                        .map(|index| index.val().ok_or(anyhow!(ClaimError::MleRefMleError)))
                         .collect::<Result<Vec<_>>>()?;
 
                     // Grab the layer ID (i.e. MLE index) which this mle refers to
@@ -365,7 +365,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                         let fixed_mle_indices = mle
                             .mle_indices
                             .iter()
-                            .map(|index| index.val().ok_or(Err(ClaimError::MleRefMleError)?))
+                            .map(|index| index.val().ok_or(anyhow!(ClaimError::MleRefMleError)))
                             .collect::<Result<Vec<_>>>()?;
 
                         // Grab the layer ID (i.e. MLE index) which this mle refers to
@@ -561,7 +561,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
 
             if g_i_zero + g_i_one != g_prev_r_prev {
-                return Err(anyhow!(VerificationError::SumcheckFailed))?;
+                return Err(anyhow!(VerificationError::SumcheckFailed));
             }
 
             g_prev_round = g_cur_round;
@@ -622,7 +622,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         // P(g_1, challenge[0], g_3, challenge[0]) * \beta( challenge, (g_2, g_4) )
         // `g_n(r_n) == P(r_1, ..., r_n) * \beta(r_1, ..., r_n, g_1, ..., g_n)`.
         if g_final_r_final != expr_value_at_challenge_point * beta_fn_evaluated_at_challenge_point {
-            return Err(VerificationError::SumcheckFailed)?;
+            return Err(anyhow!(VerificationError::SumcheckFailed));
         }
 
         Ok(VerifierLayerEnum::Regular(verifier_layer))
@@ -735,7 +735,7 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
                     let fixed_mle_indices = verifier_mle
                         .var_indices()
                         .iter()
-                        .map(|index| index.val().ok_or(Err(ClaimError::MleRefMleError)?))
+                        .map(|index| index.val().ok_or(anyhow!(ClaimError::MleRefMleError)))
                         .collect::<Result<Vec<_>>>()?;
 
                     // Grab the layer ID (i.e. MLE index) which this mle refers to
@@ -760,7 +760,7 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
                         let fixed_mle_indices = verifier_mle
                             .var_indices()
                             .iter()
-                            .map(|index| index.val().ok_or(Err(ClaimError::MleRefMleError)?))
+                            .map(|index| index.val().ok_or(anyhow!(ClaimError::MleRefMleError)))
                             .collect::<Result<Vec<_>>>()?;
 
                         // Grab the layer ID (i.e. MLE index) which this mle refers to

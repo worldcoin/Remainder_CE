@@ -32,7 +32,7 @@ use super::{
     verifier_expr::VerifierExpr,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Result};
 
 /// Type for defining [Expression<F, ExprDescription>], the type used
 /// for representing expressions in the circuit description.
@@ -167,7 +167,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                     Box::new(lhs.into_verifier_node(point, transcript_reader)?),
                     Box::new(rhs.into_verifier_node(point, transcript_reader)?),
                 )),
-                _ => Err(ExpressionError::SelectorBitNotBoundError).with_context(|| ""),
+                _ => Err(anyhow!(ExpressionError::SelectorBitNotBoundError)),
             },
             ExpressionNode::Mle(circuit_mle) => Ok(ExpressionNode::Mle(
                 circuit_mle.into_verifier_mle(point, transcript_reader)?,
