@@ -545,8 +545,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             //   the trascript reader and read the polynomial in whatever
             //   representation is being used.
             let g_cur_round = transcript_reader
-                .consume_elements("Sumcheck message", degree + 1)
-                .map_err(|_| VerificationError::TranscriptError)?;
+                .consume_elements("Sumcheck message", degree + 1)?;
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
@@ -640,8 +639,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
     ) -> Result<Self::VerifierLayer> {
         let verifier_expr = self
             .expression
-            .bind(sumcheck_challenges, transcript_reader)
-            .map_err(|_| VerificationError::ExpressionError)?;
+            .bind(sumcheck_challenges, transcript_reader)?;
 
         let verifier_layer = VerifierRegularLayer::new_raw(self.layer_id(), verifier_expr);
         Ok(verifier_layer)
