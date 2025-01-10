@@ -40,3 +40,6 @@ scripts-upshot/
 
 # ignore test coverage reports
 lcov.info
+
+# zk proofs
+*.zkp
