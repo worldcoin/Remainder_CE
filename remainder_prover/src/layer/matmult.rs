@@ -390,8 +390,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         for _round in 0..num_rounds {
             let degree = 2;
 
-            let g_cur_round = transcript_reader
-                .consume_elements("Sumcheck message", degree + 1)?;
+            let g_cur_round = transcript_reader.consume_elements("Sumcheck message", degree + 1)?;
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;

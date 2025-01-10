@@ -131,8 +131,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             // V_i(g_2, g_1) = \sum_{p_2} \sum_{x} \beta(g_2, p_2) f_1(g_1, x) (V_{i + 1}(p_2, x))
             let degree = 2;
 
-            let g_cur_round = transcript_reader
-                .consume_elements("Sumcheck message", degree + 1)?;
+            let g_cur_round = transcript_reader.consume_elements("Sumcheck message", degree + 1)?;
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;

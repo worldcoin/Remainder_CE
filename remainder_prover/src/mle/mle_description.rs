@@ -136,8 +136,7 @@ impl<F: Field> MleDescription<F> {
             })
             .collect::<Result<Vec<MleIndex<F>>>>()?;
 
-        let eval = transcript_reader
-            .consume_element("MLE evaluation")?;
+        let eval = transcript_reader.consume_element("MLE evaluation")?;
 
         Ok(VerifierMle::new(self.layer_id, verifier_indices, eval))
     }

@@ -19,7 +19,7 @@ use crate::{
     sumcheck::evaluate_at_a_point,
 };
 
-use super::{claim_group::ClaimGroup};
+use super::claim_group::ClaimGroup;
 
 use anyhow::{Ok, Result};
 

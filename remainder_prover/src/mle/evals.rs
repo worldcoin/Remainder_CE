@@ -16,7 +16,7 @@ use bit_packed_vector::BitPackedVector;
 
 use crate::utils::arithmetic::i64_to_field;
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 
 #[derive(Error, Debug, Clone)]
 /// the errors associated with the dimension of the MLE.

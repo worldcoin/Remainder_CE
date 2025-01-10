@@ -324,9 +324,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
                 // we cannot have an indexed bit for the selector bit that is
                 // less than the current sumcheck round. therefore this is an
                 // error
-                std::cmp::Ordering::Greater => {
-                    Err(anyhow!(ExpressionError::InvalidMleIndex))
-                }
+                std::cmp::Ordering::Greater => Err(anyhow!(ExpressionError::InvalidMleIndex)),
             }
         }
         // if the selector bit has already been bound, that means the beta value

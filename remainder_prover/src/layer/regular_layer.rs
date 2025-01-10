@@ -34,7 +34,7 @@ use super::{
 
 use super::{LayerDescription, VerifierLayer};
 
-use anyhow::{Ok, Result, anyhow};
+use anyhow::{anyhow, Ok, Result};
 
 /// The most common implementation of [crate::layer::Layer].
 ///
@@ -544,8 +544,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             //   We should hide that under another function whose job is to take
             //   the trascript reader and read the polynomial in whatever
             //   representation is being used.
-            let g_cur_round = transcript_reader
-                .consume_elements("Sumcheck message", degree + 1)?;
+            let g_cur_round = transcript_reader.consume_elements("Sumcheck message", degree + 1)?;
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;

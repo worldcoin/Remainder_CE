@@ -16,7 +16,7 @@ use super::BinaryOperation;
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-use anyhow::{Ok, Result, anyhow};
+use anyhow::{anyhow, Ok, Result};
 
 /// Error handling for gate mle construction.
 #[derive(Error, Debug, Clone)]
@@ -178,10 +178,7 @@ pub fn evaluate_mle_product_no_beta_table<F: Field>(
 }
 
 /// Checks whether mle was bound correctly to all the challenge points.
-pub fn check_fully_bound<F: Field>(
-    mles: &mut [impl Mle<F>],
-    challenges: Vec<F>,
-) -> Result<F> {
+pub fn check_fully_bound<F: Field>(mles: &mut [impl Mle<F>], challenges: Vec<F>) -> Result<F> {
     let mles_bound: Vec<bool> = mles
         .iter()
         .map(|mle| {
