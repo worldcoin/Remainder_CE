@@ -1620,6 +1620,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ark-std",
+ "bincode",
  "clap",
  "criterion",
  "ff 0.13.0",
@@ -1641,6 +1642,7 @@ dependencies = [
  "sha3 0.10.8",
  "thiserror",
  "tracing",
+ "zeroize",
 ]
 
 [[package]]
@@ -1683,6 +1685,8 @@ dependencies = [
  "itertools 0.11.0",
  "num",
  "num-bigint",
+ "once_cell",
+ "parking_lot",
  "pasta_curves",
  "poseidon",
  "rand",

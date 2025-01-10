@@ -13,6 +13,7 @@ use std::{
 use gate_helpers::bind_round_gate;
 use itertools::Itertools;
 use remainder_shared_types::{
+    config::global_config::global_prover_lazy_beta_evals,
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
@@ -29,7 +30,7 @@ use crate::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
         mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
     },
-    prover::{global_config::global_prover_lazy_beta_evals, SumcheckProof},
+    prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
 

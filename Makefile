@@ -21,9 +21,9 @@ test:  ## GitHub Action #2 - Slow but Comprehensive testing.
 
 mem-lim:  ## GitHub Action #3 - run sequential worldcoin binary with a memory limit.
 	$(MAKE) prod-seq
-	echo 500M | sudo tee /sys/fs/cgroup/makefile_memory_limited_group/memory.max
+	echo 350M | sudo tee /sys/fs/cgroup/makefile_memory_limited_group/memory.max
 	echo 0 | sudo tee /sys/fs/cgroup/makefile_memory_limited_group/memory.swap.max
-	sudo cgexec -g memory:makefile_memory_limited_group ./target/release/worldcoin
+	sudo cgexec -g memory:makefile_memory_limited_group ./target/release/worldcoin prove worldcoin.circuit iriscode_pcp_example worldcoin.zkp
 
 test-dev:  ## Faster alternative to "make test"; uses `--release` flag and ignores slow tests.
 	cargo test --release
@@ -35,16 +35,16 @@ prod:  ## Build worldcoin binary for production; optimizations + rayon paralleli
 prod-seq:  ## Similar to 'prod', but NO rayon parallelism.
 	cargo build --release --bin worldcoin
 
-bin:  ## Build worldcoin binary for efficient debugging; optimizations + rayon parallelism + print-trace.
-	cargo build --bin worldcoin --release --features "parallel, print-trace"
+bin:  ## Build the binaries for efficient debugging; optimizations + rayon parallelism + print-trace.
+	cargo build --bins --release --features "parallel, print-trace"
 
 bin-seq:  ## Similar to "make bin", but NO rayon parallelism.
-	cargo build --bin worldcoin --release --features "parallel, print-trace"
+	cargo build --bins --release --features "parallel, print-trace"
 
 bench:  ## Use Valgrind to profile memory usage, for worldcoin ic circuit. Example - make bench name=v2.0
 	cargo build --profile=opt-with-debug --bin worldcoin
 	mkdir -p massif
-	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin
+	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/worldcoin prove worldcoin.circuit iriscode_pcp_example worldcoin.zkp
 	ms_print massif/massif.$(name).out | less
 
 bench-mpc:  ## Use Valgrind to profile memory usage, for worldcoin mpc circuit. Example - make bench-mpc
@@ -52,6 +52,12 @@ bench-mpc:  ## Use Valgrind to profile memory usage, for worldcoin mpc circuit. 
 	mkdir -p massif
 	valgrind --tool=massif --massif-out-file=massif/massif.mpc.out --pages-as-heap=yes ./target/opt-with-debug/worldcoin_mpc
 	ms_print massif/massif.mpc.out | less
+
+bench-single:  ## Use Valgrind to profile memory usage of the proving and verifying of a single iriscode circuit (i.e. just one eye, just iris).
+	cargo build --profile=opt-with-debug --bin run_iriscode_circuit
+	mkdir -p massif
+	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/opt-with-debug/run_iriscode_circuit --image-filepath remainder_prover/src/worldcoin/constants/v3-split-images/iris/test_image.bin
+	ms_print massif/massif.$(name).out | less
 
 mobile:  ## Compile worldcoin binary optimized for binary size.
 	cargo build --profile mobile --bin worldcoin

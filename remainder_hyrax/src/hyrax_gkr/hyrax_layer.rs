@@ -6,7 +6,7 @@ use crate::{
     utils::vandermonde::VandermondeInverse,
 };
 use itertools::Itertools;
-use rand::Rng;
+use rand::{CryptoRng, Rng, RngCore};
 use remainder::layer::product::{Intermediate, PostSumcheckLayer};
 use remainder::layer::Layer;
 use remainder::layer::LayerDescription;
@@ -25,7 +25,10 @@ use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use remainder_shared_types::Field;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 /// This struct represents what a proof looks like for one layer of GKR, but Hyrax version.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxLayerProof<C: PrimeOrderCurve> {
     /// This is the proof of the sumcheck rounds for that layer.
     pub proof_of_sumcheck: ProofOfSumcheck<C>,
@@ -91,7 +94,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // The output MLEs from this layer, whose bookkeeping tables combined make the layerwise bookkeeping table.
         output_mles_from_layer: Vec<DenseMle<C::Scalar>>,
         committer: &PedersenCommitter<C>,
-        mut blinding_rng: &mut impl Rng,
+        mut blinding_rng: &mut (impl CryptoRng + RngCore),
         transcript: &mut impl ECTranscriptTrait<C>,
         converter: &mut VandermondeInverse<C::Scalar>,
     ) -> (Self, Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>) {
@@ -254,7 +257,6 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // made on that layer, we take the max of the number of variables in the expression and
         // the number of variables in the beta table.
         let num_sumcheck_rounds_expected = layer_desc.sumcheck_round_indices().len();
-        let _sumcheck_round_indices = layer_desc.sumcheck_round_indices();
 
         // Verify the proof of sumcheck
         // Append first sumcheck message to transcript, which is the proported sum.
@@ -391,7 +393,7 @@ pub fn evaluate_committed_psl<C: PrimeOrderCurve>(
 }
 
 /// Return the claims made on other layers by the atomic factors of this product.
-pub fn get_claims_from_product<F: Field, T: Clone>(
+pub fn get_claims_from_product<F: Field, T: Clone + Serialize + for<'de> Deserialize<'de>>(
     product: &Product<F, T>,
 ) -> Vec<HyraxClaim<F, T>> {
     product
@@ -435,8 +437,9 @@ impl<C: PrimeOrderCurve> HyraxClaim<C::Scalar, CommittedScalar<C>> {
 ///     CommittedScalar<C> (if used by the prover)
 ///     to interface with claim aggregation code in remainder
 ///     C (this is the verifier's view, i.e. just the commitment)
-#[derive(Clone, Debug)]
-pub struct HyraxClaim<F: Field, T> {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "F: Field, T: DeserializeOwned")]
+pub struct HyraxClaim<F: Field, T: Serialize + DeserializeOwned> {
     /// Id of the layer upon which the claim is made
     pub to_layer_id: LayerId,
     /// The evaluation point

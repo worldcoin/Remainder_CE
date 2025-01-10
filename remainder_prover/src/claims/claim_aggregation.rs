@@ -4,6 +4,7 @@ use std::cmp::max;
 
 use ark_std::{cfg_into_iter, end_timer, start_timer};
 use remainder_shared_types::{
+    config::global_config::global_prover_claim_agg_constant_column_optimization,
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
@@ -15,7 +16,6 @@ use crate::{
         combine_mles_with_aggregate, get_indexed_layer_mles_to_combine, pre_fix_mles,
     },
     mle::dense::DenseMle,
-    prover::{global_config::global_prover_claim_agg_constant_column_optimization},
     sumcheck::evaluate_at_a_point,
 };
 

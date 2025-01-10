@@ -621,4 +621,74 @@ impl<F: Field> MultilinearExtension<F> {
         let out = mles.iter().flat_map(|mle| mle.to_vec()).collect();
         Self::new(out)
     }
+
+    /// Convert a [MultilinearExtension] into a vector of u8s.
+    /// Every element is padded to contain 8 bits.
+    pub fn convert_into_u8_vec(&self) -> Vec<u8> {
+        self.f
+            .iter()
+            .map(|field_element| {
+                let field_element_le_bytes = field_element.to_bytes_le();
+                let mut padded_u8 = [0u8; 1];
+                padded_u8.copy_from_slice(&field_element_le_bytes[..1]);
+                u8::from_le_bytes(padded_u8)
+            })
+            .collect_vec()
+    }
+
+    /// Convert a [MultilinearExtension] into a vector of u16s.
+    /// Every element is padded to contain 16 bits.
+    pub fn convert_into_u16_vec(&self) -> Vec<u16> {
+        self.f
+            .iter()
+            .map(|field_element| {
+                let field_element_le_bytes = field_element.to_bytes_le();
+                let mut padded_u16 = [0u8; 2];
+                padded_u16.copy_from_slice(&field_element_le_bytes[..2]);
+                u16::from_le_bytes(padded_u16)
+            })
+            .collect_vec()
+    }
+
+    /// Convert a [MultilinearExtension] into a vector of u32s.
+    /// Every element is padded to contain 32 bits.
+    pub fn convert_into_u32_vec(&self) -> Vec<u32> {
+        self.f
+            .iter()
+            .map(|field_element| {
+                let field_element_le_bytes = field_element.to_bytes_le();
+                let mut padded_u32 = [0u8; 4];
+                padded_u32.copy_from_slice(&field_element_le_bytes[..4]);
+                u32::from_le_bytes(padded_u32)
+            })
+            .collect_vec()
+    }
+
+    /// Convert a [MultilinearExtension] into a vector of u64s.
+    /// Every element is padded to contain 64 bits.
+    pub fn convert_into_u64_vec(&self) -> Vec<u64> {
+        self.f
+            .iter()
+            .map(|field_element| {
+                let field_element_le_bytes = field_element.to_bytes_le();
+                let mut padded_u64 = [0u8; 8];
+                padded_u64.copy_from_slice(&field_element_le_bytes[..8]);
+                u64::from_le_bytes(padded_u64)
+            })
+            .collect_vec()
+    }
+
+    /// Convert a [MultilinearExtension] into a vector of u128s.
+    /// Every element is padded to contain 128 bits.
+    pub fn convert_into_u128_vec(&self) -> Vec<u128> {
+        self.f
+            .iter()
+            .map(|field_element| {
+                let field_element_le_bytes = field_element.to_bytes_le();
+                let mut padded_u128 = [0u8; 16];
+                padded_u128.copy_from_slice(&field_element_le_bytes[..16]);
+                u128::from_le_bytes(padded_u128)
+            })
+            .collect_vec()
+    }
 }
