@@ -16,6 +16,8 @@ use super::BinaryOperation;
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
+use anyhow::{Ok, Result, anyhow};
+
 /// Error handling for gate mle construction.
 #[derive(Error, Debug, Clone)]
 pub enum GateError {
@@ -63,7 +65,7 @@ pub fn evaluate_mle_product_no_beta_table<F: Field>(
     mles: &[&impl Mle<F>],
     independent_variable: bool,
     degree: usize,
-) -> Result<SumcheckEvals<F>, MleError> {
+) -> Result<SumcheckEvals<F>> {
     // --- Gets the total number of free variables across all MLEs within this
     // product ---
     let max_num_vars = mles
@@ -179,7 +181,7 @@ pub fn evaluate_mle_product_no_beta_table<F: Field>(
 pub fn check_fully_bound<F: Field>(
     mles: &mut [impl Mle<F>],
     challenges: Vec<F>,
-) -> Result<F, GateError> {
+) -> Result<F> {
     let mles_bound: Vec<bool> = mles
         .iter()
         .map(|mle| {
@@ -199,13 +201,13 @@ pub fn check_fully_bound<F: Field>(
         .collect();
 
     if mles_bound.contains(&false) {
-        return Err(GateError::EvaluateBoundIndicesDontMatch);
+        return Err(anyhow!(GateError::EvaluateBoundIndicesDontMatch));
     }
 
     mles.iter_mut().try_fold(F::ONE, |acc, mle| {
         // Accumulate either errors or multiply
         if mle.len() != 1 {
-            return Err(GateError::MleNotFullyBoundError);
+            return Err(anyhow!(GateError::MleNotFullyBoundError));
         }
         Ok(acc * mle.first())
     })
@@ -262,7 +264,7 @@ pub fn bind_round_identity<F: Field>(round_index: usize, challenge: F, mles: &mu
 pub fn compute_sumcheck_message_identity<F: Field>(
     round_index: usize,
     mles: &[&DenseMle<F>],
-) -> Result<Vec<F>, GateError> {
+) -> Result<Vec<F>> {
     let independent_variable = mles
         .iter()
         .map(|mle| mle.mle_indices().contains(&MleIndex::Indexed(round_index)))
@@ -396,7 +398,7 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
     mles: &[&impl Mle<F>],
     round_index: usize,
     degree: usize,
-) -> Result<Vec<F>, GateError> {
+) -> Result<Vec<F>> {
     // --- Go through all of the MLEs being multiplied together on the LHS and
     // see if any of them contain an IV ---
     let independent_variable = mles
@@ -424,7 +426,7 @@ pub fn prove_round_dataparallel_phase<F: Field>(
     nonzero_gates: &[(usize, usize, usize)],
     num_dataparallel_bits: usize,
     operation: BinaryOperation,
-) -> Result<Vec<F>, GateError> {
+) -> Result<Vec<F>> {
     beta_g2.fix_variable(challenge);
     // Need to separately update these because the phase_lhs and phase_rhs has
     // no version of them.
@@ -452,7 +454,7 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
     operation: BinaryOperation,
     nonzero_gates: &[(usize, usize, usize)],
     num_dataparallel_bits: usize,
-) -> Result<Vec<F>, GateError> {
+) -> Result<Vec<F>> {
     // When we have an add gate, we can distribute the beta table over the
     // dataparallel challenges so we only multiply to the function with the x
     // variables or y variables one at a time. When we have a mul gate, we have

@@ -16,6 +16,8 @@ use bit_packed_vector::BitPackedVector;
 
 use crate::utils::arithmetic::i64_to_field;
 
+use anyhow::{Result, anyhow};
+
 #[derive(Error, Debug, Clone)]
 /// the errors associated with the dimension of the MLE.
 pub enum DimensionError {
@@ -40,12 +42,12 @@ pub struct DimInfo {
 
 impl DimInfo {
     /// Creates a new DimInfo from the dimensions and the axes names.
-    pub fn new(dims: IxDyn, axes_names: Vec<String>) -> Result<Self, DimensionError> {
+    pub fn new(dims: IxDyn, axes_names: Vec<String>) -> Result<Self> {
         if dims.ndim() != axes_names.len() {
-            return Err(DimensionError::DimensionMismatchError(
+            return Err(anyhow!(DimensionError::DimensionMismatchError(
                 dims.ndim(),
                 axes_names.len(),
-            ));
+            )));
         }
         Ok(Self { dims, axes_names })
     }

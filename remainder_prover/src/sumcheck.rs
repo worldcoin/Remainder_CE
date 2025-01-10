@@ -44,7 +44,7 @@ use std::{
 #[cfg(test)]
 pub mod tests;
 
-use anyhow::{anyhow, Context, Ok, Result};
+use anyhow::{anyhow, Context, Result};
 use ark_std::{cfg_chunks, cfg_into_iter};
 use itertools::{repeat_n, Itertools};
 use rayon::prelude::ParallelIterator;

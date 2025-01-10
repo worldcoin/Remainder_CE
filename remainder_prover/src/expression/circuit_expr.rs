@@ -32,7 +32,7 @@ use super::{
     verifier_expr::VerifierExpr,
 };
 
-use anyhow::{Context, Ok, Result};
+use anyhow::{Context, Result};
 
 /// Type for defining [Expression<F, ExprDescription>], the type used
 /// for representing expressions in the circuit description.
@@ -158,7 +158,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
         &self,
         point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<ExpressionNode<F, _>> {
+    ) -> Result<ExpressionNode<F, VerifierExpr>> {
         match self {
             ExpressionNode::Constant(scalar) => Ok(ExpressionNode::Constant(*scalar)),
             ExpressionNode::Selector(index, lhs, rhs) => match index {

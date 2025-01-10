@@ -4,7 +4,7 @@ use std::cmp::max;
 
 use ark_std::{cfg_into_iter, end_timer, start_timer};
 use remainder_shared_types::{
-    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
+    transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
 use tracing::{debug, info};
@@ -15,13 +15,13 @@ use crate::{
         combine_mles_with_aggregate, get_indexed_layer_mles_to_combine, pre_fix_mles,
     },
     mle::dense::DenseMle,
-    prover::{global_config::global_prover_claim_agg_constant_column_optimization, GKRError},
+    prover::{global_config::global_prover_claim_agg_constant_column_optimization},
     sumcheck::evaluate_at_a_point,
 };
 
-use super::{claim_group::ClaimGroup, ClaimError};
+use super::{claim_group::ClaimGroup};
 
-use anyhow::{anyhow, Context, Ok, Result};
+use anyhow::{Ok, Result};
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};

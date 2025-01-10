@@ -71,7 +71,7 @@ impl<F: Field> Expression<F, VerifierExpr> {
         };
         let mle_eval = |verifier_mle: &VerifierMle<F>| -> Result<F> { Ok(verifier_mle.value()) };
         let negated = |val: Result<F>| Ok((val?).neg());
-        let sum = |lhs: Result<F>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
+        let sum = |lhs: Result<F>, rhs: Result<F>| Ok(lhs? + rhs?);
         let product = |verifier_mles: &[VerifierMle<F>]| -> Result<F> {
             verifier_mles
                 .iter()

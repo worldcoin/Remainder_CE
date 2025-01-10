@@ -21,7 +21,7 @@ use crate::{
         prover_expr::ProverExpr,
         verifier_expr::VerifierExpr,
     },
-    layer::{Layer, LayerError, LayerId, VerificationError},
+    layer::{Layer, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription, Mle},
     sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
@@ -34,7 +34,7 @@ use super::{
 
 use super::{LayerDescription, VerifierLayer};
 
-use anyhow::{Ok, Result};
+use anyhow::{Ok, Result, anyhow};
 
 /// The most common implementation of [crate::layer::Layer].
 ///
@@ -546,7 +546,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             //   representation is being used.
             let g_cur_round = transcript_reader
                 .consume_elements("Sumcheck message", degree + 1)
-                .map_err(VerificationError::TranscriptError)?;
+                .map_err(|_| VerificationError::TranscriptError)?;
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
@@ -561,7 +561,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
 
             if g_i_zero + g_i_one != g_prev_r_prev {
-                return Err(VerificationError::SumcheckFailed)?;
+                return Err(anyhow!(VerificationError::SumcheckFailed))?;
             }
 
             g_prev_round = g_cur_round;
@@ -641,7 +641,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         let verifier_expr = self
             .expression
             .bind(sumcheck_challenges, transcript_reader)
-            .map_err(VerificationError::ExpressionError)?;
+            .map_err(|_| VerificationError::ExpressionError)?;
 
         let verifier_layer = VerifierRegularLayer::new_raw(self.layer_id(), verifier_expr);
         Ok(verifier_layer)

@@ -392,7 +392,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
 
             let g_cur_round = transcript_reader
                 .consume_elements("Sumcheck message", degree + 1)
-                .map_err(VerificationError::TranscriptError)?;
+                .map_err(|_| VerificationError::TranscriptError)?;
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
