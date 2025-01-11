@@ -338,6 +338,31 @@ pub fn compute_flipped_bit_idx_and_value_graycode(curr_val: u32, next_val: u32) 
     (flipped_bit, previous_value)
 }
 
+/// Compute the inverses and one minus the elem inverted for a vec of claim challenges.
+pub fn compute_inverses_vec_and_one_minus_inverted_vec<F: Field>(
+    claim_points: &[&[F]],
+) -> (Vec<Vec<F>>, Vec<Vec<F>>) {
+    let inverses_vec = claim_points
+        .iter()
+        .map(|claim_point| {
+            claim_point
+                .iter()
+                .map(|elem| elem.invert().unwrap())
+                .collect_vec()
+        })
+        .collect_vec();
+    let one_minus_inverses_vec = claim_points
+        .iter()
+        .map(|claim_point| {
+            claim_point
+                .iter()
+                .map(|elem| (F::ONE - elem).invert().unwrap())
+                .collect_vec()
+        })
+        .collect_vec();
+    (inverses_vec, one_minus_inverses_vec)
+}
+
 /// Compute the flipped bits between a previous value and a current value, and
 /// return each of the flipped bits' indices and previous value.
 pub fn compute_flipped_bit_idx_and_values_lexicographic(

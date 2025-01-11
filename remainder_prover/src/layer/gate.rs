@@ -104,7 +104,9 @@ pub struct GateLayer<F: Field> {
     g1: Option<Vec<F>>,
     /// the incoming claim's challenge points on the dataparallel vars of the MLE
     g2: Option<Vec<F>>,
-    // the number of rounds in phase 1
+    /// The incoming claim's challenge points.
+    g_vec: Option<Vec<Vec<F>>>,
+    /// the number of rounds in phase 1
     num_rounds_phase1: usize,
 }
 
@@ -158,6 +160,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             self.set_g2(claim_point[..self.num_dataparallel_vars].to_vec());
         }
 
+        self.g_vec = Some(vec![claim_point.to_vec()]);
         self.lhs.index_mle_indices(0);
         self.rhs.index_mle_indices(0);
 
@@ -188,11 +191,17 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             Ordering::Less => Ok(compute_sumcheck_messages_data_parallel_gate(
                 &self.lhs,
                 &self.rhs,
-                self.beta_g2.as_ref().unwrap(),
-                self.beta_g1.as_ref().unwrap(),
                 self.gate_operation,
                 &self.nonzero_gates,
                 self.num_dataparallel_vars - round_index,
+                &self
+                    .g_vec
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|challenge| challenge.as_slice())
+                    .collect_vec(),
+                random_coefficients,
             )
             .unwrap()),
 
@@ -1262,6 +1271,7 @@ impl<F: Field> GateLayer<F> {
             beta_g2: None,
             g1: None,
             g2: None,
+            g_vec: None,
             num_rounds_phase1,
         }
     }
@@ -1295,56 +1305,6 @@ impl<F: Field> GateLayer<F> {
     /// adding to all the u challenges
     fn add_to_u_challenges(&mut self, u_challenge: F) {
         self.u_challenges.push(u_challenge);
-    }
-
-    fn compute_beta_tables(
-        &mut self,
-        challenges: &[F],
-    ) -> (MultilinearExtension<F>, MultilinearExtension<F>) {
-        let mut g2_challenges = vec![];
-        let mut g1_challenges = vec![];
-
-        challenges
-            .iter()
-            .enumerate()
-            .for_each(|(bit_idx, challenge)| {
-                if bit_idx < self.num_dataparallel_vars {
-                    g2_challenges.push(*challenge);
-                } else {
-                    g1_challenges.push(*challenge);
-                }
-            });
-
-        // Create two separate beta tables for each, as they are handled differently.
-        let beta_g2 = BetaValues::new_beta_equality_mle(g2_challenges);
-        let beta_g1 = BetaValues::new_beta_equality_mle(g1_challenges);
-
-        (beta_g1, beta_g2)
-    }
-
-    /// Initialize the dataparallel phase: construct the necessary mles and return the first sumcheck message.
-    /// This will then set the necessary fields of the [Gate] struct so that the dataparallel bits can be
-    /// correctly bound during the first `num_dataparallel_vars` rounds of sumcheck.
-    fn init_dataparallel_phase(
-        &mut self,
-        beta_g1: &mut MultilinearExtension<F>,
-        beta_g2: &mut MultilinearExtension<F>,
-    ) -> Result<Vec<F>, GateError> {
-        // Index original bookkeeping tables.
-        self.lhs.index_mle_indices(0);
-        self.rhs.index_mle_indices(0);
-
-        // Result of initializing is the first sumcheck message.
-
-        compute_sumcheck_messages_data_parallel_gate(
-            &self.lhs,
-            &self.rhs,
-            beta_g2,
-            beta_g1,
-            self.gate_operation,
-            &self.nonzero_gates,
-            self.num_dataparallel_vars,
-        )
     }
 
     /// Initialize phase 1, or the necessary mles in order to bind the variables in the `lhs` of the
@@ -1513,209 +1473,6 @@ impl<F: Field> GateLayer<F> {
             });
         let SumcheckEvals(final_vec_evals) = final_evals;
         Ok(final_vec_evals)
-    }
-
-    // Once the initialization of the dataparallel phase is done, we can perform the dataparallel phase.
-    // This means that we are binding all bits that represent which copy of the circuit we are in.
-    fn perform_dataparallel_phase(
-        &mut self,
-        beta_g1: &mut MultilinearExtension<F>,
-        beta_g2: &mut MultilinearExtension<F>,
-        transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<(SumcheckProof<F>, F), LayerError> {
-        // Initialization, first message comes from here.
-        let mut challenges: Vec<F> = vec![];
-
-        let first_message = self.init_dataparallel_phase(beta_g1, beta_g2).expect(
-            "could not evaluate original lhs and rhs in order to get first sumcheck message",
-        );
-
-        let (lhs, rhs) = (&mut self.lhs, &mut self.rhs);
-
-        transcript_writer
-            .append_elements("Initial Sumcheck evaluations DATAPARALLEL", &first_message);
-        let num_rounds_copy_phase = self.num_dataparallel_vars;
-
-        // Do the first dataparallel bits number sumcheck rounds using libra giraffe.
-        let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
-            .chain((1..num_rounds_copy_phase).map(|round| {
-                let challenge = transcript_writer.get_challenge("Sumcheck challenge DATAPARALLEL");
-                challenges.push(challenge);
-                let eval = prove_round_dataparallel_phase(
-                    lhs,
-                    rhs,
-                    beta_g1,
-                    beta_g2,
-                    round,
-                    challenge,
-                    &self.nonzero_gates,
-                    self.num_dataparallel_vars - round,
-                    self.gate_operation,
-                )
-                .unwrap();
-                transcript_writer.append_elements("Sumcheck evaluations DATAPARALLEL", &eval);
-                Ok::<_, LayerError>(eval)
-            }))
-            .try_collect()?;
-
-        // Bind the final challenge, update the final beta table.
-        let final_chal_copy =
-            transcript_writer.get_challenge("Final Sumcheck challenge DATAPARALLEL");
-        // Fix the variable and everything as you would in the last round of sumcheck
-        // the evaluations from this is what you return from the first round of sumcheck in the next phase!
-        beta_g2.fix_variable(final_chal_copy);
-        self.lhs
-            .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
-        self.rhs
-            .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
-
-        let beta_g2_fully_bound = beta_g2.value();
-        Ok((sumcheck_rounds.into(), beta_g2_fully_bound))
-    }
-
-    // We are binding the "x" variables of the `lhs`. At the end of this, the lhs of the expression
-    // assuming we have a fan-in-two gate must be fully bound.
-    fn perform_phase_1(
-        &mut self,
-        challenge: Vec<F>,
-        beta_g2_fully_bound: F,
-        transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<(SumcheckProof<F>, F, Vec<F>), LayerError> {
-        let first_message = self
-            .init_phase_1(challenge)
-            .expect("could not evaluate original lhs and rhs")
-            .into_iter()
-            .map(|eval| eval * beta_g2_fully_bound)
-            .collect_vec();
-
-        let phase_1_mles = self
-            .phase_1_mles
-            .as_mut()
-            .ok_or(GateError::Phase1InitError)
-            .unwrap();
-
-        let mut challenges: Vec<F> = vec![];
-        transcript_writer.append_elements("Sumcheck evaluations PHASE 1", &first_message);
-        let num_rounds_phase1 = self.lhs.num_free_vars();
-
-        // Sumcheck rounds (binding x).
-        let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
-            .chain((1..num_rounds_phase1).map(|round| {
-                let challenge = transcript_writer.get_challenge("Sumcheck challenge PHASE 1");
-                challenges.push(challenge);
-                // If there are dataparallel bits, we want to start at that index.
-                bind_round_gate(round + self.num_dataparallel_vars, challenge, phase_1_mles);
-                let phase_1_mles: Vec<Vec<&DenseMle<F>>> = phase_1_mles
-                    .iter()
-                    .map(|mle_vec| {
-                        let mle_reference: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                        mle_reference
-                    })
-                    .collect();
-                let eval = compute_sumcheck_message_gate(
-                    round + self.num_dataparallel_vars,
-                    &phase_1_mles,
-                )
-                .into_iter()
-                .map(|eval| eval * beta_g2_fully_bound)
-                .collect_vec();
-                transcript_writer.append_elements("Sumcheck evaluations PHASE 1", &eval);
-                Ok::<_, LayerError>(eval)
-            }))
-            .try_collect()?;
-
-        // Final challenge after binding x (left side of the sum).
-        let final_chal_u =
-            transcript_writer.get_challenge("Final Sumcheck challenge for binding x");
-        challenges.push(final_chal_u);
-
-        phase_1_mles.iter_mut().for_each(|mle_vec| {
-            mle_vec.iter_mut().for_each(|mle| {
-                mle.fix_variable(
-                    num_rounds_phase1 - 1 + self.num_dataparallel_vars,
-                    final_chal_u,
-                );
-            })
-        });
-
-        let f_2 = phase_1_mles[0][1].clone();
-
-        let f2_at_u = f_2.value();
-        Ok((sumcheck_rounds.into(), f2_at_u, challenges))
-    }
-
-    // These are the rounds binding the "y" variables of the expression. At the end of this, the entire
-    // expression is fully bound because this is the last phase in proving the gate layer.
-    fn perform_phase_2(
-        &mut self,
-        f_at_u: F,
-        phase_1_challenges: Vec<F>,
-        beta_g1: MultilinearExtension<F>,
-        beta_g2_fully_bound: F,
-        transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<SumcheckProof<F>, LayerError> {
-        let first_message = self
-            .init_phase_2(phase_1_challenges, f_at_u, &beta_g1)
-            .unwrap()
-            .into_iter()
-            .map(|eval| eval * beta_g2_fully_bound)
-            .collect_vec();
-
-        let mut challenges: Vec<F> = vec![];
-
-        if self.rhs.num_free_vars() > 0 {
-            let phase_2_mles = self
-                .phase_2_mles
-                .as_mut()
-                .ok_or(GateError::Phase2InitError)
-                .unwrap();
-
-            transcript_writer.append_elements("Sumcheck evaluations", &first_message);
-
-            let num_rounds_phase2 = self.rhs.num_free_vars();
-
-            // Bind y, the right side of the sum.
-            let sumcheck_rounds_y: Vec<Vec<F>> = std::iter::once(Ok(first_message))
-                .chain((1..num_rounds_phase2).map(|round| {
-                    let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-                    challenges.push(challenge);
-                    bind_round_gate(round + self.num_dataparallel_vars, challenge, phase_2_mles);
-                    let phase_2_mles: Vec<Vec<&DenseMle<F>>> = phase_2_mles
-                        .iter()
-                        .map(|mle_vec| {
-                            let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                            mle_references
-                        })
-                        .collect();
-                    let eval = compute_sumcheck_message_gate(
-                        round + self.num_dataparallel_vars,
-                        &phase_2_mles,
-                    )
-                    .into_iter()
-                    .map(|eval| eval * beta_g2_fully_bound)
-                    .collect_vec();
-                    transcript_writer.append_elements("Sumcheck evaluations", &eval);
-                    Ok::<_, LayerError>(eval)
-                }))
-                .try_collect()?;
-
-            // Final round of sumcheck.
-            let final_chal = transcript_writer.get_challenge("Final Sumcheck challenge");
-            challenges.push(final_chal);
-
-            phase_2_mles.iter_mut().for_each(|mle_vec| {
-                mle_vec.iter_mut().for_each(|mle| {
-                    mle.fix_variable(
-                        num_rounds_phase2 - 1 + self.num_dataparallel_vars,
-                        final_chal,
-                    );
-                })
-            });
-
-            Ok(sumcheck_rounds_y.into())
-        } else {
-            Ok(vec![].into())
-        }
     }
 }
 

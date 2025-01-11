@@ -1,11 +1,9 @@
 //! This module contains the implementation of the matrix multiplication layer
 
-use std::{collections::HashSet, sync::Mutex};
+use std::collections::HashSet;
 
 use ::serde::{Deserialize, Serialize};
-use ark_std::{cfg_into_iter, cfg_iter};
 use itertools::Itertools;
-use rand::random;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
     Field,

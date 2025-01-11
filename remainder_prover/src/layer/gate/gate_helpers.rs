@@ -1,6 +1,5 @@
 use ark_std::{cfg_into_iter, cfg_iter};
 use itertools::Itertools;
-use rand::random;
 
 use std::{cmp::max, fmt::Debug};
 
@@ -8,7 +7,8 @@ use crate::{
     mle::{betavalues::BetaValues, evals::MultilinearExtension, Mle},
     sumcheck::*,
     utils::mle::{
-        compute_flipped_bit_idx_and_values_lexicographic, compute_next_beta_value_from_current,
+        compute_flipped_bit_idx_and_values_lexicographic,
+        compute_inverses_vec_and_one_minus_inverted_vec, compute_next_beta_value_from_current,
         compute_next_beta_values_vec_from_current,
     },
 };
@@ -368,23 +368,8 @@ pub fn compute_fully_bound_identity_gate_function<F: Field>(
             })
             .unzip();
 
-    let (inverses_vec_claim_challenges, one_minus_elem_inverted_vec_claim_challenges): (
-        Vec<Vec<F>>,
-        Vec<Vec<F>>,
-    ) = nondataparallel_claim_challenges_vec
-        .iter()
-        .map(|claim_point| {
-            let (inverses, one_minus_elem_inverted): (Vec<F>, Vec<F>) = claim_point
-                .iter()
-                .map(|elem| {
-                    let inverse = elem.invert().unwrap();
-                    let one_minus_elem_inverse = (F::ONE - elem).invert().unwrap();
-                    (inverse, one_minus_elem_inverse)
-                })
-                .unzip();
-            (inverses, one_minus_elem_inverted)
-        })
-        .unzip();
+    let (inverses_vec_claim_challenges, one_minus_elem_inverted_vec_claim_challenges) =
+        compute_inverses_vec_and_one_minus_inverted_vec(nondataparallel_claim_challenges_vec);
 
     let prev_aux_and_gate_function = cfg_iter!(wiring).fold(
         #[cfg(feature = "parallel")]
@@ -560,29 +545,11 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
     wiring: &[(u32, u32)],
     claim_points: &[&[F]],
     num_vars_folded_vec: usize,
-    dataparallel_aux: Option<&DenseMle<F>>,
     random_coefficients: &[F],
 ) -> Vec<F> {
-    let n = claim_points[0].len();
     // Precompute all the inverses necessary for each of the claim points.
-    let inverses_vec = claim_points
-        .iter()
-        .map(|claim_point| {
-            claim_point
-                .iter()
-                .map(|elem| elem.invert().unwrap())
-                .collect_vec()
-        })
-        .collect_vec();
-    let one_minus_inverses_vec = claim_points
-        .iter()
-        .map(|claim_point| {
-            claim_point
-                .iter()
-                .map(|elem| (F::ONE - elem).invert().unwrap())
-                .collect_vec()
-        })
-        .collect_vec();
+    let (inverses_vec, one_minus_inverses_vec) =
+        compute_inverses_vec_and_one_minus_inverted_vec(claim_points);
 
     // Initialize the folded vector of coefficients, whose size is dependent
     // on whether we are in the dataparallel case.
@@ -609,22 +576,7 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
     // If it is dataparallel, we add the value of the source MLE over all of the
     // copies in order to compute the appropriate sum. Each of these are
     // multiplied by the same beta value.
-    if let Some(source_mle) = dataparallel_aux {
-        let num_nondataparallel_coeffs = 1 << (source_mle.num_free_vars() - num_vars_folded_vec);
-        (0..(1 << num_vars_folded_vec)).for_each(|dataparallel_copy_idx| {
-            let source_mle_at_nonzero_gate_for_copy = source_mle
-                .mle
-                .get(
-                    (current_nonzero_input_gate_label as usize)
-                        + dataparallel_copy_idx * num_nondataparallel_coeffs,
-                )
-                .unwrap_or(F::ZERO);
-            folded_vec[dataparallel_copy_idx] +=
-                source_mle_at_nonzero_gate_for_copy * first_nonzero_gate_beta_rlc;
-        })
-    } else {
-        folded_vec[current_nonzero_input_gate_label as usize] = first_nonzero_gate_beta_rlc;
-    }
+    folded_vec[current_nonzero_input_gate_label as usize] = first_nonzero_gate_beta_rlc;
 
     wiring.iter().skip(1).for_each(
         |(next_nonzero_output_gate_label, next_nonzero_input_gate_label)| {
@@ -652,24 +604,7 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
 
             // If dataparallel, add all of the values of the source_mle over
             // each of the copies.
-            if let Some(source_mle) = dataparallel_aux {
-                let num_nondataparallel_coeffs =
-                    1 << (source_mle.num_free_vars() - num_vars_folded_vec);
-                (0..(1 << num_vars_folded_vec)).for_each(|dataparallel_copy_idx| {
-                    let source_mle_at_nonzero_gate_for_copy = source_mle
-                        .mle
-                        .get(
-                            (*next_nonzero_input_gate_label as usize)
-                                + dataparallel_copy_idx * num_nondataparallel_coeffs,
-                        )
-                        .unwrap_or(F::ZERO);
-
-                    folded_vec[dataparallel_copy_idx] +=
-                        source_mle_at_nonzero_gate_for_copy * beta_values_rlc;
-                })
-            } else {
-                folded_vec[*next_nonzero_input_gate_label as usize] += beta_values_rlc;
-            }
+            folded_vec[*next_nonzero_input_gate_label as usize] += beta_values_rlc;
             current_nonzero_input_gate_label = *next_nonzero_input_gate_label;
             current_nonzero_output_gate_label = *next_nonzero_output_gate_label;
             current_beta_values = next_beta_values;
@@ -677,6 +612,118 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
     );
 
     folded_vec
+}
+
+pub fn fold_wiring_into_dataparallel_beta_mle_identity_gate<F: Field>(
+    wiring: &[(u32, u32)],
+    claim_points: &[&[F]],
+    num_dataparallel_vars: usize,
+    source_mle: &DenseMle<F>,
+    random_coefficients: &[F],
+) -> (Vec<F>, Vec<F>) {
+    // Precompute all the inverses necessary for each of the claim points.
+    let (inverses_vec, one_minus_inverses_vec) =
+        compute_inverses_vec_and_one_minus_inverted_vec(claim_points);
+
+    // Initialize the folded vector of coefficients, whose size is dependent
+    // on whether we are in the dataparallel case.
+    let mut folded_vec_mle = vec![F::ZERO; 1 << num_dataparallel_vars];
+    let mut folded_vec_beta = vec![F::ZERO; 1 << num_dataparallel_vars];
+
+    // We start at the first nonzero gate and first beta value for each claim
+    // challenge.
+    let (current_nonzero_output_gate_label, current_nonzero_input_gate_label) = wiring[0];
+    let mut current_idx_of_beta = current_nonzero_output_gate_label;
+    let idx_of_mle = current_nonzero_input_gate_label;
+    let mut current_beta_values = claim_points
+        .iter()
+        .map(|claim_point| {
+            BetaValues::compute_beta_over_challenge_and_index(
+                claim_point,
+                current_nonzero_output_gate_label as usize,
+            )
+        })
+        .collect_vec();
+    let first_nonzero_gate_beta_rlc = current_beta_values
+        .iter()
+        .zip(random_coefficients)
+        .fold(F::ZERO, |acc, (elem, random_coeff)| {
+            acc + (*elem * random_coeff)
+        });
+
+    folded_vec_beta[0] = first_nonzero_gate_beta_rlc;
+    folded_vec_mle[0] = source_mle.get(idx_of_mle as usize).unwrap();
+
+    // We go through the first iteration of the dataparallel bits and compute
+    // the appropriate beta values to add to the folded vector.
+    let num_nondataparallel_coefficients =
+        1 << (source_mle.num_free_vars() - num_dataparallel_vars);
+
+    (0..(1 << num_dataparallel_vars))
+        .skip(1)
+        .for_each(|dataparallel_copy_index| {
+            let next_idx_of_beta = (dataparallel_copy_index * num_nondataparallel_coefficients)
+                + current_nonzero_output_gate_label as usize;
+            let idx_of_mle = (dataparallel_copy_index * num_nondataparallel_coefficients)
+                + current_nonzero_input_gate_label as usize;
+            let source_value_at_idx = source_mle.get(idx_of_mle as usize).unwrap();
+            let flipped_bits_and_indices = compute_flipped_bit_idx_and_values_lexicographic(
+                current_idx_of_beta,
+                next_idx_of_beta as u32,
+            );
+            let next_beta_values = compute_next_beta_values_vec_from_current(
+                &current_beta_values,
+                &inverses_vec,
+                &one_minus_inverses_vec,
+                claim_points,
+                &flipped_bits_and_indices,
+            );
+            let next_beta_rlc = next_beta_values
+                .iter()
+                .zip(random_coefficients)
+                .fold(F::ZERO, |acc, (elem, random_coeff)| {
+                    acc + (*elem * random_coeff)
+                });
+            folded_vec_beta[dataparallel_copy_index] += next_beta_rlc;
+            folded_vec_mle[dataparallel_copy_index] += source_value_at_idx;
+            current_idx_of_beta = next_idx_of_beta as u32;
+            current_beta_values = next_beta_values;
+        });
+
+    (0..(1 << num_dataparallel_vars)).for_each(|dataparallel_copy_index| {
+        wiring.iter().skip(1).for_each(
+            |(next_nonzero_output_gate_label, next_nonzero_input_gate_label)| {
+                let next_idx_of_beta = (dataparallel_copy_index * num_nondataparallel_coefficients)
+                    + *next_nonzero_output_gate_label as usize;
+                let idx_of_mle = (dataparallel_copy_index * num_nondataparallel_coefficients)
+                    + *next_nonzero_input_gate_label as usize;
+                let source_value_at_idx = source_mle.get(idx_of_mle as usize).unwrap();
+                let flipped_bits_and_indices = compute_flipped_bit_idx_and_values_lexicographic(
+                    current_idx_of_beta,
+                    next_idx_of_beta as u32,
+                );
+                let next_beta_values = compute_next_beta_values_vec_from_current(
+                    &current_beta_values,
+                    &inverses_vec,
+                    &one_minus_inverses_vec,
+                    claim_points,
+                    &flipped_bits_and_indices,
+                );
+                let next_beta_rlc = next_beta_values
+                    .iter()
+                    .zip(random_coefficients)
+                    .fold(F::ZERO, |acc, (elem, random_coeff)| {
+                        acc + (*elem * random_coeff)
+                    });
+                folded_vec_beta[dataparallel_copy_index] += next_beta_rlc;
+                folded_vec_mle[dataparallel_copy_index] += source_value_at_idx;
+                current_idx_of_beta = next_idx_of_beta as u32;
+                current_beta_values = next_beta_values;
+            },
+        )
+    });
+
+    (folded_vec_beta, folded_vec_mle)
 }
 
 /// Compute sumcheck message without a beta table.
@@ -705,15 +752,13 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
 pub fn prove_round_dataparallel_phase<F: Field>(
     lhs: &mut DenseMle<F>,
     rhs: &mut DenseMle<F>,
-    beta_g1: &MultilinearExtension<F>,
     beta_g2: &mut MultilinearExtension<F>,
     round_index: usize,
     challenge: F,
     wiring: &[(usize, usize, usize)],
     num_dataparallel_bits: usize,
     operation: BinaryOperation,
-    g2_challenges_vec: &[&[F]],
-    g1_challenges_vec: &[&[F]],
+    challenges_vec: &[&[F]],
     random_coefficients: &[F],
 ) -> Result<Vec<F>, GateError> {
     beta_g2.fix_variable(challenge);
@@ -724,13 +769,10 @@ pub fn prove_round_dataparallel_phase<F: Field>(
     compute_sumcheck_messages_data_parallel_gate(
         lhs,
         rhs,
-        beta_g2,
-        beta_g1,
         operation,
         wiring,
         num_dataparallel_bits,
-        g2_challenges_vec,
-        g1_challenges_vec,
+        challenges_vec,
         random_coefficients,
     )
 }
@@ -741,35 +783,15 @@ pub fn prove_round_dataparallel_phase<F: Field>(
 pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
     f2_p2_x: &DenseMle<F>,
     f3_p2_y: &DenseMle<F>,
-    beta_g2: &MultilinearExtension<F>,
-    beta_g1: &MultilinearExtension<F>,
     operation: BinaryOperation,
     wiring: &[(usize, usize, usize)],
-    num_dataparallel_bits: usize,
-    g2_challenges_vec: &[&[F]],
-    g1_challenges_vec: &[&[F]],
+    num_dataparallel_vars: usize,
+    challenges_vec: &[&[F]],
     random_coefficients: &[F],
 ) -> Result<Vec<F>, GateError> {
-    let (g2_inverses_vec, g2_one_minus_elem_inverted_vec): (Vec<Vec<F>>, Vec<Vec<F>>) =
-        g2_challenges_vec
-            .iter()
-            .map(|g2_challenge_vec| {
-                g2_challenge_vec
-                    .iter()
-                    .map(|elem| (elem.invert().unwrap(), (F::ONE - elem).invert().unwrap()))
-                    .unzip()
-            })
-            .unzip();
-    let (g1_inverses_vec, g1_one_minus_elem_inverted_vec): (Vec<Vec<F>>, Vec<Vec<F>>) =
-        g1_challenges_vec
-            .iter()
-            .map(|g1_challenge_vec| {
-                g1_challenge_vec
-                    .iter()
-                    .map(|elem| (elem.invert().unwrap(), (F::ONE - elem).invert().unwrap()))
-                    .unzip()
-            })
-            .unzip();
+    let (inverses_vec, one_minus_elem_inverted_vec) =
+        compute_inverses_vec_and_one_minus_inverted_vec(challenges_vec);
+
     // When we have an add gate, we can distribute the beta table over the
     // dataparallel challenges so we only multiply to the function with the x
     // variables or y variables one at a time. When we have a mul gate, we have
@@ -784,206 +806,150 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
     // evaluations of it, over `0..degree`.
     let eval_count = degree + 1;
 
-    let num_dataparallel_copies_mid = 1 << (num_dataparallel_bits - 1);
+    let num_dataparallel_copies_mid = 1 << (num_dataparallel_vars - 1);
 
-    // Iterate across all pairs of evaluations.
-    let evals = cfg_into_iter!((0..num_dataparallel_copies_mid)).fold(
+    let num_nondataparallel_coeffs_f2_x = 1 << (f2_p2_x.num_free_vars() - num_dataparallel_vars);
+    let num_nondataparallel_coeffs_f3_y = 1 << (f3_p2_y.num_free_vars() - num_dataparallel_vars);
+    let num_z_coeffs = 1 << (challenges_vec[0].len() - num_dataparallel_vars);
+    let scaled_wirings = cfg_into_iter!((0..num_dataparallel_copies_mid))
+        .flat_map(|p2_idx| {
+            wiring
+                .iter()
+                .map(|(z, x, y)| {
+                    (
+                        num_z_coeffs * p2_idx + z,
+                        num_nondataparallel_coeffs_f2_x * p2_idx + x,
+                        num_nondataparallel_coeffs_f3_y * p2_idx + y,
+                    )
+                })
+                .collect_vec()
+        })
+        .collect_vec();
+
+    let evals = cfg_into_iter!(scaled_wirings).fold(
         #[cfg(feature = "parallel")]
-        || (vec![F::ZERO; eval_count], None::<(Vec<F>, Vec<F>, usize)>),
+        || (vec![F::ZERO; eval_count], None::<(Vec<F>, u32)>),
         #[cfg(not(feature = "parallel"))]
-        (vec![F::ZERO; eval_count], None::<(Vec<F>, Vec<F>, usize)>),
-        |(mut acc, maybe_current_beta_aux), p2_idx| {
-            let next_beta_g2_values = if maybe_current_beta_aux.is_some() {
-                let (_, current_beta_g2_values, curr_p2_idx) =
-                    maybe_current_beta_aux.as_ref().unwrap();
-                let flipped_bit_idx_and_values =
-                    compute_flipped_bit_idx_and_values_lexicographic(*curr_p2_idx as u32, p2_idx);
-                compute_next_beta_values_vec_from_current(
-                    current_beta_g2_values,
-                    &g2_inverses_vec,
-                    &g2_one_minus_elem_inverted_vec,
-                    g2_challenges_vec,
-                    &flipped_bit_idx_and_values,
+        (vec![F::ZERO; eval_count], None::<(Vec<F>, u32)>),
+        |(mut acc, maybe_current_beta_aux), (scaled_z, scaled_x, scaled_y)| {
+            let next_beta_values_at_0 =
+                if let Some((current_beta_values, current_scaled_z)) = maybe_current_beta_aux {
+                    let flipped_bits_and_idx = compute_flipped_bit_idx_and_values_lexicographic(
+                        current_scaled_z,
+                        scaled_z as u32,
+                    );
+                    compute_next_beta_values_vec_from_current(
+                        &current_beta_values,
+                        &inverses_vec,
+                        &one_minus_elem_inverted_vec,
+                        &challenges_vec,
+                        &flipped_bits_and_idx,
+                    )
+                } else {
+                    challenges_vec
+                        .iter()
+                        .map(|challenge| {
+                            BetaValues::compute_beta_over_challenge_and_index(challenge, scaled_z)
+                        })
+                        .collect_vec()
+                };
+            let next_beta_values_at_1 = next_beta_values_at_0
+                .iter()
+                .zip(
+                    challenges_vec
+                        .iter()
+                        .zip(one_minus_elem_inverted_vec.iter()),
                 )
-            } else {
-                g2_challenges_vec
-                    .iter()
-                    .map(|g2_challenges| {
-                        BetaValues::compute_beta_over_challenge_and_index(
-                            g2_challenges,
-                            p2_idx as usize,
-                        )
-                    })
-                    .collect_vec()
-            };
-            // Compute the beta successors the same way it's done for each mle.
-            // Do it outside the loop because it only needs to be done once per
-            // product of mles.
-            let first_rlc_of_beta_g2 = next_beta_g2_values
+                .map(|(beta_at_0, (challenges, one_minus_inverses))| {
+                    *beta_at_0 * one_minus_inverses[0] * challenges[0]
+                })
+                .collect_vec();
+
+            let rlc_beta_values_at_0 = next_beta_values_at_0
                 .iter()
                 .zip(random_coefficients)
-                .fold(F::ZERO, |acc, (curr_beta, random_coeff)| {
-                    acc + *curr_beta * random_coeff
+                .fold(F::ZERO, |acc, (beta_val, random_coeff)| {
+                    acc + *beta_val * random_coeff
                 });
-            let second_rlc_of_beta_g2 = if !g2_challenges_vec[0].is_empty() {
-                next_beta_g2_values
-                    .iter()
-                    .zip(random_coefficients)
-                    .zip(g2_one_minus_elem_inverted_vec.iter().zip(g2_challenges_vec))
-                    .fold(
-                        F::ZERO,
-                        |acc, ((curr_beta, random_coeff), (one_minus_elem_inverted, g2_chal))| {
-                            let multiplier = *curr_beta * one_minus_elem_inverted[0] * g2_chal[0];
-                            acc + *curr_beta * random_coeff * multiplier
-                        },
-                    )
-            } else {
-                first_rlc_of_beta_g2
-            };
-            let step = second_rlc_of_beta_g2 - first_rlc_of_beta_g2;
-
-            // Iterator that represents all evaluations of the MLE extended to
-            // arbitrarily many linear extrapolations on the line of 0/1.
-            let beta_successors =
-                std::iter::successors(Some(first_rlc_of_beta_g2), move |item| Some(*item + step));
-            let beta_iter: Box<dyn Iterator<Item = F>> = Box::new(beta_successors);
-
-            let inner_sum_successors = wiring
+            let rlc_beta_values_at_1 = next_beta_values_at_1
                 .iter()
-                .copied()
-                .map(|(z, x, y)| {
-                    let mut curr_z_idx = z;
-                    let next_beta_g1_values = if maybe_current_beta_aux.is_some() {
-                        let (current_beta_g1_values, _, _) =
-                            maybe_current_beta_aux.as_ref().unwrap();
-                        let flipped_bit_idx_and_values =
-                            compute_flipped_bit_idx_and_values_lexicographic(
-                                curr_z_idx as u32,
-                                z as u32,
-                            );
-                        compute_next_beta_values_vec_from_current(
-                            current_beta_g1_values,
-                            &g1_inverses_vec,
-                            &g1_one_minus_elem_inverted_vec,
-                            g1_challenges_vec,
-                            &flipped_bit_idx_and_values,
-                        )
-                    } else {
-                        g1_challenges_vec
-                            .iter()
-                            .map(|g1_challenges| {
-                                BetaValues::compute_beta_over_challenge_and_index(
-                                    g1_challenges,
-                                    z as usize,
-                                )
-                            })
-                            .collect_vec()
-                    };
+                .zip(random_coefficients)
+                .fold(F::ZERO, |acc, (beta_val, random_coeff)| {
+                    acc + *beta_val * random_coeff
+                });
+            let linear_diff_betas = rlc_beta_values_at_1 - rlc_beta_values_at_0;
+            let beta_evals_p2_z =
+                std::iter::successors(Some(rlc_beta_values_at_1), move |rlc_beta_values_prev| {
+                    Some(*rlc_beta_values_prev + linear_diff_betas)
+                });
+            let all_beta_evals_p2_z = std::iter::once(rlc_beta_values_at_0).chain(beta_evals_p2_z);
 
-                    let g1_z = beta_g1.get(z).unwrap();
-                    let g1_z_successors = std::iter::successors(Some(g1_z), move |_| Some(g1_z));
+            // Compute f_2((A, p_2), x) Note that the bookkeeping table
+            // is big-endian, so we shift by idx * (number of non
+            // dataparallel vars) to index into the correct copy.
+            let f2_0_p2_x = f2_p2_x.get(scaled_x).unwrap();
+            let f2_1_p2_x = if f2_p2_x.num_free_vars() != 0 {
+                f2_p2_x
+                    .get(scaled_x + (num_nondataparallel_coeffs_f2_x * num_dataparallel_copies_mid))
+                    .unwrap()
+            } else {
+                f2_0_p2_x
+            };
+            let linear_diff_f2 = f2_1_p2_x - f2_0_p2_x;
 
-                    // Compute f_2((A, p_2), x) Note that the bookkeeping table
-                    // is big-endian, so we shift by idx * (number of non
-                    // dataparallel vars) to index into the correct copy.
-                    let f2_0_p2_x = f2_p2_x
-                        .get(
-                            (p2_idx as usize)
-                                * (1 << (f2_p2_x.num_free_vars() - num_dataparallel_bits))
-                                + x,
-                        )
-                        .unwrap();
-                    let f2_1_p2_x = if f2_p2_x.num_free_vars() != 0 {
-                        f2_p2_x
-                            .get(
-                                ((p2_idx + num_dataparallel_copies_mid) as usize)
-                                    * (1 << (f2_p2_x.num_free_vars() - num_dataparallel_bits))
-                                    + x,
-                            )
-                            .unwrap()
-                    } else {
-                        f2_0_p2_x
-                    };
-                    let linear_diff_f2 = f2_1_p2_x - f2_0_p2_x;
+            let f2_evals_p2_x = std::iter::successors(Some(f2_1_p2_x), move |f2_prev_p2_x| {
+                Some(*f2_prev_p2_x + linear_diff_f2)
+            });
+            let all_f2_evals_p2_x = std::iter::once(f2_0_p2_x).chain(f2_evals_p2_x);
 
-                    let f2_evals_p2_x =
-                        std::iter::successors(Some(f2_1_p2_x), move |f2_prev_p2_x| {
-                            Some(*f2_prev_p2_x + linear_diff_f2)
-                        });
-                    let all_f2_evals_p2_x = std::iter::once(f2_0_p2_x).chain(f2_evals_p2_x);
+            // Compute f_3((A, p_2), y). Note that the bookkeeping table
+            // is big-endian, so we shift by `idx * (number of non
+            // dataparallel vars) to index into the correct copy.`
+            let f3_0_p2_y = f3_p2_y.get(scaled_y).unwrap();
+            let f3_1_p2_y = if f3_p2_y.num_free_vars() != 0 {
+                f3_p2_y
+                    .get(scaled_y + (num_nondataparallel_coeffs_f3_y * num_dataparallel_copies_mid))
+                    .unwrap()
+            } else {
+                f3_0_p2_y
+            };
+            let linear_diff_f3 = f3_1_p2_y - f3_0_p2_y;
 
-                    // Compute f_3((A, p_2), y). Note that the bookkeeping table
-                    // is big-endian, so we shift by `idx * (number of non
-                    // dataparallel vars) to index into the correct copy.`
-                    let f3_0_p2_y = f3_p2_y
-                        .get(
-                            (p2_idx) * (1 << (f3_p2_y.num_free_vars() - num_dataparallel_bits)) + y,
-                        )
-                        .unwrap();
-                    let f3_1_p2_y = if f3_p2_y.num_free_vars() != 0 {
-                        f3_p2_y
-                            .get(
-                                (p2_idx + num_dataparallel_copies_mid)
-                                    * (1 << (f3_p2_y.num_free_vars() - num_dataparallel_bits))
-                                    + y,
-                            )
-                            .unwrap()
-                    } else {
-                        f3_0_p2_y
-                    };
-                    let linear_diff_f3 = f3_1_p2_y - f3_0_p2_y;
+            let f3_evals_p2_y = std::iter::successors(Some(f3_1_p2_y), move |f3_prev_p2_y| {
+                Some(*f3_prev_p2_y + linear_diff_f3)
+            });
+            let all_f3_evals_p2_y = std::iter::once(f3_0_p2_y).chain(f3_evals_p2_y);
 
-                    let f3_evals_p2_y =
-                        std::iter::successors(Some(f3_1_p2_y), move |f3_prev_p2_y| {
-                            Some(*f3_prev_p2_y + linear_diff_f3)
-                        });
-                    let all_f3_evals_p2_y = std::iter::once(f3_0_p2_y).chain(f3_evals_p2_y);
+            // --- The evals we want are simply the element-wise product
+            // of the accessed evals ---
+            let g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y = all_beta_evals_p2_z
+                .zip(all_f2_evals_p2_x.zip(all_f3_evals_p2_y))
+                .map(|(g1_z_eval, (f2_eval, f3_eval))| {
+                    g1_z_eval * operation.perform_operation(f2_eval, f3_eval)
+                });
 
-                    // --- The evals we want are simply the element-wise product
-                    // of the accessed evals ---
-                    let g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y = g1_z_successors
-                        .zip(all_f2_evals_p2_x.zip(all_f3_evals_p2_y))
-                        .map(|(g1_z_eval, (f2_eval, f3_eval))| {
-                            g1_z_eval * operation.perform_operation(f2_eval, f3_eval)
-                        });
-
-                    let evals_iter: Box<dyn Iterator<Item = F>> =
-                        Box::new(g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y);
-
-                    evals_iter
-                })
-                .reduce(|acc, successor| {
-                    let add_successors = acc
-                        .zip(successor)
-                        .map(|(acc_eval, successor_eval)| acc_eval + successor_eval);
-
-                    let add_iter: Box<dyn Iterator<Item = F>> = Box::new(add_successors);
-                    add_iter
-                })
-                .unwrap();
-
-            let evals = std::iter::once(inner_sum_successors)
-                // Chain the beta successors.
-                .chain(std::iter::once(beta_iter))
-                .reduce(|acc, evals| Box::new(acc.zip(evals).map(|(acc, eval)| acc * eval)))
-                .unwrap();
+            let evals_iter: Box<dyn Iterator<Item = F>> =
+                Box::new(g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y);
 
             acc.iter_mut()
-                .zip(evals)
+                .zip(evals_iter)
                 .for_each(|(acc, eval)| *acc += eval);
-            acc
+            (acc, Some((next_beta_values_at_0, scaled_z as u32)))
         },
     );
 
     #[cfg(feature = "parallel")]
-    let evals = evals.reduce(
-        || vec![F::ZERO; eval_count],
-        |mut acc, partial| {
-            acc.iter_mut()
-                .zip(partial)
-                .for_each(|(acc, partial)| *acc += partial);
-            acc
-        },
-    );
-    Ok(evals)
+    {
+        let evals = evals.fold(
+            || vec![F::ZERO; eval_count],
+            |mut acc, (partial, _, _)| {
+                acc.iter_mut()
+                    .zip(partial)
+                    .for_each(|(acc, partial)| *acc += partial);
+                acc
+            },
+        );
+        Ok(evals)
+    }
+    Ok(evals.0)
 }
