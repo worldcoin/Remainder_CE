@@ -231,12 +231,11 @@ impl<F: Field> Evaluations<F> {
         evals1
             .iter()
             .zip_longest(evals2.iter())
-            .map(|pair| match pair {
+            .all(|pair| match pair {
                 Both(l, r) => l == r,
                 Left(l) => l == F::ZERO,
                 Right(r) => r == F::ZERO,
             })
-            .all(|x| x)
     }
 
     /// Sorts the elements of `values` by their 0-based index transformed by
