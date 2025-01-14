@@ -468,7 +468,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         self.g1_challenges_vec = Some(vec![g1_challenges.to_vec()]);
 
         if self.num_dataparallel_vars > 0 {
-            let beta_g2 = BetaValues::new(g2_challenges.to_vec().into_iter().enumerate().collect());
+            let beta_g2 = BetaValues::new(g2_challenges.iter().copied().enumerate().collect());
             self.beta_g2_vec = Some(vec![beta_g2]);
             self.init_dataparallel_phase(claim_point);
         }
@@ -497,7 +497,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             let beta_g2_vec = g2_challenges_vec
                 .iter()
                 .map(|g2_challenges| {
-                    BetaValues::new(g2_challenges.to_vec().into_iter().enumerate().collect())
+                    BetaValues::new(g2_challenges.iter().copied().enumerate().collect())
                 })
                 .collect();
             self.beta_g2_vec = Some(beta_g2_vec);
@@ -716,7 +716,7 @@ pub struct IdentityGate<F: Field> {
     num_dataparallel_vars: usize,
 }
 
-impl<'a, F: Field> IdentityGate<F> {
+impl<F: Field> IdentityGate<F> {
     /// Create a new [IdentityGate] struct.
     pub fn new(
         layer_id: LayerId,
@@ -748,7 +748,7 @@ impl<'a, F: Field> IdentityGate<F> {
         let (folded_full_beta, folded_source_mle) =
             fold_wiring_into_dataparallel_beta_mle_identity_gate(
                 &self.wiring,
-                &[&claim_points],
+                &[claim_points],
                 self.num_dataparallel_vars,
                 &self.source_mle,
                 &[F::ONE],

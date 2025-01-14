@@ -592,7 +592,7 @@ pub(crate) fn successors_from_mle_product_no_ind_var<F: Field>(
 /// This is one step of the beta cascade algorithm, performing `(1 - beta_val) *
 /// mle[index] + beta_val * mle[index + 1]`
 pub(crate) fn beta_cascade_step<F: Field>(
-    mle_successor_vec: &Vec<Vec<F>>,
+    mle_successor_vec: &[Vec<F>],
     beta_val: F,
 ) -> Vec<Vec<F>> {
     let (one_minus_beta_val, beta_val) = (F::ONE - beta_val, beta_val);

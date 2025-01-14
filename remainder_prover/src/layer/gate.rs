@@ -148,8 +148,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
     fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
         self.beta_g2_vec = Some(vec![BetaValues::new(
             claim_point[..self.num_dataparallel_vars]
-                .to_vec()
-                .into_iter()
+                .iter()
+                .copied()
                 .enumerate()
                 .collect(),
         )]);
@@ -170,8 +170,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     claim.get_point().to_vec(),
                     BetaValues::new(
                         claim.get_point()[..self.num_dataparallel_vars]
-                            .to_vec()
-                            .into_iter()
+                            .iter()
+                            .copied()
                             .enumerate()
                             .collect(),
                     ),
@@ -211,46 +211,117 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 random_coefficients,
             )
             .unwrap())
-        } else {
-            if round_index < rounds_before_phase_2 {
-                if round_index == self.num_dataparallel_vars {
-                    match global_prover_claim_agg_strategy() {
-                        ClaimAggregationStrategy::Interpolative => {
-                            self.init_phase_1(
-                                self.g_vec.as_ref().unwrap()[0][self.num_dataparallel_vars..]
-                                    .to_vec(),
-                            );
-                        }
-                        ClaimAggregationStrategy::RLC => {
-                            self.init_phase_1_rlc(
-                                &self
-                                    .g_vec
-                                    .as_ref()
-                                    .unwrap()
-                                    .clone()
-                                    .iter()
-                                    .map(|challenge| &challenge[self.num_dataparallel_vars..])
-                                    .collect_vec(),
-                                random_coefficients,
-                            );
-                        }
+        } else if round_index < rounds_before_phase_2 {
+            if round_index == self.num_dataparallel_vars {
+                match global_prover_claim_agg_strategy() {
+                    ClaimAggregationStrategy::Interpolative => {
+                        self.init_phase_1(
+                            self.g_vec.as_ref().unwrap()[0][self.num_dataparallel_vars..].to_vec(),
+                        );
+                    }
+                    ClaimAggregationStrategy::RLC => {
+                        self.init_phase_1_rlc(
+                            &self
+                                .g_vec
+                                .as_ref()
+                                .unwrap()
+                                .clone()
+                                .iter()
+                                .map(|challenge| &challenge[self.num_dataparallel_vars..])
+                                .collect_vec(),
+                            random_coefficients,
+                        );
                     }
                 }
+            }
+            let max_deg = self
+                .phase_1_mles
+                .as_ref()
+                .unwrap()
+                .iter()
+                .fold(0, |acc, elem| max(acc, elem.len()));
+
+            let init_mles: Vec<Vec<&DenseMle<F>>> = self
+                .phase_1_mles
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|mle_vec| {
+                    let mle_reference: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                    mle_reference
+                })
+                .collect();
+            let evals_vec = init_mles
+                .iter()
+                .map(|mle_vec| {
+                    compute_sumcheck_message_no_beta_table(
+                        mle_vec,
+                        self.num_dataparallel_vars,
+                        max_deg,
+                    )
+                    .unwrap()
+                })
+                .collect_vec();
+            let final_evals = evals_vec
+                .clone()
+                .into_iter()
+                .skip(1)
+                .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
+                    acc + SumcheckEvals(elem)
+                });
+            Ok(final_evals.0)
+        } else {
+            if round_index == rounds_before_phase_2 {
+                let f2 = &self.phase_1_mles.as_ref().unwrap()[0][1];
+                let f2_at_u = f2.value();
+                let u_challenges = f2.mle_indices()[self.num_dataparallel_vars..]
+                    .iter()
+                    .map(|mle_index| match mle_index {
+                        MleIndex::Bound(value, _idx) => *value,
+                        _ => panic!("Should not have any unbound values"),
+                    })
+                    .collect_vec();
+
+                match global_prover_claim_agg_strategy() {
+                    ClaimAggregationStrategy::Interpolative => {
+                        let g_challenges =
+                            self.g_vec.as_ref().unwrap()[0][self.num_dataparallel_vars..].to_vec();
+                        self.init_phase_2(&u_challenges, f2_at_u, &g_challenges);
+                    }
+                    ClaimAggregationStrategy::RLC => {
+                        self.init_phase_2_rlc(
+                            &u_challenges,
+                            f2_at_u,
+                            &self
+                                .g_vec
+                                .as_ref()
+                                .unwrap()
+                                .clone()
+                                .iter()
+                                .map(|claim| &claim[self.num_dataparallel_vars..])
+                                .collect_vec(),
+                            random_coefficients,
+                        );
+                    }
+                }
+            }
+            if self.phase_2_mles.as_ref().unwrap()[0][1].num_free_vars() > 0 {
+                // Return the first sumcheck message of this phase.
                 let max_deg = self
-                    .phase_1_mles
+                    .phase_2_mles
                     .as_ref()
                     .unwrap()
                     .iter()
                     .fold(0, |acc, elem| max(acc, elem.len()));
 
                 let init_mles: Vec<Vec<&DenseMle<F>>> = self
-                    .phase_1_mles
+                    .phase_2_mles
                     .as_ref()
                     .unwrap()
                     .iter()
                     .map(|mle_vec| {
-                        let mle_reference: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                        mle_reference
+                        let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                        mle_references
                     })
                     .collect();
                 let evals_vec = init_mles
@@ -273,82 +344,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     });
                 Ok(final_evals.0)
             } else {
-                if round_index == rounds_before_phase_2 {
-                    let f2 = &self.phase_1_mles.as_ref().unwrap()[0][1];
-                    let f2_at_u = f2.value();
-                    let u_challenges = f2.mle_indices()[self.num_dataparallel_vars..]
-                        .iter()
-                        .map(|mle_index| match mle_index {
-                            MleIndex::Bound(value, _idx) => *value,
-                            _ => panic!("Should not have any unbound values"),
-                        })
-                        .collect_vec();
-
-                    match global_prover_claim_agg_strategy() {
-                        ClaimAggregationStrategy::Interpolative => {
-                            let g_challenges = self.g_vec.as_ref().unwrap()[0]
-                                [self.num_dataparallel_vars..]
-                                .to_vec();
-                            self.init_phase_2(&u_challenges, f2_at_u, &g_challenges);
-                        }
-                        ClaimAggregationStrategy::RLC => {
-                            self.init_phase_2_rlc(
-                                &u_challenges,
-                                f2_at_u,
-                                &self
-                                    .g_vec
-                                    .as_ref()
-                                    .unwrap()
-                                    .clone()
-                                    .iter()
-                                    .map(|claim| &claim[self.num_dataparallel_vars..])
-                                    .collect_vec(),
-                                random_coefficients,
-                            );
-                        }
-                    }
-                }
-                if self.phase_2_mles.as_ref().unwrap()[0][1].num_free_vars() > 0 {
-                    // Return the first sumcheck message of this phase.
-                    let max_deg = self
-                        .phase_2_mles
-                        .as_ref()
-                        .unwrap()
-                        .iter()
-                        .fold(0, |acc, elem| max(acc, elem.len()));
-
-                    let init_mles: Vec<Vec<&DenseMle<F>>> = self
-                        .phase_2_mles
-                        .as_ref()
-                        .unwrap()
-                        .iter()
-                        .map(|mle_vec| {
-                            let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
-                            mle_references
-                        })
-                        .collect();
-                    let evals_vec = init_mles
-                        .iter()
-                        .map(|mle_vec| {
-                            compute_sumcheck_message_no_beta_table(
-                                mle_vec,
-                                self.num_dataparallel_vars,
-                                max_deg,
-                            )
-                            .unwrap()
-                        })
-                        .collect_vec();
-                    let final_evals = evals_vec
-                        .clone()
-                        .into_iter()
-                        .skip(1)
-                        .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
-                            acc + SumcheckEvals(elem)
-                        });
-                    Ok(final_evals.0)
-                } else {
-                    Ok(vec![])
-                }
+                Ok(vec![])
             }
         }
     }
@@ -1202,7 +1198,7 @@ impl<F: Field> GateLayer<F> {
         let (a_f1_lhs, a_f1_rhs) = fold_binary_gate_wiring_into_mles_phase_2(
             &self.nonzero_gates,
             f_at_u,
-            &u_claim,
+            u_claim,
             &[g1_claim_points],
             &[beta_g2_fully_bound],
             self.rhs.num_free_vars(),
@@ -1260,8 +1256,8 @@ impl<F: Field> GateLayer<F> {
         let (a_f1_lhs, a_f1_rhs) = fold_binary_gate_wiring_into_mles_phase_2(
             &self.nonzero_gates,
             f_at_u,
-            &u_claim,
-            &g1_claim_points,
+            u_claim,
+            g1_claim_points,
             &random_coefficients_scaled_by_beta_g2,
             self.rhs.num_free_vars(),
             self.gate_operation,

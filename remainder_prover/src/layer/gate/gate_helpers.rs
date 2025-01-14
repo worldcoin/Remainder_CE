@@ -45,11 +45,6 @@ pub enum GateError {
     /// When checking the last round of sumcheck, the challenges don't match
     /// what is bound to the MLE.
     EvaluateBoundIndicesDontMatch,
-    #[error("beta table associated is not indexed")]
-    /// The beta table we are working with doesn't have numbered indices but we
-    /// need labeled bits!
-    #[allow(dead_code)]
-    BetaTableNotIndexed,
 }
 
 /// Given (possibly half-fixed) bookkeeping tables of the MLEs which are
@@ -363,6 +358,9 @@ pub fn compute_fully_bound_identity_gate_function<F: Field>(
     }
 }
 
+/// Similar to [compute_fully_bound_identity_gate_function], this
+/// function uses the "Rothblum" trick in order to evaluate the
+/// fully bound gate function in a streaming fashion.
 pub fn compute_fully_bound_binary_gate_function<F: Field>(
     nondataparallel_round_u_challenges: &[F],
     nondataparallel_round_v_challenges: &[F],
@@ -641,6 +639,9 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
     folded_vec
 }
 
+/// This function uses the "Rothblum"-inspired sumcheck trick
+/// in order to evaluate the necessary MLEs as defined in
+/// [Libra] for phase 1 of binary gate sumcheck messages.
 pub fn fold_binary_gate_wiring_into_mles_phase_1<F: Field>(
     wiring: &[(u32, u32, u32)],
     claim_points: &[&[F]],
@@ -713,6 +714,9 @@ pub fn fold_binary_gate_wiring_into_mles_phase_1<F: Field>(
     (a_hg_lhs, a_hg_rhs)
 }
 
+/// This function uses the "Rothblum"-inspired sumcheck trick
+/// in order to evaluate the necessary MLEs as defined in
+/// [Libra] for phase 2 of binary gate sumcheck messages.
 pub fn fold_binary_gate_wiring_into_mles_phase_2<F: Field>(
     wiring: &[(u32, u32, u32)],
     f2_at_u: F,
@@ -811,6 +815,9 @@ pub fn fold_binary_gate_wiring_into_mles_phase_2<F: Field>(
     (a_f1_lhs, a_f1_rhs)
 }
 
+/// This function uses the "Rothblum"-inspired sumcheck trick
+/// in order to evaluate the necessary MLEs as defined in
+/// [Libra] for the dataparallel phase of an identity gate.
 pub fn fold_wiring_into_dataparallel_beta_mle_identity_gate<F: Field>(
     wiring: &[(u32, u32)],
     claim_points: &[&[F]],
@@ -863,7 +870,7 @@ pub fn fold_wiring_into_dataparallel_beta_mle_identity_gate<F: Field>(
                 + current_nonzero_output_gate_label as usize;
             let idx_of_mle = (dataparallel_copy_index * num_nondataparallel_coefficients)
                 + current_nonzero_input_gate_label as usize;
-            let source_value_at_idx = source_mle.get(idx_of_mle as usize).unwrap();
+            let source_value_at_idx = source_mle.get(idx_of_mle).unwrap();
             let flipped_bits_and_indices = compute_flipped_bit_idx_and_values_lexicographic(
                 current_idx_of_beta,
                 next_idx_of_beta as u32,
@@ -894,7 +901,7 @@ pub fn fold_wiring_into_dataparallel_beta_mle_identity_gate<F: Field>(
                     + *next_nonzero_output_gate_label as usize;
                 let idx_of_mle = (dataparallel_copy_index * num_nondataparallel_coefficients)
                     + *next_nonzero_input_gate_label as usize;
-                let source_value_at_idx = source_mle.get(idx_of_mle as usize).unwrap();
+                let source_value_at_idx = source_mle.get(idx_of_mle).unwrap();
                 let flipped_bits_and_indices = compute_flipped_bit_idx_and_values_lexicographic(
                     current_idx_of_beta,
                     next_idx_of_beta as u32,
@@ -997,30 +1004,29 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
         #[cfg(not(feature = "parallel"))]
         (vec![F::ZERO; eval_count], None::<(Vec<F>, u32)>),
         |(mut acc, maybe_current_beta_aux), (scaled_z, scaled_x, scaled_y)| {
-            let next_beta_values_at_0 =
-                if let Some((current_beta_values, current_scaled_z)) = maybe_current_beta_aux {
-                    let flipped_bits_and_idx = compute_flipped_bit_idx_and_values_lexicographic(
-                        current_scaled_z,
-                        scaled_z as u32,
-                    );
-                    compute_next_beta_values_vec_from_current(
-                        &current_beta_values,
-                        &inverses_vec,
-                        &one_minus_elem_inverted_vec,
-                        &challenges_vec,
-                        &flipped_bits_and_idx,
-                    )
-                } else {
-                    challenges_vec
-                        .iter()
-                        .map(|challenge| {
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                challenge,
-                                scaled_z as usize,
-                            )
-                        })
-                        .collect_vec()
-                };
+            let next_beta_values_at_0 = if let Some((current_beta_values, current_scaled_z)) =
+                maybe_current_beta_aux
+            {
+                let flipped_bits_and_idx =
+                    compute_flipped_bit_idx_and_values_lexicographic(current_scaled_z, scaled_z);
+                compute_next_beta_values_vec_from_current(
+                    &current_beta_values,
+                    &inverses_vec,
+                    &one_minus_elem_inverted_vec,
+                    challenges_vec,
+                    &flipped_bits_and_idx,
+                )
+            } else {
+                challenges_vec
+                    .iter()
+                    .map(|challenge| {
+                        BetaValues::compute_beta_over_challenge_and_index(
+                            challenge,
+                            scaled_z as usize,
+                        )
+                    })
+                    .collect_vec()
+            };
             let next_beta_values_at_1 = next_beta_values_at_0
                 .iter()
                 .zip(
@@ -1108,7 +1114,7 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
             acc.iter_mut()
                 .zip(evals_iter)
                 .for_each(|(acc, eval)| *acc += eval);
-            (acc, Some((next_beta_values_at_0, scaled_z as u32)))
+            (acc, Some((next_beta_values_at_0, scaled_z)))
         },
     );
 
