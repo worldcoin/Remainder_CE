@@ -1,10 +1,10 @@
 use ark_std::{cfg_into_iter, cfg_iter};
 use itertools::Itertools;
 
-use std::{cmp::max, fmt::Debug};
+use std::fmt::Debug;
 
 use crate::{
-    mle::{betavalues::BetaValues, evals::MultilinearExtension, Mle},
+    mle::{betavalues::BetaValues, Mle},
     sumcheck::*,
     utils::mle::{
         compute_flipped_bit_idx_and_values_lexicographic,

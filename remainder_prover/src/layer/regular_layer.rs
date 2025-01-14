@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 use remainder_shared_types::{
+    config::global_config::global_prover_claim_agg_strategy,
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
@@ -126,16 +127,29 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
 
     fn prove(
         &mut self,
-        claim: RawClaim<F>,
+        claims: &[&RawClaim<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
         random_coefficients: &[F],
     ) -> Result<(), LayerError> {
         info!("Proving a GKR Layer.");
 
         // Initialize tables and pre-fix variables.
-        self.initialize(claim.get_point())?;
+        match global_prover_claim_agg_strategy() {
+            remainder_shared_types::config::ClaimAggregationStrategy::Interpolative => {
+                assert_eq!(claims.len(), 1);
+                self.initialize(claims[0].get_point())?
+            }
+            remainder_shared_types::config::ClaimAggregationStrategy::RLC => {
+                self.initialize_rlc(random_coefficients, claims);
+            }
+        }
 
-        let mut previous_round_message = vec![claim.get_eval()];
+        let mut previous_round_message = vec![claims
+            .iter()
+            .zip(random_coefficients)
+            .fold(F::ZERO, |acc, (claim, random_coeff)| {
+                acc + claim.get_eval() * random_coeff
+            })];
         let mut previous_challenge = F::ZERO;
 
         let layer_id = self.layer_id();

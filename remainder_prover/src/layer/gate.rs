@@ -5,17 +5,14 @@
 pub mod gate_helpers;
 mod new_interface_tests;
 
-use std::{
-    cmp::{max, Ordering},
-    collections::HashSet,
-};
+use std::{cmp::max, collections::HashSet};
 
 use gate_helpers::{
     fold_binary_gate_wiring_into_mles_phase_1, fold_binary_gate_wiring_into_mles_phase_2,
 };
 use itertools::Itertools;
 use remainder_shared_types::{
-    config::global_config::global_prover_lazy_beta_evals,
+    config::{global_config::global_prover_claim_agg_strategy, ClaimAggregationStrategy},
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
@@ -32,7 +29,6 @@ use crate::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
         mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
     },
-    prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
 
@@ -111,11 +107,17 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
     fn prove(
         &mut self,
-        claim: RawClaim<F>,
+        claims: &[&RawClaim<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
         random_coefficients: &[F],
     ) -> Result<(), LayerError> {
-        self.initialize(claim.get_point())?;
+        match global_prover_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
+                assert_eq!(claims.len(), 1);
+                self.initialize(claims[0].get_point())?
+            }
+            ClaimAggregationStrategy::RLC => self.initialize_rlc(random_coefficients, claims),
+        };
         let sumcheck_indices = self.sumcheck_round_indices();
         (sumcheck_indices.iter()).for_each(|round_idx| {
             let sumcheck_message = self
@@ -206,9 +208,27 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         } else {
             if round_index < rounds_before_phase_2 {
                 if round_index == self.num_dataparallel_vars {
-                    self.init_phase_1(
-                        self.g_vec.as_ref().unwrap()[0][self.num_dataparallel_vars..].to_vec(),
-                    );
+                    match global_prover_claim_agg_strategy() {
+                        ClaimAggregationStrategy::Interpolative => {
+                            self.init_phase_1(
+                                self.g_vec.as_ref().unwrap()[0][self.num_dataparallel_vars..]
+                                    .to_vec(),
+                            );
+                        }
+                        ClaimAggregationStrategy::RLC => {
+                            self.init_phase_1_rlc(
+                                &self
+                                    .g_vec
+                                    .as_ref()
+                                    .unwrap()
+                                    .clone()
+                                    .iter()
+                                    .map(|challenge| &challenge[self.num_dataparallel_vars..])
+                                    .collect_vec(),
+                                random_coefficients,
+                            );
+                        }
+                    }
                 }
                 let max_deg = self
                     .phase_1_mles
@@ -250,13 +270,6 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 if round_index == rounds_before_phase_2 {
                     let f2 = &self.phase_1_mles.as_ref().unwrap()[0][1];
                     let f2_at_u = f2.value();
-                    let g1_challenges = self
-                        .g_vec
-                        .as_ref()
-                        .unwrap()
-                        .iter()
-                        .map(|claim| claim[self.num_dataparallel_vars..].to_vec())
-                        .collect_vec();
                     let u_challenges = f2.mle_indices()[self.num_dataparallel_vars..]
                         .iter()
                         .map(|mle_index| match mle_index {
@@ -265,7 +278,29 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                         })
                         .collect_vec();
 
-                    self.init_phase_2(&u_challenges, f2_at_u, &g1_challenges);
+                    match global_prover_claim_agg_strategy() {
+                        ClaimAggregationStrategy::Interpolative => {
+                            let g_challenges = self.g_vec.as_ref().unwrap()[0]
+                                [self.num_dataparallel_vars..]
+                                .to_vec();
+                            self.init_phase_2(&u_challenges, f2_at_u, &g_challenges);
+                        }
+                        ClaimAggregationStrategy::RLC => {
+                            self.init_phase_2_rlc(
+                                &u_challenges,
+                                f2_at_u,
+                                &self
+                                    .g_vec
+                                    .as_ref()
+                                    .unwrap()
+                                    .clone()
+                                    .iter()
+                                    .map(|claim| &claim[self.num_dataparallel_vars..])
+                                    .collect_vec(),
+                                random_coefficients,
+                            );
+                        }
+                    }
                 }
                 if self.phase_2_mles.as_ref().unwrap()[0][1].num_free_vars() > 0 {
                     // Return the first sumcheck message of this phase.
@@ -304,9 +339,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                         .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
                             acc + SumcheckEvals(elem)
                         });
-                    let SumcheckEvals(mut final_vec_evals) = final_evals;
-
-                    Ok(final_vec_evals)
+                    Ok(final_evals.0)
                 } else {
                     Ok(vec![])
                 }
@@ -1090,16 +1123,6 @@ impl<F: Field> GateLayer<F> {
         }
     }
 
-    /// bookkeeping tables necessary for binding x
-    fn set_phase_1(&mut self, mles: Vec<Vec<DenseMle<F>>>) {
-        self.phase_1_mles = Some(mles);
-    }
-
-    /// bookkeeping tables necessary for binding y
-    fn set_phase_2(&mut self, mles: Vec<Vec<DenseMle<F>>>) {
-        self.phase_2_mles = Some(mles);
-    }
-
     /// Initialize phase 1, or the necessary mles in order to bind the variables in the `lhs` of the
     /// expression. Once this phase is initialized, the sumcheck rounds binding the "x" variables can
     /// be performed.
@@ -1143,13 +1166,67 @@ impl<F: Field> GateLayer<F> {
             index_mle_indices_gate(mle_vec, self.num_dataparallel_vars);
         });
 
-        self.set_phase_1(phase_1_mles.clone());
+        self.phase_1_mles = Some(phase_1_mles);
+    }
+
+    fn init_phase_1_rlc(&mut self, challenges: &[&[F]], random_coefficients: &[F]) {
+        let random_coefficients_scaled_by_beta_g2 = self
+            .beta_g2_vec
+            .as_ref()
+            .unwrap()
+            .iter()
+            .zip(random_coefficients)
+            .map(|(beta_values, random_coeff)| {
+                assert!(beta_values.unbound_values.is_empty());
+                beta_values
+                    .updated_values
+                    .values()
+                    .fold(F::ONE, |acc, elem| acc * elem)
+                    * random_coeff
+            })
+            .collect_vec();
+
+        let (a_hg_lhs_vec, a_hg_rhs_vec) = fold_binary_gate_wiring_into_mles_phase_1(
+            &self.nonzero_gates,
+            challenges,
+            &self.lhs,
+            &self.rhs,
+            &random_coefficients_scaled_by_beta_g2,
+            self.gate_operation,
+        );
+
+        // The actual mles differ based on whether we are doing a add gate or a mul gate, because
+        // in the case of an add gate, we distribute the gate function whereas in the case of the
+        // mul gate, we simply take the product over all three mles.
+        let mut phase_1_mles = match self.gate_operation {
+            BinaryOperation::Add => {
+                vec![
+                    vec![
+                        DenseMle::new_from_raw(a_hg_lhs_vec, LayerId::Input(0)),
+                        self.lhs.clone(),
+                    ],
+                    vec![DenseMle::new_from_raw(a_hg_rhs_vec, LayerId::Input(0))],
+                ]
+            }
+            BinaryOperation::Mul => {
+                vec![vec![
+                    DenseMle::new_from_raw(a_hg_rhs_vec, LayerId::Input(0)),
+                    self.lhs.clone(),
+                ]]
+            }
+        };
+
+        phase_1_mles.iter_mut().for_each(|mle_vec| {
+            index_mle_indices_gate(mle_vec, self.num_dataparallel_vars);
+        });
+
+        self.phase_1_mles = Some(phase_1_mles);
     }
 
     /// Initialize phase 2, or the necessary mles in order to bind the variables in the `rhs` of the
     /// expression. Once this phase is initialized, the sumcheck rounds binding the "y" variables can
     /// be performed.
-    fn init_phase_2(&mut self, u_claim: &[F], f_at_u: F, g1_claim_points: &[Vec<F>]) {
+    fn init_phase_2(&mut self, u_claim: &[F], f_at_u: F, g1_claim_points: &[F]) {
         let beta_g2_fully_bound = self.beta_g2_vec.as_ref().unwrap()[0]
             .updated_values
             .values()
@@ -1159,11 +1236,66 @@ impl<F: Field> GateLayer<F> {
             &self.nonzero_gates,
             f_at_u,
             &u_claim,
-            &g1_claim_points
-                .iter()
-                .map(|g1_claim| g1_claim.as_slice())
-                .collect_vec(),
+            &[g1_claim_points],
             &[beta_g2_fully_bound],
+            self.rhs.num_free_vars(),
+            self.gate_operation,
+        );
+
+        // We need to multiply h_g(x) by f_2(x)
+        let mut phase_2_mles = match self.gate_operation {
+            BinaryOperation::Add => {
+                vec![
+                    vec![
+                        DenseMle::new_from_raw(a_f1_rhs, LayerId::Input(0)),
+                        self.rhs.clone(),
+                    ],
+                    vec![DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0))],
+                ]
+            }
+            BinaryOperation::Mul => {
+                vec![vec![
+                    DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0)),
+                    self.rhs.clone(),
+                ]]
+            }
+        };
+
+        phase_2_mles.iter_mut().for_each(|mle_vec| {
+            index_mle_indices_gate(mle_vec, self.num_dataparallel_vars);
+        });
+        self.phase_2_mles = Some(phase_2_mles);
+    }
+
+    fn init_phase_2_rlc(
+        &mut self,
+        u_claim: &[F],
+        f_at_u: F,
+        g1_claim_points: &[&[F]],
+        random_coefficients: &[F],
+    ) {
+        let random_coefficients_scaled_by_beta_g2 = self
+            .beta_g2_vec
+            .as_ref()
+            .unwrap()
+            .iter()
+            .zip(random_coefficients)
+            .map(|(beta_values, random_coeff)| {
+                assert!(beta_values.unbound_values.is_empty());
+                beta_values
+                    .updated_values
+                    .values()
+                    .fold(F::ONE, |acc, elem| acc * elem)
+                    * random_coeff
+            })
+            .collect_vec();
+
+        let (a_f1_lhs, a_f1_rhs) = fold_binary_gate_wiring_into_mles_phase_2(
+            &self.nonzero_gates,
+            f_at_u,
+            &u_claim,
+            &g1_claim_points,
+            &random_coefficients_scaled_by_beta_g2,
             self.rhs.num_free_vars(),
             self.gate_operation,
         );
@@ -1212,7 +1344,7 @@ impl<F: Field> GateLayer<F> {
 ///
 /// - gate_operation: The gate operation representing the fan-in-two relationship.
 pub fn compute_gate_data_outputs<F: Field>(
-    wiring: Vec<(usize, usize, usize)>,
+    wiring: Vec<(u32, u32, u32)>,
     num_dataparallel_bits: usize,
     lhs_data: &MultilinearExtension<F>,
     rhs_data: &MultilinearExtension<F>,
@@ -1228,20 +1360,20 @@ pub fn compute_gate_data_outputs<F: Field>(
     let res_table_num_entries = ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
     let num_gate_outputs_per_dataparallel_instance = (max_gate_val + 1).next_power_of_two();
 
-    let mut res_table = vec![F::ZERO; res_table_num_entries];
+    let mut res_table = vec![F::ZERO; res_table_num_entries as usize];
     // TDH(ende): investigate if this can be parallelized (and if it's a bottleneck)
     (0..num_dataparallel_vals).for_each(|idx| {
         wiring.iter().for_each(|(z_ind, x_ind, y_ind)| {
             let zero = F::ZERO;
             let f2_val = lhs_data
                 .f
-                .get(idx * (1 << (lhs_data.num_vars() - num_dataparallel_bits)) + x_ind)
+                .get((idx * (1 << (lhs_data.num_vars() - num_dataparallel_bits)) + x_ind) as usize)
                 .unwrap_or(zero);
             let f3_val = rhs_data
                 .f
-                .get(idx * (1 << (rhs_data.num_vars() - num_dataparallel_bits)) + y_ind)
+                .get((idx * (1 << (rhs_data.num_vars() - num_dataparallel_bits)) + y_ind) as usize)
                 .unwrap_or(zero);
-            res_table[num_gate_outputs_per_dataparallel_instance * idx + z_ind] +=
+            res_table[(num_gate_outputs_per_dataparallel_instance * idx + z_ind) as usize] +=
                 gate_operation.perform_operation(f2_val, f3_val);
         });
     });

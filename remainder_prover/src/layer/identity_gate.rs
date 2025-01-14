@@ -22,6 +22,7 @@ use crate::{
 };
 use itertools::Itertools;
 use remainder_shared_types::{
+    config::{global_config::global_prover_claim_agg_strategy, ClaimAggregationStrategy},
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
@@ -428,11 +429,17 @@ impl<F: Field> VerifierLayer<F> for VerifierIdentityGateLayer<F> {
 impl<F: Field> Layer<F> for IdentityGate<F> {
     fn prove(
         &mut self,
-        claim: RawClaim<F>,
+        claims: &[&RawClaim<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
         random_coefficients: &[F],
     ) -> Result<(), LayerError> {
-        self.initialize(claim.get_point())?;
+        match global_prover_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
+                assert_eq!(claims.len(), 1);
+                self.initialize(claims[0].get_point())?
+            }
+            ClaimAggregationStrategy::RLC => self.initialize_rlc(random_coefficients, claims),
+        };
         let sumcheck_indices = self.sumcheck_round_indices();
         (sumcheck_indices.iter()).for_each(|round_idx| {
             let sumcheck_message = self
@@ -512,49 +519,52 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
             _ => {
                 if round_index == self.num_dataparallel_vars {
-                    if random_coefficients == &[F::ONE] {
-                        // We compute the singular fully bound value for
-                        let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
-                            self.beta_g2_vec.as_ref().unwrap()[0]
-                                .updated_values
-                                .values()
-                                .fold(F::ONE, |acc, val| acc * *val)
-                        } else {
-                            F::ONE
-                        };
+                    match global_prover_claim_agg_strategy() {
+                        ClaimAggregationStrategy::Interpolative => {
+                            // We compute the singular fully bound value for
+                            let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
+                                self.beta_g2_vec.as_ref().unwrap()[0]
+                                    .updated_values
+                                    .values()
+                                    .fold(F::ONE, |acc, val| acc * *val)
+                            } else {
+                                F::ONE
+                            };
 
-                        self.init_phase_1(
-                            &self.g1_challenges_vec.as_ref().unwrap()[0].clone(),
-                            beta_g2_fully_bound,
-                        );
-                    } else {
-                        let random_coefficients = random_coefficients
-                            .iter()
-                            .zip(self.beta_g2_vec.as_ref().unwrap())
-                            .map(|(random_coeff, beta_values)| {
-                                if self.num_dataparallel_vars > 0 {
-                                    beta_values
-                                        .updated_values
-                                        .values()
-                                        .fold(F::ONE, |acc, val| acc * *val)
-                                        * random_coeff
-                                } else {
-                                    F::ONE * random_coeff
-                                }
-                            })
-                            .collect_vec();
-
-                        self.init_phase_1_rlc(
-                            &self
-                                .g1_challenges_vec
-                                .as_ref()
-                                .unwrap()
-                                .clone()
+                            self.init_phase_1(
+                                &self.g1_challenges_vec.as_ref().unwrap()[0].clone(),
+                                beta_g2_fully_bound,
+                            );
+                        }
+                        ClaimAggregationStrategy::RLC => {
+                            let random_coefficients = random_coefficients
                                 .iter()
-                                .map(|challenge| challenge.as_slice())
-                                .collect_vec(),
-                            &random_coefficients,
-                        );
+                                .zip(self.beta_g2_vec.as_ref().unwrap())
+                                .map(|(random_coeff, beta_values)| {
+                                    if self.num_dataparallel_vars > 0 {
+                                        beta_values
+                                            .updated_values
+                                            .values()
+                                            .fold(F::ONE, |acc, val| acc * *val)
+                                            * random_coeff
+                                    } else {
+                                        F::ONE * random_coeff
+                                    }
+                                })
+                                .collect_vec();
+
+                            self.init_phase_1_rlc(
+                                &self
+                                    .g1_challenges_vec
+                                    .as_ref()
+                                    .unwrap()
+                                    .clone()
+                                    .iter()
+                                    .map(|challenge| challenge.as_slice())
+                                    .collect_vec(),
+                                &random_coefficients,
+                            );
+                        }
                     }
                 }
 

@@ -176,7 +176,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
     // matrices in this matrix product.
     fn prove(
         &mut self,
-        claim: RawClaim<F>,
+        claims: &[&RawClaim<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
         random_coefficients: &[F],
     ) -> Result<(), LayerError> {
@@ -188,7 +188,12 @@ impl<F: Field> Layer<F> for MatMult<F> {
             self.matrix_b.cols_num_vars
         );
 
-        self.initialize(claim.get_point());
+        // We always use interpolative claim aggregation for matmult layers
+        // because the preprocessing step in matmult utilizes the fact that we
+        // have linear variables in the expression, which RLC is unable to
+        // aggregate claims for.
+        assert_eq!(claims.len(), 1);
+        self.initialize(claims[0].get_point())?;
 
         let num_vars_middle = self.num_vars_middle_ab;
 

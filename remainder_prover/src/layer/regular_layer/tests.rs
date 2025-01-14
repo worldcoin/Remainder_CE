@@ -42,7 +42,7 @@ fn regular_layer_test_prove_verify_product() {
     let mut transcript = TranscriptWriter::<_, PoseidonSponge<_>>::new("Regular Layer Test");
 
     layer
-        .prove(claim.clone(), &mut transcript, &[Fr::one()])
+        .prove(&[&claim], &mut transcript, &[Fr::one()])
         .unwrap();
 
     let transcript_raw = transcript.get_transcript();
@@ -87,7 +87,7 @@ fn regular_layer_test_prove_verify_sum() {
     let mut transcript = TranscriptWriter::<_, PoseidonSponge<_>>::new("Regular Layer Test");
 
     layer
-        .prove(claim.clone(), &mut transcript, &[Fr::one()])
+        .prove(&[&claim], &mut transcript, &[Fr::one()])
         .unwrap();
 
     let transcript_raw = transcript.get_transcript();
@@ -131,7 +131,7 @@ fn regular_layer_test_prove_verify_selector() {
     let mut transcript = TranscriptWriter::<_, PoseidonSponge<_>>::new("Regular Layer Test");
 
     layer
-        .prove(claim.clone(), &mut transcript, &[Fr::one()])
+        .prove(&[&claim], &mut transcript, &[Fr::one()])
         .unwrap();
 
     let transcript_raw = transcript.get_transcript();
@@ -183,7 +183,7 @@ fn regular_layer_test_prove_verify_complex() {
     let mut transcript = TranscriptWriter::<_, PoseidonSponge<_>>::new("Regular Layer Test");
 
     layer
-        .prove(claim.clone(), &mut transcript, &[Fr::one()])
+        .prove(&[&claim], &mut transcript, &[Fr::one()])
         .unwrap();
 
     let transcript_raw = transcript.get_transcript();
