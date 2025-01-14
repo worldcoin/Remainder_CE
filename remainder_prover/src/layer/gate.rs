@@ -11,8 +11,7 @@ use std::{
 };
 
 use gate_helpers::{
-    bind_round_gate, fold_binary_gate_wiring_into_mles_phase_1,
-    fold_binary_gate_wiring_into_mles_phase_2,
+    fold_binary_gate_wiring_into_mles_phase_1, fold_binary_gate_wiring_into_mles_phase_2,
 };
 use itertools::Itertools;
 use remainder_shared_types::{
@@ -38,9 +37,8 @@ use crate::{
 };
 
 pub use self::gate_helpers::{
-    check_fully_bound, compute_full_gate, compute_sumcheck_message_gate,
     compute_sumcheck_message_no_beta_table, compute_sumcheck_messages_data_parallel_gate,
-    index_mle_indices_gate, prove_round_dataparallel_phase, GateError,
+    index_mle_indices_gate, GateError,
 };
 
 use super::{
