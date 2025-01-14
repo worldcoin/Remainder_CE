@@ -614,6 +614,176 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
     folded_vec
 }
 
+pub fn fold_binary_gate_wiring_into_mles_phase_1<F: Field>(
+    wiring: &[(u32, u32, u32)],
+    claim_points: &[&[F]],
+    f2_x_mle: &DenseMle<F>,
+    f3_y_mle: &DenseMle<F>,
+    random_coefficients: &[F],
+    gate_operation: BinaryOperation,
+) -> (Vec<F>, Vec<F>) {
+    let num_vars = f2_x_mle.num_free_vars();
+    let (inverses, one_minus_elem_inverted) =
+        compute_inverses_vec_and_one_minus_inverted_vec(claim_points);
+    let (_, a_hg_lhs, a_hg_rhs) = cfg_into_iter!(wiring).fold(
+        #[cfg(feature = "parallel")]
+        || {
+            (
+                None::<(Vec<F>, u32)>,
+                vec![F::ZERO; 1 << num_vars],
+                vec![F::ZERO; 1 << num_vars],
+            )
+        },
+        #[cfg(not(feature = "parallel"))]
+        (
+            None::<(Vec<F>, u32)>,
+            vec![F::ZERO; 1 << num_vars],
+            vec![F::ZERO; 1 << num_vars],
+        ),
+        |(maybe_current_beta_aux, mut acc_of_a_hg_lhs, mut acc_of_a_hg_rhs),
+         (next_z, next_x, next_y)| {
+            let next_beta_vec = {
+                if let Some((current_beta_values, current_z_idx)) = maybe_current_beta_aux {
+                    let flipped_bits_and_idx =
+                        compute_flipped_bit_idx_and_values_lexicographic(current_z_idx, *next_z);
+                    compute_next_beta_values_vec_from_current(
+                        &current_beta_values,
+                        &inverses,
+                        &one_minus_elem_inverted,
+                        claim_points,
+                        &flipped_bits_and_idx,
+                    )
+                } else {
+                    claim_points
+                        .iter()
+                        .map(|claim_point| {
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                claim_point,
+                                *next_z as usize,
+                            )
+                        })
+                        .collect_vec()
+                }
+            };
+            let beta_vec_rlc = next_beta_vec
+                .iter()
+                .zip(random_coefficients)
+                .fold(F::ZERO, |acc, (random_coeff, beta)| {
+                    acc + *random_coeff * beta
+                });
+            let f_3_at_y = f3_y_mle.get(*next_y as usize).unwrap_or(F::ZERO);
+            acc_of_a_hg_rhs[*next_x as usize] += beta_vec_rlc * f_3_at_y;
+            if gate_operation == BinaryOperation::Add {
+                acc_of_a_hg_lhs[*next_x as usize] += beta_vec_rlc;
+            }
+            (
+                Some((next_beta_vec, *next_z)),
+                acc_of_a_hg_lhs,
+                acc_of_a_hg_rhs,
+            )
+        },
+    );
+    (a_hg_lhs, a_hg_rhs)
+}
+
+pub fn fold_binary_gate_wiring_into_mles_phase_2<F: Field>(
+    wiring: &[(u32, u32, u32)],
+    f2_at_u: F,
+    u_claim: &[F],
+    g1_claim_points: &[&[F]],
+    random_coefficients: &[F],
+    num_vars: usize,
+    gate_operation: BinaryOperation,
+) -> (Vec<F>, Vec<F>) {
+    let (inverses_g1, one_minus_elem_inverted_g1) =
+        compute_inverses_vec_and_one_minus_inverted_vec(g1_claim_points);
+    let (inverses_u, one_minus_elem_inverted_u): (Vec<F>, Vec<F>) = u_claim
+        .iter()
+        .map(|point| (point.invert().unwrap(), (F::ONE - point).invert().unwrap()))
+        .unzip();
+    let (_, a_f1_lhs, a_f1_rhs) = cfg_into_iter!(wiring).fold(
+        #[cfg(feature = "parallel")]
+        || {
+            (
+                (None::<(Vec<F>, u32)>, None::<(F, u32)>),
+                vec![F::ZERO; 1 << num_vars],
+                vec![F::ZERO; 1 << num_vars],
+            )
+        },
+        #[cfg(not(feature = "parallel"))]
+        (
+            (None::<(Vec<F>, u32)>, None::<(F, u32)>),
+            vec![F::ZERO; 1 << num_vars],
+            vec![F::ZERO; 1 << num_vars],
+        ),
+        |(maybe_current_beta_aux, mut acc_of_a_f1_lhs, mut acc_of_a_f1_rhs),
+         (next_z, next_x, next_y)| {
+            let (next_beta_vec_g1, next_beta_u) = {
+                if let (
+                    Some((current_beta_values_g1, current_z_idx)),
+                    Some((current_beta_value_u, current_x_idx)),
+                ) = maybe_current_beta_aux
+                {
+                    let flipped_bits_and_idx_g1 =
+                        compute_flipped_bit_idx_and_values_lexicographic(current_z_idx, *next_z);
+                    let flipped_bits_and_idx_u =
+                        compute_flipped_bit_idx_and_values_lexicographic(current_x_idx, *next_x);
+                    let next_beta_vec_g1 = compute_next_beta_values_vec_from_current(
+                        &current_beta_values_g1,
+                        &inverses_g1,
+                        &one_minus_elem_inverted_g1,
+                        g1_claim_points,
+                        &flipped_bits_and_idx_g1,
+                    );
+                    let next_beta_u = compute_next_beta_value_from_current(
+                        &current_beta_value_u,
+                        &inverses_u,
+                        &one_minus_elem_inverted_u,
+                        u_claim,
+                        &flipped_bits_and_idx_u,
+                    );
+                    (next_beta_vec_g1, next_beta_u)
+                } else {
+                    let next_beta_vec_g1 = g1_claim_points
+                        .iter()
+                        .map(|claim_point| {
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                claim_point,
+                                *next_z as usize,
+                            )
+                        })
+                        .collect_vec();
+                    let next_beta_u = BetaValues::compute_beta_over_challenge_and_index(
+                        u_claim,
+                        *next_x as usize,
+                    );
+                    (next_beta_vec_g1, next_beta_u)
+                }
+            };
+            let beta_vec_rlc_g1 = next_beta_vec_g1
+                .iter()
+                .zip(random_coefficients)
+                .fold(F::ZERO, |acc, (random_coeff, beta)| {
+                    acc + *random_coeff * beta
+                });
+            let adder = beta_vec_rlc_g1 * next_beta_u;
+            acc_of_a_f1_lhs[*next_y as usize] += adder * f2_at_u;
+            if gate_operation == BinaryOperation::Add {
+                acc_of_a_f1_rhs[*next_y as usize] += adder;
+            }
+            (
+                (
+                    Some((next_beta_vec_g1, *next_z)),
+                    Some((next_beta_u, *next_x)),
+                ),
+                acc_of_a_f1_lhs,
+                acc_of_a_f1_rhs,
+            )
+        },
+    );
+    (a_f1_lhs, a_f1_rhs)
+}
+
 pub fn fold_wiring_into_dataparallel_beta_mle_identity_gate<F: Field>(
     wiring: &[(u32, u32)],
     claim_points: &[&[F]],
@@ -755,7 +925,7 @@ pub fn prove_round_dataparallel_phase<F: Field>(
     beta_g2: &mut MultilinearExtension<F>,
     round_index: usize,
     challenge: F,
-    wiring: &[(usize, usize, usize)],
+    wiring: &[(u32, u32, u32)],
     num_dataparallel_bits: usize,
     operation: BinaryOperation,
     challenges_vec: &[&[F]],
@@ -784,7 +954,7 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
     f2_p2_x: &DenseMle<F>,
     f3_p2_y: &DenseMle<F>,
     operation: BinaryOperation,
-    wiring: &[(usize, usize, usize)],
+    wiring: &[(u32, u32, u32)],
     num_dataparallel_vars: usize,
     challenges_vec: &[&[F]],
     random_coefficients: &[F],
@@ -849,7 +1019,10 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                     challenges_vec
                         .iter()
                         .map(|challenge| {
-                            BetaValues::compute_beta_over_challenge_and_index(challenge, scaled_z)
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                challenge,
+                                scaled_z as usize,
+                            )
                         })
                         .collect_vec()
                 };
@@ -887,10 +1060,13 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
             // Compute f_2((A, p_2), x) Note that the bookkeeping table
             // is big-endian, so we shift by idx * (number of non
             // dataparallel vars) to index into the correct copy.
-            let f2_0_p2_x = f2_p2_x.get(scaled_x).unwrap();
+            let f2_0_p2_x = f2_p2_x.get(scaled_x as usize).unwrap();
             let f2_1_p2_x = if f2_p2_x.num_free_vars() != 0 {
                 f2_p2_x
-                    .get(scaled_x + (num_nondataparallel_coeffs_f2_x * num_dataparallel_copies_mid))
+                    .get(
+                        (scaled_x + (num_nondataparallel_coeffs_f2_x * num_dataparallel_copies_mid))
+                            as usize,
+                    )
                     .unwrap()
             } else {
                 f2_0_p2_x
@@ -905,10 +1081,13 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
             // Compute f_3((A, p_2), y). Note that the bookkeeping table
             // is big-endian, so we shift by `idx * (number of non
             // dataparallel vars) to index into the correct copy.`
-            let f3_0_p2_y = f3_p2_y.get(scaled_y).unwrap();
+            let f3_0_p2_y = f3_p2_y.get(scaled_y as usize).unwrap();
             let f3_1_p2_y = if f3_p2_y.num_free_vars() != 0 {
                 f3_p2_y
-                    .get(scaled_y + (num_nondataparallel_coeffs_f3_y * num_dataparallel_copies_mid))
+                    .get(
+                        (scaled_y + (num_nondataparallel_coeffs_f3_y * num_dataparallel_copies_mid))
+                            as usize,
+                    )
                     .unwrap()
             } else {
                 f3_0_p2_y

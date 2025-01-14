@@ -420,6 +420,7 @@ pub fn compute_next_beta_value_from_current<F: Field>(
     flipped_bit_idx_and_values: &[(u32, bool)],
 ) -> F {
     let n = claim_point.len();
+    dbg!(&n);
     flipped_bit_idx_and_values.iter().fold(
         // For each of the flipped bits, multiply by the
         // appropriate inverse depending on if the value was
@@ -430,6 +431,8 @@ pub fn compute_next_beta_value_from_current<F: Field>(
                 acc * inverses[n - 1 - *idx as usize]
                     * (F::ONE - claim_point[n - 1 - *idx as usize])
             } else {
+                dbg!(&idx);
+                dbg!(&one_minus_elem_inverted.len());
                 dbg!(&one_minus_elem_inverted[n - 1 - *idx as usize]);
                 acc * (one_minus_elem_inverted[n - 1 - *idx as usize])
                     * claim_point[n - 1 - *idx as usize]
