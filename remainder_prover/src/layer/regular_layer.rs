@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 use remainder_shared_types::{
-    config::global_config::global_prover_claim_agg_strategy,
+    config::{global_config::global_prover_claim_agg_strategy, ClaimAggregationStrategy},
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
@@ -129,24 +129,27 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         &mut self,
         claims: &[&RawClaim<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
-        random_coefficients: &[F],
     ) -> Result<(), LayerError> {
         info!("Proving a GKR Layer.");
 
         // Initialize tables and pre-fix variables.
-        match global_prover_claim_agg_strategy() {
-            remainder_shared_types::config::ClaimAggregationStrategy::Interpolative => {
+        let random_coefficients = match global_prover_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
                 assert_eq!(claims.len(), 1);
-                self.initialize(claims[0].get_point())?
+                self.initialize(claims[0].get_point())?;
+                vec![F::ONE]
             }
-            remainder_shared_types::config::ClaimAggregationStrategy::RLC => {
-                self.initialize_rlc(random_coefficients, claims);
+            ClaimAggregationStrategy::RLC => {
+                let random_coefficients =
+                    transcript_writer.get_challenges("RLC Claim Agg Coefficients", claims.len());
+                self.initialize_rlc(&random_coefficients, claims);
+                random_coefficients
             }
-        }
+        };
 
         let mut previous_round_message = vec![claims
             .iter()
-            .zip(random_coefficients)
+            .zip(&random_coefficients)
             .fold(F::ZERO, |acc, (claim, random_coeff)| {
                 acc + claim.get_eval() * random_coeff
             })];
@@ -156,7 +159,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         for round_index in self.nonlinear_rounds.clone() {
             // First compute the appropriate number of univariate evaluations for this round.
             let prover_sumcheck_message =
-                self.compute_round_sumcheck_message(round_index, random_coefficients)?;
+                self.compute_round_sumcheck_message(round_index, &random_coefficients)?;
             // In debug mode, catch sumcheck round errors from the prover side.
             debug_assert_eq!(
                 evaluate_at_a_point(&previous_round_message, previous_challenge).unwrap(),

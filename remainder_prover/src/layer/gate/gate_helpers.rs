@@ -363,6 +363,186 @@ pub fn compute_fully_bound_identity_gate_function<F: Field>(
     }
 }
 
+pub fn compute_fully_bound_binary_gate_function<F: Field>(
+    nondataparallel_round_u_challenges: &[F],
+    nondataparallel_round_v_challenges: &[F],
+    nondataparallel_claim_challenges_vec: &[&[F]],
+    wiring: &[(u32, u32, u32)],
+    random_coefficients: &[F],
+) -> F {
+    let (inverses_round_u_challenges, one_minus_elem_inverted_round_u_challenges): (
+        Vec<F>,
+        Vec<F>,
+    ) = nondataparallel_round_u_challenges
+        .iter()
+        .map(|elem| {
+            let inverse = elem.invert().unwrap();
+            let one_minus_elem_inverse = (F::ONE - elem).invert().unwrap();
+            (inverse, one_minus_elem_inverse)
+        })
+        .unzip();
+
+    let (inverses_round_v_challenges, one_minus_elem_inverted_round_v_challenges): (
+        Vec<F>,
+        Vec<F>,
+    ) = nondataparallel_round_v_challenges
+        .iter()
+        .map(|elem| {
+            let inverse = elem.invert().unwrap();
+            let one_minus_elem_inverse = (F::ONE - elem).invert().unwrap();
+            (inverse, one_minus_elem_inverse)
+        })
+        .unzip();
+
+    let (inverses_vec_claim_challenges, one_minus_elem_inverted_vec_claim_challenges) =
+        compute_inverses_vec_and_one_minus_inverted_vec(nondataparallel_claim_challenges_vec);
+
+    let prev_aux_and_gate_function = cfg_iter!(wiring).fold(
+        #[cfg(feature = "parallel")]
+        || {
+            (
+                (None::<(&u32, &u32, &u32)>, None::<(Vec<F>, F, F)>),
+                F::ZERO,
+            )
+        },
+        #[cfg(not(feature = "parallel"))]
+        (
+            (None::<(&u32, &u32, &u32)>, None::<(Vec<F>, F, F)>),
+            F::ZERO,
+        ),
+        |(maybe_previous_aux, current_accumulation_of_gate_value), (next_z, next_x, next_y)| {
+            // If we values for the previous auxiliary information, then we know
+            // that we are past the first initialization of the iterator, and
+            // use these previous values to accumulate.
+            if let (
+                Some((current_z, current_x, current_y)),
+                Some((current_beta_gz_vec, current_beta_u, current_beta_v)),
+            ) = maybe_previous_aux
+            {
+                // Between the previous input label and the next one, compute the
+                // flipped bits and their values in order to decide which inverses
+                // to multiply by.
+                let flipped_bit_idx_and_values_u =
+                    compute_flipped_bit_idx_and_values_lexicographic(*current_x, *next_x);
+                let flipped_bit_idx_and_values_v =
+                    compute_flipped_bit_idx_and_values_lexicographic(*current_y, *next_y);
+
+                // We do the same thing for the previous output gate label and
+                // the next one.
+                let flipped_bit_idx_and_values_z =
+                    compute_flipped_bit_idx_and_values_lexicographic(*current_z, *next_z);
+
+                // Compute the next beta value by multiplying the current ones
+                // by the appropriate inverses and elements -- this is
+                // specifically for the round challenges over the input labels
+                // as indices. We know there is only one, so we directly index
+                // into our function.
+                let next_beta_value_u = compute_next_beta_value_from_current(
+                    &current_beta_u,
+                    &inverses_round_u_challenges,
+                    &one_minus_elem_inverted_round_u_challenges,
+                    nondataparallel_round_u_challenges,
+                    &flipped_bit_idx_and_values_u,
+                );
+                let next_beta_value_v = compute_next_beta_value_from_current(
+                    &current_beta_v,
+                    &inverses_round_v_challenges,
+                    &one_minus_elem_inverted_round_v_challenges,
+                    nondataparallel_round_v_challenges,
+                    &flipped_bit_idx_and_values_v,
+                );
+
+                // Compute the next beta values by multiplying the current ones
+                // by the appropriate inverses and elements -- this is
+                // specifically for the claim challenges over the output labels
+                // as indices.
+                let next_beta_values_gz = compute_next_beta_values_vec_from_current(
+                    &current_beta_gz_vec,
+                    &inverses_vec_claim_challenges,
+                    &one_minus_elem_inverted_vec_claim_challenges,
+                    nondataparallel_claim_challenges_vec,
+                    &flipped_bit_idx_and_values_z,
+                );
+
+                let rlc_over_claim_beta_values = next_beta_values_gz
+                    .iter()
+                    .zip(random_coefficients)
+                    .fold(F::ZERO, |acc, (elem, random_coeff)| {
+                        acc + (*elem * random_coeff)
+                    });
+
+                // We accumulate by adding the previous value of \beta(g, z)
+                // * \beta(u, x) to the current one.
+                let accumulation_of_gate_value_vec = current_accumulation_of_gate_value
+                    + next_beta_value_u * next_beta_value_v * rlc_over_claim_beta_values;
+
+                (
+                    (
+                        Some((next_z, next_x, next_y)),
+                        Some((next_beta_values_gz, next_beta_value_u, next_beta_value_v)),
+                    ),
+                    accumulation_of_gate_value_vec,
+                )
+            } else {
+                // If the previous auxiliary information is None, we are on our
+                // first iteration of the iterator and therefore simply
+                // initialize the beta function over the point. We send this
+                // information into the accumulator for future rounds.
+                let next_beta_value_round_u = BetaValues::compute_beta_over_challenge_and_index(
+                    nondataparallel_round_u_challenges,
+                    *next_x as usize,
+                );
+                let next_beta_value_round_v = BetaValues::compute_beta_over_challenge_and_index(
+                    nondataparallel_round_v_challenges,
+                    *next_y as usize,
+                );
+
+                let next_beta_values_claim = nondataparallel_claim_challenges_vec
+                    .iter()
+                    .map(|claim_point| {
+                        BetaValues::compute_beta_over_challenge_and_index(
+                            claim_point,
+                            *next_z as usize,
+                        )
+                    })
+                    .collect_vec();
+
+                let rlc_over_claim_beta_values = next_beta_values_claim
+                    .iter()
+                    .zip(random_coefficients)
+                    .fold(F::ZERO, |acc, (elem, random_coeff)| {
+                        acc + (*elem * random_coeff)
+                    });
+
+                (
+                    (
+                        Some((next_z, next_x, next_y)),
+                        Some((
+                            next_beta_values_claim,
+                            next_beta_value_round_u,
+                            next_beta_value_round_v,
+                        )),
+                    ),
+                    next_beta_value_round_u * next_beta_value_round_v * rlc_over_claim_beta_values,
+                )
+            }
+        },
+    );
+
+    // For RLC Claim aggregation, we have multiple claims and therefore multiple beta tables.
+    #[cfg(feature = "parallel")]
+    {
+        prev_aux_and_gate_function
+            .map(|(_, gate_function)| gate_function)
+            .sum::<F>()
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let (_, gate_function_over_claims) = prev_aux_and_gate_function;
+        gate_function_over_claims
+    }
+}
+
 /// When `dataparallel_aux` is None, this function computes the coefficients of
 /// the MLE representing f_1(g, x) where f_1 is the multilinear extension of our
 /// gate function (which on the boolean hypercube, f_1(a, b) = 1 if there exists

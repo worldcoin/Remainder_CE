@@ -8,7 +8,8 @@ mod new_interface_tests;
 use std::{cmp::max, collections::HashSet};
 
 use gate_helpers::{
-    fold_binary_gate_wiring_into_mles_phase_1, fold_binary_gate_wiring_into_mles_phase_2,
+    compute_fully_bound_binary_gate_function, fold_binary_gate_wiring_into_mles_phase_1,
+    fold_binary_gate_wiring_into_mles_phase_2,
 };
 use itertools::Itertools;
 use remainder_shared_types::{
@@ -109,19 +110,24 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         &mut self,
         claims: &[&RawClaim<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
-        random_coefficients: &[F],
     ) -> Result<(), LayerError> {
-        match global_prover_claim_agg_strategy() {
+        let random_coefficients = match global_prover_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => {
                 assert_eq!(claims.len(), 1);
-                self.initialize(claims[0].get_point())?
+                self.initialize(claims[0].get_point())?;
+                vec![F::ONE]
             }
-            ClaimAggregationStrategy::RLC => self.initialize_rlc(random_coefficients, claims),
+            ClaimAggregationStrategy::RLC => {
+                let random_coefficients =
+                    transcript_writer.get_challenges("RLC Claim Agg Coefficients", claims.len());
+                self.initialize_rlc(&random_coefficients, claims);
+                random_coefficients
+            }
         };
         let sumcheck_indices = self.sumcheck_round_indices();
         (sumcheck_indices.iter()).for_each(|round_idx| {
             let sumcheck_message = self
-                .compute_round_sumcheck_message(*round_idx, random_coefficients)
+                .compute_round_sumcheck_message(*round_idx, &random_coefficients)
                 .unwrap();
             transcript_writer.append_elements("Round sumcheck message", &sumcheck_message);
             let challenge = transcript_writer.get_challenge("Sumcheck challenge");
@@ -426,25 +432,6 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             .to_vec();
         let last_v_challenges =
             round_challenges[self.num_dataparallel_vars + self.num_rounds_phase1..].to_vec();
-        // Compute the gate function bound at those variables.
-        // Beta table corresponding to the equality of binding the x variables to u.
-        let beta_u = BetaValues::new_beta_equality_mle(first_u_challenges);
-        // Beta table corresponding to the equality of binding the y variables to v.
-        let beta_v = BetaValues::new_beta_equality_mle(last_v_challenges);
-        // Beta table representing all "z" label challenges.
-        let beta_g = BetaValues::new_beta_equality_mle(g1_challenges);
-        // Multiply the corresponding entries of the beta tables to get the full value of the gate function
-        // i.e. f1(z, x, y) bound at the challenges f1(g1, u, v).
-        let f_1_uv = self
-            .nonzero_gates
-            .iter()
-            .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
-                let gz = beta_g.get(*z_ind as usize).unwrap_or(F::ZERO);
-                let ux = beta_u.get(*x_ind as usize).unwrap_or(F::ZERO);
-                let vy = beta_v.get(*y_ind as usize).unwrap_or(F::ZERO);
-                acc + gz * ux * vy
-            });
-
         let beta_bound = if self.num_dataparallel_vars != 0 {
             BetaValues::compute_beta_over_two_challenges(
                 &g2_challenges,
@@ -454,14 +441,22 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             F::ONE
         };
 
+        let f_1_uv = compute_fully_bound_binary_gate_function(
+            &first_u_challenges,
+            &last_v_challenges,
+            &[&g1_challenges],
+            &self.nonzero_gates,
+            &[beta_bound],
+        );
+
         match self.gate_operation {
             BinaryOperation::Add => PostSumcheckLayer(vec![
-                Product::<F, F>::new(&[lhs_mle.clone()], f_1_uv * beta_bound),
-                Product::<F, F>::new(&[rhs_mle.clone()], f_1_uv * beta_bound),
+                Product::<F, F>::new(&[lhs_mle.clone()], f_1_uv),
+                Product::<F, F>::new(&[rhs_mle.clone()], f_1_uv),
             ]),
             BinaryOperation::Mul => PostSumcheckLayer(vec![Product::<F, F>::new(
                 &[lhs_mle.clone(), rhs_mle.clone()],
-                f_1_uv * beta_bound,
+                f_1_uv,
             )]),
         }
     }
@@ -789,25 +784,6 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             .to_vec();
         let last_v_challenges =
             round_challenges[self.num_dataparallel_vars + num_rounds_phase1..].to_vec();
-        // Compute the gate function bound at those variables.
-        // Beta table corresponding to the equality of binding the x variables to u.
-        let beta_u = BetaValues::new_beta_equality_mle(first_u_challenges);
-        // Beta table corresponding to the equality of binding the y variables to v.
-        let beta_v = BetaValues::new_beta_equality_mle(last_v_challenges);
-        // Beta table representing all "z" label challenges.
-        let beta_g = BetaValues::new_beta_equality_mle(g1_challenges);
-        // Multiply the corresponding entries of the beta tables to get the full value of the gate function
-        // i.e. f1(z, x, y) bound at the challenges f1(g1, u, v).
-        let f_1_uv = self
-            .nonzero_gates
-            .iter()
-            .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
-                let gz = beta_g.get(*z_ind as usize).unwrap_or(F::ZERO);
-                let ux = beta_u.get(*x_ind as usize).unwrap_or(F::ZERO);
-                let vy = beta_v.get(*y_ind as usize).unwrap_or(F::ZERO);
-                acc + gz * ux * vy
-            });
-
         let beta_bound = if self.num_dataparallel_vars != 0 {
             BetaValues::compute_beta_over_two_challenges(
                 &g2_challenges,
@@ -817,6 +793,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             F::ONE
         };
 
+        let f_1_uv = compute_fully_bound_binary_gate_function(
+            &first_u_challenges,
+            &last_v_challenges,
+            &[&g1_challenges],
+            &self.nonzero_gates,
+            &[beta_bound],
+        );
         let lhs_challenges = &round_challenges[..self.num_dataparallel_vars + num_rounds_phase1];
         let rhs_challenges = &round_challenges[..self.num_dataparallel_vars]
             .iter()
@@ -826,21 +809,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
         match self.gate_operation {
             BinaryOperation::Add => PostSumcheckLayer(vec![
-                Product::<F, Option<F>>::new(
-                    &[self.lhs_mle.clone()],
-                    f_1_uv * beta_bound,
-                    lhs_challenges,
-                ),
-                Product::<F, Option<F>>::new(
-                    &[self.rhs_mle.clone()],
-                    f_1_uv * beta_bound,
-                    rhs_challenges,
-                ),
+                Product::<F, Option<F>>::new(&[self.lhs_mle.clone()], f_1_uv, lhs_challenges),
+                Product::<F, Option<F>>::new(&[self.rhs_mle.clone()], f_1_uv, rhs_challenges),
             ]),
             BinaryOperation::Mul => {
                 PostSumcheckLayer(vec![Product::<F, Option<F>>::new_from_mul_gate(
                     &[self.lhs_mle.clone(), self.rhs_mle.clone()],
-                    f_1_uv * beta_bound,
+                    f_1_uv,
                     &[lhs_challenges, rhs_challenges],
                 )])
             }
@@ -954,36 +929,28 @@ impl<F: Field> VerifierGateLayer<F> {
         let g2_challenges = claim.get_point()[..self.num_dataparallel_rounds].to_vec();
         let g1_challenges = claim.get_point()[self.num_dataparallel_rounds..].to_vec();
 
-        // Compute the gate function bound at those variables.
-        // Beta table corresponding to the equality of binding the x variables to u.
-        let beta_u = BetaValues::new_beta_equality_mle(self.first_u_challenges.clone());
-        // Beta table corresponding to the equality of binding the y variables to v.
-        let beta_v = BetaValues::new_beta_equality_mle(self.last_v_challenges.clone());
-        // Beta table representing all "z" label challenges.
-        let beta_g = BetaValues::new_beta_equality_mle(g1_challenges);
-        // Multiply the corresponding entries of the beta tables to get the full value of the gate function
-        // i.e. f1(z, x, y) bound at the challenges f1(g1, u, v).
-        let f_1_uv = self
-            .wiring
-            .iter()
-            .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
-                let gz = beta_g.get(*z_ind as usize).unwrap_or(F::ZERO);
-                let ux = beta_u.get(*x_ind as usize).unwrap_or(F::ZERO);
-                let vy = beta_v.get(*y_ind as usize).unwrap_or(F::ZERO);
-                acc + gz * ux * vy
-            });
+        let beta_bound = if self.num_dataparallel_rounds != 0 {
+            BetaValues::compute_beta_over_two_challenges(
+                &g2_challenges,
+                &self.dataparallel_sumcheck_challenges,
+            )
+        } else {
+            F::ONE
+        };
 
-        let beta_bound = BetaValues::compute_beta_over_two_challenges(
-            &g2_challenges,
-            &self.dataparallel_sumcheck_challenges,
+        let f_1_uv = compute_fully_bound_binary_gate_function(
+            &self.first_u_challenges,
+            &self.last_v_challenges,
+            &[&g1_challenges],
+            &self.wiring,
+            &[beta_bound],
         );
 
         // Compute the final result of the bound expression (this is the oracle query).
-        beta_bound
-            * (f_1_uv
-                * self
-                    .gate_operation
-                    .perform_operation(self.lhs_mle.value(), self.rhs_mle.value()))
+        f_1_uv
+            * self
+                .gate_operation
+                .perform_operation(self.lhs_mle.value(), self.rhs_mle.value())
     }
 }
 

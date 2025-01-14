@@ -431,19 +431,24 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         &mut self,
         claims: &[&RawClaim<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
-        random_coefficients: &[F],
     ) -> Result<(), LayerError> {
-        match global_prover_claim_agg_strategy() {
+        let random_coefficients = match global_prover_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => {
                 assert_eq!(claims.len(), 1);
-                self.initialize(claims[0].get_point())?
+                self.initialize(claims[0].get_point())?;
+                vec![F::ONE]
             }
-            ClaimAggregationStrategy::RLC => self.initialize_rlc(random_coefficients, claims),
+            ClaimAggregationStrategy::RLC => {
+                let random_coefficients =
+                    transcript_writer.get_challenges("RLC Claim Agg Coefficients", claims.len());
+                self.initialize_rlc(&random_coefficients, claims);
+                random_coefficients
+            }
         };
         let sumcheck_indices = self.sumcheck_round_indices();
         (sumcheck_indices.iter()).for_each(|round_idx| {
             let sumcheck_message = self
-                .compute_round_sumcheck_message(*round_idx, random_coefficients)
+                .compute_round_sumcheck_message(*round_idx, &random_coefficients)
                 .unwrap();
             transcript_writer.append_elements("Round sumcheck message", &sumcheck_message);
             let challenge = transcript_writer.get_challenge("Sumcheck challenge");

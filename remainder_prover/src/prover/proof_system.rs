@@ -158,13 +158,12 @@ macro_rules! layer_enum {
 
                 fn prove(
                     &mut self,
-                    claim: $crate::claims::RawClaim<F>,
+                    claims: &[&$crate::claims::RawClaim<F>],
                     transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
-                    random_coefficients: &[F],
                 ) -> Result<(), super::LayerError> {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.prove(claim, transcript, random_coefficients),
+                            Self::$var_name(layer) => layer.prove(claims, transcript),
                         )*
                     }
                 }
