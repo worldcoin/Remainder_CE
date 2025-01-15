@@ -51,7 +51,7 @@ fn regular_layer_test_prove_verify_product() {
     let verifier_layer = RegularLayerDescription::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
-        .verify_rounds(claim, &mut transcript)
+        .verify_rounds(&[&claim], &mut transcript)
         .unwrap();
 }
 
@@ -93,7 +93,7 @@ fn regular_layer_test_prove_verify_sum() {
     let verifier_layer = RegularLayerDescription::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
-        .verify_rounds(claim, &mut transcript)
+        .verify_rounds(&[&claim], &mut transcript)
         .unwrap();
 }
 
@@ -136,7 +136,7 @@ fn regular_layer_test_prove_verify_selector() {
     let verifier_layer = RegularLayerDescription::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
-        .verify_rounds(claim, &mut transcript)
+        .verify_rounds(&[&claim], &mut transcript)
         .unwrap();
 }
 
@@ -185,6 +185,6 @@ fn regular_layer_test_prove_verify_complex() {
     let verifier_layer = RegularLayerDescription::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
-        .verify_rounds(claim, &mut transcript)
+        .verify_rounds(&[&claim], &mut transcript)
         .unwrap();
 }

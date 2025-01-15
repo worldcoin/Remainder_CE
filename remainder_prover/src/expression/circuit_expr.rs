@@ -80,6 +80,16 @@ impl<F: Field> Expression<F, ExprDescription> {
             .collect()
     }
 
+    /// Traverses the expression tree to return all indices within the
+    /// expression. Can only be used after indexing the expression.
+    pub fn get_all_rounds(&self) -> Vec<usize> {
+        self.expression_node
+            .get_all_rounds(&mut vec![], &self.mle_vec)
+            .into_iter()
+            .sorted()
+            .collect()
+    }
+
     /// Get the [MleDescription]s for this expression, which are at the leaves of the expression.
     pub fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
         let circuit_mles = self.expression_node.get_circuit_mles();
@@ -447,6 +457,91 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             }
         });
         curr_nonlinear_indices.clone()
+    }
+
+    /// this traverses the expression to get all of the rounds, in total. requires going through each of the nodes
+    /// and collecting the leaf node indices.
+    pub(crate) fn get_all_rounds(
+        &self,
+        curr_indices: &mut Vec<usize>,
+        _mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec,
+    ) -> Vec<usize> {
+        let indices_in_node = {
+            match self {
+                // in a product, we need the union of all the indices in each of the individual mle refs.
+                ExpressionNode::Product(verifier_mles) => {
+                    let mut product_indices: HashSet<usize> = HashSet::new();
+                    verifier_mles.iter().for_each(|mle| {
+                        mle.var_indices().iter().for_each(|mle_index| {
+                            if let MleIndex::Indexed(i) = mle_index {
+                                product_indices.insert(*i);
+                            }
+                        })
+                    });
+                    product_indices
+                }
+                // in an mle, we need all of the mle indices in the mle.
+                ExpressionNode::Mle(verifier_mle) => verifier_mle
+                    .var_indices()
+                    .iter()
+                    .filter_map(|mle_index| match mle_index {
+                        MleIndex::Indexed(i) => Some(*i),
+                        _ => None,
+                    })
+                    .collect(),
+                // in a selector, we traverse each parts of the selector while adding the selector index
+                // itself to the total set of all indices in an expression.
+                ExpressionNode::Selector(sel_index, a, b) => {
+                    let mut sel_indices: HashSet<usize> = HashSet::new();
+                    if let MleIndex::Indexed(i) = sel_index {
+                        sel_indices.insert(*i);
+                    };
+
+                    let a_indices = a.get_all_rounds(curr_indices, _mle_vec);
+                    let b_indices = b.get_all_rounds(curr_indices, _mle_vec);
+                    a_indices
+                        .into_iter()
+                        .zip(b_indices)
+                        .for_each(|(a_mle_idx, b_mle_idx)| {
+                            sel_indices.insert(a_mle_idx);
+                            sel_indices.insert(b_mle_idx);
+                        });
+                    sel_indices
+                }
+                // we add the indices in each of the parts of the sum.
+                ExpressionNode::Sum(a, b) => {
+                    let mut sum_indices: HashSet<usize> = HashSet::new();
+                    let a_indices = a.get_all_rounds(curr_indices, _mle_vec);
+                    let b_indices = b.get_all_rounds(curr_indices, _mle_vec);
+                    a_indices
+                        .into_iter()
+                        .zip(b_indices)
+                        .for_each(|(a_mle_idx, b_mle_idx)| {
+                            sum_indices.insert(a_mle_idx);
+                            sum_indices.insert(b_mle_idx);
+                        });
+                    sum_indices
+                }
+                // for scaled and negated, we can add all of the indices found in the expression being negated or scaled.
+                ExpressionNode::Scaled(a, _) => a
+                    .get_all_rounds(curr_indices, _mle_vec)
+                    .into_iter()
+                    .collect(),
+                ExpressionNode::Negated(a) => a
+                    .get_all_rounds(curr_indices, _mle_vec)
+                    .into_iter()
+                    .collect(),
+                // for a constant there are no new indices.
+                ExpressionNode::Constant(_) => HashSet::new(),
+            }
+        };
+        // once all of them have been collected, we can take the union of all of them to grab all of the rounds in an expression.
+        indices_in_node.into_iter().for_each(|index| {
+            if !curr_indices.contains(&index) {
+                curr_indices.push(index);
+            }
+        });
+        curr_indices.clone()
     }
 
     /// Get all the [MleDescription]s, recursively, for this expression by adding the MLEs in the leaves into the vector of MleDescriptions.

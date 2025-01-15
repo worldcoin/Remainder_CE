@@ -117,16 +117,37 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
     fn verify_rounds(
         &self,
-        claim: RawClaim<F>,
+        claims: &[&RawClaim<F>],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierLayerEnum<F>, VerificationError> {
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
 
+        // Random coefficients depending on claim aggregation strategy.
+        let random_coefficients = match global_prover_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
+                assert_eq!(claims.len(), 1);
+                vec![F::ONE]
+            }
+            ClaimAggregationStrategy::RLC => {
+                transcript_reader.get_challenges("RLC Claim Agg Coefficients", claims.len())?
+            }
+        };
+
         // Represents `g_{i-1}(x)` of the previous round. This is initialized to
         // the constant polynomial `g_0(x)` which evaluates to the claim result
         // for any `x`.
-        let mut g_prev_round = vec![claim.get_eval()];
+        let mut g_prev_round = match global_prover_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
+                vec![claims[0].get_eval()]
+            }
+            ClaimAggregationStrategy::RLC => vec![random_coefficients
+                .iter()
+                .zip(claims)
+                .fold(F::ONE, |acc, (rlc_val, claim)| {
+                    acc + *rlc_val * claim.get_eval()
+                })],
+        };
 
         // Previous round's challege: r_{i-1}.
         let mut prev_challenge = F::ZERO;
@@ -168,9 +189,16 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge)?;
 
         let verifier_id_gate_layer = self
-            .convert_into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
+            .convert_into_verifier_layer(
+                &challenges,
+                &claims.iter().map(|claim| claim.get_point()).collect_vec(),
+                transcript_reader,
+            )
             .unwrap();
-        let final_result = verifier_id_gate_layer.evaluate(&claim);
+        let final_result = verifier_id_gate_layer.evaluate(
+            &claims.iter().map(|claim| claim.get_point()).collect_vec(),
+            &random_coefficients,
+        );
 
         if g_final_r_final != final_result {
             return Err(VerificationError::FinalSumcheckFailed);
@@ -197,7 +225,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
     fn convert_into_verifier_layer(
         &self,
         sumcheck_challenges: &[F],
-        _claim_point: &[F],
+        _claim_points: &[&[F]],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
         // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
@@ -341,22 +369,31 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 impl<F: Field> VerifierIdentityGateLayer<F> {
     /// Computes the oracle query's value for a given
     /// [IdentityGateVerifierLayer].
-    pub fn evaluate(&self, claim: &RawClaim<F>) -> F {
-        let g2_challenges = claim.get_point()[..self.num_dataparallel_rounds].to_vec();
-        let g1_challenges = claim.get_point()[self.num_dataparallel_rounds..].to_vec();
+    pub fn evaluate(&self, claim_points: &[&[F]], random_coefficients: &[F]) -> F {
+        assert_eq!(random_coefficients.len(), claim_points.len());
+        let scaled_random_coeffs = claim_points
+            .iter()
+            .zip(random_coefficients)
+            .map(|(claim, random_coeff)| {
+                let beta_bound = BetaValues::compute_beta_over_two_challenges(
+                    &claim[..self.num_dataparallel_rounds],
+                    &self.dataparallel_sumcheck_challenges,
+                );
+                beta_bound * random_coeff
+            })
+            .collect_vec();
 
-        let f_1_uv = compute_fully_bound_identity_gate_function(
+        let f_1_gu = compute_fully_bound_identity_gate_function(
             &self.first_u_challenges,
-            &[&g1_challenges],
+            &claim_points
+                .iter()
+                .map(|claim| &claim[self.num_dataparallel_rounds..])
+                .collect_vec(),
             &self.wiring,
-            &[F::ONE],
-        );
-        let beta_bound = BetaValues::compute_beta_over_two_challenges(
-            &g2_challenges,
-            &self.dataparallel_sumcheck_challenges,
+            &scaled_random_coeffs,
         );
         // get the fully evaluated "expression"
-        beta_bound * f_1_uv * self.source_mle.value()
+        f_1_gu * self.source_mle.value()
     }
 }
 

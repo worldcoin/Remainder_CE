@@ -51,9 +51,12 @@ pub struct RegularLayer<F: Field> {
     /// It includes information on how this layer relates to the others.
     pub(crate) expression: Expression<F, ProverExpr>,
 
-    /// Stores the indices of the non-linear rounds in this GKR layer so we
-    /// only produce sumcheck proofs over those.
-    nonlinear_rounds: Vec<usize>,
+    /// Stores the indices of the sumcheck rounds in this GKR layer so we
+    /// only produce sumcheck proofs over those. When we use interpolative
+    /// claim aggregation, this is all of the nonlinear variables in the
+    /// expression. When we use RLC claim aggregation, this is all of the
+    /// variables in the epxression.
+    sumcheck_rounds: Vec<usize>,
 
     /// Stores the beta values associated with the `expression`.
     /// Initially set to `None`. Computed during initialization.
@@ -68,11 +71,14 @@ impl<F: Field> RegularLayer<F> {
     pub fn new_raw(id: LayerId, mut expression: Expression<F, ProverExpr>) -> Self {
         // Compute nonlinear rounds from `expression`
         expression.index_mle_indices(0);
-        let nonlinear_rounds = expression.get_all_nonlinear_rounds();
+        let sumcheck_rounds = match global_prover_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => expression.get_all_nonlinear_rounds(),
+            ClaimAggregationStrategy::RLC => expression.get_all_rounds(),
+        };
         RegularLayer {
             id,
             expression,
-            nonlinear_rounds,
+            sumcheck_rounds,
             beta_vals_vec: None,
         }
     }
@@ -156,7 +162,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         let mut previous_challenge = F::ZERO;
 
         let layer_id = self.layer_id();
-        for round_index in self.nonlinear_rounds.clone() {
+        for round_index in self.sumcheck_rounds.clone() {
             // First compute the appropriate number of univariate evaluations for this round.
             let prover_sumcheck_message =
                 self.compute_round_sumcheck_message(round_index, &random_coefficients)?;
@@ -289,7 +295,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
     /// V_{i + 1}(x_1, x_2, x_3) * V_{i + 2}(x_1, x_2)
     /// then the `sumcheck_round_indices` of this layer would be [1, 2].
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        self.nonlinear_rounds.clone()
+        self.sumcheck_rounds.clone()
     }
 
     fn max_degree(&self) -> usize {
@@ -522,24 +528,48 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
 
     fn verify_rounds(
         &self,
-        claim: RawClaim<F>,
+        claims: &[&RawClaim<F>],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierLayerEnum<F>, VerificationError> {
-        let nonlinear_rounds = self.expression.get_all_nonlinear_rounds();
+        let rounds_sumchecked_over = match global_prover_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => self.expression.get_all_nonlinear_rounds(),
+            ClaimAggregationStrategy::RLC => self.expression.get_all_rounds(),
+        };
 
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
 
+        // Random coefficients depending on claim aggregation strategy.
+        let random_coefficients = match global_prover_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
+                assert_eq!(claims.len(), 1);
+                vec![F::ONE]
+            }
+            ClaimAggregationStrategy::RLC => {
+                transcript_reader.get_challenges("RLC Claim Agg Coefficients", claims.len())?
+            }
+        };
+
         // Represents `g_{i-1}(x)` of the previous round.
         // This is initialized to the constant polynomial `g_0(x)` which evaluates
         // to the claim result for any `x`.
-        let mut g_prev_round = vec![claim.get_eval()];
+        let mut g_prev_round = match global_prover_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
+                vec![claims[0].get_eval()]
+            }
+            ClaimAggregationStrategy::RLC => vec![random_coefficients
+                .iter()
+                .zip(claims)
+                .fold(F::ONE, |acc, (rlc_val, claim)| {
+                    acc + *rlc_val * claim.get_eval()
+                })],
+        };
 
         // Previous round's challege: r_{i-1}.
         let mut prev_challenge = F::ZERO;
 
         // For round 1 <= i <= n, perform the check:
-        for round_index in &nonlinear_rounds {
+        for round_index in &rounds_sumchecked_over {
             let degree = self.expression.get_round_degree(*round_index);
 
             // Receive `g_i(x)` from the Prover.
@@ -581,31 +611,39 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         }
 
         // TODO(Makis): Add check that `expr` is on the same number of total vars.
-        let num_vars = claim.get_num_vars();
+        let num_vars = claims[0].get_num_vars();
 
         // Build an indicator vector for linear indices.
         let mut var_is_linear: Vec<bool> = vec![true; num_vars];
-        for idx in &nonlinear_rounds {
-            var_is_linear[*idx] = false;
+        if global_prover_claim_agg_strategy() == ClaimAggregationStrategy::Interpolative {
+            for idx in &rounds_sumchecked_over {
+                var_is_linear[*idx] = false;
+            }
         }
-
         // Build point interlacing linear-round challenges with nonlinear-round
         // challenges.
         let mut nonlinear_idx = 0;
-        let point: Vec<F> = (0..num_vars)
-            .map(|idx| {
-                if var_is_linear[idx] {
-                    claim.get_point()[idx]
-                } else {
-                    let r = challenges[nonlinear_idx];
-                    nonlinear_idx += 1;
-                    r
-                }
-            })
-            .collect();
+        let point: &Vec<F> = match global_prover_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => &(0..num_vars)
+                .map(|idx| {
+                    if var_is_linear[idx] {
+                        claims[0].get_point()[idx]
+                    } else {
+                        let r = challenges[nonlinear_idx];
+                        nonlinear_idx += 1;
+                        r
+                    }
+                })
+                .collect(),
+            ClaimAggregationStrategy::RLC => &challenges,
+        };
 
         let verifier_layer = self
-            .convert_into_verifier_layer(&point, claim.get_point(), transcript_reader)
+            .convert_into_verifier_layer(
+                point,
+                &claims.iter().map(|claim| claim.get_point()).collect_vec(),
+                transcript_reader,
+            )
             .unwrap();
 
         // Compute `P(r_1, ..., r_n)` over all challenge points (linear and
@@ -613,15 +651,27 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         // The MLE values are retrieved from the transcript.
         let expr_value_at_challenge_point = verifier_layer.expression.evaluate()?;
 
-        // Compute `\beta((r_1, ..., r_n), (u_1, ..., u_n))`.
-        let claim_nonlinear_vals: Vec<F> = nonlinear_rounds
-            .iter()
-            .map(|idx| (claim.get_point()[*idx]))
-            .collect();
-        debug_assert_eq!(claim_nonlinear_vals.len(), challenges.len());
-
-        let beta_fn_evaluated_at_challenge_point =
-            BetaValues::compute_beta_over_two_challenges(&claim_nonlinear_vals, &challenges);
+        let beta_fn_evaluated_at_challenge_point = match global_prover_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
+                // Compute `\beta((r_1, ..., r_n), (u_1, ..., u_n))`.
+                let claim_nonlinear_vals: Vec<F> = rounds_sumchecked_over
+                    .iter()
+                    .map(|idx| (claims[0].get_point()[*idx]))
+                    .collect();
+                debug_assert_eq!(claim_nonlinear_vals.len(), challenges.len());
+                BetaValues::compute_beta_over_two_challenges(&claim_nonlinear_vals, &challenges)
+            }
+            ClaimAggregationStrategy::RLC => random_coefficients.iter().zip(claims).fold(
+                F::ZERO,
+                |acc, (random_coeff, claim)| {
+                    acc + *random_coeff
+                        * BetaValues::compute_beta_over_two_challenges(
+                            claim.get_point(),
+                            &challenges,
+                        )
+                },
+            ),
+        };
 
         // Evalute `g_n(r_n)`.
         // Note: If there were no nonlinear rounds, this value reduces to
@@ -646,7 +696,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
     fn convert_into_verifier_layer(
         &self,
         sumcheck_challenges: &[F],
-        _claim_point: &[F],
+        _claim_point: &[&[F]],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
         let verifier_expr = self

@@ -44,12 +44,12 @@ macro_rules! layer_enum {
 
                 fn verify_rounds(
                     &self,
-                    claim: $crate::claims::RawClaim<F>,
+                    claims: &[&$crate::claims::RawClaim<F>],
                     transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
                 ) -> Result<VerifierLayerEnum<F>, super::VerificationError> {
                     match self {
                         $(
-                            Self::$var_name(layer) => Ok(layer.verify_rounds(claim, transcript)?),
+                            Self::$var_name(layer) => Ok(layer.verify_rounds(claims, transcript)?),
                         )*
                     }
                 }
@@ -67,12 +67,12 @@ macro_rules! layer_enum {
                 fn convert_into_verifier_layer(
                     &self,
                     sumcheck_bindings: &[F],
-                    claim_point: &[F],
+                    claim_points: &[&[F]],
                     transcript_reader: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
                 ) -> Result<Self::VerifierLayer, super::VerificationError> {
                     match self {
                         $(
-                            Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.convert_into_verifier_layer(sumcheck_bindings, claim_point, transcript_reader)?)),
+                            Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.convert_into_verifier_layer(sumcheck_bindings, claim_points, transcript_reader)?)),
                         )*
                     }
                 }

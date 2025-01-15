@@ -394,11 +394,15 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
 
     fn verify_rounds(
         &self,
-        claim: RawClaim<F>,
+        claims: &[&RawClaim<F>],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierLayerEnum<F>, VerificationError> {
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
+
+        // For matmult we always use the interpolative claim aggregation method.
+        assert_eq!(claims.len(), 1);
+        let claim = claims[0];
 
         // Represents `g_{i-1}(x)` of the previous round.
         // This is initialized to the constant polynomial `g_0(x)` which evaluates
@@ -444,7 +448,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge)?;
 
         let verifier_layer: VerifierMatMultLayer<F> = self
-            .convert_into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
+            .convert_into_verifier_layer(&challenges, &[claim.get_point()], transcript_reader)
             .unwrap();
 
         let matrix_product = verifier_layer.evaluate();
@@ -510,9 +514,13 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
     fn convert_into_verifier_layer(
         &self,
         sumcheck_bindings: &[F],
-        claim_point: &[F],
+        claim_points: &[&[F]],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
+        // For matmult, we only use interpolative claim aggregation.
+        assert_eq!(claim_points.len(), 1);
+        let claim_point = claim_points[0];
+
         // Split the claim into the claims made on matrix A rows and matrix B cols.
         let mut claim_a = claim_point.to_vec();
         let claim_b = claim_a.split_off(self.matrix_a.rows_num_vars);

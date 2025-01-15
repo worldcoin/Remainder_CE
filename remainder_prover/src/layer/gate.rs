@@ -571,11 +571,22 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
     fn verify_rounds(
         &self,
-        claim: RawClaim<F>,
+        claims: &[&RawClaim<F>],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierLayerEnum<F>, VerificationError> {
         // Storing challenges for the sake of claim generation later
         let mut challenges = vec![];
+
+        // Random coefficients depending on claim aggregation strategy.
+        let random_coefficients = match global_prover_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
+                assert_eq!(claims.len(), 1);
+                vec![F::ONE]
+            }
+            ClaimAggregationStrategy::RLC => {
+                transcript_reader.get_challenges("RLC Claim Agg Coefficients", claims.len())?
+            }
+        };
 
         // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
         // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED
@@ -607,10 +618,29 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             .consume_elements("Initial Sumcheck evaluations", first_round_num_evals)?;
         sumcheck_messages.push(first_round_sumcheck_messages.clone());
 
-        // Check: V_i(g_2, g_1) =? g_1(0) + g_1(1)
-        // TODO(ryancao): SUPER overloaded notation (in e.g. above comments); fix across the board
-        if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1] != claim.get_eval() {
-            return Err(VerificationError::SumcheckStartFailed);
+        match global_prover_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
+                // Check: V_i(g_2, g_1) =? g_1(0) + g_1(1)
+                // TODO(ryancao): SUPER overloaded notation (in e.g. above comments); fix across the board
+                if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1]
+                    != claims[0].get_eval()
+                {
+                    return Err(VerificationError::SumcheckStartFailed);
+                }
+            }
+            ClaimAggregationStrategy::RLC => {
+                let rlc_claim_eval = random_coefficients
+                    .iter()
+                    .zip(claims)
+                    .fold(F::ONE, |acc, (rlc_val, claim)| {
+                        acc + *rlc_val * claim.get_eval()
+                    });
+                if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1]
+                    != rlc_claim_eval
+                {
+                    return Err(VerificationError::SumcheckStartFailed);
+                }
+            }
         }
 
         // Check each of the messages -- note that here the verifier doesn't actually see the difference
@@ -661,9 +691,16 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         // Create the resulting verifier layer for claim tracking
         // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
         let verifier_gate_layer = self
-            .convert_into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
+            .convert_into_verifier_layer(
+                &challenges,
+                &claims.iter().map(|claim| claim.get_point()).collect_vec(),
+                transcript_reader,
+            )
             .unwrap();
-        let final_result = verifier_gate_layer.evaluate(&claim);
+        let final_result = verifier_gate_layer.evaluate(
+            &claims.iter().map(|claim| claim.get_point()).collect_vec(),
+            &random_coefficients,
+        );
 
         // Finally, compute g_n(r_n).
         let g_n_evals = sumcheck_messages[sumcheck_messages.len() - 1].clone();
@@ -696,7 +733,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
     fn convert_into_verifier_layer(
         &self,
         sumcheck_bindings: &[F],
-        claim_point: &[F],
+        claim_points: &[&[F]],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
         // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
@@ -754,7 +791,11 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             lhs_mle: lhs_verifier_mle,
             rhs_mle: rhs_verifier_mle,
             num_dataparallel_rounds: self.num_dataparallel_vars,
-            claim_challenge_points: claim_point.to_vec(),
+            claim_challenge_points: claim_points
+                .iter()
+                .cloned()
+                .map(|claim| claim.to_vec())
+                .collect_vec(),
             dataparallel_sumcheck_challenges: dataparallel_challenges,
             first_u_challenges,
             last_v_challenges,
@@ -921,25 +962,29 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
 impl<F: Field> VerifierGateLayer<F> {
     /// Computes the oracle query's value for a given [VerifierGateLayer].
-    pub fn evaluate(&self, claim: &RawClaim<F>) -> F {
-        let g2_challenges = claim.get_point()[..self.num_dataparallel_rounds].to_vec();
-        let g1_challenges = claim.get_point()[self.num_dataparallel_rounds..].to_vec();
-
-        let beta_bound = if self.num_dataparallel_rounds != 0 {
-            BetaValues::compute_beta_over_two_challenges(
-                &g2_challenges,
-                &self.dataparallel_sumcheck_challenges,
-            )
-        } else {
-            F::ONE
-        };
+    pub fn evaluate(&self, claims: &[&[F]], random_coefficients: &[F]) -> F {
+        assert_eq!(random_coefficients.len(), claims.len());
+        let scaled_random_coeffs = claims
+            .iter()
+            .zip(random_coefficients)
+            .map(|(claim, random_coeff)| {
+                let beta_bound = BetaValues::compute_beta_over_two_challenges(
+                    &claim[..self.num_dataparallel_rounds],
+                    &self.dataparallel_sumcheck_challenges,
+                );
+                beta_bound * random_coeff
+            })
+            .collect_vec();
 
         let f_1_uv = compute_fully_bound_binary_gate_function(
             &self.first_u_challenges,
             &self.last_v_challenges,
-            &[&g1_challenges],
+            &claims
+                .iter()
+                .map(|claim| &claim[self.num_dataparallel_rounds..])
+                .collect_vec(),
             &self.wiring,
-            &[beta_bound],
+            &scaled_random_coeffs,
         );
 
         // Compute the final result of the bound expression (this is the oracle query).
@@ -974,7 +1019,7 @@ pub struct VerifierGateLayer<F: Field> {
     rhs_mle: VerifierMle<F>,
 
     /// The challenge points for the claim on the [Gate] layer.
-    claim_challenge_points: Vec<F>,
+    claim_challenge_points: Vec<Vec<F>>,
 
     /// The number of dataparallel rounds.
     num_dataparallel_rounds: usize,
