@@ -64,8 +64,8 @@ pub fn evaluate_mle_product_no_beta_table<F: Field>(
     independent_variable: bool,
     degree: usize,
 ) -> Result<SumcheckEvals<F>, MleError> {
-    // --- Gets the total number of free variables across all MLEs within this
-    // product ---
+    // Gets the total number of free variables across all MLEs within this
+    // product
     let max_num_vars = mles
         .iter()
         .map(|mle| mle.num_free_vars())
@@ -162,8 +162,9 @@ pub fn evaluate_mle_product_no_beta_table<F: Field>(
                     .reduce(|acc, eval| acc * eval)
                     .unwrap();
 
-                // --- Combine them into the accumulator --- Note that the
-                // accumulator stores g(0), g(1), ..., g(d - 1)
+                // Combine them into the accumulator.
+                //
+                // Note that the accumulator stores g(0), g(1), ..., g(d - 1)
                 acc + product
             },
         );
@@ -825,6 +826,16 @@ pub fn fold_wiring_into_dataparallel_beta_mle_identity_gate<F: Field>(
     source_mle: &DenseMle<F>,
     random_coefficients: &[F],
 ) -> (Vec<F>, Vec<F>) {
+    dbg!(&claim_points);
+    dbg!(&wiring);
+    let full_beta = BetaValues::new_beta_equality_mle(claim_points[0].to_vec());
+    let folded_beta = full_beta
+        .to_vec()
+        .chunks(2)
+        .map(|chunk| chunk[0] + chunk[1])
+        .collect_vec();
+    dbg!(&folded_beta);
+    //sum_{x, z}{\beta(g2g1, p2z) * f1(z, x, y) * Vi(p2, x)}
     // Precompute all the inverses necessary for each of the claim points.
     let (inverses_vec, one_minus_inverses_vec) =
         compute_inverses_vec_and_one_minus_inverted_vec(claim_points);
@@ -860,15 +871,19 @@ pub fn fold_wiring_into_dataparallel_beta_mle_identity_gate<F: Field>(
 
     // We go through the first iteration of the dataparallel bits and compute
     // the appropriate beta values to add to the folded vector.
-    let num_nondataparallel_coefficients =
+    let num_nondataparallel_coefficients_in_result =
+        1 << (claim_points[0].len() - num_dataparallel_vars);
+    let num_nondataparallel_coefficients_in_mle =
         1 << (source_mle.num_free_vars() - num_dataparallel_vars);
 
     (0..(1 << num_dataparallel_vars))
         .skip(1)
         .for_each(|dataparallel_copy_index| {
-            let next_idx_of_beta = (dataparallel_copy_index * num_nondataparallel_coefficients)
+            dbg!(&current_nonzero_output_gate_label);
+            let next_idx_of_beta = (dataparallel_copy_index
+                * num_nondataparallel_coefficients_in_result)
                 + current_nonzero_output_gate_label as usize;
-            let idx_of_mle = (dataparallel_copy_index * num_nondataparallel_coefficients)
+            let idx_of_mle = (dataparallel_copy_index * num_nondataparallel_coefficients_in_mle)
                 + current_nonzero_input_gate_label as usize;
             let source_value_at_idx = source_mle.get(idx_of_mle).unwrap();
             let flipped_bits_and_indices = compute_flipped_bit_idx_and_values_lexicographic(
@@ -897,9 +912,11 @@ pub fn fold_wiring_into_dataparallel_beta_mle_identity_gate<F: Field>(
     (0..(1 << num_dataparallel_vars)).for_each(|dataparallel_copy_index| {
         wiring.iter().skip(1).for_each(
             |(next_nonzero_output_gate_label, next_nonzero_input_gate_label)| {
-                let next_idx_of_beta = (dataparallel_copy_index * num_nondataparallel_coefficients)
+                let next_idx_of_beta = (dataparallel_copy_index
+                    * num_nondataparallel_coefficients_in_result)
                     + *next_nonzero_output_gate_label as usize;
-                let idx_of_mle = (dataparallel_copy_index * num_nondataparallel_coefficients)
+                let idx_of_mle = (dataparallel_copy_index
+                    * num_nondataparallel_coefficients_in_mle)
                     + *next_nonzero_input_gate_label as usize;
                 let source_value_at_idx = source_mle.get(idx_of_mle).unwrap();
                 let flipped_bits_and_indices = compute_flipped_bit_idx_and_values_lexicographic(
@@ -936,13 +953,16 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
     round_index: usize,
     degree: usize,
 ) -> Result<Vec<F>, GateError> {
-    // --- Go through all of the MLEs being multiplied together on the LHS and
-    // see if any of them contain an IV ---
+    // Go through all of the MLEs being multiplied together on the LHS and
+    // see if any of them contain an IV
     let independent_variable = mles
         .iter()
         .map(|mle| mle.mle_indices().contains(&MleIndex::Indexed(round_index)))
         .reduce(|acc, item| acc | item)
         .ok_or(GateError::EmptyMleList)?;
+    dbg!(&independent_variable);
+    dbg!(&round_index);
+    dbg!(&mles);
     let eval = evaluate_mle_product_no_beta_table(mles, independent_variable, degree).unwrap();
 
     let SumcheckEvals(evaluations) = eval;
@@ -952,7 +972,7 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
 /// Get the evals for a binary gate specified by the BinaryOperation. Note that
 /// this specifically refers to computing the prover message while binding the
 /// dataparallel bits of a `Gate` expression.
-pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
+pub fn compute_sumcheck_message_data_parallel_gate<F: Field>(
     f2_p2_x: &DenseMle<F>,
     f3_p2_y: &DenseMle<F>,
     operation: BinaryOperation,
@@ -966,9 +986,11 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
 
     // When we have an add gate, we can distribute the beta table over the
     // dataparallel challenges so we only multiply to the function with the x
-    // variables or y variables one at a time. When we have a mul gate, we have
-    // to multiply the beta table over the dataparallel challenges with the
-    // function on the x variables and the function on the y variables.
+    // variables or y variables one at a time.
+    //
+    // When we have a mul gate, we have to multiply the beta table over the
+    // dataparallel challenges with the function on the x variables and the
+    // function on the y variables.
     let degree = match operation {
         BinaryOperation::Add => 2,
         BinaryOperation::Mul => 3,
@@ -1079,9 +1101,9 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
             });
             let all_f2_evals_p2_x = std::iter::once(f2_0_p2_x).chain(f2_evals_p2_x);
 
-            // Compute f_3((A, p_2), y). Note that the bookkeeping table
-            // is big-endian, so we shift by `idx * (number of non
-            // dataparallel vars) to index into the correct copy.`
+            // Compute f_3((A, p_2), y). Note that the bookkeeping table is
+            // big-endian, so we shift by `idx * (number of non dataparallel
+            // vars)` to index into the correct copy.
             let f3_0_p2_y = f3_p2_y.get(scaled_y as usize).unwrap();
             let f3_1_p2_y = if f3_p2_y.num_free_vars() != 0 {
                 f3_p2_y
@@ -1100,8 +1122,8 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
             });
             let all_f3_evals_p2_y = std::iter::once(f3_0_p2_y).chain(f3_evals_p2_y);
 
-            // --- The evals we want are simply the element-wise product
-            // of the accessed evals ---
+            // The evals we want are simply the element-wise product
+            // of the accessed evals
             let g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y = all_beta_evals_p2_z
                 .zip(all_f2_evals_p2_x.zip(all_f3_evals_p2_y))
                 .map(|(g1_z_eval, (f2_eval, f3_eval))| {

@@ -77,7 +77,9 @@ pub fn global_prover_circuit_description_hash_type() -> CircuitHashType {
 }
 /// The variant of claim aggregation to be used
 /// (see documentation within [GKRCircuitProverConfig])
-pub fn global_prover_claim_agg_strategy() -> ClaimAggregationStrategy {
+/// NOTE: No distinction between "prover" and "verifier",
+/// for correctness both must be using the same strategy.
+pub fn global_claim_agg_strategy() -> ClaimAggregationStrategy {
     let prover_verifier_config_instance = PROVER_VERIFIER_CONFIG.read();
     prover_verifier_config_instance.0.get_claim_agg_strategy()
 }

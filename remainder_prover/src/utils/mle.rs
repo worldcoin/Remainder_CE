@@ -61,7 +61,7 @@ pub fn argsort<T: Ord>(slice: &[T], invert: bool) -> Vec<usize> {
 /// Helper function to create random MLE with specific number of vars
 pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F> {
     let capacity = 2_u32.pow(num_vars as u32);
-    let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()) * F::from(rng.gen::<u64>()))
+    let bookkeeping_table = repeat_with(|| F::from(1_u64) * F::from(1_u64))
         .take(capacity as usize)
         .collect_vec();
     DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
@@ -369,16 +369,16 @@ pub fn compute_flipped_bit_idx_and_values_lexicographic(
     curr_val: u32,
     next_val: u32,
 ) -> Vec<(u32, bool)> {
-    let flipped_bits_round = curr_val ^ next_val;
-    let mut flipped_bit_idx_and_values_round = Vec::<(u32, bool)>::new();
+    let flipped_bits = curr_val ^ next_val;
+    let mut flipped_bit_idx_and_values = Vec::<(u32, bool)>::new();
     (0..32).for_each(|idx| {
-        if (flipped_bits_round & (1 << idx)) != 0 {
+        if (flipped_bits & (1 << idx)) != 0 {
             // NOTE: Our bookkeeping tables are in "big-endian", so we need
             // to take this into account when evaluating an MLE.
-            flipped_bit_idx_and_values_round.push((idx, (curr_val & (1 << idx)) != 0))
+            flipped_bit_idx_and_values.push((idx, (curr_val & (1 << idx)) != 0))
         }
     });
-    flipped_bit_idx_and_values_round
+    flipped_bit_idx_and_values
 }
 
 /// Compute the next beta values from the previous by multiplying by appropriate
@@ -420,7 +420,6 @@ pub fn compute_next_beta_value_from_current<F: Field>(
     flipped_bit_idx_and_values: &[(u32, bool)],
 ) -> F {
     let n = claim_point.len();
-    dbg!(&n);
     flipped_bit_idx_and_values.iter().fold(
         // For each of the flipped bits, multiply by the
         // appropriate inverse depending on if the value was
@@ -431,9 +430,6 @@ pub fn compute_next_beta_value_from_current<F: Field>(
                 acc * inverses[n - 1 - *idx as usize]
                     * (F::ONE - claim_point[n - 1 - *idx as usize])
             } else {
-                dbg!(&idx);
-                dbg!(&one_minus_elem_inverted.len());
-                dbg!(&one_minus_elem_inverted[n - 1 - *idx as usize]);
                 acc * (one_minus_elem_inverted[n - 1 - *idx as usize])
                     * claim_point[n - 1 - *idx as usize]
             }

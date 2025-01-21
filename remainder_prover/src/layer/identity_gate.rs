@@ -22,7 +22,7 @@ use crate::{
 };
 use itertools::Itertools;
 use remainder_shared_types::{
-    config::{global_config::global_prover_claim_agg_strategy, ClaimAggregationStrategy},
+    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy},
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
@@ -124,7 +124,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         let mut challenges = vec![];
 
         // Random coefficients depending on claim aggregation strategy.
-        let random_coefficients = match global_prover_claim_agg_strategy() {
+        let random_coefficients = match global_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => {
                 assert_eq!(claims.len(), 1);
                 vec![F::ONE]
@@ -137,7 +137,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         // Represents `g_{i-1}(x)` of the previous round. This is initialized to
         // the constant polynomial `g_0(x)` which evaluates to the claim result
         // for any `x`.
-        let mut g_prev_round = match global_prover_claim_agg_strategy() {
+        let mut g_prev_round = match global_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => {
                 vec![claims[0].get_eval()]
             }
@@ -167,6 +167,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
+            dbg!(&challenge);
 
             // Verify that: `g_i(0) + g_i(1) == g_{i - 1}(r_{i-1})`
             let g_i_zero = evaluate_at_a_point(&g_cur_round, F::ZERO).unwrap();
@@ -469,7 +470,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         claims: &[&RawClaim<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError> {
-        let random_coefficients = match global_prover_claim_agg_strategy() {
+        let random_coefficients = match global_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => {
                 assert_eq!(claims.len(), 1);
                 self.initialize(claims[0].get_point())?;
@@ -489,6 +490,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 .unwrap();
             transcript_writer.append_elements("Round sumcheck message", &sumcheck_message);
             let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            dbg!(&challenge);
             self.bind_round_variable(*round_idx, challenge).unwrap();
         });
         self.append_leaf_mles_to_transcript(transcript_writer);
@@ -561,7 +563,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
             _ => {
                 if round_index == self.num_dataparallel_vars {
-                    match global_prover_claim_agg_strategy() {
+                    match global_claim_agg_strategy() {
                         ClaimAggregationStrategy::Interpolative => {
                             // We compute the singular fully bound value for
                             let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
@@ -790,6 +792,8 @@ impl<F: Field> IdentityGate<F> {
                 &self.source_mle,
                 &[F::ONE],
             );
+        dbg!(&folded_full_beta);
+        dbg!(&folded_source_mle);
         let mut folded_beta_table = DenseMle::new_from_raw(folded_full_beta, self.layer_id());
         folded_beta_table.index_mle_indices(0);
         let mut folded_source_mle = DenseMle::new_from_raw(folded_source_mle, self.layer_id());
@@ -826,12 +830,10 @@ impl<F: Field> IdentityGate<F> {
     /// beta_g2 since this is the value that scales all of the sumcheck
     /// evaluations.
     fn init_phase_1(&mut self, challenge: &[F], fully_bound_beta_g2: F) {
-        let num_vars = self.source_mle.num_free_vars() - self.num_dataparallel_vars;
-
         let a_hg_mle_vec = fold_wiring_into_beta_mle_identity_gate(
             &self.wiring,
             &[challenge],
-            num_vars,
+            self.source_mle.num_free_vars(),
             &[fully_bound_beta_g2],
         );
         let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
