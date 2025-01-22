@@ -969,6 +969,160 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
 
     Ok(evaluations)
 }
+
+/// Get the evals for a binary gate specified by the BinaryOperation. Note that
+/// this specifically refers to computing the prover message while binding the
+/// dataparallel bits of a `IdentityGate` expression.
+pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
+    source_mle: &DenseMle<F>,
+    wiring: &[(u32, u32)],
+    num_dataparallel_vars: usize,
+    challenges_vec: &[&[F]],
+    random_coefficients: &[F],
+) -> Result<Vec<F>, GateError> {
+    let (inverses_vec, one_minus_elem_inverted_vec) =
+        compute_inverses_vec_and_one_minus_inverted_vec(challenges_vec);
+
+    // UPDATE COMMMENT HERE
+    let degree = 2;
+
+    // There is an independent variable, and we must extract `degree`
+    // evaluations of it, over `0..degree`.
+    let eval_count = degree + 1;
+
+    let num_dataparallel_copies_mid = 1 << (num_dataparallel_vars - 1);
+
+    let num_nondataparallel_coeffs_source = 1 << (source_mle.num_free_vars() - num_dataparallel_vars);
+    let num_z_coeffs = 1 << (challenges_vec[0].len() - num_dataparallel_vars);
+    let scaled_wirings = cfg_into_iter!((0..num_dataparallel_copies_mid))
+        .flat_map(|p2_idx| {
+            wiring
+                .iter()
+                .map(|(z, x)| {
+                    (
+                        num_z_coeffs * p2_idx + z,
+                        num_nondataparallel_coeffs_source * p2_idx + x,
+                    )
+                })
+                .collect_vec()
+        })
+        .collect_vec();
+
+    let evals = cfg_into_iter!(scaled_wirings).fold(
+        #[cfg(feature = "parallel")]
+        || (vec![F::ZERO; eval_count], None::<(Vec<F>, u32)>),
+        #[cfg(not(feature = "parallel"))]
+        (vec![F::ZERO; eval_count], None::<(Vec<F>, u32)>),
+        |(mut acc, maybe_current_beta_aux), (scaled_z, scaled_x)| {
+            let next_beta_values_at_0 = if let Some((current_beta_values, current_scaled_z)) =
+                maybe_current_beta_aux
+            {
+                let flipped_bits_and_idx =
+                    compute_flipped_bit_idx_and_values_lexicographic(current_scaled_z, scaled_z);
+                compute_next_beta_values_vec_from_current(
+                    &current_beta_values,
+                    &inverses_vec,
+                    &one_minus_elem_inverted_vec,
+                    challenges_vec,
+                    &flipped_bits_and_idx,
+                )
+            } else {
+                challenges_vec
+                    .iter()
+                    .map(|challenge| {
+                        BetaValues::compute_beta_over_challenge_and_index(
+                            challenge,
+                            scaled_z as usize,
+                        )
+                    })
+                    .collect_vec()
+            };
+            let next_beta_values_at_1 = next_beta_values_at_0
+                .iter()
+                .zip(
+                    challenges_vec
+                        .iter()
+                        .zip(one_minus_elem_inverted_vec.iter()),
+                )
+                .map(|(beta_at_0, (challenges, one_minus_inverses))| {
+                    *beta_at_0 * one_minus_inverses[0] * challenges[0]
+                })
+                .collect_vec();
+
+            let rlc_beta_values_at_0 = next_beta_values_at_0
+                .iter()
+                .zip(random_coefficients)
+                .fold(F::ZERO, |acc, (beta_val, random_coeff)| {
+                    acc + *beta_val * random_coeff
+                });
+            let rlc_beta_values_at_1 = next_beta_values_at_1
+                .iter()
+                .zip(random_coefficients)
+                .fold(F::ZERO, |acc, (beta_val, random_coeff)| {
+                    acc + *beta_val * random_coeff
+                });
+            let linear_diff_betas = rlc_beta_values_at_1 - rlc_beta_values_at_0;
+            let beta_evals_p2_z =
+                std::iter::successors(Some(rlc_beta_values_at_1), move |rlc_beta_values_prev| {
+                    Some(*rlc_beta_values_prev + linear_diff_betas)
+                });
+            let all_beta_evals_p2_z = std::iter::once(rlc_beta_values_at_0).chain(beta_evals_p2_z);
+
+            // Compute f_2((A, p_2), x) Note that the bookkeeping table
+            // is big-endian, so we shift by idx * (number of non
+            // dataparallel vars) to index into the correct copy.
+            let source_0_p2_x = source_mle.get(scaled_x as usize).unwrap();
+            let source_1_p2_x= if source_mle.num_free_vars() != 0 {
+                source_mle
+                    .get(
+                        (scaled_x + (num_nondataparallel_coeffs_source * num_dataparallel_copies_mid))
+                            as usize,
+                    )
+                    .unwrap()
+            } else {
+                source_0_p2_x
+            };
+            let linear_diff_f2 = source_1_p2_x - source_0_p2_x;
+
+            let f2_evals_p2_x = std::iter::successors(Some(source_1_p2_x), move |f2_prev_p2_x| {
+                Some(*f2_prev_p2_x + linear_diff_f2)
+            });
+            let all_f2_evals_p2_x = std::iter::once(source_0_p2_x).chain(f2_evals_p2_x);
+
+            // The evals we want are simply the element-wise product
+            // of the accessed evals
+            let g1_z_times_source_p2_x = all_beta_evals_p2_z
+                .zip(all_f2_evals_p2_x)
+                .map(|(g1_z_eval, source_eval)| {
+                    g1_z_eval * source_eval
+                });
+
+            let evals_iter: Box<dyn Iterator<Item = F>> =
+                Box::new(g1_z_times_source_p2_x);
+
+            acc.iter_mut()
+                .zip(evals_iter)
+                .for_each(|(acc, eval)| *acc += eval);
+            (acc, Some((next_beta_values_at_0, scaled_z)))
+        },
+    );
+
+    #[cfg(feature = "parallel")]
+    {
+        let evals = evals.fold(
+            || vec![F::ZERO; eval_count],
+            |mut acc, (partial, _, _)| {
+                acc.iter_mut()
+                    .zip(partial)
+                    .for_each(|(acc, partial)| *acc += partial);
+                acc
+            },
+        );
+        Ok(evals)
+    }
+    Ok(evals.0)
+}
+
 /// Get the evals for a binary gate specified by the BinaryOperation. Note that
 /// this specifically refers to computing the prover message while binding the
 /// dataparallel bits of a `Gate` expression.
