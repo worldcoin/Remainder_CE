@@ -120,7 +120,6 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             ClaimAggregationStrategy::RLC => {
                 let random_coefficients =
                     transcript_writer.get_challenges("RLC Claim Agg Coefficients", claims.len());
-                dbg!("random coeffs prover", &random_coefficients);
                 self.initialize_rlc(&random_coefficients, claims);
                 random_coefficients
             }
@@ -130,11 +129,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             let sumcheck_message = self
                 .compute_round_sumcheck_message(*round_idx, &random_coefficients)
                 .unwrap();
-            dbg!(&round_idx, self.num_dataparallel_vars);
-            dbg!("sumcheck message prover", &sumcheck_message);
             transcript_writer.append_elements("Round sumcheck message", &sumcheck_message);
             let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-            dbg!(&challenge);
             self.bind_round_variable(*round_idx, challenge).unwrap();
         });
 
@@ -196,6 +192,9 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         // evaluate beta's within it yet
 
         let rounds_before_phase_2 = self.num_dataparallel_vars + self.num_rounds_phase1;
+        dbg!(&rounds_before_phase_2);
+        dbg!(&round_index);
+        dbg!(&self.num_rounds_phase1);
 
         if round_index < self.num_dataparallel_vars {
             // dataparallel phase
@@ -210,9 +209,22 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     .as_ref()
                     .unwrap()
                     .iter()
-                    .map(|challenge| challenge.as_slice())
+                    .map(|challenge| &challenge[round_index..])
                     .collect_vec(),
-                random_coefficients,
+                &self
+                    .beta_g2_vec
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .zip(random_coefficients)
+                    .map(|(beta_values, random_coeff)| {
+                        *random_coeff
+                            * beta_values
+                                .updated_values
+                                .values()
+                                .fold(F::ONE, |acc, elem| acc * elem)
+                    })
+                    .collect_vec(),
             )
             .unwrap())
         } else if round_index < rounds_before_phase_2 {
@@ -244,7 +256,6 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 .unwrap()
                 .iter()
                 .fold(0, |acc, elem| max(acc, elem.len()));
-            dbg!(&max_deg);
 
             let init_mles: Vec<Vec<&DenseMle<F>>> = self
                 .phase_1_mles
@@ -262,7 +273,6 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     compute_sumcheck_message_no_beta_table(mle_vec, round_index, max_deg).unwrap()
                 })
                 .collect_vec();
-            dbg!(&evals_vec);
             let final_evals = evals_vec
                 .clone()
                 .into_iter()
@@ -590,7 +600,6 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
                 transcript_reader.get_challenges("RLC Claim Agg Coefficients", claims.len())?
             }
         };
-        dbg!("random_coeffs_verifier", &random_coefficients);
 
         // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
         // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED
@@ -620,7 +629,6 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         };
         let first_round_sumcheck_messages = transcript_reader
             .consume_elements("Initial Sumcheck evaluations", first_round_num_evals)?;
-        dbg!("sumcheck message verifier", &first_round_sumcheck_messages);
         sumcheck_messages.push(first_round_sumcheck_messages.clone());
 
         match global_claim_agg_strategy() {
@@ -656,7 +664,6 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             let challenge = transcript_reader
                 .get_challenge("Sumcheck challenge")
                 .unwrap();
-            dbg!("challenge verifier", &challenge);
             let g_i_minus_1_evals = sumcheck_messages[sumcheck_messages.len() - 1].clone();
 
             // Evaluate g_{i - 1}(r_{i - 1})
@@ -673,13 +680,9 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
                 (false, BinaryOperation::Mul) => NON_DATAPARALLEL_ROUND_MUL_NUM_EVALS,
             };
 
-            dbg!(&self.layer_id());
-            dbg!(&sumcheck_round_idx);
-            dbg!(&univariate_num_evals);
             let curr_evals = transcript_reader
                 .consume_elements("Sumcheck evaluations", univariate_num_evals)
                 .unwrap();
-            dbg!("sumcheck evals verifier", &curr_evals);
 
             // Check: g_i(0) + g_i(1) =? g_{i - 1}(r_{i - 1})
             if prev_at_r != curr_evals[0] + curr_evals[1] {
@@ -1184,7 +1187,6 @@ impl<F: Field> GateLayer<F> {
         phase_1_mles.iter_mut().for_each(|mle_vec| {
             index_mle_indices_gate(mle_vec, self.num_dataparallel_vars);
         });
-        dbg!(&phase_1_mles);
         self.phase_1_mles = Some(phase_1_mles);
     }
 
@@ -1282,6 +1284,7 @@ impl<F: Field> GateLayer<F> {
         phase_2_mles.iter_mut().for_each(|mle_vec| {
             index_mle_indices_gate(mle_vec, self.num_dataparallel_vars);
         });
+        dbg!("HELLO FROM THE OTHER SIDE");
         self.phase_2_mles = Some(phase_2_mles);
     }
 

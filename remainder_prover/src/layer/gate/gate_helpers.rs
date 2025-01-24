@@ -826,15 +826,12 @@ pub fn fold_wiring_into_dataparallel_beta_mle_identity_gate<F: Field>(
     source_mle: &DenseMle<F>,
     random_coefficients: &[F],
 ) -> (Vec<F>, Vec<F>) {
-    dbg!(&claim_points);
-    dbg!(&wiring);
     let full_beta = BetaValues::new_beta_equality_mle(claim_points[0].to_vec());
     let folded_beta = full_beta
         .to_vec()
         .chunks(2)
         .map(|chunk| chunk[0] + chunk[1])
         .collect_vec();
-    dbg!(&folded_beta);
     //sum_{x, z}{\beta(g2g1, p2z) * f1(z, x, y) * Vi(p2, x)}
     // Precompute all the inverses necessary for each of the claim points.
     let (inverses_vec, one_minus_inverses_vec) =
@@ -960,9 +957,7 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
         .map(|mle| mle.mle_indices().contains(&MleIndex::Indexed(round_index)))
         .reduce(|acc, item| acc | item)
         .ok_or(GateError::EmptyMleList)?;
-    dbg!(&independent_variable);
-    dbg!(&round_index);
-    dbg!(&mles);
+
     let eval = evaluate_mle_product_no_beta_table(mles, independent_variable, degree).unwrap();
 
     let SumcheckEvals(evaluations) = eval;
@@ -992,7 +987,8 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
 
     let num_dataparallel_copies_mid = 1 << (num_dataparallel_vars - 1);
 
-    let num_nondataparallel_coeffs_source = 1 << (source_mle.num_free_vars() - num_dataparallel_vars);
+    let num_nondataparallel_coeffs_source =
+        1 << (source_mle.num_free_vars() - num_dataparallel_vars);
     let num_z_coeffs = 1 << (challenges_vec[0].len() - num_dataparallel_vars);
     let scaled_wirings = cfg_into_iter!((0..num_dataparallel_copies_mid))
         .flat_map(|p2_idx| {
@@ -1072,10 +1068,11 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
             // is big-endian, so we shift by idx * (number of non
             // dataparallel vars) to index into the correct copy.
             let source_0_p2_x = source_mle.get(scaled_x as usize).unwrap();
-            let source_1_p2_x= if source_mle.num_free_vars() != 0 {
+            let source_1_p2_x = if source_mle.num_free_vars() != 0 {
                 source_mle
                     .get(
-                        (scaled_x + (num_nondataparallel_coeffs_source * num_dataparallel_copies_mid))
+                        (scaled_x
+                            + (num_nondataparallel_coeffs_source * num_dataparallel_copies_mid))
                             as usize,
                     )
                     .unwrap()
@@ -1093,12 +1090,9 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
             // of the accessed evals
             let g1_z_times_source_p2_x = all_beta_evals_p2_z
                 .zip(all_f2_evals_p2_x)
-                .map(|(g1_z_eval, source_eval)| {
-                    g1_z_eval * source_eval
-                });
+                .map(|(g1_z_eval, source_eval)| g1_z_eval * source_eval);
 
-            let evals_iter: Box<dyn Iterator<Item = F>> =
-                Box::new(g1_z_times_source_p2_x);
+            let evals_iter: Box<dyn Iterator<Item = F>> = Box::new(g1_z_times_source_p2_x);
 
             acc.iter_mut()
                 .zip(evals_iter)
