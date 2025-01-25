@@ -311,14 +311,15 @@ impl<F: Field> Expression<F, ProverExpr> {
     /// node of the expression tree.
     pub fn evaluate_sumcheck_beta_cascade<T>(
         &self,
-        constant: &impl Fn(F, &[BetaValues<F>]) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T, &[BetaValues<F>]) -> T,
-        mle_eval: &impl Fn(&DenseMle<F>, &[Vec<F>], &[Vec<F>]) -> T,
+        constant: &impl Fn(F, &[&BetaValues<F>], &[F]) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, Vec<T>, Vec<T>, &[&BetaValues<F>], &[F]) -> T,
+        mle_eval: &impl Fn(&DenseMle<F>, &[Vec<F>], &[Vec<F>], &[F]) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[&DenseMle<F>], &[Vec<F>], &[Vec<F>]) -> T, // changed signature here, note to modify caller's calling code
+        product: &impl Fn(&[&DenseMle<F>], &[Vec<F>], &[Vec<F>], &[F]) -> T, // changed signature here, note to modify caller's calling code
         scaled: &impl Fn(T, F) -> T,
-        beta: &[BetaValues<F>],
+        beta: &[&BetaValues<F>],
+        random_coefficients: &[F],
     ) -> T {
         self.expression_node.evaluate_sumcheck_node_beta_cascade(
             constant,
@@ -330,6 +331,7 @@ impl<F: Field> Expression<F, ProverExpr> {
             scaled,
             beta,
             &self.mle_vec,
+            random_coefficients,
         )
     }
 
@@ -577,43 +579,57 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     #[allow(clippy::too_many_arguments)]
     pub fn evaluate_sumcheck_node_beta_cascade<T>(
         &self,
-        constant: &impl Fn(F, &[BetaValues<F>]) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T, &[BetaValues<F>]) -> T,
-        mle_eval: &impl Fn(&DenseMle<F>, &[Vec<F>], &[Vec<F>]) -> T,
+        constant: &impl Fn(F, &[&BetaValues<F>], &[F]) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, Vec<T>, Vec<T>, &[&BetaValues<F>], &[F]) -> T,
+        mle_eval: &impl Fn(&DenseMle<F>, &[Vec<F>], &[Vec<F>], &[F]) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[&DenseMle<F>], &[Vec<F>], &[Vec<F>]) -> T,
+        product: &impl Fn(&[&DenseMle<F>], &[Vec<F>], &[Vec<F>], &[F]) -> T,
         scaled: &impl Fn(T, F) -> T,
-        beta_vec: &[BetaValues<F>],
+        beta_vec: &[&BetaValues<F>],
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+        random_coefficients: &[F],
     ) -> T {
         match self {
-            ExpressionNode::Constant(scalar) => constant(*scalar, beta_vec),
+            ExpressionNode::Constant(scalar) => constant(*scalar, beta_vec, random_coefficients),
             ExpressionNode::Selector(index, a, b) => selector_column(
                 index,
-                a.evaluate_sumcheck_node_beta_cascade(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                    beta_vec,
-                    mle_vec,
-                ),
-                b.evaluate_sumcheck_node_beta_cascade(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                    beta_vec,
-                    mle_vec,
-                ),
+                beta_vec
+                    .iter()
+                    .map(|beta| {
+                        a.evaluate_sumcheck_node_beta_cascade(
+                            constant,
+                            selector_column,
+                            mle_eval,
+                            negated,
+                            sum,
+                            product,
+                            scaled,
+                            &[beta],
+                            mle_vec,
+                            &[F::ONE],
+                        )
+                    })
+                    .collect_vec(),
+                beta_vec
+                    .iter()
+                    .map(|beta| {
+                        b.evaluate_sumcheck_node_beta_cascade(
+                            constant,
+                            selector_column,
+                            mle_eval,
+                            negated,
+                            sum,
+                            product,
+                            scaled,
+                            &[beta],
+                            mle_vec,
+                            &[F::ONE],
+                        )
+                    })
+                    .collect_vec(),
                 beta_vec,
+                random_coefficients,
             ),
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
@@ -622,7 +638,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .map(|beta| beta.get_relevant_beta_unbound_and_bound(mle.mle_indices()))
                     .unzip();
 
-                mle_eval(mle, &unbound_beta_vec, &bound_beta_vec)
+                mle_eval(mle, &unbound_beta_vec, &bound_beta_vec, random_coefficients)
             }
             ExpressionNode::Negated(a) => {
                 let a = a.evaluate_sumcheck_node_beta_cascade(
@@ -635,6 +651,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     scaled,
                     beta_vec,
                     mle_vec,
+                    random_coefficients,
                 );
                 negated(a)
             }
@@ -649,6 +666,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     scaled,
                     beta_vec,
                     mle_vec,
+                    random_coefficients,
                 );
                 let b = b.evaluate_sumcheck_node_beta_cascade(
                     constant,
@@ -660,6 +678,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     scaled,
                     beta_vec,
                     mle_vec,
+                    random_coefficients,
                 );
                 sum(a, b)
             }
@@ -682,7 +701,12 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .map(|beta| beta.get_relevant_beta_unbound_and_bound(&mle_indices_vec))
                     .unzip();
 
-                product(&mles, &unbound_beta_vec, &bound_beta_vec)
+                product(
+                    &mles,
+                    &unbound_beta_vec,
+                    &bound_beta_vec,
+                    random_coefficients,
+                )
             }
             ExpressionNode::Scaled(a, f) => {
                 let a = a.evaluate_sumcheck_node_beta_cascade(
@@ -695,6 +719,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     scaled,
                     beta_vec,
                     mle_vec,
+                    random_coefficients,
                 );
                 scaled(a, *f)
             }

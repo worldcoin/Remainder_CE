@@ -7,6 +7,7 @@ use remainder::{
     input_layer::InputLayerDescription, layer::LayerId, mle::evals::MultilinearExtension,
 };
 use remainder_shared_types::ff_field;
+use remainder_shared_types::Zeroizable;
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
     pedersen::{CommittedScalar, PedersenCommitter},
@@ -65,6 +66,13 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                 (claim.point.clone(), proof)
             })
             .collect_vec();
+        // Zeroize each of the blinding factors once we have committed to all of the claims.
+        prover_commitment
+            .blinding_factors_matrix
+            .iter_mut()
+            .for_each(|blinding_factor| {
+                blinding_factor.zeroize();
+            });
         end_timer!(eval_proof_timer);
 
         HyraxInputLayerProof {

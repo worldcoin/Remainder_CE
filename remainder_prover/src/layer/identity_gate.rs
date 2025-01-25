@@ -31,14 +31,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{
-    gate::{
-        compute_sumcheck_message_no_beta_table,
-        gate_helpers::{
-            compute_sumcheck_message_data_parallel_identity_gate,
-            evaluate_mle_product_no_beta_table, fold_wiring_into_beta_mle_identity_gate,
-            fold_wiring_into_dataparallel_beta_mle_identity_gate,
-        },
-        GateError,
+    gate::gate_helpers::{
+        compute_sumcheck_message_data_parallel_identity_gate, evaluate_mle_product_no_beta_table,
+        fold_wiring_into_beta_mle_identity_gate,
     },
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
@@ -145,7 +140,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             ClaimAggregationStrategy::RLC => vec![random_coefficients
                 .iter()
                 .zip(claims)
-                .fold(F::ONE, |acc, (rlc_val, claim)| {
+                .fold(F::ZERO, |acc, (rlc_val, claim)| {
                     acc + *rlc_val * claim.get_eval()
                 })],
         };
@@ -279,13 +274,6 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
-        let f_1_uv = compute_fully_bound_identity_gate_function(
-            &round_challenges[self.num_dataparallel_vars..],
-            &[&claim_challenges[self.num_dataparallel_vars..]],
-            &self.wiring,
-            &[F::ONE],
-        );
-
         let beta_bound = if self.num_dataparallel_vars != 0 {
             let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
             BetaValues::compute_beta_over_two_challenges(
@@ -296,9 +284,16 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             F::ONE
         };
 
+        let f_1_gu = compute_fully_bound_identity_gate_function(
+            &round_challenges[self.num_dataparallel_vars..],
+            &[&claim_challenges[self.num_dataparallel_vars..]],
+            &self.wiring,
+            &[beta_bound],
+        );
+
         PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
             &[self.source_mle.clone()],
-            f_1_uv * beta_bound,
+            f_1_gu,
             round_challenges,
         )])
     }
@@ -584,6 +579,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                         .collect_vec(),
                 )
                 .unwrap();
+                dbg!(&sumcheck_message);
                 Ok(sumcheck_message)
             }
             _ => {
@@ -606,21 +602,25 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                             );
                         }
                         ClaimAggregationStrategy::RLC => {
-                            let random_coefficients = random_coefficients
-                                .iter()
-                                .zip(self.beta_g2_vec.as_ref().unwrap())
-                                .map(|(random_coeff, beta_values)| {
-                                    if self.num_dataparallel_vars > 0 {
-                                        beta_values
-                                            .updated_values
-                                            .values()
-                                            .fold(F::ONE, |acc, val| acc * *val)
-                                            * random_coeff
-                                    } else {
-                                        F::ONE * random_coeff
-                                    }
-                                })
-                                .collect_vec();
+                            let random_coefficients = if self.num_dataparallel_vars > 0 {
+                                random_coefficients
+                                    .iter()
+                                    .zip(self.beta_g2_vec.as_ref().unwrap())
+                                    .map(|(random_coeff, beta_values)| {
+                                        if self.num_dataparallel_vars > 0 {
+                                            beta_values
+                                                .updated_values
+                                                .values()
+                                                .fold(F::ONE, |acc, val| acc * *val)
+                                                * random_coeff
+                                        } else {
+                                            F::ONE * random_coeff
+                                        }
+                                    })
+                                    .collect_vec()
+                            } else {
+                                random_coefficients.to_vec()
+                            };
 
                             self.init_phase_1_rlc(
                                 &self
@@ -671,6 +671,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 })
             }
             let a_hg_mle = self.a_hg_mle_phase_1.as_mut().unwrap();
+            dbg!(&a_hg_mle);
+            dbg!(&self.source_mle);
 
             [a_hg_mle, &mut self.source_mle].iter_mut().for_each(|mle| {
                 mle.fix_variable(round_index, challenge);
@@ -692,12 +694,6 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F> {
-        let f_1_uv = compute_fully_bound_identity_gate_function(
-            &round_challenges[self.num_dataparallel_vars..],
-            &[&claim_challenges[self.num_dataparallel_vars..]],
-            &self.wiring,
-            &[F::ONE],
-        );
         let beta_bound = if self.num_dataparallel_vars != 0 {
             let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
             BetaValues::compute_beta_over_two_challenges(
@@ -707,10 +703,16 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         } else {
             F::ONE
         };
+        let f_1_gu = compute_fully_bound_identity_gate_function(
+            &round_challenges[self.num_dataparallel_vars..],
+            &[&claim_challenges[self.num_dataparallel_vars..]],
+            &self.wiring,
+            &[beta_bound],
+        );
 
         PostSumcheckLayer(vec![Product::<F, F>::new(
             &[self.source_mle.clone()],
-            f_1_uv * beta_bound,
+            f_1_gu,
         )])
     }
 
@@ -821,13 +823,14 @@ impl<F: Field> IdentityGate<F> {
     /// initialization function used when we are doing RLC claim
     /// aggregation.
     fn init_phase_1_rlc(&mut self, challenges: &[&[F]], random_coefficients: &[F]) {
-        let num_vars = self.source_mle.num_free_vars() - self.num_dataparallel_vars;
         let a_hg_mle_vec = fold_wiring_into_beta_mle_identity_gate(
             &self.wiring,
             challenges,
-            num_vars,
+            self.source_mle.num_free_vars(),
             random_coefficients,
         );
-        self.a_hg_mle_phase_1 = Some(DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id()));
+        let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
+        a_hg_mle.index_mle_indices(self.num_dataparallel_vars);
+        self.a_hg_mle_phase_1 = Some(a_hg_mle);
     }
 }

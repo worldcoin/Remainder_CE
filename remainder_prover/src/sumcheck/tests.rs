@@ -51,7 +51,7 @@ pub(crate) fn dummy_sumcheck<F: Field>(
             expr,
             round_index,
             degree,
-            &vec![newbeta.clone()],
+            &vec![&newbeta],
             &[F::ONE],
         );
 
@@ -186,7 +186,7 @@ pub(crate) fn get_dummy_expression_eval<F: Field>(
 
     let beta = BetaValues::new(challenges_enumerate);
     let eval =
-        compute_sumcheck_message_beta_cascade(&expression, 0, 2, &vec![beta], &[F::ONE]).unwrap();
+        compute_sumcheck_message_beta_cascade(&expression, 0, 2, &vec![&beta], &[F::ONE]).unwrap();
     let SumcheckEvals(evals) = eval;
     let result = if evals.len() > 1 {
         evals[0] + evals[1]
@@ -207,7 +207,7 @@ fn eval_expr_nums() {
         &mut expression1,
         0,
         1,
-        &vec![new_beta],
+        &vec![&new_beta],
         &[Fr::one()],
     );
     let exp = SumcheckEvals(vec![Fr::from(0), Fr::from(6)]);
@@ -264,7 +264,7 @@ fn test_linear_sum() {
     mleexpr.fix_variable_at_index(1, Fr::from(4));
 
     let res =
-        compute_sumcheck_message_beta_cascade(&mut mleexpr, 1, 0, &vec![newbeta], &[Fr::one()]);
+        compute_sumcheck_message_beta_cascade(&mut mleexpr, 1, 0, &vec![&newbeta], &[Fr::one()]);
     let exp = SumcheckEvals(vec![Fr::from(29)]);
     assert_eq!(res.unwrap(), exp);
 }
@@ -283,8 +283,13 @@ fn test_quadratic_sum() {
     let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle1, mle2]);
     expression.index_mle_indices(0);
 
-    let res =
-        compute_sumcheck_message_beta_cascade(&mut expression, 0, 3, &vec![new_beta], &[Fr::one()]);
+    let res = compute_sumcheck_message_beta_cascade(
+        &mut expression,
+        0,
+        3,
+        &vec![&new_beta],
+        &[Fr::one()],
+    );
     let exp = SumcheckEvals(vec![
         Fr::from(2).neg(),
         Fr::from(120),
@@ -319,8 +324,13 @@ fn test_quadratic_sum_differently_sized_mles2() {
     expression.index_mle_indices(0);
     expression.fix_variable_at_index(2, Fr::from(3));
 
-    let res =
-        compute_sumcheck_message_beta_cascade(&mut expression, 1, 3, &vec![new_beta], &[Fr::one()]);
+    let res = compute_sumcheck_message_beta_cascade(
+        &mut expression,
+        1,
+        3,
+        &vec![&new_beta],
+        &[Fr::one()],
+    );
     let exp = SumcheckEvals(vec![
         Fr::from(12).neg(),
         Fr::from(230),

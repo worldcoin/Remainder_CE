@@ -61,7 +61,9 @@ pub fn argsort<T: Ord>(slice: &[T], invert: bool) -> Vec<usize> {
 /// Helper function to create random MLE with specific number of vars
 pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F> {
     let capacity = 2_u32.pow(num_vars as u32);
-    let bookkeeping_table = repeat_with(|| F::ONE).take(capacity as usize).collect_vec();
+    let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()) * F::from(rng.gen::<u64>()))
+        .take(capacity as usize)
+        .collect_vec();
     DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
 }
 

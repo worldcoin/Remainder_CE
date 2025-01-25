@@ -826,12 +826,6 @@ pub fn fold_wiring_into_dataparallel_beta_mle_identity_gate<F: Field>(
     source_mle: &DenseMle<F>,
     random_coefficients: &[F],
 ) -> (Vec<F>, Vec<F>) {
-    let full_beta = BetaValues::new_beta_equality_mle(claim_points[0].to_vec());
-    let folded_beta = full_beta
-        .to_vec()
-        .chunks(2)
-        .map(|chunk| chunk[0] + chunk[1])
-        .collect_vec();
     //sum_{x, z}{\beta(g2g1, p2z) * f1(z, x, y) * Vi(p2, x)}
     // Precompute all the inverses necessary for each of the claim points.
     let (inverses_vec, one_minus_inverses_vec) =
@@ -1009,30 +1003,31 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
         || (vec![F::ZERO; eval_count], None::<(Vec<F>, u32)>),
         #[cfg(not(feature = "parallel"))]
         (vec![F::ZERO; eval_count], None::<(Vec<F>, u32)>),
-        |(mut acc, maybe_current_beta_aux), (scaled_z, scaled_x)| {
-            let next_beta_values_at_0 = if let Some((current_beta_values, current_scaled_z)) =
-                maybe_current_beta_aux
-            {
-                let flipped_bits_and_idx =
-                    compute_flipped_bit_idx_and_values_lexicographic(current_scaled_z, scaled_z);
-                compute_next_beta_values_vec_from_current(
-                    &current_beta_values,
-                    &inverses_vec,
-                    &one_minus_elem_inverted_vec,
-                    challenges_vec,
-                    &flipped_bits_and_idx,
-                )
-            } else {
-                challenges_vec
-                    .iter()
-                    .map(|challenge| {
-                        BetaValues::compute_beta_over_challenge_and_index(
-                            challenge,
-                            scaled_z as usize,
-                        )
-                    })
-                    .collect_vec()
-            };
+        |(mut acc, maybe_current_beta_aux), (next_scaled_z, next_scaled_x)| {
+            let next_beta_values_at_0 =
+                if let Some((current_beta_values, current_scaled_z)) = maybe_current_beta_aux {
+                    let flipped_bits_and_idx = compute_flipped_bit_idx_and_values_lexicographic(
+                        current_scaled_z,
+                        next_scaled_z,
+                    );
+                    compute_next_beta_values_vec_from_current(
+                        &current_beta_values,
+                        &inverses_vec,
+                        &one_minus_elem_inverted_vec,
+                        challenges_vec,
+                        &flipped_bits_and_idx,
+                    )
+                } else {
+                    challenges_vec
+                        .iter()
+                        .map(|challenge| {
+                            BetaValues::compute_beta_over_challenge_and_index(
+                                challenge,
+                                next_scaled_z as usize,
+                            )
+                        })
+                        .collect_vec()
+                };
             let next_beta_values_at_1 = next_beta_values_at_0
                 .iter()
                 .zip(
@@ -1044,6 +1039,11 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
                     *beta_at_0 * one_minus_inverses[0] * challenges[0]
                 })
                 .collect_vec();
+            dbg!(&next_beta_values_at_0, &next_beta_values_at_1);
+            dbg!(
+                &next_beta_values_at_0[0].neg(),
+                &next_beta_values_at_1[0].neg()
+            );
 
             let rlc_beta_values_at_0 = next_beta_values_at_0
                 .iter()
@@ -1067,11 +1067,11 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
             // Compute f_2((A, p_2), x) Note that the bookkeeping table
             // is big-endian, so we shift by idx * (number of non
             // dataparallel vars) to index into the correct copy.
-            let source_0_p2_x = source_mle.get(scaled_x as usize).unwrap();
+            let source_0_p2_x = source_mle.get(next_scaled_x as usize).unwrap();
             let source_1_p2_x = if source_mle.num_free_vars() != 0 {
                 source_mle
                     .get(
-                        (scaled_x
+                        (next_scaled_x
                             + (num_nondataparallel_coeffs_source * num_dataparallel_copies_mid))
                             as usize,
                     )
@@ -1097,7 +1097,7 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
             acc.iter_mut()
                 .zip(evals_iter)
                 .for_each(|(acc, eval)| *acc += eval);
-            (acc, Some((next_beta_values_at_0, scaled_z)))
+            (acc, Some((next_beta_values_at_0, next_scaled_z)))
         },
     );
 

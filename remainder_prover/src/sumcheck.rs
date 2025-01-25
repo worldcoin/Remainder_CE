@@ -218,8 +218,8 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     expr: &Expression<F, ProverExpr>,
     round_index: usize,
     max_degree: usize,
-    beta_values: &[BetaValues<F>],
-    random_coefficients: &[F],
+    beta_values: &[&BetaValues<F>],
+    random_coefficients_input: &[F],
 ) -> Result<SumcheckEvals<F>, ExpressionError> {
     // Each different type of expression node (constant, selector, product, sum,
     // neg, scaled, mle) is treated differently, so we create closures for each
@@ -229,7 +229,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     // A constant does not have any variables, so we do not need a beta table at
     // all. Therefore we just repeat the constant evaluation for the `degree +
     // 1` number of times as this is how many evaluations we need.
-    let constant = |constant, beta_tables: &[BetaValues<F>]| {
+    let constant = |constant, beta_tables: &[&BetaValues<F>], random_coefficients: &[F]| {
         let sumcheck_eval_not_scaled_by_constant = beta_tables
             .iter()
             .zip(random_coefficients)
@@ -259,11 +259,9 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     // are in by comparing the round_index to the selector index which is an
     // argument to the closure.
     let selector = |index: &MleIndex<F>,
-                    a: Result<_, _>,
-                    b: Result<_, _>,
-                    beta_tables: &[BetaValues<F>]| {
-        let a_eval: SumcheckEvals<F> = a?;
-        let b_eval: SumcheckEvals<F> = b?;
+                    a_vec: Vec<Result<_, _>>,
+                    b_vec: Vec<Result<_, _>>,
+                    beta_tables: &[&BetaValues<F>], random_coefficients: &[F]| {
         match index {
             MleIndex::Indexed(indexed_bit) => {
                 // because the selector bit itself only has one variable (1 - b_i) *
@@ -273,10 +271,12 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
                     std::cmp::Ordering::Less => {
                         let sumcheck_eval = beta_tables
                             .iter()
-                            .zip(random_coefficients)
-                            .map(|(beta_table, random_coeff)| {
+                            .zip((a_vec.iter().zip(b_vec.iter())).zip(random_coefficients))
+                            .map(|(beta_table, ((a, b), random_coeff))| {
                                 let index_claim =
                                     beta_table.unbound_values.get(indexed_bit).unwrap();
+                                let a_eval: &SumcheckEvals<F> = a.as_ref().unwrap();
+                                let b_eval: &SumcheckEvals<F> = b.as_ref().unwrap();
                                 // when the selector bit is not the independent variable and
                                 // has not been bound yet, we are simply summing over
                                 // everything. in order to take the beta values into account
@@ -298,13 +298,13 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
                         // variable! this means the beta value at this index also
                         // has an independent variable.
 
-                        let (SumcheckEvals(first_evals), SumcheckEvals(second_evals)) =
-                            (a_eval, b_eval);
-                        if first_evals.len() == second_evals.len() {
-                            let sumcheck_eval = beta_tables
+                        let sumcheck_eval = beta_tables
                                 .iter()
-                                .zip(random_coefficients)
-                                .map(|(beta_table, random_coeff)| {
+                                .zip((a_vec.iter().zip(b_vec)).zip(random_coefficients))
+                                .map(|(beta_table, ((a, b), random_coeff))| {
+                                    let SumcheckEvals(first_evals) = a.as_ref().unwrap();
+                                    let SumcheckEvals(second_evals) = b.as_ref().unwrap();
+                                    if first_evals.len() == second_evals.len() {
                                     let index_claim =
                                         beta_table.unbound_values.get(indexed_bit).unwrap();
                                     // therefore we compute the successors of the beta
@@ -332,7 +332,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
                                             .map(|(idx, first_eval)| {
                                                 first_eval
                                                     * (F::ONE - F::from(idx as u64))
-                                                    * beta_evals[idx]
+                                                    * beta_evals[idx] 
                                             })
                                             .collect(),
                                     );
@@ -349,13 +349,13 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
                                     );
 
                                     (first_evals + second_evals) * random_coeff
+                                } else {
+                                    panic!("Expression returns two evals that do not have the same length on a selector bit")
+                                }
                                 })
                                 .reduce(|acc, elem| acc + elem)
                                 .unwrap();
-                            Ok(sumcheck_eval)
-                        } else {
-                            Err(ExpressionError::EvaluationError("Expression returns two evals that do not have the same length on a selector bit"))
-                        }
+                        Ok(sumcheck_eval)
                     }
                     // we cannot have an indexed bit for the selector bit that is
                     // less than the current sumcheck round. therefore this is an
@@ -371,17 +371,16 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
                 let one = &F::ONE;
 
                 let sumcheck_eval = beta_tables
-                    .iter()
-                    .zip(random_coefficients)
-                    .map(|(beta_table, random_coeff)| {
+                    .iter().zip((a_vec.iter().zip(b_vec)).zip(random_coefficients))
+                    .map(|(beta_table ,((a, b), random_coeff))| {
+                        let a_eval = a.as_ref().unwrap();
+                        let b_eval = b.as_ref().unwrap();
                         let beta_bound_val = beta_table
                             .updated_values
                             .get(bound_round_idx)
                             .unwrap_or(one);
                         // the evaluation is just scaled by the beta bound value
-                        ((b_eval.clone() * coeff) + (a_eval.clone() * coeff_neg))
-                            * *beta_bound_val
-                            * random_coeff
+                        (((b_eval.clone() * coeff) + (a_eval.clone() * coeff_neg)) * *beta_bound_val) * random_coeff
                     })
                     .reduce(|acc, elem| acc + elem)
                     .unwrap();
@@ -396,7 +395,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     // and bound beta values to pass into the `beta_cascade` function
     let mle_eval = |mle: &DenseMle<F>,
                     unbound_beta_vals_vec: &[Vec<F>],
-                    bound_beta_vals_vec: &[Vec<F>]|
+                    bound_beta_vals_vec: &[Vec<F>], random_coefficients: &[F]|
      -> Result<SumcheckEvals<F>, ExpressionError> {
         Ok(beta_cascade(
             &[&mle.clone()],
@@ -421,10 +420,10 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
 
     // when we have a product, the node can only contain mle refs. therefore
     // this is similar to the mle evaluation, but instead we have a list of mle
-    // refs, and the corresponding unbound and bound beta values for that node.
+    // refs, and the corresponding unbound and bound  beta values for that node.
     let product = |mles: &[&DenseMle<F>],
                    unbound_beta_vals_vec: &[Vec<F>],
-                   bound_beta_vals_vec: &[Vec<F>]|
+                   bound_beta_vals_vec: &[Vec<F>], random_coefficients: &[F]|
      -> Result<SumcheckEvals<F>, ExpressionError> {
         Ok(beta_cascade(
             mles,
@@ -453,6 +452,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: Field>(
         &product,
         &scaled,
         beta_values,
+        random_coefficients_input
     )
 }
 

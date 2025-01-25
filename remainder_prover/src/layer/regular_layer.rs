@@ -25,7 +25,9 @@ use crate::{
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription, Mle},
-    sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
+    sumcheck::{
+        compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree, SumcheckEvals,
+    },
 };
 
 use super::{
@@ -176,7 +178,6 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
             transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
             // Sample the challenge
             let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-            dbg!(&challenge);
             // "Bind" the challenge to the expression at this point.
             self.bind_round_variable(round_index, challenge)?;
             // For debug mode, update the previous message and challenge for the purpose
@@ -259,15 +260,39 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         // Grabs the degree of univariate polynomial we are sending over.
         let degree = get_round_degree(expression, round_index);
 
+        let individual_message = newbeta
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|beta| {
+                let elem = compute_sumcheck_message_beta_cascade(
+                    expression,
+                    round_index,
+                    degree,
+                    &[beta],
+                    &[F::ONE],
+                )
+                .unwrap();
+                dbg!(&elem);
+                elem
+            })
+            .zip(random_coefficients)
+            .fold(
+                SumcheckEvals(vec![F::ZERO; degree + 1]),
+                |acc, (elem, coeff)| acc + (elem * coeff),
+            );
+
         // Computes the sumcheck message using the beta cascade algorithm.
         let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
             expression,
             round_index,
             degree,
-            newbeta.as_ref().unwrap(),
+            &newbeta.as_ref().unwrap().iter().collect_vec(),
             random_coefficients,
         )
         .unwrap();
+        dbg!(&individual_message);
+        dbg!(&prover_sumcheck_message);
 
         Ok(prover_sumcheck_message.0)
     }
@@ -561,7 +586,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             ClaimAggregationStrategy::RLC => vec![random_coefficients
                 .iter()
                 .zip(claims)
-                .fold(F::ONE, |acc, (rlc_val, claim)| {
+                .fold(F::ZERO, |acc, (rlc_val, claim)| {
                     acc + *rlc_val * claim.get_eval()
                 })],
         };
