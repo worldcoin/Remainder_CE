@@ -1678,6 +1678,7 @@ dependencies = [
 name = "remainder-shared-types"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "ark-std",
  "criterion",
  "ff 0.13.0",
