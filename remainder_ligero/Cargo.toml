@@ -21,8 +21,8 @@ blake3 = { version = "1", features = [
 ark-bn254 = "0.4.0" # For BN-254 field
 ark-std = "0.4.0" # Also for BN-254 (mostly RNG purposes)
 halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2", tag = "v0.3.0" }
-ark-poly = "0.4.2" # For BN-254 FFT stuff
-ark-ff = "0.4.2" # Also for FFT stuff
+ark-poly = "=0.4.1" # For BN-254 FFT stuff
+ark-ff = "=0.4.1" # Also for FFT stuff
 ark-serialize = { version = "0.4", features = ["derive"] } # For serialization
 # fffft = "0.4"
 itertools = "0.10"
