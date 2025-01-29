@@ -27,6 +27,8 @@ use crate::{
     utils::mle::{compute_flipped_bit_idx_and_value_graycode, GrayCodeIterator},
 };
 
+use anyhow::{anyhow, Ok, Result};
+
 /// Used to represent a matrix; basically an MLE which is the
 /// flattened version of this matrix along with the log2
 /// num_rows (`rows_num_vars`) and the log2 num_cols `cols_num_vars`.
@@ -178,7 +180,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
         &mut self,
         claims: &[&RawClaim<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<(), LayerError> {
+    ) -> Result<()> {
         println!(
             "MatMul::prove_rounds() for a product ({} x {}) * ({} x {}) matrix.",
             self.matrix_a.rows_num_vars,
@@ -219,7 +221,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
         self.layer_id
     }
 
-    fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
+    fn initialize(&mut self, claim_point: &[F]) -> Result<()> {
         // Split the claim on the MLE representing the output of this layer
         // accordingly.
         // We need to make sure the number of variables in the claim is the
@@ -258,14 +260,14 @@ impl<F: Field> Layer<F> for MatMult<F> {
         &mut self,
         round_index: usize,
         _random_coefficients: &[F],
-    ) -> Result<Vec<F>, LayerError> {
+    ) -> Result<Vec<F>> {
         let mles = vec![&self.matrix_a.mle, &self.matrix_b.mle];
         let sumcheck_message =
             compute_sumcheck_message_no_beta_table(&mles, round_index, 2).unwrap();
         Ok(sumcheck_message)
     }
 
-    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
+    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<()> {
         self.matrix_a.mle.fix_variable(round_index, challenge);
         self.matrix_b.mle.fix_variable(round_index, challenge);
 
@@ -291,7 +293,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
         PostSumcheckLayer(vec![Product::<F, F>::new(&mles, F::ONE)])
     }
     /// Get the claims that this layer makes on other layers
-    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<Claim<F>>> {
         let claims = vec![&self.matrix_a.mle, &self.matrix_b.mle]
             .into_iter()
             .map(|matrix_mle| {
@@ -396,7 +398,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         &self,
         claims: &[&RawClaim<F>],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<VerifierLayerEnum<F>, VerificationError> {
+    ) -> Result<VerifierLayerEnum<F>> {
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
 
@@ -420,9 +422,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         for _round in 0..num_rounds {
             let degree = 2;
 
-            let g_cur_round = transcript_reader
-                .consume_elements("Sumcheck message", degree + 1)
-                .map_err(VerificationError::TranscriptError)?;
+            let g_cur_round = transcript_reader.consume_elements("Sumcheck message", degree + 1)?;
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
@@ -434,7 +434,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
             let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
 
             if g_i_zero + g_i_one != g_prev_r_prev {
-                return Err(VerificationError::SumcheckFailed);
+                return Err(anyhow!(VerificationError::SumcheckFailed));
             }
 
             g_prev_round = g_cur_round;
@@ -454,7 +454,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         let matrix_product = verifier_layer.evaluate();
 
         if g_final_r_final != matrix_product {
-            return Err(VerificationError::FinalSumcheckFailed);
+            return Err(anyhow!(VerificationError::FinalSumcheckFailed));
         }
 
         Ok(VerifierLayerEnum::MatMult(verifier_layer))
@@ -516,7 +516,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         sumcheck_bindings: &[F],
         claim_points: &[&[F]],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::VerifierLayer, VerificationError> {
+    ) -> Result<Self::VerifierLayer> {
         // For matmult, we only use interpolative claim aggregation.
         assert_eq!(claim_points.len(), 1);
         let claim_point = claim_points[0];
@@ -710,7 +710,7 @@ impl<F: Field> VerifierLayer<F> for VerifierMatMultLayer<F> {
         self.layer_id
     }
 
-    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<Claim<F>>> {
         let claims = vec![&self.matrix_a, &self.matrix_b]
             .into_iter()
             .map(|matrix| {

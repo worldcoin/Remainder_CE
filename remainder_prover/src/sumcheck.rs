@@ -44,6 +44,7 @@ use std::{
 #[cfg(test)]
 pub mod tests;
 
+use anyhow::{anyhow, Result};
 use ark_std::{cfg_chunks, cfg_into_iter};
 use itertools::{repeat_n, Itertools};
 use thiserror::Error;
@@ -177,7 +178,7 @@ pub fn successors_from_mle_product<F: Field>(
     mles: &[&impl Mle<F>],
     degree: usize,
     round_index: usize,
-) -> Result<Vec<Vec<F>>, MleError> {
+) -> Result<Vec<Vec<F>>> {
     // Gets the total number of free variables across all MLEs within this
     // product
     let mut max_num_vars = mles
@@ -423,7 +424,7 @@ pub(crate) fn get_round_degree<F: Field>(
 
     let mut get_degree_closure = |expr: &ExpressionNode<F, ProverExpr>,
                                   mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
-     -> Result<(), ()> {
+     -> Result<()> {
         let round_degree = &mut round_degree;
 
         // The only exception is within a product of MLEs
@@ -455,7 +456,7 @@ pub(crate) fn get_round_degree<F: Field>(
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary
 /// point
-pub fn evaluate_at_a_point<F: Field>(given_evals: &[F], point: F) -> Result<F, InterpError> {
+pub fn evaluate_at_a_point<F: Field>(given_evals: &[F], point: F) -> Result<F> {
     // Special case for the constant polynomial.
     if given_evals.len() == 1 {
         return Ok(given_evals[0]);
@@ -494,5 +495,5 @@ pub fn evaluate_at_a_point<F: Field>(given_evals: &[F], point: F) -> Result<F, I
             |(x, (num, denom))| given_evals[x] * num * denom.invert().unwrap(),
         )
         .reduce(|x, y| x + y);
-    eval.ok_or(InterpError::NoInverse)
+    eval.ok_or(anyhow!("Interpretation Error: No Inverse"))
 }

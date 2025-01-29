@@ -33,6 +33,8 @@ use crate::{
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
 
+use anyhow::{anyhow, Ok, Result};
+
 pub use self::gate_helpers::{
     compute_sumcheck_message_data_parallel_gate, compute_sumcheck_message_no_beta_table,
     index_mle_indices_gate, GateError,
@@ -110,7 +112,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         &mut self,
         claims: &[&RawClaim<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<(), LayerError> {
+    ) -> Result<()> {
         let original_lhs_num_free_vars = self.lhs.num_free_vars();
         let original_rhs_num_free_vars = self.rhs.num_free_vars();
         let random_coefficients = match global_claim_agg_strategy() {
@@ -207,7 +209,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         Ok(())
     }
 
-    fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
+    fn initialize(&mut self, claim_point: &[F]) -> Result<()> {
         self.beta_g2_vec = Some(vec![BetaValues::new(
             claim_point[..self.num_dataparallel_vars]
                 .iter()
@@ -248,7 +250,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         &mut self,
         round_index: usize,
         random_coefficients: &[F],
-    ) -> Result<Vec<F>, LayerError> {
+    ) -> Result<Vec<F>> {
         let rounds_before_phase_2 = self.num_dataparallel_vars + self.num_rounds_phase1;
 
         if round_index < self.num_dataparallel_vars {
@@ -418,7 +420,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         }
     }
 
-    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
+    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<()> {
         if round_index < self.num_dataparallel_vars {
             self.beta_g2_vec
                 .as_mut()
@@ -526,7 +528,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         }
     }
 
-    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<Claim<F>>> {
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
         let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
 
@@ -642,7 +644,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         &self,
         claims: &[&RawClaim<F>],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<VerifierLayerEnum<F>, VerificationError> {
+    ) -> Result<VerifierLayerEnum<F>> {
         // Storing challenges for the sake of claim generation later
         let mut challenges = vec![];
 
@@ -694,7 +696,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
                 if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1]
                     != claims[0].get_eval()
                 {
-                    return Err(VerificationError::SumcheckStartFailed);
+                    return Err(anyhow!(VerificationError::SumcheckStartFailed));
                 }
             }
             ClaimAggregationStrategy::RLC => {
@@ -707,7 +709,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
                 if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1]
                     != rlc_claim_eval
                 {
-                    return Err(VerificationError::SumcheckStartFailed);
+                    return Err(anyhow!(VerificationError::SumcheckStartFailed));
                 }
             }
         }
@@ -743,7 +745,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             // Check: g_i(0) + g_i(1) =? g_{i - 1}(r_{i - 1})
             if prev_at_r != curr_evals[0] + curr_evals[1] {
                 dbg!(&sumcheck_round_idx);
-                return Err(VerificationError::SumcheckFailed);
+                return Err(anyhow!(VerificationError::SumcheckFailed));
             };
 
             // Add the prover message to the sumcheck messages
@@ -778,7 +780,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
         // Final check in sumcheck.
         if final_result != prev_at_r {
-            return Err(VerificationError::FinalSumcheckFailed);
+            return Err(anyhow!(VerificationError::FinalSumcheckFailed));
         }
 
         Ok(VerifierLayerEnum::Gate(verifier_gate_layer))
@@ -805,7 +807,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         sumcheck_bindings: &[F],
         claim_points: &[&[F]],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::VerifierLayer, VerificationError> {
+    ) -> Result<Self::VerifierLayer> {
         // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
         // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED
         // BITS
@@ -1109,7 +1111,7 @@ impl<F: Field> VerifierLayer<F> for VerifierGateLayer<F> {
         self.layer_id
     }
 
-    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<Claim<F>>> {
         // Grab the claim on the left side.
         // TODO!(ryancao): Do error handling here!
         let lhs_vars = self.lhs_mle.var_indices();

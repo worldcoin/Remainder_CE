@@ -841,12 +841,20 @@ where
 
     // step 4: evaluate and return
     // Computes dot product between inner_tensor (i.e. a) and proof.p_eval (i.e. b^T M)
-    Ok(inner_tensor
+    #[cfg(not(feature = "parallel"))]
+    return Ok(inner_tensor
         .iter()
         .zip(&p_eval[..])
         .map(|(t, e)| *t * e)
         .reduce(|a, v| a + v)
-        .unwrap_or(F::ZERO))
+        .unwrap_or(F::ZERO));
+
+    #[cfg(feature = "parallel")]
+    return Ok(inner_tensor
+        .par_iter()
+        .zip(&p_eval[..])
+        .map(|(t, e)| *t * e)
+        .reduce(|| F::ZERO, |a, v| a + v));
 }
 
 /// Check a column opening by

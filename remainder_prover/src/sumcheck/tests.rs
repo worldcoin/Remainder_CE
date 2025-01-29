@@ -10,6 +10,8 @@ use ark_std::test_rng;
 use rand::Rng;
 use remainder_shared_types::Fr;
 
+use anyhow::Result;
+
 /// Does a dummy version of sumcheck with a testing RNG.
 pub(crate) fn dummy_sumcheck<F: Field>(
     expr: &mut Expression<F, ProverExpr>,
@@ -64,7 +66,7 @@ pub fn verify_sumcheck_messages<F: Field>(
     mut expression: Expression<F, ProverExpr>,
     layer_claim: RawClaim<F>,
     rng: &mut impl Rng,
-) -> Result<F, VerifyError> {
+) -> Result<F> {
     if messages.is_empty() {
         return Ok(F::ZERO);
     }
@@ -78,7 +80,7 @@ pub fn verify_sumcheck_messages<F: Field>(
     // TODO!(ende): degree check?
     let claimed_val = messages[0].0[0] + messages[0].0[1];
     if claimed_val != layer_claim.get_eval() {
-        return Err(VerifyError::SumcheckBad);
+        return Err(anyhow!(VerifyError::SumcheckBad));
     }
     let mut challenges = vec![];
 
@@ -93,7 +95,7 @@ pub fn verify_sumcheck_messages<F: Field>(
 
         // g_{i - 1}(r) should equal g_i(0) + g_i(1)
         if prev_at_r != curr_evals[0] + curr_evals[1] {
-            return Err(VerifyError::SumcheckBad);
+            return Err(anyhow!(VerifyError::SumcheckBad));
         };
         prev_evals = curr_evals;
         challenges.push(chal);
@@ -112,7 +114,7 @@ pub fn verify_sumcheck_messages<F: Field>(
     let prev_at_r =
         evaluate_at_a_point(prev_evals, final_chal).expect("could not evaluate at challenge point");
     if oracle_query != prev_at_r {
-        return Err(VerifyError::SumcheckBad);
+        return Err(anyhow!(VerifyError::SumcheckBad));
     }
 
     Ok(chal)

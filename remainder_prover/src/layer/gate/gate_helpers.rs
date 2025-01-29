@@ -21,6 +21,8 @@ use super::BinaryOperation;
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
+use anyhow::{anyhow, Ok, Result};
+
 /// Error handling for gate mle construction.
 #[derive(Error, Debug, Clone)]
 pub enum GateError {
@@ -63,7 +65,7 @@ pub fn evaluate_mle_product_no_beta_table<F: Field>(
     mles: &[&impl Mle<F>],
     independent_variable: bool,
     degree: usize,
-) -> Result<SumcheckEvals<F>, MleError> {
+) -> Result<SumcheckEvals<F>> {
     // Gets the total number of free variables across all MLEs within this
     // product
     let max_num_vars = mles
@@ -1005,14 +1007,14 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
     mles: &[&impl Mle<F>],
     round_index: usize,
     degree: usize,
-) -> Result<Vec<F>, GateError> {
+) -> Result<Vec<F>> {
     // Go through all of the MLEs being multiplied together on the LHS and
     // see if any of them contain an IV
     let independent_variable = mles
         .iter()
         .map(|mle| mle.mle_indices().contains(&MleIndex::Indexed(round_index)))
         .reduce(|acc, item| acc | item)
-        .ok_or(GateError::EmptyMleList)?;
+        .ok_or(anyhow!(GateError::EmptyMleList))?;
 
     let eval = evaluate_mle_product_no_beta_table(mles, independent_variable, degree).unwrap();
 
@@ -1030,7 +1032,7 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
     num_dataparallel_vars: usize,
     challenges_vec: &[&[F]],
     random_coefficients: &[F],
-) -> Result<Vec<F>, GateError> {
+) -> Result<Vec<F>> {
     let (inverses_vec, one_minus_elem_inverted_vec) =
         compute_inverses_vec_and_one_minus_inverted_vec(challenges_vec);
 
@@ -1188,7 +1190,7 @@ pub fn compute_sumcheck_message_data_parallel_gate<F: Field>(
     num_dataparallel_vars: usize,
     challenges_vec: &[&[F]],
     random_coefficients: &[F],
-) -> Result<Vec<F>, GateError> {
+) -> Result<Vec<F>> {
     let (inverses_vec, one_minus_elem_inverted_vec) =
         compute_inverses_vec_and_one_minus_inverted_vec(challenges_vec);
 
