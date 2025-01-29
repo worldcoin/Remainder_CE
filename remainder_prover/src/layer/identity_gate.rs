@@ -40,9 +40,6 @@ use super::{
     Layer, LayerDescription, LayerId, VerifierLayer,
 };
 
-#[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-
 /// The circuit Description for an [IdentityGate].
 #[derive(Serialize, Deserialize, Clone, Hash)]
 #[serde(bound = "F: Field")]
@@ -579,7 +576,6 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                         .collect_vec(),
                 )
                 .unwrap();
-                dbg!(&sumcheck_message);
                 Ok(sumcheck_message)
             }
             _ => {
@@ -671,8 +667,6 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 })
             }
             let a_hg_mle = self.a_hg_mle_phase_1.as_mut().unwrap();
-            dbg!(&a_hg_mle);
-            dbg!(&self.source_mle);
 
             [a_hg_mle, &mut self.source_mle].iter_mut().for_each(|mle| {
                 mle.fix_variable(round_index, challenge);

@@ -176,11 +176,11 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 ClaimAggregationStrategy::Interpolative => {
                     let g_challenges =
                         self.g_vec.as_ref().unwrap()[0][self.num_dataparallel_vars..].to_vec();
-                    self.init_phase_2(&u_challenges, f2_at_u, &g_challenges);
+                    self.init_phase_2(u_challenges, f2_at_u, &g_challenges);
                 }
                 ClaimAggregationStrategy::RLC => {
                     self.init_phase_2_rlc(
-                        &u_challenges,
+                        u_challenges,
                         f2_at_u,
                         &self
                             .g_vec
@@ -249,14 +249,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         round_index: usize,
         random_coefficients: &[F],
     ) -> Result<Vec<F>, LayerError> {
-        // TODO!(ende): right now we still initializes the beta even the LAZY_BETA_EVALUATION flag is on
-        // it's because fn `compute_sumcheck_messages_data_parallel_identity_gate` cannot lazy
-        // evaluate beta's within it yet
-
         let rounds_before_phase_2 = self.num_dataparallel_vars + self.num_rounds_phase1;
-        dbg!(&rounds_before_phase_2);
-        dbg!(&round_index);
-        dbg!(&self.num_rounds_phase1);
 
         if round_index < self.num_dataparallel_vars {
             // dataparallel phase
@@ -362,11 +355,11 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     ClaimAggregationStrategy::Interpolative => {
                         let g_challenges =
                             self.g_vec.as_ref().unwrap()[0][self.num_dataparallel_vars..].to_vec();
-                        self.init_phase_2(&u_challenges, f2_at_u, &g_challenges);
+                        self.init_phase_2(u_challenges, f2_at_u, &g_challenges);
                     }
                     ClaimAggregationStrategy::RLC => {
                         self.init_phase_2_rlc(
-                            &u_challenges,
+                            u_challenges,
                             f2_at_u,
                             &self
                                 .g_vec

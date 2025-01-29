@@ -25,9 +25,7 @@ use crate::{
     layer::{Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription, Mle},
-    sumcheck::{
-        compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree, SumcheckEvals,
-    },
+    sumcheck::{evaluate_at_a_point, get_round_degree},
 };
 
 use super::{
@@ -260,39 +258,13 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         // Grabs the degree of univariate polynomial we are sending over.
         let degree = get_round_degree(expression, round_index);
 
-        let individual_message = newbeta
-            .as_ref()
-            .unwrap()
-            .iter()
-            .map(|beta| {
-                let elem = compute_sumcheck_message_beta_cascade(
-                    expression,
-                    round_index,
-                    degree,
-                    &[beta],
-                    &[F::ONE],
-                )
-                .unwrap();
-                dbg!(&elem);
-                elem
-            })
-            .zip(random_coefficients)
-            .fold(
-                SumcheckEvals(vec![F::ZERO; degree + 1]),
-                |acc, (elem, coeff)| acc + (elem * coeff),
-            );
-
         // Computes the sumcheck message using the beta cascade algorithm.
-        let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
-            expression,
-            round_index,
-            degree,
+        let prover_sumcheck_message = expression.evaluate_sumcheck_beta_cascade(
             &newbeta.as_ref().unwrap().iter().collect_vec(),
             random_coefficients,
-        )
-        .unwrap();
-        dbg!(&individual_message);
-        dbg!(&prover_sumcheck_message);
+            round_index,
+            degree,
+        );
 
         Ok(prover_sumcheck_message.0)
     }

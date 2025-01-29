@@ -18,7 +18,7 @@ to the codebase.
 */
 
 use crate::utils::get_least_significant_bits_to_usize_little_endian;
-use ark_std::{cfg_into_iter, end_timer, start_timer};
+use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
@@ -841,7 +841,8 @@ where
 
     // step 4: evaluate and return
     // Computes dot product between inner_tensor (i.e. a) and proof.p_eval (i.e. b^T M)
-    Ok(cfg_into_iter!(inner_tensor)
+    Ok(inner_tensor
+        .iter()
         .zip(&p_eval[..])
         .map(|(t, e)| *t * e)
         .reduce(|a, v| a + v)
@@ -1000,7 +1001,8 @@ where
             .collect();
 
         // Send columns + Merkle paths to verifier
-        cfg_into_iter!(&cols_to_open)
+        cols_to_open
+            .iter()
             .map(|&col| open_column(tr, comm, col))
             .collect::<ProverResult<Vec<LcColumn<E, F>>, ErrT<E, F>>>()?
     };

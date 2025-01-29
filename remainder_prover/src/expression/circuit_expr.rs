@@ -917,7 +917,7 @@ pub fn filter_bookkeeping_table<F: Field>(
 
 /// Evaluate the bookkeeping tables by applying the element-wise operation,
 /// which can either be addition or multiplication.
-fn evaluate_bookkeeping_tables_given_operation<F: Field>(
+pub(crate) fn evaluate_bookkeeping_tables_given_operation<F: Field>(
     mle_bookkeeping_tables: &[Vec<F>],
     binary_operation: BinaryOperation,
 ) -> MultilinearExtension<F> {

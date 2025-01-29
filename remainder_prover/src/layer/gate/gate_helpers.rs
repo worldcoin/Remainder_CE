@@ -456,7 +456,7 @@ pub fn compute_fully_bound_binary_gate_function<F: Field>(
                 // specifically for the claim challenges over the output labels
                 // as indices.
                 let next_beta_values_gz = compute_next_beta_values_vec_from_current(
-                    &current_beta_gz_vec,
+                    current_beta_gz_vec.as_slice(),
                     &inverses_vec_claim_challenges,
                     &one_minus_elem_inverted_vec_claim_challenges,
                     nondataparallel_claim_challenges_vec,
@@ -654,7 +654,7 @@ pub fn fold_binary_gate_wiring_into_mles_phase_1<F: Field>(
     let num_vars = f2_x_mle.num_free_vars();
     let (inverses, one_minus_elem_inverted) =
         compute_inverses_vec_and_one_minus_inverted_vec(claim_points);
-    let (_, a_hg_lhs, a_hg_rhs) = cfg_into_iter!(wiring).fold(
+    let folded_tables = cfg_into_iter!(wiring).fold(
         #[cfg(feature = "parallel")]
         || {
             (
@@ -712,7 +712,38 @@ pub fn fold_binary_gate_wiring_into_mles_phase_1<F: Field>(
             )
         },
     );
-    (a_hg_lhs, a_hg_rhs)
+    #[cfg(feature = "parallel")]
+    {
+        let (_, a_hg_lhs, a_hg_rhs) = folded_tables.reduce(
+            || {
+                (
+                    None,
+                    vec![F::ZERO; 1 << num_vars],
+                    vec![F::ZERO; 1 << num_vars],
+                )
+            },
+            |(_, mut a_hg_lhs_acc, mut a_hg_rhs_acc), (_, a_hg_lhs_partial, a_hg_rhs_partial)| {
+                a_hg_lhs_acc
+                    .iter_mut()
+                    .zip(a_hg_lhs_partial.into_iter())
+                    .for_each(|(acc, partial)| *acc += partial);
+
+                a_hg_rhs_acc
+                    .iter_mut()
+                    .zip(a_hg_rhs_partial.into_iter())
+                    .for_each(|(acc, partial)| *acc += partial);
+
+                (None, a_hg_lhs_acc, a_hg_rhs_acc)
+            },
+        );
+
+        (a_hg_lhs, a_hg_rhs)
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let (_, a_hg_lhs, a_hg_rhs) = folded_tables;
+        (a_hg_lhs, a_hg_rhs)
+    }
 }
 
 /// This function uses the "Rothblum"-inspired sumcheck trick
@@ -733,7 +764,7 @@ pub fn fold_binary_gate_wiring_into_mles_phase_2<F: Field>(
         .iter()
         .map(|point| (point.invert().unwrap(), (F::ONE - point).invert().unwrap()))
         .unzip();
-    let (_, a_f1_lhs, a_f1_rhs) = cfg_into_iter!(wiring).fold(
+    let folded_tables = cfg_into_iter!(wiring).fold(
         #[cfg(feature = "parallel")]
         || {
             (
@@ -813,7 +844,39 @@ pub fn fold_binary_gate_wiring_into_mles_phase_2<F: Field>(
             )
         },
     );
-    (a_f1_lhs, a_f1_rhs)
+
+    #[cfg(feature = "parallel")]
+    {
+        let (_, a_f1_lhs, a_f1_rhs) = folded_tables.reduce(
+            || {
+                (
+                    (None, None),
+                    vec![F::ZERO; 1 << num_vars],
+                    vec![F::ZERO; 1 << num_vars],
+                )
+            },
+            |(_, mut a_f1_lhs_acc, mut a_f1_rhs_acc), (_, a_f1_lhs_partial, a_f1_rhs_partial)| {
+                a_f1_lhs_acc
+                    .iter_mut()
+                    .zip(a_f1_lhs_partial.into_iter())
+                    .for_each(|(acc, partial)| *acc += partial);
+
+                a_f1_rhs_acc
+                    .iter_mut()
+                    .zip(a_f1_rhs_partial.into_iter())
+                    .for_each(|(acc, partial)| *acc += partial);
+
+                ((None, None), a_f1_lhs_acc, a_f1_rhs_acc)
+            },
+        );
+
+        (a_f1_lhs, a_f1_rhs)
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let (_, a_f1_lhs, a_f1_rhs) = folded_tables;
+        (a_f1_lhs, a_f1_rhs)
+    }
 }
 
 /// This function uses the "Rothblum"-inspired sumcheck trick
@@ -870,7 +933,6 @@ pub fn fold_wiring_into_dataparallel_beta_mle_identity_gate<F: Field>(
     (0..(1 << num_dataparallel_vars))
         .skip(1)
         .for_each(|dataparallel_copy_index| {
-            dbg!(&current_nonzero_output_gate_label);
             let next_idx_of_beta = (dataparallel_copy_index
                 * num_nondataparallel_coefficients_in_result)
                 + current_nonzero_output_gate_label as usize;
@@ -984,7 +1046,7 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
     let num_nondataparallel_coeffs_source =
         1 << (source_mle.num_free_vars() - num_dataparallel_vars);
     let num_z_coeffs = 1 << (challenges_vec[0].len() - num_dataparallel_vars);
-    let scaled_wirings = cfg_into_iter!((0..num_dataparallel_copies_mid))
+    let scaled_wirings: Vec<(u32, u32)> = cfg_into_iter!((0..num_dataparallel_copies_mid))
         .flat_map(|p2_idx| {
             wiring
                 .iter()
@@ -996,7 +1058,7 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
                 })
                 .collect_vec()
         })
-        .collect_vec();
+        .collect();
 
     let evals = cfg_into_iter!(scaled_wirings).fold(
         #[cfg(feature = "parallel")]
@@ -1039,11 +1101,6 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
                     *beta_at_0 * one_minus_inverses[0] * challenges[0]
                 })
                 .collect_vec();
-            dbg!(&next_beta_values_at_0, &next_beta_values_at_1);
-            dbg!(
-                &next_beta_values_at_0[0].neg(),
-                &next_beta_values_at_1[0].neg()
-            );
 
             let rlc_beta_values_at_0 = next_beta_values_at_0
                 .iter()
@@ -1103,18 +1160,21 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
 
     #[cfg(feature = "parallel")]
     {
-        let evals = evals.fold(
-            || vec![F::ZERO; eval_count],
-            |mut acc, (partial, _, _)| {
+        let evals = evals.reduce(
+            || (vec![F::ZERO; eval_count], None),
+            |(mut acc, _), (partial, _)| {
                 acc.iter_mut()
                     .zip(partial)
                     .for_each(|(acc, partial)| *acc += partial);
-                acc
+                (acc, None)
             },
         );
-        Ok(evals)
+        Ok(evals.0)
     }
-    Ok(evals.0)
+    #[cfg(not(feature = "parallel"))]
+    {
+        Ok(evals.0)
+    }
 }
 
 /// Get the evals for a binary gate specified by the BinaryOperation. Note that
@@ -1153,7 +1213,7 @@ pub fn compute_sumcheck_message_data_parallel_gate<F: Field>(
     let num_nondataparallel_coeffs_f2_x = 1 << (f2_p2_x.num_free_vars() - num_dataparallel_vars);
     let num_nondataparallel_coeffs_f3_y = 1 << (f3_p2_y.num_free_vars() - num_dataparallel_vars);
     let num_z_coeffs = 1 << (challenges_vec[0].len() - num_dataparallel_vars);
-    let scaled_wirings = cfg_into_iter!((0..num_dataparallel_copies_mid))
+    let scaled_wirings: Vec<(u32, u32, u32)> = cfg_into_iter!((0..num_dataparallel_copies_mid))
         .flat_map(|p2_idx| {
             wiring
                 .iter()
@@ -1166,7 +1226,7 @@ pub fn compute_sumcheck_message_data_parallel_gate<F: Field>(
                 })
                 .collect_vec()
         })
-        .collect_vec();
+        .collect();
 
     let evals = cfg_into_iter!(scaled_wirings).fold(
         #[cfg(feature = "parallel")]
@@ -1290,16 +1350,19 @@ pub fn compute_sumcheck_message_data_parallel_gate<F: Field>(
 
     #[cfg(feature = "parallel")]
     {
-        let evals = evals.fold(
-            || vec![F::ZERO; eval_count],
-            |mut acc, (partial, _, _)| {
+        let evals = evals.reduce(
+            || (vec![F::ZERO; eval_count], None),
+            |(mut acc, _), (partial, _)| {
                 acc.iter_mut()
                     .zip(partial)
                     .for_each(|(acc, partial)| *acc += partial);
-                acc
+                (acc, None)
             },
         );
-        Ok(evals)
+        Ok(evals.0)
     }
-    Ok(evals.0)
+    #[cfg(not(feature = "parallel"))]
+    {
+        Ok(evals.0)
+    }
 }

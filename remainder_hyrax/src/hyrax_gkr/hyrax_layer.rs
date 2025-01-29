@@ -7,6 +7,7 @@ use crate::{
 };
 use itertools::Itertools;
 use rand::{CryptoRng, Rng, RngCore};
+use remainder::layer::product::{Intermediate, PostSumcheckLayer};
 use remainder::layer::Layer;
 use remainder::layer::LayerDescription;
 use remainder::layer::LayerId;
@@ -19,17 +20,12 @@ use remainder::{
     claims::RawClaim,
     layer::product::{new_with_values, Product},
 };
-use remainder::{
-    layer::product::{Intermediate, PostSumcheckLayer},
-    sumcheck::evaluate_at_a_point,
-};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use remainder_shared_types::Field;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::ops::Neg;
 /// This struct represents what a proof looks like for one layer of GKR, but Hyrax version.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C: PrimeOrderCurve")]
@@ -64,10 +60,6 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         let round_evaluations = underlying_layer
             .compute_round_sumcheck_message(bit_index, &[C::Scalar::ONE])
             .unwrap();
-        dbg!(&round_evaluations);
-        dbg!(evaluate_at_a_point(&round_evaluations, C::Scalar::from(2_u64)).unwrap());
-        dbg!(round_evaluations[0] + &round_evaluations[1]);
-        dbg!((round_evaluations[0] + &round_evaluations[1]).neg());
 
         // Convert the evaluations above into coefficients (in Hyrax, it is the coefficients, not
         // the evaluations, that are used)
