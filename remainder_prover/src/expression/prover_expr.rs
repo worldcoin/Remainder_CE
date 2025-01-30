@@ -30,6 +30,8 @@ use std::{
     ops::{Add, Mul, Neg, Sub},
 };
 
+use anyhow::{anyhow, Ok, Result};
+
 /// mid-term solution for deduplication of DenseMleRefs
 /// basically a wrapper around usize, which denotes the index
 /// of the MleRef in an expression's MleRef list/// Generic Expressions
@@ -167,7 +169,7 @@ impl<F: Field> Expression<F, ProverExpr> {
         // use traverse_mut
         let mut increment_closure = |expr: &mut ExpressionNode<F, ProverExpr>,
                                      _mle_vec: &mut Vec<DenseMle<F>>|
-         -> Result<(), ()> {
+         -> Result<()> {
             match expr {
                 ExpressionNode::Mle(mle_vec_index) => {
                     mle_vec_index.increment(offset);
@@ -199,9 +201,7 @@ impl<F: Field> Expression<F, ProverExpr> {
     ///
     /// If the bookkeeping table has more than 1 element, it
     /// throws an ExpressionError::EvaluateNotFullyBoundError
-    pub fn transform_to_verifier_expression(
-        self,
-    ) -> Result<Expression<F, VerifierExpr>, ExpressionError> {
+    pub fn transform_to_verifier_expression(self) -> Result<Expression<F, VerifierExpr>> {
         let (mut expression_node, mle_vec) = self.deconstruct();
         Ok(Expression::new(
             expression_node
@@ -226,7 +226,7 @@ impl<F: Field> Expression<F, ProverExpr> {
     }
 
     /// evaluates an expression on the given challenges points, by fixing the variables
-    pub fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError> {
+    pub fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F> {
         // It's as simple as fixing all variables
         challenges
             .iter()
@@ -238,7 +238,7 @@ impl<F: Field> Expression<F, ProverExpr> {
         // ----- this is literally a check -----
         let mut observer_fn = |exp: &ExpressionNode<F, ProverExpr>,
                                mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
-         -> Result<(), ExpressionError> {
+         -> Result<()> {
             match exp {
                 ExpressionNode::Mle(mle_vec_idx) => {
                     let mle = mle_vec_idx.get_mle(mle_vec);
@@ -260,7 +260,7 @@ impl<F: Field> Expression<F, ProverExpr> {
                     if indices.as_slice() == &challenges[start..=end] {
                         Ok(())
                     } else {
-                        Err(ExpressionError::EvaluateBoundIndicesDontMatch)
+                        Err(anyhow!(ExpressionError::EvaluateBoundIndicesDontMatch))
                     }
                 }
                 ExpressionNode::Product(mle_vec_indices) => {
@@ -288,7 +288,7 @@ impl<F: Field> Expression<F, ProverExpr> {
                             if indices.as_slice() == &challenges[start..=end] {
                                 Ok(())
                             } else {
-                                Err(ExpressionError::EvaluateBoundIndicesDontMatch)
+                                Err(anyhow!(ExpressionError::EvaluateBoundIndicesDontMatch))
                             }
                         })
                         .try_collect()
@@ -394,7 +394,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     pub fn transform_to_verifier_expression_node(
         &mut self,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
-    ) -> Result<ExpressionNode<F, VerifierExpr>, ExpressionError> {
+    ) -> Result<ExpressionNode<F, VerifierExpr>> {
         match self {
             ExpressionNode::Constant(scalar) => Ok(ExpressionNode::Constant(*scalar)),
             ExpressionNode::Selector(index, a, b) => Ok(ExpressionNode::Selector(
@@ -414,7 +414,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 // [remainder::mle::dense::Dense::value] which performs the
                 // necessary checks and panics if the MLE is not fully-bound.
                 if mle.len() != 1 {
-                    return Err(ExpressionError::EvaluateNotFullyBoundError);
+                    return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
                 }
 
                 let layer_id = mle.layer_id();
@@ -444,7 +444,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 // remove.
                 for mle in mles.iter() {
                     if mle.len() != 1 {
-                        return Err(ExpressionError::EvaluateNotFullyBoundError);
+                        return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
                     }
                 }
 

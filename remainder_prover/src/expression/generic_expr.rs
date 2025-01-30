@@ -7,6 +7,8 @@ use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
 
+use anyhow::{Ok, Result};
+
 /// An [ExpressionType] defines two fields -- the type of MLE representation
 /// at the leaf of the expression node tree, and the "global" unique copies
 /// of each of the MLEs (this is so that if an expression references the
@@ -107,19 +109,19 @@ impl<F: Field, E: ExpressionType<F>> Expression<F, E> {
     /// traverse the expression tree, and applies the observer_fn to all child node
     /// because the expression node has the recursive structure, the traverse_node
     /// helper function is implemented on it, with the mle_vec reference passed in
-    pub fn traverse<D>(
+    pub fn traverse(
         &self,
-        observer_fn: &mut impl FnMut(&ExpressionNode<F, E>, &E::MleVec) -> Result<(), D>,
-    ) -> Result<(), D> {
+        observer_fn: &mut impl FnMut(&ExpressionNode<F, E>, &E::MleVec) -> Result<()>,
+    ) -> Result<()> {
         self.expression_node
             .traverse_node(observer_fn, &self.mle_vec)
     }
 
     /// similar to traverse, but allows mutation of self (expression node and mle_vec)
-    pub fn traverse_mut<D>(
+    pub fn traverse_mut(
         &mut self,
-        observer_fn: &mut impl FnMut(&mut ExpressionNode<F, E>, &mut E::MleVec) -> Result<(), D>,
-    ) -> Result<(), D> {
+        observer_fn: &mut impl FnMut(&mut ExpressionNode<F, E>, &mut E::MleVec) -> Result<()>,
+    ) -> Result<()> {
         self.expression_node
             .traverse_node_mut(observer_fn, &mut self.mle_vec)
     }
@@ -128,11 +130,11 @@ impl<F: Field, E: ExpressionType<F>> Expression<F, E> {
 /// Generic helper methods shared across all types of [ExpressionNode]s.
 impl<F: Field, E: ExpressionType<F>> ExpressionNode<F, E> {
     /// traverse the expression tree, and applies the observer_fn to all child node / the mle_vec reference
-    pub fn traverse_node<D>(
+    pub fn traverse_node(
         &self,
-        observer_fn: &mut impl FnMut(&ExpressionNode<F, E>, &E::MleVec) -> Result<(), D>,
+        observer_fn: &mut impl FnMut(&ExpressionNode<F, E>, &E::MleVec) -> Result<()>,
         mle_vec: &E::MleVec,
-    ) -> Result<(), D> {
+    ) -> Result<()> {
         observer_fn(self, mle_vec)?;
         match self {
             ExpressionNode::Constant(_) | ExpressionNode::Mle(_) | ExpressionNode::Product(_) => {
@@ -152,11 +154,11 @@ impl<F: Field, E: ExpressionType<F>> ExpressionNode<F, E> {
     }
 
     /// similar to traverse, but allows mutation of self (expression node and mle_vec)
-    pub fn traverse_node_mut<D>(
+    pub fn traverse_node_mut(
         &mut self,
-        observer_fn: &mut impl FnMut(&mut ExpressionNode<F, E>, &mut E::MleVec) -> Result<(), D>,
+        observer_fn: &mut impl FnMut(&mut ExpressionNode<F, E>, &mut E::MleVec) -> Result<()>,
         mle_vec: &mut E::MleVec,
-    ) -> Result<(), D> {
+    ) -> Result<()> {
         observer_fn(self, mle_vec)?;
         match self {
             ExpressionNode::Constant(_) | ExpressionNode::Mle(_) | ExpressionNode::Product(_) => {
