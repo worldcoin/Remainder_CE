@@ -8,7 +8,7 @@ on:
 jobs:
   check_and_test:
     name: Compile and check formatting/linting.
-    runs-on: self-hosted
+    runs-on: [self-hosted, amd64, rust]
     steps:
       - uses: actions/checkout@v2
       - name: Run 'make check'
@@ -16,7 +16,7 @@ jobs:
 
   fmt_and_lint:
     name: Run tests
-    runs-on: self-hosted
+    runs-on: [self-hosted, amd64, rust]
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -28,7 +28,7 @@ jobs:
 
   mem_limit_test:
     name: Memory Limit Test
-    runs-on: self-hosted
+    runs-on: [self-hosted, amd64, rust]
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
