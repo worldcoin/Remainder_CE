@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "=4.3.21", features = ["derive"] }
+clap = { version = "^4", features = ["derive"] }
 criterion = "0.5.1"
 rand_chacha = "0.3.1"
 remainder-shared-types = { path = "../remainder_shared_types" }
