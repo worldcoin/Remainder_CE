@@ -57,3 +57,7 @@ path = "src/bin/worldcoin.rs"
 [[bin]]
 name = "worldcoin_mpc"
 path = "src/bin/worldcoin_mpc.rs"
+
+[[bin]]
+name = "worldcoin_mpc_new"
+path = "src/bin/worldcoin_mpc_new.rs"
