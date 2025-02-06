@@ -10,6 +10,7 @@ use remainder_shared_types::{config::global_config::global_prover_enable_bit_pac
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use itertools::FoldWhile::{Continue, Done};
+use zeroize::Zeroize;
 
 // -------------- Helper Functions -----------------
 
@@ -123,6 +124,16 @@ pub(in crate::mle::evals) struct BitPackedVector<F: Field> {
     /// The number of bits required to represent each element optimally.
     /// This is equal to `ceil(log_2(b - a + 1))` as described above.
     bits_per_element: usize,
+}
+
+impl<F: Field> Zeroize for BitPackedVector<F> {
+    fn zeroize(&mut self) {
+        self.buf.iter_mut().for_each(|x| x.zeroize());
+        self.naive_buf.iter_mut().for_each(|x| x.zeroize());
+        self.num_elements.zeroize();
+        self.offset.zeroize();
+        self.bits_per_element.zeroize();
+    }
 }
 
 impl<F: Field> BitPackedVector<F> {
