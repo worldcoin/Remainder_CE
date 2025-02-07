@@ -35,6 +35,14 @@ prod:  ## Build worldcoin binary for production; optimizations + rayon paralleli
 prod-new:  ## Build new worldcoin binary for production; optimizations + rayon parallelism, NO print-trace.
 	cargo build --release --features parallel --bin worldcoin_mpc_new
 
+prod-binaries:  ## Build new worldcoin binary for production; optimizations + rayon parallelism, NO print-trace.
+	cargo build --release --features parallel --bin world_circuit
+	cargo build --release --features parallel --bin world_prove
+	cargo build --release --features parallel --bin world_sign_up_verify
+	cargo build --release --features parallel --bin world_verify_party_0
+	cargo build --release --features parallel --bin world_verify_party_1
+	cargo build --release --features parallel --bin world_verify_party_2
+
 prod-seq:  ## Similar to 'prod', but NO rayon parallelism.
 	cargo build --release --bin worldcoin_mpc
 
