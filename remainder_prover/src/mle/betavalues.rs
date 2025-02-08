@@ -71,16 +71,23 @@ impl<F: Field> BetaValues<F> {
     pub fn get_relevant_beta_unbound_and_bound(
         &self,
         mle_indices: &[MleIndex<F>],
+        round_index: usize,
+        independent_variable: bool,
     ) -> (Vec<F>, Vec<F>) {
-        let bound_betas = mle_indices
-            .iter()
-            .filter_map(|index| match index {
-                MleIndex::Bound(_, round_idx) => self.updated_values.get(round_idx).copied(),
-                _ => None,
-            })
-            .collect_vec();
+        // We always want every bound value so far.
+        let bound_betas = if independent_variable {
+            self.updated_values.values().copied().collect()
+        } else {
+            mle_indices
+                .iter()
+                .filter_map(|index| match index {
+                    MleIndex::Bound(_, round_idx) => self.unbound_values.get(round_idx).copied(),
+                    _ => None,
+                })
+                .collect_vec()
+        };
 
-        let unbound_betas = mle_indices
+        let mut unbound_betas = mle_indices
             .iter()
             .filter_map(|index| match index {
                 MleIndex::Indexed(round_idx) => self.unbound_values.get(round_idx).copied(),
@@ -88,6 +95,11 @@ impl<F: Field> BetaValues<F> {
             })
             .collect_vec();
 
+        // If the MLE indices does not contain the current "independent variable",
+        // then we want to manually include it in our unbound betas.
+        if !mle_indices.contains(&MleIndex::Indexed(round_index)) && independent_variable {
+            unbound_betas.push(self.unbound_values.get(&round_index).copied().unwrap())
+        }
         (unbound_betas, bound_betas)
     }
 

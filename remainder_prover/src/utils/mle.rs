@@ -221,7 +221,7 @@ pub struct GrayCodeIterator {
 impl GrayCodeIterator {
     /// Note: `num_bits` cannot be more than 31 because we work with u32s in
     /// this iterator.
-    fn new(num_bits: usize) -> Self {
+    pub fn new(num_bits: usize) -> Self {
         assert!(num_bits < 32);
         Self {
             num_bits,
@@ -282,14 +282,13 @@ impl Iterator for GrayCodeIterator {
         self.current_iteration += 1;
         let new_gray = (self.current_iteration ^ (self.current_iteration >> 1)) & mask;
 
-        // Compute which bit was flipped.
-        let flipped_bit = (prev_gray ^ new_gray).trailing_zeros();
-        let previous_value = (prev_gray & (1 << flipped_bit)) != 0;
-
         // Internally, the bits are stored in little-endian. NOTE: Our
         // bookkeeping tables are in "big-endian", so we need to take this into
         // account when evaluating an MLE.
-        Some((new_gray, (flipped_bit, previous_value)))
+        Some((
+            new_gray,
+            compute_flipped_bit_idx_and_value_graycode(prev_gray, new_gray),
+        ))
     }
 }
 
@@ -323,20 +322,119 @@ impl Iterator for LexicographicLE {
 
         let prev_val = self.current_val;
         self.current_val += 1;
-        let flipped_bits = prev_val ^ self.current_val;
 
-        let mut flipped_bit_idx_and_values = Vec::<(u32, bool)>::new();
-
-        (0..32).for_each(|idx| {
-            if (flipped_bits & (1 << idx)) != 0 {
-                // NOTE: Our bookkeeping tables are in "big-endian", so we need
-                // to take this into account when evaluating an MLE.
-                flipped_bit_idx_and_values.push((idx, (prev_val & (1 << idx)) != 0))
-            }
-        });
+        let flipped_bit_idx_and_values =
+            compute_flipped_bit_idx_and_values_lexicographic(prev_val, self.current_val);
 
         Some((self.current_val, flipped_bit_idx_and_values))
     }
+}
+
+/// Compute the single flipped bit and its previous value for the gray codes
+/// iterator.
+pub fn compute_flipped_bit_idx_and_value_graycode(curr_val: u32, next_val: u32) -> (u32, bool) {
+    let flipped_bit = (curr_val ^ next_val).trailing_zeros();
+    let previous_value = (curr_val & (1 << flipped_bit)) != 0;
+    (flipped_bit, previous_value)
+}
+
+/// Compute the inverses and one minus the elem inverted for a vec of claim challenges.
+pub fn compute_inverses_vec_and_one_minus_inverted_vec<F: Field>(
+    claim_points: &[&[F]],
+) -> (Vec<Vec<F>>, Vec<Vec<F>>) {
+    let inverses_vec = claim_points
+        .iter()
+        .map(|claim_point| {
+            claim_point
+                .iter()
+                .map(|elem| elem.invert().unwrap())
+                .collect_vec()
+        })
+        .collect_vec();
+    let one_minus_inverses_vec = claim_points
+        .iter()
+        .map(|claim_point| {
+            claim_point
+                .iter()
+                .map(|elem| (F::ONE - elem).invert().unwrap())
+                .collect_vec()
+        })
+        .collect_vec();
+    (inverses_vec, one_minus_inverses_vec)
+}
+
+/// Compute the flipped bits between a previous value and a current value, and
+/// return each of the flipped bits' indices and previous value.
+pub fn compute_flipped_bit_idx_and_values_lexicographic(
+    curr_val: u32,
+    next_val: u32,
+) -> Vec<(u32, bool)> {
+    let flipped_bits = curr_val ^ next_val;
+    let mut flipped_bit_idx_and_values = Vec::<(u32, bool)>::new();
+    (0..32).for_each(|idx| {
+        if (flipped_bits & (1 << idx)) != 0 {
+            // NOTE: Our bookkeeping tables are in "big-endian", so we need
+            // to take this into account when evaluating an MLE.
+            flipped_bit_idx_and_values.push((idx, (curr_val & (1 << idx)) != 0))
+        }
+    });
+    flipped_bit_idx_and_values
+}
+
+/// Compute the next beta values from the previous by multiplying by appropriate
+/// inverses and challenge points given the flipped bits and their previous
+/// values. This is for when we have multiple claims to compute the beta over.
+pub fn compute_next_beta_values_vec_from_current<F: Field>(
+    current_beta_values: &[F],
+    inverses_vec: &[Vec<F>],
+    one_minus_elem_inverted_vec: &[Vec<F>],
+    claim_points: &[&[F]],
+    flipped_bit_idx_and_values: &[(u32, bool)],
+) -> Vec<F> {
+    current_beta_values
+        .iter()
+        .zip(inverses_vec.iter().zip(one_minus_elem_inverted_vec))
+        .zip(claim_points)
+        .map(
+            |((current_beta_value, (inverses, one_minus_inverses)), claim_point)| {
+                compute_next_beta_value_from_current(
+                    current_beta_value,
+                    inverses,
+                    one_minus_inverses,
+                    claim_point,
+                    flipped_bit_idx_and_values,
+                )
+            },
+        )
+        .collect_vec()
+}
+
+/// Compute the next beta value from the previous by multiplying by appropriate
+/// inverses and challenge points given the flipped bits and their previous
+/// values. This is for when we have a single claim to compute the beta over.
+pub fn compute_next_beta_value_from_current<F: Field>(
+    current_beta_value: &F,
+    inverses: &[F],
+    one_minus_elem_inverted: &[F],
+    claim_point: &[F],
+    flipped_bit_idx_and_values: &[(u32, bool)],
+) -> F {
+    let n = claim_point.len();
+    flipped_bit_idx_and_values.iter().fold(
+        // For each of the flipped bits, multiply by the
+        // appropriate inverse depending on if the value was
+        // previously 0 or 1.
+        *current_beta_value,
+        |acc, (idx, value)| {
+            if *value {
+                acc * inverses[n - 1 - *idx as usize]
+                    * (F::ONE - claim_point[n - 1 - *idx as usize])
+            } else {
+                acc * (one_minus_elem_inverted[n - 1 - *idx as usize])
+                    * claim_point[n - 1 - *idx as usize]
+            }
+        },
+    )
 }
 
 /// This function non-destructively evaluates an MLE at a given point using the

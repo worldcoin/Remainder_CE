@@ -44,12 +44,12 @@ macro_rules! layer_enum {
 
                 fn verify_rounds(
                     &self,
-                    claim: $crate::claims::RawClaim<F>,
+                    claims: &[&$crate::claims::RawClaim<F>],
                     transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
                 ) -> anyhow::Result<VerifierLayerEnum<F>> {
                     match self {
                         $(
-                            Self::$var_name(layer) => Ok(layer.verify_rounds(claim, transcript)?),
+                            Self::$var_name(layer) => Ok(layer.verify_rounds(claims, transcript)?),
                         )*
                     }
                 }
@@ -67,12 +67,12 @@ macro_rules! layer_enum {
                 fn convert_into_verifier_layer(
                     &self,
                     sumcheck_bindings: &[F],
-                    claim_point: &[F],
+                    claim_points: &[&[F]],
                     transcript_reader: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
                 ) -> anyhow::Result<Self::VerifierLayer> {
                     match self {
                         $(
-                            Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.convert_into_verifier_layer(sumcheck_bindings, claim_point, transcript_reader)?)),
+                            Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.convert_into_verifier_layer(sumcheck_bindings, claim_points, transcript_reader)?)),
                         )*
                     }
                 }
@@ -158,12 +158,12 @@ macro_rules! layer_enum {
 
                 fn prove(
                     &mut self,
-                    claim: $crate::claims::RawClaim<F>,
+                    claims: &[&$crate::claims::RawClaim<F>],
                     transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
                 ) -> anyhow::Result<()> {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.prove(claim, transcript),
+                            Self::$var_name(layer) => layer.prove(claims, transcript),
                         )*
                     }
                 }
@@ -176,10 +176,10 @@ macro_rules! layer_enum {
                     }
                 }
 
-                fn compute_round_sumcheck_message(&mut self, round_index: usize) -> anyhow::Result<Vec<F>> {
+                fn compute_round_sumcheck_message(&mut self, round_index: usize, random_coefficients: &[F]) -> anyhow::Result<Vec<F>> {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.compute_round_sumcheck_message(round_index),
+                            Self::$var_name(layer) => layer.compute_round_sumcheck_message(round_index, random_coefficients),
                         )*
                     }
                 }
@@ -224,6 +224,14 @@ macro_rules! layer_enum {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.get_claims(),
+                        )*
+                    }
+                }
+
+                fn initialize_rlc(&mut self, random_coefficients: &[F], claims: &[&$crate::claims::RawClaim<F>]) {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.initialize_rlc(random_coefficients, claims),
                         )*
                     }
                 }

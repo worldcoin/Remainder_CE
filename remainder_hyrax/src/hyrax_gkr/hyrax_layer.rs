@@ -58,7 +58,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
     ) -> CommittedVector<C> {
         // The univariate evaluations for that round (i.e. f(0), f(1), ...)
         let round_evaluations = underlying_layer
-            .compute_round_sumcheck_message(bit_index)
+            .compute_round_sumcheck_message(bit_index, &[C::Scalar::ONE])
             .unwrap();
 
         // Convert the evaluations above into coefficients (in Hyrax, it is the coefficients, not

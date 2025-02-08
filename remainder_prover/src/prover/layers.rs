@@ -41,7 +41,7 @@ impl<F: Field, T: Layer<F>> Layers<F, T> {
     /// A flattened `DenseMle` that represents the evaluations of the add gate wiring on `lhs` and `rhs` over the boolean hypercube
     pub fn add_gate(
         &mut self,
-        nonzero_gates: Vec<(usize, usize, usize)>,
+        nonzero_gates: Vec<(u32, u32, u32)>,
         lhs: DenseMle<F>,
         rhs: DenseMle<F>,
         num_dataparallel_bits: Option<usize>,
@@ -72,19 +72,19 @@ impl<F: Field, T: Layer<F>> Layers<F, T> {
         self.layers.push(gate.into());
 
         // iterate through each of the indices and perform the binary operation specified
-        let mut res_table = vec![F::ZERO; res_table_num_entries];
+        let mut res_table = vec![F::ZERO; res_table_num_entries as usize];
         (0..num_dataparallel_vals).for_each(|idx| {
             nonzero_gates
                 .clone()
                 .into_iter()
                 .for_each(|(z_ind, x_ind, y_ind)| {
                     let f2_val = lhs
-                        .get(idx + (x_ind * num_dataparallel_vals))
+                        .get((idx + (x_ind * num_dataparallel_vals)) as usize)
                         .unwrap_or(F::ZERO);
                     let f3_val = rhs
-                        .get(idx + (y_ind * num_dataparallel_vals))
+                        .get((idx + (y_ind * num_dataparallel_vals)) as usize)
                         .unwrap_or(F::ZERO);
-                    res_table[idx + (z_ind * num_dataparallel_vals)] =
+                    res_table[(idx + (z_ind * num_dataparallel_vals)) as usize] =
                         gate_operation.perform_operation(f2_val, f3_val);
                 });
         });

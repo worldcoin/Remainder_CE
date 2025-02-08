@@ -20,10 +20,11 @@ use crate::{
     layer::VerificationError,
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
-        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription,
-        verifier_mle::VerifierMle, Mle, MleIndex,
+        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
+        mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
     },
     sumcheck::evaluate_at_a_point,
+    utils::mle::{compute_flipped_bit_idx_and_value_graycode, GrayCodeIterator},
 };
 
 use anyhow::{anyhow, Ok, Result};
@@ -177,7 +178,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
     // matrices in this matrix product.
     fn prove(
         &mut self,
-        claim: RawClaim<F>,
+        claims: &[&RawClaim<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<()> {
         println!(
@@ -188,23 +189,18 @@ impl<F: Field> Layer<F> for MatMult<F> {
             self.matrix_b.cols_num_vars
         );
 
-        // Split the claim on the MLE representing the output of this layer
-        // accordingly.
-        // We need to make sure the number of variables in the claim is the
-        // sum of the outer dimensions of this matrix product.
-        assert_eq!(
-            claim.get_point().len(),
-            self.matrix_a.rows_num_vars + self.matrix_b.cols_num_vars
-        );
-        let mut claim_a = claim.get_point().to_vec();
-        let claim_b = claim_a.split_off(self.matrix_a.rows_num_vars);
-        self.pre_processing_step(claim_a, claim_b);
+        // We always use interpolative claim aggregation for matmult layers
+        // because the preprocessing step in matmult utilizes the fact that we
+        // have linear variables in the expression, which RLC is unable to
+        // aggregate claims for.
+        assert_eq!(claims.len(), 1);
+        self.initialize(claims[0].get_point())?;
 
         let num_vars_middle = self.num_vars_middle_ab;
 
         for round in 0..num_vars_middle {
             // Compute the round's sumcheck message.
-            let message = self.compute_round_sumcheck_message(round)?;
+            let message = self.compute_round_sumcheck_message(round, &[F::ONE])?;
             // Add to transcript.
             transcript_writer.append_elements("Sumcheck evaluations", &message);
             // Sample the challenge to bind the round's MatMult expression to.
@@ -226,13 +222,45 @@ impl<F: Field> Layer<F> for MatMult<F> {
     }
 
     fn initialize(&mut self, claim_point: &[F]) -> Result<()> {
+        // Split the claim on the MLE representing the output of this layer
+        // accordingly.
+        // We need to make sure the number of variables in the claim is the
+        // sum of the outer dimensions of this matrix product.
+        assert_eq!(
+            claim_point.len(),
+            self.matrix_a.rows_num_vars + self.matrix_b.cols_num_vars
+        );
         let mut claim_a = claim_point.to_vec();
         let claim_b = claim_a.split_off(self.matrix_a.rows_num_vars);
         self.pre_processing_step(claim_a, claim_b);
         Ok(())
     }
 
-    fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>> {
+    fn initialize_rlc(&mut self, random_coefficients: &[F], claims: &[&RawClaim<F>]) {
+        let claim_points_vec = claims.iter().map(|claim| claim.get_point()).collect_vec();
+        let matrix_a_mle = preprocess_matrix(
+            &self.matrix_a.mle,
+            self.matrix_a.rows_num_vars,
+            &claim_points_vec,
+            random_coefficients,
+            true,
+        );
+        let matrix_b_mle = preprocess_matrix(
+            &self.matrix_b.mle,
+            self.matrix_b.cols_num_vars,
+            &claim_points_vec,
+            random_coefficients,
+            false,
+        );
+        self.matrix_a.mle = matrix_a_mle;
+        self.matrix_b.mle = matrix_b_mle;
+    }
+
+    fn compute_round_sumcheck_message(
+        &mut self,
+        round_index: usize,
+        _random_coefficients: &[F],
+    ) -> Result<Vec<F>> {
         let mles = vec![&self.matrix_a.mle, &self.matrix_b.mle];
         let sumcheck_message =
             compute_sumcheck_message_no_beta_table(&mles, round_index, 2).unwrap();
@@ -368,11 +396,15 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
 
     fn verify_rounds(
         &self,
-        claim: RawClaim<F>,
+        claims: &[&RawClaim<F>],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierLayerEnum<F>> {
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
+
+        // For matmult we always use the interpolative claim aggregation method.
+        assert_eq!(claims.len(), 1);
+        let claim = claims[0];
 
         // Represents `g_{i-1}(x)` of the previous round.
         // This is initialized to the constant polynomial `g_0(x)` which evaluates
@@ -416,7 +448,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge)?;
 
         let verifier_layer: VerifierMatMultLayer<F> = self
-            .convert_into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
+            .convert_into_verifier_layer(&challenges, &[claim.get_point()], transcript_reader)
             .unwrap();
 
         let matrix_product = verifier_layer.evaluate();
@@ -482,9 +514,13 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
     fn convert_into_verifier_layer(
         &self,
         sumcheck_bindings: &[F],
-        claim_point: &[F],
+        claim_points: &[&[F]],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer> {
+        // For matmult, we only use interpolative claim aggregation.
+        assert_eq!(claim_points.len(), 1);
+        let claim_point = claim_points[0];
+
         // Split the claim into the claims made on matrix A rows and matrix B cols.
         let mut claim_a = claim_point.to_vec();
         let claim_b = claim_a.split_off(self.matrix_a.rows_num_vars);
@@ -710,6 +746,120 @@ impl<F: Field> VerifierMatMultLayer<F> {
     fn evaluate(&self) -> F {
         self.matrix_a.mle.value() * self.matrix_b.mle.value()
     }
+}
+
+/// Compute the pre-processed matrix fixed on all claim points in its outer
+/// dimensions.
+fn preprocess_matrix<F: Field>(
+    matrix_mle: &DenseMle<F>,
+    log_num_vars: usize,
+    claim_points_vec: &[&[F]],
+    random_coefficients: &[F],
+    is_lhs: bool,
+) -> DenseMle<F> {
+    let (inverses_vec_claim_challenges, one_minus_elem_inverted_vec_claim_challenges): (
+        Vec<Vec<F>>,
+        Vec<Vec<F>>,
+    ) = claim_points_vec
+        .iter()
+        .map(|claim_point| {
+            let (inverses, one_minus_elem_inverted): (Vec<F>, Vec<F>) = claim_point[..log_num_vars]
+                .iter()
+                .map(|elem| {
+                    let inverse = elem.invert().unwrap();
+                    let one_minus_elem_inverse = (F::ONE - elem).invert().unwrap();
+                    (inverse, one_minus_elem_inverse)
+                })
+                .unzip();
+            (inverses, one_minus_elem_inverted)
+        })
+        .unzip();
+
+    let num_entries_folded_matrix = 1 << (matrix_mle.num_free_vars() - log_num_vars);
+    let num_entries_matrix = 1 << matrix_mle.num_free_vars();
+    let mut folded_matrix = vec![F::ZERO; num_entries_folded_matrix];
+    (0..num_entries_matrix).fold(None::<Vec<F>>, |maybe_current_beta_value_vec, idx| {
+        if let Some(current_beta_value_vec) = maybe_current_beta_value_vec {
+            let current_gray_code_index =
+                GrayCodeIterator::get_gray_index(matrix_mle.num_free_vars(), idx - 1);
+            let next_gray_code_index =
+                GrayCodeIterator::get_gray_index(matrix_mle.num_free_vars(), idx);
+            let (idx_flipped, curr_val_bit) = compute_flipped_bit_idx_and_value_graycode(
+                current_gray_code_index,
+                next_gray_code_index,
+            );
+            current_beta_value_vec
+                .iter()
+                .zip(claim_points_vec)
+                .zip(
+                    inverses_vec_claim_challenges
+                        .iter()
+                        .zip(one_minus_elem_inverted_vec_claim_challenges.iter()),
+                )
+                .map(
+                    |((current_beta_value, claim_point), (inverses, one_minus_elem_inverses))| {
+                        let n = log_num_vars;
+                        let sliced_claim = if is_lhs {
+                            &claim_point[..log_num_vars]
+                        } else {
+                            &claim_point[(claim_point.len() - log_num_vars)..]
+                        };
+                        if curr_val_bit {
+                            *current_beta_value
+                                * inverses[n - 1 - idx_flipped as usize]
+                                * (F::ONE - sliced_claim[n - 1 - idx_flipped as usize])
+                        } else {
+                            *current_beta_value
+                                * one_minus_elem_inverses[n - 1 - idx_flipped as usize]
+                                * sliced_claim[n - 1 - idx_flipped as usize]
+                        }
+                    },
+                )
+                .collect_vec();
+            let rlc_beta_value = current_beta_value_vec
+                .iter()
+                .zip(random_coefficients)
+                .fold(F::ZERO, |acc, (elem, random_coeff)| {
+                    acc + *elem * random_coeff
+                });
+            folded_matrix[(next_gray_code_index as usize) % num_entries_folded_matrix] +=
+                rlc_beta_value * matrix_mle.get(next_gray_code_index as usize).unwrap();
+            Some(current_beta_value_vec)
+        } else {
+            let gray_code_index = GrayCodeIterator::get_gray_index(matrix_mle.num_free_vars(), idx);
+            let current_beta_value_vec = claim_points_vec
+                .iter()
+                .map(|claim_point| {
+                    let sliced_claim = if is_lhs {
+                        &claim_point[..log_num_vars]
+                    } else {
+                        &claim_point[(claim_point.len() - log_num_vars)..]
+                    };
+                    BetaValues::compute_beta_over_challenge_and_index(
+                        sliced_claim,
+                        gray_code_index as usize,
+                    )
+                })
+                .collect_vec();
+            let rlc_beta_value = current_beta_value_vec
+                .iter()
+                .zip(random_coefficients)
+                .fold(F::ZERO, |acc, (elem, random_coeff)| {
+                    acc + *elem * random_coeff
+                });
+            let idx_in_folded_matrix = if is_lhs {
+                (gray_code_index as usize) % num_entries_folded_matrix
+            } else {
+                (gray_code_index as usize) / (1 << log_num_vars)
+            };
+            folded_matrix[idx_in_folded_matrix] +=
+                rlc_beta_value * matrix_mle.get(gray_code_index as usize).unwrap();
+            Some(current_beta_value_vec)
+        }
+    });
+    let mut folded_matrix_mle = DenseMle::new_from_raw(folded_matrix, matrix_mle.layer_id());
+    folded_matrix_mle.index_mle_indices(0);
+    folded_matrix_mle
 }
 
 /// Compute the product of two matrices given flattened vectors rather than

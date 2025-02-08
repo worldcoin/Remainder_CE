@@ -18,7 +18,6 @@ to the codebase.
 */
 
 use crate::utils::get_least_significant_bits_to_usize_little_endian;
-
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
