@@ -89,6 +89,13 @@ pub fn global_prover_claim_agg_constant_column_optimization() -> bool {
         .0
         .get_claim_agg_constant_column_optimization()
 }
+/// Whether to turn on "hyrax batch opening"
+/// (see documentation within [GKRCircuitProverConfig])
+pub fn global_prover_hyrax_batch_opening() -> bool {
+    let prover_verifier_config_instance = PROVER_VERIFIER_CONFIG.read();
+    prover_verifier_config_instance.0.get_hyrax_batch_opening()
+}
+
 /// Whether to turn on the "bit packed vector" optimization
 /// (see documentation within [GKRCircuitProverConfig])
 pub fn global_prover_enable_bit_packing() -> bool {
@@ -108,6 +115,7 @@ pub fn get_current_global_prover_config() -> GKRCircuitProverConfig {
         prover_verifier_config_instance
             .0
             .get_claim_agg_constant_column_optimization(),
+        prover_verifier_config_instance.0.get_hyrax_batch_opening(),
         prover_verifier_config_instance.0.get_enable_bit_packing(),
     )
 }

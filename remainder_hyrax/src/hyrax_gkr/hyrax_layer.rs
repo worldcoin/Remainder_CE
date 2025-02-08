@@ -416,6 +416,16 @@ pub fn get_claims_from_product<F: Field, T: Clone + Serialize + for<'de> Deseria
 
 /// Implementation of HyraxClaim as used by the prover
 impl<C: PrimeOrderCurve> HyraxClaim<C::Scalar, CommittedScalar<C>> {
+    /// Form a new [HyraxClaim] given a challenge point and [CommittedScalar].
+    ///
+    /// NOTE: Only to be called during testing.
+    pub fn new_raw(point: Vec<C::Scalar>, eval: CommittedScalar<C>) -> Self {
+        Self {
+            point,
+            to_layer_id: LayerId::Input(0),
+            evaluation: eval,
+        }
+    }
     /// Convert to a [RawClaim] for claim aggregation
     pub fn to_raw_claim(&self) -> RawClaim<C::Scalar> {
         RawClaim::new(self.point.clone(), self.evaluation.value)
