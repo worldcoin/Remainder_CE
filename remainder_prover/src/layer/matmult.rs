@@ -20,11 +20,10 @@ use crate::{
     layer::VerificationError,
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
-        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
-        mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
+        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription,
+        verifier_mle::VerifierMle, Mle, MleIndex,
     },
     sumcheck::evaluate_at_a_point,
-    utils::mle::{compute_flipped_bit_idx_and_value_graycode, GrayCodeIterator},
 };
 
 use anyhow::{anyhow, Ok, Result};
@@ -236,24 +235,12 @@ impl<F: Field> Layer<F> for MatMult<F> {
         Ok(())
     }
 
-    fn initialize_rlc(&mut self, random_coefficients: &[F], claims: &[&RawClaim<F>]) {
-        let claim_points_vec = claims.iter().map(|claim| claim.get_point()).collect_vec();
-        let matrix_a_mle = preprocess_matrix(
-            &self.matrix_a.mle,
-            self.matrix_a.rows_num_vars,
-            &claim_points_vec,
-            random_coefficients,
-            true,
-        );
-        let matrix_b_mle = preprocess_matrix(
-            &self.matrix_b.mle,
-            self.matrix_b.cols_num_vars,
-            &claim_points_vec,
-            random_coefficients,
-            false,
-        );
-        self.matrix_a.mle = matrix_a_mle;
-        self.matrix_b.mle = matrix_b_mle;
+    fn initialize_rlc(&mut self, _random_coefficients: &[F], claims: &[&RawClaim<F>]) {
+        // NOTE: Matmult layers do not support RLC claim aggregation,
+        // so if this function is called we simply aggregate using
+        // the interpolated claim.
+        assert_eq!(claims.len(), 1);
+        self.initialize(claims[0].get_point()).unwrap();
     }
 
     fn compute_round_sumcheck_message(
@@ -287,7 +274,8 @@ impl<F: Field> Layer<F> for MatMult<F> {
     fn get_post_sumcheck_layer(
         &self,
         _round_challenges: &[F],
-        _claim_challenges: &[F],
+        _claim_challenges: &[&[F]],
+        _random_coefficients: &[F],
     ) -> PostSumcheckLayer<F, F> {
         let mles = vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()];
         PostSumcheckLayer(vec![Product::<F, F>::new(&mles, F::ONE)])
@@ -579,10 +567,14 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
-        claim_challenges: &[F],
+        claim_challenges: &[&[F]],
+        _random_coefficients: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
+        // We are always using interpolative claim aggregation for MatMult layers.
+        assert_eq!(claim_challenges.len(), 1);
+        let claim_challenge = claim_challenges[0];
         let mut pre_bound_matrix_a_mle = self.matrix_a.mle.clone();
-        let claim_chals_matrix_a = claim_challenges[..self.matrix_a.rows_num_vars].to_vec();
+        let claim_chals_matrix_a = claim_challenge[..self.matrix_a.rows_num_vars].to_vec();
         let mut indexed_index_counter = 0;
         let mut bound_index_counter = 0;
 
@@ -623,7 +615,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         // as Indexed for sumcheck, and keep the rest as bound to their
         // respective claim point in pre-processing.
         let mut pre_bound_matrix_b_mle = self.matrix_b.mle.clone();
-        let claim_chals_matrix_b = claim_challenges[self.matrix_a.rows_num_vars..].to_vec();
+        let claim_chals_matrix_b = claim_challenge[self.matrix_a.rows_num_vars..].to_vec();
         let mut bound_index_counter = 0;
         let mut indexed_index_counter = 0;
         let matrix_b_new_indices = self
@@ -746,120 +738,6 @@ impl<F: Field> VerifierMatMultLayer<F> {
     fn evaluate(&self) -> F {
         self.matrix_a.mle.value() * self.matrix_b.mle.value()
     }
-}
-
-/// Compute the pre-processed matrix fixed on all claim points in its outer
-/// dimensions.
-fn preprocess_matrix<F: Field>(
-    matrix_mle: &DenseMle<F>,
-    log_num_vars: usize,
-    claim_points_vec: &[&[F]],
-    random_coefficients: &[F],
-    is_lhs: bool,
-) -> DenseMle<F> {
-    let (inverses_vec_claim_challenges, one_minus_elem_inverted_vec_claim_challenges): (
-        Vec<Vec<F>>,
-        Vec<Vec<F>>,
-    ) = claim_points_vec
-        .iter()
-        .map(|claim_point| {
-            let (inverses, one_minus_elem_inverted): (Vec<F>, Vec<F>) = claim_point[..log_num_vars]
-                .iter()
-                .map(|elem| {
-                    let inverse = elem.invert().unwrap();
-                    let one_minus_elem_inverse = (F::ONE - elem).invert().unwrap();
-                    (inverse, one_minus_elem_inverse)
-                })
-                .unzip();
-            (inverses, one_minus_elem_inverted)
-        })
-        .unzip();
-
-    let num_entries_folded_matrix = 1 << (matrix_mle.num_free_vars() - log_num_vars);
-    let num_entries_matrix = 1 << matrix_mle.num_free_vars();
-    let mut folded_matrix = vec![F::ZERO; num_entries_folded_matrix];
-    (0..num_entries_matrix).fold(None::<Vec<F>>, |maybe_current_beta_value_vec, idx| {
-        if let Some(current_beta_value_vec) = maybe_current_beta_value_vec {
-            let current_gray_code_index =
-                GrayCodeIterator::get_gray_index(matrix_mle.num_free_vars(), idx - 1);
-            let next_gray_code_index =
-                GrayCodeIterator::get_gray_index(matrix_mle.num_free_vars(), idx);
-            let (idx_flipped, curr_val_bit) = compute_flipped_bit_idx_and_value_graycode(
-                current_gray_code_index,
-                next_gray_code_index,
-            );
-            current_beta_value_vec
-                .iter()
-                .zip(claim_points_vec)
-                .zip(
-                    inverses_vec_claim_challenges
-                        .iter()
-                        .zip(one_minus_elem_inverted_vec_claim_challenges.iter()),
-                )
-                .map(
-                    |((current_beta_value, claim_point), (inverses, one_minus_elem_inverses))| {
-                        let n = log_num_vars;
-                        let sliced_claim = if is_lhs {
-                            &claim_point[..log_num_vars]
-                        } else {
-                            &claim_point[(claim_point.len() - log_num_vars)..]
-                        };
-                        if curr_val_bit {
-                            *current_beta_value
-                                * inverses[n - 1 - idx_flipped as usize]
-                                * (F::ONE - sliced_claim[n - 1 - idx_flipped as usize])
-                        } else {
-                            *current_beta_value
-                                * one_minus_elem_inverses[n - 1 - idx_flipped as usize]
-                                * sliced_claim[n - 1 - idx_flipped as usize]
-                        }
-                    },
-                )
-                .collect_vec();
-            let rlc_beta_value = current_beta_value_vec
-                .iter()
-                .zip(random_coefficients)
-                .fold(F::ZERO, |acc, (elem, random_coeff)| {
-                    acc + *elem * random_coeff
-                });
-            folded_matrix[(next_gray_code_index as usize) % num_entries_folded_matrix] +=
-                rlc_beta_value * matrix_mle.get(next_gray_code_index as usize).unwrap();
-            Some(current_beta_value_vec)
-        } else {
-            let gray_code_index = GrayCodeIterator::get_gray_index(matrix_mle.num_free_vars(), idx);
-            let current_beta_value_vec = claim_points_vec
-                .iter()
-                .map(|claim_point| {
-                    let sliced_claim = if is_lhs {
-                        &claim_point[..log_num_vars]
-                    } else {
-                        &claim_point[(claim_point.len() - log_num_vars)..]
-                    };
-                    BetaValues::compute_beta_over_challenge_and_index(
-                        sliced_claim,
-                        gray_code_index as usize,
-                    )
-                })
-                .collect_vec();
-            let rlc_beta_value = current_beta_value_vec
-                .iter()
-                .zip(random_coefficients)
-                .fold(F::ZERO, |acc, (elem, random_coeff)| {
-                    acc + *elem * random_coeff
-                });
-            let idx_in_folded_matrix = if is_lhs {
-                (gray_code_index as usize) % num_entries_folded_matrix
-            } else {
-                (gray_code_index as usize) / (1 << log_num_vars)
-            };
-            folded_matrix[idx_in_folded_matrix] +=
-                rlc_beta_value * matrix_mle.get(gray_code_index as usize).unwrap();
-            Some(current_beta_value_vec)
-        }
-    });
-    let mut folded_matrix_mle = DenseMle::new_from_raw(folded_matrix, matrix_mle.layer_id());
-    folded_matrix_mle.index_mle_indices(0);
-    folded_matrix_mle
 }
 
 /// Compute the product of two matrices given flattened vectors rather than

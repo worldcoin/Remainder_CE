@@ -484,13 +484,21 @@ impl<F: Field> Layer<F> for GateLayer<F> {
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
-        claim_challenges: &[F],
+        claim_challenges: &[&[F]],
+        random_coefficients: &[F],
     ) -> super::product::PostSumcheckLayer<F, F> {
+        assert_eq!(claim_challenges.len(), random_coefficients.len());
         let lhs_mle = &self.phase_1_mles.as_ref().unwrap()[0][1];
         let rhs_mle = &self.phase_2_mles.as_ref().unwrap()[0][1];
 
-        let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
-        let g1_challenges = claim_challenges[self.num_dataparallel_vars..].to_vec();
+        let g2_challenges_vec = claim_challenges
+            .iter()
+            .map(|claim_chal| &claim_chal[..self.num_dataparallel_vars])
+            .collect_vec();
+        let g1_challenges_vec = claim_challenges
+            .iter()
+            .map(|claim_chal| &claim_chal[self.num_dataparallel_vars..])
+            .collect_vec();
 
         let dataparallel_sumcheck_challenges =
             round_challenges[..self.num_dataparallel_vars].to_vec();
@@ -499,21 +507,28 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             .to_vec();
         let last_v_challenges =
             round_challenges[self.num_dataparallel_vars + self.num_rounds_phase1..].to_vec();
-        let beta_bound = if self.num_dataparallel_vars != 0 {
-            BetaValues::compute_beta_over_two_challenges(
-                &g2_challenges,
-                &dataparallel_sumcheck_challenges,
-            )
-        } else {
-            F::ONE
-        };
+        let random_coefficients_scaled_by_beta_bound = g2_challenges_vec
+            .iter()
+            .zip(random_coefficients)
+            .map(|(g2_challenges, random_coeff)| {
+                let beta_bound = if self.num_dataparallel_vars != 0 {
+                    BetaValues::compute_beta_over_two_challenges(
+                        &g2_challenges,
+                        &dataparallel_sumcheck_challenges,
+                    )
+                } else {
+                    F::ONE
+                };
+                beta_bound * random_coeff
+            })
+            .collect_vec();
 
         let f_1_uv = compute_fully_bound_binary_gate_function(
             &first_u_challenges,
             &last_v_challenges,
-            &[&g1_challenges],
+            &g1_challenges_vec,
             &self.nonzero_gates,
-            &[beta_bound],
+            &random_coefficients_scaled_by_beta_bound,
         );
 
         match self.gate_operation {
@@ -879,12 +894,19 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
-        claim_challenges: &[F],
+        claim_challenges: &[&[F]],
+        random_coefficients: &[F],
     ) -> super::product::PostSumcheckLayer<F, Option<F>> {
         let num_rounds_phase1 = self.lhs_mle.num_free_vars() - self.num_dataparallel_vars;
 
-        let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
-        let g1_challenges = claim_challenges[self.num_dataparallel_vars..].to_vec();
+        let g2_challenges_vec = claim_challenges
+            .iter()
+            .map(|claim_chal| &claim_chal[..self.num_dataparallel_vars])
+            .collect_vec();
+        let g1_challenges_vec = claim_challenges
+            .iter()
+            .map(|claim_chal| &claim_chal[self.num_dataparallel_vars..])
+            .collect_vec();
 
         let dataparallel_sumcheck_challenges =
             round_challenges[..self.num_dataparallel_vars].to_vec();
@@ -893,21 +915,28 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             .to_vec();
         let last_v_challenges =
             round_challenges[self.num_dataparallel_vars + num_rounds_phase1..].to_vec();
-        let beta_bound = if self.num_dataparallel_vars != 0 {
-            BetaValues::compute_beta_over_two_challenges(
-                &g2_challenges,
-                &dataparallel_sumcheck_challenges,
-            )
-        } else {
-            F::ONE
-        };
+        let random_coefficients_scaled_by_beta_bound = g2_challenges_vec
+            .iter()
+            .zip(random_coefficients)
+            .map(|(g2_challenges, random_coeff)| {
+                let beta_bound = if self.num_dataparallel_vars != 0 {
+                    BetaValues::compute_beta_over_two_challenges(
+                        &g2_challenges,
+                        &dataparallel_sumcheck_challenges,
+                    )
+                } else {
+                    F::ONE
+                };
+                beta_bound * random_coeff
+            })
+            .collect_vec();
 
         let f_1_uv = compute_fully_bound_binary_gate_function(
             &first_u_challenges,
             &last_v_challenges,
-            &[&g1_challenges],
+            &g1_challenges_vec,
             &self.nonzero_gates,
-            &[beta_bound],
+            &random_coefficients_scaled_by_beta_bound,
         );
         let lhs_challenges = &round_challenges[..self.num_dataparallel_vars + num_rounds_phase1];
         let rhs_challenges = &round_challenges[..self.num_dataparallel_vars]

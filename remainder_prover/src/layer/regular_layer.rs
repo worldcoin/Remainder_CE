@@ -307,28 +307,40 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
-        claim_challenges: &[F],
+        claim_challenges: &[&[F]],
+        random_coefficients: &[F],
     ) -> PostSumcheckLayer<F, F> {
-        let nonlinear_round_indices = self.sumcheck_round_indices();
+        let sumcheck_round_indices = self.sumcheck_round_indices();
         // Filter the claim to get the values of the claim pertaining to the nonlinear rounds.
-        let nonlinear_claim_points = claim_challenges
+        let sumcheck_claim_points_vec = claim_challenges
             .iter()
-            .enumerate()
-            .filter_map(|(idx, point)| {
-                if nonlinear_round_indices.contains(&idx) {
-                    Some(*point)
-                } else {
-                    None
-                }
+            .map(|claim_challenge| {
+                claim_challenge
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, point)| {
+                        if sumcheck_round_indices.contains(&idx) {
+                            Some(*point)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect_vec()
             })
             .collect_vec();
-        assert_eq!(round_challenges.len(), nonlinear_claim_points.len());
 
         // Compute beta over these and the sumcheck challenges.
-        let fully_bound_beta =
-            BetaValues::compute_beta_over_two_challenges(round_challenges, &nonlinear_claim_points);
+        let rlc_beta = sumcheck_claim_points_vec
+            .iter()
+            .zip(random_coefficients)
+            .fold(F::ZERO, |acc, (elem, random_coeff)| {
+                assert_eq!(round_challenges.len(), elem.len());
+                let fully_bound_beta =
+                    BetaValues::compute_beta_over_two_challenges(round_challenges, &elem);
+                acc + fully_bound_beta * random_coeff
+            });
 
-        self.expression.get_post_sumcheck_layer(fully_bound_beta)
+        self.expression.get_post_sumcheck_layer(rlc_beta)
     }
 
     fn get_claims(&self) -> Result<Vec<Claim<F>>> {
@@ -688,7 +700,10 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        self.expression.get_all_nonlinear_rounds().clone()
+        match global_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => self.expression.get_all_nonlinear_rounds(),
+            ClaimAggregationStrategy::RLC => self.expression.get_all_rounds(),
+        }
     }
 
     fn convert_into_verifier_layer(
@@ -710,46 +725,65 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
-        claim_challenges: &[F],
+        claim_challenges: &[&[F]],
+        random_coefficients: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
-        let nonlinear_round_indices = self.sumcheck_round_indices();
+        let sumcheck_round_indices = self.sumcheck_round_indices();
         // Filter the claim to get the values of the claim pertaining to the nonlinear rounds.
-        let nonlinear_claim_points = claim_challenges
+        let sumcheck_claim_points_vec = claim_challenges
             .iter()
-            .enumerate()
-            .filter_map(|(idx, point)| {
-                if nonlinear_round_indices.contains(&idx) {
-                    Some(*point)
-                } else {
-                    None
-                }
+            .map(|claim_challenge| {
+                claim_challenge
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, point)| {
+                        if sumcheck_round_indices.contains(&idx) {
+                            Some(*point)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect_vec()
             })
             .collect_vec();
-        assert_eq!(round_challenges.len(), nonlinear_claim_points.len());
 
         // Compute beta over these and the sumcheck challenges.
-        let fully_bound_beta =
-            BetaValues::compute_beta_over_two_challenges(round_challenges, &nonlinear_claim_points);
+        let rlc_beta = sumcheck_claim_points_vec
+            .iter()
+            .zip(random_coefficients)
+            .fold(F::ZERO, |acc, (elem, random_coeff)| {
+                assert_eq!(round_challenges.len(), elem.len());
+                let fully_bound_beta =
+                    BetaValues::compute_beta_over_two_challenges(round_challenges, &elem);
+                acc + fully_bound_beta * random_coeff
+            });
 
         // Compute the fully bound challenges, which include those pre-fixed for linear rounds
         // and the sumcheck rounds.
-        let mut nonlinear_round_index_counter = 0;
-        let all_bound_challenges = (0..claim_challenges.len())
-            .map(|idx| {
-                if nonlinear_round_indices.contains(&idx) {
-                    let chal = round_challenges[nonlinear_round_index_counter];
-                    nonlinear_round_index_counter += 1;
-                    chal
-                } else {
-                    claim_challenges[idx]
-                }
-            })
-            .collect_vec();
 
-        assert_eq!(nonlinear_round_index_counter, nonlinear_round_indices.len());
+        let all_bound_challenges = match global_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
+                assert_eq!(claim_challenges.len(), 1);
+                let mut sumcheck_round_index_counter = 0;
+                let all_chals = (0..claim_challenges[0].len())
+                    .map(|idx| {
+                        if sumcheck_round_indices.contains(&idx) {
+                            let chal = round_challenges[sumcheck_round_index_counter];
+                            sumcheck_round_index_counter += 1;
+                            chal
+                        } else {
+                            claim_challenges[0][idx]
+                        }
+                    })
+                    .collect_vec();
+                assert_eq!(sumcheck_round_index_counter, sumcheck_round_indices.len());
+                all_chals
+            }
+            ClaimAggregationStrategy::RLC => round_challenges.to_vec(),
+        };
 
         self.expression
-            .get_post_sumcheck_layer(fully_bound_beta, &all_bound_challenges)
+            .get_post_sumcheck_layer(rlc_beta, &all_bound_challenges)
     }
 
     fn max_degree(&self) -> usize {

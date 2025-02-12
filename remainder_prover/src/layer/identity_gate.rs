@@ -269,23 +269,37 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
-        claim_challenges: &[F],
+        claim_challenges: &[&[F]],
+        random_coefficients: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
-        let beta_bound = if self.num_dataparallel_vars != 0 {
-            let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
-            BetaValues::compute_beta_over_two_challenges(
-                &g2_challenges,
-                &round_challenges[..self.num_dataparallel_vars],
-            )
-        } else {
-            F::ONE
-        };
+        assert_eq!(claim_challenges.len(), random_coefficients.len());
+        let random_coefficients_scaled_by_beta_bound = claim_challenges
+            .iter()
+            .zip(random_coefficients)
+            .map(|(claim_chals, random_coeff)| {
+                let beta_bound = if self.num_dataparallel_vars > 0 {
+                    let g2_challenges = claim_chals[..self.num_dataparallel_vars].to_vec();
+                    BetaValues::compute_beta_over_two_challenges(
+                        &g2_challenges,
+                        &round_challenges[..self.num_dataparallel_vars],
+                    )
+                } else {
+                    F::ONE
+                };
+                beta_bound * random_coeff
+            })
+            .collect_vec();
+
+        let nondataparallel_claim_chals = claim_challenges
+            .iter()
+            .map(|claim_chal| &claim_chal[self.num_dataparallel_vars..])
+            .collect_vec();
 
         let f_1_gu = compute_fully_bound_identity_gate_function(
             &round_challenges[self.num_dataparallel_vars..],
-            &[&claim_challenges[self.num_dataparallel_vars..]],
+            &nondataparallel_claim_chals,
             &self.wiring,
-            &[beta_bound],
+            &random_coefficients_scaled_by_beta_bound,
         );
 
         PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
@@ -686,22 +700,37 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
-        claim_challenges: &[F],
+        claim_challenges: &[&[F]],
+        random_coefficients: &[F],
     ) -> PostSumcheckLayer<F, F> {
-        let beta_bound = if self.num_dataparallel_vars != 0 {
-            let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
-            BetaValues::compute_beta_over_two_challenges(
-                &g2_challenges,
-                &round_challenges[..self.num_dataparallel_vars],
-            )
-        } else {
-            F::ONE
-        };
+        assert_eq!(claim_challenges.len(), random_coefficients.len());
+        let random_coefficients_scaled_by_beta_bound = claim_challenges
+            .iter()
+            .zip(random_coefficients)
+            .map(|(claim_chals, random_coeff)| {
+                let beta_bound = if self.num_dataparallel_vars > 0 {
+                    let g2_challenges = claim_chals[..self.num_dataparallel_vars].to_vec();
+                    BetaValues::compute_beta_over_two_challenges(
+                        &g2_challenges,
+                        &round_challenges[..self.num_dataparallel_vars],
+                    )
+                } else {
+                    F::ONE
+                };
+                beta_bound * random_coeff
+            })
+            .collect_vec();
+
+        let nondataparallel_claim_chals = claim_challenges
+            .iter()
+            .map(|claim_chal| &claim_chal[self.num_dataparallel_vars..])
+            .collect_vec();
+
         let f_1_gu = compute_fully_bound_identity_gate_function(
             &round_challenges[self.num_dataparallel_vars..],
-            &[&claim_challenges[self.num_dataparallel_vars..]],
+            &nondataparallel_claim_chals,
             &self.wiring,
-            &[beta_bound],
+            &random_coefficients_scaled_by_beta_bound,
         );
 
         PostSumcheckLayer(vec![Product::<F, F>::new(
