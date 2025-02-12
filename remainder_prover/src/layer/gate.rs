@@ -513,7 +513,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             .map(|(g2_challenges, random_coeff)| {
                 let beta_bound = if self.num_dataparallel_vars != 0 {
                     BetaValues::compute_beta_over_two_challenges(
-                        &g2_challenges,
+                        g2_challenges,
                         &dataparallel_sumcheck_challenges,
                     )
                 } else {
@@ -921,7 +921,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             .map(|(g2_challenges, random_coeff)| {
                 let beta_bound = if self.num_dataparallel_vars != 0 {
                     BetaValues::compute_beta_over_two_challenges(
-                        &g2_challenges,
+                        g2_challenges,
                         &dataparallel_sumcheck_challenges,
                     )
                 } else {

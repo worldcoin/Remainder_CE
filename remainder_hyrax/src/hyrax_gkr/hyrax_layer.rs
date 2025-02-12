@@ -204,10 +204,8 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
                             .iter()
                             .map(|claim| claim.to_raw_claim())
                             .collect_vec();
-                        layer.initialize_rlc(
-                            &random_coefficients,
-                            &raw_claims.iter().map(|raw_claim| raw_claim).collect_vec(),
-                        );
+                        layer
+                            .initialize_rlc(&random_coefficients, &raw_claims.iter().collect_vec());
                         (
                             None,
                             &claims.iter().map(|claim| claim.point.clone()).collect_vec(),

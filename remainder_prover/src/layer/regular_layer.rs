@@ -336,7 +336,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
             .fold(F::ZERO, |acc, (elem, random_coeff)| {
                 assert_eq!(round_challenges.len(), elem.len());
                 let fully_bound_beta =
-                    BetaValues::compute_beta_over_two_challenges(round_challenges, &elem);
+                    BetaValues::compute_beta_over_two_challenges(round_challenges, elem);
                 acc + fully_bound_beta * random_coeff
             });
 
@@ -754,7 +754,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             .fold(F::ZERO, |acc, (elem, random_coeff)| {
                 assert_eq!(round_challenges.len(), elem.len());
                 let fully_bound_beta =
-                    BetaValues::compute_beta_over_two_challenges(round_challenges, &elem);
+                    BetaValues::compute_beta_over_two_challenges(round_challenges, elem);
                 acc + fully_bound_beta * random_coeff
             });
 

@@ -57,16 +57,15 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         let evaluation_proofs = claims_grouped_by_common_points
             .iter()
             .map(|claim_group| {
-                let proof = HyraxPCSEvaluationProof::prove(
+                HyraxPCSEvaluationProof::prove(
                     input_layer_desc.log_num_cols,
                     &prover_commitment.mle,
-                    &claim_group,
+                    claim_group,
                     committer,
                     blinding_rng,
                     transcript,
                     &mut prover_commitment.blinding_factors_matrix,
-                );
-                proof
+                )
             })
             .collect_vec();
         // Zeroize each of the blinding factors once we have committed to all of the claims.
