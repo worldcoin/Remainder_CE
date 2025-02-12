@@ -63,8 +63,8 @@ name = "worldcoin_mpc_new"
 path = "src/bin/worldcoin_mpc_new.rs"
 
 [[bin]]
-name = "world_circuit"
-path = "src/bin/world_circuit.rs"
+name = "world_gen_iriscode_secret_share_circuit_descriptions"
+path = "src/bin/world_gen_iriscode_secret_share_circuit_descriptions.rs"
 
 [[bin]]
 name = "world_prove"
