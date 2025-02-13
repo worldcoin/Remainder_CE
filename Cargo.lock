@@ -1694,6 +1694,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "sha2",
  "sha3 0.10.8",
  "subtle",
  "thiserror",
