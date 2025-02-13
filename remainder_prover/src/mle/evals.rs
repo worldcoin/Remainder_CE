@@ -13,6 +13,7 @@ use thiserror::Error;
 pub mod bit_packed_vector;
 
 use bit_packed_vector::BitPackedVector;
+use zeroize::Zeroize;
 
 use crate::utils::arithmetic::i64_to_field;
 
@@ -116,6 +117,14 @@ pub struct Evaluations<F: Field> {
     /// need someone to own the "zero" of the field. If I make this a const, I'm
     /// not sure how to initialize it.
     zero: F,
+}
+
+impl<F: Field> Zeroize for Evaluations<F> {
+    fn zeroize(&mut self) {
+        self.evals.zeroize();
+        self.num_vars.zeroize();
+        self.zero.zeroize();
+    }
 }
 
 impl<F: Field> Evaluations<F> {
@@ -386,6 +395,12 @@ impl<F: Field> Iterator for EvaluationsPairIterator<'_, F> {
 pub struct MultilinearExtension<F: Field> {
     /// The bookkeeping table with the evaluations of `f` on the hypercube.
     pub f: Evaluations<F>,
+}
+
+impl<F: Field> Zeroize for MultilinearExtension<F> {
+    fn zeroize(&mut self) {
+        self.f.zeroize();
+    }
 }
 
 impl<F: Field> From<Vec<bool>> for MultilinearExtension<F> {
