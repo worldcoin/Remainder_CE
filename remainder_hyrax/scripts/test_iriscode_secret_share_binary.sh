@@ -25,18 +25,18 @@ cargo run --release --bin world_upgrade_verify -- \
 cargo run --release --bin world_verify_ampc_party -- \
     --circuit iriscode_pcp_example/proving_stuff/iriscode_v3_and_secret_share_circuit.bin \
     --hashes iriscode_pcp_example/hashes.json \
-    --mpc-proof iriscode_pcp_example/proving_stuff/world_mpc_party_0.zkp \
+    --secret-share-proof iriscode_pcp_example/proving_stuff/world_mpc_party_0.zkp \
     --commitments iriscode_pcp_example/proving_stuff/commitments.zkp \
     --ampc-party-index 0
 cargo run --release --bin world_verify_ampc_party -- \
     --circuit iriscode_pcp_example/proving_stuff/iriscode_v3_and_secret_share_circuit.bin \
     --hashes iriscode_pcp_example/hashes.json \
-    --mpc-proof iriscode_pcp_example/proving_stuff/world_mpc_party_1.zkp \
+    --secret-share-proof iriscode_pcp_example/proving_stuff/world_mpc_party_1.zkp \
     --commitments iriscode_pcp_example/proving_stuff/commitments.zkp \
     --ampc-party-index 1
 cargo run --release --bin world_verify_ampc_party -- \
     --circuit iriscode_pcp_example/proving_stuff/iriscode_v3_and_secret_share_circuit.bin \
     --hashes iriscode_pcp_example/hashes.json \
-    --mpc-proof iriscode_pcp_example/proving_stuff/world_mpc_party_2.zkp \
+    --secret-share-proof iriscode_pcp_example/proving_stuff/world_mpc_party_2.zkp \
     --commitments iriscode_pcp_example/proving_stuff/commitments.zkp \
     --ampc-party-index 2
