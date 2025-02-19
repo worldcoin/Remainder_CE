@@ -1,6 +1,6 @@
 # Builder stage
 # FROM rust:latest as builder
-FROM rust:1.84.1-bookworm as builder
+FROM rust:1.84.1-bookworm AS builder
 WORKDIR /app
 COPY . .
 RUN make prod-seq
@@ -8,6 +8,8 @@ RUN make prod-seq
 # Runtime stage
 # FROM ubuntu:latest
 FROM ubuntu:24.04
+RUN useradd -m non-root
+USER non-root
 WORKDIR /app
 # Copy necessary files for running `world_prove`.
 COPY ./world.circuit .
