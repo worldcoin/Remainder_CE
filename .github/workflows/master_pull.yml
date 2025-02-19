@@ -19,8 +19,8 @@ jobs:
       - name: Run 'make check'
         run: make check
 
-  test-dev:
-    name: Run standard tests
+  test-dev-seq:
+    name: Run standard tests without parallelism
     runs-on: [self-hosted, amd64, rust]
     steps:
       - uses: actions/checkout@v2
@@ -28,8 +28,20 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
-      - name: Run 'make test-dev'
-        run: make test-dev
+      - name: Run 'make test-dev-seq'
+        run: make test-dev-seq
+
+  test-dev-par:
+    name: Run standard tests with parallelism
+    runs-on: [self-hosted, amd64, rust]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+      - name: Run 'make test-dev-par'
+        run: make test-dev-par
 
   test-ignored:
     name: Run slower tests

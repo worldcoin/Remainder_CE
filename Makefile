@@ -16,8 +16,12 @@ check:  ## GitHub Action #1 - compile, run formatter and linter.
 	cargo fmt --all -- --check
 	cargo clippy --no-deps -- -D warnings
 
-test-dev:  ## GitHub Action #2a - Basic unit testing. With and without parallel feature.
+test-dev: test-dev-seq test-dev-par  ## GitHub Action #2a - Basic unit testing. With and without parallel features.
+
+test-dev-seq:
 	cargo test --profile=dev-opt
+
+test-dev-par:
 	cargo test --profile=dev-opt --features parallel
 
 test-ignored:  ## GitHub Action #2b - Runs some slow tests that are normally ignored.
