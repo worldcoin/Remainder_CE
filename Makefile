@@ -24,19 +24,19 @@ test-dev-seq:
 test-dev-par:
 	cargo test --profile=dev-opt --features parallel
 
-test-ignored:  ## GitHub Action #2b - Runs some slow tests that are normally ignored.
+test-ignored:  ## GitHub Action #2b - Run some slow tests that are normally ignored.
 	cargo test --profile=dev-opt --features parallel --package remainder-hyrax --lib -- --ignored hyrax_worldcoin::test_worldcoin
 	cargo test --profile=dev-opt --features parallel --package remainder --lib -- --ignored worldcoin::tests
 
-test: test-dev test-ignored  ## Comprehensive testing.
+test: test-dev test-ignored  ## Comprehensive testing. Equivalent to `test-dev` followed by `test-ignored`.
 
-mem-lim-cgroups:  ## GitHub Action #3 - run sequential world prover with a memory limit. Only available on Linux!
+mem-lim-cgroups:  ## GitHub Action #3 - Run sequential world prover with a memory limit. Only available on Linux!
 	$(MAKE) prod-seq
 	echo ${MEM_LIM}M | sudo tee /sys/fs/cgroup/makefile_memory_limited_group/memory.max
 	echo 0 | sudo tee /sys/fs/cgroup/makefile_memory_limited_group/memory.swap.max
 	sudo cgexec -g memory:makefile_memory_limited_group ./target/release/world_prove --circuit world.circuit --input iriscode_pcp_example --output-dir world_zkp
 
-mem-lim-docker: Dockerfile  ## Run sequential worldcoin prover inside a Docker container with a memory limit.
+mem-lim-docker: Dockerfile  ## Run sequential World prover inside a Docker container with a memory limit.
 	docker build -t remainder-mem .
 	docker run --rm --memory=${MEM_LIM}m --memory-swap=${MEM_LIM}m remainder-mem:latest
 	echo "World V3 + MPC prover runs in under ${MEM_LIM} MB!"
@@ -44,7 +44,7 @@ mem-lim-docker: Dockerfile  ## Run sequential worldcoin prover inside a Docker c
 circuit: prod  ## Generate iris code upgrade circuit (V3 + MPC).
 	./target/release/world_gen_iriscode_secret_share_circuit_descriptions --circuit world.circuit
 
-prod:  ## Build worldcoin binary for production; optimizations + rayon parallelism, NO print-trace.
+prod:  ## Build World binaries for production; optimizations + rayon parallelism, NO print-trace.
 	cargo build --release --features parallel --bin world_gen_iriscode_secret_share_circuit_descriptions
 	cargo build --release --features parallel --bin world_prove
 	cargo build --release --features parallel --bin world_upgrade_verify
@@ -74,7 +74,7 @@ mem-profile-prover:  ## Use Valgrind to profile memory usage of the World prover
 	valgrind --tool=massif --massif-out-file=massif/massif.$(name).out --pages-as-heap=yes ./target/mem-bench/world_prove --circuit world.circuit --input iriscode_pcp_example --output-dir world_zkp
 	ms_print massif/massif.$(name).out | less
 
-mobile:  ## Compile World prover optimized for binary size.
+mobile:  ## DEPRECATED - Compile World prover optimized for binary size.
 	cargo build --profile mobile --bin world_prove
 
 clean:  ## Equivalent to "cargo clean"
@@ -82,5 +82,5 @@ clean:  ## Equivalent to "cargo clean"
 
 # Got the idea from https://stackoverflow.com/a/47107132.
 help:  ## Show this help message.
-	@sed -ne '/@sed/!s/## //p' $(MAKEFILE_LIST) | column -t -s':'
+	@sed -ne '/@sed/!s/:.*## /:/p' $(MAKEFILE_LIST) | column -t -s':'
 
