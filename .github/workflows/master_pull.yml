@@ -19,8 +19,8 @@ jobs:
       - name: Run 'make check'
         run: make check
 
-  test:
-    name: Run tests
+  test-dev:
+    name: Run standard tests
     runs-on: [self-hosted, amd64, rust]
     steps:
       - uses: actions/checkout@v2
@@ -28,8 +28,20 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
-      - name: Run 'make test'
-        run: make test
+      - name: Run 'make test-dev'
+        run: make test-dev
+
+  test-ignored:
+    name: Run slower tests
+    runs-on: [self-hosted, amd64, rust]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+      - name: Run 'make test-ignored'
+        run: make test-ignored
 
 #  mem_limit_test:
 #    name: Memory Limit Test

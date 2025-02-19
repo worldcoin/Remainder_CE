@@ -1,4 +1,4 @@
-.PHONY: all pr check test mem-lim-cgroups mem-lim-docker test-dev prod prod-seq bin bin-seq mem-profile-prover mobile clean help
+.PHONY: all pr check test-dev test-ignored test mem-lim-cgroups mem-lim-docker prod prod-seq bin bin-seq mem-profile-prover mobile clean help
 
 # Memory limit in MB.
 MEM_LIM=110
@@ -16,11 +16,15 @@ check:  ## GitHub Action #1 - compile, run formatter and linter.
 	cargo fmt --all -- --check
 	cargo clippy --no-deps -- -D warnings
 
-test:  ## GitHub Action #2 - Comprehensive testing. Includes some slow tests that are normally ignored.
+test-dev:  ## GitHub Action #2a - Basic unit testing. With and without parallel feature.
 	cargo test --profile=dev-opt
 	cargo test --profile=dev-opt --features parallel
+
+test-ignored:  ## GitHub Action #2b - Runs some slow tests that are normally ignored.
 	cargo test --profile=dev-opt --features parallel --package remainder-hyrax --lib -- --ignored hyrax_worldcoin::test_worldcoin
 	cargo test --profile=dev-opt --features parallel --package remainder --lib -- --ignored worldcoin::tests
+
+test: test-dev test-ignored  ## Comprehensive testing.
 
 mem-lim-cgroups:  ## GitHub Action #3 - run sequential world prover with a memory limit. Only available on Linux!
 	$(MAKE) prod-seq
@@ -35,10 +39,6 @@ mem-lim-docker: Dockerfile  ## Run sequential worldcoin prover inside a Docker c
 
 circuit: prod  ## Generate iris code upgrade circuit (V3 + MPC).
 	./target/release/world_gen_iriscode_secret_share_circuit_descriptions --circuit world.circuit
-
-test-dev:  ## Faster alternative to `make test`; ignores slow tests.
-	cargo test --profile=dev-opt
-	cargo test --profile=dev-opt --features parallel
 
 prod:  ## Build worldcoin binary for production; optimizations + rayon parallelism, NO print-trace.
 	cargo build --release --features parallel --bin world_gen_iriscode_secret_share_circuit_descriptions
