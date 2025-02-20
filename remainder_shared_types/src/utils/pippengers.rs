@@ -91,7 +91,7 @@ pub fn scalar_mult_pippenger<C: PrimeOrderCurve>(
         let max_input_mle_value = scalar_vec.iter().max().unwrap();
         let max_num_bits_needed = num_bits::<C>(*max_input_mle_value);
         // We take the ceiling division to compute the window size.
-        let num_buckets = (max_num_bits_needed + c_bucket_size - 1) / c_bucket_size;
+        let num_buckets = max_num_bits_needed.div_ceil(c_bucket_size);
         let mut bucket_groups = vec![vec![0_u64; n]; num_buckets];
         scalar_vec.iter().enumerate().for_each(|(idx, elem)| {
             // We compute all the bits of the field elements.
@@ -132,7 +132,7 @@ pub fn scalar_mult_pippenger<C: PrimeOrderCurve>(
         // Perform the smaller MSMs.
         let c_bit_scalar_mults = bucket_groups
             .iter()
-            .map(|bucket_group| c_bit_scalar_mult(c_bucket_size, base_vec, &bucket_group))
+            .map(|bucket_group| c_bit_scalar_mult(c_bucket_size, base_vec, bucket_group))
             .collect_vec();
         // Combine all the smaller MSMs.
         combine_c_bit_scalar_mults(c_bucket_size, &c_bit_scalar_mults)
