@@ -1,4 +1,7 @@
 name: master-pull
+permissions:
+  contents: read
+  pull-requests: read
 run-name: CI/CD Pipeline to run on merge to master
 on:
   push:
