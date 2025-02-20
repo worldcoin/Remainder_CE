@@ -11,7 +11,7 @@ jobs:
     runs-on: [self-hosted, amd64, rust]
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af
         with:
           profile: minimal
           toolchain: stable
@@ -24,7 +24,7 @@ jobs:
     runs-on: [self-hosted, amd64, rust]
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af
         with:
           profile: minimal
           toolchain: stable
@@ -36,7 +36,7 @@ jobs:
     runs-on: [self-hosted, amd64, rust]
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af
         with:
           profile: minimal
           toolchain: stable
@@ -48,7 +48,7 @@ jobs:
     runs-on: [self-hosted, amd64, rust]
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af
         with:
           profile: minimal
           toolchain: stable
@@ -60,7 +60,7 @@ jobs:
 #    runs-on: [self-hosted, amd64, rust]
 #    steps:
 #      - uses: actions/checkout@v2
-#      - uses: actions-rs/toolchain@v1
+#      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af
 #        with:
 #          profile: minimal
 #          toolchain: stable
