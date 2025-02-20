@@ -27,16 +27,27 @@ cargo run --release --bin world_verify_ampc_party -- \
     --hashes iriscode_pcp_example/hashes.json \
     --secret-share-proof iriscode_pcp_example/proving_stuff/world_mpc_party_0.zkp \
     --commitments iriscode_pcp_example/proving_stuff/commitments.zkp \
-    --ampc-party-index 0
+    --ampc-party-index 0 \
+    --secret-share-bytes-path iriscode_pcp_example/proving_stuff/secret_shares_party_0.bin
 cargo run --release --bin world_verify_ampc_party -- \
     --circuit iriscode_pcp_example/proving_stuff/iriscode_v3_and_secret_share_circuit.bin \
     --hashes iriscode_pcp_example/hashes.json \
     --secret-share-proof iriscode_pcp_example/proving_stuff/world_mpc_party_1.zkp \
     --commitments iriscode_pcp_example/proving_stuff/commitments.zkp \
-    --ampc-party-index 1
+    --ampc-party-index 1 \
+    --secret-share-bytes-path iriscode_pcp_example/proving_stuff/secret_shares_party_1.bin
 cargo run --release --bin world_verify_ampc_party -- \
     --circuit iriscode_pcp_example/proving_stuff/iriscode_v3_and_secret_share_circuit.bin \
     --hashes iriscode_pcp_example/hashes.json \
     --secret-share-proof iriscode_pcp_example/proving_stuff/world_mpc_party_2.zkp \
     --commitments iriscode_pcp_example/proving_stuff/commitments.zkp \
-    --ampc-party-index 2
+    --ampc-party-index 2 \
+    --secret-share-bytes-path iriscode_pcp_example/proving_stuff/secret_shares_party_2.bin
+
+# --- Finally, sanitycheck/validate the secret shares ---
+cargo run --release --bin sanitycheck_secret_shares -- \
+    --secret-share-bytes-path iriscode_pcp_example/proving_stuff/secret_shares_party_0.bin
+cargo run --release --bin sanitycheck_secret_shares -- \
+    --secret-share-bytes-path iriscode_pcp_example/proving_stuff/secret_shares_party_1.bin
+cargo run --release --bin sanitycheck_secret_shares -- \
+    --secret-share-bytes-path iriscode_pcp_example/proving_stuff/secret_shares_party_2.bin

@@ -73,3 +73,7 @@ path = "src/bin/world_upgrade_verify.rs"
 [[bin]]
 name = "world_verify_ampc_party"
 path = "src/bin/world_verify_ampc_party.rs"
+
+[[bin]]
+name = "sanitycheck_secret_shares"
+path = "src/bin/sanitycheck_secret_shares.rs"
