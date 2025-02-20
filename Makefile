@@ -32,16 +32,11 @@ test-dev:  ## Faster alternative to "make test"; uses `--release` flag and ignor
 prod:  ## Build worldcoin binary for production; optimizations + rayon parallelism, NO print-trace.
 	cargo build --release --features parallel --bin worldcoin_mpc
 
-prod-new:  ## Build new worldcoin binary for production; optimizations + rayon parallelism, NO print-trace.
-	cargo build --release --features parallel --bin worldcoin_mpc_new
-
 prod-binaries:  ## Build new worldcoin binary for production; optimizations + rayon parallelism, NO print-trace.
-	cargo build --release --features parallel --bin world_circuit
+	cargo build --release --features parallel --bin world_gen_iriscode_secret_share_circuit_descriptions
 	cargo build --release --features parallel --bin world_prove
-	cargo build --release --features parallel --bin world_sign_up_verify
-	cargo build --release --features parallel --bin world_verify_party_0
-	cargo build --release --features parallel --bin world_verify_party_1
-	cargo build --release --features parallel --bin world_verify_party_2
+	cargo build --release --features parallel --bin world_upgrade_verify
+	cargo build --release --features parallel --bin world_verify_ampc_party
 
 prod-seq:  ## Similar to 'prod', but NO rayon parallelism.
 	cargo build --release --bin worldcoin_mpc
