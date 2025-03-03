@@ -29,7 +29,7 @@ scripts-ion/
 scripts-noya/
 scripts-upshot/
 
-*.bin
+# *.bin
 # Ignore all npy files - probably contains customer-specific data.
 *.npy
 
