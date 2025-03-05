@@ -43,22 +43,6 @@ name = "pcs_bench"
 harness = false
 
 [[bin]]
-name = "run_iriscode_circuit"
-path = "src/bin/run_iriscode_circuit.rs"
-
-[[bin]]
-name = "get_circuit_description"
-path = "src/bin/get_circuit_description.rs"
-
-[[bin]]
-name = "worldcoin"
-path = "src/bin/worldcoin.rs"
-
-[[bin]]
-name = "worldcoin_mpc"
-path = "src/bin/worldcoin_mpc.rs"
-
-[[bin]]
 name = "world_gen_iriscode_secret_share_circuit_descriptions"
 path = "src/bin/world_gen_iriscode_secret_share_circuit_descriptions.rs"
 
@@ -73,3 +57,7 @@ path = "src/bin/world_upgrade_verify.rs"
 [[bin]]
 name = "world_verify_ampc_party"
 path = "src/bin/world_verify_ampc_party.rs"
+
+[[bin]]
+name = "sanitycheck_secret_shares"
+path = "src/bin/sanitycheck_secret_shares.rs"
