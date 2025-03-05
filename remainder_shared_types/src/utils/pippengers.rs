@@ -9,7 +9,9 @@ fn c_bit_scalar_mult<C: PrimeOrderCurve>(c: usize, base_vec: &[C], scalar_vec: &
     let mut buckets: Vec<C> = vec![C::zero(); (1 << c) - 1];
     scalar_vec.iter().zip(base_vec).for_each(|(scalar, base)| {
         // Since this is a c-bit scalar, the scalar must fall in one of these buckets.
-        assert!(scalar.to_le_bytes().as_ref().len() * 8 - (scalar.leading_zeros() as usize) <= c);
+        debug_assert!(
+            scalar.to_le_bytes().as_ref().len() * 8 - (scalar.leading_zeros() as usize) <= c
+        );
         // We skip when the scalar is 0 because it won't contribute to the MSM.
         if *scalar != 0 {
             buckets[*scalar as usize - 1] += *base;
@@ -24,7 +26,8 @@ fn c_bit_scalar_mult<C: PrimeOrderCurve>(c: usize, base_vec: &[C], scalar_vec: &
         .iter()
         .rev()
         .fold((C::zero(), C::zero()), |(acc, prev), elem| {
-            (acc + (prev + *elem), prev + *elem)
+            let t = prev + *elem;
+            (acc + t, t)
         });
     sum
 }
