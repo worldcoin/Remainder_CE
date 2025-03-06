@@ -112,7 +112,7 @@ mod tests {
     use ark_std::test_rng;
     use itertools::Itertools;
     use rand::Rng;
-    use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+    use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
     use remainder_shared_types::transcript::{
         ProverTranscript, TranscriptReader, TranscriptWriter, VerifierTranscript,
     };

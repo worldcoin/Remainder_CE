@@ -13,7 +13,7 @@ use remainder_shared_types::config::global_config::{
     global_prover_circuit_description_hash_type, global_verifier_circuit_description_hash_type,
 };
 use remainder_shared_types::config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig};
-use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
 use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
 use remainder_shared_types::{perform_function_under_expected_configs, Field};
 use serde_json;
