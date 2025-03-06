@@ -25,18 +25,35 @@ cargo run --release --bin world_upgrade_verify -- \
 cargo run --release --bin world_verify_ampc_party -- \
     --circuit iriscode_pcp_example/proving_stuff/iriscode_v3_and_secret_share_circuit.bin \
     --hashes iriscode_pcp_example/hashes.json \
-    --mpc-proof iriscode_pcp_example/proving_stuff/world_mpc_party_0.zkp \
+    --secret-share-proof iriscode_pcp_example/proving_stuff/world_mpc_party_0.zkp \
     --commitments iriscode_pcp_example/proving_stuff/commitments.zkp \
-    --ampc-party-index 0
+    --ampc-party-index 0 \
+    --secret-share-bytes-dir iriscode_pcp_example/proving_stuff
 cargo run --release --bin world_verify_ampc_party -- \
     --circuit iriscode_pcp_example/proving_stuff/iriscode_v3_and_secret_share_circuit.bin \
     --hashes iriscode_pcp_example/hashes.json \
-    --mpc-proof iriscode_pcp_example/proving_stuff/world_mpc_party_1.zkp \
+    --secret-share-proof iriscode_pcp_example/proving_stuff/world_mpc_party_1.zkp \
     --commitments iriscode_pcp_example/proving_stuff/commitments.zkp \
-    --ampc-party-index 1
+    --ampc-party-index 1 \
+    --secret-share-bytes-dir iriscode_pcp_example/proving_stuff
 cargo run --release --bin world_verify_ampc_party -- \
     --circuit iriscode_pcp_example/proving_stuff/iriscode_v3_and_secret_share_circuit.bin \
     --hashes iriscode_pcp_example/hashes.json \
-    --mpc-proof iriscode_pcp_example/proving_stuff/world_mpc_party_2.zkp \
+    --secret-share-proof iriscode_pcp_example/proving_stuff/world_mpc_party_2.zkp \
     --commitments iriscode_pcp_example/proving_stuff/commitments.zkp \
-    --ampc-party-index 2
+    --ampc-party-index 2 \
+    --secret-share-bytes-dir iriscode_pcp_example/proving_stuff
+
+# --- Finally, sanitycheck/validate the secret shares ---
+cargo run --release --bin sanitycheck_secret_shares -- \
+    --secret-share-bytes-path iriscode_pcp_example/proving_stuff/secret_shares_party_0_left_masked_iriscode.bin
+cargo run --release --bin sanitycheck_secret_shares -- \
+    --secret-share-bytes-path iriscode_pcp_example/proving_stuff/secret_shares_party_0_right_masked_iriscode.bin
+cargo run --release --bin sanitycheck_secret_shares -- \
+    --secret-share-bytes-path iriscode_pcp_example/proving_stuff/secret_shares_party_1_left_masked_iriscode.bin
+cargo run --release --bin sanitycheck_secret_shares -- \
+    --secret-share-bytes-path iriscode_pcp_example/proving_stuff/secret_shares_party_1_right_masked_iriscode.bin
+cargo run --release --bin sanitycheck_secret_shares -- \
+    --secret-share-bytes-path iriscode_pcp_example/proving_stuff/secret_shares_party_2_left_masked_iriscode.bin
+cargo run --release --bin sanitycheck_secret_shares -- \
+    --secret-share-bytes-path iriscode_pcp_example/proving_stuff/secret_shares_party_2_right_masked_iriscode.bin
