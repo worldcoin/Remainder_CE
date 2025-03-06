@@ -302,3 +302,75 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
             .append_input_elements(label, elements, &hash_chain_digest);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{ECTranscript, ECTranscriptTrait};
+    use crate::{
+        curves::PrimeOrderCurve,
+        transcript::{poseidon_sponge::PoseidonSponge, ProverTranscript},
+        Base, Bn256Point, Scalar,
+    };
+    use ark_std::test_rng;
+    use itertools::Itertools;
+    use rand::Rng;
+
+    /// A basic test which ensures that the transcript challenge which would
+    /// have been derived from simply calling `append_scalar_field_elems` is
+    /// NOT the same as the one which would've been derived from calling
+    /// `append_input_scalar_field_elems`.
+    #[test]
+    fn test_ec_scalar_input_hash_soundness() {
+        // Create transcripts to compare
+        let mut ec_transcript_1: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+            ECTranscript::new("test ec_transcript_1");
+        let mut ec_transcript_2: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+            ECTranscript::new("test ec_transcript_2");
+
+        // Generate random input elements
+        let mut rng = test_rng();
+        let random_input_elems = (0..1000)
+            .map(|_| Scalar::from(rng.gen::<u64>()))
+            .collect_vec();
+        ec_transcript_1
+            .append_scalar_field_elems("test append scalar field elems", &random_input_elems);
+        ec_transcript_2.append_input_scalar_field_elems(
+            "test append input scalar field elems",
+            &random_input_elems,
+        );
+
+        // Generate challenges from each and assert they are not the same
+        assert_ne!(
+            ec_transcript_1.get_challenge("get challenge 1"),
+            ec_transcript_2.get_challenge("get challenge 2")
+        );
+    }
+
+    /// A basic test which ensures that the transcript challenge which would
+    /// have been derived from simply calling `append_ec_points` is
+    /// NOT the same as the one which would've been derived from calling
+    /// `append_input_ec_points`.
+    #[test]
+    fn test_ec_point_input_hash_soundness() {
+        // Create transcripts to compare
+        let mut ec_transcript_1: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+            ECTranscript::new("test ec_transcript_1");
+        let mut ec_transcript_2: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+            ECTranscript::new("test ec_transcript_2");
+
+        // Generate random input elements
+        let mut rng = test_rng();
+        let random_input_ec_points = (0..1000)
+            .map(|_| Bn256Point::random(&mut rng))
+            .collect_vec();
+        ec_transcript_1.append_ec_points("test append ec elems", &random_input_ec_points);
+        ec_transcript_2
+            .append_input_ec_points("test append input ec elems", random_input_ec_points);
+
+        // Generate challenges from each and assert they are not the same
+        assert_ne!(
+            ec_transcript_1.get_challenge("get challenge 1"),
+            ec_transcript_2.get_challenge("get challenge 2")
+        );
+    }
+}
