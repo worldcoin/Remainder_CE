@@ -194,12 +194,12 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
                         )
                     }
                     ClaimAggregationStrategy::RLC => {
-                        let rlc_eval = claims
-                            .iter()
-                            .zip(random_coefficients.iter())
-                            .fold(CommittedScalar::zero(), |acc, (elem, random_coeff)| {
-                                acc + &elem.evaluation * *random_coeff
-                            });
+                        let rlc_eval = claims.iter().zip(random_coefficients.iter()).fold(
+                            CommittedScalar::zero(),
+                            |acc, (elem, random_coeff)| {
+                                acc + elem.evaluation.clone() * *random_coeff
+                            },
+                        );
                         let raw_claims = claims
                             .iter()
                             .map(|claim| claim.to_raw_claim())
