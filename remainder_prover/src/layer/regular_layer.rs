@@ -57,7 +57,7 @@ pub struct RegularLayer<F: Field> {
     /// only produce sumcheck proofs over those. When we use interpolative
     /// claim aggregation, this is all of the nonlinear variables in the
     /// expression. When we use RLC claim aggregation, this is all of the
-    /// variables in the epxression.
+    /// variables in the expression.
     sumcheck_rounds: Vec<usize>,
 
     /// Stores the beta values associated with the `expression`.

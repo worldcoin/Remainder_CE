@@ -582,7 +582,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 if round_index == self.num_dataparallel_vars {
                     match global_claim_agg_strategy() {
                         ClaimAggregationStrategy::Interpolative => {
-                            // We compute the singular fully bound value for
+                            // We compute the singular fully bound value for the beta MLE over
+                            // the dataparallel challenges.
                             let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
                                 self.beta_g2_vec.as_ref().unwrap()[0]
                                     .updated_values
@@ -598,6 +599,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                             );
                         }
                         ClaimAggregationStrategy::RLC => {
+                            // We compute the beta MLE fully bound over all the claims rather
+                            // than the aggregated claim.
                             let random_coefficients = if self.num_dataparallel_vars > 0 {
                                 random_coefficients
                                     .iter()
@@ -734,25 +737,26 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
     }
 }
 
-/// identity gate struct wiring is used to be able to select specific elements
-/// from an MLE (equivalent to an add gate with a zero mle ref)
+/// The Identity Gate struct allows being able to select specific indices
+/// from the `source_mle` that are not necessarily regular.
 #[derive(Error, Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: Field")]
 pub struct IdentityGate<F: Field> {
-    /// layer id that this gate is found
+    /// Layer ID for this gate.
     layer_id: LayerId,
-    /// we only need a single incoming gate and a single outgoing gate so this
-    /// is a tuple of 2 integers representing which label maps to which Tuples
-    /// are of form `(dest_idx, src_idx)`.
+    /// Wiring tuples are of the form `(dest_idx, src_idx)`, which specifies
+    /// that we would like the value in the `src_idx` of the `source_mle` to
+    /// be copied into `dest_idx` of the output MLE.
     wiring: Vec<(u32, u32)>,
-    /// the mle ref in question from which we are selecting specific indices
+    /// The MLE from which we are selecting the indices.
     source_mle: DenseMle<F>,
     /// The [BetaValues] struct which enumerates the incoming claim's challenge
-    /// points on the dataparallel vars of the MLE
+    /// points on the dataparallel vars of the MLE.
     beta_g2_vec: Option<Vec<BetaValues<F>>>,
     /// The nondataparallel claim points in the layer.
     g1_challenges_vec: Option<Vec<Vec<F>>>,
-    /// The claim points in the layer.
+    /// The claim points in the layer (both nondataparallel and dataparallel)
+    /// challenges.
     challenges_vec: Option<Vec<Vec<F>>>,
     /// The MLE initialized in phase 1, which contains the beta values over
     /// `g1_challenges` folded into the wiring function.

@@ -61,7 +61,7 @@ pub enum GateError {
 ///   least one of the `mles`
 /// * `degree` - degree of `g_k(x)`, i.e. number of evaluations to send (minus
 ///   one!)
-pub fn evaluate_mle_product_no_beta_table<F: Field>(
+pub(crate) fn evaluate_mle_product_no_beta_table<F: Field>(
     mles: &[&impl Mle<F>],
     independent_variable: bool,
     degree: usize,
@@ -197,7 +197,7 @@ pub fn index_mle_indices_gate<F: Field>(mles: &mut [impl Mle<F>], index: usize) 
 ///
 /// The function is also usable if parallelism is turned on, by having the
 /// folding accumulator keep track of the previous state.
-pub fn compute_fully_bound_identity_gate_function<F: Field>(
+pub(crate) fn compute_fully_bound_identity_gate_function<F: Field>(
     nondataparallel_round_challenges: &[F],
     nondataparallel_claim_challenges_vec: &[&[F]],
     wiring: &[(u32, u32)],
@@ -231,7 +231,7 @@ pub fn compute_fully_bound_identity_gate_function<F: Field>(
         ),
         |(maybe_previous_aux, current_accumulation_of_gate_value),
          (next_nonzero_output_gate_label, next_nonzero_input_gate_label)| {
-            // If we values for the previous auxiliary information, then we know
+            // If there is Some(value) for the previous auxiliary information, then we know
             // that we are past the first initialization of the iterator, and
             // use these previous values to accumulate.
             if let (
@@ -364,7 +364,7 @@ pub fn compute_fully_bound_identity_gate_function<F: Field>(
 /// Similar to [compute_fully_bound_identity_gate_function], this
 /// function uses the "Rothblum" trick in order to evaluate the
 /// fully bound gate function in a streaming fashion.
-pub fn compute_fully_bound_binary_gate_function<F: Field>(
+pub(crate) fn compute_fully_bound_binary_gate_function<F: Field>(
     nondataparallel_round_u_challenges: &[F],
     nondataparallel_round_v_challenges: &[F],
     nondataparallel_claim_challenges_vec: &[&[F]],
@@ -412,8 +412,8 @@ pub fn compute_fully_bound_binary_gate_function<F: Field>(
             F::ZERO,
         ),
         |(maybe_previous_aux, current_accumulation_of_gate_value), (next_z, next_x, next_y)| {
-            // If we values for the previous auxiliary information, then we know
-            // that we are past the first initialization of the iterator, and
+            // If there is Some(value) for the previous auxiliary information, then
+            // we know that we are past the first initialization of the iterator, and
             // use these previous values to accumulate.
             if let (
                 Some((current_z, current_x, current_y)),
@@ -544,18 +544,6 @@ pub fn compute_fully_bound_binary_gate_function<F: Field>(
     }
 }
 
-/// When `dataparallel_aux` is None, this function computes the coefficients of
-/// the MLE representing f_1(g, x) where f_1 is the multilinear extension of our
-/// gate function (which on the boolean hypercube, f_1(a, b) = 1 if there exists
-/// a gate such that the label b is the input routing to the label a, and 0
-/// otherwise). The resulting vector should have num_nondataparallel_copies
-/// entries.
-///
-/// When `dataparallel_aux` is Some(..), this function computes the coefficients
-/// of the MLE representing \sum_{wiring}{f_2(p_2, x) * f_1(g, x)} where p_2 is
-/// the dataparallel index. The resulting vector should have
-/// num_dataparallel_copies entries.
-///
 /// The folding occurs by first iterating through the nonzero gates, and
 /// computing the value \beta(g, z) for each output label z and the challenge
 /// point g. Instead of computing the \beta value from scratch, we take
@@ -569,7 +557,7 @@ pub fn compute_fully_bound_binary_gate_function<F: Field>(
 /// We have multiple `claim_points` when using RLC claim agg, and in this case,
 /// we compute the random linear combination of the `random_coefficients` and
 /// the `g` variables.
-pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
+pub(crate) fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
     wiring: &[(u32, u32)],
     claim_points: &[&[F]],
     num_vars_folded_vec: usize,
@@ -579,9 +567,9 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
     let (inverses_vec, one_minus_inverses_vec) =
         compute_inverses_vec_and_one_minus_inverted_vec(claim_points);
 
-    // Initialize the folded vector of coefficients, whose size is dependent
-    // on whether we are in the dataparallel case.
+    // Initialize the folded vector of coefficients.
     let mut folded_vec = vec![F::ZERO; 1 << num_vars_folded_vec];
+
     // We start at the first nonzero gate and first beta value for each claim
     // challenge.
     let (mut current_nonzero_output_gate_label, mut current_nonzero_input_gate_label) = wiring[0];
@@ -601,9 +589,7 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
             acc + (*elem * random_coeff)
         });
 
-    // If it is dataparallel, we add the value of the source MLE over all of the
-    // copies in order to compute the appropriate sum. Each of these are
-    // multiplied by the same beta value.
+    // We update the folded vector with the base case.
     folded_vec[current_nonzero_input_gate_label as usize] = first_nonzero_gate_beta_rlc;
 
     wiring.iter().skip(1).for_each(
@@ -630,8 +616,8 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
                     acc + (*elem * random_coeff)
                 });
 
-            // If dataparallel, add all of the values of the source_mle over
-            // each of the copies.
+            // Update the folded vector with the appropriate RLC'ed value of the
+            // wiring into its equality MLE.
             folded_vec[*next_nonzero_input_gate_label as usize] += beta_values_rlc;
             current_nonzero_input_gate_label = *next_nonzero_input_gate_label;
             current_nonzero_output_gate_label = *next_nonzero_output_gate_label;
@@ -645,7 +631,23 @@ pub fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
 /// This function uses the "Rothblum"-inspired sumcheck trick
 /// in order to evaluate the necessary MLEs as defined in
 /// [Libra] for phase 1 of binary gate sumcheck messages.
-pub fn fold_binary_gate_wiring_into_mles_phase_1<F: Field>(
+///
+/// # Arguments:
+/// * `wiring`: The gate wiring in the form (z, x, y) such that
+///    the gate_operation(value of the LHS MLE at x, value of the
+///    RHS MLE at y) = value of the output MLE at z.
+/// * `claim_points`: The claims made on the output MLE of this
+///    layer.
+/// * `f2_x_mle`: The MLE representing the LHS of the input MLE
+///    into this binary gate.
+/// * `f3_y_mle`: The MLE representing the RHS of the input MLE
+///    into this binary gate.
+/// * `random_coefficients`: The random coefficients used to
+///    aggregate the claims made on this layer.
+/// * `gate_operation`: The binary operation used to combine the
+///    input MLEs, which is either [BinaryOperation::Add] or
+///    [BinaryOperation::Mul].
+pub(crate) fn fold_binary_gate_wiring_into_mles_phase_1<F: Field>(
     wiring: &[(u32, u32, u32)],
     claim_points: &[&[F]],
     f2_x_mle: &DenseMle<F>,
@@ -751,7 +753,26 @@ pub fn fold_binary_gate_wiring_into_mles_phase_1<F: Field>(
 /// This function uses the "Rothblum"-inspired sumcheck trick
 /// in order to evaluate the necessary MLEs as defined in
 /// [Libra] for phase 2 of binary gate sumcheck messages.
-pub fn fold_binary_gate_wiring_into_mles_phase_2<F: Field>(
+///
+/// # Arguments:
+/// * `wiring`: The gate wiring in the form (z, x, y) such that
+///    the gate_operation(value of the LHS MLE at x, value of the
+///    RHS MLE at y) = value of the output MLE at z.
+/// * `f2_at_u`: The fully bound value of the LHS MLE at the point
+///    `u_claim`.
+/// * `u_claim:` The challenges bound to the `x` variables (i.e.,
+///    the variables that make up the MLE that represents the LHS
+///    input to the binary gate).
+/// * `g1_claim_points`: The nondataparallel claims made on the
+///    output MLE of this layer.
+/// * `random_coefficients`: The random coefficients used to
+///    aggregate the claims made on this layer.
+/// * `num_vars`: The number of variables in each of the folded
+///    tables in the output.
+/// * `gate_operation`: The binary operation used to combine the
+///    input MLEs, which is either [BinaryOperation::Add] or
+///    [BinaryOperation::Mul].
+pub(crate) fn fold_binary_gate_wiring_into_mles_phase_2<F: Field>(
     wiring: &[(u32, u32, u32)],
     f2_at_u: F,
     u_claim: &[F],
@@ -881,127 +902,6 @@ pub fn fold_binary_gate_wiring_into_mles_phase_2<F: Field>(
     }
 }
 
-/// This function uses the "Rothblum"-inspired sumcheck trick
-/// in order to evaluate the necessary MLEs as defined in
-/// [Libra] for the dataparallel phase of an identity gate.
-pub fn fold_wiring_into_dataparallel_beta_mle_identity_gate<F: Field>(
-    wiring: &[(u32, u32)],
-    claim_points: &[&[F]],
-    num_dataparallel_vars: usize,
-    source_mle: &DenseMle<F>,
-    random_coefficients: &[F],
-) -> (Vec<F>, Vec<F>) {
-    //sum_{x, z}{\beta(g2g1, p2z) * f1(z, x, y) * Vi(p2, x)}
-    // Precompute all the inverses necessary for each of the claim points.
-    let (inverses_vec, one_minus_inverses_vec) =
-        compute_inverses_vec_and_one_minus_inverted_vec(claim_points);
-
-    // Initialize the folded vector of coefficients, whose size is dependent
-    // on whether we are in the dataparallel case.
-    let mut folded_vec_mle = vec![F::ZERO; 1 << num_dataparallel_vars];
-    let mut folded_vec_beta = vec![F::ZERO; 1 << num_dataparallel_vars];
-
-    // We start at the first nonzero gate and first beta value for each claim
-    // challenge.
-    let (current_nonzero_output_gate_label, current_nonzero_input_gate_label) = wiring[0];
-    let mut current_idx_of_beta = current_nonzero_output_gate_label;
-    let idx_of_mle = current_nonzero_input_gate_label;
-    let mut current_beta_values = claim_points
-        .iter()
-        .map(|claim_point| {
-            BetaValues::compute_beta_over_challenge_and_index(
-                claim_point,
-                current_nonzero_output_gate_label as usize,
-            )
-        })
-        .collect_vec();
-    let first_nonzero_gate_beta_rlc = current_beta_values
-        .iter()
-        .zip(random_coefficients)
-        .fold(F::ZERO, |acc, (elem, random_coeff)| {
-            acc + (*elem * random_coeff)
-        });
-
-    folded_vec_beta[0] = first_nonzero_gate_beta_rlc;
-    folded_vec_mle[0] = source_mle.get(idx_of_mle as usize).unwrap();
-
-    // We go through the first iteration of the dataparallel bits and compute
-    // the appropriate beta values to add to the folded vector.
-    let num_nondataparallel_coefficients_in_result =
-        1 << (claim_points[0].len() - num_dataparallel_vars);
-    let num_nondataparallel_coefficients_in_mle =
-        1 << (source_mle.num_free_vars() - num_dataparallel_vars);
-
-    (0..(1 << num_dataparallel_vars))
-        .skip(1)
-        .for_each(|dataparallel_copy_index| {
-            let next_idx_of_beta = (dataparallel_copy_index
-                * num_nondataparallel_coefficients_in_result)
-                + current_nonzero_output_gate_label as usize;
-            let idx_of_mle = (dataparallel_copy_index * num_nondataparallel_coefficients_in_mle)
-                + current_nonzero_input_gate_label as usize;
-            let source_value_at_idx = source_mle.get(idx_of_mle).unwrap();
-            let flipped_bits_and_indices = compute_flipped_bit_idx_and_values_lexicographic(
-                current_idx_of_beta,
-                next_idx_of_beta as u32,
-            );
-            let next_beta_values = compute_next_beta_values_vec_from_current(
-                &current_beta_values,
-                &inverses_vec,
-                &one_minus_inverses_vec,
-                claim_points,
-                &flipped_bits_and_indices,
-            );
-            let next_beta_rlc = next_beta_values
-                .iter()
-                .zip(random_coefficients)
-                .fold(F::ZERO, |acc, (elem, random_coeff)| {
-                    acc + (*elem * random_coeff)
-                });
-            folded_vec_beta[dataparallel_copy_index] += next_beta_rlc;
-            folded_vec_mle[dataparallel_copy_index] += source_value_at_idx;
-            current_idx_of_beta = next_idx_of_beta as u32;
-            current_beta_values = next_beta_values;
-        });
-
-    (0..(1 << num_dataparallel_vars)).for_each(|dataparallel_copy_index| {
-        wiring.iter().skip(1).for_each(
-            |(next_nonzero_output_gate_label, next_nonzero_input_gate_label)| {
-                let next_idx_of_beta = (dataparallel_copy_index
-                    * num_nondataparallel_coefficients_in_result)
-                    + *next_nonzero_output_gate_label as usize;
-                let idx_of_mle = (dataparallel_copy_index
-                    * num_nondataparallel_coefficients_in_mle)
-                    + *next_nonzero_input_gate_label as usize;
-                let source_value_at_idx = source_mle.get(idx_of_mle).unwrap();
-                let flipped_bits_and_indices = compute_flipped_bit_idx_and_values_lexicographic(
-                    current_idx_of_beta,
-                    next_idx_of_beta as u32,
-                );
-                let next_beta_values = compute_next_beta_values_vec_from_current(
-                    &current_beta_values,
-                    &inverses_vec,
-                    &one_minus_inverses_vec,
-                    claim_points,
-                    &flipped_bits_and_indices,
-                );
-                let next_beta_rlc = next_beta_values
-                    .iter()
-                    .zip(random_coefficients)
-                    .fold(F::ZERO, |acc, (elem, random_coeff)| {
-                        acc + (*elem * random_coeff)
-                    });
-                folded_vec_beta[dataparallel_copy_index] += next_beta_rlc;
-                folded_vec_mle[dataparallel_copy_index] += source_value_at_idx;
-                current_idx_of_beta = next_idx_of_beta as u32;
-                current_beta_values = next_beta_values;
-            },
-        )
-    });
-
-    (folded_vec_beta, folded_vec_mle)
-}
-
 /// Compute sumcheck message without a beta table.
 pub fn compute_sumcheck_message_no_beta_table<F: Field>(
     mles: &[&impl Mle<F>],
@@ -1026,7 +926,7 @@ pub fn compute_sumcheck_message_no_beta_table<F: Field>(
 /// Get the evals for a binary gate specified by the BinaryOperation. Note that
 /// this specifically refers to computing the prover message while binding the
 /// dataparallel bits of a `IdentityGate` expression.
-pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
+pub(crate) fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
     source_mle: &DenseMle<F>,
     wiring: &[(u32, u32)],
     num_dataparallel_vars: usize,
@@ -1036,7 +936,9 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
     let (inverses_vec, one_minus_elem_inverted_vec) =
         compute_inverses_vec_and_one_minus_inverted_vec(challenges_vec);
 
-    // UPDATE COMMMENT HERE
+    // The degree is 2 because we have the independent variable as degree 2,
+    // appearing once in the wiring folded into the beta MLE, and once in
+    // the source MLE.
     let degree = 2;
 
     // There is an independent variable, and we must extract `degree`
@@ -1179,9 +1081,11 @@ pub fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
     }
 }
 
-/// Get the evals for a binary gate specified by the BinaryOperation. Note that
-/// this specifically refers to computing the prover message while binding the
-/// dataparallel bits of a `Gate` expression.
+/// Compute the sumcheck message for a binary gate specified by the BinaryOperation.
+///
+/// We use a "Rothblum"-inspired sumcheck trick in order to stream the beta MLE
+/// while folding it into the wiring. We use the random coefficients to compute
+/// the RLC of all the beta values.
 pub fn compute_sumcheck_message_data_parallel_gate<F: Field>(
     f2_p2_x: &DenseMle<F>,
     f3_p2_y: &DenseMle<F>,
