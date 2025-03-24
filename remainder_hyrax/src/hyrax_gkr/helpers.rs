@@ -6,7 +6,7 @@ use remainder_shared_types::{
     curves::PrimeOrderCurve,
     pedersen::PedersenCommitter,
     perform_function_under_expected_configs,
-    transcript::{ec_transcript::ECTranscript, poseidon_transcript::PoseidonSponge},
+    transcript::{ec_transcript::ECTranscript, poseidon_sponge::PoseidonSponge},
 };
 
 use crate::{

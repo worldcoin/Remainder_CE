@@ -461,8 +461,8 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
         curr_nonlinear_indices.clone()
     }
 
-    /// this traverses the expression to get all of the rounds, in total. requires going through each of the nodes
-    /// and collecting the leaf node indices.
+    /// This function traverses an expression tree in order to determine what are
+    /// the labels for the variables in the expression.
     pub(crate) fn get_all_rounds(
         &self,
         curr_indices: &mut Vec<usize>,
@@ -470,7 +470,8 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     ) -> Vec<usize> {
         let indices_in_node = {
             match self {
-                // in a product, we need the union of all the indices in each of the individual mle refs.
+                // In a product, we need the union of all the labels of the variables in each
+                // of the MLEs.
                 ExpressionNode::Product(verifier_mles) => {
                     let mut product_indices: HashSet<usize> = HashSet::new();
                     verifier_mles.iter().for_each(|mle| {
@@ -482,7 +483,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                     });
                     product_indices
                 }
-                // in an mle, we need all of the mle indices in the mle.
+                // In an mle, all the variable labels are relevant in the expression.
                 ExpressionNode::Mle(verifier_mle) => verifier_mle
                     .var_indices()
                     .iter()
@@ -491,8 +492,8 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                         _ => None,
                     })
                     .collect(),
-                // in a selector, we traverse each parts of the selector while adding the selector index
-                // itself to the total set of all indices in an expression.
+                // In a selector, we traverse each parts of the selector while adding the selector index
+                // itself to the total set of all variable labels in an expression.
                 ExpressionNode::Selector(sel_index, a, b) => {
                     let mut sel_indices: HashSet<usize> = HashSet::new();
                     if let MleIndex::Indexed(i) = sel_index {
@@ -510,7 +511,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                         });
                     sel_indices
                 }
-                // we add the indices in each of the parts of the sum.
+                // We add the variable labels in each of the parts of the sum.
                 ExpressionNode::Sum(a, b) => {
                     let mut sum_indices: HashSet<usize> = HashSet::new();
                     let a_indices = a.get_all_rounds(curr_indices, _mle_vec);
@@ -524,7 +525,8 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                         });
                     sum_indices
                 }
-                // for scaled and negated, we can add all of the indices found in the expression being negated or scaled.
+                // For scaled and negated, we can add all of variable labels
+                // found in the expression being negated or scaled.
                 ExpressionNode::Scaled(a, _) => a
                     .get_all_rounds(curr_indices, _mle_vec)
                     .into_iter()
@@ -537,7 +539,8 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 ExpressionNode::Constant(_) => HashSet::new(),
             }
         };
-        // once all of them have been collected, we can take the union of all of them to grab all of the rounds in an expression.
+        // Once all of them have been collected, we can take the union of all
+        // of them to grab the variable labels of an expression.
         indices_in_node.into_iter().for_each(|index| {
             if !curr_indices.contains(&index) {
                 curr_indices.push(index);

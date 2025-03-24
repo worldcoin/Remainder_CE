@@ -312,8 +312,9 @@ impl<F: Field> Expression<F, ProverExpr> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    /// this evaluates a sumcheck message using the beta cascade algorithm by calling it on the root
-    /// node of the expression tree.
+    /// This evaluates a sumcheck message using the beta cascade algorithm by calling it on the root
+    /// node of the expression tree. This assumes that there is an independent variable in the
+    /// expression, which is the `round_index`.
     pub fn evaluate_sumcheck_beta_cascade(
         &self,
         beta: &[&BetaValues<F>],
@@ -330,6 +331,10 @@ impl<F: Field> Expression<F, ProverExpr> {
         )
     }
 
+    /// This evaluates a sumcheck message using the beta cascade algorithm, taking the sum
+    /// of the expression over all the variables `round_index` and after. For the variables
+    /// before, we compute the fully bound beta equality MLE and scale the rest of the sum
+    /// by this value.
     pub fn evaluate_sumcheck_node_beta_cascade_sum(
         &self,
         beta_values: &BetaValues<F>,

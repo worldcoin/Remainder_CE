@@ -1,6 +1,6 @@
 use ark_std::test_rng;
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge, TranscriptReader, TranscriptWriter},
+    transcript::{poseidon_sponge::PoseidonSponge, TranscriptReader, TranscriptWriter},
     Fr,
 };
 

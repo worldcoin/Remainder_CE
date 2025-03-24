@@ -136,9 +136,9 @@ dependencies = [
 
 [[package]]
 name = "ark-ec"
-version = "0.4.2"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "defd9a439d56ac24968cca0571f598a61bc8c55f71d50a89cda591cb750670ba"
+checksum = "3c60370a92f8e1a5f053cad73a862e1b99bc642333cd676fa11c0c39f80f4ac2"
 dependencies = [
  "ark-ff",
  "ark-poly",
@@ -1695,6 +1695,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "sha2",
  "sha3 0.10.8",
  "subtle",
  "thiserror",
