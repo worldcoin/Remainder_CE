@@ -6,7 +6,7 @@ use remainder_shared_types::halo2curves::group::Group;
 use remainder_shared_types::halo2curves::CurveExt;
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscript;
-use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
 
 use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
 use crate::hyrax_pcs::HyraxPCSEvaluationProof;

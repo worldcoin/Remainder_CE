@@ -235,12 +235,11 @@ impl<F: Field> Layer<F> for MatMult<F> {
         Ok(())
     }
 
-    fn initialize_rlc(&mut self, _random_coefficients: &[F], claims: &[&RawClaim<F>]) {
-        // NOTE: Matmult layers do not support RLC claim aggregation,
-        // so if this function is called we simply aggregate using
-        // the interpolated claim.
-        assert_eq!(claims.len(), 1);
-        self.initialize(claims[0].get_point()).unwrap();
+    fn initialize_rlc(&mut self, _random_coefficients: &[F], _claims: &[&RawClaim<F>]) {
+        // This function is not implemented for MatMult layers because we should
+        // never be using RLC claim aggregation for MatMult layers. Instead, we always
+        // use interpolative claim aggregation.
+        unimplemented!()
     }
 
     fn compute_round_sumcheck_message(
