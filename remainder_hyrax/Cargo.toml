@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "=4.3.21", features = ["derive"] }
+clap = { version = "^4", features = ["derive"] }
 criterion = "0.5.1"
 rand_chacha = "0.3.1"
 remainder-shared-types = { path = "../remainder_shared_types" }
@@ -27,8 +27,8 @@ rayon = "1.7"
 sha256 = "1.5.0"
 bincode = "1.3.3"
 parking_lot = "0.12"
-anyhow = "1.0.95"
-zeroize = "1.8.1"
+anyhow = "^1"
+zeroize = "^1.7"
 
 [features]
 parallel = ["remainder/parallel", "ark-std/parallel"]
@@ -43,17 +43,21 @@ name = "pcs_bench"
 harness = false
 
 [[bin]]
-name = "run_iriscode_circuit"
-path = "src/bin/run_iriscode_circuit.rs"
+name = "world_gen_iriscode_secret_share_circuit_descriptions"
+path = "src/bin/world_gen_iriscode_secret_share_circuit_descriptions.rs"
 
 [[bin]]
-name = "get_circuit_description"
-path = "src/bin/get_circuit_description.rs"
+name = "world_prove"
+path = "src/bin/world_prove.rs"
 
 [[bin]]
-name = "worldcoin"
-path = "src/bin/worldcoin.rs"
+name = "world_upgrade_verify"
+path = "src/bin/world_upgrade_verify.rs"
 
 [[bin]]
-name = "worldcoin_mpc"
-path = "src/bin/worldcoin_mpc.rs"
+name = "world_verify_ampc_party"
+path = "src/bin/world_verify_ampc_party.rs"
+
+[[bin]]
+name = "sanitycheck_secret_shares"
+path = "src/bin/sanitycheck_secret_shares.rs"

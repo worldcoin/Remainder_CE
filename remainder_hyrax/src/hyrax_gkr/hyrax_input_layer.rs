@@ -13,6 +13,7 @@ use remainder_shared_types::{
 };
 use remainder_shared_types::{ff_field, Zeroizable};
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 use crate::hyrax_pcs::HyraxPCSEvaluationProof;
 
@@ -196,7 +197,8 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
 
 /// The prover's view of the commitment to the input layer, which includes the
 /// blinding factors and the plaintext values.
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxProverInputCommitment<C: PrimeOrderCurve> {
     /// The plaintext values
     pub mle: MultilinearExtension<C::Scalar>,
@@ -204,4 +206,16 @@ pub struct HyraxProverInputCommitment<C: PrimeOrderCurve> {
     pub commitment: Vec<C>,
     /// The blinding factors used in the commitment
     pub blinding_factors_matrix: Vec<C::Scalar>,
+}
+
+impl<C: PrimeOrderCurve> Zeroizable for HyraxProverInputCommitment<C> {
+    fn zeroize(&mut self) {
+        self.mle.zeroize();
+        for c in &mut self.commitment {
+            c.zeroize();
+        }
+        for bf in &mut self.blinding_factors_matrix {
+            bf.zeroize();
+        }
+    }
 }

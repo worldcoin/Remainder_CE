@@ -1,6 +1,8 @@
 use std::fmt::Display;
 
-use crate::HasByteRepresentation;
+use itertools::Itertools;
+
+use crate::{transcript::utils::sha256_hash_chain_on_field_elems, HasByteRepresentation};
 
 use crate::curves::PrimeOrderCurve;
 
@@ -44,6 +46,18 @@ pub trait ECTranscriptTrait<C: PrimeOrderCurve>: Display {
     fn append_scalar_field_elem(&mut self, label: &str, elem: C::Scalar);
 
     fn append_scalar_field_elems(&mut self, label: &str, elements: &[C::Scalar]);
+
+    /// This function absorbs elliptic curve points as individual base field
+    /// elements, and additionally absorbs the hash chain digest of the
+    /// base field elements.
+    fn append_input_ec_points(&mut self, label: &str, elements: Vec<C>);
+
+    /// This function absorbs scalar field elements into the transcript sponge,
+    /// and additionally absorbs the hash chain digest of these elements.
+    fn append_input_scalar_field_elems(&mut self, label: &str, elements: &[C::Scalar]);
+
+    /// This function absorbs base field elements into the transcript sponge.
+    fn append_base_field_elems(&mut self, label: &str, elements: &[C::Base]);
 
     fn get_scalar_field_challenge(&mut self, label: &str) -> C::Scalar;
 
@@ -191,6 +205,38 @@ impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscriptTrait<
             .map(|(x_coord, y_coord_sign)| C::from_x_and_sign_y(x_coord, y_coord_sign))
             .collect()
     }
+
+    fn append_input_ec_points(&mut self, label: &str, elements: Vec<C>) {
+        // We compute the list of all x-coordinates interwoven with all
+        // y-coordinates, i.e. [x_1, y_1, x_2, y_2, ...]
+        let elements_interwoven_x_y_coords = elements
+            .into_iter()
+            .map(|ec_element| ec_element.affine_coordinates().unwrap())
+            .flat_map(|(x, y)| vec![x, y])
+            .collect_vec();
+        // We then compute the hash chain digest of the list.
+        let hash_chain_digest = sha256_hash_chain_on_field_elems(&elements_interwoven_x_y_coords);
+        // We first absorb the interwoven x/y coordinates, then the hash chain (both as native base field elements).
+        self.append_base_field_elems(label, &elements_interwoven_x_y_coords);
+        self.append_base_field_elems(label, &hash_chain_digest);
+    }
+
+    fn append_input_scalar_field_elems(
+        &mut self,
+        label: &str,
+        elements: &[<C as PrimeOrderCurve>::Scalar],
+    ) {
+        // First, compute the hash chain digest of the elements.
+        let hash_chain_digest = sha256_hash_chain_on_field_elems(elements);
+        // Next, we simply absorb the elements and then the hash chain digest of the elements.
+        self.append_scalar_field_elems(label, elements);
+        self.append_scalar_field_elems(label, &hash_chain_digest);
+    }
+
+    fn append_base_field_elems(&mut self, label: &str, elements: &[<C as PrimeOrderCurve>::Base]) {
+        // This is a simple wrapper around the `ProverTranscript<C::Base>` trait.
+        self.append_elements(label, elements);
+    }
 }
 
 impl<C: PrimeOrderCurve, Sp: ECTranscriptSponge<C>> std::fmt::Display for ECTranscript<C, Sp> {
@@ -248,5 +294,83 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
             }
             challenges
         }
+    }
+
+    fn append_input_elements(&mut self, label: &str, elements: &[C::Base]) {
+        let hash_chain_digest = sha256_hash_chain_on_field_elems(elements);
+        self.transcript
+            .append_input_elements(label, elements, &hash_chain_digest);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ECTranscript, ECTranscriptTrait};
+    use crate::{
+        curves::PrimeOrderCurve,
+        transcript::{poseidon_sponge::PoseidonSponge, ProverTranscript},
+        Base, Bn256Point, Scalar,
+    };
+    use ark_std::test_rng;
+    use itertools::Itertools;
+    use rand::Rng;
+
+    /// A basic test which ensures that the transcript challenge which would
+    /// have been derived from simply calling `append_scalar_field_elems` is
+    /// NOT the same as the one which would've been derived from calling
+    /// `append_input_scalar_field_elems`.
+    #[test]
+    fn test_ec_scalar_input_hash_soundness() {
+        // Create transcripts to compare
+        let mut ec_transcript_1: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+            ECTranscript::new("test ec_transcript_1");
+        let mut ec_transcript_2: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+            ECTranscript::new("test ec_transcript_2");
+
+        // Generate random input elements
+        let mut rng = test_rng();
+        let random_input_elems = (0..1000)
+            .map(|_| Scalar::from(rng.gen::<u64>()))
+            .collect_vec();
+        ec_transcript_1
+            .append_scalar_field_elems("test append scalar field elems", &random_input_elems);
+        ec_transcript_2.append_input_scalar_field_elems(
+            "test append input scalar field elems",
+            &random_input_elems,
+        );
+
+        // Generate challenges from each and assert they are not the same
+        assert_ne!(
+            ec_transcript_1.get_challenge("get challenge 1"),
+            ec_transcript_2.get_challenge("get challenge 2")
+        );
+    }
+
+    /// A basic test which ensures that the transcript challenge which would
+    /// have been derived from simply calling `append_ec_points` is
+    /// NOT the same as the one which would've been derived from calling
+    /// `append_input_ec_points`.
+    #[test]
+    fn test_ec_point_input_hash_soundness() {
+        // Create transcripts to compare
+        let mut ec_transcript_1: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+            ECTranscript::new("test ec_transcript_1");
+        let mut ec_transcript_2: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+            ECTranscript::new("test ec_transcript_2");
+
+        // Generate random input elements
+        let mut rng = test_rng();
+        let random_input_ec_points = (0..1000)
+            .map(|_| Bn256Point::random(&mut rng))
+            .collect_vec();
+        ec_transcript_1.append_ec_points("test append ec elems", &random_input_ec_points);
+        ec_transcript_2
+            .append_input_ec_points("test append input ec elems", random_input_ec_points);
+
+        // Generate challenges from each and assert they are not the same
+        assert_ne!(
+            ec_transcript_1.get_challenge("get challenge 1"),
+            ec_transcript_2.get_challenge("get challenge 2")
+        );
     }
 }

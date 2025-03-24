@@ -9,12 +9,20 @@ members = [
 
 resolver = "2"
 
-[profile.opt-with-debug]
+# Memory benchmarking profile for Valgrind.
+# Inherits "release" but turns debug symbols on.
+[profile.mem-bench]
 inherits = "release"
 debug = true
 
+# Optimized dev profile for faster testing.
+# Inherits "dev" but turns on optimizations.
+[profile.dev-opt]
+inherits = "dev"
+opt-level = 3
+
 [profile.mobile]
 inherits = "release"
-opt-level = "s"   # Optimize for size.
+opt-level = "s"      # Optimize for size.
 lto = true
 codegen-units = 1

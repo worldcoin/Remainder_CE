@@ -24,7 +24,7 @@ use halo2_proofs::poly::EvaluationDomain;
 use itertools::{iterate, Itertools};
 use rand::Rng;
 use remainder_shared_types::transcript::{
-    poseidon_transcript::PoseidonSponge, ProverTranscript, VerifierTranscript,
+    poseidon_sponge::PoseidonSponge, ProverTranscript, VerifierTranscript,
 };
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptWriter},
