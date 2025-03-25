@@ -187,11 +187,11 @@ fn group_claims_by_common_points_with_dimension<
     let mut claim_groups: Vec<Vec<HyraxClaim<C::Scalar, T>>> = Vec::new();
     for claim in claims.into_iter() {
         for claim_group in claim_groups.iter_mut() {
-            if !claim_group.is_empty() {
-                if claim_group[0].point[log_n_cols..] == claim.point[log_n_cols..] {
-                    claim_group.push(claim.clone());
-                    break;
-                }
+            if !claim_group.is_empty()
+                && claim_group[0].point[log_n_cols..] == claim.point[log_n_cols..]
+            {
+                claim_group.push(claim.clone());
+                break;
             }
         }
         claim_groups.push(vec![claim]);
