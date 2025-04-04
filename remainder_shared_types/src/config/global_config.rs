@@ -10,21 +10,21 @@ use super::{
 /// Default prover/verifier config is runtime-optimized for both! Note that this
 /// is a global static variable with atomic read/write access. In particular:
 /// * The [Lazy] component allows there to be a single static global config.
-///     This ensures that all prover/verifier functionality is "viewing" the
-///     same global config and we don't need to pass the options around.
+///   This ensures that all prover/verifier functionality is "viewing" the
+///   same global config and we don't need to pass the options around.
 /// * The [RwLock] component ensures that there is atomic access to the prover
-///     and verifier configs. This ensures that we are able to atomically (with
-///     respect to the config) check that the global static config matches the
-///     locally expected config (e.g. one which you might specify for a specific
-///     test or binary run) and run the proving/verifying functions under that
-///     global config with the guarantee that the global config remains the same
-///     (since we simply hold onto a reader for the lifetime of the function
-///     call).
+///   and verifier configs. This ensures that we are able to atomically (with
+///   respect to the config) check that the global static config matches the
+///   locally expected config (e.g. one which you might specify for a specific
+///   test or binary run) and run the proving/verifying functions under that
+///   global config with the guarantee that the global config remains the same
+///   (since we simply hold onto a reader for the lifetime of the function
+///   call).
 /// * Finally, the idea of having the [GKRCircuitProverConfig] and
-///     [GKRCircuitVerifierConfig] together in the same [RwLock] is so that
-///     we can run an atomic prove + verify test. This is technically less
-///     efficient vs. keeping each of the configs in independent [Lazy<RwLock>],
-///     but gives a nicer abstraction.
+///   [GKRCircuitVerifierConfig] together in the same [RwLock] is so that
+///   we can run an atomic prove + verify test. This is technically less
+///   efficient vs. keeping each of the configs in independent [Lazy<RwLock>],
+///   but gives a nicer abstraction.
 pub static PROVER_VERIFIER_CONFIG: Lazy<
     RwLock<(GKRCircuitProverConfig, GKRCircuitVerifierConfig)>,
 > = Lazy::new(|| {
@@ -334,10 +334,10 @@ macro_rules! perform_function_under_verifier_config {
 /// It does this by first reading the global config and checking whether
 /// that config matches the expected configs which are passed in, then
 /// * If matches, it performs the function immediately while holding the read
-///     lock and returns.
+///   lock and returns.
 /// * If doesn't match, it attempts to acquire a write lock, then writes the
-///     config to the global one, downgrades the write lock to a read lock
-///     (thereby unblocking all other readers), and performs the function.
+///   config to the global one, downgrades the write lock to a read lock
+///   (thereby unblocking all other readers), and performs the function.
 #[macro_export]
 macro_rules! perform_function_under_expected_configs {
     ($func:expr, $expected_prover_config: expr, $expected_verifier_config:expr, $($arg:expr),*) => {{

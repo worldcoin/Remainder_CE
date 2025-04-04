@@ -112,9 +112,9 @@ impl<F: Field> MatMult<F> {
     ///
     /// #Arguments
     /// * `claim_a`: the first log_num_rows variables of the claim made on the
-    ///     MLE representing the output of this layer.
+    ///   MLE representing the output of this layer.
     /// * `claim_b`: the last log_num_cols variables of the claim made on the
-    ///     MLE representing the output of this layer.
+    ///   MLE representing the output of this layer.
     fn pre_processing_step(&mut self, claim_a: Vec<F>, claim_b: Vec<F>) {
         let matrix_a_mle = &mut self.matrix_a.mle;
         let matrix_b_mle = &mut self.matrix_b.mle;

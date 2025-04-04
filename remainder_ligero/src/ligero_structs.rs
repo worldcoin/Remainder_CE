@@ -82,8 +82,8 @@ where
     ///
     /// ## Arguments
     /// * `inp` - Slice of coefficients of length `self.rho_inv` *
-    ///     `self.orig_num_cols`. Note that only the first `self.orig_num_cols`
-    ///     values should be nonzero.
+    ///   `self.orig_num_cols`. Note that only the first `self.orig_num_cols`
+    ///   values should be nonzero.
     fn encode(&self, inp: &mut [F]) -> Result<(), Self::Err> {
         // So we need to convert num_cols(M) coefficients into num_cols(M) * (1 / rho) evaluations
         // All the coefficients past the original number of cols should be zero-padded

@@ -29,7 +29,10 @@ pub fn pad_with<F: Clone>(padding_value: F, data: &[F]) -> Vec<F> {
     let padded_length = data.len().checked_next_power_of_two().unwrap();
     let mut padded_data = Vec::with_capacity(padded_length);
     padded_data.extend_from_slice(data);
-    padded_data.extend(std::iter::repeat(padding_value).take(padded_length - data.len()));
+    padded_data.extend(std::iter::repeat_n(
+        padding_value,
+        padded_length - data.len(),
+    ));
     padded_data
 }
 

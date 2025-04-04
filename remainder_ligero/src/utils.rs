@@ -27,7 +27,7 @@ pub fn get_random_coeffs_for_multilinear_poly<F: Field>(
 /// ## Arguments
 ///
 /// * `poly_len` - Number of coefficients in the actual polynomial, i.e.
-///     width(M) * height(M)
+///   width(M) * height(M)
 /// * `rho_inv` - rho^{-1}, i.e. the code rate
 ///
 /// ## Returns
@@ -64,7 +64,7 @@ pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8, ratio: f64) -> (usiz
 ///
 /// ## Returns
 /// * `evals` - Evaluations over the roots-of-unity subset of polynomial p
-///     represented by `coeffs`.
+///   represented by `coeffs`.
 pub fn halo2_fft<F: Field>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
     // Sanitycheck
     debug_assert!(coeffs.len().is_power_of_two());
@@ -128,13 +128,13 @@ pub fn halo2_ifft<F: Field>(evals: Vec<F>, rho_inv: u8) -> Vec<F> {
 ///
 /// ## Arguments
 /// * `bytes` - Vector of individual bytes, with EACH byte stored in big-endian but ORDERED
-///     in the vector in little-endian
+///   in the vector in little-endian
 /// * `num_bits` - Number of bits to grab from the "pure" little-endian representation
-///     of the number
+///   of the number
 ///
 /// ## Returns
 /// * `val` - The binary recomposition (interpreted in little-endian) of the `num_bits`
-///     least significant bits of `bytes`
+///   least significant bits of `bytes`
 pub fn get_least_significant_bits_to_usize_little_endian(bytes: Vec<u8>, num_bits: usize) -> usize {
     bytes
         .into_iter()

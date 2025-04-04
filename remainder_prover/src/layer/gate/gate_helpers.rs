@@ -634,19 +634,19 @@ pub(crate) fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
 ///
 /// # Arguments:
 /// * `wiring`: The gate wiring in the form (z, x, y) such that
-///    the gate_operation(value of the LHS MLE at x, value of the
-///    RHS MLE at y) = value of the output MLE at z.
+///   the gate_operation(value of the LHS MLE at x, value of the
+///   RHS MLE at y) = value of the output MLE at z.
 /// * `claim_points`: The claims made on the output MLE of this
-///    layer.
+///   layer.
 /// * `f2_x_mle`: The MLE representing the LHS of the input MLE
-///    into this binary gate.
+///   into this binary gate.
 /// * `f3_y_mle`: The MLE representing the RHS of the input MLE
-///    into this binary gate.
+///   into this binary gate.
 /// * `random_coefficients`: The random coefficients used to
-///    aggregate the claims made on this layer.
+///   aggregate the claims made on this layer.
 /// * `gate_operation`: The binary operation used to combine the
-///    input MLEs, which is either [BinaryOperation::Add] or
-///    [BinaryOperation::Mul].
+///   input MLEs, which is either [BinaryOperation::Add] or
+///   [BinaryOperation::Mul].
 pub(crate) fn fold_binary_gate_wiring_into_mles_phase_1<F: Field>(
     wiring: &[(u32, u32, u32)],
     claim_points: &[&[F]],
@@ -756,22 +756,22 @@ pub(crate) fn fold_binary_gate_wiring_into_mles_phase_1<F: Field>(
 ///
 /// # Arguments:
 /// * `wiring`: The gate wiring in the form (z, x, y) such that
-///    the gate_operation(value of the LHS MLE at x, value of the
-///    RHS MLE at y) = value of the output MLE at z.
+///   the gate_operation(value of the LHS MLE at x, value of the
+///   RHS MLE at y) = value of the output MLE at z.
 /// * `f2_at_u`: The fully bound value of the LHS MLE at the point
-///    `u_claim`.
+///   `u_claim`.
 /// * `u_claim:` The challenges bound to the `x` variables (i.e.,
-///    the variables that make up the MLE that represents the LHS
-///    input to the binary gate).
+///   the variables that make up the MLE that represents the LHS
+///   input to the binary gate).
 /// * `g1_claim_points`: The nondataparallel claims made on the
-///    output MLE of this layer.
+///   output MLE of this layer.
 /// * `random_coefficients`: The random coefficients used to
-///    aggregate the claims made on this layer.
+///   aggregate the claims made on this layer.
 /// * `num_vars`: The number of variables in each of the folded
-///    tables in the output.
+///   tables in the output.
 /// * `gate_operation`: The binary operation used to combine the
-///    input MLEs, which is either [BinaryOperation::Add] or
-///    [BinaryOperation::Mul].
+///   input MLEs, which is either [BinaryOperation::Add] or
+///   [BinaryOperation::Mul].
 pub(crate) fn fold_binary_gate_wiring_into_mles_phase_2<F: Field>(
     wiring: &[(u32, u32, u32)],
     f2_at_u: F,

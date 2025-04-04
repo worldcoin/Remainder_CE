@@ -77,11 +77,11 @@ pub fn num_bits<F: Field>(n: F) -> usize {
 /// # Notes
 /// 1. Currently the implementation uses more storage than the theoretically
 ///    optimal mentioned above. This is because:
-///    a. If `ceil(log_2(b - a + 1)) > 64`, we resort to the standard
+///    1. If `ceil(log_2(b - a + 1)) > 64`, we resort to the standard
 ///       representation of using `sizeof::<F>()` bytes. This is because for our
 ///       use-case, there are not many instances of vectors needing `c \in [65,
 ///       256]` bits to encode each value.
-///    b. We round `ceil(log_2(b - a + 1))` up to the nearest divisor of 64.
+///    2. We round `ceil(log_2(b - a + 1))` up to the nearest divisor of 64.
 ///       This is to simplify the implementation by avoiding the situation where
 ///       the encoding of an element spans multiple words.
 /// 2. For optimal performance, the buffer used to store the encoded values

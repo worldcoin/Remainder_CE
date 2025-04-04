@@ -254,11 +254,11 @@ impl<F: Field> ClaimGroup<F> {
     ///
     /// # Parameters
     /// * `layer_mles`: the compiled bookkeeping tables from this layer, which
-    ///    when aggregated appropriately with their prefix bits, make up the
-    ///    layerwise bookkeeping table.
+    ///   when aggregated appropriately with their prefix bits, make up the
+    ///   layerwise bookkeeping table.
     /// * `layer`: the layer whose output MLE is being made a claim on. Each of the
-    ///    claims are aggregated into one claim, whose validity is reduced to the
-    ///    validity of a claim in a future layer throught he sumcheck protocol.
+    ///   claims are aggregated into one claim, whose validity is reduced to the
+    ///   validity of a claim in a future layer throught he sumcheck protocol.
     /// * `transcript_writer`: is used to post wlx evaluations and generate
     ///   challenges.
     ///

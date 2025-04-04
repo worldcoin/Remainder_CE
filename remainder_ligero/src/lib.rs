@@ -242,7 +242,7 @@ where
     ///
     /// ## Returns
     /// * `proof` - Ligero evaluation proof for committed polynomial at the
-    ///     challenge point represented by `outer_tensor`
+    ///   challenge point represented by `outer_tensor`
     pub fn prove(
         &self,
         outer_tensor: &[F],
@@ -612,7 +612,7 @@ fn merkle_tree<D, F>(
     assert_eq!(ins.len(), outs.len() + 1);
 
     // Merkle-ize just the next layer
-    let (outs, rems) = outs.split_at_mut((outs.len() + 1) / 2);
+    let (outs, rems) = outs.split_at_mut(outs.len().div_ceil(2));
     merkle_layer::<D, F>(ins, outs, master_default_poseidon_merkle_hasher);
 
     if !rems.is_empty() {
@@ -661,7 +661,7 @@ fn merkle_layer<D, F>(
 /// Open the commitment to a single column of M' by
 /// * Sending the column in the clear to the verifier
 /// * Sending the Merkle path to the Merkle root from that column's corresponding
-///     leaf node hash
+///   leaf node hash
 ///
 /// Additionally, appends each of the column values *and* each of the Merkle
 /// paths to the transcript writer, to match the transcript reader of the
@@ -711,7 +711,7 @@ where
         let other = (column & !1) | (!column & 1);
         assert_eq!(other ^ column, 1);
         path.push(hashes[other]);
-        let (_, hashes_new) = hashes.split_at((hashes.len() + 1) / 2);
+        let (_, hashes_new) = hashes.split_at(hashes.len().div_ceil(2));
         hashes = hashes_new;
         column >>= 1;
     }
@@ -737,7 +737,7 @@ const fn log2(v: usize) -> usize {
 /// * All the `b^T M'` s (i.e. column-wise) are consistent with the verifier-derived enc(b^T M)
 /// * All the columns are consistent with the merkle commitment
 /// * Evaluates (b^T M) * a on its own (where b^T M is given by the prover) and returns the result
-///      as the evaluation
+///   as the evaluation
 ///
 /// ## Arguments
 /// * `root` - Merkle root, i.e. the Ligero commitment
@@ -860,7 +860,7 @@ where
 /// Check a column opening by
 /// * Computing a linear hash over the column elements
 /// * Taking that hash as the Merkle leaf, and computing pairwise hashes against
-///     the Merkle path
+///   the Merkle path
 /// * Checking that against `root`
 ///
 /// ## Arguments

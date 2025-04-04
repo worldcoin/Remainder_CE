@@ -33,7 +33,7 @@ use super::{prove, GKRCircuitDescription};
 /// ## Arguments
 /// * `circuit_description` - The [GKRCircuitDescription] to be written to file.
 /// * `circuit_description_path` - The filepath to which the JSON description
-///     will be saved.
+///   will be saved.
 pub fn write_circuit_description_to_file<F: Field>(
     circuit_description: &GKRCircuitDescription<F>,
     circuit_description_path: &Path,
@@ -49,9 +49,9 @@ pub fn write_circuit_description_to_file<F: Field>(
 ///
 /// ## Arguments
 /// * `circuit_description` - The circuit description to be hashed and
-///     added to transcript.
+///   added to transcript.
 /// * `circuit_description_hash_type` - The type of hash function to be
-///     used.
+///   used.
 pub fn get_circuit_description_hash_as_field_elems<F: Field>(
     circuit_description: &GKRCircuitDescription<F>,
     circuit_description_hash_type: CircuitHashType,
