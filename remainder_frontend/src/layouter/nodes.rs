@@ -11,6 +11,7 @@ use remainder::circuit_building_context::CircuitBuildingContext;
 
 use anyhow::Result;
 
+pub mod binary_adder;
 pub mod circuit_inputs;
 pub mod circuit_outputs;
 pub mod fiat_shamir_challenge;
