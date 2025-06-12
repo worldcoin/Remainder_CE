@@ -17,69 +17,6 @@ use crate::{
     },
 };
 
-/*
-#[derive(Clone, Debug)]
-pub struct HalfAdder<F: Field> {
-    pub adder_sector: Sector<F>,
-    carry_check_sector: Sector<F>,
-    carry_check_output: OutputNode,
-}
-
-impl<F: Field> HalfAdder<F> {
-    pub fn new(
-        lhs_bit: &impl CircuitNode,
-        rhs_bit: &impl CircuitNode,
-        carry_bit: &impl CircuitNode,
-    ) -> Self {
-        let adder_sector = Sector::new(&[lhs_bit, rhs_bit], |nodes| {
-            assert_eq!(nodes.len(), 2);
-
-            let b0 = nodes[0];
-            let b1 = nodes[1];
-
-            let b0_b1 = Expression::<F, AbstractExpr>::products(vec![b0, b1]);
-
-            // b0 XOR b1
-            // b0 * (1 - b1) + (1 - b0) * b1
-            b0.expr() + b1.expr() - b0_b1.clone() - b0_b1
-        });
-
-        let carry_check_sector = Sector::new(&[lhs_bit, rhs_bit, carry_bit], |nodes| {
-            assert_eq!(nodes.len(), 3);
-
-            let b0 = nodes[0];
-            let b1 = nodes[1];
-            let c = nodes[2];
-
-            let b0_b1 = Expression::<F, AbstractExpr>::products(vec![b0, b1]);
-
-            // b0 * b1 - c
-            b0_b1 - c.expr()
-        });
-        let carry_check_output = OutputNode::new_zero(&carry_check_sector);
-
-        Self {
-            adder_sector,
-            carry_check_sector,
-            carry_check_output,
-        }
-    }
-}
-
-impl<F: Field, N> Component<N> for HalfAdder<F>
-where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
-{
-    fn yield_nodes(self) -> Vec<N> {
-        vec![
-            self.adder_sector.into(),
-            self.carry_check_sector.into(),
-            self.carry_check_output.into(),
-        ]
-    }
-}
-*/
-
 /// Performs binary addition between two nodes that represent binary values, given the vector of
 /// carries as a witness. Works with bit-widths that are powers of 2 up to `2^8 = 256` bits.
 #[derive(Clone, Debug)]
