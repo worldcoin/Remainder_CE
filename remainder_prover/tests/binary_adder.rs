@@ -2,12 +2,12 @@ use std::collections::HashMap;
 
 use itertools::Itertools;
 use remainder::{
+    binary_operations::{binary_adder::BinaryAdder, logical_shift::ShiftNode},
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     layer::LayerId,
     layouter::{
         component::Component,
         nodes::{
-            binary_adder::{FullAdder, HalfAdder},
             circuit_inputs::{InputLayerNode, InputShred},
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
@@ -16,7 +16,7 @@ use remainder::{
             CircuitNode, NodeId,
         },
     },
-    mle::evals::{Evaluations, MultilinearExtension},
+    mle::evals::MultilinearExtension,
     prover::{generate_circuit_description, prove, verify, GKRCircuitDescription},
 };
 use remainder_shared_types::{
@@ -26,7 +26,6 @@ use remainder_shared_types::{
     Fr,
 };
 
-use sha3::digest::typenum::{Abs, Exp};
 use tracing::Level;
 use tracing_subscriber::fmt;
 use tracing_subscriber::{self};
@@ -39,10 +38,9 @@ fn build_circuit() -> (
 
     // LHS: [a0, a1, ..., a7]
     // RHS: [b0, b1, ..., b7]
-    // Previous Carries: [0, c1, ..., c7]
-    // Next Carries: [d0, d1, ..., d6, overflow_bit]
+    // Carries: [c0, d1, ..., c7]
     // Results: [r0, r1, ..., r7]
-    let all_inputs = InputShred::new(6, &input_layer);
+    let all_inputs = InputShred::new(5, &input_layer);
     let input_node_id = all_inputs.id();
 
     // Check that all input bits are binary.
@@ -50,7 +48,7 @@ fn build_circuit() -> (
         assert_eq!(nodes.len(), 1);
 
         let b = nodes[0];
-        let b_sq = Expression::<Fr, AbstractExpr>::products(vec![b, b]);
+        let b_sq = Expression::<_, AbstractExpr>::products(vec![b, b]);
         let b = b.expr();
 
         // b * (1 - b) = b - b^2
@@ -61,20 +59,10 @@ fn build_circuit() -> (
     // a = [a0, ..., a7],
     // b = [b0, ..., b7],
     // c = [c0, ..., c7],
-    // d = [d0, ..., d7],
     // r = [r0, ..., r7],
-    // ...
-    let splits = SplitNode::new(&all_inputs, 3);
-    // assert_eq!(splits.len(), 8);
+    let splits = SplitNode::new(&all_inputs, 2);
 
-    let [lhs, rhs, prev_carries, cur_carries, results, _, _, _] = splits.try_into().unwrap();
-
-    /*
-    let lhs_splits = SplitNode::new(&lhs, 3);
-    let rhs_splits = SplitNode::new(&rhs, 3);
-    let carries_splits = SplitNode::new(&carries, 3);
-    let expected_results_splits = SplitNode::new(&results, 3);
-    */
+    let [lhs, rhs, carries, results] = splits.try_into().unwrap();
 
     let mut nodes: Vec<NodeEnum<Fr>> = vec![
         input_layer.into(),
@@ -83,24 +71,16 @@ fn build_circuit() -> (
         binary_output.into(),
     ];
 
-    let adder = FullAdder::new(&lhs, &rhs, &prev_carries, &cur_carries);
-    let compare_sector = Sector::<Fr>::new(&[&results, &&adder.adder_sector], |nodes| {
+    let adder = BinaryAdder::new(&lhs, &rhs, &carries);
+    let compare_sector = Sector::<Fr>::new(&[&results, &adder.get_output()], |nodes| {
         nodes[0].expr() - nodes[1].expr()
     });
     let compare_output = OutputNode::new_zero(&compare_sector);
 
-    // TODO: Add check that `prev_carries == cur_carries >> 1`;
-
     nodes.extend(adder.yield_nodes());
     nodes.extend([compare_sector.into(), compare_output.into()]);
 
-    nodes.extend(vec![
-        lhs.into(),
-        rhs.into(),
-        prev_carries.into(),
-        cur_carries.into(),
-        results.into(),
-    ]);
+    nodes.extend(vec![lhs.into(), rhs.into(), carries.into(), results.into()]);
 
     let (circuit_description, layer_ids_to_node_ids, circuit_description_map) =
         generate_circuit_description(nodes).unwrap();
@@ -109,15 +89,13 @@ fn build_circuit() -> (
     // 2. Attach input data.
     let lhs = [0, 0, 1, 0, 1, 1, 0, 1];
     let rhs = [1, 0, 0, 1, 1, 1, 1, 1];
-    let prev_carries = [0, 1, 1, 1, 1, 1, 1, 0];
-    let cur_carries = [0, 0, 1, 1, 1, 1, 1, 1];
+    let carries = [0, 0, 1, 1, 1, 1, 1, 1];
     let expected_results = [1, 1, 0, 0, 1, 1, 0, 0];
 
     let input_mle = MultilinearExtension::new(
         lhs.into_iter()
             .chain(rhs.into_iter())
-            .chain(prev_carries.into_iter())
-            .chain(cur_carries.into_iter())
+            .chain(carries.into_iter())
             .chain(expected_results.into_iter())
             .map(Fr::from)
             .collect_vec(),
