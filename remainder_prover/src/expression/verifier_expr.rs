@@ -139,18 +139,6 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
                 selector_column(index, lhs, rhs)
             }
             ExpressionNode::Mle(query) => mle_eval(query),
-            ExpressionNode::Negated(a) => {
-                let a = a.reduce(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                negated(a)
-            }
             ExpressionNode::Sum(a, b) => {
                 let a = a.reduce(
                     constant,
@@ -261,10 +249,6 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
                     .get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec)
                     .into_iter()
                     .collect(),
-                ExpressionNode::Negated(a) => a
-                    .get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec)
-                    .into_iter()
-                    .collect(),
                 ExpressionNode::Constant(_) | ExpressionNode::Mle(_) => HashSet::new(),
             }
         };
@@ -298,7 +282,6 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, VerifierE
                 .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
             ExpressionNode::Mle(mle) => f.debug_struct("Circuit Mle").field("mle", mle).finish(),
-            ExpressionNode::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
             ExpressionNode::Product(a) => f.debug_tuple("Product").field(a).finish(),
             ExpressionNode::Scaled(poly, scalar) => {
