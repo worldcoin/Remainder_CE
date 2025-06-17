@@ -117,7 +117,6 @@ impl<F: Field> RegularLayer<F> {
                 ExpressionNode::Constant(_)
                 | ExpressionNode::Scaled(_, _)
                 | ExpressionNode::Sum(_, _)
-                | ExpressionNode::Negated(_)
                 | ExpressionNode::Selector(_, _, _) => Ok(()),
             }
         };

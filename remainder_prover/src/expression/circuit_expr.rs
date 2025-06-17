@@ -182,9 +182,6 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             ExpressionNode::Mle(circuit_mle) => Ok(ExpressionNode::Mle(
                 circuit_mle.into_verifier_mle(point, transcript_reader)?,
             )),
-            ExpressionNode::Negated(a) => Ok(ExpressionNode::Negated(Box::new(
-                a.into_verifier_node(point, transcript_reader)?,
-            ))),
             ExpressionNode::Sum(lhs, rhs) => Ok(ExpressionNode::Sum(
                 Box::new(lhs.into_verifier_node(point, transcript_reader)?),
                 Box::new(rhs.into_verifier_node(point, transcript_reader)?),
@@ -244,15 +241,6 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                         (b_bookkeeping_table.to_vec()),
                     ],
                     BinaryOperation::Add,
-                ))
-            }
-            ExpressionNode::Negated(a) => {
-                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map)?;
-                Some(MultilinearExtension::new(
-                    a_bookkeeping_table
-                        .iter()
-                        .map(|elem| elem.neg())
-                        .collect_vec(),
                 ))
             }
             ExpressionNode::Scaled(a, scale) => {
@@ -321,18 +309,6 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 selector_column(index, lhs, rhs)
             }
             ExpressionNode::Mle(query) => mle_eval(query),
-            ExpressionNode::Negated(a) => {
-                let a = a.reduce(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                negated(a)
-            }
             ExpressionNode::Sum(a, b) => {
                 let a = a.reduce(
                     constant,
@@ -445,10 +421,6 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                     .get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec)
                     .into_iter()
                     .collect(),
-                ExpressionNode::Negated(a) => a
-                    .get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec)
-                    .into_iter()
-                    .collect(),
                 ExpressionNode::Constant(_) | ExpressionNode::Mle(_) => HashSet::new(),
             }
         };
@@ -525,13 +497,8 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                         });
                     sum_indices
                 }
-                // For scaled and negated, we can add all of variable labels
-                // found in the expression being negated or scaled.
+                // For scaled, we can add all of variable labels found in the expression being scaled.
                 ExpressionNode::Scaled(a, _) => a
-                    .get_all_rounds(curr_indices, _mle_vec)
-                    .into_iter()
-                    .collect(),
-                ExpressionNode::Negated(a) => a
                     .get_all_rounds(curr_indices, _mle_vec)
                     .into_iter()
                     .collect(),
@@ -568,9 +535,6 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             ExpressionNode::Scaled(a, _scale_factor) => {
                 circuit_mles.extend(a.get_circuit_mles());
             }
-            ExpressionNode::Negated(a) => {
-                circuit_mles.extend(a.get_circuit_mles());
-            }
             ExpressionNode::Constant(_constant) => {}
         }
         circuit_mles
@@ -602,9 +566,6 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             ExpressionNode::Scaled(a, _scale_factor) => {
                 a.index_mle_vars(start_index);
             }
-            ExpressionNode::Negated(a) => {
-                a.index_mle_vars(start_index);
-            }
             ExpressionNode::Constant(_constant) => {}
         }
     }
@@ -631,9 +592,6 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             }
             ExpressionNode::Scaled(a, scale_factor) => {
                 a.into_prover_expression(circuit_map) * *scale_factor
-            }
-            ExpressionNode::Negated(a) => {
-                Expression::<F, ProverExpr>::negated(a.into_prover_expression(circuit_map))
             }
             ExpressionNode::Constant(constant) => Expression::<F, ProverExpr>::constant(*constant),
         }
@@ -694,10 +652,6 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 let acc = multiplier * scale_factor;
                 products.extend(a.get_post_sumcheck_layer(acc, challenges, _mle_vec).0);
             }
-            ExpressionNode::Negated(a) => {
-                let acc = multiplier.neg();
-                products.extend(a.get_post_sumcheck_layer(acc, challenges, _mle_vec).0);
-            }
             ExpressionNode::Constant(constant) => {
                 products.push(Product::<F, Option<F>>::new(
                     &[],
@@ -725,7 +679,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 // max degree is the number of MLEs in a product
                 mles.len()
             }
-            ExpressionNode::Scaled(a, _) | ExpressionNode::Negated(a) => a.get_max_degree(_mle_vec),
+            ExpressionNode::Scaled(a, _) => a.get_max_degree(_mle_vec),
             ExpressionNode::Constant(_) => 1,
         }
     }
@@ -743,7 +697,6 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 max(lhs.get_num_vars() + 1, rhs.get_num_vars() + 1)
             }
             ExpressionNode::Mle(circuit_mle_desc) => circuit_mle_desc.num_free_vars(),
-            ExpressionNode::Negated(expr) => expr.get_num_vars(),
             ExpressionNode::Sum(lhs, rhs) => max(lhs.get_num_vars(), rhs.get_num_vars()),
             ExpressionNode::Product(nodes) => nodes.iter().fold(0, |cur_max, circuit_mle_desc| {
                 max(cur_max, circuit_mle_desc.num_free_vars())
@@ -873,7 +826,7 @@ impl<F: Field> Expression<F, ExprDescription> {
     pub fn negated(expression: Self) -> Self {
         let (node, _) = expression.deconstruct();
 
-        let mle_node = ExpressionNode::Negated(Box::new(node));
+        let mle_node = ExpressionNode::Scaled(Box::new(node), F::from(1).neg());
 
         Expression::new(mle_node, ())
     }
@@ -1004,7 +957,6 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, ExprDescr
                 .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
             ExpressionNode::Mle(mle) => f.debug_struct("Circuit Mle").field("mle", mle).finish(),
-            ExpressionNode::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
             ExpressionNode::Product(a) => f.debug_tuple("Product").field(a).finish(),
             ExpressionNode::Scaled(poly, scalar) => {
