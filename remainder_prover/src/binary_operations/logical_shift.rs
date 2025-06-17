@@ -56,13 +56,11 @@ fn generate_shift_wirings(num_vars: usize, shift_amount: i16) -> Vec<(u32, u32)>
     if shift_amount >= 0 {
         let shift_amount = shift_amount as u32;
         (0..(1 << num_vars) - shift_amount)
-            .into_iter()
             .map(|i| (i + shift_amount, i))
             .collect_vec()
     } else {
         let shift_amount = abs(shift_amount) as u32;
         (0..(1 << num_vars) - shift_amount as u32)
-            .into_iter()
             .map(|i| (i, i + shift_amount))
             .collect_vec()
     }
