@@ -280,7 +280,6 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
         constant: &mut impl FnMut(F) -> T,
         selector_column: &mut impl FnMut(&MleIndex<F>, T, T) -> T,
         mle_eval: &mut impl FnMut(&<ExprDescription as ExpressionType<F>>::MLENodeRepr) -> T,
-        negated: &mut impl FnMut(T) -> T,
         sum: &mut impl FnMut(T, T) -> T,
         product: &mut impl FnMut(&[<ExprDescription as ExpressionType<F>>::MLENodeRepr]) -> T,
         scaled: &mut impl FnMut(T, F) -> T,
@@ -288,59 +287,19 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
         match self {
             ExpressionNode::Constant(scalar) => constant(*scalar),
             ExpressionNode::Selector(index, a, b) => {
-                let lhs = a.reduce(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                let rhs = b.reduce(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
+                let lhs = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
+                let rhs = b.reduce(constant, selector_column, mle_eval, sum, product, scaled);
                 selector_column(index, lhs, rhs)
             }
             ExpressionNode::Mle(query) => mle_eval(query),
             ExpressionNode::Sum(a, b) => {
-                let a = a.reduce(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                let b = b.reduce(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
+                let a = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
+                let b = b.reduce(constant, selector_column, mle_eval, sum, product, scaled);
                 sum(a, b)
             }
             ExpressionNode::Product(queries) => product(queries),
             ExpressionNode::Scaled(a, f) => {
-                let a = a.reduce(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
+                let a = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
                 scaled(a, *f)
             }
         }
