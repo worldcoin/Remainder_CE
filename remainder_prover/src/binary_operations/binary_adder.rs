@@ -18,7 +18,12 @@ use crate::{
 };
 
 /// Performs binary addition between two nodes that represent binary values, given the vector of
-/// carries as a witness. Works with bit-widths that are powers of 2 up to `2^8 = 256` bits.
+/// carries as a witness. Works with bit-widths that are powers of 2 up to `2^30 = 1,073,741,824`
+/// bits (this constraint is inherited from `ShiftNode`).
+///
+/// # Requires
+/// All inputs are assumed to only contain binary digits (i.e. only values from the set
+/// `{F::ZERO, F::ONE}` for a field `F`).
 #[derive(Clone, Debug)]
 pub struct BinaryAdder<F: Field> {
     adder_sector: Sector<F>,
@@ -86,17 +91,13 @@ impl<F: Field> BinaryAdder<F> {
                     Expression::<F, AbstractExpr>::products(vec![b0, b1, c]),
                     F::from(2),
                 );
-                let b0_sq_b1_c = Expression::<F, AbstractExpr>::products(vec![b0, b0, b1, c]);
-                let b0_b1_sq_c = Expression::<F, AbstractExpr>::products(vec![b0, b1, b1, c]);
-                let two_b0_sq_b1_sq_c = Expression::<F, AbstractExpr>::scaled(
-                    Expression::<F, AbstractExpr>::products(vec![b0, b0, b1, b1, c]),
-                    F::from(2),
-                );
 
-                // The following expression is equivalent to:
-                // `(b0 AND b1) OR ((b0 XOR b1) AND c)`
-                b0_b1 + b0_c + b1_c - two_b0_b1_c - b0_sq_b1_c - b0_b1_sq_c + two_b0_sq_b1_sq_c
-                    - expected_c.expr()
+                // The next carry is 1 iff at least 2 of the 3 input bits (`b0`, `b1` and `c`) are
+                // 1. The following expression is the multilinear polynomial extending the boolean
+                // function described in the previous sentence.
+                // TODO: Use something like this after merging Benny's PR:
+                // b0 * b1 * c + b0 * b1 * (1 - c) + b0 * (1 - b1) * c + (1 - b0) * b1 * c - expected_c
+                b0_b1 + b0_c + b1_c - two_b0_b1_c - expected_c.expr()
             },
         );
         let carry_check_output = OutputNode::new_zero(&carry_check_sector);
