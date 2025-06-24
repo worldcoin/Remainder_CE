@@ -4,26 +4,31 @@ pub mod curves;
 pub mod pedersen;
 pub mod transcript;
 pub mod utils;
-
-use std::hash::Hash;
-
-use halo2curves::ff::{FromUniformBytes, WithSmallOrderMulGroup};
-use serde::{Deserialize, Serialize};
-
-pub use halo2curves::ff::Field as ff_field;
-
 pub use halo2curves;
 pub use halo2curves::bn256::{Fq, Fr};
-pub use poseidon::Poseidon;
-
+pub use halo2curves::ff::Field as ff_field;
+use halo2curves::ff::{FromUniformBytes, WithSmallOrderMulGroup};
 use halo2curves::CurveExt;
 pub use halo2curves::{bn256::G1 as Bn256Point, group::Group};
+pub use poseidon::Poseidon;
+use serde::{Deserialize, Serialize};
+use std::hash::Hash;
 pub type Scalar = <Bn256Point as Group>::Scalar;
 pub type Base = <Bn256Point as CurveExt>::Base;
 
 /// The primary finite field used within a GKR circuit, as well as within
 /// sumcheck. Note that the field's size should be large enough such that
-/// d / |F| bits of computational soundness is considered secure!
+/// `depth(C) * deg(C) / |F|` bits of computational soundness is considered
+/// secure, where `depth(C)` is the depth of the GKR circuit and `deg(C)` is
+/// the maximum degree of any layerwise polynomial relationship.
+///
+/// ### Note
+/// We use the Halo2 implementation of BN-256's scalar field ([crate::Fr])
+/// everywhere currently for testing purposes, as well as the Halo2
+/// implementation of BN-256's curve elements ([crate::Bn256Point]) within
+/// Hyrax as Pedersen group elements. The Halo2 implementation of BN-256's
+/// base field ([crate::Fq]) is also available as a re-export, although
+/// this is not used in any circuits by default.
 pub trait Field:
 ff_field
     + FromUniformBytes<64> // only need this bc of Poseidon transcript,
