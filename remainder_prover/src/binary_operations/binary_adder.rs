@@ -84,20 +84,14 @@ impl<F: Field> BinaryAdder<F> {
                 let c = nodes[2];
                 let expected_c = nodes[3];
 
-                let b0_b1 = Expression::<F, AbstractExpr>::products(vec![b0, b1]);
-                let b0_c = Expression::<F, AbstractExpr>::products(vec![b0, c]);
-                let b1_c = Expression::<F, AbstractExpr>::products(vec![b1, c]);
-                let two_b0_b1_c = Expression::<F, AbstractExpr>::scaled(
-                    Expression::<F, AbstractExpr>::products(vec![b0, b1, c]),
-                    F::from(2),
-                );
-
                 // The next carry is 1 iff at least 2 of the 3 input bits (`b0`, `b1` and `c`) are
                 // 1. The following expression is the multilinear polynomial extending the boolean
                 // function described in the previous sentence.
-                // TODO: Use something like this after merging Benny's PR:
-                // b0 * b1 * c + b0 * b1 * (1 - c) + b0 * (1 - b1) * c + (1 - b0) * b1 * c - expected_c
-                b0_b1 + b0_c + b1_c - two_b0_b1_c - expected_c.expr()
+                b0.expr() * b1.expr() * c.expr()
+                    + b0.expr() * b1.expr() * -(c.expr() - F::ONE)
+                    + b0.expr() * -(b1.expr() - F::ONE) * c.expr()
+                    + -(b0.expr() - F::ONE) * b1.expr() * c.expr()
+                    - expected_c.expr()
             },
         );
         let carry_check_output = OutputNode::new_zero(&carry_check_sector);
