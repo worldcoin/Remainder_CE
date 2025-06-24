@@ -137,7 +137,7 @@ impl<F: Field> Expression<F, ProverExpr> {
     pub fn negated(expression: Self) -> Self {
         let (node, mle_vec) = expression.deconstruct();
 
-        let mle_node = ExpressionNode::Negated(Box::new(node));
+        let mle_node = ExpressionNode::Scaled(Box::new(node), F::from(1).neg());
 
         Expression::new(mle_node, mle_vec)
     }
@@ -189,7 +189,6 @@ impl<F: Field> Expression<F, ProverExpr> {
                 ExpressionNode::Constant(_)
                 | ExpressionNode::Scaled(_, _)
                 | ExpressionNode::Sum(_, _)
-                | ExpressionNode::Negated(_)
                 | ExpressionNode::Selector(_, _, _) => Ok(()),
             }
         };
@@ -454,9 +453,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     eval,
                 )))
             }
-            ExpressionNode::Negated(a) => Ok(ExpressionNode::Negated(Box::new(
-                a.transform_to_verifier_expression_node(mle_vec)?,
-            ))),
             ExpressionNode::Sum(a, b) => Ok(ExpressionNode::Sum(
                 Box::new(a.transform_to_verifier_expression_node(mle_vec)?),
                 Box::new(b.transform_to_verifier_expression_node(mle_vec)?),
@@ -517,7 +513,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     mle.fix_variable(round_index, challenge);
                 }
             }
-            ExpressionNode::Negated(a) => a.fix_variable_node(round_index, challenge, mle_vec),
             ExpressionNode::Sum(a, b) => {
                 a.fix_variable_node(round_index, challenge, mle_vec);
                 b.fix_variable_node(round_index, challenge, mle_vec);
@@ -563,9 +558,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 if mle.mle_indices().contains(&MleIndex::Indexed(round_index)) {
                     mle.fix_variable_at_index(round_index, challenge);
                 }
-            }
-            ExpressionNode::Negated(a) => {
-                a.fix_variable_at_index_node(round_index, challenge, mle_vec)
             }
             ExpressionNode::Sum(a, b) => {
                 a.fix_variable_at_index_node(round_index, challenge, mle_vec);
@@ -640,9 +632,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 );
                 beta_cascade_no_independent_variable(mle.mle.to_vec(), &unbound, &bound, degree)
             }
-            ExpressionNode::Negated(expression_node) => expression_node
-                .evaluate_sumcheck_node_beta_cascade_sum(beta_values, round_index, degree, mle_vec)
-                .neg(),
             ExpressionNode::Sum(lhs, rhs) => {
                 let lhs_eval = lhs.evaluate_sumcheck_node_beta_cascade_sum(
                     beta_values,
@@ -1001,17 +990,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     random_coefficients,
                 )
             }
-            // Just invert
-            ExpressionNode::Negated(a) => {
-                let a = a.evaluate_sumcheck_node_beta_cascade(
-                    beta_vec,
-                    mle_vec,
-                    random_coefficients,
-                    round_index,
-                    degree,
-                );
-                a.neg()
-            }
             // when we have a sum, we can evaluate both parts of the expression
             // separately and just add the evaluations
             ExpressionNode::Sum(a, b) => {
@@ -1121,7 +1099,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 .reduce(max)
                 .unwrap_or(curr_index),
             ExpressionNode::Scaled(a, _) => a.index_mle_indices_node(curr_index, mle_vec),
-            ExpressionNode::Negated(a) => a.index_mle_indices_node(curr_index, mle_vec),
             ExpressionNode::Constant(_) => curr_index,
         }
     }
@@ -1198,10 +1175,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 }
                 // for scaled and negated, we can add all of the indices found in the expression being negated or scaled.
                 ExpressionNode::Scaled(a, _) => a
-                    .get_all_rounds(curr_indices, mle_vec)
-                    .into_iter()
-                    .collect(),
-                ExpressionNode::Negated(a) => a
                     .get_all_rounds(curr_indices, mle_vec)
                     .into_iter()
                     .collect(),
@@ -1288,10 +1261,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     sum_nonlinear_indices
                 }
                 ExpressionNode::Scaled(a, _) => a
-                    .get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec)
-                    .into_iter()
-                    .collect(),
-                ExpressionNode::Negated(a) => a
                     .get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec)
                     .into_iter()
                     .collect(),
@@ -1399,7 +1368,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     + curr_size
             }
             ExpressionNode::Scaled(a, _) => a.get_expression_size_node(curr_size, mle_vec),
-            ExpressionNode::Negated(a) => a.get_expression_size_node(curr_size, mle_vec),
             ExpressionNode::Constant(_) => curr_size,
         }
     }
@@ -1462,9 +1430,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             ExpressionNode::Scaled(a, _) => {
                 a.get_expression_num_free_variables_node(curr_size, mle_vec)
             }
-            ExpressionNode::Negated(a) => {
-                a.get_expression_num_free_variables_node(curr_size, mle_vec)
-            }
             ExpressionNode::Constant(_) => curr_size,
         }
     }
@@ -1506,10 +1471,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 let acc = multiplier * scale_factor;
                 products.extend(a.get_post_sumcheck_layer(acc, mle_vec).0);
             }
-            ExpressionNode::Negated(a) => {
-                let acc = multiplier.neg();
-                products.extend(a.get_post_sumcheck_layer(acc, mle_vec).0);
-            }
             ExpressionNode::Constant(constant) => {
                 products.push(Product::<F, F>::new(&[], *constant * multiplier));
             }
@@ -1533,7 +1494,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 // max degree is the number of MLEs in a product
                 mles.len()
             }
-            ExpressionNode::Scaled(a, _) | ExpressionNode::Negated(a) => a.get_max_degree(_mle_vec),
+            ExpressionNode::Scaled(a, _) => a.get_max_degree(_mle_vec),
             ExpressionNode::Constant(_) => 1,
         }
     }
@@ -1591,7 +1552,6 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, ProverExp
                 .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
             ExpressionNode::Mle(_mle) => f.debug_struct("Mle").field("mle", _mle).finish(),
-            ExpressionNode::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
             ExpressionNode::Product(a) => f.debug_tuple("Product").field(a).finish(),
             ExpressionNode::Scaled(poly, scalar) => {
