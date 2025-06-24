@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use itertools::Itertools;
 use remainder::{
-    binary_operations::{binary_adder::BinaryAdder, logical_shift::ShiftNode},
+    binary_operations::binary_adder::BinaryAdder,
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     layer::LayerId,
     layouter::{
@@ -36,11 +36,20 @@ fn build_circuit() -> (
 ) {
     let input_layer = InputLayerNode::new(None);
 
+    // Create a circuit for adding two `2^log_bit_width = 8`-bit binary unsigned integers.
+    let log_bit_width = 3;
+
+    // We're packing all inputs into a single `InputShred``. This is convenient for applying
+    // a binary-checker on all of them at once, before spliting them into individual pieces later
+    // using a `SplitNode`.
+    // Here's the intended structure of this input shred:
     // LHS: [a0, a1, ..., a7]
     // RHS: [b0, b1, ..., b7]
     // Carries: [c0, d1, ..., c7]
     // Results: [r0, r1, ..., r7]
-    let all_inputs = InputShred::new(5, &input_layer);
+    // Packing four MLEs like that requires two extra selector bits, hence the `2 + log_bit_width`
+    // variables on this input shred.
+    let all_inputs = InputShred::new(2 + log_bit_width, &input_layer);
     let input_node_id = all_inputs.id();
 
     // Check that all input bits are binary.
@@ -56,12 +65,12 @@ fn build_circuit() -> (
     });
     let binary_output = OutputNode::new_zero(&binary_sector);
 
-    // a = [a0, ..., a7],
-    // b = [b0, ..., b7],
-    // c = [c0, ..., c7],
-    // r = [r0, ..., r7],
     let splits = SplitNode::new(&all_inputs, 2);
 
+    // lhs = [a0, ..., a7],
+    // rhs = [b0, ..., b7],
+    // carries = [c0, ..., c7],
+    // results = [r0, ..., r7],
     let [lhs, rhs, carries, results] = splits.try_into().unwrap();
 
     let mut nodes: Vec<NodeEnum<Fr>> = vec![

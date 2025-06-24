@@ -32,8 +32,9 @@ impl ShiftNode {
     /// # Requires
     /// `input` is assumed to only contain binary digits (i.e. only values from the set
     /// `{F::ZERO, F::ONE}` for a field `F`).
-    pub fn new(num_vars: usize, shift_amount: i16, input: &impl CircuitNode) -> Self {
+    pub fn new(num_vars: usize, shift_amount: i32, input: &impl CircuitNode) -> Self {
         // Compute the bit reroutings that effectively shift the
+        // input MLE by the appropriate amount.
         let shift_wirings = generate_shift_wirings(num_vars, shift_amount);
         let output = IdentityGateNode::new(input, shift_wirings, num_vars, None);
 
@@ -46,12 +47,18 @@ impl ShiftNode {
     }
 }
 
-fn generate_shift_wirings(num_vars: usize, shift_amount: i16) -> Vec<(u32, u32)> {
-    // Work with at most `256` bit-lenghts.
-    assert!(num_vars <= 8);
+fn generate_shift_wirings(num_vars: usize, shift_amount: i32) -> Vec<(u32, u32)> {
+    // Ensure `shift_amount` can represent all possible shift amounts for a given value of
+    // `num_vars`.
+    // In general, if `shift_amount` is a signed `n`-bit integer, it can represent shift amounts
+    // in the integer range `[-2^(n-1), +2^(n-1) - 1]`. For a `2^num_vars`-bit shifter,
+    // ideally we'd like to support all bit shift values in the integer range `[-2^num_vars,
+    // +2^num_vars]`, therefore we have to work under the assumption that `num_vars < n-1`.
+    // Here `shift_amount` is of type `i32` (`n == 32`), so we need `num_vars <= 30`.
+    assert!(num_vars <= 30);
 
     // Cap the shift amount to be in the range `[-2^num_vars, 2^num_vars]`.
-    let shift_amount = max(min(shift_amount, 1 << num_vars), -(1 << num_vars) as i16);
+    let shift_amount = max(min(shift_amount, 1 << num_vars), -(1 << num_vars));
 
     if shift_amount >= 0 {
         let shift_amount = shift_amount as u32;
