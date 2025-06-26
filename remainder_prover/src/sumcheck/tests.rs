@@ -112,8 +112,7 @@ pub fn verify_sumcheck_messages<F: Field>(
         .iter()
         .map(|idx| claim_point[*idx])
         .collect_vec();
-    let beta_bound =
-        BetaValues::compute_beta_over_two_challenges(&nonlinear_claims, &challenges);
+    let beta_bound = BetaValues::compute_beta_over_two_challenges(&nonlinear_claims, &challenges);
     // MLE bound is evaluated with challenges interlaced with linear claims
     let claim_point = layer_claim.get_point();
     let expression_linear_indices = expression.get_all_linear_rounds();
@@ -529,14 +528,12 @@ fn test_dummy_sumcheck_concat_aggro() {
     let mle_1 = mle1.clone();
     let mle_2 = mle2.clone();
 
-    let mle_output_v2 = mle1.into_iter()
+    let mle_output_v2 = mle1
+        .into_iter()
         .zip(mle2.clone().into_iter().flat_map(|x| [x, x]))
         .map(|(first, second)| first * second);
     let mle_output_v2 = mle_output_v2.clone().into_iter().chain(mle_output_v2);
-    let mle_output = DenseMle::new_from_iter(
-        mle_output_v2,
-        LayerId::Input(0),
-    );
+    let mle_output = DenseMle::new_from_iter(mle_output_v2, LayerId::Input(0));
     let layer_claims = get_dummy_claim(mle_output, &mut rng, None);
 
     let expression = Expression::<Fr, ProverExpr>::products(vec![mle_1, mle_2]);
@@ -571,8 +568,7 @@ fn test_dummy_sumcheck_concat_aggro_aggro() {
     let layer_claims = get_dummy_expression_eval(&expression_aggro, &mut rng);
     let verifier_expr = expression_aggro.clone();
     let res_messages = dummy_sumcheck(&mut expression_aggro, &mut rng, layer_claims.clone());
-    let verifyres =
-        verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
+    let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
 
@@ -598,8 +594,7 @@ fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
     let layer_claims = get_dummy_expression_eval(&expression_aggro_aggro, &mut rng);
     let verifier_expr = expression_aggro_aggro.clone();
     let res_messages = dummy_sumcheck(&mut expression_aggro_aggro, &mut rng, layer_claims.clone());
-    let verifyres =
-        verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
+    let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
 
@@ -623,8 +618,7 @@ fn test_dummy_sumcheck_sum() {
     let layer_claims = get_dummy_expression_eval(&expression_aggro, &mut rng);
     let verifier_expr = expression_aggro.clone();
     let res_messages = dummy_sumcheck(&mut expression_aggro, &mut rng, layer_claims.clone());
-    let verifyres =
-        verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
+    let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
 
