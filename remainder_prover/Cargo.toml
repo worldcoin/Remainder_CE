@@ -75,3 +75,7 @@ harness = false
 [[bench]]
 name = "beta_cascade"
 harness = false
+
+[[bench]]
+name = "polynomials"
+harness = false
