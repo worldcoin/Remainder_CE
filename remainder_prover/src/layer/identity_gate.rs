@@ -157,8 +157,9 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             let degree = 2;
 
             // Read g_i(1), ..., g_i(d+1) from the prover, reserve space to compute g_i(0)
-            let mut g_cur_round: Vec<_> = [Ok(F::from(0))].into_iter().chain((0..degree)
-                .map(|_| transcript_reader.consume_element("Sumcheck message")))
+            let mut g_cur_round: Vec<_> = [Ok(F::from(0))]
+                .into_iter()
+                .chain((0..degree).map(|_| transcript_reader.consume_element("Sumcheck message")))
                 .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.

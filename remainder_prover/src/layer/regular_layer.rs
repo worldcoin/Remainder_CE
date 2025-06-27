@@ -601,8 +601,9 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             //   We should hide that under another function whose job is to take
             //   the trascript reader and read the polynomial in whatever
             //   representation is being used.
-            let mut g_cur_round: Vec<_> = [Ok(F::from(0))].into_iter().chain((0..degree)
-                .map(|_| transcript_reader.consume_element("Sumcheck message")))
+            let mut g_cur_round: Vec<_> = [Ok(F::from(0))]
+                .into_iter()
+                .chain((0..degree).map(|_| transcript_reader.consume_element("Sumcheck message")))
                 .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
@@ -616,7 +617,6 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
             let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
             g_cur_round[0] = g_prev_r_prev - g_i_one;
-
 
             g_prev_round = g_cur_round;
             prev_challenge = challenge;
