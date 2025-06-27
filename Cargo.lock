@@ -1578,6 +1578,7 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "base64",
+ "bincode",
  "chrono",
  "clap",
  "criterion",
