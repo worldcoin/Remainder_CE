@@ -87,7 +87,7 @@ pub(crate) fn evaluate_mle_product_no_beta_table<F: Field>(
             #[cfg(not(feature = "parallel"))]
             vec![F::ZERO; eval_count],
             |mut acc, index| {
-                //get the product of all evaluations over 0/1/..degree
+                // get the product of all evaluations over 0/1/..degree
                 let evals = mles
                     .iter()
                     .map(|mle| {
