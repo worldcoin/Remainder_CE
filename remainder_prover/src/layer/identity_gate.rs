@@ -156,20 +156,20 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             // \sum_{x} \beta(g_2, p_2) f_1(g_1, x) (V_{i + 1}(p_2, x))
             let degree = 2;
 
-            let g_cur_round = transcript_reader.consume_elements("Sumcheck message", degree + 1)?;
+            // Read g_i(1), ..., g_i(d+1) from the prover, reserve space to compute g_i(0)
+            let mut g_cur_round: Vec<_> = [Ok(F::from(0))]
+                .into_iter()
+                .chain((0..degree).map(|_| transcript_reader.consume_element("Sumcheck message")))
+                .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
 
-            // Verify that: `g_i(0) + g_i(1) == g_{i - 1}(r_{i-1})`
-            let g_i_zero = evaluate_at_a_point(&g_cur_round, F::ZERO).unwrap();
-            let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
+            // Compute:
+            //       `g_i(0) = g_{i - 1}(r_{i-1}) - g_i(1)`
             let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
-
-            if g_i_zero + g_i_one != g_prev_r_prev {
-                dbg!(_round);
-                return Err(anyhow!(VerificationError::SumcheckFailed));
-            }
+            let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
+            g_cur_round[0] = g_prev_r_prev - g_i_one;
 
             g_prev_round = g_cur_round;
             prev_challenge = challenge;
@@ -494,7 +494,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             let sumcheck_message = self
                 .compute_round_sumcheck_message(*round_idx, &random_coefficients)
                 .unwrap();
-            transcript_writer.append_elements("Round sumcheck message", &sumcheck_message);
+            // Since the verifier can deduce g_i(0) by computing claim - g_i(1), the prover does not send g_i(0)
+            transcript_writer.append_elements("Sumcheck message", &sumcheck_message[1..]);
             let challenge = transcript_writer.get_challenge("Sumcheck challenge");
             self.bind_round_variable(*round_idx, challenge).unwrap();
         });
