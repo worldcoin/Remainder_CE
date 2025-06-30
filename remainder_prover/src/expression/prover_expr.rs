@@ -246,7 +246,6 @@ impl<F: Field> Expression<F, ProverExpr> {
             match exp {
                 ExpressionNode::Mle(mle_vec_idx) => {
                     let mle = mle_vec_idx.get_mle(mle_vec);
-
                     let indices = mle
                         .mle_indices()
                         .iter()

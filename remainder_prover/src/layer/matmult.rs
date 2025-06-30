@@ -201,7 +201,9 @@ impl<F: Field> Layer<F> for MatMult<F> {
             // Compute the round's sumcheck message.
             let message = self.compute_round_sumcheck_message(round, &[F::ONE])?;
             // Add to transcript.
-            transcript_writer.append_elements("Sumcheck round univariate evaluations", &message);
+            // Since the verifier can deduce g_i(0) by computing claim - g_i(1), the prover does not send g_i(0)
+            transcript_writer
+                .append_elements("Sumcheck round univariate evaluations", &message[1..]);
             // Sample the challenge to bind the round's MatMult expression to.
             let challenge = transcript_writer.get_challenge("Sumcheck round challenge");
             // Bind the Matrix MLEs to this variable.
@@ -409,21 +411,22 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         for _round in 0..num_rounds {
             let degree = 2;
 
-            let g_cur_round = transcript_reader
-                .consume_elements("Sumcheck round univariate evaluations", degree + 1)?;
+            // Read g_i(1), ..., g_i(d+1) from the prover, reserve space to compute g_i(0)
+            let mut g_cur_round: Vec<_> = [Ok(F::from(0))]
+                .into_iter()
+                .chain((0..degree).map(|_| {
+                    transcript_reader.consume_element("Sumcheck round univariate evaluations")
+                }))
+                .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck round challenge")?;
 
-            // Verify that:
-            //       `g_i(0) + g_i(1) == g_{i - 1}(r_{i-1})`
-            let g_i_zero = evaluate_at_a_point(&g_cur_round, F::ZERO).unwrap();
-            let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
+            // Compute:
+            //       `g_i(0) = g_{i - 1}(r_{i-1}) - g_i(1)`
             let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
-
-            if g_i_zero + g_i_one != g_prev_r_prev {
-                return Err(anyhow!(VerificationError::SumcheckFailed));
-            }
+            let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
+            g_cur_round[0] = g_prev_r_prev - g_i_one;
 
             g_prev_round = g_cur_round;
             prev_challenge = challenge;
