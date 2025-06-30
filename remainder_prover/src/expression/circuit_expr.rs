@@ -8,17 +8,14 @@ use crate::{
         product::{PostSumcheckLayer, Product},
     },
     layouter::layouting::CircuitMap,
-    mle::{
-        evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle,
-        MleIndex,
-    },
+    mle::{evals::MultilinearExtension, mle_description::MleDescription, MleIndex},
 };
 use ark_std::log2;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::max,
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
 };
@@ -128,34 +125,30 @@ impl<F: Field> Expression<F, ExprDescription> {
     /// Returns the maximum degree of b_{curr_round} within an expression
     /// (and therefore the number of prover messages we need to send)
     pub fn get_round_degree(&self, curr_round: usize) -> usize {
-        // By default, all rounds have degree at least 2 (beta table included)
-        let mut round_degree = 1;
-
         let mut get_degree_closure = |expr: &ExpressionNode<F, ExprDescription>,
                                       _mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec|
-         -> Result<()> {
-            let round_degree = &mut round_degree;
-
-            // The only exception is within a product of MLEs
-            if let ExpressionNode::Product(circuit_mles) = expr {
-                let mut product_round_degree: usize = 0;
-                for circuit_mle in circuit_mles {
+         -> Result<usize> {
+            Ok(match expr {
+                // If encountering an MLE, determing if b_{curr_round} is a variable
+                ExpressionNode::Mle(circuit_mle) => {
                     let mle_indices = circuit_mle.var_indices();
-                    for mle_index in mle_indices {
-                        if *mle_index == MleIndex::Indexed(curr_round) {
-                            product_round_degree += 1;
-                            break;
-                        }
+                    if mle_indices.contains(&MleIndex::Indexed(curr_round)) {
+                        1
+                    } else {
+                        0
                     }
                 }
-                if *round_degree < product_round_degree {
-                    *round_degree = product_round_degree;
-                }
-            }
-            Ok(())
+                ExpressionNode::Constant(_) => 0,
+                _ => unreachable!(),
+            })
         };
 
-        self.traverse(&mut get_degree_closure).unwrap();
+        // By default, all rounds have degree at least 2 (beta table included)
+        let round_degree = max(
+            1,
+            self.reduce(&mut get_degree_closure, &usize::add, &max)
+                .unwrap(),
+        );
         // add 1 cuz beta table but idk if we would ever use this without a beta table
         round_degree + 1
     }
@@ -186,14 +179,10 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 Box::new(lhs.into_verifier_node(point, transcript_reader)?),
                 Box::new(rhs.into_verifier_node(point, transcript_reader)?),
             )),
-            ExpressionNode::Product(circuit_mles) => {
-                let verifier_mles: Vec<VerifierMle<F>> = circuit_mles
-                    .iter()
-                    .map(|circuit_mle| circuit_mle.into_verifier_mle(point, transcript_reader))
-                    .collect::<Result<Vec<VerifierMle<F>>>>()?;
-
-                Ok(ExpressionNode::Product(verifier_mles))
-            }
+            ExpressionNode::Product(lhs, rhs) => Ok(ExpressionNode::Product(
+                Box::new(lhs.into_verifier_node(point, transcript_reader)?),
+                Box::new(rhs.into_verifier_node(point, transcript_reader)?),
+            )),
             ExpressionNode::Scaled(circuit_mle, scalar) => Ok(ExpressionNode::Scaled(
                 Box::new(circuit_mle.into_verifier_node(point, transcript_reader)?),
                 *scalar,
@@ -217,18 +206,14 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                     return None;
                 }
             }
-            ExpressionNode::Product(circuit_mles) => {
-                let mle_bookkeeping_tables = circuit_mles
-                    .iter()
-                    .map(|circuit_mle| {
-                        circuit_map
-                            .get_data_from_circuit_mle(circuit_mle) // Returns Result
-                            .map(|data| data.to_vec()) // Map Ok value to slice
-                    })
-                    .collect::<Result<Vec<Vec<F>>>>() // Collect all into a Result
-                    .ok()?;
+            ExpressionNode::Product(a, b) => {
+                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map)?;
+                let b_bookkeeping_table = b.compute_bookkeeping_table(circuit_map)?;
                 Some(evaluate_bookkeeping_tables_given_operation(
-                    &mle_bookkeeping_tables,
+                    &[
+                        (a_bookkeeping_table.to_vec()),
+                        (b_bookkeeping_table.to_vec()),
+                    ],
                     BinaryOperation::Mul,
                 ))
             }
@@ -281,7 +266,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
         selector_column: &mut impl FnMut(&MleIndex<F>, T, T) -> T,
         mle_eval: &mut impl FnMut(&<ExprDescription as ExpressionType<F>>::MLENodeRepr) -> T,
         sum: &mut impl FnMut(T, T) -> T,
-        product: &mut impl FnMut(&[<ExprDescription as ExpressionType<F>>::MLENodeRepr]) -> T,
+        product: &mut impl FnMut(T, T) -> T,
         scaled: &mut impl FnMut(T, F) -> T,
     ) -> T {
         match self {
@@ -297,7 +282,11 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 let b = b.reduce(constant, selector_column, mle_eval, sum, product, scaled);
                 sum(a, b)
             }
-            ExpressionNode::Product(queries) => product(queries),
+            ExpressionNode::Product(a, b) => {
+                let a = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
+                let b = b.reduce(constant, selector_column, mle_eval, sum, product, scaled);
+                product(a, b)
+            }
             ExpressionNode::Scaled(a, f) => {
                 let a = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
                 scaled(a, *f)
@@ -314,66 +303,51 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     ) -> Vec<usize> {
         let nonlinear_indices_in_node = {
             match self {
-                // The only case where an index is nonlinear is if it is present in multiple mle
-                // refs that are part of a product. We iterate through all the indices in the
-                // product nodes to look for repeated indices within a single node.
-                ExpressionNode::Product(verifier_mles) => {
+                ExpressionNode::Product(a, b) => {
                     let mut product_nonlinear_indices: HashSet<usize> = HashSet::new();
-                    let mut product_indices_counts: HashMap<MleIndex<F>, usize> = HashMap::new();
-
-                    verifier_mles.iter().for_each(|verifier_mle| {
-                        verifier_mle.var_indices().iter().for_each(|mle_index| {
-                            let curr_count = {
-                                if product_indices_counts.contains_key(mle_index) {
-                                    product_indices_counts.get(mle_index).unwrap()
-                                } else {
-                                    &0
-                                }
-                            };
-                            product_indices_counts.insert(mle_index.clone(), curr_count + 1);
-                        })
+                    // Every non-linear indices in a and b
+                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
+                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
+                    a_indices.into_iter().for_each(|a_mle_idx| {
+                        product_nonlinear_indices.insert(a_mle_idx);
+                    });
+                    b_indices.into_iter().for_each(|b_mle_idx| {
+                        product_nonlinear_indices.insert(b_mle_idx);
                     });
 
-                    product_indices_counts
-                        .into_iter()
-                        .for_each(|(mle_index, count)| {
-                            if count > 1 {
-                                if let MleIndex::Indexed(i) = mle_index {
-                                    product_nonlinear_indices.insert(i);
-                                } else if let MleIndex::Bound(_, i) = mle_index {
-                                    product_nonlinear_indices.insert(i);
-                                }
-                            }
-                        });
+                    // Every indices that appear in both a and b
+                    let a_indices = a.get_all_rounds(curr_nonlinear_indices, _mle_vec);
+                    let b_indices = b.get_all_rounds(curr_nonlinear_indices, _mle_vec);
+                    a_indices.into_iter().for_each(|a_mle_idx| {
+                        if b_indices.contains(&a_mle_idx) {
+                            product_nonlinear_indices.insert(a_mle_idx);
+                        }
+                    });
 
                     product_nonlinear_indices
                 }
-                // for the rest of the types of expressions, we simply traverse through the expression node to look
-                // for more leaves which are specifically product nodes.
                 ExpressionNode::Selector(_sel_index, a, b) => {
                     let mut sel_nonlinear_indices: HashSet<usize> = HashSet::new();
                     let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
                     let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
-                    a_indices
-                        .into_iter()
-                        .zip(b_indices)
-                        .for_each(|(a_mle_idx, b_mle_idx)| {
-                            sel_nonlinear_indices.insert(a_mle_idx);
-                            sel_nonlinear_indices.insert(b_mle_idx);
-                        });
+                    a_indices.into_iter().for_each(|a_mle_idx| {
+                        sel_nonlinear_indices.insert(a_mle_idx);
+                    });
+                    b_indices.into_iter().for_each(|b_mle_idx| {
+                        sel_nonlinear_indices.insert(b_mle_idx);
+                    });
                     sel_nonlinear_indices
                 }
                 ExpressionNode::Sum(a, b) => {
                     let mut sum_nonlinear_indices: HashSet<usize> = HashSet::new();
                     let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
                     let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
-                    a_indices
-                        .into_iter()
-                        .zip(b_indices)
-                        .for_each(|(a_mle_idx, b_mle_idx)| {
-                            sum_nonlinear_indices.insert(a_mle_idx);
-                            sum_nonlinear_indices.insert(b_mle_idx);
-                        });
+                    a_indices.into_iter().for_each(|a_mle_idx| {
+                        sum_nonlinear_indices.insert(a_mle_idx);
+                    });
+                    b_indices.into_iter().for_each(|b_mle_idx| {
+                        sum_nonlinear_indices.insert(b_mle_idx);
+                    });
                     sum_nonlinear_indices
                 }
                 ExpressionNode::Scaled(a, _) => a
@@ -401,16 +375,16 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     ) -> Vec<usize> {
         let indices_in_node = {
             match self {
-                // In a product, we need the union of all the labels of the variables in each
-                // of the MLEs.
-                ExpressionNode::Product(verifier_mles) => {
+                // In a product, we need the union of each part of the product.
+                ExpressionNode::Product(a, b) => {
                     let mut product_indices: HashSet<usize> = HashSet::new();
-                    verifier_mles.iter().for_each(|mle| {
-                        mle.var_indices().iter().for_each(|mle_index| {
-                            if let MleIndex::Indexed(i) = mle_index {
-                                product_indices.insert(*i);
-                            }
-                        })
+                    let a_indices = a.get_all_rounds(curr_indices, _mle_vec);
+                    let b_indices = b.get_all_rounds(curr_indices, _mle_vec);
+                    a_indices.into_iter().for_each(|a_mle_idx| {
+                        product_indices.insert(a_mle_idx);
+                    });
+                    b_indices.into_iter().for_each(|b_mle_idx| {
+                        product_indices.insert(b_mle_idx);
                     });
                     product_indices
                 }
@@ -433,13 +407,12 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
 
                     let a_indices = a.get_all_rounds(curr_indices, _mle_vec);
                     let b_indices = b.get_all_rounds(curr_indices, _mle_vec);
-                    a_indices
-                        .into_iter()
-                        .zip(b_indices)
-                        .for_each(|(a_mle_idx, b_mle_idx)| {
-                            sel_indices.insert(a_mle_idx);
-                            sel_indices.insert(b_mle_idx);
-                        });
+                    a_indices.into_iter().for_each(|a_mle_idx| {
+                        sel_indices.insert(a_mle_idx);
+                    });
+                    b_indices.into_iter().for_each(|b_mle_idx| {
+                        sel_indices.insert(b_mle_idx);
+                    });
                     sel_indices
                 }
                 // We add the variable labels in each of the parts of the sum.
@@ -447,13 +420,12 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                     let mut sum_indices: HashSet<usize> = HashSet::new();
                     let a_indices = a.get_all_rounds(curr_indices, _mle_vec);
                     let b_indices = b.get_all_rounds(curr_indices, _mle_vec);
-                    a_indices
-                        .into_iter()
-                        .zip(b_indices)
-                        .for_each(|(a_mle_idx, b_mle_idx)| {
-                            sum_indices.insert(a_mle_idx);
-                            sum_indices.insert(b_mle_idx);
-                        });
+                    a_indices.into_iter().for_each(|a_mle_idx| {
+                        sum_indices.insert(a_mle_idx);
+                    });
+                    b_indices.into_iter().for_each(|b_mle_idx| {
+                        sum_indices.insert(b_mle_idx);
+                    });
                     sum_indices
                 }
                 // For scaled, we can add all of variable labels found in the expression being scaled.
@@ -490,7 +462,10 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             ExpressionNode::Mle(mle) => {
                 circuit_mles.push(mle);
             }
-            ExpressionNode::Product(mles) => mles.iter().for_each(|mle| circuit_mles.push(mle)),
+            ExpressionNode::Product(a, b) => {
+                circuit_mles.extend(a.get_circuit_mles());
+                circuit_mles.extend(b.get_circuit_mles());
+            }
             ExpressionNode::Scaled(a, _scale_factor) => {
                 circuit_mles.extend(a.get_circuit_mles());
             }
@@ -518,9 +493,9 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             ExpressionNode::Mle(mle) => {
                 mle.index_mle_indices(start_index);
             }
-            ExpressionNode::Product(mles) => {
-                mles.iter_mut()
-                    .for_each(|mle| mle.index_mle_indices(start_index));
+            ExpressionNode::Product(a, b) => {
+                a.index_mle_vars(start_index);
+                b.index_mle_vars(start_index);
             }
             ExpressionNode::Scaled(a, _scale_factor) => {
                 a.index_mle_vars(start_index);
@@ -542,12 +517,8 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 let prover_mle = mle.into_dense_mle(circuit_map);
                 prover_mle.expression()
             }
-            ExpressionNode::Product(mles) => {
-                let dense_mles = mles
-                    .iter()
-                    .map(|mle| mle.into_dense_mle(circuit_map))
-                    .collect_vec();
-                Expression::<F, ProverExpr>::products(dense_mles)
+            ExpressionNode::Product(a, b) => {
+                a.into_prover_expression(circuit_map) * b.into_prover_expression(circuit_map)
             }
             ExpressionNode::Scaled(a, scale_factor) => {
                 a.into_prover_expression(circuit_map) * *scale_factor
@@ -634,9 +605,11 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 // 1 for the current MLE
                 1
             }
-            ExpressionNode::Product(mles) => {
-                // max degree is the number of MLEs in a product
-                mles.len()
+            ExpressionNode::Product(a, b) => {
+                // max degree is the sum of degrees of the two children
+                let a_degree = a.get_max_degree(_mle_vec);
+                let b_degree = b.get_max_degree(_mle_vec);
+                a_degree + b_degree
             }
             ExpressionNode::Scaled(a, _) => a.get_max_degree(_mle_vec),
             ExpressionNode::Constant(_) => 1,
@@ -657,9 +630,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             }
             ExpressionNode::Mle(circuit_mle_desc) => circuit_mle_desc.num_free_vars(),
             ExpressionNode::Sum(lhs, rhs) => max(lhs.get_num_vars(), rhs.get_num_vars()),
-            ExpressionNode::Product(nodes) => nodes.iter().fold(0, |cur_max, circuit_mle_desc| {
-                max(cur_max, circuit_mle_desc.num_free_vars())
-            }),
+            ExpressionNode::Product(lhs, rhs) => max(lhs.get_num_vars(), rhs.get_num_vars()),
             ExpressionNode::Scaled(expr, _) => expr.get_num_vars(),
         }
     }
@@ -675,13 +646,14 @@ impl<F: Field> Expression<F, ExprDescription> {
         self.expression_node.get_num_vars()
     }
 
-    /// Creates an `Expression<F, ExprDescription>` which describes the polynomial relationship
-    ///
-    /// `circuit_mle_descs[0](x_1, ..., x_{n_0}) * circuit_mle_descs[1](x_1, ..., x_{n_1}) * ...`
-    pub fn products(circuit_mle_descs: Vec<MleDescription<F>>) -> Self {
-        let product_node = ExpressionNode::Product(circuit_mle_descs);
+    /// `lhs` * `rhs`, as an "`Expression`"
+    pub fn products(lhs: Self, rhs: Self) -> Self {
+        let (lhs_node, _) = lhs.deconstruct();
+        let (rhs_node, _) = rhs.deconstruct();
 
-        Expression::new(product_node, ())
+        let sum_node = ExpressionNode::Product(Box::new(lhs_node), Box::new(rhs_node));
+
+        Expression::new(sum_node, ())
     }
 
     /// Creates an [Expression<F, ExprDescription>] which describes the polynomial relationship
@@ -774,14 +746,14 @@ impl<F: Field> Expression<F, ExprDescription> {
         expressions[0].clone()
     }
 
-    /// Literally just `constant` as a term, but as an "`Expression`"
+    /// `constant` as a term, but as an "`Expression`"
     pub fn constant(constant: F) -> Self {
         let mle_node = ExpressionNode::Constant(constant);
 
         Expression::new(mle_node, ())
     }
 
-    /// Literally just `-expression`, as an "`Expression`"
+    /// `-expression`, as an "`Expression`"
     pub fn negated(expression: Self) -> Self {
         let (node, _) = expression.deconstruct();
 
@@ -790,7 +762,7 @@ impl<F: Field> Expression<F, ExprDescription> {
         Expression::new(mle_node, ())
     }
 
-    /// Literally just `lhs` + `rhs`, as an "`Expression`"
+    /// `lhs` + `rhs`, as an "`Expression`"
     pub fn sum(lhs: Self, rhs: Self) -> Self {
         let (lhs_node, _) = lhs.deconstruct();
         let (rhs_node, _) = rhs.deconstruct();
@@ -896,6 +868,13 @@ impl<F: Field> Mul<F> for Expression<F, ExprDescription> {
     }
 }
 
+impl<F: Field> Mul for Expression<F, ExprDescription> {
+    type Output = Expression<F, ExprDescription>;
+    fn mul(self, rhs: Expression<F, ExprDescription>) -> Expression<F, ExprDescription> {
+        Expression::<F, ExprDescription>::products(self, rhs)
+    }
+}
+
 impl<F: std::fmt::Debug + Field> std::fmt::Debug for Expression<F, ExprDescription> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Circuit Expression")
@@ -917,7 +896,7 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, ExprDescr
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
             ExpressionNode::Mle(mle) => f.debug_struct("Circuit Mle").field("mle", mle).finish(),
             ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
-            ExpressionNode::Product(a) => f.debug_tuple("Product").field(a).finish(),
+            ExpressionNode::Product(a, b) => f.debug_tuple("Product").field(a).field(b).finish(),
             ExpressionNode::Scaled(poly, scalar) => {
                 f.debug_tuple("Scaled").field(poly).field(scalar).finish()
             }
