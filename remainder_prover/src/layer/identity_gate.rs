@@ -156,10 +156,11 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             // \sum_{x} \beta(g_2, p_2) f_1(g_1, x) (V_{i + 1}(p_2, x))
             let degree = 2;
 
-            let g_cur_round = transcript_reader.consume_elements("Sumcheck message", degree + 1)?;
+            let g_cur_round = transcript_reader
+                .consume_elements("Sumcheck round univariate evaluations", degree + 1)?;
 
             // Sample random challenge `r_i`.
-            let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
+            let challenge = transcript_reader.get_challenge("Sumcheck round challenge")?;
 
             // Verify that: `g_i(0) + g_i(1) == g_{i - 1}(r_{i-1})`
             let g_i_zero = evaluate_at_a_point(&g_cur_round, F::ZERO).unwrap();
@@ -494,8 +495,9 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             let sumcheck_message = self
                 .compute_round_sumcheck_message(*round_idx, &random_coefficients)
                 .unwrap();
-            transcript_writer.append_elements("Round sumcheck message", &sumcheck_message);
-            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            transcript_writer
+                .append_elements("Sumcheck round univariate evaluations", &sumcheck_message);
+            let challenge = transcript_writer.get_challenge("Sumcheck round challenge");
             self.bind_round_variable(*round_idx, challenge).unwrap();
         });
         self.append_leaf_mles_to_transcript(transcript_writer);
@@ -821,7 +823,7 @@ impl<F: Field> IdentityGate<F> {
 
     fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
         assert_eq!(self.source_mle.len(), 1);
-        transcript_writer.append("Fully bound source MLE", self.source_mle.first());
+        transcript_writer.append("Fully bound MLE evaluation", self.source_mle.first());
     }
 
     /// Initialize the bookkeeping table necessary for phase 1, which is the

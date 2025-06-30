@@ -133,8 +133,9 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             let sumcheck_message = self
                 .compute_round_sumcheck_message(*round_idx, &random_coefficients)
                 .unwrap();
-            transcript_writer.append_elements("Round sumcheck message", &sumcheck_message);
-            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            transcript_writer
+                .append_elements("Sumcheck round univariate evaluations", &sumcheck_message);
+            let challenge = transcript_writer.get_challenge("Sumcheck round challenge");
             self.bind_round_variable(*round_idx, challenge).unwrap();
         });
 
@@ -202,9 +203,9 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         // First, send the claimed value of V_{i + 1}(g_2, u)
         let lhs_reduced = &self.phase_1_mles.as_ref().unwrap()[0][1];
         let rhs_reduced = &self.phase_2_mles.as_ref().unwrap()[0][1];
-        transcript_writer.append("Evaluation of V_{i + 1}(g_2, u)", lhs_reduced.value());
+        transcript_writer.append("Fully bound MLE evaluation", lhs_reduced.value());
         // Next, send the claimed value of V_{i + 1}(g_2, v)
-        transcript_writer.append("Evaluation of V_{i + 1}(g_2, v)", rhs_reduced.value());
+        transcript_writer.append("Fully bound MLE evaluation", rhs_reduced.value());
 
         Ok(())
     }
@@ -700,8 +701,10 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             (BinaryOperation::Add, _) => DATAPARALLEL_ROUND_ADD_NUM_EVALS,
             (BinaryOperation::Mul, _) => DATAPARALLEL_ROUND_MUL_NUM_EVALS,
         };
-        let first_round_sumcheck_messages = transcript_reader
-            .consume_elements("Initial Sumcheck evaluations", first_round_num_evals)?;
+        let first_round_sumcheck_messages = transcript_reader.consume_elements(
+            "Sumcheck round univariate evaluations",
+            first_round_num_evals,
+        )?;
         sumcheck_messages.push(first_round_sumcheck_messages.clone());
 
         match global_claim_agg_strategy() {
@@ -735,7 +738,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         for sumcheck_round_idx in 1..self.num_dataparallel_vars + num_u + num_v {
             // Read challenge r_{i - 1} from transcript
             let challenge = transcript_reader
-                .get_challenge("Sumcheck challenge")
+                .get_challenge("Sumcheck round challenge")
                 .unwrap();
             let g_i_minus_1_evals = sumcheck_messages[sumcheck_messages.len() - 1].clone();
 
@@ -754,7 +757,10 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             };
 
             let curr_evals = transcript_reader
-                .consume_elements("Sumcheck evaluations", univariate_num_evals)
+                .consume_elements(
+                    "Sumcheck round univariate evaluations",
+                    univariate_num_evals,
+                )
                 .unwrap();
 
             // Check: g_i(0) + g_i(1) =? g_{i - 1}(r_{i - 1})
@@ -771,7 +777,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
         // Final round of sumcheck -- sample r_n from transcript.
         let final_chal = transcript_reader
-            .get_challenge("Final Sumcheck challenge")
+            .get_challenge("Sumcheck round challenge")
             .unwrap();
         challenges.push(final_chal);
 

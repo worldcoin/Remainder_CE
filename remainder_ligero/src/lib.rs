@@ -1001,7 +1001,7 @@ where
     let n_col_opens = enc.get_n_col_opens();
     let _columns: Vec<LcColumn<E, F>> = {
         let cols_to_open: Vec<usize> = tr
-            .get_challenges("Columns", n_col_opens)
+            .get_challenges("Column openings", n_col_opens)
             .into_iter()
             .map(|challenge| {
                 compute_col_idx_from_transcript_challenge(challenge, comm.encoded_num_cols)
