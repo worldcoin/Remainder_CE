@@ -103,14 +103,14 @@ impl<F: Field> RegularLayer<F> {
                 ExpressionNode::Mle(mle_vec_index) => {
                     let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
                     let val = mle.mle.value();
-                    transcript_writer.append("Leaf MLE value", val);
+                    transcript_writer.append("Fully bound MLE evaluation", val);
                     Ok(())
                 }
                 ExpressionNode::Product(mle_vec_indices) => {
                     for mle_vec_index in mle_vec_indices {
                         let mle = &mle_vec[mle_vec_index.index()];
                         let eval = mle.mle.value();
-                        transcript_writer.append("Product MLE value", eval);
+                        transcript_writer.append("Fully bound MLE evaluation", eval);
                     }
                     Ok(())
                 }
@@ -174,9 +174,12 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                 "failed at round {round_index}, layer {layer_id}",
             );
             // Append the evaluations to the transcript.
-            transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
+            transcript_writer.append_elements(
+                "Sumcheck round univariate evaluations",
+                &prover_sumcheck_message,
+            );
             // Sample the challenge
-            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            let challenge = transcript_writer.get_challenge("Sumcheck round challenge");
             // "Bind" the challenge to the expression at this point.
             self.bind_round_variable(round_index, challenge)?;
             // For debug mode, update the previous message and challenge for the purpose
@@ -596,10 +599,11 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             //   We should hide that under another function whose job is to take
             //   the trascript reader and read the polynomial in whatever
             //   representation is being used.
-            let g_cur_round = transcript_reader.consume_elements("Sumcheck message", degree + 1)?;
+            let g_cur_round = transcript_reader
+                .consume_elements("Sumcheck round univariate evaluations", degree + 1)?;
 
             // Sample random challenge `r_i`.
-            let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
+            let challenge = transcript_reader.get_challenge("Sumcheck round challenge")?;
 
             // TODO(Makis): After refactoring `SumcheckEvals` to be a
             // representation of a univariate polynomial, `evaluate_at_a_point`
