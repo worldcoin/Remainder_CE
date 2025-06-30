@@ -34,7 +34,7 @@ pub trait ExpressionType<F: Field>: Serialize + for<'de> Deserialize<'de> {
 /// [ExpressionNode] can be made up of the following:
 /// * [ExpressionNode::Constant], i.e. + c for c \in \mathbb{F}
 /// * [ExpressionNode::Mle], i.e. \widetilde{V}_{j > i}(b_1, ..., b_{m \leq n})
-/// * [ExpressionNode::Product], i.e. \prod_j \widetilde{V}_{j > i}(b_1, ..., b_{m \leq n})
+/// * [ExpressionNode::Product], i.e. \widetilde{V}_{j_1 > i}(b_1, ..., b_{m_1 \leq n}) * \widetilde{V}_{j_2 > i}(b_1, ..., b_{m_2 \leq n})
 /// * [ExpressionNode::Selector], i.e. (1 - b_0) * Expr(b_1, ..., b_{m \leq n}) + b_0 * Expr(b_1, ..., b_{m \leq n})
 /// * [ExpressionNode::Sum], i.e. \widetilde{V}_{j_1 > i}(b_1, ..., b_{m_1 \leq n}) + \widetilde{V}_{j_2 > i}(b_1, ..., b_{m_2 \leq n})
 /// * [ExpressionNode::Scaled], i.e. c * Expr(b_1, ..., b_{m \leq n}) for c \in mathbb{F}
@@ -55,9 +55,8 @@ pub enum ExpressionNode<F: Field, E: ExpressionType<F>> {
     Mle(E::MLENodeRepr),
     /// See documentation for [ExpressionNode].
     Sum(Box<ExpressionNode<F, E>>, Box<ExpressionNode<F, E>>),
-    /// The product of several multilinear extension functions. This is also
-    /// an expression tree's leaf.
-    Product(Vec<E::MLENodeRepr>),
+    /// See documentation for [ExpressionNode].
+    Product(Box<ExpressionNode<F, E>>, Box<ExpressionNode<F, E>>),
     /// See documentation for [ExpressionNode].
     Scaled(Box<ExpressionNode<F, E>>, F),
 }
@@ -122,6 +121,18 @@ impl<F: Field, E: ExpressionType<F>> Expression<F, E> {
         self.expression_node
             .traverse_node_mut(observer_fn, &mut self.mle_vec)
     }
+
+    /// reduce the expression tree by recursively map each node to a value and reduce
+    /// the tree according to addition and multiplication folding rule
+    pub fn reduce<T>(
+        &self,
+        map_fn: &impl Fn(&ExpressionNode<F, E>, &E::MleVec) -> Result<T>,
+        fold_fn_sum: &impl Fn(T, T) -> T,
+        fold_fn_prod: &impl Fn(T, T) -> T,
+    ) -> Result<T> {
+        self.expression_node
+            .reduce_node(map_fn, fold_fn_sum, fold_fn_prod, &self.mle_vec)
+    }
 }
 
 /// Generic helper methods shared across all types of [ExpressionNode]s.
@@ -134,15 +145,17 @@ impl<F: Field, E: ExpressionType<F>> ExpressionNode<F, E> {
     ) -> Result<()> {
         observer_fn(self, mle_vec)?;
         match self {
-            ExpressionNode::Constant(_) | ExpressionNode::Mle(_) | ExpressionNode::Product(_) => {
-                Ok(())
-            }
+            ExpressionNode::Constant(_) | ExpressionNode::Mle(_) => Ok(()),
             ExpressionNode::Scaled(exp, _) => exp.traverse_node(observer_fn, mle_vec),
             ExpressionNode::Selector(_, lhs, rhs) => {
                 lhs.traverse_node(observer_fn, mle_vec)?;
                 rhs.traverse_node(observer_fn, mle_vec)
             }
             ExpressionNode::Sum(lhs, rhs) => {
+                lhs.traverse_node(observer_fn, mle_vec)?;
+                rhs.traverse_node(observer_fn, mle_vec)
+            }
+            ExpressionNode::Product(lhs, rhs) => {
                 lhs.traverse_node(observer_fn, mle_vec)?;
                 rhs.traverse_node(observer_fn, mle_vec)
             }
@@ -157,9 +170,7 @@ impl<F: Field, E: ExpressionType<F>> ExpressionNode<F, E> {
     ) -> Result<()> {
         observer_fn(self, mle_vec)?;
         match self {
-            ExpressionNode::Constant(_) | ExpressionNode::Mle(_) | ExpressionNode::Product(_) => {
-                Ok(())
-            }
+            ExpressionNode::Constant(_) | ExpressionNode::Mle(_) => Ok(()),
             ExpressionNode::Scaled(exp, _) => exp.traverse_node_mut(observer_fn, mle_vec),
             ExpressionNode::Selector(_, lhs, rhs) => {
                 lhs.traverse_node_mut(observer_fn, mle_vec)?;
@@ -168,6 +179,41 @@ impl<F: Field, E: ExpressionType<F>> ExpressionNode<F, E> {
             ExpressionNode::Sum(lhs, rhs) => {
                 lhs.traverse_node_mut(observer_fn, mle_vec)?;
                 rhs.traverse_node_mut(observer_fn, mle_vec)
+            }
+            ExpressionNode::Product(lhs, rhs) => {
+                lhs.traverse_node_mut(observer_fn, mle_vec)?;
+                rhs.traverse_node_mut(observer_fn, mle_vec)
+            }
+        }
+    }
+
+    /// map each node to a value and reduce the entire tree down to a single value
+    pub fn reduce_node<T>(
+        &self,
+        map_fn: &impl Fn(&ExpressionNode<F, E>, &E::MleVec) -> Result<T>,
+        fold_fn_sum: &impl Fn(T, T) -> T,
+        fold_fn_prod: &impl Fn(T, T) -> T,
+        mle_vec: &E::MleVec,
+    ) -> Result<T> {
+        match self {
+            ExpressionNode::Constant(_) | ExpressionNode::Mle(_) => map_fn(self, mle_vec),
+            ExpressionNode::Scaled(exp, _) => {
+                exp.reduce_node(map_fn, fold_fn_sum, fold_fn_prod, mle_vec)
+            }
+            ExpressionNode::Selector(_, lhs, rhs) => {
+                let lhs_t = lhs.reduce_node(map_fn, fold_fn_sum, fold_fn_prod, mle_vec)?;
+                let rhs_t = rhs.reduce_node(map_fn, fold_fn_sum, fold_fn_prod, mle_vec)?;
+                Ok(fold_fn_sum(lhs_t, rhs_t))
+            }
+            ExpressionNode::Sum(lhs, rhs) => {
+                let lhs_t = lhs.reduce_node(map_fn, fold_fn_sum, fold_fn_prod, mle_vec)?;
+                let rhs_t = rhs.reduce_node(map_fn, fold_fn_sum, fold_fn_prod, mle_vec)?;
+                Ok(fold_fn_sum(lhs_t, rhs_t))
+            }
+            ExpressionNode::Product(lhs, rhs) => {
+                let lhs_t = lhs.reduce_node(map_fn, fold_fn_sum, fold_fn_prod, mle_vec)?;
+                let rhs_t = rhs.reduce_node(map_fn, fold_fn_sum, fold_fn_prod, mle_vec)?;
+                Ok(fold_fn_prod(lhs_t, rhs_t))
             }
         }
     }
