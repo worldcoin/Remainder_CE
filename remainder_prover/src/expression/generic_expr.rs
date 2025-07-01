@@ -37,7 +37,6 @@ pub trait ExpressionType<F: Field>: Serialize + for<'de> Deserialize<'de> {
 /// * [ExpressionNode::Product], i.e. \prod_j \widetilde{V}_{j > i}(b_1, ..., b_{m \leq n})
 /// * [ExpressionNode::Selector], i.e. (1 - b_0) * Expr(b_1, ..., b_{m \leq n}) + b_0 * Expr(b_1, ..., b_{m \leq n})
 /// * [ExpressionNode::Sum], i.e. \widetilde{V}_{j_1 > i}(b_1, ..., b_{m_1 \leq n}) + \widetilde{V}_{j_2 > i}(b_1, ..., b_{m_2 \leq n})
-/// * [ExpressionNode::Negated], i.e. -1 * Expr(b_1, ..., b_{m \leq n})
 /// * [ExpressionNode::Scaled], i.e. c * Expr(b_1, ..., b_{m \leq n}) for c \in mathbb{F}
 #[derive(Serialize, Deserialize, Clone, PartialEq, Hash, Eq)]
 #[serde(bound = "F: Field")]
@@ -54,8 +53,6 @@ pub enum ExpressionNode<F: Field, E: ExpressionType<F>> {
     /// An [ExpressionNode] representing the leaf of an expression tree which
     /// is actually mathematically defined as a multilinear extension.
     Mle(E::MLENodeRepr),
-    /// See documentation for [ExpressionNode].
-    Negated(Box<ExpressionNode<F, E>>),
     /// See documentation for [ExpressionNode].
     Sum(Box<ExpressionNode<F, E>>, Box<ExpressionNode<F, E>>),
     /// The product of several multilinear extension functions. This is also
@@ -140,7 +137,6 @@ impl<F: Field, E: ExpressionType<F>> ExpressionNode<F, E> {
             ExpressionNode::Constant(_) | ExpressionNode::Mle(_) | ExpressionNode::Product(_) => {
                 Ok(())
             }
-            ExpressionNode::Negated(exp) => exp.traverse_node(observer_fn, mle_vec),
             ExpressionNode::Scaled(exp, _) => exp.traverse_node(observer_fn, mle_vec),
             ExpressionNode::Selector(_, lhs, rhs) => {
                 lhs.traverse_node(observer_fn, mle_vec)?;
@@ -164,7 +160,6 @@ impl<F: Field, E: ExpressionType<F>> ExpressionNode<F, E> {
             ExpressionNode::Constant(_) | ExpressionNode::Mle(_) | ExpressionNode::Product(_) => {
                 Ok(())
             }
-            ExpressionNode::Negated(exp) => exp.traverse_node_mut(observer_fn, mle_vec),
             ExpressionNode::Scaled(exp, _) => exp.traverse_node_mut(observer_fn, mle_vec),
             ExpressionNode::Selector(_, lhs, rhs) => {
                 lhs.traverse_node_mut(observer_fn, mle_vec)?;

@@ -70,7 +70,6 @@ impl<F: Field> Expression<F, VerifierExpr> {
             Err(anyhow!(ExpressionError::SelectorBitNotBoundError))
         };
         let mle_eval = |verifier_mle: &VerifierMle<F>| -> Result<F> { Ok(verifier_mle.value()) };
-        let negated = |val: Result<F>| Ok((val?).neg());
         let sum = |lhs: Result<F>, rhs: Result<F>| Ok(lhs? + rhs?);
         let product = |verifier_mles: &[VerifierMle<F>]| -> Result<F> {
             verifier_mles
@@ -83,7 +82,6 @@ impl<F: Field> Expression<F, VerifierExpr> {
             &constant,
             &selector_column,
             &mle_eval,
-            &negated,
             &sum,
             &product,
             &scaled,
@@ -110,7 +108,6 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
         constant: &impl Fn(F) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
         mle_eval: &impl Fn(&<VerifierExpr as ExpressionType<F>>::MLENodeRepr) -> T,
-        negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
         product: &impl Fn(&[<VerifierExpr as ExpressionType<F>>::MLENodeRepr]) -> T,
         scaled: &impl Fn(T, F) -> T,
@@ -118,71 +115,19 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
         match self {
             ExpressionNode::Constant(scalar) => constant(*scalar),
             ExpressionNode::Selector(index, a, b) => {
-                let lhs = a.reduce(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                let rhs = b.reduce(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
+                let lhs = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
+                let rhs = b.reduce(constant, selector_column, mle_eval, sum, product, scaled);
                 selector_column(index, lhs, rhs)
             }
             ExpressionNode::Mle(query) => mle_eval(query),
-            ExpressionNode::Negated(a) => {
-                let a = a.reduce(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                negated(a)
-            }
             ExpressionNode::Sum(a, b) => {
-                let a = a.reduce(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                let b = b.reduce(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
+                let a = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
+                let b = b.reduce(constant, selector_column, mle_eval, sum, product, scaled);
                 sum(a, b)
             }
             ExpressionNode::Product(queries) => product(queries),
             ExpressionNode::Scaled(a, f) => {
-                let a = a.reduce(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
+                let a = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
                 scaled(a, *f)
             }
         }
@@ -261,10 +206,6 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
                     .get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec)
                     .into_iter()
                     .collect(),
-                ExpressionNode::Negated(a) => a
-                    .get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec)
-                    .into_iter()
-                    .collect(),
                 ExpressionNode::Constant(_) | ExpressionNode::Mle(_) => HashSet::new(),
             }
         };
@@ -298,7 +239,6 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, VerifierE
                 .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
             ExpressionNode::Mle(mle) => f.debug_struct("Circuit Mle").field("mle", mle).finish(),
-            ExpressionNode::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
             ExpressionNode::Product(a) => f.debug_tuple("Product").field(a).finish(),
             ExpressionNode::Scaled(poly, scalar) => {
