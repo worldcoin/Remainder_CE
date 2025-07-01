@@ -64,7 +64,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
 
         // Add the commitments to the coefficients to the transcript
         coeffs.iter().enumerate().for_each(|(i, commit_triple)| {
-            let label = format!("Interpolating polynomial coefficient {}", i);
+            let label = format!("Commitment to interpolating polynomial coefficient {}", i);
             transcript.append_ec_point(Box::leak(label.into_boxed_str()), commit_triple.commitment);
         });
 
@@ -160,7 +160,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
             .iter()
             .enumerate()
             .for_each(|(i, commit)| {
-                let label = format!("Interpolating polynomial coefficient {}", i);
+                let label = format!("Commitment to interpolating polynomial coefficient {}", i);
                 transcript.append_ec_point(Box::leak(label.into_boxed_str()), *commit);
             });
 

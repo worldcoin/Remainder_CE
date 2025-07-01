@@ -170,7 +170,7 @@ pub fn prove<F: Field>(
             };
             // Add the root of the commitment to the transcript.
             let root = commitment.get_root();
-            transcript_writer.append_input_elements("Ligero input layer root", &[root.into_raw()]);
+            transcript_writer.append_input_elements("Ligero commit", &[root.into_raw()]);
             // Store the commitment for later use.
             ligero_input_commitments.insert(*layer_id, commitment);
         });
@@ -277,7 +277,7 @@ pub fn verify<F: Field>(
         .sorted_by_key(|desc| desc.layer_id.get_raw_input_layer_id())
         .for_each(|desc| {
             let (commitment_as_vec, _expected_input_hash_chain_digest) = transcript
-                .consume_input_elements("Ligero input layer root", 1)
+                .consume_input_elements("Ligero commit", 1)
                 .unwrap();
             assert_eq!(commitment_as_vec.len(), 1);
             ligero_commitments.insert(desc.layer_id, commitment_as_vec[0]);
