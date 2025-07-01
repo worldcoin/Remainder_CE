@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests;
 
-use std::fmt::Debug;
+use anyhow::{anyhow, Result};
+use std::{fmt::Debug, intrinsics::unreachable};
 
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
@@ -338,5 +339,103 @@ impl<F: Field> IntoIterator for DenseMle<F> {
     fn into_iter(self) -> Self::IntoIter {
         // TEMPORARY: get_evals_vector()
         self.mle.iter().collect::<Vec<F>>().into_iter()
+    }
+}
+
+// MLE operations
+impl<F: Field> DenseMle<F> {
+    // addition or multiplication
+    fn bin(lhs: Self, rhs: Self, bin_op: &impl Fn(F, F) -> F) -> Result<Self> {
+        // LAYER ID
+        // assert layer IDs match
+        assert_eq!(lhs.layer_id, rhs.layer_id);
+        // edge cases
+        if lhs.len() == 0 { return Ok(rhs.clone()) }
+        if rhs.len() == 0 { return Ok(lhs.clone()) }
+
+        // INDICES
+        // indices for the resulting vector, in particular:
+        //   - no "free" indices
+        //   - ignore all "fixed" indices
+        //   - all "bound" of the same index have the same challenge
+        //   - sort the `indexed` and `bound` from both inputs
+        let mut new_indices: Vec<MleIndex<F>> = Vec::new();
+        // map from the new index to the old index, if exist
+        let mut lhs_indices_map: Vec<Option<usize>> = Vec::new();
+        let mut rhs_indices_map: Vec<Option<usize>> = Vec::new();
+        // pointers to lhs and rhs indices
+        let lhs_iter = lhs.mle_indices().iter();
+        let rhs_iter = rhs.mle_indices().iter();
+        let mut next_left = lhs_iter.next();
+        let mut next_right = rhs_iter.next();
+
+        // helper closures for setting indices
+        let get_bound_and_index = |m: &MleIndex<F>| {
+            match m {
+                MleIndex::Free | MleIndex::Fixed(_) => unreachable!(),
+                MleIndex::Indexed(i) => (None, i),
+                MleIndex::Bound(f, i) => (Some(f), i),
+            }
+        };
+        let push_index = |child_index: &MleIndex<F>, left_child: bool| {
+            let (child_f, child_i) = get_bound_and_index(child_index);
+            let child_index_map = if left_child { &mut lhs_indices_map } else { &mut rhs_indices_map };
+            // first check if mle_index already exists in new_indices
+            new_indices.iter().enumerate().map(|(new_i, new_index)| {
+                let (new_f, new_i) = get_bound_and_index(new_index);
+                if child_i == new_i {
+                    // if it exists, they must be either both binded to the same value or both not binded
+                    assert_eq!(child_f, new_f);
+                    assert!(child_index_map[*new_i].is_none());
+                    child_index_map[*new_i] = Some(*child_i);
+                    return ()
+                }
+            });
+            // if not, push it to new_indices
+            new_indices.push(child_index.clone());
+            child_index_map.push(Some(*child_i));
+            let other_index_map = if left_child { &mut rhs_indices_map } else { &mut lhs_indices_map };
+            other_index_map.push(None)
+        };
+
+        while next_left.is_some() || next_right.is_some() {
+            match (next_left, next_right) {
+                (_, Some(MleIndex::Free)) | (Some(MleIndex::Free), _) => { anyhow!("Cannot perform binary operation on MLEs: MLE contains free"); }
+                (_, Some(MleIndex::Fixed(_))) => { next_right = rhs_iter.next() }
+                (Some(MleIndex::Fixed(_)), _) => { next_left = lhs_iter.next() }
+                (Some(left), None) => {
+                    push_index(left, true);
+                    next_left = lhs_iter.next();
+                }
+                (None, Some(right)) => {
+                    push_index(right, false);
+                    next_right = rhs_iter.next();
+                }
+                (Some(MleIndex::Indexed(i)), Some(MleIndex::Bound(..))) | (Some(MleIndex::Bound(..)), Some(MleIndex::Indexed(i))) => { 
+                    anyhow!("Cannot perform binary operation on MLEs: index {i} is bound in one MLE but not the other"); 
+                }
+                (Some(MleIndex::Indexed(l)), Some(MleIndex::Indexed(r))) |
+                (Some(MleIndex::Bound(_, l)), Some(MleIndex::Bound(_, r))) => {
+                    // TODO (benny): add a case for equality to avoid a linear scan
+                    if l < r {
+                        push_index(next_left.unwrap(), true);
+                        next_left = lhs_iter.next();
+                    } else {
+                        push_index(next_right.unwrap(), false);
+                        next_right = rhs_iter.next();
+                    }
+                }
+                (None, None) => unreachable!(),
+            }
+        }
+
+        // MLE
+        // Closure that extracts the correct value given an evaluation point on the boolean hypercube
+
+
+        Ok(DenseMle {
+            layer_id: lhs.layer_id,
+            mle:
+        })
     }
 }
