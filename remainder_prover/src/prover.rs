@@ -147,7 +147,8 @@ pub fn prove<F: Field>(
         .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
         .for_each(|layer_id| {
             let mle = inputs.get(layer_id).unwrap();
-            transcript_writer.append_input_elements("input layer", &mle.iter().collect_vec());
+            transcript_writer
+                .append_input_elements("Public input layer", &mle.iter().collect_vec());
         });
 
     // For each Ligero input layer, calculate commitments if not already provided, and then add each
@@ -169,7 +170,7 @@ pub fn prove<F: Field>(
             };
             // Add the root of the commitment to the transcript.
             let root = commitment.get_root();
-            transcript_writer.append_input_elements("ligero input layer root", &[root.into_raw()]);
+            transcript_writer.append_input_elements("Ligero commit", &[root.into_raw()]);
             // Store the commitment for later use.
             ligero_input_commitments.insert(*layer_id, commitment);
         });
@@ -258,7 +259,7 @@ pub fn verify<F: Field>(
                 .find(|desc| desc.layer_id == *layer_id)
                 .unwrap();
             let (transcript_mle, _expected_input_hash_chain_digest) = transcript
-                .consume_input_elements("input layer", 1 << layer_desc.num_vars)
+                .consume_input_elements("Public input layer", 1 << layer_desc.num_vars)
                 .unwrap();
             let expected_mle = public_inputs.get(layer_id).unwrap();
             if expected_mle.f.iter().collect_vec() != transcript_mle {
@@ -276,7 +277,7 @@ pub fn verify<F: Field>(
         .sorted_by_key(|desc| desc.layer_id.get_raw_input_layer_id())
         .for_each(|desc| {
             let (commitment_as_vec, _expected_input_hash_chain_digest) = transcript
-                .consume_input_elements("ligero input layer root", 1)
+                .consume_input_elements("Ligero commit", 1)
                 .unwrap();
             assert_eq!(commitment_as_vec.len(), 1);
             ligero_commitments.insert(desc.layer_id, commitment_as_vec[0]);
@@ -296,7 +297,7 @@ pub fn verify<F: Field>(
         } else {
             // This can only be a programming error on our part (since there was sufficient input
             // data to verify the proof of the circuit).
-            panic!("Input layer {:?} has a claim but is not a public input layer nor a Ligero input layer.", layer_id);
+            panic!("Input layer {layer_id:?} has a claim but is not a public input layer nor a Ligero input layer.");
         }
     });
 
@@ -372,11 +373,13 @@ pub fn prove_circuit<F: Field>(
                 panic!("We don't support DenseMLE as output layers for now")
             }
             // Just write a single zero into the transcript since the counts (layer size) are already included in the circuit description
-            MleEnum::Zero(_) => transcript_writer.append_elements("output layer", &[F::ZERO]),
+            MleEnum::Zero(_) => {
+                transcript_writer.append_elements("Output layer MLE evals", &[F::ZERO])
+            }
         };
 
-        let challenges =
-            transcript_writer.get_challenges("output layer binding", output.num_free_vars());
+        let challenges = transcript_writer
+            .get_challenges("Challenge on the output layer", output.num_free_vars());
         output.fix_layer(&challenges)?;
 
         let claim = output.get_claim()?;

@@ -40,7 +40,7 @@ impl<C: PrimeOrderCurve> ProofOfOpening<C> {
         let alpha = committer.scalar_commit(&t_1, &t_2);
 
         // alpha is added to the transcript.
-        transcript.append_ec_point("PoO alpha", alpha);
+        transcript.append_ec_point("Commitment to random values", alpha);
 
         // A scalar field element $c$ is sampled from the transcript.
         let c = transcript.get_scalar_field_challenge("PoO c");
@@ -53,8 +53,8 @@ impl<C: PrimeOrderCurve> ProofOfOpening<C> {
         t_1.zeroize();
         t_2.zeroize();
 
-        transcript.append_scalar_field_elem("PoO z1", z1);
-        transcript.append_scalar_field_elem("PoO z2", z2);
+        transcript.append_scalar_field_elem("Blinded response 1", z1);
+        transcript.append_scalar_field_elem("Blinded response 2", z2);
 
         Self { z1, z2, alpha }
     }
@@ -70,13 +70,13 @@ impl<C: PrimeOrderCurve> ProofOfOpening<C> {
         transcript: &mut impl ECTranscriptTrait<C>,
     ) {
         // EC group element $\alpha$ is added to the transcript
-        transcript.append_ec_point("PoO alpha", self.alpha);
+        transcript.append_ec_point("Commitment to random values", self.alpha);
 
         // A scalar field element $c$ is sampled from the transcript.
         let c = transcript.get_scalar_field_challenge("PoO c");
 
-        transcript.append_scalar_field_elem("PoO z1", self.z1);
-        transcript.append_scalar_field_elem("PoO z2", self.z2);
+        transcript.append_scalar_field_elem("Blinded response 1", self.z1);
+        transcript.append_scalar_field_elem("Blinded response 2", self.z2);
 
         // Check: $g^{z_1} \cdot h^{z_2} \overset{?}{=} C_0^c \cdot \alpha$.
         assert_eq!(
