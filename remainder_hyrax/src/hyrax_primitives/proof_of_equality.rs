@@ -35,14 +35,14 @@ impl<C: PrimeOrderCurve> ProofOfEquality<C> {
         let alpha = committer.blinding_generator * r;
 
         // EC group element $\alpha$ is added to the transcript.
-        transcript.append_ec_point("PoE alpha", alpha);
+        transcript.append_ec_point("Commitment to random value", alpha);
 
         // A scalar field element $c$ is sampled from the transcript.
         let c: <C as PrimeOrderCurve>::Scalar = transcript.get_scalar_field_challenge("PoE c");
 
         // Compute $z = c \cdot(s_1 - s_2) + r$.
         let z = c * (commit0.blinding - commit1.blinding) + r;
-        transcript.append_scalar_field_elem("PoE z", z);
+        transcript.append_scalar_field_elem("Blinded response", z);
 
         // Zeroize all randomly generated values.
         r.zeroize();
@@ -60,12 +60,12 @@ impl<C: PrimeOrderCurve> ProofOfEquality<C> {
         transcript: &mut impl ECTranscriptTrait<C>,
     ) {
         // EC group element $\alpha$ is added to the transcript.
-        transcript.append_ec_point("PoE alpha", self.alpha);
+        transcript.append_ec_point("Commitment to random value", self.alpha);
 
         // A scalar field element $c$ is sampled from the transcript.
         let c = transcript.get_scalar_field_challenge("PoE c");
 
-        transcript.append_scalar_field_elem("PoE z", self.z);
+        transcript.append_scalar_field_elem("Blinded response", self.z);
 
         // Check: $h^z \overset{?}{=} (c_0 \cdot (c_1)^{-1})^c\cdot \alpha$
         let h = committer.blinding_generator;

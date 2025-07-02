@@ -175,8 +175,10 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
                 let mle = inputs.get(layer_id).unwrap();
                 let public_il_to_transcript_timer =
                     start_timer!(|| format!("adding il elements to transcript for {layer_id}"));
-                transcript
-                    .append_input_scalar_field_elems("input layer", &mle.f.iter().collect_vec());
+                transcript.append_input_scalar_field_elems(
+                    "Public input layer values",
+                    &mle.f.iter().collect_vec(),
+                );
                 end_timer!(public_il_to_transcript_timer);
             });
 
@@ -207,7 +209,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
 
                 // Add the verifier's view of the commitment to transcript
                 transcript.append_input_ec_points(
-                    "Hyrax input layer values",
+                    "Hyrax input layer commitment",
                     prover_commitment.commitment.clone(),
                 );
 
@@ -393,7 +395,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
                 _layer_id
             ));
             transcript.append_input_scalar_field_elems(
-                "input layer",
+                "Public input layer values",
                 &mle.as_ref().unwrap().f.iter().collect_vec(),
             );
             end_timer!(il_timer);
@@ -409,7 +411,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
         .sorted_by_key(|input_proof| input_proof.layer_id.get_raw_input_layer_id())
         .for_each(|input_proof| {
             transcript.append_input_ec_points(
-                "Hyrax input layer values",
+                "Hyrax input layer commitment",
                 input_proof.input_commitment.clone(),
             );
         });

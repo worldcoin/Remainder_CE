@@ -235,7 +235,7 @@ impl<F: Field> OutputLayerDescription<F> {
 
         let num_evals = 1;
 
-        let evals = transcript_reader.consume_elements("Output Layer MLE evals", num_evals)?;
+        let evals = transcript_reader.consume_elements("Output layer MLE evals", num_evals)?;
 
         if evals != vec![F::ZERO] {
             return Err(anyhow!(VerifierOutputLayerError::NonZeroEvalForZeroMle));
@@ -247,7 +247,7 @@ impl<F: Field> OutputLayerDescription<F> {
 
         // Evaluate each output MLE at a random challenge point.
         for bit in 0..bits {
-            let challenge = transcript_reader.get_challenge("Setting Output Layer Claim")?;
+            let challenge = transcript_reader.get_challenge("Challenge on the output layer")?;
             mle.fix_variable(bit, challenge);
         }
 
