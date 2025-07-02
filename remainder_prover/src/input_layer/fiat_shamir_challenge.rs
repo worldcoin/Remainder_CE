@@ -128,7 +128,7 @@ mod tests {
 
         // 2. Get commitment from transcript.
         let values = transcript_reader
-            .get_challenges("Verifier challenges", 1 << fs_desc.num_bits)
+            .get_challenges("random challenges for FS", 1 << fs_desc.num_bits)
             .unwrap();
         let fiat_shamir_challenge = fs_desc.instantiate(values);
 

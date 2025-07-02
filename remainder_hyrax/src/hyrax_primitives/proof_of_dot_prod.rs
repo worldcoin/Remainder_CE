@@ -62,8 +62,11 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
         let commit_d = committer.vector_commit(&d_vec, &r_delta);
         let commit_d_dot_a = committer.scalar_commit(&d_dot_a, &r_beta);
 
-        transcript.append_ec_point("commitment to d", commit_d);
-        transcript.append_ec_point("commitment to d dot a", commit_d_dot_a);
+        transcript.append_ec_point("Commitment to random vector", commit_d);
+        transcript.append_ec_point(
+            "Commitment to inner product of random vector and public vector",
+            commit_d_dot_a,
+        );
 
         let c: <C as PrimeOrderCurve>::Scalar =
             transcript.get_scalar_field_challenge("challenge c");
@@ -75,13 +78,14 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
             .zip(d_vec.iter())
             .map(|(x_elem, d_elem)| c * x_elem + d_elem)
             .collect_vec();
-        transcript.append_scalar_field_elems("PoDP z_vector", &z_vector);
+        transcript.append_scalar_field_elems("Blinded private vector", &z_vector);
         // the blinding factor to commit to z
         let z_delta = c * x.blinding + r_delta;
-        transcript.append_scalar_field_elem("PoDP z_delta", z_delta);
+        transcript
+            .append_scalar_field_elem("Blinding factor for blinded vector commitment", z_delta);
         // the blinding factor to commit to <z, a>
         let z_beta = c * y.blinding + r_beta;
-        transcript.append_scalar_field_elem("PoDP z_beta", z_beta);
+        transcript.append_scalar_field_elem("Blinding factor for blinded inner product", z_beta);
 
         // Zeroize all randomly generated values.
         r_delta.zeroize();
@@ -130,16 +134,20 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
 
         // Read transcript-generated prover messages and compare against proof-supplied messages
         // Messages for d and <d, a>
-        transcript.append_ec_point("commitment to d", *commit_d);
-        transcript.append_ec_point("commitment to d dot a", *commit_d_dot_a);
+        transcript.append_ec_point("Commitment to random vector", *commit_d);
+        transcript.append_ec_point(
+            "Commitment to inner product of random vector and public vector",
+            *commit_d_dot_a,
+        );
 
         // now the verifier can sample the same random challenge. once again, this is in the base field so we
         // truncate in order to convert it into the scalar field.
         let c = transcript.get_scalar_field_challenge("challenge c");
 
-        transcript.append_scalar_field_elems("PoDP z_vector", z_vector);
-        transcript.append_scalar_field_elem("PoDP z_delta", *z_delta);
-        transcript.append_scalar_field_elem("PoDP z_beta", *z_beta);
+        transcript.append_scalar_field_elems("Blinded private vector", z_vector);
+        transcript
+            .append_scalar_field_elem("Blinding factor for blinded vector commitment", *z_delta);
+        transcript.append_scalar_field_elem("Blinding factor for blinded inner product", *z_beta);
 
         // we compute <z, a> and then commitments to z and <z, a> based off of the blinding factors and values in
         // the evaluation proof.
