@@ -129,7 +129,7 @@ impl<F: Debug> Display for Transcript<F> {
                 writeln!(f, "Append: \"{}\" with {} elements", label, elements.len())
             }
             Operation::Squeeze(label, num_elements) => {
-                writeln!(f, "Squeeze: \"{}\" with {} elements", label, num_elements)
+                writeln!(f, "Squeeze: \"{label}\" with {num_elements} elements")
             }
             Operation::AppendInput(label, elements, elements_hash_chain_digest) => {
                 writeln!(
