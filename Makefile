@@ -11,10 +11,6 @@ pr:  ## Prepare for a PR; run all GitHub CI Actions.
 	$(MAKE) mem-lim-docker
 
 check:  ## GitHub Action #1 - compile, run formatter and linter.
-	cargo check
-	cargo check --features parallel
-	cargo fmt --all -- --check
-	cargo clippy --no-deps -- -D warnings
 	@if find remainder_*/src -name mod.rs | grep -q .; then \
 		echo; \
 	 	echo "Found the following 'mod.rs' files in a src directory:"; \
@@ -24,6 +20,10 @@ check:  ## GitHub Action #1 - compile, run formatter and linter.
 		echo;  \
 		exit 1; \
 	fi
+	cargo check
+	cargo check --features parallel
+	cargo fmt --all -- --check
+	cargo clippy --no-deps -- -D warnings
 
 test-dev: test-dev-seq test-dev-par  ## GitHub Action #2a - Basic unit testing. With and without parallel features.
 
