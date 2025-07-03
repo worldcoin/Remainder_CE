@@ -15,6 +15,15 @@ check:  ## GitHub Action #1 - compile, run formatter and linter.
 	cargo check --features parallel
 	cargo fmt --all -- --check
 	cargo clippy --no-deps -- -D warnings
+	@if find remainder_*/src -name mod.rs | grep -q .; then \
+		echo; \
+	 	echo "Found the following 'mod.rs' files in a src directory:"; \
+		find remainder_*/src -name mod.rs; \
+		echo; \
+		echo "Please follow the '[module_name].rs' instead of '[module_name]/mod.rs' file naming convention."; \
+		echo;  \
+		exit 1; \
+	fi
 
 test-dev: test-dev-seq test-dev-par  ## GitHub Action #2a - Basic unit testing. With and without parallel features.
 
