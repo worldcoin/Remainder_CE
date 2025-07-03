@@ -297,7 +297,7 @@ pub fn verify<F: Field>(
         } else {
             // This can only be a programming error on our part (since there was sufficient input
             // data to verify the proof of the circuit).
-            panic!("Input layer {:?} has a claim but is not a public input layer nor a Ligero input layer.", layer_id);
+            panic!("Input layer {layer_id:?} has a claim but is not a public input layer nor a Ligero input layer.");
         }
     });
 
