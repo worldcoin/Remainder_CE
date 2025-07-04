@@ -292,7 +292,7 @@ fn test_quadratic_sum_differently_sized_mles2() {
     let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle1, mle2]);
     expression.index_mle_indices(0);
     expression.fix_variable_at_index(2, Fr::from(3));
-    let res = expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 1, 3);
+    let res = expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 0, 3);
     let exp = SumcheckEvals(vec![
         Fr::from(12).neg(),
         Fr::from(230),
