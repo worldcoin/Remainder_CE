@@ -328,6 +328,7 @@ pub fn beta_cascade<F: Field>(
     assert_eq!(beta_vals_vec.len(), random_coefficients.len());
 
     let mle_successor_vec = successors_from_mle_product(mles, degree, round_index).unwrap();
+
     // We compute the sumcheck evaluations using beta cascade for the same
     // set of MLE successors, but different beta values. All of these are
     // stored in the iterator.
