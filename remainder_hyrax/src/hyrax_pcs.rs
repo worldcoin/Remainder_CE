@@ -222,8 +222,10 @@ impl<C: PrimeOrderCurve> HyraxPCSEvaluationProof<C> {
             assert_eq!(claims.len(), 1);
             vec![C::Scalar::ONE]
         } else {
-            transcript
-                .get_scalar_field_challenges("random coefficients for batch opening", claims.len())
+            transcript.get_scalar_field_challenges(
+                "Random coefficients for batch opening of Hyrax commitments",
+                claims.len(),
+            )
         };
         let (l_vector, r_vector) = HyraxPCSEvaluationProof::<C>::compute_l_r_from_log_n_cols(
             log_n_cols,
@@ -274,7 +276,7 @@ impl<C: PrimeOrderCurve> HyraxPCSEvaluationProof<C> {
                 acc + (&claim.evaluation * *random_coeff)
             });
         transcript.append_ec_point(
-            "commitment to y",
+            "Commitment to the inner product of MLE and evaluation challenge",
             mle_evaluation_committed_scalar.commitment,
         );
 
@@ -313,7 +315,7 @@ impl<C: PrimeOrderCurve> HyraxPCSEvaluationProof<C> {
             vec![C::Scalar::ONE]
         } else {
             transcript.get_scalar_field_challenges(
-                "random coefficients for batch opening",
+                "Random coefficients for batch opening of Hyrax commitments",
                 challenge_coordinates.len(),
             )
         };
@@ -344,7 +346,10 @@ impl<C: PrimeOrderCurve> HyraxPCSEvaluationProof<C> {
             commitment_to_coeff_matrix[0]
         };
 
-        transcript.append_ec_point("commitment to y", *commitment_to_evaluation);
+        transcript.append_ec_point(
+            "Commitment to the inner product of MLE and evaluation challenge",
+            *commitment_to_evaluation,
+        );
 
         // Using this commitment, the verifier can then do a proof of dot
         // product verification given the evaluation proof and the prover's

@@ -64,7 +64,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
 
         // Add the commitments to the coefficients to the transcript
         coeffs.iter().enumerate().for_each(|(i, commit_triple)| {
-            let label = format!("coeff {}", i);
+            let label = format!("Commitment to interpolating polynomial coefficient {i}");
             transcript.append_ec_point(Box::leak(label.into_boxed_str()), commit_triple.commitment);
         });
 
@@ -97,7 +97,9 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
             .collect();
 
         // A random evaluation point $\tau \in \mathbb{F}$ is sampled from the transcript
-        let tau = transcript.get_scalar_field_challenge("PoCA tau");
+        let tau = transcript.get_scalar_field_challenge(
+            "Evaluation point challenge for claim aggregation polynomial",
+        );
 
         // Calculate the powers of tau
         let powers_of_tau: Vec<C::Scalar> =
@@ -158,7 +160,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
             .iter()
             .enumerate()
             .for_each(|(i, commit)| {
-                let label = format!("coeff {}", i);
+                let label = format!("Commitment to interpolating polynomial coefficient {i}");
                 transcript.append_ec_point(Box::leak(label.into_boxed_str()), *commit);
             });
 
@@ -193,7 +195,9 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
             });
 
         // A random evaluation point $\tau \in \mathbb{F}$ is sampled from the transcript
-        let tau = transcript.get_scalar_field_challenge("PoCA tau");
+        let tau = transcript.get_scalar_field_challenge(
+            "Evaluation point challenge for claim aggregation polynomial",
+        );
 
         // Calculate the powers of tau
         let powers_of_tau: Vec<C::Scalar> =
