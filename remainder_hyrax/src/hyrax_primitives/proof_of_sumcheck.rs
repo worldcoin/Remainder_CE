@@ -53,11 +53,17 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
         debug_assert_eq!(n, bindings.len());
 
         // sample the RLC coeffs for the matrix rows, rho_1, .., rho_{n+1}, from the transcript
-        let rhos = transcript.get_scalar_field_challenges("rhos", n + 1);
+        let rhos = transcript.get_scalar_field_challenges(
+            "Proof of sumcheck RLC coefficients for batching rows",
+            n + 1,
+        );
         assert_eq!(rhos.len(), n + 1);
 
         // sample the RLC coeffs for the alpha_j's, gamma_1, .., gamma_n, from the transcript
-        let gammas = transcript.get_scalar_field_challenges("gammas", n);
+        let gammas = transcript.get_scalar_field_challenges(
+            "Proof of sumcheck RLC coefficients for batching columns",
+            n,
+        );
         assert_eq!(gammas.len(), n);
 
         // compute alpha, the commitment to the gamma combo of the alphas (private vector in PoDP)
@@ -121,11 +127,17 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
         let n = self.messages.len();
 
         // sample the RLC coeffs for the matrix rows, rho_1, .., rho_{n+1}, from the transcript
-        let rhos = transcript.get_scalar_field_challenges("rhos", n + 1);
+        let rhos = transcript.get_scalar_field_challenges(
+            "Proof of sumcheck RLC coefficients for batching rows",
+            n + 1,
+        );
         assert_eq!(rhos.len(), n + 1);
 
         // sample the RLC coeffs for the alpha_j's, gamma_1, .., gamma_n, from the transcript
-        let gammas = transcript.get_scalar_field_challenges("gammas", n);
+        let gammas = transcript.get_scalar_field_challenges(
+            "Proof of sumcheck RLC coefficients for batching columns",
+            n,
+        );
         debug_assert_eq!(gammas.len(), n);
 
         // compute alpha, the commitment to the gamma combo of the alphas (private vector in PoDP)

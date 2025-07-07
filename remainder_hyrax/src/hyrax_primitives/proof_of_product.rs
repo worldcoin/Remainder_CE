@@ -50,9 +50,9 @@ impl<C: PrimeOrderCurve> ProofOfProduct<C> {
         let delta = committer.scalar_commit(&(x.value * b_3), &(x.blinding * b_3 + b_5));
 
         // $\alpha, \beta, \delta$ are added to the transcript.
-        transcript.append_ec_point("PoP alpha", alpha);
-        transcript.append_ec_point("PoP beta", beta);
-        transcript.append_ec_point("PoP delta", delta);
+        transcript.append_ec_point("Commitment to random values 1", alpha);
+        transcript.append_ec_point("Commitment to random values 2", beta);
+        transcript.append_ec_point("Commitment to random values 3", delta);
 
         // Scalar field element $c$ is sampled from the transcript.
         let c: <C as PrimeOrderCurve>::Scalar = transcript.get_scalar_field_challenge("PoP c");
@@ -71,11 +71,11 @@ impl<C: PrimeOrderCurve> ProofOfProduct<C> {
         b_4.zeroize();
         b_5.zeroize();
 
-        transcript.append_scalar_field_elem("PoP z1", z1);
-        transcript.append_scalar_field_elem("PoP z2", z2);
-        transcript.append_scalar_field_elem("PoP z3", z3);
-        transcript.append_scalar_field_elem("PoP z4", z4);
-        transcript.append_scalar_field_elem("PoP z5", z5);
+        transcript.append_scalar_field_elem("Blinded response 1", z1);
+        transcript.append_scalar_field_elem("Blinded response 2", z2);
+        transcript.append_scalar_field_elem("Blinded response 3", z3);
+        transcript.append_scalar_field_elem("Blinded response 4", z4);
+        transcript.append_scalar_field_elem("Blinded response 5", z5);
 
         Self {
             alpha,
@@ -100,18 +100,18 @@ impl<C: PrimeOrderCurve> ProofOfProduct<C> {
         transcript: &mut impl ECTranscriptTrait<C>,
     ) {
         // $\alpha, \beta, \delta$ are added to transcript
-        transcript.append_ec_point("PoP alpha", self.alpha);
-        transcript.append_ec_point("PoP beta", self.beta);
-        transcript.append_ec_point("PoP delta", self.delta);
+        transcript.append_ec_point("Commitment to random values 1", self.alpha);
+        transcript.append_ec_point("Commitment to random values 2", self.beta);
+        transcript.append_ec_point("Commitment to random values 3", self.delta);
 
         // A scalar field element $c$ is sampled from the transcript.
         let c = transcript.get_scalar_field_challenge("PoP c");
 
-        transcript.append_scalar_field_elem("PoP z1", self.z1);
-        transcript.append_scalar_field_elem("PoP z2", self.z2);
-        transcript.append_scalar_field_elem("PoP z3", self.z3);
-        transcript.append_scalar_field_elem("PoP z4", self.z4);
-        transcript.append_scalar_field_elem("PoP z5", self.z5);
+        transcript.append_scalar_field_elem("Blinded response 1", self.z1);
+        transcript.append_scalar_field_elem("Blinded response 2", self.z2);
+        transcript.append_scalar_field_elem("Blinded response 3", self.z3);
+        transcript.append_scalar_field_elem("Blinded response 4", self.z4);
+        transcript.append_scalar_field_elem("Blinded response 5", self.z5);
 
         // Check the following:
         // \alpha \cdot X^c \overset{?}{=} g^{z_1}\cdot h^{z_2} \\

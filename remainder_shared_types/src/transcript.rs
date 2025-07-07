@@ -129,7 +129,7 @@ impl<F: Debug> Display for Transcript<F> {
                 writeln!(f, "Append: \"{}\" with {} elements", label, elements.len())
             }
             Operation::Squeeze(label, num_elements) => {
-                writeln!(f, "Squeeze: \"{}\" with {} elements", label, num_elements)
+                writeln!(f, "Squeeze: \"{label}\" with {num_elements} elements")
             }
             Operation::AppendInput(label, elements, elements_hash_chain_digest) => {
                 writeln!(
@@ -332,6 +332,7 @@ impl<F: Field, T: TranscriptSponge<F>> TranscriptReader<F, T> {
         match self.transcript.operations.get(operation_idx) {
             Some(Operation::AppendInput(expected_label, elements, _elements_hash_chain_digest)) => {
                 if label != expected_label {
+                    dbg!("MISMATCH");
                     warn!("Label mismatch on TranscriptReader `consume_input_elements`. Expected \"{}\" but instead got \"{}\".", expected_label, label);
                 }
                 match elements.get(element_idx) {
@@ -361,6 +362,7 @@ impl<F: Field, T: TranscriptSponge<F>> TranscriptReader<F, T> {
             Some(Operation::AppendInput(expected_label, elements, elements_hash_chain_digest)) => {
                 let hash_chain_digest_idx = element_idx - elements.len();
                 if label != expected_label {
+                    dbg!("MISMATCH");
                     warn!("Label mismatch on TranscriptReader `consume_input_elements`. Expected \"{}\" but instead got \"{}\".", expected_label, label);
                 }
                 match elements_hash_chain_digest.get(hash_chain_digest_idx) {
@@ -398,6 +400,7 @@ impl<F: Field, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReade
         match self.transcript.operations.get(operation_idx) {
             Some(Operation::Append(expected_label, v)) => {
                 if label != expected_label {
+                    dbg!("MISMATCH");
                     warn!("Label mismatch on TranscriptReader consume_element. Expected \"{}\" but instead got \"{}\".", expected_label, label);
                 }
                 match v.get(element_idx) {
@@ -490,6 +493,7 @@ impl<F: Field, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReade
         match self.transcript.operations.get(operation_idx) {
             Some(Operation::Squeeze(expected_label, num_elements)) => {
                 if label != expected_label {
+                    dbg!("MISMATCH");
                     warn!("Label mismatch on TranscriptReader get_challenge. Expected \"{}\" but instead got \"{}\".", expected_label, label);
                 }
                 if element_idx >= *num_elements {
