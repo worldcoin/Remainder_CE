@@ -32,28 +32,28 @@ pub type Base = <Bn256Point as CurveExt>::Base;
 ///
 /// ### Sub-traits
 /// * [FromUniformBytes] -- see associated trait documentation for more details.
-/// Our use-case is specifically for compatibility with [Poseidon], which we
-/// are using as the hash function instantiation of a verifier's public coins (see
-/// `impl` block for [Poseidon::new], for example).
+///   Our use-case is specifically for compatibility with [Poseidon], which we
+///   are using as the hash function instantiation of a verifier's public coins (see
+///   `impl` block for [Poseidon::new], for example).
 /// * [WithSmallOrderMulGroup] -- see associated trait documentation for more
-/// details. Our use-case is specifically for Halo2's FFT implementation, which
-/// uses Halo2's [EvaluationDomain] to compute extended evaluations of a
-/// power-of-two degree polynomial. This trait will ideally be removed in a
-/// future update.
+///   details. Our use-case is specifically for Halo2's FFT implementation, which
+///   uses Halo2's [EvaluationDomain] to compute extended evaluations of a
+///   power-of-two degree polynomial. This trait will ideally be removed in a
+///   future update.
 /// * [Hash] -- necessary for creating a hashed representation of a circuit,
-/// as well as storing [Field] values within data structures as [HashMap].
+///   as well as storing [Field] values within data structures as [HashMap].
 /// * [Ord] -- not strictly necessary for cryptographic purposes, but useful
-/// for comparing elements against one another. Consider replacing with [Eq].
+///   for comparing elements against one another. Consider replacing with [Eq].
 /// * [Serialize], [Deserialize] -- necessary for writing values to file using
-/// Serde.
+///   Serde.
 /// * [HasByteRepresentation] -- necessary for converting a field element into
-/// its u8 limbs. This is useful for e.g. computing a block-based hash function
-/// over a field whose num bytes integer representation does not evenly divide
-/// the hash function's block size (e.g. a 136-bit field against a 256-bit hash
-/// block).
+///   its u8 limbs. This is useful for e.g. computing a block-based hash function
+///   over a field whose num bytes integer representation does not evenly divide
+///   the hash function's block size (e.g. a 136-bit field against a 256-bit hash
+///   block).
 /// * [Zeroizable] -- necessary for actively over-writing otherwise sensitive
-/// values which may still be stored in RAM (e.g. blinding factors within a
-/// Hyrax commitment, or intermediate MLE values within a GKR circuit).
+///   values which may still be stored in RAM (e.g. blinding factors within a
+///   Hyrax commitment, or intermediate MLE values within a GKR circuit).
 pub trait Field:
     ff_field
     + FromUniformBytes<64>
