@@ -33,7 +33,7 @@ pub type Base = <Bn256Point as CurveExt>::Base;
 /// ### Sub-traits
 /// * [FromUniformBytes] -- see associated trait documentation for more details.
 /// Our use-case is specifically for compatibility with [Poseidon], which we
-/// are using as the hash function instiation of a verifier's public coins (see
+/// are using as the hash function instantiation of a verifier's public coins (see
 /// `impl` block for [Poseidon::new], for example).
 /// * [WithSmallOrderMulGroup] -- see associated trait documentation for more
 /// details. Our use-case is specifically for Halo2's FFT implementation, which
