@@ -138,7 +138,6 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<()> {
         info!("Proving a GKR Layer.");
-
         // Initialize tables and pre-fix variables.
         let random_coefficients = match global_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => {

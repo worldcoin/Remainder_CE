@@ -32,10 +32,12 @@ use std::{
     cmp::max,
     collections::{HashMap, HashSet},
     fmt::Debug,
-    ops::{Add, Mul, Neg, Sub},
+    ops::{Add, Mul, Neg, Sub}, time::Instant,
 };
 
 use anyhow::{anyhow, Ok, Result};
+
+const USE_BKT: bool = true;
 
 /// mid-term solution for deduplication of DenseMleRefs
 /// basically a wrapper around usize, which denotes the index
@@ -320,26 +322,23 @@ impl<F: Field> Expression<F, ProverExpr> {
         round_index: usize,
         degree: usize,
     ) -> SumcheckEvals<F> {
-        println!("MLE: {:?}", self.mle_vec[0]);
-        println!("EXPR: {:?}", self.expression_node);
-        println!("ROUND_INDEX: {:?}, DEGREE: {:?}", round_index, degree);
-
-        let old = self.expression_node.evaluate_sumcheck_node_beta_cascade(
-            beta,
-            &self.mle_vec,
-            random_coefficients,
-            round_index,
-            degree,
-        );
-        let new = self.expression_node.evaluate_sumcheck_node_beta_cascade_bookkeeping_table(
-            beta,
-            &self.mle_vec,
-            random_coefficients,
-            round_index,
-            degree,
-        );
-        assert_eq!(old, new);
-        old
+        if USE_BKT {
+            self.expression_node.evaluate_sumcheck_node_beta_cascade_bookkeeping_table(
+                beta,
+                &self.mle_vec,
+                random_coefficients,
+                round_index,
+                degree,
+            )
+        } else {
+            self.expression_node.evaluate_sumcheck_node_beta_cascade(
+                beta,
+                &self.mle_vec,
+                random_coefficients,
+                round_index,
+                degree,
+            )
+        }
     }
 
     /// This evaluates a sumcheck message using the beta cascade algorithm, taking the sum
@@ -1084,13 +1083,20 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         round_index: usize,
         degree: usize,
     ) -> SumcheckEvals<F> {
+        let start = Instant::now();
         let mle_bookkeeping_tables: Vec<(bool, Vec<_>)> = mle_vec
             .iter()
             .map(|mle| MleBookkeepingTables::from_mle_evals(mle, degree, round_index))
             .collect();
+        let elapse = start.elapsed().as_millis();
+        println!("BKT_TIME: {} ms", elapse);
 
-        let (comb_tree, cnst_tables) = MleCombinationTree::from_mle_and_expr(&self, mle_vec.len());
+        let start = Instant::now();
+        let (comb_tree, cnst_tables) = MleCombinationTree::from_expr_and_bind(&self, mle_vec.len(), degree, round_index);
+        let elapse = start.elapsed().as_millis();
+        println!("TREE_TIME: {} ms", elapse);
 
+        let start = Instant::now();
         // group the bookkeeping tables by evaluation on X
         let comb_tables: Vec<_> = (0..degree + 1)
             .map(|eval| {
@@ -1100,13 +1106,19 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                         let j = if *bounded { 0 } else { eval };
                         &tables[j]
                     })
-                    .chain(cnst_tables.iter())
+                    .chain(cnst_tables.iter().map(|(bounded, tables)| {
+                        let j = if *bounded { 0 } else { eval };
+                        &tables[j]
+                    }))
                     .collect();
                 let comb_table = MleBookkeepingTables::comb(&tables_per_eval, &comb_tree);
                 comb_table
             })
             .collect();
+        let elapse = start.elapsed().as_millis();
+        println!("COMB_TIME: {} ms", elapse);
 
+        let start = Instant::now();
         // all comb_tables are of the same structure, so only 
         // need to process beta once on `comb_tables[0]`
         // returns:
@@ -1162,6 +1174,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 // random linear combination by summing at the end.
                 apply_updated_beta_values_to_evals(evals, &beta_updated_vals) * random_coeff
             });
+        let elapse = start.elapsed().as_millis();
+        println!("BETA_TIME: {} ms", elapse);
         // Combine all the evaluations using a random linear combination. We
         // simply sum because all evaluations are already multiplied by their
         // random coefficient.
