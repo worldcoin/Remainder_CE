@@ -5,6 +5,8 @@ use remainder_shared_types::{utils::bookkeeping_table::initialize_tensor, Field}
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Debug};
 
+use crate::mle::mle_bookkeeping_table::MleBookkeepingTables;
+
 use super::{evals::MultilinearExtension, MleIndex};
 
 /// A struct that holds the claim and the relevant bound values for the beta
@@ -81,7 +83,7 @@ impl<F: Field> BetaValues<F> {
             mle_indices
                 .iter()
                 .filter_map(|index| match index {
-                    MleIndex::Bound(_, round_idx) => self.unbound_values.get(round_idx).copied(),
+                    MleIndex::Bound(_, i) => self.updated_values.get(i).copied(),
                     _ => None,
                 })
                 .collect_vec()
@@ -90,7 +92,7 @@ impl<F: Field> BetaValues<F> {
         let mut unbound_betas = mle_indices
             .iter()
             .filter_map(|index| match index {
-                MleIndex::Indexed(round_idx) => self.unbound_values.get(round_idx).copied(),
+                MleIndex::Indexed(i) => self.unbound_values.get(i).copied(),
                 _ => None,
             })
             .collect_vec();
@@ -100,6 +102,21 @@ impl<F: Field> BetaValues<F> {
         if !mle_indices.contains(&MleIndex::Indexed(round_index)) && independent_variable {
             unbound_betas.push(self.unbound_values.get(&round_index).copied().unwrap())
         }
+        (unbound_betas, bound_betas)
+    }
+
+    /// Given a bookkeeping table, returns the relevante beta bound and unbound values
+    pub fn get_relevant_beta_unbound_and_bound_from_bookkeeping_table(
+        &self,
+        bookkeeping_table: &MleBookkeepingTables<F>,
+    ) -> (Vec<F>, Vec<F>) {
+        // We always want every bound value so far.
+        let bound_betas = self.updated_values.values().copied().collect();
+
+        let unbound_betas = bookkeeping_table.indices.iter().map(|i|
+            self.unbound_values.get(i).unwrap().clone()
+        ).collect_vec();
+
         (unbound_betas, bound_betas)
     }
 

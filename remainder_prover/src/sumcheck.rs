@@ -52,12 +52,9 @@ use thiserror::Error;
 use crate::{
     expression::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
-        prover_expr::{MleVecIndex, ProverExpr},
+        prover_expr::ProverExpr,
     },
-    mle::{
-        mle_bookkeeping_table::{MleBookkeepingTables, MleCombinationTree},
-        Mle, MleIndex,
-    },
+    mle::{Mle, MleIndex},
 };
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -390,74 +387,7 @@ pub fn beta_cascade<F: Field>(
     // Combine all the evaluations using a random linear combination. We
     // simply sum because all evaluations are already multiplied by their
     // random coefficient.
-    let orig_val = evals_iter.reduce(|acc, elem| acc + elem).unwrap();
-
-    // test out new bookkeeping table
-    let mle_bookkeeping_tables: Vec<(bool, Vec<_>)> = mles
-        .iter()
-        .map(|mle| MleBookkeepingTables::from_mle_evals(*mle, degree, round_index))
-        .collect();
-    let expr: ExpressionNode<F, ProverExpr> =
-        ExpressionNode::Product((0..mles.len()).map(MleVecIndex::new).collect());
-    let (comb_tree, cnst_tables) = MleCombinationTree::from_mle_and_expr(&expr, mles.len());
-    // group the bookkeeping tables by evaluation on X
-    let comb_tables: Vec<_> = (0..degree + 1)
-        .map(|eval| {
-            let tables_per_eval: Vec<&MleBookkeepingTables<F>> = mle_bookkeeping_tables
-                .iter()
-                .map(|(bounded, tables)| {
-                    let j = if *bounded { 0 } else { eval };
-                    &tables[j]
-                })
-                .chain(cnst_tables.iter())
-                .collect();
-            let comb_table = MleBookkeepingTables::comb(&tables_per_eval, &comb_tree);
-            comb_table
-        })
-        .collect();
-
-    let evals_iter = beta_vals_vec
-        .iter()
-        .zip(beta_updated_vals_vec)
-        .zip(random_coefficients)
-        .map(|((beta_vals, beta_updated_vals), random_coeff)| {
-            // bind each table to beta[1..]
-            let folded_mle_successors: Vec<F> = comb_tables
-                .iter()
-                .map(|t| t.beta_cascade(&beta_vals[1..]))
-                .collect();
-
-            // combine all points with beta[0]
-            let evals = if !beta_vals.is_empty() {
-                let second_beta_successor = beta_vals[0];
-                let first_beta_successor = F::ONE - second_beta_successor;
-                let step = second_beta_successor - first_beta_successor;
-                let beta_successors =
-                    std::iter::successors(Some(first_beta_successor), move |item| {
-                        Some(*item + step)
-                    });
-                // the length of the mle successor vec before this last step must be
-                // degree + 1. therefore we can just do a zip with the beta
-                // successors to get the final degree + 1 evaluations.
-                beta_successors
-                    .zip(folded_mle_successors)
-                    .map(|(beta_succ, mle_succ)| beta_succ * mle_succ)
-                    .take(degree + 1)
-                    .collect_vec()
-            } else {
-                vec![F::ONE]
-            };
-            // apply the bound beta values as a scalar factor to each of the
-            // evaluations Multiply by the random coefficient to get the
-            // random linear combination by summing at the end.
-            apply_updated_beta_values_to_evals(evals, beta_updated_vals) * random_coeff
-        });
-    // Combine all the evaluations using a random linear combination. We
-    // simply sum because all evaluations are already multiplied by their
-    // random coefficient.
-    let new_val = evals_iter.reduce(|acc, elem| acc + elem).unwrap();
-    assert_eq!(orig_val, new_val);
-    orig_val
+    evals_iter.reduce(|acc, elem| acc + elem).unwrap()
 }
 
 /// Similar to [beta_cascade], but does not compute any evaluations and

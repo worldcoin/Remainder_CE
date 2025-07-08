@@ -15,7 +15,7 @@ use super::{
 };
 use crate::{
     layer::product::Product,
-    mle::{betavalues::BetaValues, dense::DenseMle, MleIndex},
+    mle::{betavalues::BetaValues, dense::DenseMle, mle_bookkeeping_table::{MleBookkeepingTables, MleCombinationTree}, MleIndex},
     sumcheck::{
         apply_updated_beta_values_to_evals, beta_cascade, beta_cascade_no_independent_variable,
         SumcheckEvals,
@@ -320,13 +320,26 @@ impl<F: Field> Expression<F, ProverExpr> {
         round_index: usize,
         degree: usize,
     ) -> SumcheckEvals<F> {
-        self.expression_node.evaluate_sumcheck_node_beta_cascade(
+        println!("MLE: {:?}", self.mle_vec[0]);
+        println!("EXPR: {:?}", self.expression_node);
+        println!("ROUND_INDEX: {:?}, DEGREE: {:?}", round_index, degree);
+
+        let old = self.expression_node.evaluate_sumcheck_node_beta_cascade(
             beta,
             &self.mle_vec,
             random_coefficients,
             round_index,
             degree,
-        )
+        );
+        let new = self.expression_node.evaluate_sumcheck_node_beta_cascade_bookkeeping_table(
+            beta,
+            &self.mle_vec,
+            random_coefficients,
+            round_index,
+            degree,
+        );
+        assert_eq!(old, new);
+        old
     }
 
     /// This evaluates a sumcheck message using the beta cascade algorithm, taking the sum
@@ -1059,6 +1072,100 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 a * scale
             }
         }
+    }
+
+    /// Compute a single-round sumcheck message using book keeping table impl.
+    #[allow(clippy::too_many_arguments)]
+    pub fn evaluate_sumcheck_node_beta_cascade_bookkeeping_table(
+        &self,
+        beta_vec: &[&BetaValues<F>],
+        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+        random_coefficients: &[F],
+        round_index: usize,
+        degree: usize,
+    ) -> SumcheckEvals<F> {
+        let mle_bookkeeping_tables: Vec<(bool, Vec<_>)> = mle_vec
+            .iter()
+            .map(|mle| MleBookkeepingTables::from_mle_evals(mle, degree, round_index))
+            .collect();
+
+        let (comb_tree, cnst_tables) = MleCombinationTree::from_mle_and_expr(&self, mle_vec.len());
+
+        // group the bookkeeping tables by evaluation on X
+        let comb_tables: Vec<_> = (0..degree + 1)
+            .map(|eval| {
+                let tables_per_eval: Vec<&MleBookkeepingTables<F>> = mle_bookkeeping_tables
+                    .iter()
+                    .map(|(bounded, tables)| {
+                        let j = if *bounded { 0 } else { eval };
+                        &tables[j]
+                    })
+                    .chain(cnst_tables.iter())
+                    .collect();
+                let comb_table = MleBookkeepingTables::comb(&tables_per_eval, &comb_tree);
+                comb_table
+            })
+            .collect();
+
+        // all comb_tables are of the same structure, so only 
+        // need to process beta once on `comb_tables[0]`
+        // returns:
+        //   - beta_current_val_vec: beta values of the current round
+        //   - beta_unbound_vals_vec: beta values yet to be bounded
+        //   - beta_updated_vals_vec: beta values already bounded, in the form of a multiple
+        let (beta_current_val_vec, (beta_unbound_vals_vec, beta_updated_vals_vec)): (Vec<Option<F>>, (Vec<Vec<F>>, Vec<Vec<F>>)) = beta_vec
+            .iter()
+            .map(|beta| {
+                (
+                    beta.unbound_values.get(&round_index).copied(), 
+                    beta.get_relevant_beta_unbound_and_bound_from_bookkeeping_table(
+                        &comb_tables[0],
+                    )
+                )
+            })
+            .unzip();
+
+        let evals_iter = beta_current_val_vec
+            .into_iter()
+            .zip(beta_unbound_vals_vec)
+            .zip(beta_updated_vals_vec)
+            .zip(random_coefficients)
+            .map(|(((beta_cur_val, beta_unbound_vals), beta_updated_vals), random_coeff)| {
+                // bind each table to beta_unbound
+                let folded_mle_successors: Vec<F> = comb_tables
+                    .iter()
+                    .map(|t| t.beta_cascade(&beta_unbound_vals))
+                    .collect();
+
+                // combine all points with beta_current
+                let evals = if let Some(beta_cur_val) = beta_cur_val {
+                    let second_beta_successor = beta_cur_val;
+                    let first_beta_successor = F::ONE - second_beta_successor;
+                    let step = second_beta_successor - first_beta_successor;
+                    let beta_successors =
+                        std::iter::successors(Some(first_beta_successor), move |item| {
+                            Some(*item + step)
+                        });
+                    // the length of the mle successor vec before this last step must be
+                    // degree + 1. therefore we can just do a zip with the beta
+                    // successors to get the final degree + 1 evaluations.
+                    beta_successors
+                        .zip(folded_mle_successors)
+                        .map(|(beta_succ, mle_succ)| beta_succ * mle_succ)
+                        .take(degree + 1)
+                        .collect_vec()
+                } else {
+                    vec![F::ONE]
+                };
+                // apply the bound beta values as a scalar factor to each of the
+                // evaluations Multiply by the random coefficient to get the
+                // random linear combination by summing at the end.
+                apply_updated_beta_values_to_evals(evals, &beta_updated_vals) * random_coeff
+            });
+        // Combine all the evaluations using a random linear combination. We
+        // simply sum because all evaluations are already multiplied by their
+        // random coefficient.
+        evals_iter.reduce(|acc, elem| acc + elem).unwrap()
     }
 
     /// Mutate the MLE indices that are [MleIndex::Free] in the expression and
