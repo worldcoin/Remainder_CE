@@ -1123,7 +1123,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             &mut gray_code_memoize_table,
         );
 
-        let start = Instant::now();
         // // group the bookkeeping tables by evaluation on X
         // let comb_tables: Vec<_> = (0..degree + 1)
         //     .map(|eval| {
@@ -1164,9 +1163,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             &comb_seq,
             &mut gray_code_memoize_table,
         );
-
-        let elapse = start.elapsed().as_millis();
-        println!("COMB_TIME: {} ms", elapse);
 
         // all comb_tables are of the same structure, so only
         // need to process beta once on `comb_tables[0]`
