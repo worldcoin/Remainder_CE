@@ -15,7 +15,7 @@ use super::{
 };
 use crate::{
     layer::product::Product,
-    mle::{betavalues::BetaValues, dense::DenseMle, mle_bookkeeping_table::{MleBookkeepingTables, MleCombinationTree}, MleIndex},
+    mle::{betavalues::BetaValues, dense::DenseMle, mle_bookkeeping_table::{MleBookkeepingTables, MleCombinationSeq}, MleIndex},
     sumcheck::{
         apply_updated_beta_values_to_evals, beta_cascade, beta_cascade_no_independent_variable,
         SumcheckEvals,
@@ -32,12 +32,12 @@ use std::{
     cmp::max,
     collections::{HashMap, HashSet},
     fmt::Debug,
-    ops::{Add, Mul, Neg, Sub}, time::Instant,
+    ops::{Add, Mul, Neg, Sub},
 };
 
 use anyhow::{anyhow, Ok, Result};
 
-const USE_BKT: bool = true;
+const USE_BKT: bool = false;
 
 /// mid-term solution for deduplication of DenseMleRefs
 /// basically a wrapper around usize, which denotes the index
@@ -1083,20 +1083,12 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         round_index: usize,
         degree: usize,
     ) -> SumcheckEvals<F> {
-        let start = Instant::now();
         let mle_bookkeeping_tables: Vec<(bool, Vec<_>)> = mle_vec
             .iter()
             .map(|mle| MleBookkeepingTables::from_mle_evals(mle, degree, round_index))
             .collect();
-        let elapse = start.elapsed().as_millis();
-        println!("BKT_TIME: {} ms", elapse);
+        let (comb_seq, cnst_tables) = MleCombinationSeq::from_expr_and_bind(&self, mle_vec.len(), degree, round_index);
 
-        let start = Instant::now();
-        let (comb_tree, cnst_tables) = MleCombinationTree::from_expr_and_bind(&self, mle_vec.len(), degree, round_index);
-        let elapse = start.elapsed().as_millis();
-        println!("TREE_TIME: {} ms", elapse);
-
-        let start = Instant::now();
         // group the bookkeeping tables by evaluation on X
         let comb_tables: Vec<_> = (0..degree + 1)
             .map(|eval| {
@@ -1111,14 +1103,11 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                         &tables[j]
                     }))
                     .collect();
-                let comb_table = MleBookkeepingTables::comb(&tables_per_eval, &comb_tree);
+                let comb_table = MleBookkeepingTables::comb(&tables_per_eval, &comb_seq);
                 comb_table
             })
             .collect();
-        let elapse = start.elapsed().as_millis();
-        println!("COMB_TIME: {} ms", elapse);
 
-        let start = Instant::now();
         // all comb_tables are of the same structure, so only 
         // need to process beta once on `comb_tables[0]`
         // returns:
@@ -1174,8 +1163,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 // random linear combination by summing at the end.
                 apply_updated_beta_values_to_evals(evals, &beta_updated_vals) * random_coeff
             });
-        let elapse = start.elapsed().as_millis();
-        println!("BETA_TIME: {} ms", elapse);
         // Combine all the evaluations using a random linear combination. We
         // simply sum because all evaluations are already multiplied by their
         // random coefficient.
