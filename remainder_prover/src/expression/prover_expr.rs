@@ -32,12 +32,12 @@ use std::{
     cmp::max,
     collections::{HashMap, HashSet},
     fmt::Debug,
-    ops::{Add, Mul, Neg, Sub},
+    ops::{Add, Mul, Neg, Sub}, time::Instant,
 };
 
 use anyhow::{anyhow, Ok, Result};
 
-const USE_BKT: bool = false;
+const USE_BKT: bool = true;
 
 /// mid-term solution for deduplication of DenseMleRefs
 /// basically a wrapper around usize, which denotes the index
@@ -1083,30 +1083,59 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         round_index: usize,
         degree: usize,
     ) -> SumcheckEvals<F> {
+        // book keeping table evaluation depends heavily on gray code
+        // since each gray code table is used multiple times, we memoize the gray code table
+        let mut gray_code_memoize_table = Vec::new();
+
+        let start = Instant::now();
         let mle_bookkeeping_tables: Vec<(bool, Vec<_>)> = mle_vec
             .iter()
-            .map(|mle| MleBookkeepingTables::from_mle_evals(mle, degree, round_index))
+            .map(|mle| MleBookkeepingTables::from_mle_evals(mle, degree, round_index, &mut gray_code_memoize_table))
             .collect();
-        let (comb_seq, cnst_tables) = MleCombinationSeq::from_expr_and_bind(&self, mle_vec.len(), degree, round_index);
+        let elapse = start.elapsed().as_millis();
+        println!("MLE_SIZE: {} x {}, DEGREE: {}, BKT_TIME: {} ms", mle_vec.len(), mle_vec[0].len(), degree, elapse);
 
-        // group the bookkeeping tables by evaluation on X
-        let comb_tables: Vec<_> = (0..degree + 1)
+        let (comb_seq, cnst_tables) = MleCombinationSeq::from_expr_and_bind(&self, mle_vec.len(), degree, round_index, &mut gray_code_memoize_table);
+
+        let start = Instant::now();
+        // // group the bookkeeping tables by evaluation on X
+        // let comb_tables: Vec<_> = (0..degree + 1)
+        //     .map(|eval| {
+        //         let tables_per_eval: Vec<&MleBookkeepingTables<F>> = mle_bookkeeping_tables
+        //             .iter()
+        //             .map(|(bounded, tables)| {
+        //                 let j = if *bounded { 0 } else { eval };
+        //                 &tables[j]
+        //             })
+        //             .chain(cnst_tables.iter().map(|(bounded, tables)| {
+        //                 let j = if *bounded { 0 } else { eval };
+        //                 &tables[j]
+        //             }))
+        //             .collect();
+        //         let comb_table = MleBookkeepingTables::comb(&tables_per_eval, &comb_seq, &mut gray_code_memoize_table);
+        //         comb_table
+        //     })
+        //     .collect();
+
+        // batch evaluate all tables on each X
+        let eval_tables_list: Vec<Vec<&MleBookkeepingTables<F>>> = (0..degree + 1)
             .map(|eval| {
-                let tables_per_eval: Vec<&MleBookkeepingTables<F>> = mle_bookkeeping_tables
-                    .iter()
-                    .map(|(bounded, tables)| {
-                        let j = if *bounded { 0 } else { eval };
-                        &tables[j]
-                    })
-                    .chain(cnst_tables.iter().map(|(bounded, tables)| {
-                        let j = if *bounded { 0 } else { eval };
-                        &tables[j]
-                    }))
-                    .collect();
-                let comb_table = MleBookkeepingTables::comb(&tables_per_eval, &comb_seq);
-                comb_table
-            })
-            .collect();
+                mle_bookkeeping_tables
+                .iter()
+                .map(|(bounded, tables)| {
+                    let j = if *bounded { 0 } else { eval };
+                    &tables[j]
+                })
+                .chain(cnst_tables.iter().map(|(bounded, tables)| {
+                    let j = if *bounded { 0 } else { eval };
+                    &tables[j]
+                }))
+                .collect()
+            }).collect();
+        let comb_tables = MleBookkeepingTables::comb_batch(eval_tables_list, &comb_seq, &mut gray_code_memoize_table);
+
+        let elapse = start.elapsed().as_millis();
+        println!("COMB_TIME: {} ms", elapse);
 
         // all comb_tables are of the same structure, so only 
         // need to process beta once on `comb_tables[0]`
