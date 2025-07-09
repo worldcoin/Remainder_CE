@@ -72,19 +72,24 @@ impl<F: Field> BetaValues<F> {
         &self,
         mle_indices: &[MleIndex<F>],
         round_index: usize,
-        independent_variable: bool,
+        computes_evals: bool,
     ) -> (Vec<F>, Vec<F>) {
         // We always want every bound value so far.
-        let bound_betas = if independent_variable {
+        // If we are computing evaluations for this node, then we want
+        // all of the updated beta values so far.
+        let bound_betas = if computes_evals {
             self.updated_values.values().copied().collect()
-        } else {
-            mle_indices
-                .iter()
-                .filter_map(|index| match index {
-                    MleIndex::Bound(_, round_idx) => self.unbound_values.get(round_idx).copied(),
-                    _ => None,
-                })
-                .collect_vec()
+        }
+        // Otherwise, we are just computing the sum of the variables
+        // multiplied by the beta this round. This means that there is
+        // a beta MLE outside of this expression that factors in the
+        // updated values already, either in the form of the verifier
+        // computing the full sumcheck evaluation multiplied by the fully
+        // bound beta, or in the form of a selector where the updated
+        // values are factored directly into the evaluation of the selector
+        // variable itself.
+        else {
+            Vec::new()
         };
 
         let mut unbound_betas = mle_indices
@@ -97,7 +102,7 @@ impl<F: Field> BetaValues<F> {
 
         // If the MLE indices does not contain the current "independent variable",
         // then we want to manually include it in our unbound betas.
-        if !mle_indices.contains(&MleIndex::Indexed(round_index)) && independent_variable {
+        if !mle_indices.contains(&MleIndex::Indexed(round_index)) && computes_evals {
             unbound_betas.push(self.unbound_values.get(&round_index).copied().unwrap())
         }
         (unbound_betas, bound_betas)
