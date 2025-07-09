@@ -113,9 +113,11 @@ impl<F: Field> BetaValues<F> {
         // We always want every bound value so far.
         let bound_betas = self.updated_values.values().copied().collect();
 
-        let unbound_betas = bookkeeping_table.indices.iter().map(|i|
-            self.unbound_values.get(i).unwrap().clone()
-        ).collect_vec();
+        let unbound_betas = bookkeeping_table
+            .indices
+            .iter()
+            .map(|i| self.unbound_values.get(i).unwrap().clone())
+            .collect_vec();
 
         (unbound_betas, bound_betas)
     }

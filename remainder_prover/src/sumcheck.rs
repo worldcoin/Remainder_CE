@@ -37,7 +37,8 @@
 
 use std::{
     iter::{repeat, successors},
-    ops::{Add, Mul, Neg}, time::Instant,
+    ops::{Add, Mul, Neg},
+    time::Instant,
 };
 
 /// Tests for sumcheck with various expressions.
@@ -327,7 +328,13 @@ pub fn beta_cascade<F: Field>(
     let start = Instant::now();
     let mle_successor_vec = successors_from_mle_product(mles, degree, round_index).unwrap();
     let elapse = start.elapsed().as_millis();
-    println!("MLE_SIZE: {} x {}, DEGREE: {}, SUCC_TIME: {} ms", mles.len(), mles[0].len(), degree, elapse);
+    println!(
+        "MLE_SIZE: {} x {}, DEGREE: {}, SUCC_TIME: {} ms",
+        mles.len(),
+        mles[0].len(),
+        degree,
+        elapse
+    );
 
     // We compute the sumcheck evaluations using beta cascade for the same
     // set of MLE successors, but different beta values. All of these are
