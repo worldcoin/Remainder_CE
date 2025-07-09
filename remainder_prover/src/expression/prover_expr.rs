@@ -15,7 +15,12 @@ use super::{
 };
 use crate::{
     layer::product::Product,
-    mle::{betavalues::BetaValues, dense::DenseMle, mle_bookkeeping_table::{MleBookkeepingTables, MleCombinationSeq}, MleIndex},
+    mle::{
+        betavalues::BetaValues,
+        dense::DenseMle,
+        mle_bookkeeping_table::{MleBookkeepingTables, MleCombinationSeq},
+        MleIndex,
+    },
     sumcheck::{
         apply_updated_beta_values_to_evals, beta_cascade, beta_cascade_no_independent_variable,
         SumcheckEvals,
@@ -32,7 +37,8 @@ use std::{
     cmp::max,
     collections::{HashMap, HashSet},
     fmt::Debug,
-    ops::{Add, Mul, Neg, Sub}, time::Instant,
+    ops::{Add, Mul, Neg, Sub},
+    time::Instant,
 };
 
 use anyhow::{anyhow, Ok, Result};
@@ -323,13 +329,14 @@ impl<F: Field> Expression<F, ProverExpr> {
         degree: usize,
     ) -> SumcheckEvals<F> {
         if USE_BKT {
-            self.expression_node.evaluate_sumcheck_node_beta_cascade_bookkeeping_table(
-                beta,
-                &self.mle_vec,
-                random_coefficients,
-                round_index,
-                degree,
-            )
+            self.expression_node
+                .evaluate_sumcheck_node_beta_cascade_bookkeeping_table(
+                    beta,
+                    &self.mle_vec,
+                    random_coefficients,
+                    round_index,
+                    degree,
+                )
         } else {
             self.expression_node.evaluate_sumcheck_node_beta_cascade(
                 beta,
@@ -1090,12 +1097,31 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         let start = Instant::now();
         let mle_bookkeeping_tables: Vec<(bool, Vec<_>)> = mle_vec
             .iter()
-            .map(|mle| MleBookkeepingTables::from_mle_evals(mle, degree, round_index, &mut gray_code_memoize_table))
+            .map(|mle| {
+                MleBookkeepingTables::from_mle_evals(
+                    mle,
+                    degree,
+                    round_index,
+                    &mut gray_code_memoize_table,
+                )
+            })
             .collect();
         let elapse = start.elapsed().as_millis();
-        println!("MLE_SIZE: {} x {}, DEGREE: {}, BKT_TIME: {} ms", mle_vec.len(), mle_vec[0].len(), degree, elapse);
+        println!(
+            "MLE_SIZE: {} x {}, DEGREE: {}, BKT_TIME: {} ms",
+            mle_vec.len(),
+            mle_vec[0].len(),
+            degree,
+            elapse
+        );
 
-        let (comb_seq, cnst_tables) = MleCombinationSeq::from_expr_and_bind(&self, mle_vec.len(), degree, round_index, &mut gray_code_memoize_table);
+        let (comb_seq, cnst_tables) = MleCombinationSeq::from_expr_and_bind(
+            &self,
+            mle_vec.len(),
+            degree,
+            round_index,
+            &mut gray_code_memoize_table,
+        );
 
         let start = Instant::now();
         // // group the bookkeeping tables by evaluation on X
@@ -1121,36 +1147,44 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         let eval_tables_list: Vec<Vec<&MleBookkeepingTables<F>>> = (0..degree + 1)
             .map(|eval| {
                 mle_bookkeeping_tables
-                .iter()
-                .map(|(bounded, tables)| {
-                    let j = if *bounded { 0 } else { eval };
-                    &tables[j]
-                })
-                .chain(cnst_tables.iter().map(|(bounded, tables)| {
-                    let j = if *bounded { 0 } else { eval };
-                    &tables[j]
-                }))
-                .collect()
-            }).collect();
-        let comb_tables = MleBookkeepingTables::comb_batch(eval_tables_list, &comb_seq, &mut gray_code_memoize_table);
+                    .iter()
+                    .map(|(bounded, tables)| {
+                        let j = if *bounded { 0 } else { eval };
+                        &tables[j]
+                    })
+                    .chain(cnst_tables.iter().map(|(bounded, tables)| {
+                        let j = if *bounded { 0 } else { eval };
+                        &tables[j]
+                    }))
+                    .collect()
+            })
+            .collect();
+        let comb_tables = MleBookkeepingTables::comb_batch(
+            eval_tables_list,
+            &comb_seq,
+            &mut gray_code_memoize_table,
+        );
 
         let elapse = start.elapsed().as_millis();
         println!("COMB_TIME: {} ms", elapse);
 
-        // all comb_tables are of the same structure, so only 
+        // all comb_tables are of the same structure, so only
         // need to process beta once on `comb_tables[0]`
         // returns:
         //   - beta_current_val_vec: beta values of the current round
         //   - beta_unbound_vals_vec: beta values yet to be bounded
         //   - beta_updated_vals_vec: beta values already bounded, in the form of a multiple
-        let (beta_current_val_vec, (beta_unbound_vals_vec, beta_updated_vals_vec)): (Vec<Option<F>>, (Vec<Vec<F>>, Vec<Vec<F>>)) = beta_vec
+        let (beta_current_val_vec, (beta_unbound_vals_vec, beta_updated_vals_vec)): (
+            Vec<Option<F>>,
+            (Vec<Vec<F>>, Vec<Vec<F>>),
+        ) = beta_vec
             .iter()
             .map(|beta| {
                 (
-                    beta.unbound_values.get(&round_index).copied(), 
+                    beta.unbound_values.get(&round_index).copied(),
                     beta.get_relevant_beta_unbound_and_bound_from_bookkeeping_table(
                         &comb_tables[0],
-                    )
+                    ),
                 )
             })
             .unzip();
@@ -1160,38 +1194,40 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             .zip(beta_unbound_vals_vec)
             .zip(beta_updated_vals_vec)
             .zip(random_coefficients)
-            .map(|(((beta_cur_val, beta_unbound_vals), beta_updated_vals), random_coeff)| {
-                // bind each table to beta_unbound
-                let folded_mle_successors: Vec<F> = comb_tables
-                    .iter()
-                    .map(|t| t.beta_cascade(&beta_unbound_vals))
-                    .collect();
+            .map(
+                |(((beta_cur_val, beta_unbound_vals), beta_updated_vals), random_coeff)| {
+                    // bind each table to beta_unbound
+                    let folded_mle_successors: Vec<F> = comb_tables
+                        .iter()
+                        .map(|t| t.beta_cascade(&beta_unbound_vals))
+                        .collect();
 
-                // combine all points with beta_current
-                let evals = if let Some(beta_cur_val) = beta_cur_val {
-                    let second_beta_successor = beta_cur_val;
-                    let first_beta_successor = F::ONE - second_beta_successor;
-                    let step = second_beta_successor - first_beta_successor;
-                    let beta_successors =
-                        std::iter::successors(Some(first_beta_successor), move |item| {
-                            Some(*item + step)
-                        });
-                    // the length of the mle successor vec before this last step must be
-                    // degree + 1. therefore we can just do a zip with the beta
-                    // successors to get the final degree + 1 evaluations.
-                    beta_successors
-                        .zip(folded_mle_successors)
-                        .map(|(beta_succ, mle_succ)| beta_succ * mle_succ)
-                        .take(degree + 1)
-                        .collect_vec()
-                } else {
-                    vec![F::ONE]
-                };
-                // apply the bound beta values as a scalar factor to each of the
-                // evaluations Multiply by the random coefficient to get the
-                // random linear combination by summing at the end.
-                apply_updated_beta_values_to_evals(evals, &beta_updated_vals) * random_coeff
-            });
+                    // combine all points with beta_current
+                    let evals = if let Some(beta_cur_val) = beta_cur_val {
+                        let second_beta_successor = beta_cur_val;
+                        let first_beta_successor = F::ONE - second_beta_successor;
+                        let step = second_beta_successor - first_beta_successor;
+                        let beta_successors =
+                            std::iter::successors(Some(first_beta_successor), move |item| {
+                                Some(*item + step)
+                            });
+                        // the length of the mle successor vec before this last step must be
+                        // degree + 1. therefore we can just do a zip with the beta
+                        // successors to get the final degree + 1 evaluations.
+                        beta_successors
+                            .zip(folded_mle_successors)
+                            .map(|(beta_succ, mle_succ)| beta_succ * mle_succ)
+                            .take(degree + 1)
+                            .collect_vec()
+                    } else {
+                        vec![F::ONE]
+                    };
+                    // apply the bound beta values as a scalar factor to each of the
+                    // evaluations Multiply by the random coefficient to get the
+                    // random linear combination by summing at the end.
+                    apply_updated_beta_values_to_evals(evals, &beta_updated_vals) * random_coeff
+                },
+            );
         // Combine all the evaluations using a random linear combination. We
         // simply sum because all evaluations are already multiplied by their
         // random coefficient.
