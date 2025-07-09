@@ -25,7 +25,9 @@ use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{layer_enum::LayerEnum, LayerId};
 use crate::layer::{Layer, LayerDescription, VerifierLayer};
-use crate::layouter::layouting::{layout, CircuitDescriptionMap, CircuitLocation, CircuitMap};
+use crate::layouter::layouting::{
+    layout, CircuitDescriptionMap, CircuitLocation, CircuitMap, LayerDescriptionMap,
+};
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, NodeId};
 use crate::mle::dense::DenseMle;
@@ -819,7 +821,7 @@ pub fn generate_circuit_description<F: Field>(
     nodes: Vec<NodeEnum<F>>,
 ) -> Result<(
     GKRCircuitDescription<F>,
-    HashMap<LayerId, Vec<NodeId>>,
+    LayerDescriptionMap,
     CircuitDescriptionMap,
 )> {
     // FIXME This doesn't seem well factored.  Pass in the return values of layout() as arguments to this function?  Inline layout here?
@@ -834,14 +836,14 @@ pub fn generate_circuit_description<F: Field>(
     let mut output_layers = Vec::<OutputLayerDescription<F>>::new();
     let mut circuit_description_map = CircuitDescriptionMap::new();
 
-    let mut input_layer_id_to_input_shred_ids = HashMap::new();
+    let mut layer_description_map = LayerDescriptionMap::new();
     let input_layers = input_layer_nodes
         .iter()
         .map(|input_layer_node| {
             let input_layer_description = input_layer_node
                 .generate_input_layer_description::<F>(&mut circuit_description_map)
                 .unwrap();
-            input_layer_id_to_input_shred_ids.insert(
+            layer_description_map.insert(
                 input_layer_description.layer_id,
                 input_layer_node.subnodes().unwrap(),
             );
@@ -895,7 +897,7 @@ pub fn generate_circuit_description<F: Field>(
 
     Ok((
         circuit_description,
-        input_layer_id_to_input_shred_ids,
+        layer_description_map,
         circuit_description_map,
     ))
 }
