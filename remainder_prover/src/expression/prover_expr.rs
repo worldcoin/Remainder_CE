@@ -1090,21 +1090,10 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         round_index: usize,
         degree: usize,
     ) -> SumcheckEvals<F> {
-        // book keeping table evaluation depends heavily on gray code
-        // since each gray code table is used multiple times, we memoize the gray code table
-        let mut gray_code_memoize_table = Vec::new();
-
         let start = Instant::now();
         let mle_bookkeeping_tables: Vec<(bool, Vec<_>)> = mle_vec
             .iter()
-            .map(|mle| {
-                MleBookkeepingTables::from_mle_evals(
-                    mle,
-                    degree,
-                    round_index,
-                    &mut gray_code_memoize_table,
-                )
-            })
+            .map(|mle| MleBookkeepingTables::from_mle_evals(mle, degree, round_index))
             .collect();
         let elapse = start.elapsed().as_millis();
         println!(
@@ -1115,13 +1104,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             elapse
         );
 
-        let (comb_seq, cnst_tables) = MleCombinationSeq::from_expr_and_bind(
-            &self,
-            mle_vec.len(),
-            degree,
-            round_index,
-            &mut gray_code_memoize_table,
-        );
+        let (comb_seq, cnst_tables) =
+            MleCombinationSeq::from_expr_and_bind(&self, mle_vec.len(), degree, round_index);
 
         // // group the bookkeeping tables by evaluation on X
         // let comb_tables: Vec<_> = (0..degree + 1)
@@ -1158,11 +1142,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .collect()
             })
             .collect();
-        let comb_tables = MleBookkeepingTables::comb_batch(
-            eval_tables_list,
-            &comb_seq,
-            &mut gray_code_memoize_table,
-        );
+        let comb_tables = MleBookkeepingTables::comb_batch(eval_tables_list, &comb_seq);
 
         // all comb_tables are of the same structure, so only
         // need to process beta once on `comb_tables[0]`
