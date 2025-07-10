@@ -25,11 +25,8 @@ use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{layer_enum::LayerEnum, LayerId};
 use crate::layer::{Layer, LayerDescription, VerifierLayer};
-use crate::layouter::layouting::{
-    layout, CircuitDescriptionMap, CircuitLocation, CircuitMap, LayerDescriptionMap,
-};
-use crate::layouter::nodes::node_enum::NodeEnum;
-use crate::layouter::nodes::{CircuitNode, NodeId};
+use crate::layouter::layouting::{CircuitLocation, CircuitMap};
+use crate::layouter::nodes::NodeId;
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
@@ -811,93 +808,4 @@ impl<F: Field> GKRCircuitDescription<F> {
 
         Ok(input_layer_claims)
     }
-}
-
-/// Generate the circuit description given a set of [NodeEnum]s.
-/// Returns a [GKRCircuitDescription], and a function that takes a map of input shred data and returns a
-/// map of input layer data.
-/// The returned circuit description already has indices assigned to the MLEs.
-pub fn generate_circuit_description<F: Field>(
-    nodes: Vec<NodeEnum<F>>,
-) -> Result<(
-    GKRCircuitDescription<F>,
-    LayerDescriptionMap,
-    CircuitDescriptionMap,
-)> {
-    // FIXME This doesn't seem well factored.  Pass in the return values of layout() as arguments to this function?  Inline layout here?
-    let (
-        input_layer_nodes,
-        fiat_shamir_challenge_nodes,
-        intermediate_nodes,
-        lookup_nodes,
-        output_nodes,
-    ) = layout(nodes).unwrap();
-    let mut intermediate_layers = Vec::<LayerDescriptionEnum<F>>::new();
-    let mut output_layers = Vec::<OutputLayerDescription<F>>::new();
-    let mut circuit_description_map = CircuitDescriptionMap::new();
-
-    let mut layer_description_map = LayerDescriptionMap::new();
-    let input_layers = input_layer_nodes
-        .iter()
-        .map(|input_layer_node| {
-            let input_layer_description = input_layer_node
-                .generate_input_layer_description::<F>(&mut circuit_description_map)
-                .unwrap();
-            layer_description_map.insert(
-                input_layer_description.layer_id,
-                input_layer_node.subnodes().unwrap(),
-            );
-            input_layer_description
-        })
-        .collect_vec();
-
-    let fiat_shamir_challenges = fiat_shamir_challenge_nodes
-        .iter()
-        .map(|fiat_shamir_challenge_node| {
-            fiat_shamir_challenge_node
-                .generate_circuit_description::<F>(&mut circuit_description_map)
-        })
-        .collect_vec();
-
-    for node in &intermediate_nodes {
-        let node_compiled_intermediate_layers = node
-            .generate_circuit_description(&mut circuit_description_map)
-            .unwrap();
-        intermediate_layers.extend(node_compiled_intermediate_layers);
-    }
-
-    // Get the contributions of each LookupTable to the circuit description.
-    (intermediate_layers, output_layers) = lookup_nodes.iter().fold(
-        (intermediate_layers, output_layers),
-        |(mut lookup_intermediate_acc, mut lookup_output_acc), lookup_node| {
-            let (intermediate_layers, output_layer) = lookup_node
-                .generate_lookup_circuit_description(&mut circuit_description_map)
-                .unwrap();
-            lookup_intermediate_acc.extend(intermediate_layers);
-            lookup_output_acc.push(output_layer);
-            (lookup_intermediate_acc, lookup_output_acc)
-        },
-    );
-
-    output_layers = output_nodes
-        .iter()
-        .fold(output_layers, |mut output_layer_acc, output_node| {
-            output_layer_acc
-                .extend(output_node.generate_circuit_description(&mut circuit_description_map));
-            output_layer_acc
-        });
-
-    let mut circuit_description = GKRCircuitDescription {
-        input_layers,
-        fiat_shamir_challenges,
-        intermediate_layers,
-        output_layers,
-    };
-    circuit_description.index_mle_indices(0);
-
-    Ok((
-        circuit_description,
-        layer_description_map,
-        circuit_description_map,
-    ))
 }
