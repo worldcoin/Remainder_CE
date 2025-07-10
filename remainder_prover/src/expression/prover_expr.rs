@@ -1127,8 +1127,10 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .collect()
             })
             .collect();
-        let comb_tables =
-            MleBookkeepingTables::comb_multi_batch_single_output(eval_tables_list, &comb_seq);
+        let comb_tables: Vec<_> = eval_tables_list.into_iter().map(|eval_tables|
+            MleBookkeepingTables::comb(eval_tables, &comb_seq)
+        ).collect();
+        // MleBookkeepingTables::comb_batch(eval_tables_list, &comb_seq);
 
         // all comb_tables are of the same structure, so only
         // need to process beta once on `comb_tables[0]`
