@@ -1055,14 +1055,18 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     })
                     .unzip();
 
-                beta_cascade(
+                let start = Instant::now();
+                let output = beta_cascade(
                     &mles,
                     degree,
                     round_index,
                     &unbound_beta_vec,
                     &bound_beta_vec,
                     random_coefficients,
-                )
+                );
+                let elapse = start.elapsed().as_millis();
+                println!("EVAL_TIME: {} ms", elapse);
+                output
             }
 
             // when the expression is scaled by a field element, we can scale the
@@ -1107,25 +1111,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         let (comb_seq, cnst_tables) =
             MleCombinationSeq::from_expr_and_bind(&self, mle_vec.len(), degree, round_index);
 
-        // // group the bookkeeping tables by evaluation on X
-        // let comb_tables: Vec<_> = (0..degree + 1)
-        //     .map(|eval| {
-        //         let tables_per_eval: Vec<&MleBookkeepingTables<F>> = mle_bookkeeping_tables
-        //             .iter()
-        //             .map(|(bounded, tables)| {
-        //                 let j = if *bounded { 0 } else { eval };
-        //                 &tables[j]
-        //             })
-        //             .chain(cnst_tables.iter().map(|(bounded, tables)| {
-        //                 let j = if *bounded { 0 } else { eval };
-        //                 &tables[j]
-        //             }))
-        //             .collect();
-        //         let comb_table = MleBookkeepingTables::comb(&tables_per_eval, &comb_seq, &mut gray_code_memoize_table);
-        //         comb_table
-        //     })
-        //     .collect();
-
         // batch evaluate all tables on each X
         let eval_tables_list: Vec<Vec<&MleBookkeepingTables<F>>> = (0..degree + 1)
             .map(|eval| {
@@ -1142,7 +1127,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .collect()
             })
             .collect();
-        let comb_tables = MleBookkeepingTables::comb_batch(eval_tables_list, &comb_seq);
+        let comb_tables =
+            MleBookkeepingTables::comb_multi_batch_single_output(eval_tables_list, &comb_seq);
 
         // all comb_tables are of the same structure, so only
         // need to process beta once on `comb_tables[0]`
