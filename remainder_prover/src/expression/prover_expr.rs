@@ -16,10 +16,8 @@ use super::{
 use crate::{
     layer::product::Product,
     mle::{
-        betavalues::BetaValues,
-        dense::DenseMle,
-        mle_bookkeeping_table::{MleBookkeepingTables, MleCombinationSeq},
-        MleIndex,
+        betavalues::BetaValues, dense::DenseMle, mle_bookkeeping_table::MleBookkeepingTables,
+        mle_combination::MleCombinationSeq, MleIndex,
     },
     sumcheck::{
         apply_updated_beta_values_to_evals, beta_cascade, beta_cascade_no_independent_variable,
@@ -1127,9 +1125,10 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .collect()
             })
             .collect();
-        let comb_tables: Vec<_> = eval_tables_list.into_iter().map(|eval_tables|
-            MleBookkeepingTables::comb(eval_tables, &comb_seq)
-        ).collect();
+        let comb_tables: Vec<_> = eval_tables_list
+            .into_iter()
+            .map(|eval_tables| MleBookkeepingTables::comb(eval_tables, &comb_seq))
+            .collect();
         // MleBookkeepingTables::comb_batch(eval_tables_list, &comb_seq);
 
         // all comb_tables are of the same structure, so only
