@@ -488,8 +488,8 @@ pub fn prove_circuit<F: Field>(
     Ok(input_layer_claims)
 }
 
-/// The Verifier Key associated with a GKR proof of a [ProofSystem].
-/// It consists of consice GKR Circuit description to be use by the Verifier.
+/// The complete description of a layered circuit whose output validity can be
+/// proven against a set of committed inputs.
 #[derive(Debug, Serialize, Deserialize, Hash, Clone)]
 #[serde(bound = "F: Field")]
 pub struct GKRCircuitDescription<F: Field> {

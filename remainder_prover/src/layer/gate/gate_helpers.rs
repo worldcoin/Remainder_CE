@@ -630,7 +630,8 @@ pub(crate) fn fold_wiring_into_beta_mle_identity_gate<F: Field>(
 
 /// This function uses the "Rothblum"-inspired sumcheck trick
 /// in order to evaluate the necessary MLEs as defined in
-/// [Libra] for phase 1 of binary gate sumcheck messages.
+/// <https://eprint.iacr.org/2019/317.pdf> for phase 1 of
+/// binary gate sumcheck messages.
 ///
 /// # Arguments:
 /// * `wiring`: The gate wiring in the form (z, x, y) such that
@@ -752,7 +753,8 @@ pub(crate) fn fold_binary_gate_wiring_into_mles_phase_1<F: Field>(
 
 /// This function uses the "Rothblum"-inspired sumcheck trick
 /// in order to evaluate the necessary MLEs as defined in
-/// [Libra] for phase 2 of binary gate sumcheck messages.
+/// <https://eprint.iacr.org/2019/317.pdf> for phase 2 of binary
+/// gate sumcheck messages.
 ///
 /// # Arguments:
 /// * `wiring`: The gate wiring in the form (z, x, y) such that

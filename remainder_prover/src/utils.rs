@@ -50,7 +50,7 @@ pub fn file_exists(file_path: &String) -> bool {
     }
 }
 
-/// Returns `true` if the parallel feature is on for the [remainder]
+/// Returns `true` if the parallel feature is on for the `remainder`
 /// crate.
 pub fn is_parallel_feature_on() -> bool {
     #[cfg(feature = "parallel")]

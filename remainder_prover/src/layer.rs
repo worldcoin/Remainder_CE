@@ -110,7 +110,8 @@ pub trait Layer<F: Field> {
     fn initialize(&mut self, claim_point: &[F]) -> Result<()>;
 
     /// Tries to prove `claims` for this layer. There is only a single
-    /// aggregated claim if our [ClaimAggregationStrategy] is Interpolative,
+    /// aggregated claim if our
+    /// [remainder_shared_types::config::ClaimAggregationStrategy] is Interpolative,
     /// otherwise we have several claims we take the random linear
     /// combination over.
     ///
@@ -176,7 +177,8 @@ pub trait LayerDescription<F: Field> {
     /// Tries to verify `claims` for this layer and returns a [VerifierLayer]
     /// with a fully bound and evaluated expression.
     ///
-    /// There is only a single aggregated claim if our [ClaimAggregationStrategy]
+    /// There is only a single aggregated claim if our
+    /// [remainder_shared_types::config::ClaimAggregationStrategy]
     /// is Interpolative, otherwise we have several claims we take the random linear
     /// combination over.
     ///
@@ -213,7 +215,7 @@ pub trait LayerDescription<F: Field> {
     fn max_degree(&self) -> usize;
 
     /// Label the MLE indices, starting from the `start_index` by
-    /// converting [MleIndex::Free] to [MleIndex::IndexedBit].
+    /// converting [crate::mle::MleIndex::Free] to [crate::mle::MleIndex::Indexed].
     fn index_mle_indices(&mut self, start_index: usize);
 
     /// Given the [MleDescription]s of which outputs are expected of this layer, compute the data

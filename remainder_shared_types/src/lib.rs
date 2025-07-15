@@ -37,11 +37,11 @@ pub type Base = <Bn256Point as CurveExt>::Base;
 ///   `impl` block for [Poseidon::new], for example).
 /// * [WithSmallOrderMulGroup] -- see associated trait documentation for more
 ///   details. Our use-case is specifically for Halo2's FFT implementation, which
-///   uses Halo2's [EvaluationDomain] to compute extended evaluations of a
+///   uses Halo2's `EvaluationDomain` to compute extended evaluations of a
 ///   power-of-two degree polynomial. This trait will ideally be removed in a
 ///   future update.
 /// * [Hash] -- necessary for creating a hashed representation of a circuit,
-///   as well as storing [Field] values within data structures as [HashMap].
+///   as well as storing [Field] values within data structures e.g. `HashMap`.
 /// * [Ord] -- not strictly necessary for cryptographic purposes, but useful
 ///   for comparing elements against one another. Consider replacing with [Eq].
 /// * [Serialize], [Deserialize] -- necessary for writing values to file using

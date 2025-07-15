@@ -25,8 +25,8 @@ pub mod mle_enum;
 /// tables of Beta functions.
 pub mod betavalues;
 
-/// Defines [Evaluations], [MultilinearExtension] for representing un-indexed
-/// MLEs.
+/// Defines [crate::mle::evals::Evaluations] and
+/// [crate::mle::evals::MultilinearExtension] for representing un-indexed MLEs.
 pub mod evals;
 
 /// Defines [crate::mle::mle_description::MleDescription], i.e. the in-circuit-context description
