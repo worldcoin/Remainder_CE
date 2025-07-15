@@ -38,7 +38,7 @@ impl<F: Field> MleDescription<F> {
         self.var_indices = new_mle_indices;
     }
 
-    /// Convert [MleIndex::Free] into [MleIndex::IndexedBit] with the correct
+    /// Convert [MleIndex::Free] into [MleIndex::Indexed] with the correct
     /// index labeling, given by start_index parameter.
     pub fn index_mle_indices(&mut self, start_index: usize) {
         let mut index_counter = start_index;
