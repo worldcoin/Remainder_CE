@@ -120,7 +120,7 @@ impl<F: Field> OutputLayer<F> {
 
     /// Extract a claim on this output layer by extracting the bindings from the fixed variables.
     pub fn get_claim(&mut self) -> Result<Claim<F>> {
-        if self.mle.len() != 1 {
+        if !self.mle.is_fully_bounded() {
             return Err(anyhow!(LayerError::ClaimError(ClaimError::MleRefMleError)));
         }
 

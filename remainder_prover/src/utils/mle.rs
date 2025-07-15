@@ -692,7 +692,7 @@ pub fn evaluate_mle_destructive<F: Field>(mle: &mut MultilinearExtension<F>, poi
     point.iter().for_each(|challenge| {
         mle.fix_variable(*challenge);
     });
-    assert_eq!(mle.len(), 1);
+    assert!(mle.is_fully_bound());
     mle.first()
 }
 
