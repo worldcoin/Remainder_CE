@@ -826,7 +826,7 @@ impl<F: Field> IdentityGate<F> {
     }
 
     fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
-        assert_eq!(self.source_mle.len(), 1);
+        assert!(self.source_mle.is_fully_bounded());
         transcript_writer.append("Fully bound MLE evaluation", self.source_mle.first());
     }
 

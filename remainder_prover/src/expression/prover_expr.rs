@@ -430,15 +430,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
 
-                // TODO(Makis): Technically, this is wrong because a fully-bound
-                // MLE whose value happens to be `F::ZERO`, is allowed to have
-                // an implicit representation with an empty bookeeping table in
-                // the current implementation of
-                // [remainder::mle::evals::Evaluations].  We should probably
-                // remove this test and instead rely on
-                // [remainder::mle::dense::Dense::value] which performs the
-                // necessary checks and panics if the MLE is not fully-bound.
-                if mle.len() != 1 {
+                if !mle.is_fully_bounded() {
                     return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
                 }
 
@@ -462,10 +454,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                     .collect_vec();
 
-                // TODO(Makis): Same as in the previous case. Should probably
-                // remove.
                 for mle in mles.iter() {
-                    if mle.len() != 1 {
+                    if !mle.is_fully_bounded() {
                         return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
                     }
                 }
@@ -1455,7 +1445,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
-                assert_eq!(mle.len(), 1);
+                assert!(mle.is_fully_bounded());
                 products.push(Product::<F, F>::new(&[mle.clone()], multiplier));
             }
             ExpressionNode::Product(mle_vec_indices) => {
