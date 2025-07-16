@@ -42,7 +42,7 @@ pub mod hyrax_input_layer;
 /// [HyraxLayerProof]
 pub mod hyrax_layer;
 /// The module that contains all functions necessary to do operations on an
-/// output layer, [HyraxOutputLayer]
+/// output layer.
 pub mod hyrax_output_layer;
 #[cfg(test)]
 /// The testing module for integration tests
@@ -781,7 +781,7 @@ pub struct FiatShamirChallengeProof<C: PrimeOrderCurve> {
 
 /// Match up the claims from the verifier with the claims from the prover. Used
 /// for proofs of evaluation on public values where the proof (in the case of
-/// [PublicInputLayer] and [FiatShamirChallenge] ) consists of the prover simply
+/// "public" input layers and [FiatShamirChallenge] ) consists of the prover simply
 /// opening the commitments in the claims, or equivalently just handing over the
 /// CommittedScalars. Panics if a verifier claim can not be matched to a prover
 /// claim (but doesn't worry about prover claims that don't have a verifier

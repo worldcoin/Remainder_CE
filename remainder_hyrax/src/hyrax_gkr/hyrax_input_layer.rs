@@ -245,7 +245,7 @@ impl From<InputLayerDescription> for HyraxInputLayerDescription {
 }
 
 /// Given a [HyraxInputLayerDescription] and values for its MLE, compute the
-/// [HyraxInputCommitment] for the input layer.
+/// [HyraxProverInputCommitment] for the input layer.
 pub fn commit_to_input_values<C: PrimeOrderCurve>(
     input_layer_desc: &HyraxInputLayerDescription,
     input_mle: &MultilinearExtension<C::Scalar>,
