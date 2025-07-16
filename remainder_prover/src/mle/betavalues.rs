@@ -17,9 +17,11 @@ use super::{evals::MultilinearExtension, MleIndex};
 /// evaluates to `1` at this point and `0` at every other point, which is a
 /// beta table. This would be a table of size `2^n`.
 ///
-/// Instead, we choose to store just the individual values in a hash map as we
-/// don't need the entire representation in order to perform the computations
-/// with beta tables.
+/// Instead, we represent the beta MLE `\beta(g_0, ..., g_{n-1}; x_0, ..., x_{n-1})` by mapping each
+/// index `i` that participates in this MLE to either `g_i`, if `x_i` has not yet been bound, or to
+/// `(1 - r_i)*(1 - g_i) + r_i*g_i`, if `x_i` has already been bound to `r_i`. Indices in the range
+/// `{0, 1, ..., n-1}` which are not part of this MLE are called "unassigned" and they don't map to
+/// any value.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub struct BetaValues<F: Field> {
@@ -86,12 +88,9 @@ impl<F: Field> BetaValues<F> {
 
     /// obtain the value at an index if it is unbounded
     pub fn get_unbound_value(&self, index: usize) -> Option<F> {
-        if self.values.len() <= index {
-            None
-        } else if let BetaValueType::Unbound(v) = self.values[index] {
-            Some(v)
-        } else {
-            None
+        match self.values.get(index) {
+            Some(BetaValueType::Unbound(v)) => Some(*v),
+            _ => None,
         }
     }
 
