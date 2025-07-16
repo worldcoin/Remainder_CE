@@ -6,7 +6,7 @@ use crate::poseidon_ligero::PoseidonSpongeHasher;
 use crate::{ligero_structs::LigeroAuxInfo, ligero_structs::LigeroEvalProof};
 
 use itertools::Itertools;
-use remainder_shared_types::Field;
+use remainder_shared_types::Halo2FFTFriendlyField;
 use serde::{Deserialize, Serialize};
 
 /// Struct containing all of the components of a Ligero commitment + evaluation
@@ -26,7 +26,7 @@ pub struct LigeroProof<F> {
 }
 
 /// Converts a lcpc-style Ligero proof/root into the above data structure.
-pub fn convert_lcpc_to_halo<F: Field>(
+pub fn convert_lcpc_to_halo<F: Halo2FFTFriendlyField>(
     root: LigeroRoot<F>,
     pf: LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroAuxInfo<F>, F>,
 ) -> LigeroProof<F> {
@@ -81,7 +81,7 @@ pub fn convert_halo_to_lcpc<D, E, F>(
     halo2_ligero_proof: LigeroProof<F>,
 ) -> (LigeroRoot<F>, LigeroEvalProof<D, E, F>, LigeroAuxInfo<F>)
 where
-    F: Field,
+    F: Halo2FFTFriendlyField,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
