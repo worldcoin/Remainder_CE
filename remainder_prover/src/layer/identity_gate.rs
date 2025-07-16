@@ -587,9 +587,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                         .iter()
                         .zip(random_coefficients)
                         .map(|(beta_values, random_coeff)| {
-                            *random_coeff
-                                * beta_values
-                                    .fold_updated_values()
+                            *random_coeff * beta_values.fold_updated_values()
                         })
                         .collect_vec(),
                 )
@@ -603,8 +601,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                             // We compute the singular fully bound value for the beta MLE over
                             // the dataparallel challenges.
                             let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
-                                self.beta_g2_vec.as_ref().unwrap()[0]
-                                    .fold_updated_values()
+                                self.beta_g2_vec.as_ref().unwrap()[0].fold_updated_values()
                             } else {
                                 F::ONE
                             };
@@ -623,9 +620,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                                     .zip(self.beta_g2_vec.as_ref().unwrap())
                                     .map(|(random_coeff, beta_values)| {
                                         if self.num_dataparallel_vars > 0 {
-                                            beta_values
-                                                .fold_updated_values()
-                                                * random_coeff
+                                            beta_values.fold_updated_values() * random_coeff
                                         } else {
                                             F::ONE * random_coeff
                                         }

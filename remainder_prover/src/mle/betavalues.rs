@@ -73,8 +73,11 @@ impl<F: Field> BetaValues<F> {
     }
 
     /// obtain the value at an index if it is updated
+    /// do not check for out of bound
     pub fn get_updated_value(&self, index: usize) -> Option<F> {
-        if let BetaValueType::Updated(v) = self.values[index] {
+        if self.values.len() <= index {
+            None
+        } else if let BetaValueType::Updated(v) = self.values[index] {
             Some(v)
         } else {
             None
@@ -83,7 +86,9 @@ impl<F: Field> BetaValues<F> {
 
     /// obtain the value at an index if it is unbounded
     pub fn get_unbound_value(&self, index: usize) -> Option<F> {
-        if let BetaValueType::Unbound(v) = self.values[index] {
+        if self.values.len() <= index {
+            None
+        } else if let BetaValueType::Unbound(v) = self.values[index] {
             Some(v)
         } else {
             None
@@ -92,12 +97,17 @@ impl<F: Field> BetaValues<F> {
 
     /// determine if no entry is unbound
     pub fn is_fully_bounded(&self) -> bool {
-        (0..self.values.len()).filter(|i| self.get_unbound_value(*i).is_none()).count() == 0
+        (0..self.values.len())
+            .filter(|i| self.get_unbound_value(*i).is_some())
+            .count()
+            == 0
     }
 
     /// obtain product of all updated values
     pub fn fold_updated_values(&self) -> F {
-        (0..self.values.len()).filter_map(|i| self.get_updated_value(i)).product()
+        (0..self.values.len())
+            .filter_map(|i| self.get_updated_value(i))
+            .product()
     }
 
     /// Given a vector of mle indices, returns the relevant beta bound and
@@ -114,9 +124,9 @@ impl<F: Field> BetaValues<F> {
         // If we are computing evaluations for this node, then we want
         // all of the updated beta values so far.
         let bound_betas = if computes_evals {
-            (0..self.values.len()).filter_map(|i| 
-                self.get_updated_value(i)
-            ).collect()
+            (0..self.values.len())
+                .filter_map(|i| self.get_updated_value(i))
+                .collect()
         }
         // Otherwise, we are just computing the sum of the variables
         // multiplied by the beta this round. This means that there is
@@ -133,9 +143,7 @@ impl<F: Field> BetaValues<F> {
         let mut unbound_betas = mle_indices
             .iter()
             .filter_map(|index| match index {
-                MleIndex::Indexed(i) => {
-                    self.get_unbound_value(*i)
-                },
+                MleIndex::Indexed(i) => self.get_unbound_value(*i),
                 _ => None,
             })
             .collect_vec();
