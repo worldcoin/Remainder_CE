@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use super::hyrax_layer::HyraxClaim;
 
-/// The proof structure for the proof of a [HyraxOutputLayer], which
+/// The proof structure for the proof of a Hyrax output layer, which
 /// doesn't need anything other than whether the challenges the
 /// output layer was evaluated on, so that the verifier can check
 /// whether these match the transcript.
