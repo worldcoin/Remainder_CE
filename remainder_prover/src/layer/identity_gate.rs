@@ -589,9 +589,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                         .map(|(beta_values, random_coeff)| {
                             *random_coeff
                                 * beta_values
-                                    .updated_values
-                                    .values()
-                                    .fold(F::ONE, |acc, elem| acc * elem)
+                                    .fold_updated_values()
                         })
                         .collect_vec(),
                 )
@@ -606,9 +604,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                             // the dataparallel challenges.
                             let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
                                 self.beta_g2_vec.as_ref().unwrap()[0]
-                                    .updated_values
-                                    .values()
-                                    .fold(F::ONE, |acc, val| acc * *val)
+                                    .fold_updated_values()
                             } else {
                                 F::ONE
                             };
@@ -628,9 +624,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                                     .map(|(random_coeff, beta_values)| {
                                         if self.num_dataparallel_vars > 0 {
                                             beta_values
-                                                .updated_values
-                                                .values()
-                                                .fold(F::ONE, |acc, val| acc * *val)
+                                                .fold_updated_values()
                                                 * random_coeff
                                         } else {
                                             F::ONE * random_coeff
@@ -686,7 +680,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         } else {
             if self.num_dataparallel_vars > 0 {
                 self.beta_g2_vec.as_ref().unwrap().iter().for_each(|beta| {
-                    assert!(beta.unbound_values.is_empty());
+                    assert!(beta.is_fully_bounded());
                 })
             }
             let a_hg_mle = self.a_hg_mle_phase_1.as_mut().unwrap();
