@@ -597,15 +597,14 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 );
                 match selector_mle_index {
                     MleIndex::Indexed(var_number) => {
-                        let index_claim = beta_values.unbound_values.get(var_number).unwrap();
+                        let index_claim = beta_values.get_unbound_value(*var_number).unwrap();
                         (lhs_eval * (F::ONE - index_claim)) + (rhs_eval * index_claim)
                     }
                     MleIndex::Bound(bound_value, var_number) => {
                         let identity = F::ONE;
                         let beta_bound = beta_values
-                            .updated_values
-                            .get(var_number)
-                            .unwrap_or(&identity);
+                            .get_updated_value(*var_number)
+                            .unwrap_or(identity);
                         ((lhs_eval * (F::ONE - bound_value)) + (rhs_eval * bound_value))
                             * beta_bound
                     }
@@ -756,18 +755,17 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .iter()
                     .zip(random_coefficients)
                     .map(|(beta_table, random_coeff)| {
-                        let constant_updated_vals =
-                            beta_table.updated_values.values().copied().collect_vec();
-                        let index_claim = beta_table.unbound_values.get(&round_index).unwrap();
+                        let folded_updated_vals = beta_table.fold_updated_values();
+                        let index_claim = beta_table.get_unbound_value(round_index).unwrap();
                         let one_minus_index_claim = F::ONE - index_claim;
-                        let beta_step = *index_claim - one_minus_index_claim;
+                        let beta_step = index_claim - one_minus_index_claim;
                         let evals =
                             std::iter::successors(Some(one_minus_index_claim), move |item| {
                                 Some(*item + beta_step)
                             })
                             .take(degree + 1)
                             .collect_vec();
-                        apply_updated_beta_values_to_evals(evals, &constant_updated_vals)
+                        apply_updated_beta_values_to_evals(evals, folded_updated_vals)
                             * random_coeff
                     })
                     .reduce(|acc, elem| acc + elem)
@@ -818,8 +816,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                                     .iter()
                                     .zip((lhs_evals.iter().zip(rhs_evals.iter())).zip(random_coefficients))
                                     .map(|(beta_table, ((a, b), random_coeff))| {
-                                        let index_claim =
-                                            beta_table.unbound_values.get(indexed_bit).unwrap();
+                                        let index_claim = beta_table.get_unbound_value(*indexed_bit).unwrap();
                                         let a_eval: &SumcheckEvals<F> = a;
                                         let b_eval: &SumcheckEvals<F> = b;
                                         // when the selector bit is not the independent variable and
@@ -849,18 +846,16 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                                             let SumcheckEvals(first_evals) = a;
                                             let SumcheckEvals(second_evals) = b;
                                             if first_evals.len() == second_evals.len() {
-                                                let bound_beta_values = beta_table.updated_values.values().fold(
-                                                    F::ONE, |acc, elem| acc * elem
-                                                );
+                                                let bound_beta_values = beta_table.fold_updated_values();
                                                 let index_claim =
-                                                    beta_table.unbound_values.get(indexed_bit).unwrap();
+                                                    beta_table.get_unbound_value(*indexed_bit).unwrap();
                                                 // therefore we compute the successors of the beta
                                                 // values as well, as the successors correspond to
                                                 // evaluations at the points 0, 1, ... for the
                                                 // independent variable.
                                                 let eval_len = first_evals.len();
                                                 let one_minus_index_claim = F::ONE - index_claim;
-                                                let beta_step = *index_claim - one_minus_index_claim;
+                                                let beta_step = index_claim - one_minus_index_claim;
                                                 let beta_evals = std::iter::successors(
                                                     Some(one_minus_index_claim),
                                                     move |item| Some(*item + beta_step),
