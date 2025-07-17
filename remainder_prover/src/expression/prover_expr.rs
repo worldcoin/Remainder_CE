@@ -36,7 +36,6 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
-    time::Instant,
 };
 
 use anyhow::{anyhow, Ok, Result};
@@ -1038,7 +1037,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     })
                     .unzip();
 
-                let start = Instant::now();
                 let output = beta_cascade(
                     &mles,
                     degree,
@@ -1047,8 +1045,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     &bound_beta_vec,
                     random_coefficients,
                 );
-                let elapse = start.elapsed().as_millis();
-                println!("EVAL_TIME: {} ms", elapse);
                 output
             }
 
@@ -1077,19 +1073,10 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         round_index: usize,
         degree: usize,
     ) -> SumcheckEvals<F> {
-        let start = Instant::now();
         let mle_bookkeeping_tables: Vec<(bool, Vec<_>)> = mle_vec
             .iter()
             .map(|mle| MleBookkeepingTables::from_mle_evals(mle, degree, round_index))
             .collect();
-        let elapse = start.elapsed().as_millis();
-        println!(
-            "MLE_SIZE: {} x {}, DEGREE: {}, BKT_TIME: {} ms",
-            mle_vec.len(),
-            mle_vec[0].len(),
-            degree,
-            elapse
-        );
 
         let (comb_seq, cnst_tables) =
             MleCombinationSeq::from_expr_and_bind(&self, mle_vec.len(), degree, round_index);
