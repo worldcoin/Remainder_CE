@@ -98,7 +98,7 @@ impl<F: Field> Product<F, F> {
     /// Panics if any are not fully bound.
     pub fn new(mles: &[DenseMle<F>], coefficient: F) -> Self {
         // ensure all MLEs are fully bound
-        assert!(mles.iter().all(|mle| mle.len() == 1));
+        assert!(mles.iter().all(|mle| mle.is_fully_bounded()));
         if mles.is_empty() {
             return Product {
                 intermediates: vec![Intermediate::Composite { value: F::ONE }],

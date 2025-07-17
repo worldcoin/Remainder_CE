@@ -276,11 +276,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     .iter()
                     .zip(random_coefficients)
                     .map(|(beta_values, random_coeff)| {
-                        *random_coeff
-                            * beta_values
-                                .updated_values
-                                .values()
-                                .fold(F::ONE, |acc, elem| acc * elem)
+                        *random_coeff * beta_values.fold_updated_values()
                     })
                     .collect_vec(),
             )
@@ -1242,10 +1238,7 @@ impl<F: Field> GateLayer<F> {
     /// expression. Once this phase is initialized, the sumcheck rounds binding the "x" variables can
     /// be performed.
     fn init_phase_1(&mut self, challenges: Vec<F>) {
-        let beta_g2_fully_bound = self.beta_g2_vec.as_ref().unwrap()[0]
-            .updated_values
-            .values()
-            .fold(F::ONE, |acc, elem| acc * elem);
+        let beta_g2_fully_bound = self.beta_g2_vec.as_ref().unwrap()[0].fold_updated_values();
 
         let (a_hg_lhs_vec, a_hg_rhs_vec) = fold_binary_gate_wiring_into_mles_phase_1(
             &self.nonzero_gates,
@@ -1291,12 +1284,8 @@ impl<F: Field> GateLayer<F> {
             .iter()
             .zip(random_coefficients)
             .map(|(beta_values, random_coeff)| {
-                assert!(beta_values.unbound_values.is_empty());
-                beta_values
-                    .updated_values
-                    .values()
-                    .fold(F::ONE, |acc, elem| acc * elem)
-                    * random_coeff
+                assert!(beta_values.is_fully_bounded());
+                beta_values.fold_updated_values() * random_coeff
             })
             .collect_vec();
 
@@ -1340,10 +1329,7 @@ impl<F: Field> GateLayer<F> {
     /// expression. Once this phase is initialized, the sumcheck rounds binding the "y" variables can
     /// be performed.
     fn init_phase_2(&mut self, u_claim: &[F], f_at_u: F, g1_claim_points: &[F]) {
-        let beta_g2_fully_bound = self.beta_g2_vec.as_ref().unwrap()[0]
-            .updated_values
-            .values()
-            .fold(F::ONE, |acc, elem| acc * elem);
+        let beta_g2_fully_bound = self.beta_g2_vec.as_ref().unwrap()[0].fold_updated_values();
 
         let (a_f1_lhs, a_f1_rhs) = fold_binary_gate_wiring_into_mles_phase_2(
             &self.nonzero_gates,
@@ -1394,12 +1380,8 @@ impl<F: Field> GateLayer<F> {
             .iter()
             .zip(random_coefficients)
             .map(|(beta_values, random_coeff)| {
-                assert!(beta_values.unbound_values.is_empty());
-                beta_values
-                    .updated_values
-                    .values()
-                    .fold(F::ONE, |acc, elem| acc * elem)
-                    * random_coeff
+                assert!(beta_values.is_fully_bounded());
+                beta_values.fold_updated_values() * random_coeff
             })
             .collect_vec();
 
