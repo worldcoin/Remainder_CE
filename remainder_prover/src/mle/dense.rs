@@ -192,10 +192,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
             .collect();
         assert_eq!(evals.len(), 1 << indices.len());
 
-        MleBookkeepingTables {
-            evals: evals,
-            indices,
-        }
+        MleBookkeepingTables { evals, indices }
     }
 }
 
