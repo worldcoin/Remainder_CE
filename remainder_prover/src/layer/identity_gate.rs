@@ -159,11 +159,13 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             // Read g_i(1), ..., g_i(d+1) from the prover, reserve space to compute g_i(0)
             let mut g_cur_round: Vec<_> = [Ok(F::from(0))]
                 .into_iter()
-                .chain((0..degree).map(|_| transcript_reader.consume_element("Sumcheck message")))
+                .chain((0..degree).map(|_| {
+                    transcript_reader.consume_element("Sumcheck round univariate evaluations")
+                }))
                 .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
-            let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
+            let challenge = transcript_reader.get_challenge("Sumcheck round challenge")?;
 
             // Compute:
             //       `g_i(0) = g_{i - 1}(r_{i-1}) - g_i(1)`
@@ -495,8 +497,11 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 .compute_round_sumcheck_message(*round_idx, &random_coefficients)
                 .unwrap();
             // Since the verifier can deduce g_i(0) by computing claim - g_i(1), the prover does not send g_i(0)
-            transcript_writer.append_elements("Sumcheck message", &sumcheck_message[1..]);
-            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            transcript_writer.append_elements(
+                "Sumcheck round univariate evaluations",
+                &sumcheck_message[1..],
+            );
+            let challenge = transcript_writer.get_challenge("Sumcheck round challenge");
             self.bind_round_variable(*round_idx, challenge).unwrap();
         });
         self.append_leaf_mles_to_transcript(transcript_writer);
@@ -582,11 +587,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                         .iter()
                         .zip(random_coefficients)
                         .map(|(beta_values, random_coeff)| {
-                            *random_coeff
-                                * beta_values
-                                    .updated_values
-                                    .values()
-                                    .fold(F::ONE, |acc, elem| acc * elem)
+                            *random_coeff * beta_values.fold_updated_values()
                         })
                         .collect_vec(),
                 )
@@ -600,10 +601,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                             // We compute the singular fully bound value for the beta MLE over
                             // the dataparallel challenges.
                             let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
-                                self.beta_g2_vec.as_ref().unwrap()[0]
-                                    .updated_values
-                                    .values()
-                                    .fold(F::ONE, |acc, val| acc * *val)
+                                self.beta_g2_vec.as_ref().unwrap()[0].fold_updated_values()
                             } else {
                                 F::ONE
                             };
@@ -622,11 +620,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                                     .zip(self.beta_g2_vec.as_ref().unwrap())
                                     .map(|(random_coeff, beta_values)| {
                                         if self.num_dataparallel_vars > 0 {
-                                            beta_values
-                                                .updated_values
-                                                .values()
-                                                .fold(F::ONE, |acc, val| acc * *val)
-                                                * random_coeff
+                                            beta_values.fold_updated_values() * random_coeff
                                         } else {
                                             F::ONE * random_coeff
                                         }
@@ -681,7 +675,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         } else {
             if self.num_dataparallel_vars > 0 {
                 self.beta_g2_vec.as_ref().unwrap().iter().for_each(|beta| {
-                    assert!(beta.unbound_values.is_empty());
+                    assert!(beta.is_fully_bounded());
                 })
             }
             let a_hg_mle = self.a_hg_mle_phase_1.as_mut().unwrap();
@@ -821,8 +815,8 @@ impl<F: Field> IdentityGate<F> {
     }
 
     fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
-        assert_eq!(self.source_mle.len(), 1);
-        transcript_writer.append("Fully bound source MLE", self.source_mle.first());
+        assert!(self.source_mle.is_fully_bounded());
+        transcript_writer.append("Fully bound MLE evaluation", self.source_mle.first());
     }
 
     /// Initialize the bookkeeping table necessary for phase 1, which is the

@@ -11,7 +11,10 @@ use serde::{Deserialize, Serialize};
 use super::{evals::EvaluationsIterator, mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
     claims::RawClaim,
-    mle::evals::{Evaluations, MultilinearExtension},
+    mle::{
+        evals::{Evaluations, MultilinearExtension},
+        mle_bookkeeping_table::MleBookkeepingTables,
+    },
 };
 use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
@@ -106,7 +109,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
 
         self.mle.fix_variable_at_index(bit_count - 1, point);
 
-        if self.num_free_vars() == 0 {
+        if self.is_fully_bounded() {
             let fixed_claim_return = RawClaim::new(
                 self.mle_indices
                     .iter()
@@ -132,7 +135,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         // Update the bookkeeping table.
         self.mle.fix_variable(binding);
 
-        if self.num_free_vars() == 0 {
+        if self.is_fully_bounded() {
             let fixed_claim_return = RawClaim::new(
                 self.mle_indices
                     .iter()
@@ -172,6 +175,24 @@ impl<F: Field> Mle<F> for DenseMle<F> {
 
     fn value(&self) -> F {
         self.mle.value()
+    }
+
+    fn to_bookkeeping_table(&self) -> MleBookkeepingTables<F> {
+        let evals = self.mle.to_vec();
+        let indices: Vec<usize> = self
+            .mle_indices()
+            .iter()
+            .filter_map(|item| {
+                if let MleIndex::Indexed(i) = item {
+                    Some(*i)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(evals.len(), 1 << indices.len());
+
+        MleBookkeepingTables { evals, indices }
     }
 }
 

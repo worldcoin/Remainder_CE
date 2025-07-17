@@ -295,12 +295,13 @@ impl<F: Field> ClaimGroup<F> {
 
         // Append evaluations to the transcript before sampling a challenge.
         transcript_writer.append_elements(
-            "Claim Aggregation Wlx_evaluations",
+            "Claim aggregation interpolation polynomial evaluations",
             &relevant_wlx_evaluations,
         );
 
         // Next, sample `r^\star` from the transcript.
-        let agg_chal = transcript_writer.get_challenge("Challenge for claim aggregation");
+        let agg_chal = transcript_writer
+            .get_challenge("Challenge for claim aggregation interpolation polynomial");
         debug!("Aggregate challenge: {:#?}", agg_chal);
 
         let aggregated_challenges = self.compute_aggregated_challenges(agg_chal).unwrap();
@@ -351,7 +352,7 @@ impl<F: Field> ClaimGroup<F> {
 
         let num_relevant_wlx_evaluations = num_wlx_evaluations - num_claims;
         let relevant_wlx_evaluations = transcript_reader.consume_elements(
-            "Claim Aggregation Wlx_evaluations",
+            "Claim aggregation interpolation polynomial evaluations",
             num_relevant_wlx_evaluations,
         )?;
         let wlx_evaluations = self
@@ -362,7 +363,8 @@ impl<F: Field> ClaimGroup<F> {
             .collect_vec();
 
         // Next, sample `r^\star` from the transcript.
-        let agg_chal = transcript_reader.get_challenge("Challenge for claim aggregation")?;
+        let agg_chal = transcript_reader
+            .get_challenge("Challenge for claim aggregation interpolation polynomial")?;
         debug!("Aggregate challenge: {:#?}", agg_chal);
 
         let aggregated_challenges = self.compute_aggregated_challenges(agg_chal).unwrap();

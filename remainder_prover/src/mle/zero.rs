@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::claims::RawClaim;
 use crate::layer::LayerId;
+use crate::mle::mle_bookkeeping_table::MleBookkeepingTables;
 use remainder_shared_types::Field;
 
 use super::evals::{Evaluations, EvaluationsIterator};
@@ -128,7 +129,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
     }
 
     fn value(&self) -> F {
-        assert_eq!(self.num_free_vars(), 0);
+        assert!(self.is_fully_bounded());
         F::ZERO
     }
 
@@ -137,6 +138,14 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
             Some(F::ZERO)
         } else {
             None
+        }
+    }
+
+    fn to_bookkeeping_table(&self) -> MleBookkeepingTables<F> {
+        // express as a constant
+        MleBookkeepingTables {
+            evals: vec![F::ZERO],
+            indices: Vec::new(),
         }
     }
 }

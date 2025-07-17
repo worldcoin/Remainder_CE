@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::Field;
 
-use crate::{layer::LayerId, mle::Mle};
+use crate::{
+    layer::LayerId,
+    mle::{mle_bookkeeping_table::MleBookkeepingTables, Mle},
+};
 
 use super::{dense::DenseMle, evals::EvaluationsIterator, zero::ZeroMle, MleIndex};
 
@@ -118,6 +121,13 @@ impl<F: Field> Mle<F> for MleEnum<F> {
 
     fn add_prefix_bits(&mut self, _new_bits: Vec<MleIndex<F>>) {
         todo!()
+    }
+
+    fn to_bookkeeping_table(&self) -> MleBookkeepingTables<F> {
+        match self {
+            MleEnum::Dense(item) => item.to_bookkeeping_table(),
+            MleEnum::Zero(item) => item.to_bookkeeping_table(),
+        }
     }
 }
 

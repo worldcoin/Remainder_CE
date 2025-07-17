@@ -163,7 +163,7 @@ impl<F: Field> MatMult<F> {
 
     fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
         transcript_writer.append_elements(
-            "Fully bound matrix evaluations",
+            "Fully bound MLE evaluation",
             &[self.matrix_a.mle.value(), self.matrix_b.mle.value()],
         );
     }
@@ -202,16 +202,17 @@ impl<F: Field> Layer<F> for MatMult<F> {
             let message = self.compute_round_sumcheck_message(round, &[F::ONE])?;
             // Add to transcript.
             // Since the verifier can deduce g_i(0) by computing claim - g_i(1), the prover does not send g_i(0)
-            transcript_writer.append_elements("Sumcheck message", &message[1..]);
+            transcript_writer
+                .append_elements("Sumcheck round univariate evaluations", &message[1..]);
             // Sample the challenge to bind the round's MatMult expression to.
-            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            let challenge = transcript_writer.get_challenge("Sumcheck round challenge");
             // Bind the Matrix MLEs to this variable.
             self.bind_round_variable(round, challenge)?;
         }
 
         // Assert that the MLEs have been fully bound.
-        assert_eq!(self.matrix_a.mle.num_free_vars(), 0);
-        assert_eq!(self.matrix_b.mle.num_free_vars(), 0);
+        assert!(self.matrix_a.mle.is_fully_bounded());
+        assert!(self.matrix_b.mle.is_fully_bounded());
 
         self.append_leaf_mles_to_transcript(transcript_writer);
         Ok(())
@@ -413,11 +414,13 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
             // Read g_i(1), ..., g_i(d+1) from the prover, reserve space to compute g_i(0)
             let mut g_cur_round: Vec<_> = [Ok(F::from(0))]
                 .into_iter()
-                .chain((0..degree).map(|_| transcript_reader.consume_element("Sumcheck message")))
+                .chain((0..degree).map(|_| {
+                    transcript_reader.consume_element("Sumcheck round univariate evaluations")
+                }))
                 .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
-            let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
+            let challenge = transcript_reader.get_challenge("Sumcheck round challenge")?;
 
             // Compute:
             //       `g_i(0) = g_{i - 1}(r_{i-1}) - g_i(1)`
