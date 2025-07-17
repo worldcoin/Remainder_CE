@@ -41,6 +41,7 @@ use std::{
 use anyhow::{anyhow, Ok, Result};
 
 const USE_BKT: bool = true;
+type BetaValsVecs<F> = (Vec<Option<F>>, (Vec<Vec<F>>, Vec<Vec<F>>));
 
 /// mid-term solution for deduplication of DenseMleRefs
 /// basically a wrapper around usize, which denotes the index
@@ -1037,15 +1038,14 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     })
                     .unzip();
 
-                let output = beta_cascade(
+                beta_cascade(
                     &mles,
                     degree,
                     round_index,
                     &unbound_beta_vec,
                     &bound_beta_vec,
                     random_coefficients,
-                );
-                output
+                )
             }
 
             // when the expression is scaled by a field element, we can scale the
@@ -1079,7 +1079,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             .collect();
 
         let (comb_seq, cnst_tables) =
-            MleCombinationSeq::from_expr_and_bind(&self, mle_vec.len(), degree, round_index);
+            MleCombinationSeq::from_expr_and_bind(self, mle_vec.len(), degree, round_index);
 
         // batch evaluate all tables on each X
         let eval_tables_list: Vec<Vec<&MleBookkeepingTables<F>>> = (0..degree + 1)
@@ -1110,10 +1110,9 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         //   - beta_current_val_vec: beta values of the current round
         //   - beta_unbound_vals_vec: beta values yet to be bounded
         //   - beta_updated_vals_vec: beta values already bounded, in the form of a multiple
-        let (beta_current_val_vec, (beta_unbound_vals_vec, beta_updated_vals_vec)): (
-            Vec<Option<F>>,
-            (Vec<Vec<F>>, Vec<Vec<F>>),
-        ) = beta_vec
+        let (beta_current_val_vec, (beta_unbound_vals_vec, beta_updated_vals_vec)): BetaValsVecs<
+            F,
+        > = beta_vec
             .iter()
             .map(|beta| {
                 (
