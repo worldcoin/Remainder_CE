@@ -77,7 +77,7 @@ impl<F: Field> OutputLayer<F> {
         match &self.mle {
             MleEnum::Dense(_) => unimplemented!(),
             MleEnum::Zero(zero_mle) => {
-                if zero_mle.num_free_vars() != 0 {
+                if !zero_mle.is_fully_bounded() {
                     return Err(anyhow!(OutputLayerError::MleNotFullyBound));
                 }
 
@@ -97,6 +97,11 @@ impl<F: Field> OutputLayer<F> {
         self.mle.num_free_vars()
     }
 
+    /// Whether the output layer is fully bounded
+    pub fn is_fully_bounded(&self) -> bool {
+        self.mle.is_fully_bounded()
+    }
+
     /// Fix the variables of this output layer to random challenges sampled
     /// from the transcript.
     /// Expects `self.num_free_vars()` challenges.
@@ -114,13 +119,13 @@ impl<F: Field> OutputLayer<F> {
             .for_each(|(bit, challenge)| {
                 self.mle.fix_variable(bit, *challenge);
             });
-        debug_assert_eq!(self.num_free_vars(), 0);
+        debug_assert!(self.is_fully_bounded());
         Ok(())
     }
 
     /// Extract a claim on this output layer by extracting the bindings from the fixed variables.
     pub fn get_claim(&mut self) -> Result<Claim<F>> {
-        if self.mle.len() != 1 {
+        if !self.mle.is_fully_bounded() {
             return Err(anyhow!(LayerError::ClaimError(ClaimError::MleRefMleError)));
         }
 
