@@ -3,7 +3,7 @@
 use itertools::Itertools;
 use remainder_shared_types::{utils::bookkeeping_table::initialize_tensor, Field};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt::Debug};
+use std::fmt::Debug;
 
 use crate::mle::mle_bookkeeping_table::MleBookkeepingTables;
 
@@ -19,39 +19,45 @@ use super::{evals::MultilinearExtension, MleIndex};
 /// evaluates to `1` at this point and `0` at every other point, which is a
 /// beta table. This would be a table of size `2^n`.
 ///
-/// Instead, we choose to store just the individual values in a hash map as we
-/// don't need the entire representation in order to perform the computations
-/// with beta tables.
+/// Instead, we represent the beta MLE `\beta(g_0, ..., g_{n-1}; x_0, ..., x_{n-1})` by mapping each
+/// index `i` that participates in this MLE to either `g_i`, if `x_i` has not yet been bound, or to
+/// `(1 - r_i)*(1 - g_i) + r_i*g_i`, if `x_i` has already been bound to `r_i`. Indices in the range
+/// `{0, 1, ..., n-1}` which are not part of this MLE are called "unassigned" and they don't map to
+/// any value.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub struct BetaValues<F: Field> {
-    /// The challenges in the claim that have not yet been "bound" in the
-    /// sumcheck protocol. Keys are the "round" of sumcheck and values are
-    /// which challenge in the claim that corresponds to. Every key in
-    /// unbound values should be >= the current round index in sumcheck.
-    pub unbound_values: HashMap<usize, F>,
+    /// Map from each index to a beta value type
+    pub values: Vec<BetaValueType<F>>,
+}
 
-    /// The challenges that have already been bound in the sumcheck protocol.
-    /// Keys are the round it corresponds to, and values are
-    /// `(1 - r_i)(1 - g_i) + r_i*g_i` where `i` is the key, `g_i` is the
-    /// claim challenge point,
-    /// and `r_i` is the current challenge point. Every key here should be
-    /// < the current round index in sumcheck.
-    pub updated_values: HashMap<usize, F>,
+/// Type of beta values
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "F: Field")]
+pub enum BetaValueType<F: Field> {
+    /// In a linear round, there is no corresponding beta value
+    Unassigned,
+    /// Challenges that have not yet been "bound" in the
+    /// sumcheck protocol, as `g_i`
+    Unbound(F),
+    /// Challenges that have already been bound in the sumcheck protocol,
+    /// as `(1 - r_i)(1 - g_i) + r_i*g_i` where `i` is the key, `g_i` is the
+    /// claim challenge point, and `r_i` is the current challenge point.
+    Updated(F),
 }
 
 impl<F: Field> BetaValues<F> {
     /// Constructs a new beta table using a vector of the challenge points in a
     /// claim along with it's corresponding round index as a tuple.
     pub fn new(layer_claim_vars_and_index: Vec<(usize, F)>) -> Self {
-        let mut beta_elems_map = HashMap::<usize, F>::new();
+        let mut values = Vec::new();
         layer_claim_vars_and_index.iter().for_each(|(idx, elem)| {
-            beta_elems_map.insert(*idx, *elem);
+            if values.len() <= *idx {
+                values.extend(vec![BetaValueType::Unassigned; *idx + 1 - values.len()]);
+            }
+            values[*idx] = BetaValueType::Unbound(*elem);
         });
-        BetaValues {
-            unbound_values: beta_elems_map,
-            updated_values: HashMap::<usize, F>::new(),
-        }
+        BetaValues { values }
     }
 
     /// Updates the given value of beta using a new challenge point. Simply
@@ -60,10 +66,49 @@ impl<F: Field> BetaValues<F> {
     ///
     /// We remove it from the unbound hashmap and add it to the bound hashmap.
     pub fn beta_update(&mut self, round_index: usize, challenge: F) {
-        let val_to_update = self.unbound_values.remove(&round_index).unwrap();
-        let updated_val =
-            ((F::ONE - val_to_update) * (F::ONE - challenge)) + (val_to_update * challenge);
-        self.updated_values.insert(round_index, updated_val);
+        assert!(self.values.len() > round_index);
+        if let BetaValueType::Unbound(val_to_update) = self.values[round_index] {
+            let updated_val =
+                ((F::ONE - val_to_update) * (F::ONE - challenge)) + (val_to_update * challenge);
+            self.values[round_index] = BetaValueType::Updated(updated_val);
+        } else {
+            unreachable!()
+        }
+    }
+
+    /// obtain the value at an index if it is updated
+    /// do not check for out of bound
+    pub fn get_updated_value(&self, index: usize) -> Option<F> {
+        if self.values.len() <= index {
+            None
+        } else if let BetaValueType::Updated(v) = self.values[index] {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    /// obtain the value at an index if it is unbounded
+    pub fn get_unbound_value(&self, index: usize) -> Option<F> {
+        match self.values.get(index) {
+            Some(BetaValueType::Unbound(v)) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// determine if no entry is unbound
+    pub fn is_fully_bounded(&self) -> bool {
+        (0..self.values.len())
+            .filter(|i| self.get_unbound_value(*i).is_some())
+            .count()
+            == 0
+    }
+
+    /// obtain product of all updated values
+    pub fn fold_updated_values(&self) -> F {
+        (0..self.values.len())
+            .filter_map(|i| self.get_updated_value(i))
+            .product()
     }
 
     /// Given a vector of mle indices, returns the relevant beta bound and
@@ -74,33 +119,40 @@ impl<F: Field> BetaValues<F> {
         &self,
         mle_indices: &[MleIndex<F>],
         round_index: usize,
-        independent_variable: bool,
+        computes_evals: bool,
     ) -> (Vec<F>, Vec<F>) {
         // We always want every bound value so far.
-        let bound_betas = if independent_variable {
-            self.updated_values.values().copied().collect()
-        } else {
-            mle_indices
-                .iter()
-                .filter_map(|index| match index {
-                    MleIndex::Bound(_, i) => self.updated_values.get(i).copied(),
-                    _ => None,
-                })
-                .collect_vec()
+        // If we are computing evaluations for this node, then we want
+        // all of the updated beta values so far.
+        let bound_betas = if computes_evals {
+            (0..self.values.len())
+                .filter_map(|i| self.get_updated_value(i))
+                .collect()
+        }
+        // Otherwise, we are just computing the sum of the variables
+        // multiplied by the beta this round. This means that there is
+        // a beta MLE outside of this expression that factors in the
+        // updated values already, either in the form of the verifier
+        // computing the full sumcheck evaluation multiplied by the fully
+        // bound beta, or in the form of a selector where the updated
+        // values are factored directly into the evaluation of the selector
+        // variable itself.
+        else {
+            Vec::new()
         };
 
         let mut unbound_betas = mle_indices
             .iter()
             .filter_map(|index| match index {
-                MleIndex::Indexed(i) => self.unbound_values.get(i).copied(),
+                MleIndex::Indexed(i) => self.get_unbound_value(*i),
                 _ => None,
             })
             .collect_vec();
 
         // If the MLE indices does not contain the current "independent variable",
         // then we want to manually include it in our unbound betas.
-        if !mle_indices.contains(&MleIndex::Indexed(round_index)) && independent_variable {
-            unbound_betas.push(self.unbound_values.get(&round_index).copied().unwrap())
+        if !mle_indices.contains(&MleIndex::Indexed(round_index)) && computes_evals {
+            unbound_betas.push(self.get_unbound_value(round_index).unwrap())
         }
         (unbound_betas, bound_betas)
     }
@@ -111,14 +163,15 @@ impl<F: Field> BetaValues<F> {
         bookkeeping_table: &MleBookkeepingTables<F>,
     ) -> (Vec<F>, Vec<F>) {
         // We always want every bound value so far.
-        let bound_betas = self.updated_values.values().copied().collect();
+        let bound_betas = (0..self.values.len())
+            .filter_map(|i| self.get_updated_value(i))
+            .collect();
 
         let unbound_betas = bookkeeping_table
             .indices
             .iter()
-            .map(|i| self.unbound_values.get(i).unwrap().clone())
+            .map(|i| self.get_unbound_value(*i).unwrap())
             .collect_vec();
-
         (unbound_betas, bound_betas)
     }
 

@@ -292,14 +292,11 @@ pub(crate) fn beta_cascade_step<F: Field>(
 /// values.
 pub(crate) fn apply_updated_beta_values_to_evals<F: Field>(
     evals: Vec<F>,
-    beta_updated_vals: &[F],
+    folded_updated_vals: F,
 ) -> SumcheckEvals<F> {
-    let beta_total_updated_product = beta_updated_vals
-        .iter()
-        .fold(F::ONE, |acc, elem| acc * elem);
     let evals = evals
         .iter()
-        .map(|elem| beta_total_updated_product * elem)
+        .map(|elem| folded_updated_vals * elem)
         .collect_vec();
 
     SumcheckEvals(evals)
@@ -392,7 +389,8 @@ pub fn beta_cascade<F: Field>(
             // apply the bound beta values as a scalar factor to each of the
             // evaluations Multiply by the random coefficient to get the
             // random linear combination by summing at the end.
-            apply_updated_beta_values_to_evals(evals, beta_updated_vals) * random_coeff
+            apply_updated_beta_values_to_evals(evals, beta_updated_vals.iter().product())
+                * random_coeff
         });
     // Combine all the evaluations using a random linear combination. We
     // simply sum because all evaluations are already multiplied by their
@@ -421,7 +419,7 @@ pub fn beta_cascade_no_independent_variable<F: Field>(
     assert_eq!(evaluated_bookkeeping_table.len(), 1);
     let eval_vec: Vec<F> = repeat_n(evaluated_bookkeeping_table[0], degree + 1).collect();
 
-    apply_updated_beta_values_to_evals(eval_vec, beta_updated_vals)
+    apply_updated_beta_values_to_evals(eval_vec, beta_updated_vals.iter().product())
 }
 
 /// Returns the maximum degree of b_{curr_round} within an expression (and

@@ -31,7 +31,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     ) -> (Self, HyraxClaim<C::Scalar, CommittedScalar<C>>) {
         // Fix variable on the output layer in order to generate the claim on the previous layer
         let bindings: Vec<C::Scalar> = (0..output_layer.get_mle().num_free_vars())
-            .map(|_idx| transcript.get_scalar_field_challenge("output claim point"))
+            .map(|_idx| transcript.get_scalar_field_challenge("Challenge for claim on output"))
             .collect_vec();
         output_layer.fix_layer(&bindings).unwrap();
         let claim = output_layer.get_claim().unwrap();
@@ -45,7 +45,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         };
         let commitment = committed_claim.to_claim_commitment().evaluation;
         // Add the commitment to the transcript
-        transcript.append_ec_point("output layer commit", commitment);
+        transcript.append_ec_point("Commitment to claim on output layer", commitment);
 
         (
             Self {
@@ -74,12 +74,17 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
             .iter()
             .map(|idx| match idx {
                 MleIndex::Fixed(bit) => C::Scalar::from(*bit as u64),
-                MleIndex::Indexed(_) => transcript.get_scalar_field_challenge("output claim point"),
+                MleIndex::Indexed(_) => {
+                    transcript.get_scalar_field_challenge("Challenge for claim on output")
+                }
                 MleIndex::Free => panic!("MLEs should be indexed by this point"),
                 _ => panic!("Unexpected MleIndex"),
             })
             .collect_vec();
-        transcript.append_ec_point("output layer commit", proof.claim_commitment);
+        transcript.append_ec_point(
+            "Commitment to claim on output layer",
+            proof.claim_commitment,
+        );
 
         HyraxClaim {
             point: bindings,

@@ -11,6 +11,15 @@ pr:  ## Prepare for a PR; run all GitHub CI Actions.
 	$(MAKE) mem-lim-docker
 
 check:  ## GitHub Action #1 - compile, run formatter and linter.
+	@if find remainder_*/src -name mod.rs | grep -q .; then \
+		echo; \
+	 	echo "Found the following 'mod.rs' files in a src directory:"; \
+		find remainder_*/src -name mod.rs; \
+		echo; \
+		echo "Please follow the '[module_name].rs' instead of '[module_name]/mod.rs' file naming convention."; \
+		echo;  \
+		exit 1; \
+	fi
 	cargo check
 	cargo check --features parallel
 	cargo fmt --all -- --check
