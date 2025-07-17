@@ -15,7 +15,10 @@ use super::{
 };
 use crate::{
     layer::product::Product,
-    mle::{betavalues::BetaValues, dense::DenseMle, MleIndex},
+    mle::{
+        betavalues::BetaValues, dense::DenseMle, mle_bookkeeping_table::MleBookkeepingTables,
+        mle_combination::MleCombinationSeq, MleIndex,
+    },
     sumcheck::{
         apply_updated_beta_values_to_evals, beta_cascade, beta_cascade_no_independent_variable,
         SumcheckEvals,
@@ -36,6 +39,9 @@ use std::{
 };
 
 use anyhow::{anyhow, Ok, Result};
+
+const USE_BKT: bool = true;
+type BetaValsVecs<F> = (Vec<Option<F>>, (Vec<Vec<F>>, Vec<Vec<F>>));
 
 /// mid-term solution for deduplication of DenseMleRefs
 /// basically a wrapper around usize, which denotes the index
@@ -291,13 +297,24 @@ impl<F: Field> Expression<F, ProverExpr> {
         round_index: usize,
         degree: usize,
     ) -> SumcheckEvals<F> {
-        self.expression_node.evaluate_sumcheck_node_beta_cascade(
-            beta,
-            &self.mle_vec,
-            random_coefficients,
-            round_index,
-            degree,
-        )
+        if USE_BKT {
+            self.expression_node
+                .evaluate_sumcheck_node_beta_cascade_bookkeeping_table(
+                    beta,
+                    &self.mle_vec,
+                    random_coefficients,
+                    round_index,
+                    degree,
+                )
+        } else {
+            self.expression_node.evaluate_sumcheck_node_beta_cascade(
+                beta,
+                &self.mle_vec,
+                random_coefficients,
+                round_index,
+                degree,
+            )
+        }
     }
 
     /// This evaluates a sumcheck message using the beta cascade algorithm, taking the sum
@@ -401,15 +418,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
 
-                // TODO(Makis): Technically, this is wrong because a fully-bound
-                // MLE whose value happens to be `F::ZERO`, is allowed to have
-                // an implicit representation with an empty bookeeping table in
-                // the current implementation of
-                // [remainder::mle::evals::Evaluations].  We should probably
-                // remove this test and instead rely on
-                // [remainder::mle::dense::Dense::value] which performs the
-                // necessary checks and panics if the MLE is not fully-bound.
-                if mle.len() != 1 {
+                if !mle.is_fully_bounded() {
                     return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
                 }
 
@@ -559,15 +568,14 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 );
                 match selector_mle_index {
                     MleIndex::Indexed(var_number) => {
-                        let index_claim = beta_values.unbound_values.get(var_number).unwrap();
+                        let index_claim = beta_values.get_unbound_value(*var_number).unwrap();
                         (lhs_eval * (F::ONE - index_claim)) + (rhs_eval * index_claim)
                     }
                     MleIndex::Bound(bound_value, var_number) => {
                         let identity = F::ONE;
                         let beta_bound = beta_values
-                            .updated_values
-                            .get(var_number)
-                            .unwrap_or(&identity);
+                            .get_updated_value(*var_number)
+                            .unwrap_or(identity);
                         ((lhs_eval * (F::ONE - bound_value)) + (rhs_eval * bound_value))
                             * beta_bound
                     }
@@ -718,18 +726,17 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .iter()
                     .zip(random_coefficients)
                     .map(|(beta_table, random_coeff)| {
-                        let constant_updated_vals =
-                            beta_table.updated_values.values().copied().collect_vec();
-                        let index_claim = beta_table.unbound_values.get(&round_index).unwrap();
+                        let folded_updated_vals = beta_table.fold_updated_values();
+                        let index_claim = beta_table.get_unbound_value(round_index).unwrap();
                         let one_minus_index_claim = F::ONE - index_claim;
-                        let beta_step = *index_claim - one_minus_index_claim;
+                        let beta_step = index_claim - one_minus_index_claim;
                         let evals =
                             std::iter::successors(Some(one_minus_index_claim), move |item| {
                                 Some(*item + beta_step)
                             })
                             .take(degree + 1)
                             .collect_vec();
-                        apply_updated_beta_values_to_evals(evals, &constant_updated_vals)
+                        apply_updated_beta_values_to_evals(evals, folded_updated_vals)
                             * random_coeff
                     })
                     .reduce(|acc, elem| acc + elem)
@@ -780,8 +787,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                                     .iter()
                                     .zip((lhs_evals.iter().zip(rhs_evals.iter())).zip(random_coefficients))
                                     .map(|(beta_table, ((a, b), random_coeff))| {
-                                        let index_claim =
-                                            beta_table.unbound_values.get(indexed_bit).unwrap();
+                                        let index_claim = beta_table.get_unbound_value(*indexed_bit).unwrap();
                                         let a_eval: &SumcheckEvals<F> = a;
                                         let b_eval: &SumcheckEvals<F> = b;
                                         // when the selector bit is not the independent variable and
@@ -811,18 +817,16 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                                             let SumcheckEvals(first_evals) = a;
                                             let SumcheckEvals(second_evals) = b;
                                             if first_evals.len() == second_evals.len() {
-                                                let bound_beta_values = beta_table.updated_values.values().fold(
-                                                    F::ONE, |acc, elem| acc * elem
-                                                );
+                                                let bound_beta_values = beta_table.fold_updated_values();
                                                 let index_claim =
-                                                    beta_table.unbound_values.get(indexed_bit).unwrap();
+                                                    beta_table.get_unbound_value(*indexed_bit).unwrap();
                                                 // therefore we compute the successors of the beta
                                                 // values as well, as the successors correspond to
                                                 // evaluations at the points 0, 1, ... for the
                                                 // independent variable.
                                                 let eval_len = first_evals.len();
                                                 let one_minus_index_claim = F::ONE - index_claim;
-                                                let beta_step = *index_claim - one_minus_index_claim;
+                                                let beta_step = index_claim - one_minus_index_claim;
                                                 let beta_evals = std::iter::successors(
                                                     Some(one_minus_index_claim),
                                                     move |item| Some(*item + beta_step),
@@ -1011,6 +1015,113 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 a * scale
             }
         }
+    }
+
+    /// Compute a single-round sumcheck message using book keeping table impl.
+    #[allow(clippy::too_many_arguments)]
+    pub fn evaluate_sumcheck_node_beta_cascade_bookkeeping_table(
+        &self,
+        beta_vec: &[&BetaValues<F>],
+        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+        random_coefficients: &[F],
+        round_index: usize,
+        degree: usize,
+    ) -> SumcheckEvals<F> {
+        let mle_bookkeeping_tables: Vec<(bool, Vec<_>)> = mle_vec
+            .iter()
+            .map(|mle| MleBookkeepingTables::from_mle_evals(mle, degree, round_index))
+            .collect();
+
+        let (comb_seq, cnst_tables) =
+            MleCombinationSeq::from_expr_and_bind(self, mle_vec.len(), degree, round_index);
+
+        // batch evaluate all tables on each X
+        let eval_tables_list: Vec<Vec<&MleBookkeepingTables<F>>> = (0..degree + 1)
+            .map(|eval| {
+                mle_bookkeeping_tables
+                    .iter()
+                    .map(|(bounded, tables)| {
+                        let j = if *bounded { 0 } else { eval };
+                        &tables[j]
+                    })
+                    .chain(cnst_tables.iter().map(|(bounded, tables)| {
+                        let j = if *bounded { 0 } else { eval };
+                        &tables[j]
+                    }))
+                    .collect()
+            })
+            .collect();
+
+        let comb_tables: Vec<_> = eval_tables_list
+            .into_iter()
+            .map(|eval_tables| MleBookkeepingTables::comb(eval_tables, &comb_seq))
+            .collect();
+        // MleBookkeepingTables::comb_batch(eval_tables_list, &comb_seq);
+
+        // all comb_tables are of the same structure, so only
+        // need to process beta once on `comb_tables[0]`
+        // returns:
+        //   - beta_current_val_vec: beta values of the current round
+        //   - beta_unbound_vals_vec: beta values yet to be bounded
+        //   - beta_updated_vals_vec: beta values already bounded, in the form of a multiple
+        let (beta_current_val_vec, (beta_unbound_vals_vec, beta_updated_vals_vec)): BetaValsVecs<
+            F,
+        > = beta_vec
+            .iter()
+            .map(|beta| {
+                (
+                    beta.get_unbound_value(round_index),
+                    beta.get_relevant_beta_unbound_and_bound_from_bookkeeping_table(
+                        &comb_tables[0],
+                    ),
+                )
+            })
+            .unzip();
+
+        let evals_iter = beta_current_val_vec
+            .into_iter()
+            .zip(beta_unbound_vals_vec)
+            .zip(beta_updated_vals_vec)
+            .zip(random_coefficients)
+            .map(
+                |(((beta_cur_val, beta_unbound_vals), beta_updated_vals), random_coeff)| {
+                    // bind each table to beta_unbound
+                    let folded_mle_successors: Vec<F> = comb_tables
+                        .iter()
+                        .map(|t| t.beta_cascade(&beta_unbound_vals))
+                        .collect();
+
+                    // combine all points with beta_current
+                    let evals = if let Some(beta_cur_val) = beta_cur_val {
+                        let second_beta_successor = beta_cur_val;
+                        let first_beta_successor = F::ONE - second_beta_successor;
+                        let step = second_beta_successor - first_beta_successor;
+                        let beta_successors =
+                            std::iter::successors(Some(first_beta_successor), move |item| {
+                                Some(*item + step)
+                            });
+                        // the length of the mle successor vec before this last step must be
+                        // degree + 1. therefore we can just do a zip with the beta
+                        // successors to get the final degree + 1 evaluations.
+                        beta_successors
+                            .zip(folded_mle_successors)
+                            .map(|(beta_succ, mle_succ)| beta_succ * mle_succ)
+                            .take(degree + 1)
+                            .collect_vec()
+                    } else {
+                        vec![F::ONE]
+                    };
+                    // apply the bound beta values as a scalar factor to each of the
+                    // evaluations Multiply by the random coefficient to get the
+                    // random linear combination by summing at the end.
+                    apply_updated_beta_values_to_evals(evals, beta_updated_vals.iter().product())
+                        * random_coeff
+                },
+            );
+        // Combine all the evaluations using a random linear combination. We
+        // simply sum because all evaluations are already multiplied by their
+        // random coefficient.
+        evals_iter.reduce(|acc, elem| acc + elem).unwrap()
     }
 
     /// Mutate the MLE indices that are [MleIndex::Free] in the expression and
@@ -1407,7 +1518,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
-                assert_eq!(mle.len(), 1);
+                assert!(mle.is_fully_bounded());
                 products.push(Product::<F, F>::new(&[mle.clone()], multiplier));
             }
             ExpressionNode::Product(mle_vec_indices) => {

@@ -250,7 +250,7 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
 {
     fn append(&mut self, label: &str, elem: C::Base) {
         if self.debug {
-            println!("Appending element (\"{}\"): {:?}", label, elem);
+            println!("Appending element (\"{label}\"): {elem:?}");
         }
         self.sponge.absorb(elem);
         self.transcript.append_elements(label, &[elem]);
@@ -275,7 +275,7 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
         let challenge = self.sponge.squeeze();
         self.transcript.squeeze_elements(label, 1);
         if self.debug {
-            println!("Squeezing challenge (\"{}\"): {:?}", label, challenge);
+            println!("Squeezing challenge (\"{label}\"): {challenge:?}");
         }
         challenge
     }

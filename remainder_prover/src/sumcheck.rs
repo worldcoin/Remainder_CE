@@ -241,7 +241,7 @@ pub fn successors_from_mle_product<F: Field>(
                     let step = second - first;
 
                     // creating the successors representing the evaluations for
-                    // \pi_{i = 1}^n f_i(X, b_2, ..., b_n) across X = 0,1, 2,
+                    // \pi_{i = 1}^n f_i(X, b_2, ..., b_n) across X = 0, 1, 2,
                     // ... for a specific set of b_2, ..., b_n.
                     Box::new(successors(Some(first), move |item| Some(*item + step)))
                         as Box<dyn Iterator<Item = F> + Send>
@@ -291,14 +291,11 @@ pub(crate) fn beta_cascade_step<F: Field>(
 /// values.
 pub(crate) fn apply_updated_beta_values_to_evals<F: Field>(
     evals: Vec<F>,
-    beta_updated_vals: &[F],
+    folded_updated_vals: F,
 ) -> SumcheckEvals<F> {
-    let beta_total_updated_product = beta_updated_vals
-        .iter()
-        .fold(F::ONE, |acc, elem| acc * elem);
     let evals = evals
         .iter()
-        .map(|elem| beta_total_updated_product * elem)
+        .map(|elem| folded_updated_vals * elem)
         .collect_vec();
 
     SumcheckEvals(evals)
@@ -325,6 +322,7 @@ pub fn beta_cascade<F: Field>(
     assert_eq!(beta_vals_vec.len(), random_coefficients.len());
 
     let mle_successor_vec = successors_from_mle_product(mles, degree, round_index).unwrap();
+
     // We compute the sumcheck evaluations using beta cascade for the same
     // set of MLE successors, but different beta values. All of these are
     // stored in the iterator.
@@ -348,13 +346,13 @@ pub fn beta_cascade<F: Field>(
                 // Only clone if this is going to be the final one we fold to get evaluations.
                 mle_successor_vec.clone()
             };
-
             // Check that mle_successor_vec now contains only one element after
             // cascading
             assert_eq!(final_successor_vec.len(), 1);
 
             // Extract the remaining iterator from mle_successor_vec by popping it
             let folded_mle_successors = &final_successor_vec[0];
+
             // for the MSB of the beta value, this must be
             // the independent variable. otherwise it would already be bound.
             // therefore we need to compute the successors of this value in order to
@@ -381,7 +379,8 @@ pub fn beta_cascade<F: Field>(
             // apply the bound beta values as a scalar factor to each of the
             // evaluations Multiply by the random coefficient to get the
             // random linear combination by summing at the end.
-            apply_updated_beta_values_to_evals(evals, beta_updated_vals) * random_coeff
+            apply_updated_beta_values_to_evals(evals, beta_updated_vals.iter().product())
+                * random_coeff
         });
     // Combine all the evaluations using a random linear combination. We
     // simply sum because all evaluations are already multiplied by their
@@ -410,7 +409,7 @@ pub fn beta_cascade_no_independent_variable<F: Field>(
     assert_eq!(evaluated_bookkeeping_table.len(), 1);
     let eval_vec: Vec<F> = repeat_n(evaluated_bookkeeping_table[0], degree + 1).collect();
 
-    apply_updated_beta_values_to_evals(eval_vec, beta_updated_vals)
+    apply_updated_beta_values_to_evals(eval_vec, beta_updated_vals.iter().product())
 }
 
 /// Returns the maximum degree of b_{curr_round} within an expression (and
