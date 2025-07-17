@@ -103,14 +103,14 @@ impl<F: Field> RegularLayer<F> {
                 ExpressionNode::Mle(mle_vec_index) => {
                     let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
                     let val = mle.mle.value();
-                    transcript_writer.append("Leaf MLE value", val);
+                    transcript_writer.append("Fully bound MLE evaluation", val);
                     Ok(())
                 }
                 ExpressionNode::Product(mle_vec_indices) => {
                     for mle_vec_index in mle_vec_indices {
                         let mle = &mle_vec[mle_vec_index.index()];
                         let eval = mle.mle.value();
-                        transcript_writer.append("Product MLE value", eval);
+                        transcript_writer.append("Fully bound MLE evaluation", eval);
                     }
                     Ok(())
                 }
@@ -174,9 +174,12 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
             );
             // Append the evaluations to the transcript.
             // Since the verifier can deduce g_i(0) by computing claim - g_i(1), the prover does not send g_i(0)
-            transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message[1..]);
+            transcript_writer.append_elements(
+                "Sumcheck round univariate evaluations",
+                &prover_sumcheck_message[1..],
+            );
             // Sample the challenge
-            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            let challenge = transcript_writer.get_challenge("Sumcheck round challenge");
             // "Bind" the challenge to the expression at this point.
             self.bind_round_variable(round_index, challenge)?;
             // For debug mode, update the previous message and challenge for the purpose
@@ -602,11 +605,13 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             //   representation is being used.
             let mut g_cur_round: Vec<_> = [Ok(F::from(0))]
                 .into_iter()
-                .chain((0..degree).map(|_| transcript_reader.consume_element("Sumcheck message")))
+                .chain((0..degree).map(|_| {
+                    transcript_reader.consume_element("Sumcheck round univariate evaluations")
+                }))
                 .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
-            let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
+            let challenge = transcript_reader.get_challenge("Sumcheck round challenge")?;
 
             // TODO(Makis): After refactoring `SumcheckEvals` to be a
             // representation of a univariate polynomial, `evaluate_at_a_point`

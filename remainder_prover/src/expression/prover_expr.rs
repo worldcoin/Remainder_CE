@@ -447,15 +447,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
 
-                // TODO(Makis): Technically, this is wrong because a fully-bound
-                // MLE whose value happens to be `F::ZERO`, is allowed to have
-                // an implicit representation with an empty bookeeping table in
-                // the current implementation of
-                // [remainder::mle::evals::Evaluations].  We should probably
-                // remove this test and instead rely on
-                // [remainder::mle::dense::Dense::value] which performs the
-                // necessary checks and panics if the MLE is not fully-bound.
-                if mle.len() != 1 {
+                if !mle.is_fully_bounded() {
                     return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
                 }
 
@@ -479,10 +471,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                     .collect_vec();
 
-                // TODO(Makis): Same as in the previous case. Should probably
-                // remove.
                 for mle in mles.iter() {
-                    if mle.len() != 1 {
+                    if !mle.is_fully_bounded() {
                         return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
                     }
                 }
@@ -624,15 +614,14 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 );
                 match selector_mle_index {
                     MleIndex::Indexed(var_number) => {
-                        let index_claim = beta_values.unbound_values.get(var_number).unwrap();
+                        let index_claim = beta_values.get_unbound_value(*var_number).unwrap();
                         (lhs_eval * (F::ONE - index_claim)) + (rhs_eval * index_claim)
                     }
                     MleIndex::Bound(bound_value, var_number) => {
                         let identity = F::ONE;
                         let beta_bound = beta_values
-                            .updated_values
-                            .get(var_number)
-                            .unwrap_or(&identity);
+                            .get_updated_value(*var_number)
+                            .unwrap_or(identity);
                         ((lhs_eval * (F::ONE - bound_value)) + (rhs_eval * bound_value))
                             * beta_bound
                     }
@@ -783,18 +772,17 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .iter()
                     .zip(random_coefficients)
                     .map(|(beta_table, random_coeff)| {
-                        let constant_updated_vals =
-                            beta_table.updated_values.values().copied().collect_vec();
-                        let index_claim = beta_table.unbound_values.get(&round_index).unwrap();
+                        let folded_updated_vals = beta_table.fold_updated_values();
+                        let index_claim = beta_table.get_unbound_value(round_index).unwrap();
                         let one_minus_index_claim = F::ONE - index_claim;
-                        let beta_step = *index_claim - one_minus_index_claim;
+                        let beta_step = index_claim - one_minus_index_claim;
                         let evals =
                             std::iter::successors(Some(one_minus_index_claim), move |item| {
                                 Some(*item + beta_step)
                             })
                             .take(degree + 1)
                             .collect_vec();
-                        apply_updated_beta_values_to_evals(evals, &constant_updated_vals)
+                        apply_updated_beta_values_to_evals(evals, folded_updated_vals)
                             * random_coeff
                     })
                     .reduce(|acc, elem| acc + elem)
@@ -845,8 +833,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                                     .iter()
                                     .zip((lhs_evals.iter().zip(rhs_evals.iter())).zip(random_coefficients))
                                     .map(|(beta_table, ((a, b), random_coeff))| {
-                                        let index_claim =
-                                            beta_table.unbound_values.get(indexed_bit).unwrap();
+                                        let index_claim = beta_table.get_unbound_value(*indexed_bit).unwrap();
                                         let a_eval: &SumcheckEvals<F> = a;
                                         let b_eval: &SumcheckEvals<F> = b;
                                         // when the selector bit is not the independent variable and
@@ -876,18 +863,16 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                                             let SumcheckEvals(first_evals) = a;
                                             let SumcheckEvals(second_evals) = b;
                                             if first_evals.len() == second_evals.len() {
-                                                let bound_beta_values = beta_table.updated_values.values().fold(
-                                                    F::ONE, |acc, elem| acc * elem
-                                                );
+                                                let bound_beta_values = beta_table.fold_updated_values();
                                                 let index_claim =
-                                                    beta_table.unbound_values.get(indexed_bit).unwrap();
+                                                    beta_table.get_unbound_value(*indexed_bit).unwrap();
                                                 // therefore we compute the successors of the beta
                                                 // values as well, as the successors correspond to
                                                 // evaluations at the points 0, 1, ... for the
                                                 // independent variable.
                                                 let eval_len = first_evals.len();
                                                 let one_minus_index_claim = F::ONE - index_claim;
-                                                let beta_step = *index_claim - one_minus_index_claim;
+                                                let beta_step = index_claim - one_minus_index_claim;
                                                 let beta_evals = std::iter::successors(
                                                     Some(one_minus_index_claim),
                                                     move |item| Some(*item + beta_step),
@@ -1125,6 +1110,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .collect()
             })
             .collect();
+
         let comb_tables: Vec<_> = eval_tables_list
             .into_iter()
             .map(|eval_tables| MleBookkeepingTables::comb(eval_tables, &comb_seq))
@@ -1144,7 +1130,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             .iter()
             .map(|beta| {
                 (
-                    beta.unbound_values.get(&round_index).copied(),
+                    beta.get_unbound_value(round_index),
                     beta.get_relevant_beta_unbound_and_bound_from_bookkeeping_table(
                         &comb_tables[0],
                     ),
@@ -1188,7 +1174,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     // apply the bound beta values as a scalar factor to each of the
                     // evaluations Multiply by the random coefficient to get the
                     // random linear combination by summing at the end.
-                    apply_updated_beta_values_to_evals(evals, &beta_updated_vals) * random_coeff
+                    apply_updated_beta_values_to_evals(evals, beta_updated_vals.iter().product())
+                        * random_coeff
                 },
             );
         // Combine all the evaluations using a random linear combination. We
@@ -1591,7 +1578,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
-                assert_eq!(mle.len(), 1);
+                assert!(mle.is_fully_bounded());
                 products.push(Product::<F, F>::new(&[mle.clone()], multiplier));
             }
             ExpressionNode::Product(mle_vec_indices) => {

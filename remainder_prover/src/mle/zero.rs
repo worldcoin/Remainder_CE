@@ -129,7 +129,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
     }
 
     fn value(&self) -> F {
-        assert_eq!(self.num_free_vars(), 0);
+        assert!(self.is_fully_bounded());
         F::ZERO
     }
 
