@@ -211,8 +211,8 @@ impl<F: Field> Layer<F> for MatMult<F> {
         }
 
         // Assert that the MLEs have been fully bound.
-        assert_eq!(self.matrix_a.mle.num_free_vars(), 0);
-        assert_eq!(self.matrix_b.mle.num_free_vars(), 0);
+        assert!(self.matrix_a.mle.is_fully_bounded());
+        assert!(self.matrix_b.mle.is_fully_bounded());
 
         self.append_leaf_mles_to_transcript(transcript_writer);
         Ok(())
