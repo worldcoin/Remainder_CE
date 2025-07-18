@@ -32,7 +32,7 @@ use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::max,
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
 };
@@ -309,8 +309,7 @@ impl<F: Field> Expression<F, ProverExpr> {
     /// expression. Can only be used after indexing the expression.
     pub fn get_all_rounds(&self) -> Vec<usize> {
         let (expression_node, mle_vec) = self.deconstruct_ref();
-        let mut curr_indices: Vec<usize> = Vec::new();
-        let mut all_rounds = expression_node.get_all_rounds(&mut curr_indices, mle_vec);
+        let mut all_rounds = expression_node.get_all_rounds(mle_vec);
         all_rounds.sort();
         all_rounds
     }
@@ -319,9 +318,7 @@ impl<F: Field> Expression<F, ProverExpr> {
     /// returns the indices sorted.
     pub fn get_all_nonlinear_rounds(&self) -> Vec<usize> {
         let (expression_node, mle_vec) = self.deconstruct_ref();
-        let mut curr_nonlinear_indices: Vec<usize> = Vec::new();
-        let mut nonlinear_rounds =
-            expression_node.get_all_nonlinear_rounds(&mut curr_nonlinear_indices, mle_vec);
+        let mut nonlinear_rounds = expression_node.get_all_nonlinear_rounds(mle_vec);
         nonlinear_rounds.sort();
         nonlinear_rounds
     }
@@ -641,183 +638,23 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     /// and collecting the leaf node indices.
     pub(crate) fn get_all_rounds(
         &self,
-        curr_indices: &mut Vec<usize>,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
-        let indices_in_node = {
-            match self {
-                // in a product, we need the union of all the indices in each part of the product
-                ExpressionNode::Product(a, b) => {
-                    let mut product_indices: HashSet<usize> = HashSet::new();
-                    let a_indices = a.get_all_rounds(curr_indices, mle_vec);
-                    let b_indices = b.get_all_rounds(curr_indices, mle_vec);
-                    a_indices
-                        .into_iter()
-                        .zip(b_indices)
-                        .for_each(|(a_mle_idx, b_mle_idx)| {
-                            product_indices.insert(a_mle_idx);
-                            product_indices.insert(b_mle_idx);
-                        });
-                    product_indices
-                }
-                // in an mle, we need all of the mle indices in the mle.
-                ExpressionNode::Mle(mle_vec_idx) => {
-                    let mle = mle_vec_idx.get_mle(mle_vec);
-                    mle.mle_indices
-                        .clone()
-                        .into_iter()
-                        .filter_map(|mle_index| match mle_index {
-                            MleIndex::Indexed(i) => Some(i),
-                            _ => None,
-                        })
-                        .collect()
-                }
-                // in a selector, we traverse each parts of the selector while adding the selector index
-                // itself to the total set of all indices in an expression.
-                ExpressionNode::Selector(sel_index, a, b) => {
-                    let mut sel_indices: HashSet<usize> = HashSet::new();
-                    if let MleIndex::Indexed(i) = sel_index {
-                        sel_indices.insert(*i);
-                    };
-
-                    let a_indices = a.get_all_rounds(curr_indices, mle_vec);
-                    let b_indices = b.get_all_rounds(curr_indices, mle_vec);
-                    a_indices
-                        .into_iter()
-                        .zip(b_indices)
-                        .for_each(|(a_mle_idx, b_mle_idx)| {
-                            sel_indices.insert(a_mle_idx);
-                            sel_indices.insert(b_mle_idx);
-                        });
-                    sel_indices
-                }
-                // we add the indices in each of the parts of the sum.
-                ExpressionNode::Sum(a, b) => {
-                    let mut sum_indices: HashSet<usize> = HashSet::new();
-                    let a_indices = a.get_all_rounds(curr_indices, mle_vec);
-                    let b_indices = b.get_all_rounds(curr_indices, mle_vec);
-                    a_indices
-                        .into_iter()
-                        .zip(b_indices)
-                        .for_each(|(a_mle_idx, b_mle_idx)| {
-                            sum_indices.insert(a_mle_idx);
-                            sum_indices.insert(b_mle_idx);
-                        });
-                    sum_indices
-                }
-                // for scaled and negated, we can add all of the indices found in the expression being negated or scaled.
-                ExpressionNode::Scaled(a, _) => a
-                    .get_all_rounds(curr_indices, mle_vec)
-                    .into_iter()
-                    .collect(),
-                // for a constant there are no new indices.
-                ExpressionNode::Constant(_) => HashSet::new(),
-            }
-        };
-        // once all of them have been collected, we can take the union of all of them to grab all of the rounds in an expression.
-        indices_in_node.into_iter().for_each(|index| {
-            if !curr_indices.contains(&index) {
-                curr_indices.push(index);
-            }
-        });
-        curr_indices.clone()
+        let degree_per_index = self.get_rounds_helper(mle_vec);
+        (0..degree_per_index.len())
+            .filter(|&i| degree_per_index[i] > 0)
+            .collect()
     }
 
     /// traverse an expression tree in order to get all of the nonlinear rounds in an expression.
     pub fn get_all_nonlinear_rounds(
         &self,
-        curr_nonlinear_indices: &mut Vec<usize>,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
-        let nonlinear_indices_in_node = {
-            match self {
-                // product is the only way to introduce new nonlinear rounds.
-                // if any round appears in both children, then it is nonlinear
-                ExpressionNode::Product(a, b) => {
-                    let mut product_nonlinear_indices: HashSet<usize> = HashSet::new();
-                    // Every nonlinear rounds in children are still nonlinear
-                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
-                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
-                    a_indices
-                        .into_iter()
-                        .zip(b_indices)
-                        .for_each(|(a_mle_idx, b_mle_idx)| {
-                            product_nonlinear_indices.insert(a_mle_idx);
-                            product_nonlinear_indices.insert(b_mle_idx);
-                        });
-                    
-
-                    let mles = mle_vec_indices
-                        .iter()
-                        .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
-                        .collect_vec();
-                    let mut product_nonlinear_indices: HashSet<usize> = HashSet::new();
-                    let mut product_indices_counts: HashMap<MleIndex<F>, usize> = HashMap::new();
-                    mles.into_iter().for_each(|mle| {
-                        mle.mle_indices.iter().for_each(|mle_index| {
-                            let curr_count = {
-                                if product_indices_counts.contains_key(mle_index) {
-                                    product_indices_counts.get(mle_index).unwrap()
-                                } else {
-                                    &0
-                                }
-                            };
-                            product_indices_counts.insert(mle_index.clone(), curr_count + 1);
-                        })
-                    });
-                    product_indices_counts
-                        .into_iter()
-                        .for_each(|(mle_index, count)| {
-                            if count > 1 {
-                                if let MleIndex::Indexed(i) = mle_index {
-                                    product_nonlinear_indices.insert(i);
-                                }
-                            }
-                        });
-                    product_nonlinear_indices
-                }
-                // for the rest of the types of expressions, we simply traverse through the expression node to look
-                // for more leaves which are specifically product nodes.
-                ExpressionNode::Selector(_sel_index, a, b) => {
-                    let mut sel_nonlinear_indices: HashSet<usize> = HashSet::new();
-                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
-                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
-                    a_indices
-                        .into_iter()
-                        .zip(b_indices)
-                        .for_each(|(a_mle_idx, b_mle_idx)| {
-                            sel_nonlinear_indices.insert(a_mle_idx);
-                            sel_nonlinear_indices.insert(b_mle_idx);
-                        });
-                    sel_nonlinear_indices
-                }
-                ExpressionNode::Sum(a, b) => {
-                    let mut sum_nonlinear_indices: HashSet<usize> = HashSet::new();
-                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
-                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
-                    a_indices
-                        .into_iter()
-                        .zip(b_indices)
-                        .for_each(|(a_mle_idx, b_mle_idx)| {
-                            sum_nonlinear_indices.insert(a_mle_idx);
-                            sum_nonlinear_indices.insert(b_mle_idx);
-                        });
-                    sum_nonlinear_indices
-                }
-                ExpressionNode::Scaled(a, _) => a
-                    .get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec)
-                    .into_iter()
-                    .collect(),
-                ExpressionNode::Constant(_) | ExpressionNode::Mle(_) => HashSet::new(),
-            }
-        };
-        // we grab all of the indices and take the union of all of them to return all nonlinear rounds in an expression tree.
-        nonlinear_indices_in_node.into_iter().for_each(|index| {
-            if !curr_nonlinear_indices.contains(&index) {
-                curr_nonlinear_indices.push(index);
-            }
-        });
-        curr_nonlinear_indices.clone()
+        let degree_per_index = self.get_rounds_helper(mle_vec);
+        (0..degree_per_index.len())
+            .filter(|&i| degree_per_index[i] > 1)
+            .collect()
     }
 
     /// get all of the linear rounds from an expression tree
@@ -825,21 +662,96 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         &self,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
-        let mut curr_indices: Vec<usize> = Vec::new();
-        let mut curr_nonlinear_indices: Vec<usize> = Vec::new();
-        // first we get all the rounds of the expression
-        let all_indices = &self.get_all_rounds(&mut curr_indices, mle_vec);
-        // then we get all of the nonlinear rounds
-        let all_nonlinear_indices =
-            &self.get_all_nonlinear_rounds(&mut curr_nonlinear_indices, mle_vec);
-        let mut all_linear_indices: Vec<usize> = Vec::new();
-        // all of the rounds that are in all rounds but not in the nonlinear rounds must be linear rounds.
-        all_indices.iter().for_each(|mle_idx| {
-            if !all_nonlinear_indices.contains(mle_idx) {
-                all_linear_indices.push(*mle_idx);
+        let degree_per_index = self.get_rounds_helper(mle_vec);
+        (0..degree_per_index.len())
+            .filter(|&i| degree_per_index[i] == 1)
+            .collect()
+    }
+
+    // a recursive helper for get_all_rounds, get_all_nonlinear_rounds, and get_all_linear_rounds
+    fn get_rounds_helper(&self, mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> Vec<usize> {
+        // degree of each index
+        let mut degree_per_index = Vec::new();
+        // set the degree of the corresponding index to max(OLD_DEGREE, NEW_DEGREE)
+        let max_degree = |degree_per_index: &mut Vec<usize>, index: usize, new_degree: usize| {
+            if degree_per_index.len() <= index {
+                degree_per_index.extend(vec![0; index + 1 - degree_per_index.len()]);
             }
-        });
-        all_linear_indices
+            if degree_per_index[index] < new_degree {
+                degree_per_index[index] = new_degree;
+            }
+        };
+        // set the degree of the corresponding index to OLD_DEGREE + NEW_DEGREE
+        let add_degree = |degree_per_index: &mut Vec<usize>, index: usize, new_degree: usize| {
+            if degree_per_index.len() <= index {
+                degree_per_index.extend(vec![0; index + 1 - degree_per_index.len()]);
+            }
+            degree_per_index[index] += new_degree;
+        };
+
+        match self {
+            // in a product, we need the union of all the indices in each of the individual mle refs.
+            ExpressionNode::Product(a, b) => {
+                let a_degree_per_index = a.get_rounds_helper(mle_vec);
+                let b_degree_per_index = b.get_rounds_helper(mle_vec);
+                // nonlinear operator -- sum over the degree
+                for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
+                    if let Some(a_degree) = a_degree_per_index.get(i) {
+                        add_degree(&mut degree_per_index, i, *a_degree);
+                    }
+                    if let Some(b_degree) = b_degree_per_index.get(i) {
+                        add_degree(&mut degree_per_index, i, *b_degree);
+                    }
+                }
+            }
+            // in an mle, we need all of the mle indices in the mle.
+            ExpressionNode::Mle(mle_vec_idx) => {
+                let mle = mle_vec_idx.get_mle(mle_vec);
+                mle.mle_indices.iter().for_each(|mle_index| {
+                    if let MleIndex::Indexed(i) = mle_index {
+                        max_degree(&mut degree_per_index, *i, 1);
+                    }
+                });
+            }
+            // in selector, take the max degree of each children, and add 1 degree to the selector itself
+            ExpressionNode::Selector(sel_index, a, b) => {
+                if let MleIndex::Indexed(i) = sel_index {
+                    add_degree(&mut degree_per_index, *i, 1);
+                };
+                let a_degree_per_index = a.get_rounds_helper(mle_vec);
+                let b_degree_per_index = b.get_rounds_helper(mle_vec);
+                // linear operator -- take the max degree
+                for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
+                    if let Some(a_degree) = a_degree_per_index.get(i) {
+                        max_degree(&mut degree_per_index, i, *a_degree);
+                    }
+                    if let Some(b_degree) = b_degree_per_index.get(i) {
+                        max_degree(&mut degree_per_index, i, *b_degree);
+                    }
+                }
+            }
+            // in sum, take the max degree of each children
+            ExpressionNode::Sum(a, b) => {
+                let a_degree_per_index = a.get_rounds_helper(mle_vec);
+                let b_degree_per_index = b.get_rounds_helper(mle_vec);
+                // linear operator -- take the max degree
+                for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
+                    if let Some(a_degree) = a_degree_per_index.get(i) {
+                        max_degree(&mut degree_per_index, i, *a_degree);
+                    }
+                    if let Some(b_degree) = b_degree_per_index.get(i) {
+                        max_degree(&mut degree_per_index, i, *b_degree);
+                    }
+                }
+            }
+            // scaled and negated, does not affect degree
+            ExpressionNode::Scaled(a, _) => {
+                degree_per_index = a.get_rounds_helper(mle_vec);
+            }
+            // for a constant there are no new indices.
+            ExpressionNode::Constant(_) => {}
+        }
+        degree_per_index
     }
 
     /// Gets the size of an expression in terms of the number of rounds of sumcheck
