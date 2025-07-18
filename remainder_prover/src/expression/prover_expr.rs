@@ -19,7 +19,7 @@ use crate::{
         mle_combination::MleCombinationSeq, MleIndex,
     },
     sumcheck::{
-        apply_updated_beta_values_to_evals, beta_cascade, beta_cascade_no_independent_variable,
+        apply_updated_beta_values_to_evals,
         SumcheckEvals,
     },
 };
@@ -27,12 +27,11 @@ use crate::{
     layer::product::PostSumcheckLayer,
     mle::{verifier_mle::VerifierMle, Mle},
 };
-use itertools::{repeat_n, Itertools};
+use itertools::Itertools;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::max,
-    collections::HashSet,
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
 };
@@ -784,23 +783,10 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 let b_bits = b.get_expression_num_free_variables_node(curr_size, mle_vec);
                 max(a_bits, b_bits)
             }
-            ExpressionNode::Product(mle_vec_indices) => {
-                let mles = mle_vec_indices
-                    .iter()
-                    .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
-                    .collect_vec();
-
-                mles.iter()
-                    .map(|mle| {
-                        mle.mle_indices()
-                            .iter()
-                            .filter(|item| matches!(item, &&MleIndex::Free))
-                            .collect_vec()
-                            .len()
-                    })
-                    .max()
-                    .unwrap_or(0)
-                    + curr_size
+            ExpressionNode::Product(a, b) => {
+                let a_bits = a.get_expression_num_free_variables_node(curr_size, mle_vec);
+                let b_bits = b.get_expression_num_free_variables_node(curr_size, mle_vec);
+                max(a_bits, b_bits)
             }
             ExpressionNode::Scaled(a, _) => {
                 a.get_expression_num_free_variables_node(curr_size, mle_vec)
@@ -812,18 +798,23 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     /// Recursively get the [PostSumcheckLayer] for an Expression node, which is the fully bound
     /// representation of an expression.
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
+    /// returns the PostSumcheckLayer, and the evaluation of the current subtree
     pub fn get_post_sumcheck_layer(
         &self,
         multiplier: F,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
-    ) -> PostSumcheckLayer<F, F> {
+    ) -> (PostSumcheckLayer<F, F>, F) {
         let mut products: Vec<Product<F, F>> = vec![];
-        match self {
+        let eval = match self {
             ExpressionNode::Selector(mle_index, a, b) => {
+                // Delay multiplication until we reach a multiplication gate
                 let left_side_acc = multiplier * (F::ONE - mle_index.val().unwrap());
                 let right_side_acc = multiplier * (mle_index.val().unwrap());
-                products.extend(a.get_post_sumcheck_layer(left_side_acc, mle_vec).0);
-                products.extend(b.get_post_sumcheck_layer(right_side_acc, mle_vec).0);
+                let (left_product, left_eval) = a.get_post_sumcheck_layer(left_side_acc, mle_vec);
+                let (right_product, right_eval) = b.get_post_sumcheck_layer(right_side_acc, mle_vec);
+                products.extend(left_product.0);
+                products.extend(right_product.0);
+                left_eval + right_eval
             }
             ExpressionNode::Sum(a, b) => {
                 products.extend(a.get_post_sumcheck_layer(multiplier, mle_vec).0);
@@ -849,29 +840,13 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             ExpressionNode::Constant(constant) => {
                 products.push(Product::<F, F>::new(&[], *constant * multiplier));
             }
-        }
-        PostSumcheckLayer(products)
+        };
+        (PostSumcheckLayer(products), eval)
     }
 
     /// Get the maximum degree of an ExpressionNode, recursively.
-    fn get_max_degree(&self, _mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> usize {
-        match self {
-            ExpressionNode::Selector(_, a, b) | ExpressionNode::Sum(a, b) => {
-                let a_degree = a.get_max_degree(_mle_vec);
-                let b_degree = b.get_max_degree(_mle_vec);
-                max(a_degree, b_degree)
-            }
-            ExpressionNode::Mle(_) => {
-                // 1 for the current MLE
-                1
-            }
-            ExpressionNode::Product(mles) => {
-                // max degree is the number of MLEs in a product
-                mles.len()
-            }
-            ExpressionNode::Scaled(a, _) => a.get_max_degree(_mle_vec),
-            ExpressionNode::Constant(_) => 1,
-        }
+    fn get_max_degree(&self, mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> usize {
+        *self.get_rounds_helper(mle_vec).iter().max().unwrap()
     }
 }
 
@@ -935,7 +910,7 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, ProverExp
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
             ExpressionNode::Mle(_mle) => f.debug_struct("Mle").field("mle", _mle).finish(),
             ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
-            ExpressionNode::Product(a) => f.debug_tuple("Product").field(a).finish(),
+            ExpressionNode::Product(a, b) => f.debug_tuple("Product").field(a).field(b).finish(),
             ExpressionNode::Scaled(poly, scalar) => {
                 f.debug_tuple("Scaled").field(poly).field(scalar).finish()
             }

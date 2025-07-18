@@ -71,11 +71,7 @@ impl<F: Field> Expression<F, VerifierExpr> {
         };
         let mle_eval = |verifier_mle: &VerifierMle<F>| -> Result<F> { Ok(verifier_mle.value()) };
         let sum = |lhs: Result<F>, rhs: Result<F>| Ok(lhs? + rhs?);
-        let product = |verifier_mles: &[VerifierMle<F>]| -> Result<F> {
-            verifier_mles
-                .iter()
-                .try_fold(F::ONE, |acc, verifier_mle| Ok(acc * verifier_mle.value()))
-        };
+        let product = |lhs: Result<F>, rhs: Result<F>| Ok(lhs? * rhs?);
         let scaled = |val: Result<F>, scalar: F| Ok(val? * scalar);
 
         self.expression_node.reduce(
@@ -109,7 +105,7 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
         mle_eval: &impl Fn(&<VerifierExpr as ExpressionType<F>>::MLENodeRepr) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[<VerifierExpr as ExpressionType<F>>::MLENodeRepr]) -> T,
+        product: &impl Fn(T, T) -> T,
         scaled: &impl Fn(T, F) -> T,
     ) -> T {
         match self {
@@ -125,7 +121,11 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
                 let b = b.reduce(constant, selector_column, mle_eval, sum, product, scaled);
                 sum(a, b)
             }
-            ExpressionNode::Product(queries) => product(queries),
+            ExpressionNode::Product(a, b) => {
+                let a = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
+                let b = b.reduce(constant, selector_column, mle_eval, sum, product, scaled);
+                product(a, b)
+            }
             ExpressionNode::Scaled(a, f) => {
                 let a = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
                 scaled(a, *f)
