@@ -111,7 +111,8 @@ pub trait Layer<F: Field> {
 
     /// Tries to prove `claims` for this layer. There is only a single
     /// aggregated claim if our
-    /// [remainder_shared_types::config::ClaimAggregationStrategy] is Interpolative,
+    /// [remainder_shared_types::config::ClaimAggregationStrategy] is
+    /// [remainder_shared_types::config::ClaimAggregationStrategy::Interpolative],
     /// otherwise we have several claims we take the random linear
     /// combination over.
     ///
