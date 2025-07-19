@@ -142,7 +142,7 @@ pub fn get_total_mle_indices<F: Field>(
 /// assert_eq!(*result.f.iter().collect_vec().clone(), vec![Fr::from(0), Fr::from(2), Fr::from(1), Fr::from(3)]);
 /// ```
 pub fn build_composite_mle<F: Field>(
-    mles: &[(&MultilinearExtension<F>, &Vec<bool>)],
+    mles: &[(&MultilinearExtension<F>, Vec<bool>)],
 ) -> MultilinearExtension<F> {
     assert!(!mles.is_empty());
     let out_num_vars = mles[0].0.num_vars() + mles[0].1.len();
