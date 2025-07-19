@@ -1,9 +1,6 @@
 #![allow(clippy::type_complexity)]
-use crate::input_layer::ligero_input_layer::LigeroInputLayerDescriptionWithPrecommit;
 
-use crate::layer::LayerId;
 use crate::layouter::builder::ProvableCircuit;
-use crate::mle::evals::MultilinearExtension;
 use crate::prover::verify;
 use ark_std::{end_timer, start_timer};
 
@@ -20,7 +17,6 @@ use remainder_shared_types::{perform_function_under_expected_configs, Field};
 use serde_json;
 use sha3::Digest;
 use sha3::Sha3_256;
-use std::collections::HashMap;
 use std::fs::File;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::BufWriter;
