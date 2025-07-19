@@ -20,7 +20,7 @@ use crate::expression::circuit_expr::filter_bookkeeping_table;
 use crate::input_layer::fiat_shamir_challenge::{
     FiatShamirChallenge, FiatShamirChallengeDescription,
 };
-use crate::input_layer::ligero_input_layer::{LigeroCommitment, LigeroInputLayerDescription};
+use crate::input_layer::ligero_input_layer::LigeroCommitment;
 use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{layer_enum::LayerEnum, LayerId};
