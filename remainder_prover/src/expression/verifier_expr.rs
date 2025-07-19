@@ -21,7 +21,6 @@
 use crate::mle::{verifier_mle::VerifierMle, MleIndex};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
     fmt::Debug,
 };
 
@@ -93,129 +92,9 @@ impl<F: Field> Expression<F, VerifierExpr> {
     pub fn get_all_nonlinear_rounds(&mut self) -> Vec<usize> {
         let (expression_node, mle_vec) = self.deconstruct_mut();
         let mut nonlinear_rounds: Vec<usize> =
-            expression_node.get_all_nonlinear_rounds(&mut vec![], mle_vec);
+            expression_node.get_all_nonlinear_rounds(mle_vec);
         nonlinear_rounds.sort();
         nonlinear_rounds
-    }
-}
-
-impl<F: Field> ExpressionNode<F, VerifierExpr> {
-    /// Evaluate the polynomial using the provided closures to perform the
-    /// operations.
-    #[allow(clippy::too_many_arguments)]
-    pub fn reduce<T>(
-        &self,
-        constant: &impl Fn(F) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&<VerifierExpr as ExpressionType<F>>::MLENodeRepr) -> T,
-        sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[<VerifierExpr as ExpressionType<F>>::MLENodeRepr]) -> T,
-        scaled: &impl Fn(T, F) -> T,
-    ) -> T {
-        match self {
-            ExpressionNode::Constant(scalar) => constant(*scalar),
-            ExpressionNode::Selector(index, a, b) => {
-                let lhs = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
-                let rhs = b.reduce(constant, selector_column, mle_eval, sum, product, scaled);
-                selector_column(index, lhs, rhs)
-            }
-            ExpressionNode::Mle(query) => mle_eval(query),
-            ExpressionNode::Sum(a, b) => {
-                let a = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
-                let b = b.reduce(constant, selector_column, mle_eval, sum, product, scaled);
-                sum(a, b)
-            }
-            ExpressionNode::Product(queries) => product(queries),
-            ExpressionNode::Scaled(a, f) => {
-                let a = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
-                scaled(a, *f)
-            }
-        }
-    }
-
-    /// Traverse an expression tree in order and returns a vector of indices of
-    /// all the nonlinear rounds in an expression (in no particular order).
-    pub fn get_all_nonlinear_rounds(
-        &self,
-        curr_nonlinear_indices: &mut Vec<usize>,
-        _mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
-    ) -> Vec<usize> {
-        let nonlinear_indices_in_node = {
-            match self {
-                // The only case where an index is nonlinear is if it is present in multiple mle
-                // refs that are part of a product. We iterate through all the indices in the
-                // product nodes to look for repeated indices within a single node.
-                ExpressionNode::Product(verifier_mles) => {
-                    let mut product_nonlinear_indices: HashSet<usize> = HashSet::new();
-                    let mut product_indices_counts: HashMap<MleIndex<F>, usize> = HashMap::new();
-
-                    verifier_mles.iter().for_each(|verifier_mle| {
-                        verifier_mle.var_indices().iter().for_each(|mle_index| {
-                            let curr_count = {
-                                if product_indices_counts.contains_key(mle_index) {
-                                    product_indices_counts.get(mle_index).unwrap()
-                                } else {
-                                    &0
-                                }
-                            };
-                            product_indices_counts.insert(mle_index.clone(), curr_count + 1);
-                        })
-                    });
-
-                    product_indices_counts
-                        .into_iter()
-                        .for_each(|(mle_index, count)| {
-                            if count > 1 {
-                                if let MleIndex::Indexed(i) = mle_index {
-                                    product_nonlinear_indices.insert(i);
-                                }
-                            }
-                        });
-
-                    product_nonlinear_indices
-                }
-                // for the rest of the types of expressions, we simply traverse through the expression node to look
-                // for more leaves which are specifically product nodes.
-                ExpressionNode::Selector(_sel_index, a, b) => {
-                    let mut sel_nonlinear_indices: HashSet<usize> = HashSet::new();
-                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
-                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
-                    a_indices
-                        .into_iter()
-                        .zip(b_indices)
-                        .for_each(|(a_mle_idx, b_mle_idx)| {
-                            sel_nonlinear_indices.insert(a_mle_idx);
-                            sel_nonlinear_indices.insert(b_mle_idx);
-                        });
-                    sel_nonlinear_indices
-                }
-                ExpressionNode::Sum(a, b) => {
-                    let mut sum_nonlinear_indices: HashSet<usize> = HashSet::new();
-                    let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
-                    let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec);
-                    a_indices
-                        .into_iter()
-                        .zip(b_indices)
-                        .for_each(|(a_mle_idx, b_mle_idx)| {
-                            sum_nonlinear_indices.insert(a_mle_idx);
-                            sum_nonlinear_indices.insert(b_mle_idx);
-                        });
-                    sum_nonlinear_indices
-                }
-                ExpressionNode::Scaled(a, _) => a
-                    .get_all_nonlinear_rounds(curr_nonlinear_indices, _mle_vec)
-                    .into_iter()
-                    .collect(),
-                ExpressionNode::Constant(_) | ExpressionNode::Mle(_) => HashSet::new(),
-            }
-        };
-        // we grab all of the indices and take the union of all of them to return all nonlinear rounds in an expression tree.
-        nonlinear_indices_in_node.into_iter().for_each(|index| {
-            if !curr_nonlinear_indices.contains(&index) {
-                curr_nonlinear_indices.push(index);
-            }
-        });
-        curr_nonlinear_indices.clone()
     }
 }
 
