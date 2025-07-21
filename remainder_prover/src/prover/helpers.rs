@@ -13,7 +13,9 @@ use remainder_shared_types::config::global_config::{
 use remainder_shared_types::config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig};
 use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
 use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
-use remainder_shared_types::{perform_function_under_expected_configs, Field};
+use remainder_shared_types::{
+    perform_function_under_expected_configs, Field, Halo2FFTFriendlyField,
+};
 use serde_json;
 use sha3::Digest;
 use sha3::Sha3_256;
@@ -102,7 +104,7 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
 
 /// Function which calls [test_circuit_internal] with the appropriate expected
 /// prover/verifier config.
-pub fn test_circuit_with_config<F: Field>(
+pub fn test_circuit_with_config<F: Halo2FFTFriendlyField>(
     provable_circuit: &ProvableCircuit<F>,
     expected_prover_config: &GKRCircuitProverConfig,
     expected_verifier_config: &GKRCircuitVerifierConfig,
@@ -117,7 +119,9 @@ pub fn test_circuit_with_config<F: Field>(
 
 /// Function which calls [test_circuit_internal] with the appropriate expected
 /// prover/verifier config.
-pub fn test_circuit_with_runtime_optimized_config<F: Field>(provable_circuit: &ProvableCircuit<F>) {
+pub fn test_circuit_with_runtime_optimized_config<F: Halo2FFTFriendlyField>(
+    provable_circuit: &ProvableCircuit<F>,
+) {
     let expected_prover_config = GKRCircuitProverConfig::runtime_optimized_default();
     let expected_verifier_config =
         GKRCircuitVerifierConfig::new_from_prover_config(&expected_prover_config, false);
@@ -130,7 +134,9 @@ pub fn test_circuit_with_runtime_optimized_config<F: Field>(provable_circuit: &P
 }
 
 /// Function which calls [test_circuit_internal] with a memory-optimized default.
-pub fn test_circuit_with_memory_optimized_config<F: Field>(provable_circuit: &ProvableCircuit<F>) {
+pub fn test_circuit_with_memory_optimized_config<F: Halo2FFTFriendlyField>(
+    provable_circuit: &ProvableCircuit<F>,
+) {
     let expected_prover_config = GKRCircuitProverConfig::memory_optimized_default();
     let expected_verifier_config =
         GKRCircuitVerifierConfig::new_from_prover_config(&expected_prover_config, true);
@@ -144,7 +150,7 @@ pub fn test_circuit_with_memory_optimized_config<F: Field>(provable_circuit: &Pr
 
 /// Function which instantiates a circuit description with the given inputs
 /// and precommits and both attempts to both prove and verify said circuit.
-fn test_circuit_internal<F: Field>(provable_circuit: &ProvableCircuit<F>) {
+fn test_circuit_internal<F: Halo2FFTFriendlyField>(provable_circuit: &ProvableCircuit<F>) {
     let mut transcript_writer =
         TranscriptWriter::<F, PoseidonSponge<F>>::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");

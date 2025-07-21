@@ -48,7 +48,7 @@ use remainder_shared_types::config::{ClaimAggregationStrategy, ProofConfig};
 use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
 use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::transcript::{ProverTranscript, TranscriptWriter};
-use remainder_shared_types::Field;
+use remainder_shared_types::{Field, Halo2FFTFriendlyField};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, info};
@@ -118,7 +118,7 @@ pub struct InstantiatedCircuit<F: Field> {
 /// * `inputs` - a map from input layer ID to the MLE of its values (in the clear) for _all_ input layers.
 /// * `ligero_input_layers` - a vector of [LigeroInputLayerDescription]s, optionally paired with pre-computed commitments to their values (if provided, this are not checked, but simply used as is).
 /// * `circuit_description` - the [GKRCircuitDescription] of the circuit to be proven.
-pub fn prove<F: Field>(
+pub fn prove<F: Halo2FFTFriendlyField>(
     provable_circuit: &ProvableCircuit<F>,
     circuit_description_hash_type: CircuitHashType,
     transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
@@ -214,7 +214,7 @@ pub fn prove<F: Field>(
 }
 
 /// Verify a GKR proof from a transcript.
-pub fn verify<F: Field>(
+pub fn verify<F: Halo2FFTFriendlyField>(
     verifiable_circuit: &VerifiableCircuit<F>,
     circuit_description_hash_type: CircuitHashType,
     transcript: &mut impl VerifierTranscript<F>,
