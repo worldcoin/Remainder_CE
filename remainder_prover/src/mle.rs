@@ -10,7 +10,6 @@ use crate::{claims::RawClaim, layer::LayerId};
 use remainder_shared_types::Field;
 
 use self::mle_enum::MleEnum;
-use dyn_clonable::*;
 
 /// Contains the default, dense implementation of an [Mle].
 pub mod dense;
@@ -40,8 +39,7 @@ pub mod verifier_mle;
 
 /// Abstract structure of an Mle
 /// Including its number of variables, indices,layer_id, but not evaluations
-#[clonable]
-pub trait AbstractMle<F: Field>: Clone + Debug + Send + Sync {
+pub trait AbstractMle<F: Field>: Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
     /// Returns the number of free variables this Mle is defined on.
     /// Equivalently, this is the log_2 of the size of the unpruned bookkeeping
     /// table.
@@ -79,7 +77,6 @@ pub trait AbstractMle<F: Field>: Clone + Debug + Send + Sync {
 /// IntoIterator and FromIterator, this is to ensure that the semantic ordering
 /// within T is always consistent.
 #[allow(clippy::len_without_is_empty)]
-#[clonable]
 pub trait Mle<F: Field>: Clone + Debug + Send + Sync + AbstractMle<F> {
     /// Get the padded set of evaluations over the boolean hypercube; useful for
     /// constructing the input layer.

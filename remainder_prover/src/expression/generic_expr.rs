@@ -2,12 +2,48 @@
 //! [crate::expression]). See documentation in [Expression] for high-level
 //! summary.
 
-use crate::mle::MleIndex;
+use crate::mle::{AbstractMle, MleIndex};
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use std::{cmp::max, hash::Hash};
 
 use anyhow::{Ok, Result};
+
+/// mid-term solution for deduplication of MleRefs
+/// basically a wrapper around usize, which denotes the index
+/// of the MleRef in an expression's MleRef list/// Generic Expressions
+///
+/// TODO(ryancao): We should deprecate this and instead just have
+/// references to the `DenseMLE<F>`s which are stored in the circuit_map.
+#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
+pub struct MleVecIndex(usize);
+
+impl MleVecIndex {
+    /// create a new MleRefIndex
+    pub fn new(index: usize) -> Self {
+        MleVecIndex(index)
+    }
+
+    /// returns the index
+    pub fn index(&self) -> usize {
+        self.0
+    }
+
+    /// add the index with an increment amount
+    pub fn increment(&mut self, offset: usize) {
+        self.0 += offset;
+    }
+
+    /// return the actual mle in the vec within the prover expression
+    pub fn get_mle<'a, F: Field, M: AbstractMle<F>>(&self, mle_vec: &'a [M]) -> &'a M {
+        &mle_vec[self.0]
+    }
+
+    /// return the actual mle in the vec within the prover expression
+    pub fn get_mle_mut<'a, F: Field, M: AbstractMle<F>>(&self, mle_vec: &'a mut [M]) -> &'a mut M {
+        &mut mle_vec[self.0]
+    }
+}
 
 /// An [ExpressionType] defines two fields -- the type of MLE representation
 /// at the leaf of the expression node tree, and the "global" unique copies
