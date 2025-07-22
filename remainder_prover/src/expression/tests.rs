@@ -310,10 +310,9 @@ fn test_all_mle_indices() {
         expression_product_2.select(expression_mle),
     );
     expression_full.index_mle_indices(0);
-    let mut curr_all_indices: Vec<usize> = Vec::new();
     let all_indices = expression_full
         .expression_node
-        .get_all_rounds(&mut curr_all_indices, &expression_full.mle_vec);
+        .get_all_rounds(&expression_full.mle_vec);
     let expected_indices_vec: Vec<usize> = vec![0, 1, 2, 3];
     let expected_all_indices: HashSet<&usize> = HashSet::from_iter(expected_indices_vec.iter());
     let actual_all_indices: HashSet<&usize> = HashSet::from_iter(all_indices.iter());
@@ -352,10 +351,9 @@ fn test_nonlinear_mle_indices() {
         expression_product_2.select(expression_mle),
     );
     expression_full.index_mle_indices(0);
-    let mut curr_all_indices: Vec<usize> = Vec::new();
     let all_nonlinear_indices = expression_full
         .expression_node
-        .get_all_nonlinear_rounds(&mut curr_all_indices, &expression_full.mle_vec);
+        .get_all_nonlinear_rounds(&expression_full.mle_vec);
     let expected_nonlinear_indices_vec = [0, 1, 2];
     let expected_all_nonlinear_indices: HashSet<&usize> =
         HashSet::from_iter(expected_nonlinear_indices_vec.iter());
