@@ -51,8 +51,7 @@ use thiserror::Error;
 
 use crate::{
     expression::{
-        generic_expr::{Expression, ExpressionNode, ExpressionType},
-        prover_expr::ProverExpr,
+        generic_expr::{Expression, ExpressionNode}, prover_expr::ProverMle,
     },
     mle::{AbstractMle, Mle, MleIndex},
 };
@@ -414,14 +413,14 @@ pub fn beta_cascade_no_independent_variable<F: Field>(
 /// Returns the maximum degree of b_{curr_round} within an expression (and
 /// therefore the number of prover messages we need to send)
 pub(crate) fn get_round_degree<F: Field>(
-    expr: &Expression<F, ProverExpr>,
+    expr: &Expression<F, ProverMle<F>>,
     curr_round: usize,
 ) -> usize {
     // By default, all rounds have degree at least 2 (beta table included)
     let mut round_degree = 1;
 
-    let mut get_degree_closure = |expr: &ExpressionNode<F, ProverExpr>,
-                                  mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
+    let mut get_degree_closure = |expr: &ExpressionNode<F, ProverMle<F>>,
+                                  mle_vec: &[ProverMle<F>]|
      -> Result<()> {
         let round_degree = &mut round_degree;
 

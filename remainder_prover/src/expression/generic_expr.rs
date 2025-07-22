@@ -15,7 +15,7 @@ use anyhow::{Ok, Result};
 ///
 /// TODO(ryancao): We should deprecate this and instead just have
 /// references to the `DenseMLE<F>`s which are stored in the circuit_map.
-#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MleVecIndex(usize);
 
 impl MleVecIndex {
