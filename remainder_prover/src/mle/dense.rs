@@ -311,8 +311,8 @@ impl<F: Field> DenseMle<F> {
     }
 
     /// Creates an expression from the current MLE.
-    pub fn expression(self) -> Expression<F, ProverExpr> {
-        Expression::<F, ProverExpr>::mle(self)
+    pub fn expression(self) -> Expression<F, DenseMle<F>> {
+        Expression::<F, DenseMle<F>>::mle(self)
     }
 
     /// Returns the evaluation challenges for a fully-bound MLE.

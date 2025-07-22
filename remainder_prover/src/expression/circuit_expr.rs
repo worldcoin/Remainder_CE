@@ -9,64 +9,46 @@ use crate::{
     },
     layouter::layouting::CircuitMap,
     mle::{
-        evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, MleIndex
+        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, MleIndex
     },
 };
 use ark_std::log2;
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
 use std::{
     cmp::max,
-
-    fmt::Debug,
-    ops::{Add, Mul, Neg, Sub},
+    ops::Neg,
 };
 
 use remainder_shared_types::{transcript::VerifierTranscript, Field};
 
-use super::{
-    expr_errors::ExpressionError,
-    generic_expr::{Expression, ExpressionNode, ExpressionType},
-    prover_expr::ProverExpr,
-    verifier_expr::VerifierExpr,
-};
+use super::generic_expr::{Expression, ExpressionNode};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
-/// Type for defining [Expression<F, ExprDescription>], the type used
-/// for representing expressions in the circuit description.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ExprDescription;
-
-// The leaves of an expression of this type contain a [MleDescription], an analogue
-// of [crate::mle::dense::DenseMle], storing only metadata related to the MLE,
-// without any evaluations.
-impl<F: Field> ExpressionType<F> for ExprDescription {
-    type MLENodeRepr = MleDescription<F>;
-    type MleVec = ();
-}
-
-impl<F: Field> Expression<F, ExprDescription> {
+impl<F: Field> Expression<F, MleDescription<F>> {
     /// Binds the variables of this expression to `point`, and retrieves the
     /// leaf MLE values from the `transcript_reader`.  Returns a `Expression<F,
-    /// VerifierExpr>` version of `self`.
+    /// VerifierMle<F>>` version of `self`.
     pub fn bind(
         &self,
         point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Expression<F, VerifierExpr>> {
+    ) -> Result<Expression<F, VerifierMle<F>>> {
+        let (expression_node, mle_vec) = self.deconstruct();
+        let verifier_mles = mle_vec.into_iter().map(|m|
+            m.into_verifier_node(point, transcript_reader)?
+        ).collect();
         Ok(Expression::new(
-            self.expression_node
-                .into_verifier_node(point, transcript_reader)?,
-            (),
+            expression_node,
+            verifier_mles,
         ))
     }
 
-    /// Convenience function which creates a trivial [Expression<F, ExprDescription>]
+    /// Convenience function which creates a trivial [Expression<F, MleDescription<F>>]
     /// referring to a single MLE.
     pub fn from_mle_desc(mle_desc: MleDescription<F>) -> Self {
         Self {
-            expression_node: ExpressionNode::<F, ExprDescription>::Mle(mle_desc),
+            expression_node: ExpressionNode::<F>::Mle(mle_desc),
             mle_vec: (),
         }
     }
@@ -91,10 +73,9 @@ impl<F: Field> Expression<F, ExprDescription> {
             .collect()
     }
 
-    /// Get the [MleDescription]s for this expression, which are at the leaves of the expression.
+    /// Get the [MleDescription]s for this expression.
     pub fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
-        let circuit_mles = self.expression_node.get_circuit_mles();
-        circuit_mles
+        self.mle_vec.iter().collect()
     }
 
     /// Label the free variables in an expression.
@@ -102,10 +83,17 @@ impl<F: Field> Expression<F, ExprDescription> {
         self.expression_node.index_mle_vars(start_index);
     }
 
-    /// Get the [Expression<F, ProverExpr>] corresponding to this [Expression<F, ExprDescription>] using the
+    /// Get the [Expression<F, DenseMle<F>>] corresponding to this [Expression<F, MleDescription<F>>] using the
     /// associated data in the [CircuitMap].
-    pub fn into_prover_expression(&self, circuit_map: &CircuitMap<F>) -> Expression<F, ProverExpr> {
-        self.expression_node.into_prover_expression(circuit_map)
+    pub fn into_prover_expression(&self, circuit_map: &CircuitMap<F>) -> Expression<F, DenseMle<F>> {
+        let (expression_node, mle_vec) = self.deconstruct();
+        let prover_mles = mle_vec.into_iter().map(|m|
+            m.into_dense_mle(circuit_map)?
+        ).collect();
+        Ok(Expression::new(
+            expression_node,
+            prover_mles,
+        ))
     }
 
     /// Get the [PostSumcheckLayer] for this expression, which represents the fully bound values of the expression.
@@ -130,8 +118,8 @@ impl<F: Field> Expression<F, ExprDescription> {
         // By default, all rounds have degree at least 2 (beta table included)
         let mut round_degree = 1;
 
-        let mut get_degree_closure = |expr: &ExpressionNode<F, ExprDescription>,
-                                      _mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec|
+        let mut get_degree_closure = |expr: &ExpressionNode<F, MleDescription<F>>,
+                                      _mle_vec: &[MleDescription<F>]|
          -> Result<()> {
             let round_degree = &mut round_degree;
 
@@ -160,46 +148,7 @@ impl<F: Field> Expression<F, ExprDescription> {
     }
 }
 
-impl<F: Field> ExpressionNode<F, ExprDescription> {
-    /// Turn this expression into a [VerifierExpr] which represents a fully bound expression.
-    /// Should only be applicable after a full layer of sumcheck.
-    pub fn into_verifier_node(
-        &self,
-        point: &[F],
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<ExpressionNode<F, VerifierExpr>> {
-        match self {
-            ExpressionNode::Constant(scalar) => Ok(ExpressionNode::Constant(*scalar)),
-            ExpressionNode::Selector(index, lhs, rhs) => match index {
-                MleIndex::Indexed(idx) => Ok(ExpressionNode::Selector(
-                    MleIndex::Bound(point[*idx], *idx),
-                    Box::new(lhs.into_verifier_node(point, transcript_reader)?),
-                    Box::new(rhs.into_verifier_node(point, transcript_reader)?),
-                )),
-                _ => Err(anyhow!(ExpressionError::SelectorBitNotBoundError)),
-            },
-            ExpressionNode::Mle(circuit_mle) => Ok(ExpressionNode::Mle(
-                circuit_mle.into_verifier_mle(point, transcript_reader)?,
-            )),
-            ExpressionNode::Sum(lhs, rhs) => Ok(ExpressionNode::Sum(
-                Box::new(lhs.into_verifier_node(point, transcript_reader)?),
-                Box::new(rhs.into_verifier_node(point, transcript_reader)?),
-            )),
-            ExpressionNode::Product(circuit_mles) => {
-                let verifier_mles: Vec<VerifierMle<F>> = circuit_mles
-                    .iter()
-                    .map(|circuit_mle| circuit_mle.into_verifier_mle(point, transcript_reader))
-                    .collect::<Result<Vec<VerifierMle<F>>>>()?;
-
-                Ok(ExpressionNode::Product(verifier_mles))
-            }
-            ExpressionNode::Scaled(circuit_mle, scalar) => Ok(ExpressionNode::Scaled(
-                Box::new(circuit_mle.into_verifier_node(point, transcript_reader)?),
-                *scalar,
-            )),
-        }
-    }
-
+impl<F: Field> ExpressionNode<F> {
     /// Compute the expression-wise bookkeeping table (coefficients of the MLE representing the expression)
     /// for a given [ExprDescription]. This uses a [CircuitMap] in order to grab the correct data
     /// corresponding to the [MleDescription].
@@ -271,30 +220,6 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
         output_data
     }
 
-    /// Get all the [MleDescription]s, recursively, for this expression by adding the MLEs in the leaves into the vector of MleDescriptions.
-    pub fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
-        let mut circuit_mles: Vec<&MleDescription<F>> = vec![];
-        match self {
-            ExpressionNode::Selector(_mle_index, a, b) => {
-                circuit_mles.extend(a.get_circuit_mles());
-                circuit_mles.extend(b.get_circuit_mles());
-            }
-            ExpressionNode::Sum(a, b) => {
-                circuit_mles.extend(a.get_circuit_mles());
-                circuit_mles.extend(b.get_circuit_mles());
-            }
-            ExpressionNode::Mle(mle) => {
-                circuit_mles.push(mle);
-            }
-            ExpressionNode::Product(mles) => mles.iter().for_each(|mle| circuit_mles.push(mle)),
-            ExpressionNode::Scaled(a, _scale_factor) => {
-                circuit_mles.extend(a.get_circuit_mles());
-            }
-            ExpressionNode::Constant(_constant) => {}
-        }
-        circuit_mles
-    }
-
     /// Label the MLE indices of an expression, starting from the `start_index`.
     pub fn index_mle_vars(&mut self, start_index: usize) {
         match self {
@@ -325,33 +250,6 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
         }
     }
 
-    /// Get the [ExpressionNode<F, ProverExpr>] recursively, for this expression.
-    pub fn into_prover_expression(&self, circuit_map: &CircuitMap<F>) -> Expression<F, ProverExpr> {
-        match self {
-            ExpressionNode::Selector(_mle_index, a, b) => a
-                .into_prover_expression(circuit_map)
-                .select(b.into_prover_expression(circuit_map)),
-            ExpressionNode::Sum(a, b) => {
-                a.into_prover_expression(circuit_map) + b.into_prover_expression(circuit_map)
-            }
-            ExpressionNode::Mle(mle) => {
-                let prover_mle = mle.into_dense_mle(circuit_map);
-                prover_mle.expression()
-            }
-            ExpressionNode::Product(mles) => {
-                let dense_mles = mles
-                    .iter()
-                    .map(|mle| mle.into_dense_mle(circuit_map))
-                    .collect_vec();
-                Expression::<F, ProverExpr>::products(dense_mles)
-            }
-            ExpressionNode::Scaled(a, scale_factor) => {
-                a.into_prover_expression(circuit_map) * *scale_factor
-            }
-            ExpressionNode::Constant(constant) => Expression::<F, ProverExpr>::constant(*constant),
-        }
-    }
-
     /// Recursively get the [PostSumcheckLayer] for an Expression node, which is the fully bound
     /// representation of an expression.
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
@@ -359,7 +257,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
         &self,
         multiplier: F,
         challenges: &[F],
-        _mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
+        _mle_vec: &[VerifierMle<F>],
     ) -> PostSumcheckLayer<F, Option<F>> {
         let mut products: Vec<Product<F, Option<F>>> = vec![];
         match self {
@@ -422,7 +320,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     /// the MLE representing the output "data" of this particular expression.
     ///
     /// Note that unlike within the `AbstractExpr` case, we don't need to return
-    /// a `Result` since all MLEs within a `ExprDescription` are instantiated with their
+    /// a `Result` since all MLEs extentiating `AbstractMle` are instantiated with their
     /// appropriate number of variables.
     fn get_num_vars(&self) -> usize {
         match self {
@@ -440,7 +338,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     }
 }
 
-impl<F: Field> Expression<F, ExprDescription> {
+impl<F: Field> Expression<F, MleDescription<F>> {
     /// Returns the total number of variables (i.e. number of rounds of sumcheck)
     /// within the MLE representing the output "data" of this particular expression.
     ///
@@ -474,7 +372,7 @@ impl<F: Field> Expression<F, ExprDescription> {
     /// subtree with 5 variables:
     /// (1 - x_0) * (1 - x_1) * (1 - x_2) * V_i(x_3, ..., x_7) +
     /// x_0 * V_i(x_1, ..., x_7)
-    pub fn select(self, rhs: Expression<F, ExprDescription>) -> Self {
+    pub fn select(self, rhs: Expression<F, MleDescription<F>>) -> Self {
         let (lhs_node, _) = self.deconstruct();
         let (rhs_node, _) = rhs.deconstruct();
 
@@ -576,7 +474,7 @@ impl<F: Field> Expression<F, ExprDescription> {
     }
 
     /// scales an Expression by a field element
-    pub fn scaled(expression: Expression<F, ExprDescription>, scale: F) -> Self {
+    pub fn scaled(expression: Expression<F, MleDescription<F>>, scale: F) -> Self {
         let (node, _) = expression.deconstruct();
 
         Expression::new(ExpressionNode::Scaled(Box::new(node), scale), ())
@@ -640,62 +538,4 @@ pub(crate) fn evaluate_bookkeeping_tables_given_operation<F: Field>(
         output_table[index] = evaluated_data_point;
     });
     MultilinearExtension::new(output_table)
-}
-
-impl<F: Field> Neg for Expression<F, ExprDescription> {
-    type Output = Expression<F, ExprDescription>;
-    fn neg(self) -> Self::Output {
-        Expression::<F, ExprDescription>::negated(self)
-    }
-}
-
-/// implement the Add, Sub, and Mul traits for the Expression
-impl<F: Field> Add for Expression<F, ExprDescription> {
-    type Output = Expression<F, ExprDescription>;
-    fn add(self, rhs: Expression<F, ExprDescription>) -> Expression<F, ExprDescription> {
-        Expression::<F, ExprDescription>::sum(self, rhs)
-    }
-}
-
-impl<F: Field> Sub for Expression<F, ExprDescription> {
-    type Output = Expression<F, ExprDescription>;
-    fn sub(self, rhs: Expression<F, ExprDescription>) -> Expression<F, ExprDescription> {
-        self.add(rhs.neg())
-    }
-}
-
-impl<F: Field> Mul<F> for Expression<F, ExprDescription> {
-    type Output = Expression<F, ExprDescription>;
-    fn mul(self, rhs: F) -> Self::Output {
-        Expression::<F, ExprDescription>::scaled(self, rhs)
-    }
-}
-
-impl<F: std::fmt::Debug + Field> std::fmt::Debug for Expression<F, ExprDescription> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Circuit Expression")
-            .field("Expression_Node", &self.expression_node)
-            .finish()
-    }
-}
-
-impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, ExprDescription> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExpressionNode::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
-            ExpressionNode::Selector(index, a, b) => f
-                .debug_tuple("Selector")
-                .field(index)
-                .field(a)
-                .field(b)
-                .finish(),
-            // Skip enum variant and print query struct directly to maintain backwards compatibility.
-            ExpressionNode::Mle(mle) => f.debug_struct("Circuit Mle").field("mle", mle).finish(),
-            ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
-            ExpressionNode::Product(a) => f.debug_tuple("Product").field(a).finish(),
-            ExpressionNode::Scaled(poly, scalar) => {
-                f.debug_tuple("Scaled").field(poly).field(scalar).finish()
-            }
-        }
-    }
 }
