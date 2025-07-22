@@ -19,45 +19,17 @@
 //!   bound sumcheck challenge points.
 
 use crate::mle::{verifier_mle::VerifierMle, MleIndex};
-use serde::{Deserialize, Serialize};
-use std::{
-    fmt::Debug,
-};
 
 use remainder_shared_types::Field;
 
 use super::{
     expr_errors::ExpressionError,
-    generic_expr::{Expression, ExpressionNode, ExpressionType},
+    generic_expr::Expression,
 };
 
 use anyhow::{anyhow, Ok, Result};
 
-/// Placeholder type for defining `Expression<F, VerifierExpr>`, the type used
-/// for representing expressions for the Verifier.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct VerifierExpr;
-
-// The leaves of an expression of this type contain a [VerifierMle], an analogue
-// of [crate::mle::dense::DenseMle], storing fully bound MLEs.
-// TODO(Makis): Consider allowing for re-use of MLEs, like in a [ProverExpr]:
-// ```ignore
-//     type MLENodeRepr = usize,
-//     type MleVec = Vec<VerifierMle<F>>,
-// ```
-impl<F: Field> ExpressionType<F> for VerifierExpr {
-    type MLENodeRepr = VerifierMle<F>;
-    type MleVec = ();
-}
-
-impl<F: Field> Expression<F, VerifierExpr> {
-    /// Create a mle Expression that contains one MLE
-    pub fn mle(mle: VerifierMle<F>) -> Self {
-        let mle_node = ExpressionNode::Mle(mle);
-
-        Expression::new(mle_node, ())
-    }
-
+impl<F: Field> Expression<F, VerifierMle<F>> {
     /// Evaluate this fully bound expression.
     pub fn evaluate(&self) -> Result<F> {
         let constant = |c| Ok(c);
@@ -95,34 +67,5 @@ impl<F: Field> Expression<F, VerifierExpr> {
             expression_node.get_all_nonlinear_rounds(mle_vec);
         nonlinear_rounds.sort();
         nonlinear_rounds
-    }
-}
-
-impl<F: std::fmt::Debug + Field> std::fmt::Debug for Expression<F, VerifierExpr> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Circuit Expression")
-            .field("Expression_Node", &self.expression_node)
-            .finish()
-    }
-}
-
-impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, VerifierExpr> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExpressionNode::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
-            ExpressionNode::Selector(index, a, b) => f
-                .debug_tuple("Selector")
-                .field(index)
-                .field(a)
-                .field(b)
-                .finish(),
-            // Skip enum variant and print query struct directly to maintain backwards compatibility.
-            ExpressionNode::Mle(mle) => f.debug_struct("Circuit Mle").field("mle", mle).finish(),
-            ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
-            ExpressionNode::Product(a) => f.debug_tuple("Product").field(a).finish(),
-            ExpressionNode::Scaled(poly, scalar) => {
-                f.debug_tuple("Scaled").field(poly).field(scalar).finish()
-            }
-        }
     }
 }
