@@ -24,7 +24,7 @@ use crate::{
     },
     layer::{Layer, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription, Mle},
+    mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription, AbstractMle, Mle},
     sumcheck::{evaluate_at_a_point, get_round_degree},
 };
 
@@ -833,7 +833,7 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
             match exp {
                 ExpressionNode::Mle(verifier_mle) => {
                     let fixed_mle_indices = verifier_mle
-                        .var_indices()
+                        .mle_indices()
                         .iter()
                         .map(|index| index.val().ok_or(anyhow!(ClaimError::MleRefMleError)))
                         .collect::<Result<Vec<_>>>()?;
@@ -858,7 +858,7 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
                 ExpressionNode::Product(verifier_mle_vec) => {
                     for verifier_mle in verifier_mle_vec {
                         let fixed_mle_indices = verifier_mle
-                            .var_indices()
+                            .mle_indices()
                             .iter()
                             .map(|index| index.val().ok_or(anyhow!(ClaimError::MleRefMleError)))
                             .collect::<Result<Vec<_>>>()?;

@@ -20,8 +20,7 @@ use crate::{
     layer::VerificationError,
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
-        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription,
-        verifier_mle::VerifierMle, Mle, MleIndex,
+        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex
     },
     sumcheck::evaluate_at_a_point,
 };
@@ -496,7 +495,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         let output_data = MultilinearExtension::new(product);
         assert_eq!(
             output_data.num_vars(),
-            mle_output_necessary.var_indices().len()
+            mle_output_necessary.mle_indices().len()
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
@@ -590,7 +589,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         let matrix_a_new_indices = self
             .matrix_a
             .mle
-            .var_indices()
+            .mle_indices()
             .iter()
             .map(|mle_idx| match mle_idx {
                 &MleIndex::Indexed(_) => {
@@ -624,7 +623,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         let matrix_b_new_indices = self
             .matrix_b
             .mle
-            .var_indices()
+            .mle_indices()
             .iter()
             .map(|mle_idx| match mle_idx {
                 &MleIndex::Indexed(_) => {
@@ -711,7 +710,7 @@ impl<F: Field> VerifierLayer<F> for VerifierMatMultLayer<F> {
             .map(|matrix| {
                 let matrix_fixed_indices = matrix
                     .mle
-                    .var_indices()
+                    .mle_indices()
                     .iter()
                     .map(|index| {
                         index

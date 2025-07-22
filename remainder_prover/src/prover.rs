@@ -32,6 +32,7 @@ use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
 use crate::mle::mle_enum::MleEnum;
+use crate::mle::AbstractMle;
 use crate::output_layer::{OutputLayer, OutputLayerDescription};
 use crate::utils::mle::verify_claim;
 use ark_std::{end_timer, start_timer};

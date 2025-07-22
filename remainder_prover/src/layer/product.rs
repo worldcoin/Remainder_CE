@@ -6,7 +6,7 @@ use remainder_shared_types::Field;
 use super::LayerId;
 use crate::mle::dense::DenseMle;
 use crate::mle::mle_description::MleDescription;
-use crate::mle::Mle;
+use crate::mle::{AbstractMle, Mle};
 
 /// Represents a normal form for a layer expression in which the layer is represented as a linear
 /// combination of products of other layer MLEs, the coefficients of which are public.

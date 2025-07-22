@@ -9,8 +9,7 @@ use crate::{
     },
     layouter::layouting::CircuitMap,
     mle::{
-        evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle,
-        MleIndex,
+        evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, MleIndex
     },
 };
 use ark_std::log2;
@@ -140,7 +139,7 @@ impl<F: Field> Expression<F, ExprDescription> {
             if let ExpressionNode::Product(circuit_mles) = expr {
                 let mut product_round_degree: usize = 0;
                 for circuit_mle in circuit_mles {
-                    let mle_indices = circuit_mle.var_indices();
+                    let mle_indices = circuit_mle.mle_indices();
                     for mle_index in mle_indices {
                         if *mle_index == MleIndex::Indexed(curr_round) {
                             product_round_degree += 1;

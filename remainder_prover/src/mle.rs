@@ -38,6 +38,36 @@ pub mod mle_description;
 /// with a prover-claimed value.
 pub mod verifier_mle;
 
+/// Abstract structure of an Mle
+/// Including its number of variables, indices,layer_id, but not evaluations
+#[clonable]
+pub trait AbstractMle<F: Field>: Clone + Debug + Send + Sync {
+    /// Returns the number of free variables this Mle is defined on.
+    /// Equivalently, this is the log_2 of the size of the unpruned bookkeeping
+    /// table.
+    /// The number of [MleIndex::Indexed] OR [MleIndex::Free] bits in this MLE.
+    fn num_free_vars(&self) -> usize {
+        self.mle_indices().iter().fold(0, |acc, idx| {
+            acc + match idx {
+                MleIndex::Free => 1,
+                MleIndex::Indexed(_) => 1,
+                _ => 0,
+            }
+        })
+    }
+
+    /// An MLE is fully bounded if it has no more free variables.
+    fn is_fully_bounded(&self) -> bool {
+        self.num_free_vars() == 0
+    }
+
+    /// Get the indicies of the `Mle` that this `MleRef` represents.
+    fn mle_indices(&self) -> &[MleIndex<F>];
+
+    /// Get the layer ID of the associated MLE.
+    fn layer_id(&self) -> LayerId;
+}
+
 // TODO!(Maybe this type needs PartialEq, could be easily implemented with a
 // random id...).
 /// The trait that defines how a semantic Type (T) and a MultiLinearEvaluation
@@ -50,17 +80,7 @@ pub mod verifier_mle;
 /// within T is always consistent.
 #[allow(clippy::len_without_is_empty)]
 #[clonable]
-pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
-    /// Returns the number of free variables this Mle is defined on.
-    /// Equivalently, this is the log_2 of the size of the unpruned bookkeeping
-    /// table.
-    fn num_free_vars(&self) -> usize;
-
-    /// An MLE is fully bounded if it has no more free variables.
-    fn is_fully_bounded(&self) -> bool {
-        self.num_free_vars() == 0
-    }
-
+pub trait Mle<F: Field>: Clone + Debug + Send + Sync + AbstractMle<F> {
     /// Get the padded set of evaluations over the boolean hypercube; useful for
     /// constructing the input layer.
     fn get_padded_evaluations(&self) -> Vec<F>;
@@ -68,9 +88,6 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     /// Mutates the MLE in order to set the prefix bits. This is needed when we
     /// are working with dataparallel circuits and new bits need to be added.
     fn add_prefix_bits(&mut self, new_bits: Vec<MleIndex<F>>);
-
-    /// Get the layer ID of the associated MLE.
-    fn layer_id(&self) -> LayerId;
 
     /// Returns the length of the current bookkeeping table.
     fn len(&self) -> usize;
@@ -89,9 +106,6 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
 
     /// Returns the first element of the evaluations table (if any).
     fn get(&self, index: usize) -> Option<F>;
-
-    /// Get the indicies of the `Mle` that this `MleRef` represents.
-    fn mle_indices(&self) -> &[MleIndex<F>];
 
     /// Fix the variable at `round_index` at a given `challenge` point. Mutates
     /// `self` to be the bookeeping table for the new MLE.

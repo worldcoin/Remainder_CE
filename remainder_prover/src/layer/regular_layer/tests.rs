@@ -10,7 +10,7 @@ use crate::{
         circuit_expr::ExprDescription, generic_expr::Expression, prover_expr::ProverExpr,
     },
     layer::{Layer, LayerDescription, LayerId},
-    mle::{dense::DenseMle, mle_description::MleDescription, Mle},
+    mle::{dense::DenseMle, mle_description::MleDescription, AbstractMle},
 };
 
 use super::{RegularLayer, RegularLayerDescription};

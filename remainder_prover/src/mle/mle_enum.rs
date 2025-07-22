@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::Field;
 
-use crate::{layer::LayerId, mle::Mle};
+use crate::{layer::LayerId, mle::{AbstractMle, Mle}};
 
 use super::{dense::DenseMle, evals::EvaluationsIterator, zero::ZeroMle, MleIndex};
 
@@ -17,6 +17,29 @@ pub enum MleEnum<F: Field> {
     Dense(DenseMle<F>),
     /// A [ZeroMle] variant.
     Zero(ZeroMle<F>),
+}
+
+impl<F: Field> AbstractMle<F> for MleEnum<F> {
+    fn mle_indices(&self) -> &[super::MleIndex<F>] {
+        match self {
+            MleEnum::Dense(item) => item.mle_indices(),
+            MleEnum::Zero(item) => item.mle_indices(),
+        }
+    }
+
+    fn num_free_vars(&self) -> usize {
+        match self {
+            MleEnum::Dense(item) => item.num_free_vars(),
+            MleEnum::Zero(item) => item.num_free_vars(),
+        }
+    }
+
+    fn layer_id(&self) -> LayerId {
+        match self {
+            MleEnum::Dense(item) => item.layer_id(),
+            MleEnum::Zero(item) => item.layer_id(),
+        }
+    }
 }
 
 impl<F: Field> Mle<F> for MleEnum<F> {
@@ -55,20 +78,6 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         }
     }
 
-    fn mle_indices(&self) -> &[super::MleIndex<F>] {
-        match self {
-            MleEnum::Dense(item) => item.mle_indices(),
-            MleEnum::Zero(item) => item.mle_indices(),
-        }
-    }
-
-    fn num_free_vars(&self) -> usize {
-        match self {
-            MleEnum::Dense(item) => item.num_free_vars(),
-            MleEnum::Zero(item) => item.num_free_vars(),
-        }
-    }
-
     fn fix_variable(
         &mut self,
         round_index: usize,
@@ -95,13 +104,6 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         match self {
             MleEnum::Dense(item) => item.index_mle_indices(curr_index),
             MleEnum::Zero(item) => item.index_mle_indices(curr_index),
-        }
-    }
-
-    fn layer_id(&self) -> LayerId {
-        match self {
-            MleEnum::Dense(item) => item.layer_id(),
-            MleEnum::Zero(item) => item.layer_id(),
         }
     }
 
