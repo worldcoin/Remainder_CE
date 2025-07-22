@@ -54,7 +54,7 @@ use crate::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    mle::{Mle, MleIndex},
+    mle::{AbstractMle, Mle, MleIndex},
 };
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};

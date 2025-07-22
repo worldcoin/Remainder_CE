@@ -15,7 +15,7 @@ use super::{
 };
 use crate::{
     layer::product::Product,
-    mle::{betavalues::BetaValues, dense::DenseMle, MleIndex},
+    mle::{betavalues::BetaValues, dense::DenseMle, AbstractMle, MleIndex},
     sumcheck::{
         apply_updated_beta_values_to_evals, beta_cascade, beta_cascade_no_independent_variable,
         SumcheckEvals,

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use super::{evals::EvaluationsIterator, mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
     claims::RawClaim,
-    mle::evals::{Evaluations, MultilinearExtension},
+    mle::{evals::{Evaluations, MultilinearExtension}, AbstractMle},
 };
 use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
@@ -31,11 +31,20 @@ pub struct DenseMle<F: Field> {
     pub mle_indices: Vec<MleIndex<F>>,
 }
 
-impl<F: Field> Mle<F> for DenseMle<F> {
+impl<F: Field> AbstractMle<F> for DenseMle<F> {
     fn num_free_vars(&self) -> usize {
         self.mle.num_vars()
     }
 
+    fn mle_indices(&self) -> &[MleIndex<F>] {
+        &self.mle_indices
+    }
+
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+}
+impl<F: Field> Mle<F> for DenseMle<F> {
     fn get_padded_evaluations(&self) -> Vec<F> {
         let size: usize = 1 << self.mle.num_vars();
         let padding = size - self.mle.len();
@@ -48,20 +57,12 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         self.mle_indices.clone_from(&new_bits);
     }
 
-    fn layer_id(&self) -> LayerId {
-        self.layer_id
-    }
-
     fn len(&self) -> usize {
         self.mle.len()
     }
 
     fn iter(&self) -> EvaluationsIterator<F> {
         self.mle.iter()
-    }
-
-    fn mle_indices(&self) -> &[MleIndex<F>] {
-        &self.mle_indices
     }
 
     fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<RawClaim<F>> {
