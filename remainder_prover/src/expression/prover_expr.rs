@@ -14,12 +14,10 @@ use super::{
     verifier_expr::VerifierExpr,
 };
 use crate::{
-    layer::product::Product,
-    mle::{betavalues::BetaValues, dense::DenseMle, AbstractMle, MleIndex},
-    sumcheck::{
+    expression::generic_expr::MleVecIndex, layer::product::Product, mle::{betavalues::BetaValues, dense::DenseMle, AbstractMle, MleIndex}, sumcheck::{
         apply_updated_beta_values_to_evals, beta_cascade, beta_cascade_no_independent_variable,
         SumcheckEvals,
-    },
+    }
 };
 use crate::{
     layer::{gate::BinaryOperation, product::PostSumcheckLayer},
@@ -36,42 +34,6 @@ use std::{
 };
 
 use anyhow::{anyhow, Ok, Result};
-
-/// mid-term solution for deduplication of DenseMleRefs
-/// basically a wrapper around usize, which denotes the index
-/// of the MleRef in an expression's MleRef list/// Generic Expressions
-///
-/// TODO(ryancao): We should deprecate this and instead just have
-/// references to the `DenseMLE<F>`s which are stored in the circuit_map.
-#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
-pub struct MleVecIndex(usize);
-
-impl MleVecIndex {
-    /// create a new MleRefIndex
-    pub fn new(index: usize) -> Self {
-        MleVecIndex(index)
-    }
-
-    /// returns the index
-    pub fn index(&self) -> usize {
-        self.0
-    }
-
-    /// add the index with an increment amount
-    pub fn increment(&mut self, offset: usize) {
-        self.0 += offset;
-    }
-
-    /// return the actual mle in the vec within the prover expression
-    pub fn get_mle<'a, F: Field>(&self, mle_vec: &'a [DenseMle<F>]) -> &'a DenseMle<F> {
-        &mle_vec[self.0]
-    }
-
-    /// return the actual mle in the vec within the prover expression
-    pub fn get_mle_mut<'a, F: Field>(&self, mle_vec: &'a mut [DenseMle<F>]) -> &'a mut DenseMle<F> {
-        &mut mle_vec[self.0]
-    }
-}
 
 /// Prover Expression
 /// the leaf nodes of the expression tree are DenseMleRefs
