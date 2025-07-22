@@ -41,17 +41,3 @@ pub enum VerifierLayerEnum<F: Field> {
     /// The fully bound representation of a matmult layer.
     MatMult(VerifierMatMultLayer<F>),
 }
-
-impl<F: Field> LayerEnum<F> {
-    ///Gets the size of the Layer as a whole in terms of number of bits
-    pub fn layer_size(&self) -> usize {
-        let expression = match self {
-            LayerEnum::Regular(layer) => &layer.expression,
-            LayerEnum::Gate(_) => unimplemented!(),
-            LayerEnum::IdentityGate(_) => unimplemented!(),
-            LayerEnum::MatMult(_) => unimplemented!(),
-        };
-
-        expression.get_expression_size()
-    }
-}

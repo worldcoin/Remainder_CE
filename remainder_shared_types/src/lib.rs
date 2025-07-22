@@ -35,11 +35,6 @@ pub type Base = <Bn256Point as CurveExt>::Base;
 ///   Our use-case is specifically for compatibility with [Poseidon], which we
 ///   are using as the hash function instantiation of a verifier's public coins (see
 ///   `impl` block for [Poseidon::new], for example).
-/// * [WithSmallOrderMulGroup] -- see associated trait documentation for more
-///   details. Our use-case is specifically for Halo2's FFT implementation, which
-///   uses Halo2's `EvaluationDomain` to compute extended evaluations of a
-///   power-of-two degree polynomial. This trait will ideally be removed in a
-///   future update.
 /// * [Hash] -- necessary for creating a hashed representation of a circuit,
 ///   as well as storing [Field] values within data structures e.g. `HashMap`.
 /// * [Ord] -- not strictly necessary for cryptographic purposes, but useful
@@ -57,7 +52,6 @@ pub type Base = <Bn256Point as CurveExt>::Base;
 pub trait Field:
     ff_field
     + FromUniformBytes<64>
-    + WithSmallOrderMulGroup<3>
     + Hash
     + Ord
     + Serialize
@@ -66,11 +60,9 @@ pub trait Field:
     + Zeroizable
 {
 }
-
 impl<
         F: ff_field
             + FromUniformBytes<64>
-            + WithSmallOrderMulGroup<3>
             + Hash
             + Ord
             + Serialize
@@ -80,6 +72,14 @@ impl<
     > Field for F
 {
 }
+
+/// A field which is FFT-friendly under Halo2's EvaluationDomain-based algorithm.
+/// [WithSmallOrderMulGroup] -- see associated trait documentation for more
+/// details. Our use-case is specifically for Halo2's FFT implementation, which
+/// uses Halo2's [EvaluationDomain] to compute extended evaluations of a
+/// power-of-two degree polynomial.
+pub trait Halo2FFTFriendlyField: Field + WithSmallOrderMulGroup<3> {}
+impl<F: Field + WithSmallOrderMulGroup<3>> Halo2FFTFriendlyField for F {}
 
 /// Simple trait which allows us to convert to and from
 /// a little-endian byte representation.
