@@ -14,7 +14,7 @@ use crate::{
     mle::{evals::{Evaluations, MultilinearExtension}, AbstractMle},
 };
 use crate::{
-    expression::{generic_expr::Expression, prover_expr::ProverExpr},
+    expression::generic_expr::Expression,
     layer::LayerId,
 };
 use remainder_shared_types::Field;

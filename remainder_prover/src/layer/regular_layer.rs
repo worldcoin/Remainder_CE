@@ -17,14 +17,12 @@ use tracing::info;
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
     expression::{
-        circuit_expr::{filter_bookkeeping_table, ExprDescription},
-        generic_expr::{Expression, ExpressionNode, ExpressionType},
-        prover_expr::ProverExpr,
-        verifier_expr::VerifierExpr,
+        circuit_expr::filter_bookkeeping_table,
+        generic_expr::{Expression, ExpressionNode}, prover_expr::ProverMle,
     },
     layer::{Layer, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription, AbstractMle, Mle},
+    mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle},
     sumcheck::{evaluate_at_a_point, get_round_degree},
 };
 
@@ -51,7 +49,7 @@ pub struct RegularLayer<F: Field> {
 
     /// The polynomial expression defining this layer.
     /// It includes information on how this layer relates to the others.
-    pub(crate) expression: Expression<F, ProverExpr>,
+    pub(crate) expression: Expression<F, ProverMle<F>>,
 
     /// Stores the indices of the sumcheck rounds in this GKR layer so we
     /// only produce sumcheck proofs over those. When we use interpolative
@@ -70,7 +68,7 @@ impl<F: Field> RegularLayer<F> {
     ///
     /// The `Expression` is the relationship this `Layer` proves
     /// and the `LayerId` is the location of this `Layer` in the overall circuit
-    pub fn new_raw(id: LayerId, mut expression: Expression<F, ProverExpr>) -> Self {
+    pub fn new_raw(id: LayerId, mut expression: Expression<F, ProverMle<F>>) -> Self {
         // Compute nonlinear rounds from `expression`
         expression.index_mle_indices(0);
         let sumcheck_rounds = match global_claim_agg_strategy() {
@@ -86,7 +84,7 @@ impl<F: Field> RegularLayer<F> {
     }
 
     /// Returns a reference to the expression that this layer is proving.
-    pub fn get_expression(&self) -> &Expression<F, ProverExpr> {
+    pub fn get_expression(&self) -> &Expression<F, ProverMle<F>> {
         &self.expression
     }
 
@@ -96,8 +94,8 @@ impl<F: Field> RegularLayer<F> {
         &self,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<()> {
-        let mut observer_fn = |expr_node: &ExpressionNode<F, ProverExpr>,
-                               mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
+        let mut observer_fn = |expr_node: &ExpressionNode<F>,
+                               mle_vec: &[ProverMle<F>]|
          -> Result<()> {
             match expr_node {
                 ExpressionNode::Mle(mle_vec_index) => {
@@ -358,8 +356,8 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         // Basically we just want to go down it and pass up claims.
         // We can only add a new claim if we see an MLE with all its indices
         // bound.
-        let mut observer_fn = |expr: &ExpressionNode<F, ProverExpr>,
-                               mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
+        let mut observer_fn = |expr: &ExpressionNode<F>,
+                               mle_vec: &[ProverMle<F>]|
          -> Result<()> {
             match expr {
                 ExpressionNode::Mle(mle_vec_idx) => {
@@ -443,12 +441,12 @@ pub struct RegularLayerDescription<F: Field> {
     /// A structural description of the polynomial expression defining this
     /// layer. The leaves of the expression describe the MLE characteristics
     /// without storing any values.
-    expression: Expression<F, ExprDescription>,
+    expression: Expression<F, MleDescription<F>>,
 }
 
 impl<F: Field> RegularLayerDescription<F> {
     /// Generates a new [RegularLayerDescription] given raw data.
-    pub fn new_raw(id: LayerId, expression: Expression<F, ExprDescription>) -> Self {
+    pub fn new_raw(id: LayerId, expression: Expression<F, MleDescription<F>>) -> Self {
         Self { id, expression }
     }
 }
@@ -461,12 +459,12 @@ pub struct VerifierRegularLayer<F: Field> {
     id: LayerId,
 
     /// A fully-bound expression defining the layer.
-    expression: Expression<F, VerifierExpr>,
+    expression: Expression<F, VerifierMle<F>>,
 }
 
 impl<F: Field> VerifierRegularLayer<F> {
     /// Generates a new [VerifierRegularLayer] given raw data.
-    pub(crate) fn new_raw(id: LayerId, expression: Expression<F, VerifierExpr>) -> Self {
+    pub(crate) fn new_raw(id: LayerId, expression: Expression<F, VerifierMle<F>>) -> Self {
         Self { id, expression }
     }
 }
@@ -484,7 +482,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         circuit_map: &mut CircuitMap<F>,
     ) {
         let mut expression_nodes_to_compile =
-            HashMap::<&ExpressionNode<F, ExprDescription>, Vec<(Vec<bool>, Vec<bool>)>>::new();
+            HashMap::<&ExpressionNode<F>, Vec<(Vec<bool>, Vec<bool>)>>::new();
 
         mle_outputs_necessary
             .iter()
@@ -827,8 +825,8 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
 
         let mut claims: Vec<Claim<F>> = Vec::new();
 
-        let mut observer_fn = |exp: &ExpressionNode<F, VerifierExpr>,
-                               _mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec|
+        let mut observer_fn = |exp: &ExpressionNode<F>,
+                               _mle_vec: &[VerifierMle<F>]|
          -> Result<()> {
             match exp {
                 ExpressionNode::Mle(verifier_mle) => {

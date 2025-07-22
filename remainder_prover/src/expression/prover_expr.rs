@@ -31,7 +31,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Ok, Result};
-type ProverMle<F> = DenseMle<F>;
+pub type ProverMle<F> = DenseMle<F>;
 
 /// this is what the prover manipulates to prove the correctness of the computation.
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
@@ -347,7 +347,7 @@ impl<F: Field> Expression<F, ProverMle<F>> {
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     pub fn get_post_sumcheck_layer(&self, multiplier: F) -> PostSumcheckLayer<F, F> {
         self.expression_node
-            .get_post_sumcheck_layer(multiplier, &self.mle_vec)
+            .get_post_sumcheck_layer_prover(multiplier, &self.mle_vec)
     }
 
     /// Get the maximum degree of any variable in htis expression
@@ -1030,7 +1030,7 @@ impl<F: Field> ExpressionNode<F> {
     /// Recursively get the [PostSumcheckLayer] for an Expression node, which is the fully bound
     /// representation of an expression.
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
-    pub fn get_post_sumcheck_layer(
+    pub fn get_post_sumcheck_layer_prover(
         &self,
         multiplier: F,
         mle_vec: &ProverMle<F>,
@@ -1040,12 +1040,12 @@ impl<F: Field> ExpressionNode<F> {
             ExpressionNode::Selector(mle_index, a, b) => {
                 let left_side_acc = multiplier * (F::ONE - mle_index.val().unwrap());
                 let right_side_acc = multiplier * (mle_index.val().unwrap());
-                products.extend(a.get_post_sumcheck_layer(left_side_acc, mle_vec).0);
-                products.extend(b.get_post_sumcheck_layer(right_side_acc, mle_vec).0);
+                products.extend(a.get_post_sumcheck_layer_prover(left_side_acc, mle_vec).0);
+                products.extend(b.get_post_sumcheck_layer_prover(right_side_acc, mle_vec).0);
             }
             ExpressionNode::Sum(a, b) => {
-                products.extend(a.get_post_sumcheck_layer(multiplier, mle_vec).0);
-                products.extend(b.get_post_sumcheck_layer(multiplier, mle_vec).0);
+                products.extend(a.get_post_sumcheck_layer_prover(multiplier, mle_vec).0);
+                products.extend(b.get_post_sumcheck_layer_prover(multiplier, mle_vec).0);
             }
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
@@ -1062,7 +1062,7 @@ impl<F: Field> ExpressionNode<F> {
             }
             ExpressionNode::Scaled(a, scale_factor) => {
                 let acc = multiplier * scale_factor;
-                products.extend(a.get_post_sumcheck_layer(acc, mle_vec).0);
+                products.extend(a.get_post_sumcheck_layer_prover(acc, mle_vec).0);
             }
             ExpressionNode::Constant(constant) => {
                 products.push(Product::<F, F>::new(&[], *constant * multiplier));

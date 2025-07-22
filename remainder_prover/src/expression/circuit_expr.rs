@@ -104,7 +104,7 @@ impl<F: Field> Expression<F, MleDescription<F>> {
         challenges: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
         self.expression_node
-            .get_post_sumcheck_layer(multiplier, challenges, &self.mle_vec)
+            .get_post_sumcheck_layer_verifier(multiplier, challenges, &self.mle_vec)
     }
 
     /// Get the maximum degree of any variable in this expression.
@@ -253,7 +253,7 @@ impl<F: Field> ExpressionNode<F> {
     /// Recursively get the [PostSumcheckLayer] for an Expression node, which is the fully bound
     /// representation of an expression.
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
-    pub fn get_post_sumcheck_layer(
+    pub fn get_post_sumcheck_layer_verifier(
         &self,
         multiplier: F,
         challenges: &[F],
@@ -272,21 +272,21 @@ impl<F: Field> ExpressionNode<F> {
                 let left_side_acc = multiplier * (F::ONE - idx_val);
                 let right_side_acc = multiplier * (idx_val);
                 products.extend(
-                    a.get_post_sumcheck_layer(left_side_acc, challenges, _mle_vec)
+                    a.get_post_sumcheck_layer_verifier(left_side_acc, challenges, _mle_vec)
                         .0,
                 );
                 products.extend(
-                    b.get_post_sumcheck_layer(right_side_acc, challenges, _mle_vec)
+                    b.get_post_sumcheck_layer_verifier(right_side_acc, challenges, _mle_vec)
                         .0,
                 );
             }
             ExpressionNode::Sum(a, b) => {
                 products.extend(
-                    a.get_post_sumcheck_layer(multiplier, challenges, _mle_vec)
+                    a.get_post_sumcheck_layer_verifier(multiplier, challenges, _mle_vec)
                         .0,
                 );
                 products.extend(
-                    b.get_post_sumcheck_layer(multiplier, challenges, _mle_vec)
+                    b.get_post_sumcheck_layer_verifier(multiplier, challenges, _mle_vec)
                         .0,
                 );
             }
@@ -303,7 +303,7 @@ impl<F: Field> ExpressionNode<F> {
             }
             ExpressionNode::Scaled(a, scale_factor) => {
                 let acc = multiplier * scale_factor;
-                products.extend(a.get_post_sumcheck_layer(acc, challenges, _mle_vec).0);
+                products.extend(a.get_post_sumcheck_layer_verifier(acc, challenges, _mle_vec).0);
             }
             ExpressionNode::Constant(constant) => {
                 products.push(Product::<F, Option<F>>::new(
