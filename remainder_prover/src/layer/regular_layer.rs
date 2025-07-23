@@ -146,6 +146,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
             }
         };
 
+        println!("CLAIMS: {:?}", claims);
         let mut previous_round_message = vec![claims
             .iter()
             .zip(&random_coefficients)
@@ -566,6 +567,8 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             //   We should hide that under another function whose job is to take
             //   the trascript reader and read the polynomial in whatever
             //   representation is being used.
+            println!("UNIVARIATE");
+            
             let mut g_cur_round: Vec<_> = [Ok(F::from(0))]
                 .into_iter()
                 .chain((0..degree).map(|_| {
@@ -574,6 +577,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
                 .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
+            println!("CHALLENGE");
             let challenge = transcript_reader.get_challenge("Sumcheck round challenge")?;
 
             // TODO(Makis): After refactoring `SumcheckEvals` to be a

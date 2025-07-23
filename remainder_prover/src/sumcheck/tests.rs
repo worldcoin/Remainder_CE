@@ -177,8 +177,11 @@ pub(crate) fn get_dummy_expression_eval<F: Field>(
     let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
     let expression_linear_indices = expression.get_all_linear_rounds();
 
+    // let challenges = (0..num_vars)
+    //     .map(|_| (F::from(rng.gen::<u64>())))
+    //     .collect_vec();
     let challenges = (0..num_vars)
-        .map(|_| (F::from(rng.gen::<u64>())))
+        .map(|_| (F::from(1)))
         .collect_vec();
     let challenges_enumerate = expression_nonlinear_indices
         .iter()
@@ -189,7 +192,7 @@ pub(crate) fn get_dummy_expression_eval<F: Field>(
         .for_each(|round| expression.fix_variable_at_index(*round, challenges[*round]));
 
     let beta = BetaValues::new(challenges_enumerate);
-    let eval = expression.evaluate_sumcheck_beta_cascade(&vec![&beta], &vec![F::from(1)], 0, 0);
+    let eval = expression.evaluate_sumcheck_beta_cascade_sum(&beta);
 
     let SumcheckEvals(evals) = eval;
     let result = evals[0];
