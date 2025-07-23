@@ -76,7 +76,7 @@ impl<
 /// A field which is FFT-friendly under Halo2's EvaluationDomain-based algorithm.
 /// [WithSmallOrderMulGroup] -- see associated trait documentation for more
 /// details. Our use-case is specifically for Halo2's FFT implementation, which
-/// uses Halo2's [EvaluationDomain] to compute extended evaluations of a
+/// uses Halo2's `EvaluationDomain` to compute extended evaluations of a
 /// power-of-two degree polynomial.
 pub trait Halo2FFTFriendlyField: Field + WithSmallOrderMulGroup<3> {}
 impl<F: Field + WithSmallOrderMulGroup<3>> Halo2FFTFriendlyField for F {}
