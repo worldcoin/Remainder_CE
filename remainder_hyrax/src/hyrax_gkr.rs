@@ -391,8 +391,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
         .sorted_by_key(|(layer_id, _)| layer_id.get_raw_input_layer_id())
         .for_each(|(_layer_id, mle)| {
             let il_timer = start_timer!(|| format!(
-                "Appending public input layer for {0} to transcript",
-                _layer_id
+                "Appending public input layer for {_layer_id} to transcript"
             ));
             transcript.append_input_scalar_field_elems(
                 "Public input layer values",
