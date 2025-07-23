@@ -1,7 +1,8 @@
-use crate::{ff_field, Zeroizable};
+use crate::field::{HasByteRepresentation, Zeroizable};
+use crate::halo2_field;
 use crate::{
     halo2curves::{bn256::G1 as Bn256, CurveExt},
-    Field, HasByteRepresentation,
+    Field,
 };
 use ark_std::rand::{self, RngCore};
 use halo2curves::bn256::{Fq, Fr};

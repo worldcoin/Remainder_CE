@@ -5,7 +5,7 @@ use rand::Rng;
 use remainder_shared_types::curves::PrimeOrderCurve;
 type Bn256Scalar = <Bn256Point as PrimeOrderCurve>::Scalar;
 use remainder_shared_types::pedersen::PedersenCommitter;
-use remainder_shared_types::{ff_field, Field};
+use remainder_shared_types::{halo2_field, Field};
 
 fn create_random_field_vec<F: Field>(num_items: usize, mut rng: impl Rng) -> Vec<F> {
     (0..num_items).map(|_| F::random(&mut rng)).collect()

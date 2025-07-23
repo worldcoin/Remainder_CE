@@ -1,9 +1,9 @@
 use crate::ligero_ml_helper::get_ml_inner_outer_tensors;
 use crate::ligero_structs::{LigeroAuxInfo, LigeroCommit, LigeroRoot};
 use crate::{verify, ProverError};
+use remainder_shared_types::field::Halo2FFTFriendlyField;
 use remainder_shared_types::transcript::ProverTranscript;
 use remainder_shared_types::transcript::VerifierTranscript;
-use remainder_shared_types::Halo2FFTFriendlyField;
 use tracing::instrument;
 
 use super::poseidon_ligero::PoseidonSpongeHasher;

@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use itertools::Itertools;
 
-use crate::{transcript::utils::sha256_hash_chain_on_field_elems, HasByteRepresentation};
+use crate::{field::HasByteRepresentation, transcript::utils::sha256_hash_chain_on_field_elems};
 
 use crate::curves::PrimeOrderCurve;
 

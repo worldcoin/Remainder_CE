@@ -4,7 +4,7 @@ use rand::Rng;
 use remainder::mle::{Mle, MleIndex};
 use remainder::output_layer::{OutputLayer, OutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
-use remainder_shared_types::ff_field;
+use remainder_shared_types::halo2_field;
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use serde::{Deserialize, Serialize};
 

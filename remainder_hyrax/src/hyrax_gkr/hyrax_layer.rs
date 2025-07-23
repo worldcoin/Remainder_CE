@@ -20,7 +20,7 @@ use remainder::{
     claims::RawClaim,
     layer::product::{new_with_values, Product},
 };
-use remainder_shared_types::ff_field;
+use remainder_shared_types::halo2_field;
 use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use remainder_shared_types::Field;
@@ -572,10 +572,10 @@ impl<C: PrimeOrderCurve> HyraxClaim<C::Scalar, CommittedScalar<C>> {
 
 /// Represents a claim made on a layer by an atomic factor of a product.
 /// T could be:
-///     `C::Scalar` (if used by the prover), or
+///     C::Scalar (if used by the prover), or
 ///     `CommittedScalar<C>` (if used by the prover)
 ///     to interface with claim aggregation code in remainder
-///     `C` (this is the verifier's view, i.e. just the commitment)
+///     C (this is the verifier's view, i.e. just the commitment)
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: Field, T: DeserializeOwned")]
 pub struct HyraxClaim<F: Field, T: Serialize + DeserializeOwned> {

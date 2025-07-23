@@ -4,7 +4,7 @@ use crate::log2;
 use crate::Field;
 use halo2_proofs::poly::EvaluationDomain;
 use rand::Rng;
-use remainder_shared_types::Halo2FFTFriendlyField;
+use remainder_shared_types::field::Halo2FFTFriendlyField;
 
 /// Generates and returns a random set of evaluations representing an MLE over
 /// the boolean hypercube.

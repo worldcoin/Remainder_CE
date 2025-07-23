@@ -2,7 +2,8 @@ use itertools::FoldWhile::{Continue, Done};
 use itertools::{concat, Itertools};
 use num::traits::ToBytes;
 
-use crate::{curves::PrimeOrderCurve, HasByteRepresentation};
+use crate::curves::PrimeOrderCurve;
+use crate::field::HasByteRepresentation;
 
 fn c_bit_scalar_mult<C: PrimeOrderCurve>(c: usize, base_vec: &[C], scalar_vec: &[u64]) -> C {
     // We create buckets for when the scalar is 1, up to 2^c - 1.

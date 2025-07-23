@@ -700,7 +700,7 @@ pub fn evaluate_mle_destructive<F: Field>(mle: &mut MultilinearExtension<F>, poi
 mod tests {
     use ark_std::test_rng;
     use itertools::Itertools;
-    use remainder_shared_types::{ff_field, Fr};
+    use remainder_shared_types::{halo2_field, Fr};
 
     use crate::{
         mle::evals::MultilinearExtension,

@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use remainder::mle::evals::MultilinearExtension;
-use remainder_shared_types::ff_field;
+use remainder_shared_types::halo2_field;
 use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
 use remainder_shared_types::halo2curves::group::Group;
 use remainder_shared_types::halo2curves::CurveExt;
