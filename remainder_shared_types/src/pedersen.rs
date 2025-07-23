@@ -5,7 +5,7 @@ use std::ops::{Add, Mul};
 
 use crate::curves::PrimeOrderCurve;
 use crate::curves::Sha3XofReaderWrapper;
-use crate::ff_field;
+use crate::halo2_field;
 use crate::utils::pippengers::scalar_mult_pippenger;
 use ark_std::log2;
 use itertools::Itertools;

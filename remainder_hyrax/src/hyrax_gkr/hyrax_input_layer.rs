@@ -9,10 +9,11 @@ use remainder::{
 use remainder_shared_types::{
     config::global_config::global_prover_hyrax_batch_opening,
     curves::PrimeOrderCurve,
+    field::Zeroizable,
+    halo2_field,
     pedersen::{CommittedScalar, PedersenCommitter},
     transcript::ec_transcript::ECTranscriptTrait,
 };
-use remainder_shared_types::{ff_field, Zeroizable};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 

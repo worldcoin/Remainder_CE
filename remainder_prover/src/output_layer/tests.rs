@@ -3,7 +3,7 @@
 use itertools::{repeat_n, Itertools};
 use pretty_assertions::assert_eq;
 
-use remainder_shared_types::ff_field;
+use remainder_shared_types::halo2_field;
 use remainder_shared_types::transcript::ProverTranscript;
 use remainder_shared_types::{
     transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},

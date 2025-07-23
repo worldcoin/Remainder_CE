@@ -3,8 +3,9 @@ use bit_packed_vector::num_bits;
 use quickcheck::{Arbitrary, TestResult};
 use remainder_shared_types::{
     config::{global_config::global_prover_enable_bit_packing, GKRCircuitProverConfig},
+    field::HasByteRepresentation,
     halo2curves::ff::Field,
-    perform_function_under_prover_config, Fr, HasByteRepresentation,
+    perform_function_under_prover_config, Fr,
 };
 
 use super::*;

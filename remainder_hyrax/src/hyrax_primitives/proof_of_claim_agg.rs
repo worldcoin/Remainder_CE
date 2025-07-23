@@ -2,10 +2,11 @@ use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
 use rand::{CryptoRng, RngCore};
 use remainder::layer::LayerId;
 use remainder_shared_types::curves::PrimeOrderCurve;
+use remainder_shared_types::field::Zeroizable;
+use remainder_shared_types::halo2_field;
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use remainder_shared_types::Field;
-use remainder_shared_types::{ff_field, Zeroizable};
 use serde::{Deserialize, Serialize};
 
 use super::proof_of_equality::ProofOfEquality;

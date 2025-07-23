@@ -6,14 +6,15 @@ use itertools::Itertools;
 use ndarray::Array2;
 use rand::{CryptoRng, RngCore};
 use remainder::mle::evals::{bit_packed_vector::num_bits, MultilinearExtension};
+use remainder_shared_types::field::Zeroizable;
+use remainder_shared_types::halo2_field;
+use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use remainder_shared_types::{
     config::global_config::global_prover_hyrax_batch_opening,
     curves::PrimeOrderCurve,
     pedersen::{CommittedScalar, PedersenCommitter},
     utils::bookkeeping_table::{initialize_tensor, initialize_tensor_rlc},
-    Zeroizable,
 };
-use remainder_shared_types::{ff_field, transcript::ec_transcript::ECTranscriptTrait};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "parallel")]

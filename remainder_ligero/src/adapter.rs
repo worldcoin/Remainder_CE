@@ -1,12 +1,10 @@
 use crate::ligero_structs::LigeroRoot;
 use crate::poseidon_ligero::poseidon_digest::FieldHashFnDigest;
-use crate::{LcColumn, LcEncoding};
-
 use crate::poseidon_ligero::PoseidonSpongeHasher;
 use crate::{ligero_structs::LigeroAuxInfo, ligero_structs::LigeroEvalProof};
-
+use crate::{LcColumn, LcEncoding};
 use itertools::Itertools;
-use remainder_shared_types::Halo2FFTFriendlyField;
+use remainder_shared_types::field::Halo2FFTFriendlyField;
 use serde::{Deserialize, Serialize};
 
 /// Struct containing all of the components of a Ligero commitment + evaluation

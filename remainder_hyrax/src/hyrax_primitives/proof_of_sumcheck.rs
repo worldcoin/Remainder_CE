@@ -1,7 +1,7 @@
 use rand::{CryptoRng, RngCore};
 use remainder::layer::product::PostSumcheckLayer;
 use remainder_shared_types::curves::PrimeOrderCurve;
-use remainder_shared_types::ff_field;
+use remainder_shared_types::halo2_field;
 use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use serde::{Deserialize, Serialize};

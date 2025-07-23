@@ -1,9 +1,10 @@
 use itertools::Itertools;
 use rand::{CryptoRng, RngCore};
 use remainder_shared_types::curves::PrimeOrderCurve;
+use remainder_shared_types::field::Zeroizable;
+use remainder_shared_types::halo2_field;
 use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
-use remainder_shared_types::{ff_field, Zeroizable};
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]

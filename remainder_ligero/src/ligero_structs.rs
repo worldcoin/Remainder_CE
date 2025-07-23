@@ -1,6 +1,5 @@
 use itertools::Itertools;
-
-use remainder_shared_types::Halo2FFTFriendlyField;
+use remainder_shared_types::field::Halo2FFTFriendlyField;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 

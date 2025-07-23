@@ -45,10 +45,11 @@ use remainder_shared_types::config::global_config::{
     get_current_global_prover_config, get_current_global_verifier_config, global_claim_agg_strategy,
 };
 use remainder_shared_types::config::{ClaimAggregationStrategy, ProofConfig};
+use remainder_shared_types::field::Halo2FFTFriendlyField;
 use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
 use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::transcript::{ProverTranscript, TranscriptWriter};
-use remainder_shared_types::{Field, Halo2FFTFriendlyField};
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, info};
