@@ -1,12 +1,14 @@
 use itertools::Itertools;
 use remainder::mle::evals::MultilinearExtension;
+use remainder_shared_types::ff_field;
 use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
 use remainder_shared_types::halo2curves::group::Group;
 use remainder_shared_types::halo2curves::CurveExt;
-use remainder_shared_types::pedersen::PedersenCommitter;
+use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscript;
-use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
 
+use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
 use crate::hyrax_pcs::HyraxPCSEvaluationProof;
 
 type Scalar = <Bn256Point as Group>::Scalar;
@@ -48,8 +50,10 @@ fn sanity_check_test_honest_prover_small_identity() {
     let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
         log_split_point,
         &input_layer_mle_coeff,
-        &challenge_coordinates,
-        &mle_eval_commit,
+        &[HyraxClaim::<Scalar, CommittedScalar<Bn256Point>>::new_raw(
+            challenge_coordinates.clone(),
+            mle_eval_commit,
+        )],
         &committer_copy,
         prover_random_generator,
         &mut transcript,
@@ -62,7 +66,7 @@ fn sanity_check_test_honest_prover_small_identity() {
         log_split_point,
         &committer,
         &comm_to_matrix,
-        &challenge_coordinates,
+        &[&challenge_coordinates],
         &mut transcript,
     );
 }
@@ -104,8 +108,10 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
     let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
         log_split_point,
         &input_layer_mle_coeff,
-        &challenge_coordinates,
-        &mle_eval_commit,
+        &[HyraxClaim::<Scalar, CommittedScalar<Bn256Point>>::new_raw(
+            challenge_coordinates.clone(),
+            mle_eval_commit,
+        )],
         &committer_copy,
         prover_random_generator,
         &mut transcript,
@@ -118,7 +124,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
         log_split_point,
         &committer,
         &comm_to_matrix,
-        &challenge_coordinates,
+        &[&challenge_coordinates],
         &mut transcript,
     );
 }
@@ -185,8 +191,10 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
     let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
         log_split_point,
         &input_layer_mle_coeff,
-        &challenge_coordinates,
-        &mle_eval_commit,
+        &[HyraxClaim::<Scalar, CommittedScalar<Bn256Point>>::new_raw(
+            challenge_coordinates.clone(),
+            mle_eval_commit,
+        )],
         &committer_copy,
         prover_random_generator,
         &mut transcript,
@@ -199,7 +207,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         log_split_point,
         &committer,
         &comm_to_matrix,
-        &challenge_coordinates,
+        &[&challenge_coordinates],
         &mut transcript,
     );
 }
@@ -228,7 +236,8 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
 
     let (challenge_vec, _) = HyraxPCSEvaluationProof::<Bn256Point>::compute_l_r_from_log_n_cols(
         0,
-        &challenge_coordinates,
+        &[&challenge_coordinates],
+        &[Scalar::ONE],
     );
 
     let mle_evaluation_at_challenge = input_layer_mle_coeff_raw_vec
@@ -260,8 +269,10 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
     let hyrax_eval_proof = HyraxPCSEvaluationProof::prove(
         log_split_point,
         &input_layer_mle_coeff,
-        &challenge_coordinates,
-        &mle_eval_commit,
+        &[HyraxClaim::<Scalar, CommittedScalar<Bn256Point>>::new_raw(
+            challenge_coordinates.clone(),
+            mle_eval_commit,
+        )],
         &committer_copy,
         prover_random_generator,
         &mut transcript,
@@ -274,7 +285,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         log_split_point,
         &committer,
         &comm_to_matrix,
-        &challenge_coordinates,
+        &[&challenge_coordinates],
         &mut transcript,
     );
 }

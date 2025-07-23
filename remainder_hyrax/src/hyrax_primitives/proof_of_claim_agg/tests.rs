@@ -8,7 +8,7 @@ use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
 use remainder_shared_types::halo2curves::CurveExt;
 use remainder_shared_types::pedersen::PedersenCommitter;
 use remainder_shared_types::transcript::ec_transcript::ECTranscript;
-use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
 
 type Base = <Bn256Point as CurveExt>::Base;
 

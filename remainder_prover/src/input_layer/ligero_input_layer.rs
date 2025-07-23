@@ -21,7 +21,8 @@ pub type LigeroInputLayerDescriptionWithPrecommit<F> = (
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Hash)]
 #[serde(bound = "F: Field")]
-/// The circuit description of a [LigeroInputLayer]. Stores the shape information of this layer.
+/// The circuit description of a `LigeroInputLayer`.
+/// Stores the shape information of this layer.
 pub struct LigeroInputLayerDescription<F: Field> {
     /// The ID of this Ligero Input Layer.
     pub layer_id: LayerId,

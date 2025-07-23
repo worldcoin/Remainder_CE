@@ -6,12 +6,12 @@ use remainder_shared_types::{
     curves::PrimeOrderCurve,
     pedersen::PedersenCommitter,
     perform_function_under_expected_configs,
-    transcript::{ec_transcript::ECTranscript, poseidon_transcript::PoseidonSponge},
+    transcript::{ec_transcript::ECTranscript, poseidon_sponge::PoseidonSponge},
 };
 
 use crate::{
     hyrax_gkr::{verify_hyrax_proof, HyraxProof},
-    utils::vandermonde::VandermondeInverse,
+    utils::{get_crypto_chacha20_prng, vandermonde::VandermondeInverse},
 };
 
 use super::hyrax_input_layer::HyraxInputLayerDescriptionWithPrecommit;
@@ -25,7 +25,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
 ) {
     let mut transcript: ECTranscript<C, PoseidonSponge<C::Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-    let blinding_rng = &mut rand::thread_rng();
+    let mut blinding_rng = get_crypto_chacha20_prng();
     let converter: &mut VandermondeInverse<C::Scalar> = &mut VandermondeInverse::new();
     let num_generators = 512;
     let committer = PedersenCommitter::<C>::new(
@@ -49,7 +49,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
         &private_layer_descriptions,
         &circuit_desc,
         &committer,
-        blinding_rng,
+        &mut blinding_rng,
         converter,
         &mut transcript
     );

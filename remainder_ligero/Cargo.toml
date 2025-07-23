@@ -35,6 +35,7 @@ remainder-shared-types = { path = "../remainder_shared_types" }
 
 [features]
 print-trace = ["ark-std/print-trace", "remainder-shared-types/print-trace"]
+parallel = ["ark-std/parallel"]
 
 [dev-dependencies]
 bincode = "1.3"

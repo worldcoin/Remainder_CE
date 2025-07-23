@@ -44,12 +44,12 @@ macro_rules! layer_enum {
 
                 fn verify_rounds(
                     &self,
-                    claim: $crate::claims::RawClaim<F>,
+                    claims: &[&$crate::claims::RawClaim<F>],
                     transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
-                ) -> Result<VerifierLayerEnum<F>, super::VerificationError> {
+                ) -> anyhow::Result<VerifierLayerEnum<F>> {
                     match self {
                         $(
-                            Self::$var_name(layer) => Ok(layer.verify_rounds(claim, transcript)?),
+                            Self::$var_name(layer) => Ok(layer.verify_rounds(claims, transcript)?),
                         )*
                     }
                 }
@@ -67,12 +67,12 @@ macro_rules! layer_enum {
                 fn convert_into_verifier_layer(
                     &self,
                     sumcheck_bindings: &[F],
-                    claim_point: &[F],
+                    claim_points: &[&[F]],
                     transcript_reader: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
-                ) -> Result<Self::VerifierLayer, super::VerificationError> {
+                ) -> anyhow::Result<Self::VerifierLayer> {
                     match self {
                         $(
-                            Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.convert_into_verifier_layer(sumcheck_bindings, claim_point, transcript_reader)?)),
+                            Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.convert_into_verifier_layer(sumcheck_bindings, claim_points, transcript_reader)?)),
                         )*
                     }
                 }
@@ -111,11 +111,12 @@ macro_rules! layer_enum {
                 fn get_post_sumcheck_layer(
                     &self,
                     round_challenges: &[F],
-                    claim_challenges: &[F],
+                    claim_challenges: &[&[F]],
+                    random_coefficients: &[F],
                 ) -> $crate::layer::PostSumcheckLayer<F, Option<F>> {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges),
+                            Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges, random_coefficients),
                         )*
                     }
                 }
@@ -138,7 +139,7 @@ macro_rules! layer_enum {
                     }
                 }
 
-                fn get_claims(&self) -> Result<Vec<$crate::claims::Claim<F>>, $crate::layer::LayerError> {
+                fn get_claims(&self) -> anyhow::Result<Vec<$crate::claims::Claim<F>>> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.get_claims(),
@@ -158,17 +159,17 @@ macro_rules! layer_enum {
 
                 fn prove(
                     &mut self,
-                    claim: $crate::claims::RawClaim<F>,
+                    claims: &[&$crate::claims::RawClaim<F>],
                     transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
-                ) -> Result<(), super::LayerError> {
+                ) -> anyhow::Result<()> {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.prove(claim, transcript),
+                            Self::$var_name(layer) => layer.prove(claims, transcript),
                         )*
                     }
                 }
 
-                fn initialize(&mut self, claim_point: &[F]) -> Result<(), super::LayerError> {
+                fn initialize(&mut self, claim_point: &[F]) -> anyhow::Result<()> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.initialize(claim_point),
@@ -176,15 +177,15 @@ macro_rules! layer_enum {
                     }
                 }
 
-                fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, super::LayerError> {
+                fn compute_round_sumcheck_message(&mut self, round_index: usize, random_coefficients: &[F]) -> anyhow::Result<Vec<F>> {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.compute_round_sumcheck_message(round_index),
+                            Self::$var_name(layer) => layer.compute_round_sumcheck_message(round_index, random_coefficients),
                         )*
                     }
                 }
 
-                fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), super::LayerError> {
+                fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> anyhow::Result<()> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.bind_round_variable(round_index, challenge),
@@ -211,19 +212,28 @@ macro_rules! layer_enum {
                 fn get_post_sumcheck_layer(
                     &self,
                     round_challenges: &[F],
-                    claim_challenges: &[F],
+                    claim_challenges: &[&[F]],
+                    random_coefficients: &[F],
                 ) -> $crate::layer::PostSumcheckLayer<F, F> {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges),
+                            Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges, random_coefficients),
                         )*
                     }
                 }
 
-                fn get_claims(&self) -> Result<Vec<$crate::claims::Claim<F>>, $crate::layer::LayerError> {
+                fn get_claims(&self) -> anyhow::Result<Vec<$crate::claims::Claim<F>>> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.get_claims(),
+                        )*
+                    }
+                }
+
+                fn initialize_rlc(&mut self, random_coefficients: &[F], claims: &[&$crate::claims::RawClaim<F>]) {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.initialize_rlc(random_coefficients, claims),
                         )*
                     }
                 }

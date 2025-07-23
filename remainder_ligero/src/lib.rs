@@ -18,7 +18,7 @@ to the codebase.
 */
 
 use crate::utils::get_least_significant_bits_to_usize_little_endian;
-use ark_std::{cfg_into_iter, end_timer, start_timer};
+use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
@@ -242,7 +242,7 @@ where
     ///
     /// ## Returns
     /// * `proof` - Ligero evaluation proof for committed polynomial at the
-    ///     challenge point represented by `outer_tensor`
+    ///   challenge point represented by `outer_tensor`
     pub fn prove(
         &self,
         outer_tensor: &[F],
@@ -612,7 +612,7 @@ fn merkle_tree<D, F>(
     assert_eq!(ins.len(), outs.len() + 1);
 
     // Merkle-ize just the next layer
-    let (outs, rems) = outs.split_at_mut((outs.len() + 1) / 2);
+    let (outs, rems) = outs.split_at_mut(outs.len().div_ceil(2));
     merkle_layer::<D, F>(ins, outs, master_default_poseidon_merkle_hasher);
 
     if !rems.is_empty() {
@@ -661,7 +661,7 @@ fn merkle_layer<D, F>(
 /// Open the commitment to a single column of M' by
 /// * Sending the column in the clear to the verifier
 /// * Sending the Merkle path to the Merkle root from that column's corresponding
-///     leaf node hash
+///   leaf node hash
 ///
 /// Additionally, appends each of the column values *and* each of the Merkle
 /// paths to the transcript writer, to match the transcript reader of the
@@ -711,7 +711,7 @@ where
         let other = (column & !1) | (!column & 1);
         assert_eq!(other ^ column, 1);
         path.push(hashes[other]);
-        let (_, hashes_new) = hashes.split_at((hashes.len() + 1) / 2);
+        let (_, hashes_new) = hashes.split_at(hashes.len().div_ceil(2));
         hashes = hashes_new;
         column >>= 1;
     }
@@ -737,7 +737,7 @@ const fn log2(v: usize) -> usize {
 /// * All the `b^T M'` s (i.e. column-wise) are consistent with the verifier-derived enc(b^T M)
 /// * All the columns are consistent with the merkle commitment
 /// * Evaluates (b^T M) * a on its own (where b^T M is given by the prover) and returns the result
-///      as the evaluation
+///   as the evaluation
 ///
 /// ## Arguments
 /// * `root` - Merkle root, i.e. the Ligero commitment
@@ -785,7 +785,7 @@ where
     // The verifier does this independently as well
     let cols_to_open: Vec<usize> = {
         transcript_reader
-            .get_challenges("Column openings", aux.get_n_col_opens())
+            .get_challenges("Column opening indices", aux.get_n_col_opens())
             .unwrap()
             .into_iter()
             .map(|challenge| compute_col_idx_from_transcript_challenge(challenge, encoded_num_cols))
@@ -841,17 +841,26 @@ where
 
     // step 4: evaluate and return
     // Computes dot product between inner_tensor (i.e. a) and proof.p_eval (i.e. b^T M)
-    Ok(cfg_into_iter!(inner_tensor)
+    #[cfg(not(feature = "parallel"))]
+    return Ok(inner_tensor
+        .iter()
         .zip(&p_eval[..])
         .map(|(t, e)| *t * e)
         .reduce(|a, v| a + v)
-        .unwrap_or(F::ZERO))
+        .unwrap_or(F::ZERO));
+
+    #[cfg(feature = "parallel")]
+    return Ok(inner_tensor
+        .par_iter()
+        .zip(&p_eval[..])
+        .map(|(t, e)| *t * e)
+        .reduce(|| F::ZERO, |a, v| a + v));
 }
 
 /// Check a column opening by
 /// * Computing a linear hash over the column elements
 /// * Taking that hash as the Merkle leaf, and computing pairwise hashes against
-///     the Merkle path
+///   the Merkle path
 /// * Checking that against `root`
 ///
 /// ## Arguments
@@ -992,7 +1001,7 @@ where
     let n_col_opens = enc.get_n_col_opens();
     let _columns: Vec<LcColumn<E, F>> = {
         let cols_to_open: Vec<usize> = tr
-            .get_challenges("Columns", n_col_opens)
+            .get_challenges("Column opening indices", n_col_opens)
             .into_iter()
             .map(|challenge| {
                 compute_col_idx_from_transcript_challenge(challenge, comm.encoded_num_cols)
@@ -1000,7 +1009,8 @@ where
             .collect();
 
         // Send columns + Merkle paths to verifier
-        cfg_into_iter!(&cols_to_open)
+        cols_to_open
+            .iter()
             .map(|&col| open_column(tr, comm, col))
             .collect::<ProverResult<Vec<LcColumn<E, F>>, ErrT<E, F>>>()?
     };

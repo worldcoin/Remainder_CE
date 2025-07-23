@@ -58,7 +58,7 @@ pub mod layouter;
 pub use remainder_shared_types;
 
 // module for worldcoin circuits
-pub mod worldcoin;
+pub mod zk_iriscode_ss;
 
 // module for worldcoin mpc circuits
 pub mod worldcoin_mpc;

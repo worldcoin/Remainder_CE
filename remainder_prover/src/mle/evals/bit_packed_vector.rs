@@ -10,6 +10,7 @@ use remainder_shared_types::{config::global_config::global_prover_enable_bit_pac
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use itertools::FoldWhile::{Continue, Done};
+use zeroize::Zeroize;
 
 // -------------- Helper Functions -----------------
 
@@ -76,11 +77,11 @@ pub fn num_bits<F: Field>(n: F) -> usize {
 /// # Notes
 /// 1. Currently the implementation uses more storage than the theoretically
 ///    optimal mentioned above. This is because:
-///    a. If `ceil(log_2(b - a + 1)) > 64`, we resort to the standard
+///    1. If `ceil(log_2(b - a + 1)) > 64`, we resort to the standard
 ///       representation of using `sizeof::<F>()` bytes. This is because for our
 ///       use-case, there are not many instances of vectors needing `c \in [65,
 ///       256]` bits to encode each value.
-///    b. We round `ceil(log_2(b - a + 1))` up to the nearest divisor of 64.
+///    2. We round `ceil(log_2(b - a + 1))` up to the nearest divisor of 64.
 ///       This is to simplify the implementation by avoiding the situation where
 ///       the encoding of an element spans multiple words.
 /// 2. For optimal performance, the buffer used to store the encoded values
@@ -123,6 +124,16 @@ pub(in crate::mle::evals) struct BitPackedVector<F: Field> {
     /// The number of bits required to represent each element optimally.
     /// This is equal to `ceil(log_2(b - a + 1))` as described above.
     bits_per_element: usize,
+}
+
+impl<F: Field> Zeroize for BitPackedVector<F> {
+    fn zeroize(&mut self) {
+        self.buf.iter_mut().for_each(|x| x.zeroize());
+        self.naive_buf.iter_mut().for_each(|x| x.zeroize());
+        self.num_elements.zeroize();
+        self.offset.zeroize();
+        self.bits_per_element.zeroize();
+    }
 }
 
 impl<F: Field> BitPackedVector<F> {
