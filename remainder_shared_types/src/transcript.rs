@@ -8,7 +8,7 @@ use thiserror::Error;
 use tracing::warn;
 use utils::sha256_hash_chain_on_field_elems;
 
-use crate::Field;
+use crate::{field::ExtensionField, Field};
 use std::fmt::Debug;
 
 pub mod counting_transcript;
@@ -144,7 +144,7 @@ impl<F: Debug> Display for Transcript<F> {
     }
 }
 
-pub trait ProverTranscript<F> {
+pub trait ProverTranscript<F: Field> {
     fn append(&mut self, label: &str, elem: F);
 
     fn append_elements(&mut self, label: &str, elements: &[F]);
@@ -154,6 +154,11 @@ pub trait ProverTranscript<F> {
     fn get_challenge(&mut self, label: &str) -> F;
 
     fn get_challenges(&mut self, label: &str, num_elements: usize) -> Vec<F>;
+
+    fn get_extension_field_challenge<const DEG: usize, E: ExtensionField<F, DEG>>(
+        &mut self,
+        label: &str,
+    ) -> E;
 }
 
 /// The prover-side interface for interacting with a transcript sponge. A
@@ -232,6 +237,13 @@ impl<F: Field, Tr: TranscriptSponge<F>> ProverTranscript<F> for TranscriptWriter
             self.sponge.absorb_elements(elements);
             self.sponge.absorb_elements(&elements_hash_chain_digest);
         }
+    }
+
+    fn get_extension_field_challenge<const DEG: usize, E: ExtensionField<F, DEG>>(
+        &mut self,
+        label: &str,
+    ) -> E {
+        todo!()
     }
 }
 
