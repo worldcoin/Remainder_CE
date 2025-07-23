@@ -31,10 +31,10 @@ fn regular_layer_test_prove_verify_product() {
     let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_1.mle_indices());
     let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_2.mle_indices());
     let mut circuit_expression =
-        Expression::<Fr, ExprDescription>::products(vec![circuit_mle_1, circuit_mle_2]);
+        Expression::<Fr, ExprDescription>::products(circuit_mle_1.expression(), circuit_mle_2.expression());
     circuit_expression.index_mle_vars(0);
 
-    let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_1, mle_2]);
+    let mut expression = Expression::<Fr, ProverExpr>::products(mle_1.expression(), mle_2.expression());
     let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
 
     let mut layer = RegularLayer::new_raw(crate::layer::LayerId::Layer(0), expression.clone());
@@ -157,16 +157,16 @@ fn regular_layer_test_prove_verify_complex() {
     let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_1.mle_indices());
     let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_2.mle_indices());
     let mut circuit_expression = Expression::<Fr, ExprDescription>::selectors(vec![
-        Expression::<Fr, ExprDescription>::products(vec![
-            circuit_mle_1.clone(),
-            circuit_mle_2.clone(),
-        ]),
+        Expression::<Fr, ExprDescription>::products(
+            circuit_mle_1.clone().expression(),
+            circuit_mle_2.clone().expression(),
+        ),
         Expression::from_mle_desc(circuit_mle_2) + Expression::from_mle_desc(circuit_mle_1),
     ]);
     circuit_expression.index_mle_vars(0);
     let sum = Expression::<Fr, ProverExpr>::sum(leaf_mle_2, leaf_mle_1);
 
-    let prod = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_2.clone()]);
+    let prod = Expression::<Fr, ProverExpr>::products(mle_1.clone().expression(), mle_2.clone().expression());
 
     let mut root = prod.select(sum);
 

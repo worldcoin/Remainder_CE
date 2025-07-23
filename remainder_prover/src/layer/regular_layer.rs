@@ -106,17 +106,10 @@ impl<F: Field> RegularLayer<F> {
                     transcript_writer.append("Fully bound MLE evaluation", val);
                     Ok(())
                 }
-                ExpressionNode::Product(mle_vec_indices) => {
-                    for mle_vec_index in mle_vec_indices {
-                        let mle = &mle_vec[mle_vec_index.index()];
-                        let eval = mle.mle.value();
-                        transcript_writer.append("Fully bound MLE evaluation", eval);
-                    }
-                    Ok(())
-                }
                 ExpressionNode::Constant(_)
                 | ExpressionNode::Scaled(_, _)
                 | ExpressionNode::Sum(_, _)
+                | ExpressionNode::Product(_, _)
                 | ExpressionNode::Selector(_, _, _) => Ok(()),
             }
         };
@@ -389,36 +382,6 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
 
                     // Push it into the list of claims
                     claims.push(claim);
-                }
-                ExpressionNode::Product(mle_vec_indices) => {
-                    for mle_vec_index in mle_vec_indices {
-                        let mle = mle_vec_index.get_mle(mle_vec);
-                        let fixed_mle_indices = mle
-                            .mle_indices
-                            .iter()
-                            .map(|index| index.val().ok_or(anyhow!(ClaimError::MleRefMleError)))
-                            .collect::<Result<Vec<_>>>()?;
-
-                        // Grab the layer ID (i.e. MLE index) which this mle refers to
-                        let mle_layer_id = mle.layer_id();
-
-                        let claimed_value = mle.value();
-
-                        // Note: No need to append the claim value to the transcript here. We
-                        // already appended when evaluating the expression for sumcheck.
-
-                        // Construct the claim
-                        // need to populate the claim with the mle ref we are grabbing the claim from
-                        let claim = Claim::new(
-                            fixed_mle_indices,
-                            claimed_value,
-                            self.layer_id(),
-                            mle_layer_id,
-                        );
-
-                        // Push it into the list of claims
-                        claims.push(claim);
-                    }
                 }
                 _ => {}
             }
@@ -853,31 +816,6 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
 
                     // Push it into the list of claims
                     claims.push(claim);
-                }
-                ExpressionNode::Product(verifier_mle_vec) => {
-                    for verifier_mle in verifier_mle_vec {
-                        let fixed_mle_indices = verifier_mle
-                            .var_indices()
-                            .iter()
-                            .map(|index| index.val().ok_or(anyhow!(ClaimError::MleRefMleError)))
-                            .collect::<Result<Vec<_>>>()?;
-
-                        // Grab the layer ID (i.e. MLE index) which this mle refers to
-                        let mle_layer_id = verifier_mle.layer_id();
-
-                        let claimed_value = verifier_mle.value();
-
-                        // Construct the claim
-                        let claim: Claim<F> = Claim::new(
-                            fixed_mle_indices,
-                            claimed_value,
-                            self.layer_id(),
-                            mle_layer_id,
-                        );
-
-                        // Push it into the list of claims
-                        claims.push(claim);
-                    }
                 }
                 _ => {}
             }

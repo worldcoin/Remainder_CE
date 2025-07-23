@@ -202,7 +202,7 @@ fn test_aggro_claim_4() {
     let mle2 = mle2.clone();
 
     let output_mles_from_layer = vec![mle.clone(), mle2.clone()];
-    let expr = Expression::<Fr, ProverExpr>::products(vec![mle, mle2]);
+    let expr = Expression::<Fr, ProverExpr>::products(mle.expression(), mle2.expression());
     let mut expr_copy = expr.clone();
 
     let layer = RegularLayer::new_raw(LayerId::Input(0), expr);

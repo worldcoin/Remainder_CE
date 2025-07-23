@@ -532,65 +532,66 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     pub fn get_post_sumcheck_layer(
         &self,
-        multiplier: F,
-        challenges: &[F],
+        _multiplier: F,
+        _challenges: &[F],
         _mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
     ) -> PostSumcheckLayer<F, Option<F>> {
-        let mut products: Vec<Product<F, Option<F>>> = vec![];
-        match self {
-            ExpressionNode::Selector(mle_index, a, b) => {
-                let idx_val = match mle_index {
-                    MleIndex::Indexed(idx) => challenges[*idx],
-                    MleIndex::Bound(chal, _idx) => *chal,
-                    // TODO(vishady): actually we should just have an assertion that circuit description only
-                    // contains indexed bits
-                    _ => panic!("should not have any other index here"),
-                };
-                let left_side_acc = multiplier * (F::ONE - idx_val);
-                let right_side_acc = multiplier * (idx_val);
-                products.extend(
-                    a.get_post_sumcheck_layer(left_side_acc, challenges, _mle_vec)
-                        .0,
-                );
-                products.extend(
-                    b.get_post_sumcheck_layer(right_side_acc, challenges, _mle_vec)
-                        .0,
-                );
-            }
-            ExpressionNode::Sum(a, b) => {
-                products.extend(
-                    a.get_post_sumcheck_layer(multiplier, challenges, _mle_vec)
-                        .0,
-                );
-                products.extend(
-                    b.get_post_sumcheck_layer(multiplier, challenges, _mle_vec)
-                        .0,
-                );
-            }
-            ExpressionNode::Mle(mle) => {
-                products.push(Product::<F, Option<F>>::new(
-                    &[mle.clone()],
-                    multiplier,
-                    challenges,
-                ));
-            }
-            ExpressionNode::Product(mles) => {
-                let product = Product::<F, Option<F>>::new(mles, multiplier, challenges);
-                products.push(product);
-            }
-            ExpressionNode::Scaled(a, scale_factor) => {
-                let acc = multiplier * scale_factor;
-                products.extend(a.get_post_sumcheck_layer(acc, challenges, _mle_vec).0);
-            }
-            ExpressionNode::Constant(constant) => {
-                products.push(Product::<F, Option<F>>::new(
-                    &[],
-                    *constant * multiplier,
-                    challenges,
-                ));
-            }
-        }
-        PostSumcheckLayer(products)
+        panic!("Hyrax not supported!");
+        // let mut products: Vec<Product<F, Option<F>>> = vec![];
+        // match self {
+        //     ExpressionNode::Selector(mle_index, a, b) => {
+        //         let idx_val = match mle_index {
+        //             MleIndex::Indexed(idx) => challenges[*idx],
+        //             MleIndex::Bound(chal, _idx) => *chal,
+        //             // TODO(vishady): actually we should just have an assertion that circuit description only
+        //             // contains indexed bits
+        //             _ => panic!("should not have any other index here"),
+        //         };
+        //         let left_side_acc = multiplier * (F::ONE - idx_val);
+        //         let right_side_acc = multiplier * (idx_val);
+        //         products.extend(
+        //             a.get_post_sumcheck_layer(left_side_acc, challenges, _mle_vec)
+        //                 .0,
+        //         );
+        //         products.extend(
+        //             b.get_post_sumcheck_layer(right_side_acc, challenges, _mle_vec)
+        //                 .0,
+        //         );
+        //     }
+        //     ExpressionNode::Sum(a, b) => {
+        //         products.extend(
+        //             a.get_post_sumcheck_layer(multiplier, challenges, _mle_vec)
+        //                 .0,
+        //         );
+        //         products.extend(
+        //             b.get_post_sumcheck_layer(multiplier, challenges, _mle_vec)
+        //                 .0,
+        //         );
+        //     }
+        //     ExpressionNode::Mle(mle) => {
+        //         products.push(Product::<F, Option<F>>::new(
+        //             &[mle.clone()],
+        //             multiplier,
+        //             challenges,
+        //         ));
+        //     }
+        //     ExpressionNode::Product(mles) => {
+        //         let product = Product::<F, Option<F>>::new(mles, multiplier, challenges);
+        //         products.push(product);
+        //     }
+        //     ExpressionNode::Scaled(a, scale_factor) => {
+        //         let acc = multiplier * scale_factor;
+        //         products.extend(a.get_post_sumcheck_layer(acc, challenges, _mle_vec).0);
+        //     }
+        //     ExpressionNode::Constant(constant) => {
+        //         products.push(Product::<F, Option<F>>::new(
+        //             &[],
+        //             *constant * multiplier,
+        //             challenges,
+        //         ));
+        //     }
+        // }
+        // PostSumcheckLayer(products)
     }
 
     /// Get the maximum degree of an ExpressionNode, recursively.
@@ -654,6 +655,13 @@ impl<F: Field> Expression<F, ExprDescription> {
         let sum_node = ExpressionNode::Product(Box::new(lhs_node), Box::new(rhs_node));
 
         Expression::new(sum_node, ())
+    }
+
+    /// Create a mle Expression that contains one MLE
+    pub fn mle(mle: MleDescription<F>) -> Self {
+        let mle_node = ExpressionNode::Mle(mle);
+
+        Expression::new(mle_node, ())
     }
 
     /// Creates an [Expression<F, ExprDescription>] which describes the polynomial relationship

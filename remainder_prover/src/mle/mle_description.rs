@@ -2,7 +2,7 @@ use remainder_shared_types::{transcript::VerifierTranscript, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    expression::expr_errors::ExpressionError, layer::LayerId, layouter::layouting::CircuitMap,
+    expression::{circuit_expr::ExprDescription, expr_errors::ExpressionError, generic_expr::Expression}, layer::LayerId, layouter::layouting::CircuitMap,
 };
 
 use super::{dense::DenseMle, verifier_mle::VerifierMle, MleIndex};
@@ -74,6 +74,11 @@ impl<F: Field> MleDescription<F> {
                 _ => 0,
             }
         })
+    }
+
+    /// Creates an expression from the current MLE.
+    pub fn expression(self) -> Expression<F, ExprDescription> {
+        Expression::<F, ExprDescription>::mle(self)
     }
 
     /// Get the bits in the MLE that are fixed bits.
