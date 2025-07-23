@@ -13,7 +13,6 @@ use super::{
     verifier_expr::VerifierExpr,
 };
 use crate::{
-    layer::product::Product,
     mle::{
         betavalues::BetaValues, dense::DenseMle, mle_bookkeeping_table::MleBookkeepingTables,
         mle_combination::MleCombinationSeq, MleIndex,
@@ -105,9 +104,8 @@ impl<F: Field> Expression<F, ProverExpr> {
     }
 
     /// Create a product Expression that raises one expression to a given power
-    pub fn pow(pow: usize, node_id: Self) -> Self {
+    pub fn pow(pow: usize, base: Expression<F, ProverExpr>) -> Self {
         // lazily construct a linear-depth expression tree
-        let base = node_id;
         let mut result = base.clone();
         for _ in 1..pow {
             result = result * base.clone();
@@ -281,6 +279,27 @@ impl<F: Field> Expression<F, ProverExpr> {
             .transform_to_verifier_expression()
             .unwrap()
             .evaluate()
+    }
+
+    /// This evaluates a sumcheck message using the beta cascade algorithm, taking the sum
+    /// of the expression over all the variables, applied with beta_vec
+    pub fn evaluate_sumcheck_beta_cascade_sum(
+        &self,
+        beta_values: &BetaValues<F>,
+    ) -> SumcheckEvals<F> {
+        // This is equivalent to a degree-0 beta cascade on a round not present in the MLEs
+        // First find such a non-existent round
+        let dummy_round_index = self.get_all_rounds().len();
+        println!("DUMMY_INDEX: {dummy_round_index}");
+        // Then apply beta cascade
+        self.expression_node
+            .evaluate_sumcheck_node_beta_cascade_bookkeeping_table(
+                &[beta_values],
+                &self.mle_vec,
+                &vec![F::ONE],
+                dummy_round_index,
+                0,
+            )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -491,6 +510,11 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         round_index: usize,
         degree: usize,
     ) -> SumcheckEvals<F> {
+        println!("EXPRESSION: {:?}", self);
+        for m in mle_vec {
+            println!("M: {:?}", m);
+        }
+
         let mle_bookkeeping_tables: Vec<(bool, Vec<_>)> = mle_vec
             .iter()
             .map(|mle| MleBookkeepingTables::from_mle_evals(mle, degree, round_index))
@@ -520,6 +544,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             .into_iter()
             .map(|eval_tables| MleBookkeepingTables::comb(eval_tables, &comb_seq))
             .collect();
+        println!("COMB_TABLES: {:?}", comb_tables);
         // MleBookkeepingTables::comb_batch(eval_tables_list, &comb_seq);
 
         // all comb_tables are of the same structure, so only
@@ -541,6 +566,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 )
             })
             .unzip();
+        println!("beta_current_val_vec: {beta_current_val_vec:?}, beta_unbound_vals_vec: {beta_unbound_vals_vec:?}, beta_updated_vals_vec: {beta_updated_vals_vec:?}");
 
         let evals_iter = beta_current_val_vec
             .into_iter()
@@ -582,6 +608,9 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                         * random_coeff
                 },
             );
+
+        println!("BETA_VALUES: {:?}", beta_vec);
+        println!("EVALS_ITER: {:?}", evals_iter);
         // Combine all the evaluations using a random linear combination. We
         // simply sum because all evaluations are already multiplied by their
         // random coefficient.

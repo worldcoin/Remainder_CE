@@ -5,7 +5,7 @@
 use crate::{
     layer::{
         gate::BinaryOperation,
-        product::{PostSumcheckLayer, Product},
+        product::PostSumcheckLayer,
     },
     layouter::layouting::CircuitMap,
     mle::{evals::MultilinearExtension, mle_description::MleDescription, MleIndex},
@@ -146,7 +146,7 @@ impl<F: Field> Expression<F, ExprDescription> {
         // By default, all rounds have degree at least 2 (beta table included)
         let round_degree = max(
             1,
-            self.reduce(&mut get_degree_closure, &usize::add, &max)
+            self.reduce(&mut get_degree_closure, &max, &usize::add)
                 .unwrap(),
         );
         // add 1 cuz beta table but idk if we would ever use this without a beta table
