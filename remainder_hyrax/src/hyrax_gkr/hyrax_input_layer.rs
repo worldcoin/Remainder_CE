@@ -6,13 +6,15 @@ use rand::{CryptoRng, Rng, RngCore};
 use remainder::{
     input_layer::InputLayerDescription, layer::LayerId, mle::evals::MultilinearExtension,
 };
-use remainder_shared_types::ff_field;
 use remainder_shared_types::{
+    config::global_config::global_prover_hyrax_batch_opening,
     curves::PrimeOrderCurve,
     pedersen::{CommittedScalar, PedersenCommitter},
     transcript::ec_transcript::ECTranscriptTrait,
 };
+use remainder_shared_types::{ff_field, Zeroizable};
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 use crate::hyrax_pcs::HyraxPCSEvaluationProof;
 
@@ -28,7 +30,7 @@ pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
     /// The commitment to the input polynomial
     pub input_commitment: Vec<C>,
     /// The evaluation points and evaluation proofs for the input layer claims, sorted by evaluation point.
-    pub evaluation_proofs: Vec<(Vec<C::Scalar>, HyraxPCSEvaluationProof<C>)>,
+    pub evaluation_proofs: Vec<HyraxPCSEvaluationProof<C>>,
 }
 
 impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
@@ -49,22 +51,51 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         // Sort the claims by evaluation point
         let mut committed_claims = committed_claims.to_vec();
         committed_claims.sort_by(|a, b| a.point.cmp(&b.point));
-        let evaluation_proofs = committed_claims
-            .iter()
-            .map(|claim| {
-                let proof = HyraxPCSEvaluationProof::prove(
+
+        let evaluation_proofs = if global_prover_hyrax_batch_opening() {
+            let claims_grouped_by_common_points =
+                group_claims_by_common_points_with_dimension::<C, CommittedScalar<C>>(
+                    committed_claims,
                     input_layer_desc.log_num_cols,
-                    &prover_commitment.mle,
-                    &claim.point,
-                    &claim.evaluation,
-                    committer,
-                    blinding_rng,
-                    transcript,
-                    &mut prover_commitment.blinding_factors_matrix,
                 );
-                (claim.point.clone(), proof)
-            })
-            .collect_vec();
+            claims_grouped_by_common_points
+                .iter()
+                .map(|claim_group| {
+                    HyraxPCSEvaluationProof::prove(
+                        input_layer_desc.log_num_cols,
+                        &prover_commitment.mle,
+                        claim_group,
+                        committer,
+                        blinding_rng,
+                        transcript,
+                        &mut prover_commitment.blinding_factors_matrix,
+                    )
+                })
+                .collect_vec()
+        } else {
+            committed_claims
+                .into_iter()
+                .map(|claim| {
+                    HyraxPCSEvaluationProof::prove(
+                        input_layer_desc.log_num_cols,
+                        &prover_commitment.mle,
+                        &[claim],
+                        committer,
+                        blinding_rng,
+                        transcript,
+                        &mut prover_commitment.blinding_factors_matrix,
+                    )
+                })
+                .collect_vec()
+        };
+
+        // Zeroize each of the blinding factors once we have committed to all of the claims.
+        prover_commitment
+            .blinding_factors_matrix
+            .iter_mut()
+            .for_each(|blinding_factor| {
+                blinding_factor.zeroize();
+            });
         end_timer!(eval_proof_timer);
 
         HyraxInputLayerProof {
@@ -88,27 +119,84 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         // Sort the claims by evaluation point
         let mut claim_commitments = claim_commitments.to_vec();
         claim_commitments.sort_by(|a, b| a.point.cmp(&b.point));
-
-        // Check there are the same number of claims as evaluation proofs
-        assert_eq!(self.evaluation_proofs.len(), claim_commitments.len());
-
-        // Verify each evaluation proof
-        claim_commitments
-            .iter()
-            .zip(&self.evaluation_proofs)
-            .for_each(|(claim, (eval_point, eval_proof))| {
-                assert_eq!(claim.point.len(), input_layer_desc.num_vars);
-                assert_eq!(claim.point, *eval_point);
-                assert_eq!(claim.evaluation, eval_proof.commitment_to_evaluation);
-                eval_proof.verify(
+        if global_prover_hyrax_batch_opening() {
+            let claims_grouped_by_common_points =
+                group_claims_by_common_points_with_dimension::<C, C>(
+                    claim_commitments,
                     input_layer_desc.log_num_cols,
-                    committer,
-                    &self.input_commitment,
-                    &claim.point,
-                    transcript,
                 );
-            });
+
+            // Check there are the same number of claims as evaluation proofs
+            assert_eq!(
+                self.evaluation_proofs.len(),
+                claims_grouped_by_common_points.len()
+            );
+
+            // Verify each evaluation proof
+            claims_grouped_by_common_points
+                .iter()
+                .zip(&self.evaluation_proofs)
+                .for_each(|(claim_group, eval_proof)| {
+                    assert!(claim_group
+                        .iter()
+                        .all(|claim| claim.point.len() == input_layer_desc.num_vars));
+                    eval_proof.verify(
+                        input_layer_desc.log_num_cols,
+                        committer,
+                        &self.input_commitment,
+                        &claim_group.iter().map(|claim| &claim.point).collect_vec(),
+                        transcript,
+                    );
+                });
+        } else {
+            // Check there are the same number of claims as evaluation proofs
+            assert_eq!(self.evaluation_proofs.len(), claim_commitments.len());
+
+            claim_commitments
+                .iter()
+                .zip(&self.evaluation_proofs)
+                .for_each(|(claim, eval_proof)| {
+                    assert_eq!(claim.point.len(), input_layer_desc.num_vars);
+                    assert_eq!(claim.evaluation, eval_proof.commitment_to_evaluation);
+                    eval_proof.verify(
+                        input_layer_desc.log_num_cols,
+                        committer,
+                        &self.input_commitment,
+                        &[&claim.point],
+                        transcript,
+                    );
+                })
+        }
     }
+}
+
+/// In this function, we split claims into groups in which the challenges
+/// in indices after `log_n_cols` are challenges shared within each group
+/// of claims.
+///
+/// We do this so that we can factor out the right-hand vector in the
+/// vector * Matrix * vector tensor product for Hyrax PCS Evaluation
+/// proofs, and take the RLC of the left-hand vector.
+fn group_claims_by_common_points_with_dimension<
+    C: PrimeOrderCurve,
+    T: Clone + Serialize + for<'de> Deserialize<'de>,
+>(
+    claims: Vec<HyraxClaim<C::Scalar, T>>,
+    log_n_cols: usize,
+) -> Vec<Vec<HyraxClaim<C::Scalar, T>>> {
+    let mut claim_groups: Vec<Vec<HyraxClaim<C::Scalar, T>>> = Vec::new();
+    for claim in claims.into_iter() {
+        for claim_group in claim_groups.iter_mut() {
+            if !claim_group.is_empty()
+                && claim_group[0].point[log_n_cols..] == claim.point[log_n_cols..]
+            {
+                claim_group.push(claim.clone());
+                break;
+            }
+        }
+        claim_groups.push(vec![claim]);
+    }
+    claim_groups
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -157,7 +245,7 @@ impl From<InputLayerDescription> for HyraxInputLayerDescription {
 }
 
 /// Given a [HyraxInputLayerDescription] and values for its MLE, compute the
-/// [HyraxInputCommitment] for the input layer.
+/// [HyraxProverInputCommitment] for the input layer.
 pub fn commit_to_input_values<C: PrimeOrderCurve>(
     input_layer_desc: &HyraxInputLayerDescription,
     input_mle: &MultilinearExtension<C::Scalar>,
@@ -173,7 +261,6 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
         .for_each(|blinding_factor| {
             *blinding_factor = C::Scalar::random(&mut rng);
         });
-
     let mle_coeffs_vec = MultilinearExtension::new(input_mle.f.iter().collect_vec());
     let commitment_values = HyraxPCSEvaluationProof::compute_matrix_commitments(
         input_layer_desc.log_num_cols,
@@ -190,7 +277,8 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
 
 /// The prover's view of the commitment to the input layer, which includes the
 /// blinding factors and the plaintext values.
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxProverInputCommitment<C: PrimeOrderCurve> {
     /// The plaintext values
     pub mle: MultilinearExtension<C::Scalar>,
@@ -198,4 +286,16 @@ pub struct HyraxProverInputCommitment<C: PrimeOrderCurve> {
     pub commitment: Vec<C>,
     /// The blinding factors used in the commitment
     pub blinding_factors_matrix: Vec<C::Scalar>,
+}
+
+impl<C: PrimeOrderCurve> Zeroizable for HyraxProverInputCommitment<C> {
+    fn zeroize(&mut self) {
+        self.mle.zeroize();
+        for c in &mut self.commitment {
+            c.zeroize();
+        }
+        for bf in &mut self.blinding_factors_matrix {
+            bf.zeroize();
+        }
+    }
 }

@@ -13,8 +13,11 @@ use thiserror::Error;
 pub mod bit_packed_vector;
 
 use bit_packed_vector::BitPackedVector;
+use zeroize::Zeroize;
 
 use crate::utils::arithmetic::i64_to_field;
+
+use anyhow::{anyhow, Result};
 
 #[derive(Error, Debug, Clone)]
 /// the errors associated with the dimension of the MLE.
@@ -31,7 +34,7 @@ pub enum DimensionError {
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
-/// the dimension information of the MLE. contains the dim: [IxDyn], see ndarray
+/// the dimension information of the MLE. contains the dim: [type@IxDyn], see ndarray
 /// for more detailed documentation and the names of the axes.
 pub struct DimInfo {
     dims: IxDyn,
@@ -40,12 +43,12 @@ pub struct DimInfo {
 
 impl DimInfo {
     /// Creates a new DimInfo from the dimensions and the axes names.
-    pub fn new(dims: IxDyn, axes_names: Vec<String>) -> Result<Self, DimensionError> {
+    pub fn new(dims: IxDyn, axes_names: Vec<String>) -> Result<Self> {
         if dims.ndim() != axes_names.len() {
-            return Err(DimensionError::DimensionMismatchError(
+            return Err(anyhow!(DimensionError::DimensionMismatchError(
                 dims.ndim(),
                 axes_names.len(),
-            ));
+            )));
         }
         Ok(Self { dims, axes_names })
     }
@@ -114,6 +117,14 @@ pub struct Evaluations<F: Field> {
     /// need someone to own the "zero" of the field. If I make this a const, I'm
     /// not sure how to initialize it.
     zero: F,
+}
+
+impl<F: Field> Zeroize for Evaluations<F> {
+    fn zeroize(&mut self) {
+        self.evals.zeroize();
+        self.num_vars.zeroize();
+        self.zero.zeroize();
+    }
 }
 
 impl<F: Field> Evaluations<F> {
@@ -192,8 +203,7 @@ impl<F: Field> Evaluations<F> {
     /// If `self` represents a fully-bound boolean function (i.e.
     /// [Self::num_vars] is zero), it returns its value. Otherwise panics.
     pub fn value(&self) -> F {
-        assert_eq!(self.num_vars(), 0);
-        assert!(self.evals.len() <= 1);
+        assert!(self.is_fully_bound());
         self.first()
     }
 
@@ -229,12 +239,11 @@ impl<F: Field> Evaluations<F> {
         evals1
             .iter()
             .zip_longest(evals2.iter())
-            .map(|pair| match pair {
+            .all(|pair| match pair {
                 Both(l, r) => l == r,
                 Left(l) => l == F::ZERO,
                 Right(r) => r == F::ZERO,
             })
-            .all(|x| x)
     }
 
     /// Sorts the elements of `values` by their 0-based index transformed by
@@ -385,6 +394,12 @@ impl<F: Field> Iterator for EvaluationsPairIterator<'_, F> {
 pub struct MultilinearExtension<F: Field> {
     /// The bookkeeping table with the evaluations of `f` on the hypercube.
     pub f: Evaluations<F>,
+}
+
+impl<F: Field> Zeroize for MultilinearExtension<F> {
+    fn zeroize(&mut self) {
+        self.f.zeroize();
+    }
 }
 
 impl<F: Field> From<Vec<bool>> for MultilinearExtension<F> {

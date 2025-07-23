@@ -13,9 +13,11 @@ use remainder_shared_types::config::global_config::{
     global_prover_circuit_description_hash_type, global_verifier_circuit_description_hash_type,
 };
 use remainder_shared_types::config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig};
-use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
 use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
-use remainder_shared_types::{perform_function_under_expected_configs, Field};
+use remainder_shared_types::{
+    perform_function_under_expected_configs, Field, Halo2FFTFriendlyField,
+};
 use serde_json;
 use sha3::Digest;
 use sha3::Sha3_256;
@@ -33,7 +35,7 @@ use super::{prove, GKRCircuitDescription};
 /// ## Arguments
 /// * `circuit_description` - The [GKRCircuitDescription] to be written to file.
 /// * `circuit_description_path` - The filepath to which the JSON description
-///     will be saved.
+///   will be saved.
 pub fn write_circuit_description_to_file<F: Field>(
     circuit_description: &GKRCircuitDescription<F>,
     circuit_description_path: &Path,
@@ -49,9 +51,9 @@ pub fn write_circuit_description_to_file<F: Field>(
 ///
 /// ## Arguments
 /// * `circuit_description` - The circuit description to be hashed and
-///     added to transcript.
+///   added to transcript.
 /// * `circuit_description_hash_type` - The type of hash function to be
-///     used.
+///   used.
 pub fn get_circuit_description_hash_as_field_elems<F: Field>(
     circuit_description: &GKRCircuitDescription<F>,
     circuit_description_hash_type: CircuitHashType,
@@ -105,7 +107,7 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
 
 /// Function which calls [test_circuit_internal] with the appropriate expected
 /// prover/verifier config.
-pub fn test_circuit_with_config<F: Field>(
+pub fn test_circuit_with_config<F: Halo2FFTFriendlyField>(
     circuit_description: &GKRCircuitDescription<F>,
     private_input_layer_description_and_precommits: HashMap<
         LayerId,
@@ -127,7 +129,7 @@ pub fn test_circuit_with_config<F: Field>(
 
 /// Function which calls [test_circuit_internal] with the appropriate expected
 /// prover/verifier config.
-pub fn test_circuit_with_runtime_optimized_config<F: Field>(
+pub fn test_circuit_with_runtime_optimized_config<F: Halo2FFTFriendlyField>(
     circuit_description: &GKRCircuitDescription<F>,
     private_input_layer_description_and_precommits: HashMap<
         LayerId,
@@ -149,7 +151,7 @@ pub fn test_circuit_with_runtime_optimized_config<F: Field>(
 }
 
 /// Function which calls [test_circuit_internal] with a memory-optimized default.
-pub fn test_circuit_with_memory_optimized_config<F: Field>(
+pub fn test_circuit_with_memory_optimized_config<F: Halo2FFTFriendlyField>(
     circuit_description: &GKRCircuitDescription<F>,
     private_input_layer_description_and_precommits: HashMap<
         LayerId,
@@ -172,7 +174,7 @@ pub fn test_circuit_with_memory_optimized_config<F: Field>(
 
 /// Function which instantiates a circuit description with the given inputs
 /// and precommits and both attempts to both prove and verify said circuit.
-fn test_circuit_internal<F: Field>(
+fn test_circuit_internal<F: Halo2FFTFriendlyField>(
     circuit_description: &GKRCircuitDescription<F>,
     private_input_layer_description_and_precommits: HashMap<
         LayerId,

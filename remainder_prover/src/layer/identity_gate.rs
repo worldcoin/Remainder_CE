@@ -1,5 +1,5 @@
-//! Identity gate id(z, x) determines whether the xth gate from the
-//! i + 1th layer contributes to the zth gate in the ith layer.
+//! Identity gate id(z, x) determines whether the xth gate from the i + 1th
+//! layer contributes to the zth gate in the ith layer.
 
 use std::{
     cmp::Ordering,
@@ -9,7 +9,10 @@ use std::{
 
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
-    layer::{LayerError, VerificationError},
+    layer::{
+        gate::gate_helpers::compute_fully_bound_identity_gate_function, LayerError,
+        VerificationError,
+    },
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
@@ -19,7 +22,7 @@ use crate::{
 };
 use itertools::Itertools;
 use remainder_shared_types::{
-    config::global_config::{global_prover_lazy_beta_evals, global_verifier_lazy_beta_evals},
+    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy},
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
@@ -28,14 +31,16 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{
-    gate::{gate_helpers::evaluate_mle_product_no_beta_table, GateError},
+    gate::gate_helpers::{
+        compute_sumcheck_message_data_parallel_identity_gate, evaluate_mle_product_no_beta_table,
+        fold_wiring_into_beta_mle_identity_gate,
+    },
     layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
     Layer, LayerDescription, LayerId, VerifierLayer,
 };
 
-#[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use anyhow::{anyhow, Ok, Result};
 
 /// The circuit Description for an [IdentityGate].
 #[derive(Serialize, Deserialize, Clone, Hash)]
@@ -45,8 +50,8 @@ pub struct IdentityGateLayerDescription<F: Field> {
     id: LayerId,
 
     /// A vector of tuples representing the "nonzero" gates, especially useful
-    /// in the sparse case the format is (z, x) where the gate at label z is
-    /// the output of adding all values from labels x.
+    /// in the sparse case the format is (z, x) where the gate at label z is the
+    /// output of adding all values from labels x.
     wiring: Vec<(u32, u32)>,
 
     /// The source MLE of the expression, i.e. the mle that makes up the "x"
@@ -73,13 +78,14 @@ impl<F: Field> std::fmt::Debug for IdentityGateLayerDescription<F> {
 }
 
 impl<F: Field> IdentityGateLayerDescription<F> {
-    /// Constructor for [IdentityGateLayerDescription].
-    /// Arguments:
+    /// Constructor for [IdentityGateLayerDescription]. Arguments:
     /// * `id`: The layer id associated with this layer.
     /// * `source_mle`: The Mle that is being routed to this layer.
-    /// * `nonzero_gates`: A list of tuples representing the gates that are nonzero, in the form `(dest_idx, src_idx)`.
+    /// * `nonzero_gates`: A list of tuples representing the gates that are
+    ///   nonzero, in the form `(dest_idx, src_idx)`.
     /// * `total_num_vars`: The total number of variables in the layer.
-    /// * `num_dataparallel_vars`: The number of dataparallel variables to use in this layer.
+    /// * `num_dataparallel_vars`: The number of dataparallel variables to use
+    ///   in this layer.
     pub fn new(
         id: LayerId,
         wiring: Vec<(u32, u32)>,
@@ -106,16 +112,37 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
     fn verify_rounds(
         &self,
-        claim: RawClaim<F>,
+        claims: &[&RawClaim<F>],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<VerifierLayerEnum<F>, VerificationError> {
+    ) -> Result<VerifierLayerEnum<F>> {
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
 
-        // Represents `g_{i-1}(x)` of the previous round.
-        // This is initialized to the constant polynomial `g_0(x)` which evaluates
-        // to the claim result for any `x`.
-        let mut g_prev_round = vec![claim.get_eval()];
+        // Random coefficients depending on claim aggregation strategy.
+        let random_coefficients = match global_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
+                assert_eq!(claims.len(), 1);
+                vec![F::ONE]
+            }
+            ClaimAggregationStrategy::RLC => {
+                transcript_reader.get_challenges("RLC Claim Agg Coefficients", claims.len())?
+            }
+        };
+
+        // Represents `g_{i-1}(x)` of the previous round. This is initialized to
+        // the constant polynomial `g_0(x)` which evaluates to the claim result
+        // for any `x`.
+        let mut g_prev_round = match global_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
+                vec![claims[0].get_eval()]
+            }
+            ClaimAggregationStrategy::RLC => vec![random_coefficients
+                .iter()
+                .zip(claims)
+                .fold(F::ZERO, |acc, (rlc_val, claim)| {
+                    acc + *rlc_val * claim.get_eval()
+                })],
+        };
 
         // Previous round's challege: r_{i-1}.
         let mut prev_challenge = F::ZERO;
@@ -124,46 +151,52 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
         // For round 1 <= i <= n, perform the check:
         for _round in 0..num_rounds {
-            // Degree of independent variable is always quadratic!
-            // (regardless of if there's dataparallel or not)
-            // V_i(g_2, g_1) = \sum_{p_2} \sum_{x} \beta(g_2, p_2) f_1(g_1, x) (V_{i + 1}(p_2, x))
+            // Degree of independent variable is always quadratic! (regardless
+            // of if there's dataparallel or not) V_i(g_2, g_1) = \sum_{p_2}
+            // \sum_{x} \beta(g_2, p_2) f_1(g_1, x) (V_{i + 1}(p_2, x))
             let degree = 2;
 
-            let g_cur_round = transcript_reader
-                .consume_elements("Sumcheck message", degree + 1)
-                .map_err(VerificationError::TranscriptError)?;
+            // Read g_i(1), ..., g_i(d+1) from the prover, reserve space to compute g_i(0)
+            let mut g_cur_round: Vec<_> = [Ok(F::from(0))]
+                .into_iter()
+                .chain((0..degree).map(|_| {
+                    transcript_reader.consume_element("Sumcheck round univariate evaluations")
+                }))
+                .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
-            let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
+            let challenge = transcript_reader.get_challenge("Sumcheck round challenge")?;
 
-            // Verify that:
-            //       `g_i(0) + g_i(1) == g_{i - 1}(r_{i-1})`
-            let g_i_zero = evaluate_at_a_point(&g_cur_round, F::ZERO).unwrap();
-            let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
+            // Compute:
+            //       `g_i(0) = g_{i - 1}(r_{i-1}) - g_i(1)`
             let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
-
-            if g_i_zero + g_i_one != g_prev_r_prev {
-                dbg!(_round);
-                return Err(VerificationError::SumcheckFailed);
-            }
+            let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
+            g_cur_round[0] = g_prev_r_prev - g_i_one;
 
             g_prev_round = g_cur_round;
             prev_challenge = challenge;
             challenges.push(challenge);
         }
 
-        // Evalute `g_n(r_n)`.
-        // Note: If there were no nonlinear rounds, this value reduces to
-        // `claim.get_result()` due to how we initialized `g_prev_round`.
+        // Evalute `g_n(r_n)`. Note: If there were no nonlinear rounds, this
+        // value reduces to `claim.get_result()` due to how we initialized
+        // `g_prev_round`.
         let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge)?;
 
         let verifier_id_gate_layer = self
-            .convert_into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
+            .convert_into_verifier_layer(
+                &challenges,
+                &claims.iter().map(|claim| claim.get_point()).collect_vec(),
+                transcript_reader,
+            )
             .unwrap();
-        let final_result = verifier_id_gate_layer.evaluate(&claim);
+        let final_result = verifier_id_gate_layer.evaluate(
+            &claims.iter().map(|claim| claim.get_point()).collect_vec(),
+            &random_coefficients,
+        );
 
         if g_final_r_final != final_result {
-            return Err(VerificationError::FinalSumcheckFailed);
+            return Err(anyhow!(VerificationError::FinalSumcheckFailed));
         }
 
         Ok(VerifierLayerEnum::IdentityGate(verifier_id_gate_layer))
@@ -187,12 +220,12 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
     fn convert_into_verifier_layer(
         &self,
         sumcheck_challenges: &[F],
-        _claim_point: &[F],
+        _claim_points: &[&[F]],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::VerifierLayer, VerificationError> {
+    ) -> Result<Self::VerifierLayer> {
         // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
-        // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED
-        // vars
+        // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR
+        // FREE/INDEXED vars
         let num_u = self
             .source_mle
             .var_indices()
@@ -205,22 +238,23 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             })
             - self.num_dataparallel_vars;
 
-        // We want to separate the challenges into which ones are from the dataparallel vars,
-        // which ones and are for binding x (phase 1)
+        // We want to separate the challenges into which ones are from the
+        // dataparallel vars, which ones and are for binding x (phase 1)
         let mut sumcheck_bindings_vec = sumcheck_challenges.to_vec();
         let first_u_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_vars);
         let dataparallel_sumcheck_challenges = sumcheck_bindings_vec;
 
         assert_eq!(first_u_challenges.len(), num_u);
 
-        // Since the original mles are dataparallel, the challenges are the concat of the copy vars and the variable bound vars.
+        // Since the original mles are dataparallel, the challenges are the
+        // concat of the copy vars and the variable bound vars.
         let src_verifier_mle = self
             .source_mle
             .into_verifier_mle(sumcheck_challenges, transcript_reader)
             .unwrap();
 
-        // Create the resulting verifier layer for claim tracking
-        // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
+        // Create the resulting verifier layer for claim tracking TODO(ryancao):
+        // This is not necessary; we only need to pass back the actual claims
         let verifier_id_gate_layer = VerifierIdentityGateLayer {
             layer_id: self.layer_id(),
             wiring: self.wiring.clone(),
@@ -237,88 +271,42 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
-        claim_challenges: &[F],
+        claim_challenges: &[&[F]],
+        random_coefficients: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
-        // TODO(ryancao): Distinguish between the prover and verifier here
-        let beta_ug = if !global_prover_lazy_beta_evals() {
-            Some((
-                BetaValues::new_beta_equality_mle(
-                    round_challenges[self.num_dataparallel_vars..].to_vec(),
-                ),
-                BetaValues::new_beta_equality_mle(
-                    claim_challenges[self.num_dataparallel_vars..].to_vec(),
-                ),
-            ))
-        } else {
-            None
-        };
+        assert_eq!(claim_challenges.len(), random_coefficients.len());
+        let random_coefficients_scaled_by_beta_bound = claim_challenges
+            .iter()
+            .zip(random_coefficients)
+            .map(|(claim_chals, random_coeff)| {
+                let beta_bound = if self.num_dataparallel_vars > 0 {
+                    let g2_challenges = claim_chals[..self.num_dataparallel_vars].to_vec();
+                    BetaValues::compute_beta_over_two_challenges(
+                        &g2_challenges,
+                        &round_challenges[..self.num_dataparallel_vars],
+                    )
+                } else {
+                    F::ONE
+                };
+                beta_bound * random_coeff
+            })
+            .collect_vec();
 
-        #[cfg(feature = "parallel")]
-        let f_1_uv = self
-            .wiring
-            .par_iter()
-            .fold(
-                || F::ZERO,
-                |acc, (z_ind, x_ind)| {
-                    let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
-                        (
-                            beta_g1.get(*z_ind as usize).unwrap_or(F::ZERO),
-                            beta_u.get(*x_ind as usize).unwrap_or(F::ZERO),
-                        )
-                    } else {
-                        (
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                &claim_challenges[self.num_dataparallel_vars..],
-                                *z_ind as usize,
-                            ),
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                &round_challenges[self.num_dataparallel_vars..],
-                                *x_ind as usize,
-                            ),
-                        )
-                    };
+        let nondataparallel_claim_chals = claim_challenges
+            .iter()
+            .map(|claim_chal| &claim_chal[self.num_dataparallel_vars..])
+            .collect_vec();
 
-                    acc + gz * ux
-                },
-            )
-            .sum::<F>();
-
-        #[cfg(not(feature = "parallel"))]
-        let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
-            let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
-                (
-                    beta_g1.get(*z_ind as usize).unwrap_or(F::ZERO),
-                    beta_u.get(*x_ind as usize).unwrap_or(F::ZERO),
-                )
-            } else {
-                (
-                    BetaValues::compute_beta_over_challenge_and_index(
-                        &claim_challenges[self.num_dataparallel_vars..],
-                        *z_ind as usize,
-                    ),
-                    BetaValues::compute_beta_over_challenge_and_index(
-                        &round_challenges[self.num_dataparallel_vars..],
-                        *x_ind as usize,
-                    ),
-                )
-            };
-
-            acc + gz * ux
-        });
-
-        let beta_bound = if self.num_dataparallel_vars != 0 {
-            let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
-            BetaValues::compute_beta_over_two_challenges(
-                &g2_challenges,
-                &round_challenges[..self.num_dataparallel_vars],
-            )
-        } else {
-            F::ONE
-        };
+        let f_1_gu = compute_fully_bound_identity_gate_function(
+            &round_challenges[self.num_dataparallel_vars..],
+            &nondataparallel_claim_chals,
+            &self.wiring,
+            &random_coefficients_scaled_by_beta_bound,
+        );
 
         PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
             &[self.source_mle.clone()],
-            f_1_uv * beta_bound,
+            f_1_gu,
             round_challenges,
         )])
     }
@@ -388,80 +376,33 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 }
 
 impl<F: Field> VerifierIdentityGateLayer<F> {
-    /// Computes the oracle query's value for a given [IdentityGateVerifierLayer].
-    pub fn evaluate(&self, claim: &RawClaim<F>) -> F {
-        let g2_challenges = claim.get_point()[..self.num_dataparallel_rounds].to_vec();
-        let g1_challenges = claim.get_point()[self.num_dataparallel_rounds..].to_vec();
+    /// Computes the oracle query's value for a given
+    /// [VerifierIdentityGateLayer].
+    pub fn evaluate(&self, claim_points: &[&[F]], random_coefficients: &[F]) -> F {
+        assert_eq!(random_coefficients.len(), claim_points.len());
+        let scaled_random_coeffs = claim_points
+            .iter()
+            .zip(random_coefficients)
+            .map(|(claim, random_coeff)| {
+                let beta_bound = BetaValues::compute_beta_over_two_challenges(
+                    &claim[..self.num_dataparallel_rounds],
+                    &self.dataparallel_sumcheck_challenges,
+                );
+                beta_bound * random_coeff
+            })
+            .collect_vec();
 
-        // TODO(ryancao): Is this function also used by the prover???
-        let beta_ug = if !global_verifier_lazy_beta_evals() {
-            Some((
-                BetaValues::new_beta_equality_mle(self.first_u_challenges.clone()),
-                BetaValues::new_beta_equality_mle(g1_challenges.clone()),
-            ))
-        } else {
-            None
-        };
-
-        #[cfg(feature = "parallel")]
-        let f_1_uv = self
-            .wiring
-            .par_iter()
-            .fold(
-                || F::ZERO,
-                |acc, (z_ind, x_ind)| {
-                    let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
-                        (
-                            beta_g1.f.get(*z_ind as usize).unwrap_or(F::ZERO),
-                            beta_u.f.get(*x_ind as usize).unwrap_or(F::ZERO),
-                        )
-                    } else {
-                        (
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                &g1_challenges,
-                                *z_ind as usize,
-                            ),
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                &self.first_u_challenges,
-                                *x_ind as usize,
-                            ),
-                        )
-                    };
-
-                    acc + gz * ux
-                },
-            )
-            .sum::<F>();
-
-        #[cfg(not(feature = "parallel"))]
-        let f_1_uv = self.wiring.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
-            let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
-                (
-                    beta_g1.f.get(*z_ind as usize).unwrap_or(F::ZERO),
-                    beta_u.f.get(*x_ind as usize).unwrap_or(F::ZERO),
-                )
-            } else {
-                (
-                    BetaValues::compute_beta_over_challenge_and_index(
-                        &g1_challenges,
-                        *z_ind as usize,
-                    ),
-                    BetaValues::compute_beta_over_challenge_and_index(
-                        &self.first_u_challenges,
-                        *x_ind as usize,
-                    ),
-                )
-            };
-
-            acc + gz * ux
-        });
-
-        let beta_bound = BetaValues::compute_beta_over_two_challenges(
-            &g2_challenges,
-            &self.dataparallel_sumcheck_challenges,
+        let f_1_gu = compute_fully_bound_identity_gate_function(
+            &self.first_u_challenges,
+            &claim_points
+                .iter()
+                .map(|claim| &claim[self.num_dataparallel_rounds..])
+                .collect_vec(),
+            &self.wiring,
+            &scaled_random_coeffs,
         );
         // get the fully evaluated "expression"
-        beta_bound * f_1_uv * self.source_mle.value()
+        f_1_gu * self.source_mle.value()
     }
 }
 
@@ -473,8 +414,8 @@ pub struct VerifierIdentityGateLayer<F: Field> {
     layer_id: LayerId,
 
     /// A vector of tuples representing the "nonzero" gates, especially useful
-    /// in the sparse case the format is (z, x) where the gate at label z is
-    /// the output of adding all values from labels x.
+    /// in the sparse case the format is (z, x) where the gate at label z is the
+    /// output of adding all values from labels x.
     wiring: Vec<(u32, u32)>,
 
     /// The source MLE of the expression, i.e. the mle that makes up the "x"
@@ -499,7 +440,7 @@ impl<F: Field> VerifierLayer<F> for VerifierIdentityGateLayer<F> {
         self.layer_id
     }
 
-    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<Claim<F>>> {
         // Grab the claim on the left side.
         let source_vars = self.source_mle.var_indices();
         let source_point = source_vars
@@ -534,15 +475,34 @@ impl<F: Field> VerifierLayer<F> for VerifierIdentityGateLayer<F> {
 impl<F: Field> Layer<F> for IdentityGate<F> {
     fn prove(
         &mut self,
-        claim: RawClaim<F>,
+        claims: &[&RawClaim<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<(), LayerError> {
-        self.initialize(claim.get_point())?;
-        (0..self.source_mle.num_free_vars()).for_each(|round_idx| {
-            let sumcheck_message = self.compute_round_sumcheck_message(round_idx).unwrap();
-            transcript_writer.append_elements("Round sumcheck message", &sumcheck_message);
-            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-            self.bind_round_variable(round_idx, challenge).unwrap();
+    ) -> Result<()> {
+        let random_coefficients = match global_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => {
+                assert_eq!(claims.len(), 1);
+                self.initialize(claims[0].get_point())?;
+                vec![F::ONE]
+            }
+            ClaimAggregationStrategy::RLC => {
+                let random_coefficients =
+                    transcript_writer.get_challenges("RLC Claim Agg Coefficients", claims.len());
+                self.initialize_rlc(&random_coefficients, claims);
+                random_coefficients
+            }
+        };
+        let sumcheck_indices = self.sumcheck_round_indices();
+        (sumcheck_indices.iter()).for_each(|round_idx| {
+            let sumcheck_message = self
+                .compute_round_sumcheck_message(*round_idx, &random_coefficients)
+                .unwrap();
+            // Since the verifier can deduce g_i(0) by computing claim - g_i(1), the prover does not send g_i(0)
+            transcript_writer.append_elements(
+                "Sumcheck round univariate evaluations",
+                &sumcheck_message[1..],
+            );
+            let challenge = transcript_writer.get_challenge("Sumcheck round challenge");
+            self.bind_round_variable(*round_idx, challenge).unwrap();
         });
         self.append_leaf_mles_to_transcript(transcript_writer);
         Ok(())
@@ -552,42 +512,138 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         self.layer_id
     }
 
-    fn initialize(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
-        let (g2_challenges, g1_challenges) = claim_point.split_at(self.num_dataparallel_vars);
-        self.set_g1_challenges(g1_challenges.to_vec());
-        self.set_g2_challenges(g2_challenges.to_vec());
+    fn initialize(&mut self, claim_point: &[F]) -> Result<()> {
+        self.challenges_vec = Some(vec![claim_point.to_vec()]);
+        let g2_challenges = &claim_point[..self.num_dataparallel_vars];
+        let g1_challenges = &claim_point[self.num_dataparallel_vars..];
+        self.g1_challenges_vec = Some(vec![g1_challenges.to_vec()]);
 
         if self.num_dataparallel_vars > 0 {
-            let beta_g2 = BetaValues::new(
-                self.g2_challenges
-                    .as_ref()
-                    .unwrap()
-                    .clone()
-                    .into_iter()
-                    .enumerate()
-                    .collect(),
-            );
-            self.set_beta_g2(beta_g2);
-            self.init_dataparallel_phase(self.g1_challenges.as_ref().unwrap().clone());
+            let beta_g2 = BetaValues::new(g2_challenges.iter().copied().enumerate().collect());
+            self.beta_g2_vec = Some(vec![beta_g2]);
         }
 
         self.source_mle.index_mle_indices(0);
         Ok(())
     }
 
-    fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError> {
+    fn initialize_rlc(&mut self, random_coefficients: &[F], claims: &[&RawClaim<F>]) {
+        assert_eq!(random_coefficients.len(), claims.len());
+
+        // Split all of the claimed challenges into whether they are claimed
+        // challenges on the dataparallel variables or not.
+        self.challenges_vec = Some(
+            claims
+                .iter()
+                .map(|claim| claim.get_point().to_vec())
+                .collect_vec(),
+        );
+        let (g2_challenges_vec, g1_challenges_vec): (Vec<&[F]>, Vec<&[F]>) = claims
+            .iter()
+            .map(|claim| claim.get_point().split_at(self.num_dataparallel_vars))
+            .unzip();
+        self.g1_challenges_vec = Some(
+            g1_challenges_vec
+                .into_iter()
+                .map(|challenges| challenges.to_vec())
+                .collect_vec(),
+        );
+
+        if self.num_dataparallel_vars > 0 {
+            let beta_g2_vec = g2_challenges_vec
+                .iter()
+                .map(|g2_challenges| {
+                    BetaValues::new(g2_challenges.iter().copied().enumerate().collect())
+                })
+                .collect();
+            self.beta_g2_vec = Some(beta_g2_vec);
+        }
+        self.source_mle.index_mle_indices(0);
+    }
+
+    fn compute_round_sumcheck_message(
+        &mut self,
+        round_index: usize,
+        random_coefficients: &[F],
+    ) -> Result<Vec<F>> {
         match round_index.cmp(&self.num_dataparallel_vars) {
             // Dataparallel phase.
             Ordering::Less => {
-                let sumcheck_message = self
-                    .compute_sumcheck_message_data_parallel_identity_gate_beta_cascade(round_index)
-                    .unwrap();
+                let sumcheck_message = compute_sumcheck_message_data_parallel_identity_gate(
+                    &self.source_mle,
+                    &self.wiring,
+                    self.num_dataparallel_vars - round_index,
+                    &self
+                        .challenges_vec
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .map(|claim| &claim[round_index..])
+                        .collect_vec(),
+                    &self
+                        .beta_g2_vec
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .zip(random_coefficients)
+                        .map(|(beta_values, random_coeff)| {
+                            *random_coeff * beta_values.fold_updated_values()
+                        })
+                        .collect_vec(),
+                )
+                .unwrap();
                 Ok(sumcheck_message)
             }
+            _ => {
+                if round_index == self.num_dataparallel_vars {
+                    match global_claim_agg_strategy() {
+                        ClaimAggregationStrategy::Interpolative => {
+                            // We compute the singular fully bound value for the beta MLE over
+                            // the dataparallel challenges.
+                            let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
+                                self.beta_g2_vec.as_ref().unwrap()[0].fold_updated_values()
+                            } else {
+                                F::ONE
+                            };
 
-            // Initialize phase 1.
-            Ordering::Equal => {
-                self.init_phase_1(self.g1_challenges.as_ref().unwrap().clone());
+                            self.init_phase_1(
+                                &self.g1_challenges_vec.as_ref().unwrap()[0].clone(),
+                                beta_g2_fully_bound,
+                            );
+                        }
+                        ClaimAggregationStrategy::RLC => {
+                            // We compute the beta MLE fully bound over all the claims rather
+                            // than the aggregated claim.
+                            let random_coefficients = if self.num_dataparallel_vars > 0 {
+                                random_coefficients
+                                    .iter()
+                                    .zip(self.beta_g2_vec.as_ref().unwrap())
+                                    .map(|(random_coeff, beta_values)| {
+                                        if self.num_dataparallel_vars > 0 {
+                                            beta_values.fold_updated_values() * random_coeff
+                                        } else {
+                                            F::ONE * random_coeff
+                                        }
+                                    })
+                                    .collect_vec()
+                            } else {
+                                random_coefficients.to_vec()
+                            };
+
+                            self.init_phase_1_rlc(
+                                &self
+                                    .g1_challenges_vec
+                                    .as_ref()
+                                    .unwrap()
+                                    .clone()
+                                    .iter()
+                                    .map(|challenge| challenge.as_slice())
+                                    .collect_vec(),
+                                &random_coefficients,
+                            );
+                        }
+                    }
+                }
 
                 let mles: Vec<&DenseMle<F>> =
                     vec![&self.a_hg_mle_phase_1.as_ref().unwrap(), &self.source_mle];
@@ -596,77 +652,31 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                     .map(|mle| mle.mle_indices().contains(&MleIndex::Indexed(round_index)))
                     .reduce(|acc, item| acc | item)
                     .unwrap();
-                let unscaled_sumcheck_evals =
+                let sumcheck_evals =
                     evaluate_mle_product_no_beta_table(&mles, independent_variable, mles.len())
                         .unwrap();
-
-                let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
-                    self.beta_g2
-                        .as_ref()
-                        .unwrap()
-                        .updated_values
-                        .values()
-                        .fold(F::ONE, |acc, val| acc * *val)
-                } else {
-                    F::ONE
-                };
-
-                let first_round_sumcheck_evals = unscaled_sumcheck_evals
-                    .0
-                    .iter()
-                    .map(|unscaled_eval| *unscaled_eval * beta_g2_fully_bound)
-                    .collect();
-                Ok(first_round_sumcheck_evals)
-            }
-
-            // Phase 1.
-            Ordering::Greater => {
-                let mles: Vec<&DenseMle<F>> =
-                    vec![&self.a_hg_mle_phase_1.as_ref().unwrap(), &self.source_mle];
-                let independent_variable = mles
-                    .iter()
-                    .map(|mle| mle.mle_indices().contains(&MleIndex::Indexed(round_index)))
-                    .reduce(|acc, item| acc | item)
-                    .unwrap();
-                let unscaled_sumcheck_evals =
-                    evaluate_mle_product_no_beta_table(&mles, independent_variable, mles.len())
-                        .unwrap();
-
-                let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
-                    self.beta_g2
-                        .as_ref()
-                        .unwrap()
-                        .updated_values
-                        .values()
-                        .fold(F::ONE, |acc, val| acc * *val)
-                } else {
-                    F::ONE
-                };
-                let sumcheck_evals = unscaled_sumcheck_evals
-                    .0
-                    .iter()
-                    .map(|unscaled_eval| *unscaled_eval * beta_g2_fully_bound)
-                    .collect();
-                Ok(sumcheck_evals)
+                Ok(sumcheck_evals.0)
             }
         }
     }
 
-    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
+    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<()> {
         if round_index < self.num_dataparallel_vars {
-            self.beta_g2
+            self.beta_g2_vec
                 .as_mut()
                 .unwrap()
-                .beta_update(round_index, challenge);
-            self.dataparallel_af2_mle
-                .as_mut()
-                .unwrap()
-                .fix_variable(round_index, challenge);
+                .iter_mut()
+                .for_each(|beta| {
+                    beta.beta_update(round_index, challenge);
+                });
             self.source_mle.fix_variable(round_index, challenge);
+
             Ok(())
         } else {
             if self.num_dataparallel_vars > 0 {
-                assert!(self.beta_g2.as_ref().unwrap().unbound_values.is_empty());
+                self.beta_g2_vec.as_ref().unwrap().iter().for_each(|beta| {
+                    assert!(beta.is_fully_bounded());
+                })
             }
             let a_hg_mle = self.a_hg_mle_phase_1.as_mut().unwrap();
 
@@ -688,95 +698,46 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
-        claim_challenges: &[F],
+        claim_challenges: &[&[F]],
+        random_coefficients: &[F],
     ) -> PostSumcheckLayer<F, F> {
-        // TODO(ryancao): Distinguish between prover and verifier here
-        let beta_ug = if !global_prover_lazy_beta_evals() {
-            Some((
-                BetaValues::new_beta_equality_mle(
-                    round_challenges[self.num_dataparallel_vars..].to_vec(),
-                ),
-                BetaValues::new_beta_equality_mle(
-                    claim_challenges[self.num_dataparallel_vars..].to_vec(),
-                ),
-            ))
-        } else {
-            None
-        };
-
-        #[cfg(feature = "parallel")]
-        let f_1_uv = self
-            .nonzero_gates
-            .par_iter()
-            .fold(
-                || F::ZERO,
-                |acc, (z_ind, x_ind)| {
-                    let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
-                        (
-                            beta_g1.f.get(*z_ind as usize).unwrap_or(F::ZERO),
-                            beta_u.f.get(*x_ind as usize).unwrap_or(F::ZERO),
-                        )
-                    } else {
-                        (
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                &claim_challenges[self.num_dataparallel_vars..],
-                                *z_ind as usize,
-                            ),
-                            BetaValues::compute_beta_over_challenge_and_index(
-                                &round_challenges[self.num_dataparallel_vars..],
-                                *x_ind as usize,
-                            ),
-                        )
-                    };
-
-                    acc + gz * ux
-                },
-            )
-            .sum::<F>();
-
-        #[cfg(not(feature = "parallel"))]
-        let f_1_uv = self
-            .nonzero_gates
+        assert_eq!(claim_challenges.len(), random_coefficients.len());
+        let random_coefficients_scaled_by_beta_bound = claim_challenges
             .iter()
-            .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                let (gz, ux) = if let Some((beta_u, beta_g1)) = &beta_ug {
-                    (
-                        beta_g1.f.get(*z_ind as usize).unwrap_or(F::ZERO),
-                        beta_u.f.get(*x_ind as usize).unwrap_or(F::ZERO),
+            .zip(random_coefficients)
+            .map(|(claim_chals, random_coeff)| {
+                let beta_bound = if self.num_dataparallel_vars > 0 {
+                    let g2_challenges = claim_chals[..self.num_dataparallel_vars].to_vec();
+                    BetaValues::compute_beta_over_two_challenges(
+                        &g2_challenges,
+                        &round_challenges[..self.num_dataparallel_vars],
                     )
                 } else {
-                    (
-                        BetaValues::compute_beta_over_challenge_and_index(
-                            &claim_challenges[self.num_dataparallel_vars..],
-                            *z_ind as usize,
-                        ),
-                        BetaValues::compute_beta_over_challenge_and_index(
-                            &round_challenges[self.num_dataparallel_vars..],
-                            *x_ind as usize,
-                        ),
-                    )
+                    F::ONE
                 };
+                beta_bound * random_coeff
+            })
+            .collect_vec();
 
-                acc + gz * ux
-            });
+        let nondataparallel_claim_chals = claim_challenges
+            .iter()
+            .map(|claim_chal| &claim_chal[self.num_dataparallel_vars..])
+            .collect_vec();
 
-        let beta_bound = if self.num_dataparallel_vars != 0 {
-            let g2_challenges = claim_challenges[..self.num_dataparallel_vars].to_vec();
-            BetaValues::compute_beta_over_two_challenges(
-                &g2_challenges,
-                &round_challenges[..self.num_dataparallel_vars],
-            )
-        } else {
-            F::ONE
-        };
+        let f_1_gu = compute_fully_bound_identity_gate_function(
+            &round_challenges[self.num_dataparallel_vars..],
+            &nondataparallel_claim_chals,
+            &self.wiring,
+            &random_coefficients_scaled_by_beta_bound,
+        );
 
         PostSumcheckLayer(vec![Product::<F, F>::new(
             &[self.source_mle.clone()],
-            f_1_uv * beta_bound,
+            f_1_gu,
         )])
     }
 
-    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<Claim<F>>> {
         let mut claims = vec![];
         let mut fixed_mle_indices_u: Vec<F> = vec![];
 
@@ -800,172 +761,98 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
     }
 }
 
-/// identity gate struct
-/// wiring is used to be able to select specific elements from an MLE
-/// (equivalent to an add gate with a zero mle ref)
+/// The Identity Gate struct allows being able to select specific indices
+/// from the `source_mle` that are not necessarily regular.
 #[derive(Error, Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: Field")]
 pub struct IdentityGate<F: Field> {
-    /// layer id that this gate is found
-    pub layer_id: LayerId,
-    /// we only need a single incoming gate and a single outgoing gate so this is a
-    /// tuple of 2 integers representing which label maps to which
-    /// Tuples are of form `(dest_idx, src_idx)`.
-    pub nonzero_gates: Vec<(u32, u32)>,
-    /// the mle ref in question from which we are selecting specific indices
-    pub source_mle: DenseMle<F>,
-    /// the beta table which enumerates the incoming claim's challenge points on the MLE
-    beta_g1: Option<MultilinearExtension<F>>,
-    /// The [BetaValues] struct which enumerates the incoming claim's challenge points on the
-    /// dataparallel vars of the MLE
-    beta_g2: Option<BetaValues<F>>,
-    /// The MLE initialized in the dataparallel phase which contains the nonzero gate
-    /// evaluations folded into a size 2^(num_dataparallel_bits) bookkeeping table.
-    dataparallel_af2_mle: Option<DenseMle<F>>,
-    /// The challenges pertaining to the `x` variables, which are the non-dataparallel
-    /// variables in the source MLE.
-    g1_challenges: Option<Vec<F>>,
-    /// The challenges pertaining to the dataparallel variables in the source MLE.
-    g2_challenges: Option<Vec<F>>,
-    /// The MLE initialized in phase 1, which contains the beta values over `g1_challenges`
-    /// folded into the wiring function.
+    /// Layer ID for this gate.
+    layer_id: LayerId,
+    /// Wiring tuples are of the form `(dest_idx, src_idx)`, which specifies
+    /// that we would like the value in the `src_idx` of the `source_mle` to
+    /// be copied into `dest_idx` of the output MLE.
+    wiring: Vec<(u32, u32)>,
+    /// The MLE from which we are selecting the indices.
+    source_mle: DenseMle<F>,
+    /// The [BetaValues] struct which enumerates the incoming claim's challenge
+    /// points on the dataparallel vars of the MLE.
+    beta_g2_vec: Option<Vec<BetaValues<F>>>,
+    /// The nondataparallel claim points in the layer.
+    g1_challenges_vec: Option<Vec<Vec<F>>>,
+    /// The claim points in the layer (both nondataparallel and dataparallel)
+    /// challenges.
+    challenges_vec: Option<Vec<Vec<F>>>,
+    /// The MLE initialized in phase 1, which contains the beta values over
+    /// `g1_challenges` folded into the wiring function.
     a_hg_mle_phase_1: Option<DenseMle<F>>,
     /// The total number of variables in the layer.
-    pub total_num_vars: usize,
-    /// The number of vars representing the number of "dataparallel" copies of the circuit.
-    pub num_dataparallel_vars: usize,
+    total_num_vars: usize,
+    /// The number of vars representing the number of "dataparallel" copies of
+    /// the circuit.
+    num_dataparallel_vars: usize,
 }
 
 impl<F: Field> IdentityGate<F> {
     /// Create a new [IdentityGate] struct.
     pub fn new(
         layer_id: LayerId,
-        nonzero_gates: Vec<(u32, u32)>,
+        wiring: Vec<(u32, u32)>,
         mle: DenseMle<F>,
         total_num_vars: usize,
         num_dataparallel_vars: usize,
     ) -> IdentityGate<F> {
         IdentityGate {
             layer_id,
-            nonzero_gates,
+            wiring,
             source_mle: mle,
-            beta_g1: None,
-            beta_g2: None,
-            dataparallel_af2_mle: None,
+            beta_g2_vec: None,
             a_hg_mle_phase_1: None,
             total_num_vars,
             num_dataparallel_vars,
-            g1_challenges: None,
-            g2_challenges: None,
+            g1_challenges_vec: None,
+            challenges_vec: None,
         }
-    }
-
-    fn set_beta_g1(&mut self, beta_g1: MultilinearExtension<F>) {
-        self.beta_g1 = Some(beta_g1);
-    }
-
-    fn set_beta_g2(&mut self, beta_g2: BetaValues<F>) {
-        self.beta_g2 = Some(beta_g2);
-    }
-
-    fn set_g1_challenges(&mut self, g1: Vec<F>) {
-        self.g1_challenges = Some(g1);
-    }
-
-    fn set_g2_challenges(&mut self, g2: Vec<F>) {
-        self.g2_challenges = Some(g2);
     }
 
     fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
-        assert_eq!(self.source_mle.len(), 1);
-        transcript_writer.append("Fully bound source MLE", self.source_mle.first());
+        assert!(self.source_mle.is_fully_bounded());
+        transcript_writer.append("Fully bound MLE evaluation", self.source_mle.first());
     }
 
-    fn init_dataparallel_phase(&mut self, g1_challenges: Vec<F>) {
-        let beta_getter: Box<dyn Fn(usize) -> F> = if !global_prover_lazy_beta_evals() {
-            let beta_g1 = BetaValues::new_beta_equality_mle(g1_challenges);
-            Box::new(move |idx| beta_g1.get(idx).unwrap_or(F::ZERO))
-        } else {
-            Box::new(|idx| BetaValues::compute_beta_over_challenge_and_index(&g1_challenges, idx))
-        };
-        let num_dataparallel_copies = 1 << self.num_dataparallel_vars;
-        let num_nondataparallel_coeffs =
-            1 << (self.source_mle.num_free_vars() - self.num_dataparallel_vars);
-        let mut a_f2 = vec![F::ZERO; 1 << (self.num_dataparallel_vars)];
-        (0..num_dataparallel_copies).for_each(|idx| {
-            let mut adder_f2 = F::ZERO;
-            self.nonzero_gates.iter().for_each(|(z, x)| {
-                let gz = beta_getter(*z as usize);
-                let f2_val = self
-                    .source_mle
-                    .mle
-                    .get((*x as usize) + (idx * num_nondataparallel_coeffs))
-                    .unwrap_or(F::ZERO);
-
-                adder_f2 += gz * f2_val;
-            });
-            a_f2[idx] += adder_f2;
-        });
-
-        let mut af2_mle = DenseMle::new_from_raw(a_f2, self.layer_id());
-        af2_mle.index_mle_indices(0);
-        self.dataparallel_af2_mle = Some(af2_mle);
-    }
-
-    /// initialize necessary bookkeeping tables by traversing the nonzero gates
-    pub fn init_phase_1(&mut self, challenge: Vec<F>) {
-        if !global_prover_lazy_beta_evals() {
-            let beta_g1 = BetaValues::new_beta_equality_mle(challenge.clone());
-            self.set_beta_g1(beta_g1);
-        }
-
-        let num_vars = self.source_mle.num_free_vars();
-
-        let mut a_hg_mle_vec = vec![F::ZERO; 1 << num_vars];
-
-        self.nonzero_gates.iter().for_each(|(z_ind, x_ind)| {
-            let beta_g_at_z = if global_prover_lazy_beta_evals() {
-                BetaValues::compute_beta_over_challenge_and_index(&challenge, *z_ind as usize)
-            } else {
-                self.beta_g1
-                    .as_ref()
-                    .unwrap()
-                    .get(*z_ind as usize)
-                    .unwrap_or(F::ZERO)
-            };
-
-            a_hg_mle_vec[*x_ind as usize] += beta_g_at_z;
-        });
-
+    /// Initialize the bookkeeping table necessary for phase 1, which is the
+    /// binding of the non-dataparallel variables in the source MLE. This is the
+    /// initialization function used when we are doing interpolative claim
+    /// aggregation.
+    ///
+    /// For the random coefficients, we simply use the fully bound value of
+    /// beta_g2 since this is the value that scales all of the sumcheck
+    /// evaluations.
+    fn init_phase_1(&mut self, challenge: &[F], fully_bound_beta_g2: F) {
+        let a_hg_mle_vec = fold_wiring_into_beta_mle_identity_gate(
+            &self.wiring,
+            &[challenge],
+            self.source_mle.num_free_vars(),
+            &[fully_bound_beta_g2],
+        );
         let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
         a_hg_mle.index_mle_indices(self.num_dataparallel_vars);
 
         self.a_hg_mle_phase_1 = Some(a_hg_mle);
     }
 
-    /// Get the evals for an identity gate. Note that this specifically
-    /// refers to computing the prover message while binding the dataparallel bits of a `Gate`
-    /// expression.
-    fn compute_sumcheck_message_data_parallel_identity_gate_beta_cascade(
-        &self,
-        round_index: usize,
-    ) -> Result<Vec<F>, GateError> {
-        // When we have an identity gate, we have to multiply the beta table over the dataparallel challenges
-        // with the function on the x variables.
-        let degree = 2;
-        let a_f2_x = self.dataparallel_af2_mle.as_ref().unwrap();
-        let beta_values = self.beta_g2.as_ref().unwrap();
-        let (unbound_beta_values, bound_beta_values) =
-            beta_values.get_relevant_beta_unbound_and_bound(a_f2_x.mle_indices());
-        let evals = beta_cascade(
-            &[a_f2_x],
-            degree,
-            round_index,
-            &unbound_beta_values,
-            &bound_beta_values,
-        )
-        .0;
-
-        Ok(evals)
+    /// Initialize the bookkeeping table necessary for phase 1, which is the
+    /// binding of the non-dataparallel variables in the source MLE. This is the
+    /// initialization function used when we are doing RLC claim
+    /// aggregation.
+    fn init_phase_1_rlc(&mut self, challenges: &[&[F]], random_coefficients: &[F]) {
+        let a_hg_mle_vec = fold_wiring_into_beta_mle_identity_gate(
+            &self.wiring,
+            challenges,
+            self.source_mle.num_free_vars(),
+            random_coefficients,
+        );
+        let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
+        a_hg_mle.index_mle_indices(self.num_dataparallel_vars);
+        self.a_hg_mle_phase_1 = Some(a_hg_mle);
     }
 }

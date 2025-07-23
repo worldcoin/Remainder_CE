@@ -5,7 +5,7 @@ use std::cmp::max;
 use ark_std::{cfg_into_iter, end_timer, start_timer};
 use remainder_shared_types::{
     config::global_config::global_prover_claim_agg_constant_column_optimization,
-    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
+    transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
 use tracing::{debug, info};
@@ -16,11 +16,12 @@ use crate::{
         combine_mles_with_aggregate, get_indexed_layer_mles_to_combine, pre_fix_mles,
     },
     mle::dense::DenseMle,
-    prover::GKRError,
     sumcheck::evaluate_at_a_point,
 };
 
-use super::{claim_group::ClaimGroup, ClaimError};
+use super::claim_group::ClaimGroup;
+
+use anyhow::{Ok, Result};
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -43,7 +44,7 @@ pub fn prover_aggregate_claims<F: Field>(
     claims: &[Claim<F>],
     output_mles_from_layer: Vec<DenseMle<F>>,
     transcript_writer: &mut impl ProverTranscript<F>,
-) -> Result<RawClaim<F>, GKRError> {
+) -> Result<RawClaim<F>> {
     let num_claims = claims.len();
     debug_assert!(num_claims > 0);
     info!("High-level claim aggregation on {num_claims} claims.");
@@ -65,7 +66,7 @@ pub fn prover_aggregate_claims<F: Field>(
     let intermediate_claims = claim_groups
         .into_iter()
         .map(|claim_group| claim_group.prover_aggregate(&fixed_output_mles, transcript_writer))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     end_timer!(intermediate_timer);
     let final_timer = start_timer!(|| "Final stage aggregation.".to_string());
@@ -83,10 +84,10 @@ pub fn prover_aggregate_claims<F: Field>(
 /// Returns an upper bound on the number of evaluations needed to represent the
 /// polynomial `P(x) = W(l(x))` where `W : F^n -> F` is a multilinear polynomial
 /// on `n` variables and `l : F -> F^n` is such that:
-///  * `l(0) = claim_vecs[0]`,
-///  *  `l(1) = `claim_vecs[1]`,
+///  * `l(0) = claim_vecs\[0\]`,
+///  *  `l(1) = `claim_vecs\[1\]`,
 ///  *   ...,
-///  *  `l(m-1) = `claim_vecs[m-1]`.
+///  *  `l(m-1) = `claim_vecs\[m-1\]`.
 ///
 /// It is guaranteed that the returned value is at least `num_claims =
 /// claim_vecs.len()`.
@@ -146,7 +147,7 @@ pub fn get_wlx_evaluations<F: Field>(
     claim_mles: Vec<DenseMle<F>>,
     num_claims: usize,
     num_idx: usize,
-) -> Result<Vec<F>, ClaimError> {
+) -> Result<Vec<F>> {
     // get the number of evaluations
 
     let (num_evals, common_idx) = if global_prover_claim_agg_constant_column_optimization() {
@@ -199,7 +200,7 @@ pub fn get_wlx_evaluations<F: Field>(
 pub fn verifier_aggregate_claims<F: Field>(
     claims: &[Claim<F>],
     transcript_reader: &mut impl VerifierTranscript<F>,
-) -> Result<RawClaim<F>, TranscriptReaderError> {
+) -> Result<RawClaim<F>> {
     let num_claims = claims.len();
     debug_assert!(num_claims > 0);
     info!("High-level claim aggregation on {num_claims} claims.");
@@ -222,7 +223,7 @@ pub fn verifier_aggregate_claims<F: Field>(
     let intermediate_claims = claim_groups
         .into_iter()
         .map(|claim_group| claim_group.verifier_aggregate(transcript_reader))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     end_timer!(intermediate_timer);
     let final_timer = start_timer!(|| "Final stage aggregation.".to_string());

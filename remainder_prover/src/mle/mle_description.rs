@@ -7,6 +7,8 @@ use crate::{
 
 use super::{dense::DenseMle, verifier_mle::VerifierMle, MleIndex};
 
+use anyhow::{anyhow, Result};
+
 /// A metadata-only version of [crate::mle::dense::DenseMle] used in the Circuit
 /// Descrption.  A [MleDescription] is stored in the leaves of an `Expression<F,
 /// ExprDescription>` tree.
@@ -36,7 +38,7 @@ impl<F: Field> MleDescription<F> {
         self.var_indices = new_mle_indices;
     }
 
-    /// Convert [MleIndex::Free] into [MleIndex::IndexedBit] with the correct
+    /// Convert [MleIndex::Free] into [MleIndex::Indexed] with the correct
     /// index labeling, given by start_index parameter.
     pub fn index_mle_indices(&mut self, start_index: usize) {
         let mut index_counter = start_index;
@@ -123,20 +125,18 @@ impl<F: Field> MleDescription<F> {
         &self,
         point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<VerifierMle<F>, ExpressionError> {
+    ) -> Result<VerifierMle<F>> {
         let verifier_indices = self
             .var_indices
             .iter()
             .map(|mle_index| match mle_index {
                 MleIndex::Indexed(idx) => Ok(MleIndex::Bound(point[*idx], *idx)),
                 MleIndex::Fixed(val) => Ok(MleIndex::Fixed(*val)),
-                _ => Err(ExpressionError::SelectorBitNotBoundError),
+                _ => Err(anyhow!(ExpressionError::SelectorBitNotBoundError)),
             })
-            .collect::<Result<Vec<MleIndex<F>>, ExpressionError>>()?;
+            .collect::<Result<Vec<MleIndex<F>>>>()?;
 
-        let eval = transcript_reader
-            .consume_element("MLE evaluation")
-            .map_err(ExpressionError::TranscriptError)?;
+        let eval = transcript_reader.consume_element("Fully bound MLE evaluation")?;
 
         Ok(VerifierMle::new(self.layer_id, verifier_indices, eval))
     }

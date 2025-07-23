@@ -1,4 +1,5 @@
 use crate::Field;
+use itertools::Itertools;
 
 /// Initializes with every iterated combination of the (binary)
 /// variables in `challenge_coord`.
@@ -40,4 +41,25 @@ pub fn initialize_tensor<F: Field>(challenge_coord: &[F]) -> Vec<F> {
         }
     }
     cur_table
+}
+
+/// Similar to [initialize_tensor], but takes the RLC of tensors over
+/// a vector of challenge coordinates given the random coefficients.
+pub fn initialize_tensor_rlc<F: Field>(challenge_coord_vec: &[&[F]], random_coeff: &[F]) -> Vec<F> {
+    challenge_coord_vec
+        .iter()
+        .skip(1)
+        .zip(random_coeff.iter().skip(1))
+        .fold(
+            initialize_tensor(challenge_coord_vec[0])
+                .iter()
+                .map(|elem| *elem * random_coeff[0])
+                .collect_vec(),
+            |acc, (elem, random_coeff)| {
+                acc.iter()
+                    .zip(initialize_tensor(elem).iter())
+                    .map(|(acc_elem, next_elem)| *acc_elem + (*next_elem * random_coeff))
+                    .collect_vec()
+            },
+        )
 }

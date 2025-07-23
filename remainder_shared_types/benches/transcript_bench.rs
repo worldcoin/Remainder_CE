@@ -15,7 +15,7 @@ use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::transcript::ec_transcript::ECTranscript;
 use remainder_shared_types::{
     transcript::{
-        ec_transcript::ECTranscriptTrait, poseidon_transcript::PoseidonSponge, ProverTranscript,
+        ec_transcript::ECTranscriptTrait, poseidon_sponge::PoseidonSponge, ProverTranscript,
         TranscriptWriter,
     },
     Field,
