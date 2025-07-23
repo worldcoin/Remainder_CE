@@ -50,10 +50,7 @@ use itertools::{repeat_n, Itertools};
 use thiserror::Error;
 
 use crate::{
-    expression::{
-        generic_expr::Expression,
-        prover_expr::ProverExpr,
-    },
+    expression::{generic_expr::Expression, prover_expr::ProverExpr},
     mle::{Mle, MleIndex},
 };
 #[cfg(feature = "parallel")]
