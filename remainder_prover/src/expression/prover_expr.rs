@@ -13,18 +13,15 @@ use super::{
     verifier_expr::VerifierExpr,
 };
 use crate::{
+    layer::product::PostSumcheckLayer,
+    mle::{verifier_mle::VerifierMle, Mle},
+};
+use crate::{
     mle::{
         betavalues::BetaValues, dense::DenseMle, mle_bookkeeping_table::MleBookkeepingTables,
         mle_combination::MleCombinationSeq, MleIndex,
     },
-    sumcheck::{
-        apply_updated_beta_values_to_evals,
-        SumcheckEvals,
-    },
-};
-use crate::{
-    layer::product::PostSumcheckLayer,
-    mle::{verifier_mle::VerifierMle, Mle},
+    sumcheck::{apply_updated_beta_values_to_evals, SumcheckEvals},
 };
 use itertools::Itertools;
 use remainder_shared_types::Field;
@@ -679,7 +676,10 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     }
 
     /// a recursive helper to obtain the degree of every variable
-    pub fn get_degree_list(&self, mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> Vec<usize> {
+    pub fn get_degree_list(
+        &self,
+        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+    ) -> Vec<usize> {
         // degree of each index
         let mut degree_per_index = Vec::new();
         // set the degree of the corresponding index to max(OLD_DEGREE, NEW_DEGREE)

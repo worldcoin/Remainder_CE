@@ -3,10 +3,7 @@
 //! other layers. See documentation in [crate::expression] for more details.
 
 use crate::{
-    layer::{
-        gate::BinaryOperation,
-        product::PostSumcheckLayer,
-    },
+    layer::{gate::BinaryOperation, product::PostSumcheckLayer},
     layouter::layouting::CircuitMap,
     mle::{evals::MultilinearExtension, mle_description::MleDescription, MleIndex},
 };

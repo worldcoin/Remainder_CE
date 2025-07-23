@@ -20,9 +20,7 @@
 
 use crate::mle::{verifier_mle::VerifierMle, MleIndex};
 use serde::{Deserialize, Serialize};
-use std::{
-    cmp::max, fmt::Debug
-};
+use std::{cmp::max, fmt::Debug};
 
 use remainder_shared_types::Field;
 
@@ -87,8 +85,7 @@ impl<F: Field> Expression<F, VerifierExpr> {
     /// rounds. Returns a sorted vector of indices.
     pub fn get_all_nonlinear_rounds(&mut self) -> Vec<usize> {
         let (expression_node, mle_vec) = self.deconstruct_mut();
-        let mut nonlinear_rounds: Vec<usize> =
-            expression_node.get_all_nonlinear_rounds(mle_vec);
+        let mut nonlinear_rounds: Vec<usize> = expression_node.get_all_nonlinear_rounds(mle_vec);
         nonlinear_rounds.sort();
         nonlinear_rounds
     }
@@ -144,7 +141,10 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
     }
 
     // a recursive helper for get_all_rounds, get_all_nonlinear_rounds, and get_all_linear_rounds
-    fn get_rounds_helper(&self, mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec) -> Vec<usize> {
+    fn get_rounds_helper(
+        &self,
+        mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
+    ) -> Vec<usize> {
         // degree of each index
         let mut degree_per_index = Vec::new();
         // set the degree of the corresponding index to max(OLD_DEGREE, NEW_DEGREE)
