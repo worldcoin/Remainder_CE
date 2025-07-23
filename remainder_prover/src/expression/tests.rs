@@ -30,7 +30,7 @@ fn test_abstract_expr_get_sources() {
 
     let expression4 = (expression3.clone()) * Fr::from(2);
 
-    let expression5 = Expression::<Fr, AbstractExpr>::products(vec![node_id_2, node_id_3]);
+    let expression5 = Expression::<Fr, AbstractExpr>::products(node_id_2.expr(), node_id_3.expr());
 
     let expr = expression4.clone() + expression5.clone();
 
@@ -214,7 +214,7 @@ fn test_mle_eval() {
     let _ = expression_2.index_mle_indices(0);
     let eval_2 = expression_2.evaluate_expr(challenge.clone()).unwrap();
 
-    let mut expression_product = Expression::<Fr, ProverExpr>::products(vec![mle_1, mle_2]);
+    let mut expression_product = Expression::<Fr, ProverExpr>::products(mle_1.expression(), mle_2.expression());
     let num_indices = expression_product.index_mle_indices(0);
     assert_eq!(num_indices, 2);
 
@@ -299,12 +299,12 @@ fn test_all_mle_indices() {
         LayerId::Input(0),
     );
 
-    let expression_product = Box::new(Expression::<Fr, ProverExpr>::products(vec![
-        mle_1.clone(),
-        mle_2.clone(),
-    ]));
+    let expression_product = Box::new(Expression::<Fr, ProverExpr>::products(
+        mle_1.clone().expression(),
+        mle_2.clone().expression(),
+    ));
     let expression_mle = Expression::<Fr, ProverExpr>::mle(mle_2);
-    let expression_product_2 = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_1]);
+    let expression_product_2 = Expression::<Fr, ProverExpr>::products(mle_1.clone().expression(), mle_1.expression());
     let mut expression_full = Expression::<Fr, ProverExpr>::sum(
         *expression_product,
         expression_product_2.select(expression_mle),
@@ -340,12 +340,12 @@ fn test_nonlinear_mle_indices() {
         LayerId::Input(0),
     );
 
-    let expression_product = Box::new(Expression::<Fr, ProverExpr>::products(vec![
-        mle_1.clone(),
-        mle_2.clone(),
-    ]));
+    let expression_product = Box::new(Expression::<Fr, ProverExpr>::products(
+        mle_1.clone().expression(),
+        mle_2.clone().expression(),
+    ));
     let expression_mle = Expression::<Fr, ProverExpr>::mle(mle_2);
-    let expression_product_2 = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_1]);
+    let expression_product_2 = Expression::<Fr, ProverExpr>::products(mle_1.clone().expression(), mle_1.expression());
     let mut expression_full = Expression::<Fr, ProverExpr>::sum(
         *expression_product,
         expression_product_2.select(expression_mle),
@@ -383,12 +383,12 @@ fn test_linear_mle_indices() {
         LayerId::Input(0),
     );
 
-    let expression_product = Box::new(Expression::<Fr, ProverExpr>::products(vec![
-        mle_1.clone(),
-        mle_2.clone(),
-    ]));
+    let expression_product = Box::new(Expression::<Fr, ProverExpr>::products(
+        mle_1.clone().expression(),
+        mle_2.clone().expression(),
+    ));
     let expression_mle = Expression::<Fr, ProverExpr>::mle(mle_2);
-    let expression_product_2 = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_1]);
+    let expression_product_2 = Expression::<Fr, ProverExpr>::products(mle_1.clone().expression(), mle_1.expression());
     let mut expression_full = Expression::<Fr, ProverExpr>::sum(
         *expression_product,
         expression_product_2.select(expression_mle),
@@ -425,12 +425,12 @@ fn test_linear_mle_indices_2() {
         LayerId::Input(0),
     );
 
-    let expression_product = Box::new(Expression::<Fr, ProverExpr>::products(vec![
-        mle_1.clone(),
-        mle_2.clone(),
-    ]));
+    let expression_product = Box::new(Expression::<Fr, ProverExpr>::products(
+        mle_1.clone().expression(),
+        mle_2.clone().expression(),
+    ));
     let expression_mle = Expression::<Fr, ProverExpr>::mle(mle_2);
-    let expression_product_2 = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_1]);
+    let expression_product_2 = Expression::<Fr, ProverExpr>::products(mle_1.clone().expression(), mle_1.expression());
     let expression_half = Expression::<Fr, ProverExpr>::sum(
         *expression_product.clone(),
         expression_mle.select(expression_product_2.clone()),
@@ -464,7 +464,7 @@ fn big_test_eval() {
 
     let expression = expression1.clone() + expression3.clone();
 
-    let expression_product = Expression::<Fr, ProverExpr>::pow(2, mle);
+    let expression_product = Expression::<Fr, ProverExpr>::pow(2, mle.expression());
 
     let expression = expression_product + expression;
 

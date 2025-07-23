@@ -632,7 +632,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         &self,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
-        let degree_per_index = self.get_rounds_helper(mle_vec);
+        let degree_per_index = self.get_degree_list(mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] > 0)
             .collect()
@@ -643,7 +643,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         &self,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
-        let degree_per_index = self.get_rounds_helper(mle_vec);
+        let degree_per_index = self.get_degree_list(mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] > 1)
             .collect()
@@ -654,14 +654,14 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         &self,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
-        let degree_per_index = self.get_rounds_helper(mle_vec);
+        let degree_per_index = self.get_degree_list(mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] == 1)
             .collect()
     }
 
-    // a recursive helper for get_all_rounds, get_all_nonlinear_rounds, and get_all_linear_rounds
-    fn get_rounds_helper(&self, mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> Vec<usize> {
+    /// a recursive helper to obtain the degree of every variable
+    pub fn get_degree_list(&self, mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> Vec<usize> {
         // degree of each index
         let mut degree_per_index = Vec::new();
         // set the degree of the corresponding index to max(OLD_DEGREE, NEW_DEGREE)
@@ -684,8 +684,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         match self {
             // in a product, we need the union of all the indices in each of the individual mle refs.
             ExpressionNode::Product(a, b) => {
-                let a_degree_per_index = a.get_rounds_helper(mle_vec);
-                let b_degree_per_index = b.get_rounds_helper(mle_vec);
+                let a_degree_per_index = a.get_degree_list(mle_vec);
+                let b_degree_per_index = b.get_degree_list(mle_vec);
                 // nonlinear operator -- sum over the degree
                 for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
                     if let Some(a_degree) = a_degree_per_index.get(i) {
@@ -710,8 +710,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 if let MleIndex::Indexed(i) = sel_index {
                     add_degree(&mut degree_per_index, *i, 1);
                 };
-                let a_degree_per_index = a.get_rounds_helper(mle_vec);
-                let b_degree_per_index = b.get_rounds_helper(mle_vec);
+                let a_degree_per_index = a.get_degree_list(mle_vec);
+                let b_degree_per_index = b.get_degree_list(mle_vec);
                 // linear operator -- take the max degree
                 for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
                     if let Some(a_degree) = a_degree_per_index.get(i) {
@@ -724,8 +724,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             }
             // in sum, take the max degree of each children
             ExpressionNode::Sum(a, b) => {
-                let a_degree_per_index = a.get_rounds_helper(mle_vec);
-                let b_degree_per_index = b.get_rounds_helper(mle_vec);
+                let a_degree_per_index = a.get_degree_list(mle_vec);
+                let b_degree_per_index = b.get_degree_list(mle_vec);
                 // linear operator -- take the max degree
                 for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
                     if let Some(a_degree) = a_degree_per_index.get(i) {
@@ -738,7 +738,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             }
             // scaled and negated, does not affect degree
             ExpressionNode::Scaled(a, _) => {
-                degree_per_index = a.get_rounds_helper(mle_vec);
+                degree_per_index = a.get_degree_list(mle_vec);
             }
             // for a constant there are no new indices.
             ExpressionNode::Constant(_) => {}
@@ -801,52 +801,53 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     /// returns the PostSumcheckLayer, and the evaluation of the current subtree
     pub fn get_post_sumcheck_layer(
         &self,
-        multiplier: F,
-        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
-    ) -> (PostSumcheckLayer<F, F>, F) {
-        let mut products: Vec<Product<F, F>> = vec![];
-        let eval = match self {
-            ExpressionNode::Selector(mle_index, a, b) => {
-                // Delay multiplication until we reach a multiplication gate
-                let left_side_acc = multiplier * (F::ONE - mle_index.val().unwrap());
-                let right_side_acc = multiplier * (mle_index.val().unwrap());
-                let (left_product, left_eval) = a.get_post_sumcheck_layer(left_side_acc, mle_vec);
-                let (right_product, right_eval) = b.get_post_sumcheck_layer(right_side_acc, mle_vec);
-                products.extend(left_product.0);
-                products.extend(right_product.0);
-                left_eval + right_eval
-            }
-            ExpressionNode::Sum(a, b) => {
-                products.extend(a.get_post_sumcheck_layer(multiplier, mle_vec).0);
-                products.extend(b.get_post_sumcheck_layer(multiplier, mle_vec).0);
-            }
-            ExpressionNode::Mle(mle_vec_idx) => {
-                let mle = mle_vec_idx.get_mle(mle_vec);
-                assert!(mle.is_fully_bounded());
-                products.push(Product::<F, F>::new(&[mle.clone()], multiplier));
-            }
-            ExpressionNode::Product(mle_vec_indices) => {
-                let mles = mle_vec_indices
-                    .iter()
-                    .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec).clone())
-                    .collect_vec();
-                let product = Product::<F, F>::new(&mles, multiplier);
-                products.push(product);
-            }
-            ExpressionNode::Scaled(a, scale_factor) => {
-                let acc = multiplier * scale_factor;
-                products.extend(a.get_post_sumcheck_layer(acc, mle_vec).0);
-            }
-            ExpressionNode::Constant(constant) => {
-                products.push(Product::<F, F>::new(&[], *constant * multiplier));
-            }
-        };
-        (PostSumcheckLayer(products), eval)
+        _multiplier: F,
+        _mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+    ) -> PostSumcheckLayer<F, F> {
+        panic!("Hyrax not supported!");
+        // let mut products: Vec<Product<F, F>> = vec![];
+        // let eval = match self {
+        //     ExpressionNode::Selector(mle_index, a, b) => {
+        //         // Delay multiplication until we reach a multiplication gate
+        //         let left_side_acc = multiplier * (F::ONE - mle_index.val().unwrap());
+        //         let right_side_acc = multiplier * (mle_index.val().unwrap());
+        //         let (left_product, left_eval) = a.get_post_sumcheck_layer(left_side_acc, mle_vec);
+        //         let (right_product, right_eval) = b.get_post_sumcheck_layer(right_side_acc, mle_vec);
+        //         products.extend(left_product.0);
+        //         products.extend(right_product.0);
+        //         left_eval + right_eval
+        //     }
+        //     ExpressionNode::Sum(a, b) => {
+        //         products.extend(a.get_post_sumcheck_layer(multiplier, mle_vec).0);
+        //         products.extend(b.get_post_sumcheck_layer(multiplier, mle_vec).0);
+        //     }
+        //     ExpressionNode::Mle(mle_vec_idx) => {
+        //         let mle = mle_vec_idx.get_mle(mle_vec);
+        //         assert!(mle.is_fully_bounded());
+        //         products.push(Product::<F, F>::new(&[mle.clone()], multiplier));
+        //     }
+        //     ExpressionNode::Product(mle_vec_indices) => {
+        //         let mles = mle_vec_indices
+        //             .iter()
+        //             .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec).clone())
+        //             .collect_vec();
+        //         let product = Product::<F, F>::new(&mles, multiplier);
+        //         products.push(product);
+        //     }
+        //     ExpressionNode::Scaled(a, scale_factor) => {
+        //         let acc = multiplier * scale_factor;
+        //         products.extend(a.get_post_sumcheck_layer(acc, mle_vec).0);
+        //     }
+        //     ExpressionNode::Constant(constant) => {
+        //         products.push(Product::<F, F>::new(&[], *constant * multiplier));
+        //     }
+        // };
+        // (PostSumcheckLayer(products), eval)
     }
 
     /// Get the maximum degree of an ExpressionNode, recursively.
     fn get_max_degree(&self, mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> usize {
-        *self.get_rounds_helper(mle_vec).iter().max().unwrap()
+        *self.get_degree_list(mle_vec).iter().max().unwrap()
     }
 }
 

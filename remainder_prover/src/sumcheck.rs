@@ -51,7 +51,7 @@ use thiserror::Error;
 
 use crate::{
     expression::{
-        generic_expr::{Expression, ExpressionNode, ExpressionType},
+        generic_expr::Expression,
         prover_expr::ProverExpr,
     },
     mle::{Mle, MleIndex},
@@ -418,36 +418,9 @@ pub(crate) fn get_round_degree<F: Field>(
     expr: &Expression<F, ProverExpr>,
     curr_round: usize,
 ) -> usize {
-    // By default, all rounds have degree at least 2 (beta table included)
-    let mut round_degree = 1;
-
-    let mut get_degree_closure = |expr: &ExpressionNode<F, ProverExpr>,
-                                  mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
-     -> Result<()> {
-        let round_degree = &mut round_degree;
-
-        // The only exception is within a product of MLEs
-        if let ExpressionNode::Product(mle_vec_indices) = expr {
-            let mut product_round_degree: usize = 0;
-            for mle_vec_index in mle_vec_indices {
-                let mle = mle_vec_index.get_mle(mle_vec);
-
-                let mle_indices = mle.mle_indices();
-                for mle_index in mle_indices {
-                    if *mle_index == MleIndex::Indexed(curr_round) {
-                        product_round_degree += 1;
-                        break;
-                    }
-                }
-            }
-            if *round_degree < product_round_degree {
-                *round_degree = product_round_degree;
-            }
-        }
-        Ok(())
-    };
-
-    expr.traverse(&mut get_degree_closure).unwrap();
+    let (expr_node, mle_vec) = expr.deconstruct_ref();
+    let degree_list = expr_node.get_degree_list(mle_vec);
+    let round_degree = degree_list.get(curr_round).unwrap_or(&1);
     // add 1 cuz beta table but idk if we would ever use this without a beta
     // table
     round_degree + 1
