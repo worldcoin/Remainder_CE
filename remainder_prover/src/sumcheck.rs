@@ -420,7 +420,6 @@ pub(crate) fn get_round_degree<F: Field>(
 ) -> usize {
     let (expr_node, mle_vec) = expr.deconstruct_ref();
     let degree_list = expr_node.get_degree_list(mle_vec);
-    println!("degree_list: {:?}", degree_list);
     let round_degree = degree_list.get(curr_round).unwrap_or(&1);
     // add 1 cuz beta table but idk if we would ever use this without a beta
     // table
