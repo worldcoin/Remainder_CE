@@ -18,12 +18,12 @@ serde_bytes = "0.11"
 blake3 = { version = "1", features = [
     "traits-preview",
 ] } # Duplicate from dev-dependencies
-ark-bn254 = "0.5" # For BN-254 field
-ark-std = "0.5" # Also for BN-254 (mostly RNG purposes)
+ark-bn254 = "^0.5" # For BN-254 field
+ark-std = "^0.5" # Also for BN-254 (mostly RNG purposes)
 halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2", tag = "v0.3.0" }
-ark-poly = "0.5" # For BN-254 FFT stuff
-ark-ff = "0.5" # Also for FFT stuff
-ark-serialize = { version = "0.5", features = ["derive"] } # For serialization
+ark-poly = "^0.5" # For BN-254 FFT stuff
+ark-ff = "^0.5" # Also for FFT stuff
+ark-serialize = { version = "^0.5", features = ["derive"] } # For serialization
 # fffft = "0.4"
 itertools = "0.10"
 halo2curves = "0.4.0"

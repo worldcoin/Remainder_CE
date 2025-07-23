@@ -366,7 +366,7 @@ pub fn prove_circuit<F: Field>(
     // Go through circuit output layers and grab claims on each.
     for output in output_layers.iter_mut() {
         let layer_id = output.layer_id();
-        info!("Output Layer: {:?}", layer_id);
+        info!("Output Layer: {layer_id:?}");
 
         match output.get_mle() {
             MleEnum::Dense(_) => {
@@ -399,8 +399,8 @@ pub fn prove_circuit<F: Field>(
     // beginning of proving each layer.
     for mut layer in layers.layers.into_iter().rev() {
         let layer_id = layer.layer_id();
-        let layer_timer = start_timer!(|| format!("Generating proof for layer {:?}", layer_id));
-        info!("Proving Intermediate Layer: {:?}", layer_id);
+        let layer_timer = start_timer!(|| format!("Generating proof for layer {layer_id:?}"));
+        info!("Proving Intermediate Layer: {layer_id:?}");
 
         info!("Starting claim aggregation...");
 
@@ -410,7 +410,7 @@ pub fn prove_circuit<F: Field>(
         // We always want to perform interpolative claim aggregation on MatMult layers.
         if let LayerEnum::MatMult(_) = layer {
             let claim_aggr_timer =
-                start_timer!(|| format!("Claim aggregation for layer {:?}", layer_id));
+                start_timer!(|| format!("Claim aggregation for layer {layer_id:?}"));
             let layer_claim =
                 prover_aggregate_claims(layer_claims, output_mles_from_layer, transcript_writer)?;
             end_timer!(claim_aggr_timer);
@@ -431,7 +431,7 @@ pub fn prove_circuit<F: Field>(
             match global_claim_agg_strategy() {
                 ClaimAggregationStrategy::Interpolative => {
                     let claim_aggr_timer =
-                        start_timer!(|| format!("Claim aggregation for layer {:?}", layer_id));
+                        start_timer!(|| format!("Claim aggregation for layer {layer_id:?}"));
                     let layer_claim = prover_aggregate_claims(
                         layer_claims,
                         output_mles_from_layer,
@@ -706,7 +706,7 @@ impl<F: Field> GKRCircuitDescription<F> {
 
         for circuit_output_layer in self.output_layers.iter() {
             let layer_id = circuit_output_layer.layer_id();
-            info!("Verifying Output Layer: {:?}", layer_id);
+            info!("Verifying Output Layer: {layer_id:?}");
 
             let verifier_output_layer = circuit_output_layer
                 .retrieve_mle_from_transcript_and_fix_layer(transcript_reader)?;
@@ -725,16 +725,15 @@ impl<F: Field> GKRCircuitDescription<F> {
         for layer in self.intermediate_layers.iter().rev() {
             let layer_id = layer.layer_id();
 
-            info!("Intermediate Layer: {:?}", layer_id);
-            let layer_timer =
-                start_timer!(|| format!("Proof verification for layer {:?}", layer_id));
+            info!("Intermediate Layer: {layer_id:?}");
+            let layer_timer = start_timer!(|| format!("Proof verification for layer {layer_id:?}"));
 
             let layer_claims = claim_tracker.remove(layer_id).unwrap();
 
             let verifier_layer = match global_claim_agg_strategy() {
                 ClaimAggregationStrategy::Interpolative => {
                     let claim_aggr_timer =
-                        start_timer!(|| format!("Claim aggregation for layer {:?}", layer_id));
+                        start_timer!(|| format!("Claim aggregation for layer {layer_id:?}"));
                     let prev_claim = verifier_aggregate_claims(&layer_claims, transcript_reader)?;
                     debug!("Aggregated claim: {:#?}", prev_claim);
                     end_timer!(claim_aggr_timer);
