@@ -290,7 +290,6 @@ impl<F: Field> Expression<F, ProverExpr> {
         // This is equivalent to a degree-0 beta cascade on a round not present in the MLEs
         // First find such a non-existent round
         let dummy_round_index = self.get_all_rounds().len();
-        println!("DUMMY_INDEX: {dummy_round_index}");
         // Then apply beta cascade
         self.expression_node
             .evaluate_sumcheck_node_beta_cascade_bookkeeping_table(
@@ -510,11 +509,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         round_index: usize,
         degree: usize,
     ) -> SumcheckEvals<F> {
-        println!("EXPRESSION: {:?}", self);
-        for m in mle_vec {
-            println!("M: {:?}", m);
-        }
-
         let mle_bookkeeping_tables: Vec<(bool, Vec<_>)> = mle_vec
             .iter()
             .map(|mle| MleBookkeepingTables::from_mle_evals(mle, degree, round_index))
@@ -544,7 +538,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             .into_iter()
             .map(|eval_tables| MleBookkeepingTables::comb(eval_tables, &comb_seq))
             .collect();
-        println!("COMB_TABLES: {:?}", comb_tables);
         // MleBookkeepingTables::comb_batch(eval_tables_list, &comb_seq);
 
         // all comb_tables are of the same structure, so only
@@ -566,7 +559,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 )
             })
             .unzip();
-        println!("beta_current_val_vec: {beta_current_val_vec:?}, beta_unbound_vals_vec: {beta_unbound_vals_vec:?}, beta_updated_vals_vec: {beta_updated_vals_vec:?}");
 
         let evals_iter = beta_current_val_vec
             .into_iter()
@@ -599,7 +591,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                             .take(degree + 1)
                             .collect_vec()
                     } else {
-                        vec![F::ONE]
+                        folded_mle_successors
                     };
                     // apply the bound beta values as a scalar factor to each of the
                     // evaluations Multiply by the random coefficient to get the
@@ -608,9 +600,6 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                         * random_coeff
                 },
             );
-
-        println!("BETA_VALUES: {:?}", beta_vec);
-        println!("EVALS_ITER: {:?}", evals_iter);
         // Combine all the evaluations using a random linear combination. We
         // simply sum because all evaluations are already multiplied by their
         // random coefficient.
