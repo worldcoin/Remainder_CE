@@ -7,7 +7,7 @@ use crate::{
 };
 use itertools::Itertools;
 use rand::{CryptoRng, Rng, RngCore};
-use remainder::layer::product::PostSumcheckLayerTree;
+use remainder::layer::product::{new_with_values, PostSumcheckLayerTree};
 use remainder::layer::Layer;
 use remainder::layer::LayerDescription;
 use remainder::layer::LayerId;
@@ -417,7 +417,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // Avoid committing to unnecessary values
         post_sumcheck_layer_desc.remove_add_values(false);
         let post_sumcheck_layer: PostSumcheckLayerTree<C::Scalar, C> =
-            new_with_values(&post_sumcheck_layer_desc, commitments);
+            new_with_values(&post_sumcheck_layer_desc, commitments, &mut 0);
 
         // Verify the proof of sumcheck!
         proof_of_sumcheck.verify(
@@ -431,12 +431,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
 
         // Extract the triples of commitments that must be proven in the proof of product
         // and verify the proofs of product
-        let product_triples: Vec<(C, C, C)> = post_sumcheck_layer
-            .0
-            .iter()
-            .filter_map(|commitment| commitment.get_product_triples())
-            .flatten()
-            .collect_vec();
+        let product_triples: Vec<(C, C, C)> = post_sumcheck_layer.get_product_triples();
         assert_eq!(product_triples.len(), proofs_of_product.len());
         product_triples
             .iter()
@@ -446,25 +441,16 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             });
 
         // Extract the claims that the prover implicitly made on other layers by sending `commitments`.
-        post_sumcheck_layer
-            .0
-            .iter()
-            .flat_map(|product| get_claims_from_product(product))
-            .collect_vec()
+        get_all_claims(&post_sumcheck_layer)
     }
 }
 
-// ---------- This is where all the Hyrax [PostSumcheckLayer]-specific stuff is going! ----------
-/// Evaluate the PostSumcheckLayer to a single CommittedScalar.
+// ---------- This is where all the Hyrax [PostSumcheckLayerTree]-specific stuff is going! ----------
+/// Evaluate the [PostSumcheckLayerTree] to a single CommittedScalar.
 pub fn evaluate_committed_scalar<C: PrimeOrderCurve>(
-    post_sumcheck_layer: &PostSumcheckLayer<C::Scalar, CommittedScalar<C>>,
+    post_sumcheck_layer: &PostSumcheckLayerTree<C::Scalar, CommittedScalar<C>>,
 ) -> CommittedScalar<C> {
-    post_sumcheck_layer
-        .0
-        .iter()
-        .fold(CommittedScalar::zero(), |acc, product| {
-            acc + product.get_result() * product.coefficient
-        })
+    post_sumcheck_layer.get_result()
 }
 
 /// Turn all the CommittedScalars into commitments i.e. Cs.
@@ -472,7 +458,7 @@ pub fn evaluate_committed_scalar<C: PrimeOrderCurve>(
 pub fn committed_scalar_psl_as_commitments<C: PrimeOrderCurve>(
     post_sumcheck_layer: &PostSumcheckLayerTree<C::Scalar, CommittedScalar<C>>,
 ) -> PostSumcheckLayerTree<C::Scalar, C> {
-match post_sumcheck_layer {
+    match post_sumcheck_layer {
         PostSumcheckLayerTree::Constant { coefficient } => PostSumcheckLayerTree::Constant { 
             coefficient: coefficient.clone()
         },
@@ -504,14 +490,9 @@ match post_sumcheck_layer {
 
 /// Evaluate the PostSumcheckLayer to a single scalar
 pub fn evaluate_committed_psl<C: PrimeOrderCurve>(
-    post_sumcheck_layer: &PostSumcheckLayer<C::Scalar, C>,
+    post_sumcheck_layer: &PostSumcheckLayerTree<C::Scalar, C>,
 ) -> C {
-    post_sumcheck_layer
-        .0
-        .iter()
-        .fold(C::zero(), |acc, product| {
-            acc + product.get_result() * product.coefficient
-        })
+    post_sumcheck_layer.get_result()
 }
 
 /// Obtained all the claims in a [PostSumcheckLayerTree] in post-order
@@ -519,7 +500,7 @@ fn get_all_claims<F: Field, T: Clone + Serialize + for<'de> Deserialize<'de>>(
     tree: &PostSumcheckLayerTree<F, T>
 ) -> Vec<HyraxClaim<F, T>> {
     match tree {
-        PostSumcheckLayerTree::Constant { coefficient: _ } => Vec::new(),
+        PostSumcheckLayerTree::Constant { .. } => Vec::new(),
         PostSumcheckLayerTree::Mle { layer_id, point, value } => {
             vec![HyraxClaim {
                 to_layer_id: *layer_id,
@@ -527,12 +508,12 @@ fn get_all_claims<F: Field, T: Clone + Serialize + for<'de> Deserialize<'de>>(
                 evaluation: value.clone(),
             }]
         }
-        PostSumcheckLayerTree::Add { left, right, value: _ } => {
+        PostSumcheckLayerTree::Add { left, right, .. } => {
             let left_claims = get_all_claims(left);
             let right_claims = get_all_claims(right);
             left_claims.into_iter().chain(right_claims).collect()
         }
-        PostSumcheckLayerTree::Mult { left, right, value: _ } => {
+        PostSumcheckLayerTree::Mult { left, right, .. } => {
             let left_claims = get_all_claims(left);
             let right_claims = get_all_claims(right);
             left_claims.into_iter().chain(right_claims).collect()
