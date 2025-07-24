@@ -7,7 +7,7 @@ use crate::{
 };
 use itertools::Itertools;
 use rand::{CryptoRng, Rng, RngCore};
-use remainder::layer::product::{Intermediate, PostSumcheckLayer};
+use remainder::layer::product::PostSumcheckLayerTree;
 use remainder::layer::Layer;
 use remainder::layer::LayerDescription;
 use remainder::layer::LayerId;
@@ -16,10 +16,7 @@ use remainder::{claims::claim_aggregation::get_wlx_evaluations, layer::layer_enu
 use remainder::{
     claims::claim_group::ClaimGroup, layer::combine_mles::get_indexed_layer_mles_to_combine,
 };
-use remainder::{
-    claims::RawClaim,
-    layer::product::{new_with_values, Product},
-};
+use remainder::claims::RawClaim;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
@@ -589,46 +586,32 @@ pub struct HyraxClaim<F: Field, T: Serialize + DeserializeOwned> {
 
 /// Returns a CommittedScalar version of the PostSumcheckLayer.
 pub fn commit_to_post_sumcheck_layer<C: PrimeOrderCurve>(
-    post_sumcheck_layer: &PostSumcheckLayer<C::Scalar, C::Scalar>,
+    post_sumcheck_layer: &PostSumcheckLayerTree<C::Scalar, C::Scalar>,
     committer: &PedersenCommitter<C>,
     mut blinding_rng: &mut impl Rng,
-) -> PostSumcheckLayer<C::Scalar, CommittedScalar<C>> {
-    PostSumcheckLayer(
-        post_sumcheck_layer
-            .0
-            .iter()
-            .map(|product| commit_to_product(product, committer, &mut blinding_rng))
-            .collect(),
-    )
-}
-
-// Helper for commit_to_post_sumcheck_layer.
-// Returns a CommittedScalar version of the Product.
-fn commit_to_product<C: PrimeOrderCurve>(
-    product: &Product<C::Scalar, C::Scalar>,
-    committer: &PedersenCommitter<C>,
-    mut blinding_rng: &mut impl Rng,
-) -> Product<C::Scalar, CommittedScalar<C>> {
-    let committed_scalars = product
-        .intermediates
-        .iter()
-        .map(|pp| match pp {
-            Intermediate::Atom {
-                layer_id,
-                point,
-                value,
-            } => Intermediate::Atom {
-                layer_id: *layer_id,
-                point: point.clone(),
-                value: committer.committed_scalar(value, &C::Scalar::random(&mut blinding_rng)),
-            },
-            Intermediate::Composite { value } => Intermediate::Composite {
-                value: committer.committed_scalar(value, &C::Scalar::random(&mut blinding_rng)),
-            },
-        })
-        .collect();
-    Product {
-        intermediates: committed_scalars,
-        coefficient: product.coefficient,
+) -> PostSumcheckLayerTree<C::Scalar, CommittedScalar<C>> {
+    match post_sumcheck_layer {
+        PostSumcheckLayerTree::Constant { coefficient } => PostSumcheckLayerTree::Constant { 
+            coefficient: coefficient.clone()
+        },
+        PostSumcheckLayerTree::Mle { layer_id, point, value } => PostSumcheckLayerTree::Mle { 
+            layer_id: *layer_id,
+            point: point.clone(),
+            value: committer.committed_scalar(value, &C::Scalar::random(&mut blinding_rng)),
+        },
+        PostSumcheckLayerTree::Add { left, right, value } => PostSumcheckLayerTree::Add { 
+            left: Box::new(commit_to_post_sumcheck_layer(left, committer, blinding_rng)),
+            right: Box::new(commit_to_post_sumcheck_layer(right, committer, blinding_rng)),
+            value: if let Some(val) = value {
+                Some(committer.committed_scalar(val, &C::Scalar::random(&mut blinding_rng)))
+            } else {
+                None
+            }
+        },
+        PostSumcheckLayerTree::Mult { left, right, value } => PostSumcheckLayerTree::Mult { 
+            left: Box::new(commit_to_post_sumcheck_layer(left, committer, blinding_rng)),
+            right: Box::new(commit_to_post_sumcheck_layer(right, committer, blinding_rng)),
+            value: committer.committed_scalar(value, &C::Scalar::random(&mut blinding_rng)),
+        },
     }
 }

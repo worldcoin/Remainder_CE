@@ -3,7 +3,7 @@ use crate::hyrax_gkr::hyrax_layer::committed_scalar_psl_as_commitments;
 use crate::utils::vandermonde::VandermondeInverse;
 
 use super::*;
-use remainder::layer::product::Product;
+use remainder::layer::product::PostSumcheckLayerTree;
 use remainder::layer::LayerId;
 use remainder::mle::betavalues::BetaValues;
 use remainder::mle::dense::DenseMle;
@@ -95,7 +95,7 @@ fn test_completeness() {
     let message2 = committer.committed_vector(&f2_padded, &Fr::from(7));
     assert_eq!(f20 + r2 * f21, mle_eval); // f2(r2) = mle_eval
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
-        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(&[mle.clone()], Fr::one())]),
+        &PostSumcheckLayerTree::<Fr, Fr>::mle(&mle),
         &committer,
         &mut rand::thread_rng(),
     );
@@ -200,10 +200,10 @@ fn test_example_with_regular_layer() {
 
     let _mle_eval = mle.value() * equality_mle.value();
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
-        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(
-            &vec![mle.clone()],
-            equality_mle.value(),
-        )]),
+        &PostSumcheckLayerTree::<Fr, Fr>::mult(
+            PostSumcheckLayerTree::<Fr, Fr>::mle(&mle),
+            PostSumcheckLayerTree::constant(equality_mle.value())
+        ),
         &committer,
         &mut rand::thread_rng(),
     );
@@ -258,7 +258,7 @@ fn test_soundness() {
     mle.fix_variable(1, bindings[0]);
     mle.fix_variable(2, bindings[1]);
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
-        &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(&[mle.clone()], Fr::one())]),
+        &PostSumcheckLayerTree::<Fr, Fr>::mle(&mle),
         &committer,
         &mut rand::thread_rng(),
     );

@@ -1,5 +1,5 @@
 use rand::{CryptoRng, RngCore};
-use remainder::layer::product::PostSumcheckLayer;
+use remainder::layer::product::PostSumcheckLayerTree;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
 use remainder_shared_types::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
@@ -39,7 +39,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
         // the degree of all sumcheck messages (assumed uniform)
         degree: usize,
         // The fully bound MLEs as a committed PostSumcheckLayer
-        post_sumcheck_layer: &PostSumcheckLayer<C::Scalar, CommittedScalar<C>>,
+        post_sumcheck_layer: &PostSumcheckLayerTree<C::Scalar, CommittedScalar<C>>,
         // the verifier bindings
         bindings: &[C::Scalar],
         committer: &PedersenCommitter<C>,
@@ -113,7 +113,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
         // the degree of all sumcheck messages (assumed uniform)
         degree: usize,
         // The fully bound MLEs as a PostSumcheckLayer
-        post_sumcheck_layer: &PostSumcheckLayer<C::Scalar, C>,
+        post_sumcheck_layer: &PostSumcheckLayerTree<C::Scalar, C>,
         // the verifier bindings
         bindings: &[C::Scalar],
         committer: &PedersenCommitter<C>,
