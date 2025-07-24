@@ -1,5 +1,7 @@
 //! Standardized expression representation for oracle query (GKR verifier) +
 //! determining necessary proof-of-products (Hyrax prover + verifier)
+use std::ops::{Add, Mul};
+
 use remainder_shared_types::Field;
 
 use super::LayerId;
@@ -83,22 +85,22 @@ impl<F: Field> PostSumcheckLayerTree<F, Option<F>> {
 
 impl<F: Field> PostSumcheckLayerTree<F, F> {
     // obtain the evaluation or coefficient
-    fn get_value(&self) -> F {
+    fn get_field_value(&self) -> F {
         match self {
-            PostSumcheckLayerTree::Mle{layer_id: _, point: _, value } => *value,
+            PostSumcheckLayerTree::Mle{value, .. } => *value,
             PostSumcheckLayerTree::Constant{coefficient} => *coefficient,
             PostSumcheckLayerTree::Add{left, right, value} => {
                 if value.is_some() {
                     value.unwrap()
                 } else {
-                    left.get_value() + right.get_value()
+                    left.get_field_value() + right.get_field_value()
                 }
             }
             PostSumcheckLayerTree::Mult{left, right, value} => {
                 if value.is_some() {
                     value.unwrap()
                 } else {
-                    left.get_value() * right.get_value()
+                    left.get_field_value() * right.get_field_value()
                 }
             },
         }
@@ -118,7 +120,7 @@ impl<F: Field> PostSumcheckLayerTree<F, F> {
 
     /// Creates a multiplication node from two nodes
     pub fn mult(lhs: Self, rhs: Self) -> Self {
-        let value = lhs.get_value() * rhs.get_value();
+        let value = lhs.get_field_value() * rhs.get_field_value();
         Self::Mult { 
             left: Box::new(lhs), 
             right: Box::new(rhs),
@@ -130,7 +132,7 @@ impl<F: Field> PostSumcheckLayerTree<F, F> {
 
     /// Creates an addition node from two nodes
     pub fn add(lhs: Self, rhs: Self) -> Self {
-        let value = lhs.get_value() + rhs.get_value();
+        let value = lhs.get_field_value() + rhs.get_field_value();
         Self::Add { 
             left: Box::new(lhs), 
             right: Box::new(rhs),
@@ -138,6 +140,52 @@ impl<F: Field> PostSumcheckLayerTree<F, F> {
             // but we write down everything and remove later in [remove_add_values]
             value: Some(value),
         }
+    }
+}
+
+/// Set the values of the PostSumcheckLayer to the given values in post-order, 
+/// panicking if the lengths do not match, returning a new instance. 
+/// Counterpart to [PostSumcheckLayerTree::get_values].
+pub fn new_with_values<F: Field, S, T: Clone>(
+    post_sumcheck_layer: &PostSumcheckLayerTree<F, S>,
+    values: &[T],
+    next_index: &mut usize, // index to the next value
+) -> PostSumcheckLayerTree<F, T> {
+    match post_sumcheck_layer {
+        PostSumcheckLayerTree::Constant { coefficient } => PostSumcheckLayerTree::Constant { 
+            coefficient: coefficient.clone()
+        },
+        PostSumcheckLayerTree::Mle { layer_id, point, .. } => PostSumcheckLayerTree::Mle { 
+            layer_id: *layer_id,
+            point: point.clone(),
+            value: {
+                let new_value = values[*next_index].clone();
+                *next_index += 1;
+                new_value
+            }
+        },
+        PostSumcheckLayerTree::Add { left, right, value } => PostSumcheckLayerTree::Add { 
+            left: Box::new(new_with_values(left, values, next_index)),
+            right: Box::new(new_with_values(right, values, next_index)),
+            value: if let Some(_) = value {
+                let new_value = values[*next_index].clone();
+                *next_index += 1;
+                Some(new_value)
+            } else {
+                None
+            }
+        },
+        PostSumcheckLayerTree::Mult { left, right, value } => PostSumcheckLayerTree::Mult { 
+            left: Box::new(new_with_values(left, values, next_index)),
+            right: Box::new(new_with_values(right, values, next_index)),
+            value: if let Some(_) = value {
+                let new_value = values[*next_index].clone();
+                *next_index += 1;
+                Some(new_value)
+            } else {
+                None
+            }
+        },
     }
 }
 
@@ -149,8 +197,8 @@ impl<F: Field, T: Clone> PostSumcheckLayerTree<F, T> {
     /// `parent_requires_value` is FALSE at root
     pub fn remove_add_values(&mut self, parent_requires_value: bool) {
         match self {
-            Self::Mle { layer_id: _, point: _, value: _ } => {},
-            Self::Constant { coefficient: _ } => {},
+            Self::Mle { .. } => {},
+            Self::Constant { .. } => {},
             Self::Mult { left, right, value } => {
                 let left_child_is_constant = if let Self::Constant {..} = **left { true } else { false };
                 let right_child_is_constant = if let Self::Constant {..} = **right { true } else { false };
@@ -176,22 +224,12 @@ impl<F: Field, T: Clone> PostSumcheckLayerTree<F, T> {
 
 // EVALUATIONS
 impl<F: Field, T: Clone> PostSumcheckLayerTree<F, T> {
-    /// Return the resulting value of the tree.
-    /// The value is stored at the root
-    pub fn get_result(&self) -> Option<T> {
-        match self {
-            Self::Constant { coefficient: _ } => None,
-            Self::Mle { layer_id: _, point: _, value } => Some(value.clone()),
-            Self::Add { left: _, right: _, value } => value.clone(),
-            Self::Mult { left: _, right: _, value } => value.clone(),
-        }
-    }
-
     /// Returns a vector of the values in post-order
+    /// Counterpart to [new_with_values].
     pub fn get_values(&self) -> Vec<T> {
         match self {
-            Self::Constant { coefficient: _ } => Vec::new(),
-            Self::Mle { layer_id: _, point: _, value } => vec![value.clone()],
+            Self::Constant { .. } => Vec::new(),
+            Self::Mle { value, .. } => vec![value.clone()],
             Self::Add { left, right, value } => {
                 let left_values = left.get_values();
                 let right_values = right.get_values();
@@ -216,9 +254,9 @@ impl<F: Field, T: Clone> PostSumcheckLayerTree<F, T> {
     /// Return a vector of triples (x, y, z) where z=x*y in post-order
     pub fn get_product_triples(&self) -> Vec<(T, T, T)> {
         match self {
-            Self::Constant { coefficient: _ } => Vec::new(),
-            Self::Mle { layer_id: _, point: _, value: _ } => Vec::new(),
-            Self::Add { left, right, value: _ } => {
+            Self::Constant { .. } => Vec::new(),
+            Self::Mle { .. } => Vec::new(),
+            Self::Add { left, right, .. } => {
                 let left_triples = left.get_product_triples();
                 let right_triples = right.get_product_triples();
                 left_triples.into_iter().chain(right_triples).collect()
@@ -228,12 +266,79 @@ impl<F: Field, T: Clone> PostSumcheckLayerTree<F, T> {
                 let right_triples = right.get_product_triples();
                 // only include the product if neither child is constant
                 left_triples.into_iter().chain(right_triples).chain(
-                    match (left.get_result(), right.get_result(), value) {
+                    match (left.get_root_value(), right.get_root_value(), value) {
                         (Some(x), Some(y), Some(z)) => vec![(x, y, z.clone())],
                         _ => Vec::new()
                     }
                 ).collect()
             }
+        }
+    }
+
+    // Return the value stored at the root
+    fn get_root_value(&self) -> Option<T> {
+        match self {
+            Self::Constant { .. } => None,
+            Self::Mle { value, .. } => Some(value.clone()),
+            Self::Add { value, .. } => value.clone(),
+            Self::Mult { value, .. } => value.clone(),
+        }
+    }
+}
+
+// evaluation of a node, can be F (constants) or T (polynomials)
+#[derive(PartialEq, Eq)]
+enum EvalResult<F: PartialEq + Eq, T: PartialEq + Eq> {
+    F(F),
+    T(T),
+}
+impl<F: Field + PartialEq + Eq, T> PostSumcheckLayerTree<F, T>
+    where T: Clone + PartialEq + Eq + Add<Output = T> + Add<F, Output = T> + Mul<F, Output = T>
+{
+    /// evaluate and verify any redundant values
+    pub fn get_result(&self) -> T {
+        match self.get_result_helper() {
+            EvalResult::T(t) => t,
+            EvalResult::F(_) => panic!("Standalone constant circuit not supported in hyrax!"),
+        }
+    }
+
+    // recursive helper
+    fn get_result_helper(&self) -> EvalResult<F, T> {
+        match self {
+            PostSumcheckLayerTree::Mle{value, .. } => EvalResult::T(value.clone()),
+            PostSumcheckLayerTree::Constant{coefficient} => EvalResult::F(*coefficient),
+            PostSumcheckLayerTree::Add{left, right, value} => {
+                let computed_result = match (left.get_result_helper(), right.get_result_helper()) {
+                    (EvalResult::T(t1), EvalResult::T(t2)) => EvalResult::T(t1 + t2),
+                    (EvalResult::T(t1), EvalResult::F(f2)) => EvalResult::T(t1 + f2),
+                    (EvalResult::F(f1), EvalResult::T(t2)) => EvalResult::T(t2 + f1),
+                    (EvalResult::F(f1), EvalResult::F(f2)) => EvalResult::F(f1 + f2),
+                };
+                if let Some(val) = value {
+                    assert!(computed_result == EvalResult::T(val.clone()));
+                }
+                computed_result
+            }
+            PostSumcheckLayerTree::Mult{left, right, value} => {
+                let computed_result = match (left.get_result_helper(), right.get_result_helper()) {
+                    (EvalResult::T(_), EvalResult::T(_)) => {
+                        // cannot perform multiplication on T, instead query `value`
+                        if let Some(val) = value {
+                            EvalResult::T(val.clone())
+                        } else {
+                            panic!("Cannot obtain the hyrax commitment of a multiplication!")
+                        }
+                    },
+                    (EvalResult::T(t1), EvalResult::F(f2)) => EvalResult::T(t1 * f2),
+                    (EvalResult::F(f1), EvalResult::T(t2)) => EvalResult::T(t2 * f1),
+                    (EvalResult::F(f1), EvalResult::F(f2)) => EvalResult::F(f1 * f2),
+                };
+                if let Some(val) = value {
+                    assert!(computed_result == EvalResult::T(val.clone()));
+                }
+                computed_result
+            },
         }
     }
 }

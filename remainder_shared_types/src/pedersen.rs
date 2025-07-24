@@ -272,7 +272,7 @@ fn precompute_doublings<G: PrimeOrderCurve>(base: G, bitwidth: usize) -> Vec<G> 
     powers
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(bound = "C: PrimeOrderCurve")]
 /// The committer's view of a scalar commitment, i.e. not just the commitment itself but also the
 /// underlying value and the blinding factor.
@@ -291,6 +291,14 @@ impl<C: PrimeOrderCurve> CommittedScalar<C> {
             value: C::Scalar::ZERO,
             blinding: C::Scalar::ZERO,
             commitment: C::zero(),
+        }
+    }
+
+    pub fn one() -> Self {
+        Self {
+            value: C::Scalar::ONE,
+            blinding: C::Scalar::ONE,
+            commitment: C::generator(),
         }
     }
 
