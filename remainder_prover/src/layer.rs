@@ -11,7 +11,7 @@ pub mod regular_layer;
 use std::{collections::HashSet, fmt::Debug};
 
 use layer_enum::{LayerEnum, VerifierLayerEnum};
-use product::PostSumcheckLayer;
+use product::PostSumcheckLayerTree;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -152,7 +152,7 @@ pub trait Layer<F: Field> {
         round_challenges: &[F],
         claim_challenges: &[&[F]],
         random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, F>;
+    ) -> PostSumcheckLayerTree<F, F>;
 
     /// Generates and returns all claims that this layer makes onto previous
     /// layers.
@@ -207,7 +207,7 @@ pub trait LayerDescription<F: Field> {
         round_challenges: &[F],
         claim_challenges: &[&[F]],
         random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, Option<F>>;
+    ) -> PostSumcheckLayerTree<F, Option<F>>;
 
     /// The maximum degree for any univariate in the sumcheck protocol.
     fn max_degree(&self) -> usize;

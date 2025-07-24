@@ -13,7 +13,7 @@ use super::{
     verifier_expr::VerifierExpr,
 };
 use crate::{
-    layer::product::PostSumcheckLayer,
+    layer::product::PostSumcheckLayerTree,
     mle::{verifier_mle::VerifierMle, Mle},
 };
 use crate::{
@@ -362,9 +362,9 @@ impl<F: Field> Expression<F, ProverExpr> {
 
     /// Get the [PostSumcheckLayer] for this expression, which represents the fully bound values of the expression.
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
-    pub fn get_post_sumcheck_layer(&self, multiplier: F) -> PostSumcheckLayer<F, F> {
+    pub fn get_post_sumcheck_layer(&self) -> PostSumcheckLayerTree<F, F> {
         self.expression_node
-            .get_post_sumcheck_layer(multiplier, &self.mle_vec)
+            .get_post_sumcheck_layer(&self.mle_vec)
     }
 
     /// Get the maximum degree of any variable in htis expression
@@ -813,53 +813,54 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         }
     }
 
-    /// Recursively get the [PostSumcheckLayer] for an Expression node, which is the fully bound
+    /// Recursively get the [PostSumcheckLayerTree] for an Expression node, which is the fully bound
     /// representation of an expression.
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
-    /// returns the PostSumcheckLayer, and the evaluation of the current subtree
     pub fn get_post_sumcheck_layer(
         &self,
-        _multiplier: F,
-        _mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
-    ) -> PostSumcheckLayer<F, F> {
-        let mut products: Vec<Product<F, F>> = vec![];
-        let eval = match self {
-            ExpressionNode::Selector(mle_index, a, b) => {
-                // Delay multiplication until we reach a multiplication gate
-                let left_side_acc = multiplier * (F::ONE - mle_index.val().unwrap());
-                let right_side_acc = multiplier * (mle_index.val().unwrap());
-                let (left_product, left_eval) = a.get_post_sumcheck_layer(left_side_acc, mle_vec);
-                let (right_product, right_eval) = b.get_post_sumcheck_layer(right_side_acc, mle_vec);
-                products.extend(left_product.0);
-                products.extend(right_product.0);
-                left_eval + right_eval
-            }
-            ExpressionNode::Sum(a, b) => {
-                products.extend(a.get_post_sumcheck_layer(multiplier, mle_vec).0);
-                products.extend(b.get_post_sumcheck_layer(multiplier, mle_vec).0);
-            }
+        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+    ) -> PostSumcheckLayerTree<F, F> {
+        match self {
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
                 assert!(mle.is_fully_bounded());
-                products.push(Product::<F, F>::new(&[mle.clone()], multiplier));
-            }
-            ExpressionNode::Product(mle_vec_indices) => {
-                let mles = mle_vec_indices
-                    .iter()
-                    .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec).clone())
-                    .collect_vec();
-                let product = Product::<F, F>::new(&mles, multiplier);
-                products.push(product);
-            }
-            ExpressionNode::Scaled(a, scale_factor) => {
-                let acc = multiplier * scale_factor;
-                products.extend(a.get_post_sumcheck_layer(acc, mle_vec).0);
+                PostSumcheckLayerTree::<F, F>::mle(mle)
             }
             ExpressionNode::Constant(constant) => {
-                products.push(Product::<F, F>::new(&[], *constant * multiplier));
+                PostSumcheckLayerTree::constant(
+                    *constant
+                )
             }
-        };
-        (PostSumcheckLayer(products), eval)
+            ExpressionNode::Selector(mle_index, a, b) => {
+                let left_prod = PostSumcheckLayerTree::<F, F>::mult(
+                    PostSumcheckLayerTree::constant(F::ONE - mle_index.val().unwrap()),
+                    a.get_post_sumcheck_layer(mle_vec),
+                );
+                let right_prod = PostSumcheckLayerTree::<F, F>::mult(
+                    PostSumcheckLayerTree::constant(mle_index.val().unwrap()),
+                    b.get_post_sumcheck_layer(mle_vec),
+                );
+                PostSumcheckLayerTree::<F, F>::add(left_prod, right_prod)
+            }
+            ExpressionNode::Sum(a, b) => {
+                PostSumcheckLayerTree::<F, F>::add(
+                    a.get_post_sumcheck_layer(mle_vec),
+                    b.get_post_sumcheck_layer(mle_vec),
+                )
+            }
+            ExpressionNode::Product(a, b) => {
+                PostSumcheckLayerTree::<F, F>::mult(
+                    a.get_post_sumcheck_layer(mle_vec),
+                    b.get_post_sumcheck_layer(mle_vec),
+                )
+            }
+            ExpressionNode::Scaled(a, scale_factor) => {
+                PostSumcheckLayerTree::<F, F>::mult(
+                    a.get_post_sumcheck_layer(mle_vec),
+                    PostSumcheckLayerTree::constant(*scale_factor),
+                )
+            }
+        }
     }
 
     /// Get the maximum degree of an ExpressionNode, recursively.

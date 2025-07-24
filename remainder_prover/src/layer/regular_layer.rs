@@ -30,7 +30,7 @@ use crate::{
 
 use super::{
     layer_enum::{LayerEnum, VerifierLayerEnum},
-    product::PostSumcheckLayer,
+    product::PostSumcheckLayerTree,
 };
 
 use super::{LayerDescription, VerifierLayer};
@@ -304,7 +304,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         round_challenges: &[F],
         claim_challenges: &[&[F]],
         random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, F> {
+    ) -> PostSumcheckLayerTree<F, F> {
         let sumcheck_round_indices = self.sumcheck_round_indices();
         // Filter the claim to get the values of the claim pertaining to the nonlinear rounds.
         let sumcheck_claim_points_vec = claim_challenges
@@ -335,7 +335,10 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                 acc + fully_bound_beta * random_coeff
             });
 
-        self.expression.get_post_sumcheck_layer(rlc_beta)
+        PostSumcheckLayerTree::<F, F>::mult(
+            self.expression.get_post_sumcheck_layer(),
+            PostSumcheckLayerTree::constant(rlc_beta),
+        )
     }
 
     fn get_claims(&self) -> Result<Vec<Claim<F>>> {
@@ -697,7 +700,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         round_challenges: &[F],
         claim_challenges: &[&[F]],
         random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, Option<F>> {
+    ) -> PostSumcheckLayerTree<F, Option<F>> {
         let sumcheck_round_indices = self.sumcheck_round_indices();
         // Filter the claim to get the values of the claim pertaining to the nonlinear rounds.
         let sumcheck_claim_points_vec = claim_challenges
@@ -752,8 +755,10 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             ClaimAggregationStrategy::RLC => round_challenges.to_vec(),
         };
 
-        self.expression
-            .get_post_sumcheck_layer(rlc_beta, &all_bound_challenges)
+        PostSumcheckLayerTree::<F, Option<F>>::mult(
+            self.expression.get_post_sumcheck_layer(&all_bound_challenges),
+            PostSumcheckLayerTree::<F, Option<F>>::constant(rlc_beta),
+        )
     }
 
     fn max_degree(&self) -> usize {

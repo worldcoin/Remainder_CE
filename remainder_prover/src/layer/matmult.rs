@@ -12,7 +12,7 @@ use remainder_shared_types::{
 use super::{
     gate::compute_sumcheck_message_no_beta_table,
     layer_enum::{LayerEnum, VerifierLayerEnum},
-    product::{PostSumcheckLayer, Product},
+    product::PostSumcheckLayerTree,
     Layer, LayerDescription, LayerError, LayerId, VerifierLayer,
 };
 use crate::{
@@ -270,16 +270,18 @@ impl<F: Field> Layer<F> for MatMult<F> {
         2
     }
 
-    /// Return the [PostSumcheckLayer], panicking if either of the MLE refs is not fully bound.
+    /// Return the [PostSumcheckLayerTree], panicking if either of the MLE refs is not fully bound.
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     fn get_post_sumcheck_layer(
         &self,
         _round_challenges: &[F],
         _claim_challenges: &[&[F]],
         _random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, F> {
-        let mles = vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()];
-        PostSumcheckLayer(vec![Product::<F, F>::new(&mles, F::ONE)])
+    ) -> PostSumcheckLayerTree<F, F> {
+        PostSumcheckLayerTree::<F, F>::mult(
+            PostSumcheckLayerTree::<F, F>::mle(&self.matrix_a.mle),
+            PostSumcheckLayerTree::<F, F>::mle(&self.matrix_b.mle),
+        )
     }
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<Claim<F>>> {
@@ -566,13 +568,13 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         })
     }
 
-    /// Return the [PostSumcheckLayer], given challenges that fully bind the expression.
+    /// Return the [PostSumcheckLayerTree], given challenges that fully bind the expression.
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
         claim_challenges: &[&[F]],
         _random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, Option<F>> {
+    ) -> PostSumcheckLayerTree<F, Option<F>> {
         // We are always using interpolative claim aggregation for MatMult layers.
         assert_eq!(claim_challenges.len(), 1);
         let claim_challenge = claim_challenges[0];
@@ -647,13 +649,11 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
             })
             .collect_vec();
         pre_bound_matrix_b_mle.set_mle_indices(matrix_b_new_indices);
-        let mles = vec![pre_bound_matrix_a_mle, pre_bound_matrix_b_mle];
 
-        PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
-            &mles,
-            F::ONE,
-            round_challenges,
-        )])
+        PostSumcheckLayerTree::<F, Option<F>>::mult(
+            PostSumcheckLayerTree::<F, Option<F>>::mle(&pre_bound_matrix_a_mle, round_challenges),
+            PostSumcheckLayerTree::<F, Option<F>>::mle(&pre_bound_matrix_b_mle, round_challenges),
+        )
     }
 
     fn max_degree(&self) -> usize {
