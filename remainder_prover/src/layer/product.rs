@@ -8,6 +8,44 @@ use crate::mle::dense::DenseMle;
 use crate::mle::mle_description::MleDescription;
 use crate::mle::Mle;
 
+/// A struct that closely resembles the expression tree, but stores the commitment
+/// to MLE evaluations and their products
+pub enum PostSumcheckLayerTree<F: Field, T> {
+    Mle {
+        /// the id of the layer upon which this is a claim
+        layer_id: LayerId,
+        /// the evaluation point
+        point: Vec<F>,
+        /// the value (C::Scalar), commitment to the value (C), or CommittedScalar
+        value: T,
+    },
+    Constant {
+        /// a circuit constant
+        coefficient: F,
+    },
+    Add {
+        left: Box<PostSumcheckLayerTree<F, T>>,
+        right: Box<PostSumcheckLayerTree<F, T>>,
+        /// depends on the circuit structure, the prover may or may not commit to an add value
+        value: Option<T>,
+    },
+    Mult {
+        left: Box<PostSumcheckLayerTree<F, T>>,
+        right: Box<PostSumcheckLayerTree<F, T>>,
+        /// mult values are always committed
+        value: T,
+    }
+}
+
+impl<F: Field> PostSumcheckLayer<F, F> {
+    /// Evaluate the PostSumcheckLayerTree to a single scalar
+    pub fn evaluate_scalar(&self) -> F {
+        self.0.iter().fold(F::ZERO, |acc, product| {
+            acc + product.get_result() * product.coefficient
+        })
+    }
+}
+
 /// Represents a normal form for a layer expression in which the layer is represented as a linear
 /// combination of products of other layer MLEs, the coefficients of which are public.
 #[derive(Debug)]
@@ -15,12 +53,21 @@ pub struct PostSumcheckLayer<F: Field, T>(pub Vec<Product<F, T>>);
 
 // FIXME can we implement all of these evaluate functions with a single function using trait bounds?
 // needs to have a zero() method (Default?).  need mulassign?
-impl<F: Field> PostSumcheckLayer<F, F> {
+impl<F: Field> PostSumcheckLayerTree<F, F> {
     /// Evaluate the PostSumcheckLayer to a single scalar
     pub fn evaluate_scalar(&self) -> F {
-        self.0.iter().fold(F::ZERO, |acc, product| {
-            acc + product.get_result() * product.coefficient
-        })
+        match self {
+            PostSumcheckLayerTree::Mle{layer_id: _, point: _, value } => value.clone(),
+            PostSumcheckLayerTree::Constant{coefficient} => coefficient.clone(),
+            PostSumcheckLayerTree::Add{left, right, value} => {
+                if value.is_some() {
+                    value.unwrap()
+                } else {
+                    left.evaluate_scalar() + right.evaluate_scalar()
+                }
+            }
+            PostSumcheckLayerTree::Mult{left: _, right: _, value} => value.clone(),
+        }
     }
 }
 
