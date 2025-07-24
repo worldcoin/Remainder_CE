@@ -294,14 +294,6 @@ impl<C: PrimeOrderCurve> CommittedScalar<C> {
         }
     }
 
-    pub fn one() -> Self {
-        Self {
-            value: C::Scalar::ONE,
-            blinding: C::Scalar::ONE,
-            commitment: C::generator(),
-        }
-    }
-
     /// Panic if the commitment does not match the value and blinding factor when using the provided
     /// PedersenCommitter.
     pub fn verify(&self, committer: &PedersenCommitter<C>) {
