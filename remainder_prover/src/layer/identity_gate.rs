@@ -36,7 +36,7 @@ use super::{
         fold_wiring_into_beta_mle_identity_gate,
     },
     layer_enum::{LayerEnum, VerifierLayerEnum},
-    product::{PostSumcheckLayer, Product},
+    product::PostSumcheckLayerTree,
     Layer, LayerDescription, LayerId, VerifierLayer,
 };
 
@@ -273,7 +273,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         round_challenges: &[F],
         claim_challenges: &[&[F]],
         random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, Option<F>> {
+    ) -> PostSumcheckLayerTree<F, Option<F>> {
         assert_eq!(claim_challenges.len(), random_coefficients.len());
         let random_coefficients_scaled_by_beta_bound = claim_challenges
             .iter()
@@ -304,11 +304,13 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             &random_coefficients_scaled_by_beta_bound,
         );
 
-        PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
-            &[self.source_mle.clone()],
-            f_1_gu,
-            round_challenges,
-        )])
+        PostSumcheckLayerTree::<F, Option<F>>::mult(
+            PostSumcheckLayerTree::<F, Option<F>>::mle(
+                &self.source_mle,
+                round_challenges,
+            ),
+            PostSumcheckLayerTree::constant(f_1_gu),
+        )
     }
 
     fn max_degree(&self) -> usize {
@@ -700,7 +702,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         round_challenges: &[F],
         claim_challenges: &[&[F]],
         random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, F> {
+    ) -> PostSumcheckLayerTree<F, F> {
         assert_eq!(claim_challenges.len(), random_coefficients.len());
         let random_coefficients_scaled_by_beta_bound = claim_challenges
             .iter()
@@ -731,10 +733,10 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             &random_coefficients_scaled_by_beta_bound,
         );
 
-        PostSumcheckLayer(vec![Product::<F, F>::new(
-            &[self.source_mle.clone()],
-            f_1_gu,
-        )])
+        PostSumcheckLayerTree::<F, F>::mult(
+            PostSumcheckLayerTree::<F, F>::mle(&self.source_mle),
+            PostSumcheckLayerTree::constant(f_1_gu),
+        )
     }
 
     fn get_claims(&self) -> Result<Vec<Claim<F>>> {

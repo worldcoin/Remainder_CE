@@ -113,7 +113,7 @@ macro_rules! layer_enum {
                     round_challenges: &[F],
                     claim_challenges: &[&[F]],
                     random_coefficients: &[F],
-                ) -> $crate::layer::PostSumcheckLayer<F, Option<F>> {
+                ) -> $crate::layer::PostSumcheckLayerTree<F, Option<F>> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges, random_coefficients),
@@ -214,7 +214,7 @@ macro_rules! layer_enum {
                     round_challenges: &[F],
                     claim_challenges: &[&[F]],
                     random_coefficients: &[F],
-                ) -> $crate::layer::PostSumcheckLayer<F, F> {
+                ) -> $crate::layer::PostSumcheckLayerTree<F, F> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges, random_coefficients),

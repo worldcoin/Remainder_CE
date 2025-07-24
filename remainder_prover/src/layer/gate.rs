@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
     layer::{
-        product::{PostSumcheckLayer, Product},
+        product::PostSumcheckLayerTree,
         Layer, LayerError, LayerId, VerificationError,
     },
     layouter::layouting::{CircuitLocation, CircuitMap},
@@ -483,7 +483,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         round_challenges: &[F],
         claim_challenges: &[&[F]],
         random_coefficients: &[F],
-    ) -> super::product::PostSumcheckLayer<F, F> {
+    ) -> super::product::PostSumcheckLayerTree<F, F> {
         assert_eq!(claim_challenges.len(), random_coefficients.len());
         let lhs_mle = &self.phase_1_mles.as_ref().unwrap()[0][1];
         let rhs_mle = &self.phase_2_mles.as_ref().unwrap()[0][1];
@@ -528,16 +528,22 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             &random_coefficients_scaled_by_beta_bound,
         );
 
-        match self.gate_operation {
-            BinaryOperation::Add => PostSumcheckLayer(vec![
-                Product::<F, F>::new(&[lhs_mle.clone()], f_1_uv),
-                Product::<F, F>::new(&[rhs_mle.clone()], f_1_uv),
-            ]),
-            BinaryOperation::Mul => PostSumcheckLayer(vec![Product::<F, F>::new(
-                &[lhs_mle.clone(), rhs_mle.clone()],
-                f_1_uv,
-            )]),
-        }
+        // MLE operations
+        let mle_node = match self.gate_operation {
+            BinaryOperation::Add => PostSumcheckLayerTree::<F, F>::add(
+                PostSumcheckLayerTree::<F, F>::mle(&lhs_mle),
+                PostSumcheckLayerTree::<F, F>::mle(&rhs_mle),
+            ),
+            BinaryOperation::Mul => PostSumcheckLayerTree::<F, F>::mult(
+                PostSumcheckLayerTree::<F, F>::mle(&lhs_mle),
+                PostSumcheckLayerTree::<F, F>::mle(&rhs_mle),
+            ),
+        };
+        // multiply by constant
+        PostSumcheckLayerTree::<F, F>::mult(
+            mle_node,
+            PostSumcheckLayerTree::constant(f_1_uv),
+        )
     }
 
     fn get_claims(&self) -> Result<Vec<Claim<F>>> {
@@ -898,7 +904,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         round_challenges: &[F],
         claim_challenges: &[&[F]],
         random_coefficients: &[F],
-    ) -> super::product::PostSumcheckLayer<F, Option<F>> {
+    ) -> super::product::PostSumcheckLayerTree<F, Option<F>> {
         let num_rounds_phase1 = self.lhs_mle.num_free_vars() - self.num_dataparallel_vars;
 
         let g2_challenges_vec = claim_challenges
@@ -947,19 +953,22 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
             .chain(round_challenges[self.num_dataparallel_vars + num_rounds_phase1..].to_vec())
             .collect_vec();
 
-        match self.gate_operation {
-            BinaryOperation::Add => PostSumcheckLayer(vec![
-                Product::<F, Option<F>>::new(&[self.lhs_mle.clone()], f_1_uv, lhs_challenges),
-                Product::<F, Option<F>>::new(&[self.rhs_mle.clone()], f_1_uv, rhs_challenges),
-            ]),
-            BinaryOperation::Mul => {
-                PostSumcheckLayer(vec![Product::<F, Option<F>>::new_from_mul_gate(
-                    &[self.lhs_mle.clone(), self.rhs_mle.clone()],
-                    f_1_uv,
-                    &[lhs_challenges, rhs_challenges],
-                )])
-            }
-        }
+        // MLE operations
+        let mle_node = match self.gate_operation {
+            BinaryOperation::Add => PostSumcheckLayerTree::<F, Option<F>>::add(
+                PostSumcheckLayerTree::<F, Option<F>>::mle(&self.lhs_mle, lhs_challenges),
+                PostSumcheckLayerTree::<F, Option<F>>::mle(&self.rhs_mle, rhs_challenges),
+            ),
+            BinaryOperation::Mul => PostSumcheckLayerTree::<F, Option<F>>::mult(
+                PostSumcheckLayerTree::<F, Option<F>>::mle(&self.lhs_mle, lhs_challenges),
+                PostSumcheckLayerTree::<F, Option<F>>::mle(&self.rhs_mle, rhs_challenges),
+            ),
+        };
+        // multiply by constant
+        PostSumcheckLayerTree::<F, Option<F>>::mult(
+            mle_node,
+            PostSumcheckLayerTree::constant(f_1_uv),
+        )
     }
 
     fn max_degree(&self) -> usize {
