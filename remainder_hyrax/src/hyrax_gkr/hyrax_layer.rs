@@ -450,7 +450,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
 pub fn evaluate_committed_scalar<C: PrimeOrderCurve>(
     post_sumcheck_layer: &PostSumcheckLayerTree<C::Scalar, CommittedScalar<C>>,
 ) -> CommittedScalar<C> {
-    post_sumcheck_layer.get_result()
+    post_sumcheck_layer.get_result(CommittedScalar::one())
 }
 
 /// Turn all the CommittedScalars into commitments i.e. Cs.
@@ -492,7 +492,7 @@ pub fn committed_scalar_psl_as_commitments<C: PrimeOrderCurve>(
 pub fn evaluate_committed_psl<C: PrimeOrderCurve>(
     post_sumcheck_layer: &PostSumcheckLayerTree<C::Scalar, C>,
 ) -> C {
-    post_sumcheck_layer.get_result()
+    post_sumcheck_layer.get_result(C::generator())
 }
 
 /// Obtained all the claims in a [PostSumcheckLayerTree] in post-order

@@ -1,6 +1,7 @@
 //! Standardized expression representation for oracle query (GKR verifier) +
 //! determining necessary proof-of-products (Hyrax prover + verifier)
 use std::ops::{Add, Mul};
+use std::fmt::Debug;
 
 use remainder_shared_types::Field;
 
@@ -11,6 +12,7 @@ use crate::mle::Mle;
 
 /// A struct that closely resembles the expression tree, but stores the commitment
 /// to MLE evaluations and their products
+#[derive(Debug)]
 pub enum PostSumcheckLayerTree<F: Field, T> {
     /// fully bounded Mle
     Mle {
@@ -68,8 +70,10 @@ impl<F: Field> PostSumcheckLayerTree<F, Option<F>> {
     pub fn mult(lhs: Self, rhs: Self) -> Self {
         Self::Mult { 
             left: Box::new(lhs), 
-            right: Box::new(rhs), 
-            value: None, 
+            right: Box::new(rhs),
+            // some intermediate multiplication values do not need to be recorded
+            // but we write down everything and remove later in [remove_add_values]
+            value: Some(None), 
         }
     }
 
@@ -77,8 +81,10 @@ impl<F: Field> PostSumcheckLayerTree<F, Option<F>> {
     pub fn add(lhs: Self, rhs: Self) -> Self {
         Self::Add { 
             left: Box::new(lhs), 
-            right: Box::new(rhs), 
-            value: None, 
+            right: Box::new(rhs),
+            // some intermediate addition values do not need to be recorded
+            // but we write down everything and remove later in [remove_add_values]
+            value: Some(None), 
         }
     }
 }
@@ -293,26 +299,29 @@ enum EvalResult<F: PartialEq + Eq, T: PartialEq + Eq> {
     T(T),
 }
 impl<F: Field + PartialEq + Eq, T> PostSumcheckLayerTree<F, T>
-    where T: Clone + PartialEq + Eq + Add<Output = T> + Add<F, Output = T> + Mul<F, Output = T>
+    where T: Debug + Clone + PartialEq + Eq + Add<Output = T> + Mul<F, Output = T>
 {
     /// evaluate and verify any redundant values
-    pub fn get_result(&self) -> T {
-        match self.get_result_helper() {
+    /// supply the committed value for ONE for constant evaluation
+    pub fn get_result(&self, one: T) -> T {
+        match self.get_result_helper(one.clone()) {
             EvalResult::T(t) => t,
-            EvalResult::F(_) => panic!("Standalone constant circuit not supported in hyrax!"),
+            EvalResult::F(f) => one * f,
         }
     }
 
     // recursive helper
-    fn get_result_helper(&self) -> EvalResult<F, T> {
+    fn get_result_helper(&self, one: T) -> EvalResult<F, T> {
+        println!("\n\nRESULT: {:?}", self);
+
         match self {
             PostSumcheckLayerTree::Mle{value, .. } => EvalResult::T(value.clone()),
             PostSumcheckLayerTree::Constant{coefficient} => EvalResult::F(*coefficient),
             PostSumcheckLayerTree::Add{left, right, value} => {
-                let computed_result = match (left.get_result_helper(), right.get_result_helper()) {
+                let computed_result = match (left.get_result_helper(one.clone()), right.get_result_helper(one.clone())) {
                     (EvalResult::T(t1), EvalResult::T(t2)) => EvalResult::T(t1 + t2),
-                    (EvalResult::T(t1), EvalResult::F(f2)) => EvalResult::T(t1 + f2),
-                    (EvalResult::F(f1), EvalResult::T(t2)) => EvalResult::T(t2 + f1),
+                    (EvalResult::T(t1), EvalResult::F(f2)) => EvalResult::T(t1 + one.clone() * f2),
+                    (EvalResult::F(f1), EvalResult::T(t2)) => EvalResult::T(t2 + one.clone() * f1),
                     (EvalResult::F(f1), EvalResult::F(f2)) => EvalResult::F(f1 + f2),
                 };
                 if let Some(val) = value {
@@ -321,7 +330,7 @@ impl<F: Field + PartialEq + Eq, T> PostSumcheckLayerTree<F, T>
                 computed_result
             }
             PostSumcheckLayerTree::Mult{left, right, value} => {
-                let computed_result = match (left.get_result_helper(), right.get_result_helper()) {
+                let computed_result = match (left.get_result_helper(one.clone()), right.get_result_helper(one.clone())) {
                     (EvalResult::T(_), EvalResult::T(_)) => {
                         // cannot perform multiplication on T, instead query `value`
                         if let Some(val) = value {
