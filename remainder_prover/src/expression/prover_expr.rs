@@ -865,7 +865,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
 
     /// Get the maximum degree of an ExpressionNode, recursively.
     fn get_max_degree(&self, mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> usize {
-        *self.get_degree_list(mle_vec).iter().max().unwrap()
+        *self.get_degree_list(mle_vec).iter().max().unwrap_or(&1)
     }
 }
 
