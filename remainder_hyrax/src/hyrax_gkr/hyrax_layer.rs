@@ -251,7 +251,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             });
 
         // Get the post sumcheck layer
-        let mut post_sumcheck_layer = layer.get_post_sumcheck_layer(
+        let post_sumcheck_layer = layer.get_post_sumcheck_layer(
             &bindings,
             &claim_points
                 .iter()
@@ -259,12 +259,11 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
                 .collect_vec(),
             &random_coefficients,
         );
-        // Avoid committing to unnecessary values
-        post_sumcheck_layer.remove_add_values(false);
 
-        // Commit to all the necessary values
-        let post_sumcheck_layer_committed =
+        // Commit to all necessary values
+        let mut post_sumcheck_layer_committed =
             commit_to_post_sumcheck_layer(&post_sumcheck_layer, committer, &mut blinding_rng);
+        post_sumcheck_layer_committed.remove_add_values(false);
 
         // Get the commitments (i.e. points on C)
         let commitments =
@@ -414,10 +413,13 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
                 .collect_vec(),
             &random_coefficients,
         );
+
         // Avoid committing to unnecessary values
         post_sumcheck_layer_desc.remove_add_values(false);
         let post_sumcheck_layer: PostSumcheckLayerTree<C::Scalar, C> =
             new_with_values(&post_sumcheck_layer_desc, commitments, &mut 0);
+        
+        // println!("\n\nVERIFIER_LAYER: {:?}", post_sumcheck_layer);
 
         // Verify the proof of sumcheck!
         proof_of_sumcheck.verify(
@@ -439,6 +441,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             .for_each(|((x, y, z), proof)| {
                 proof.verify(*x, *y, *z, committer, transcript);
             });
+        println!("BBB");
 
         // Extract the claims that the prover implicitly made on other layers by sending `commitments`.
         get_all_claims(&post_sumcheck_layer)
@@ -449,8 +452,9 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
 /// Evaluate the [PostSumcheckLayerTree] to a single CommittedScalar.
 pub fn evaluate_committed_scalar<C: PrimeOrderCurve>(
     post_sumcheck_layer: &PostSumcheckLayerTree<C::Scalar, CommittedScalar<C>>,
+    one: CommittedScalar<C>,
 ) -> CommittedScalar<C> {
-    post_sumcheck_layer.get_result(CommittedScalar::one())
+    post_sumcheck_layer.get_result(one)
 }
 
 /// Turn all the CommittedScalars into commitments i.e. Cs.
@@ -491,8 +495,9 @@ pub fn committed_scalar_psl_as_commitments<C: PrimeOrderCurve>(
 /// Evaluate the PostSumcheckLayer to a single scalar
 pub fn evaluate_committed_psl<C: PrimeOrderCurve>(
     post_sumcheck_layer: &PostSumcheckLayerTree<C::Scalar, C>,
+    one: C,
 ) -> C {
-    post_sumcheck_layer.get_result(C::generator())
+    post_sumcheck_layer.get_result(one)
 }
 
 /// Obtained all the claims in a [PostSumcheckLayerTree] in post-order
@@ -566,37 +571,19 @@ pub struct HyraxClaim<F: Field, T: Serialize + DeserializeOwned> {
 }
 
 /// Returns a CommittedScalar version of the PostSumcheckLayer.
+/// Note that we cannot simply commit to every scalar evaluation,
+/// instead, depending on whether the entry is public or private, 
+/// there are different types of operations
+/// Corresponds to [PostSumcheckLayerTree::get_result]
 pub fn commit_to_post_sumcheck_layer<C: PrimeOrderCurve>(
     post_sumcheck_layer: &PostSumcheckLayerTree<C::Scalar, C::Scalar>,
     committer: &PedersenCommitter<C>,
     mut blinding_rng: &mut impl Rng,
 ) -> PostSumcheckLayerTree<C::Scalar, CommittedScalar<C>> {
-    match post_sumcheck_layer {
-        PostSumcheckLayerTree::Constant { coefficient } => PostSumcheckLayerTree::Constant { 
-            coefficient: coefficient.clone()
-        },
-        PostSumcheckLayerTree::Mle { layer_id, point, value } => PostSumcheckLayerTree::Mle { 
-            layer_id: *layer_id,
-            point: point.clone(),
-            value: committer.committed_scalar(value, &C::Scalar::random(&mut blinding_rng)),
-        },
-        PostSumcheckLayerTree::Add { left, right, value } => PostSumcheckLayerTree::Add { 
-            left: Box::new(commit_to_post_sumcheck_layer(left, committer, blinding_rng)),
-            right: Box::new(commit_to_post_sumcheck_layer(right, committer, blinding_rng)),
-            value: if let Some(val) = value {
-                Some(committer.committed_scalar(val, &C::Scalar::random(&mut blinding_rng)))
-            } else {
-                None
-            }
-        },
-        PostSumcheckLayerTree::Mult { left, right, value } => PostSumcheckLayerTree::Mult { 
-            left: Box::new(commit_to_post_sumcheck_layer(left, committer, blinding_rng)),
-            right: Box::new(commit_to_post_sumcheck_layer(right, committer, blinding_rng)),
-            value: if let Some(val) = value {
-                Some(committer.committed_scalar(val, &C::Scalar::random(&mut blinding_rng)))
-            } else {
-                None
-            }
-        },
-    }
+    let comm = PostSumcheckLayerTree::<C::Scalar, CommittedScalar<C>>::commit(
+        post_sumcheck_layer,
+        &mut |value| committer.committed_scalar(&value, &C::Scalar::random(&mut blinding_rng)),
+        committer.committed_scalar(&C::Scalar::ONE, &C::Scalar::ZERO),
+    );
+    comm.0
 }

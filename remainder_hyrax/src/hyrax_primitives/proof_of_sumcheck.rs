@@ -79,10 +79,26 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
             .fold(zero, |acc, (gamma, message)| acc + message.clone() * *gamma);
 
         // calculate the vector j_star (the public vector in the PoDP)
+        println!("PROVER: B: {:?}, R: {:?}, G: {:?}, D: {:?}", bindings, &rhos, &gammas, degree);
         let j_star: Vec<C::Scalar> = Self::calculate_j_star(bindings, &rhos, &gammas, degree);
 
         // need a CommittedScalar for the result of the dot product
-        let oracle_eval = evaluate_committed_scalar(post_sumcheck_layer);
+        let oracle_eval = evaluate_committed_scalar(post_sumcheck_layer, committer.committed_scalar(&C::Scalar::ONE, &C::Scalar::ZERO));
+        if n > 0 {
+            println!("\n\nPROVER_CIRCUIT: {}", post_sumcheck_layer);
+            let m = degree + 1;
+            let last_messages = &messages[n - 1].value[messages[n - 1].value.len() - m..];
+            let challenge = bindings[n - 1];
+            let evaluation = (0..m).fold(C::Scalar::ZERO, |sum, i| {
+                let mut eval = last_messages[i];
+                for _ in 0..i {
+                    eval *= challenge;
+                }
+                sum + eval
+            });
+            println!("PROVER_ORACL: {:?}", oracle_eval.commitment);
+            assert_eq!(oracle_eval.value, evaluation);
+        }
         let sum_commitment = sum.commitment;
         let dot_product: CommittedScalar<C> =
             oracle_eval * rhos[rhos.len() - 1].neg() + sum.clone() * rhos[0];
@@ -147,10 +163,12 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
             .fold(C::zero(), |acc, (gamma, message)| acc + *message * *gamma);
 
         // calculate the vector j_star (the public vector in the PoDP)
+        println!("VERIFIER: B: {:?}, R: {:?}, G: {:?}, D: {:?}", bindings, &rhos, &gammas, degree);
         let j_star: Vec<C::Scalar> = Self::calculate_j_star(bindings, &rhos, &gammas, degree);
 
         // calculate a commitment to the expected dot product
-        let oracle_eval = evaluate_committed_psl(post_sumcheck_layer);
+        let oracle_eval = evaluate_committed_psl(post_sumcheck_layer, committer.scalar_commit_generator());
+        println!("\n\nVERIFIER_CIRCUIT: {}", post_sumcheck_layer);
         let dot_product: C = self.sum * rhos[0] + oracle_eval * rhos[rhos.len() - 1].neg();
 
         self.podp
