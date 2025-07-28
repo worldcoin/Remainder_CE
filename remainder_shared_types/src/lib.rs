@@ -36,7 +36,7 @@ pub type Base = <Bn256Point as CurveExt>::Base;
 ///   are using as the hash function instantiation of a verifier's public coins (see
 ///   `impl` block for [Poseidon::new], for example).
 /// * [Hash] -- necessary for creating a hashed representation of a circuit,
-///   as well as storing [Field] values within data structures as [HashMap].
+///   as well as storing [Field] values within data structures e.g. `HashMap`.
 /// * [Ord] -- not strictly necessary for cryptographic purposes, but useful
 ///   for comparing elements against one another. Consider replacing with [Eq].
 /// * [Serialize], [Deserialize] -- necessary for writing values to file using

@@ -34,7 +34,7 @@ pub enum DimensionError {
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
-/// the dimension information of the MLE. contains the dim: [IxDyn], see ndarray
+/// the dimension information of the MLE. contains the dim: [type@IxDyn], see ndarray
 /// for more detailed documentation and the names of the axes.
 pub struct DimInfo {
     dims: IxDyn,

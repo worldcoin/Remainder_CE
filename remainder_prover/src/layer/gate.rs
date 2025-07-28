@@ -1121,7 +1121,7 @@ pub struct VerifierGateLayer<F: Field> {
     /// variables).
     rhs_mle: VerifierMle<F>,
 
-    /// The challenge points for the claim on the [Gate] layer.
+    /// The challenge points for the claim on the [VerifierGateLayer].
     claim_challenge_points: Vec<Vec<F>>,
 
     /// The number of dataparallel rounds.

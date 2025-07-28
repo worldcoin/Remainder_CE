@@ -12,7 +12,7 @@ pub enum CircuitHashType {
     /// cryptographically secure, and thus this option is generally not recommended.
     DefaultRustHash,
     /// This converts the circuit description into a JSON string via
-    /// [serde::Serialize] and hashes the bytes using [Sha3_256].
+    /// [serde::Serialize] and hashes the bytes using SHA3-256.
     Sha3_256,
     /// This converts the circuit description into a JSON string via
     /// [serde::Serialize] and hashes the bytes in chunks of 16, converting

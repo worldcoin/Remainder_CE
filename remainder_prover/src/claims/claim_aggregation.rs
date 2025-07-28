@@ -84,10 +84,10 @@ pub fn prover_aggregate_claims<F: Field>(
 /// Returns an upper bound on the number of evaluations needed to represent the
 /// polynomial `P(x) = W(l(x))` where `W : F^n -> F` is a multilinear polynomial
 /// on `n` variables and `l : F -> F^n` is such that:
-///  * `l(0) = claim_vecs[0]`,
-///  *  `l(1) = `claim_vecs[1]`,
+///  * `l(0) = claim_vecs\[0\]`,
+///  *  `l(1) = `claim_vecs\[1\]`,
 ///  *   ...,
-///  *  `l(m-1) = `claim_vecs[m-1]`.
+///  *  `l(m-1) = `claim_vecs\[m-1\]`.
 ///
 /// It is guaranteed that the returned value is at least `num_claims =
 /// claim_vecs.len()`.

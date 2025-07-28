@@ -377,7 +377,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
 impl<F: Field> VerifierIdentityGateLayer<F> {
     /// Computes the oracle query's value for a given
-    /// [IdentityGateVerifierLayer].
+    /// [VerifierIdentityGateLayer].
     pub fn evaluate(&self, claim_points: &[&[F]], random_coefficients: &[F]) -> F {
         assert_eq!(random_coefficients.len(), claim_points.len());
         let scaled_random_coeffs = claim_points
