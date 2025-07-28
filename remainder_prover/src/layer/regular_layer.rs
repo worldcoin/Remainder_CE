@@ -335,10 +335,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                 acc + fully_bound_beta * random_coeff
             });
 
-        PostSumcheckLayerTree::<F, F>::mult(
-            self.expression.get_post_sumcheck_layer(),
-            PostSumcheckLayerTree::constant(rlc_beta),
-        )
+        self.expression.get_post_sumcheck_layer() * rlc_beta
     }
 
     fn get_claims(&self) -> Result<Vec<Claim<F>>> {
@@ -356,37 +353,34 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         let mut observer_fn = |expr: &ExpressionNode<F, ProverExpr>,
                                mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
          -> Result<()> {
-            match expr {
-                ExpressionNode::Mle(mle_vec_idx) => {
-                    let mle = mle_vec_idx.get_mle(mle_vec);
+            if let ExpressionNode::Mle(mle_vec_idx) = expr {
+                let mle = mle_vec_idx.get_mle(mle_vec);
 
-                    let fixed_mle_indices = mle
-                        .mle_indices
-                        .iter()
-                        .map(|index| index.val().ok_or(anyhow!(ClaimError::MleRefMleError)))
-                        .collect::<Result<Vec<_>>>()?;
+                let fixed_mle_indices = mle
+                    .mle_indices
+                    .iter()
+                    .map(|index| index.val().ok_or(anyhow!(ClaimError::MleRefMleError)))
+                    .collect::<Result<Vec<_>>>()?;
 
-                    // Grab the layer ID (i.e. MLE index) which this mle refers to
-                    let mle_layer_id = mle.layer_id();
+                // Grab the layer ID (i.e. MLE index) which this mle refers to
+                let mle_layer_id = mle.layer_id();
 
-                    let claimed_value = mle.value();
+                let claimed_value = mle.value();
 
-                    // Note: No need to append claim values here.
-                    // We already appended them when evaluating the
-                    // expression for sumcheck.
+                // Note: No need to append claim values here.
+                // We already appended them when evaluating the
+                // expression for sumcheck.
 
-                    // Construct the claim
-                    let claim = Claim::new(
-                        fixed_mle_indices,
-                        claimed_value,
-                        self.layer_id(),
-                        mle_layer_id,
-                    );
+                // Construct the claim
+                let claim = Claim::new(
+                    fixed_mle_indices,
+                    claimed_value,
+                    self.layer_id(),
+                    mle_layer_id,
+                );
 
-                    // Push it into the list of claims
-                    claims.push(claim);
-                }
-                _ => {}
+                // Push it into the list of claims
+                claims.push(claim);
             }
             Ok(())
         };
@@ -755,11 +749,9 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             ClaimAggregationStrategy::RLC => round_challenges.to_vec(),
         };
 
-        PostSumcheckLayerTree::<F, Option<F>>::mult(
-            self.expression
-                .get_post_sumcheck_layer(&all_bound_challenges),
-            PostSumcheckLayerTree::<F, Option<F>>::constant(rlc_beta),
-        )
+        self.expression
+            .get_post_sumcheck_layer(&all_bound_challenges)
+            * rlc_beta
     }
 
     fn max_degree(&self) -> usize {
@@ -798,32 +790,29 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
         let mut observer_fn = |exp: &ExpressionNode<F, VerifierExpr>,
                                _mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec|
          -> Result<()> {
-            match exp {
-                ExpressionNode::Mle(verifier_mle) => {
-                    let fixed_mle_indices = verifier_mle
-                        .var_indices()
-                        .iter()
-                        .map(|index| index.val().ok_or(anyhow!(ClaimError::MleRefMleError)))
-                        .collect::<Result<Vec<_>>>()?;
+            if let ExpressionNode::Mle(verifier_mle) = exp {
+                let fixed_mle_indices = verifier_mle
+                    .var_indices()
+                    .iter()
+                    .map(|index| index.val().ok_or(anyhow!(ClaimError::MleRefMleError)))
+                    .collect::<Result<Vec<_>>>()?;
 
-                    // Grab the layer ID (i.e. MLE index) which this mle refers to
-                    let mle_layer_id = verifier_mle.layer_id();
+                // Grab the layer ID (i.e. MLE index) which this mle refers to
+                let mle_layer_id = verifier_mle.layer_id();
 
-                    // Grab the actual value that the claim is supposed to evaluate to
-                    let claimed_value = verifier_mle.value();
+                // Grab the actual value that the claim is supposed to evaluate to
+                let claimed_value = verifier_mle.value();
 
-                    // Construct the claim
-                    let claim: Claim<F> = Claim::new(
-                        fixed_mle_indices,
-                        claimed_value,
-                        self.layer_id(),
-                        mle_layer_id,
-                    );
+                // Construct the claim
+                let claim: Claim<F> = Claim::new(
+                    fixed_mle_indices,
+                    claimed_value,
+                    self.layer_id(),
+                    mle_layer_id,
+                );
 
-                    // Push it into the list of claims
-                    claims.push(claim);
-                }
-                _ => {}
+                // Push it into the list of claims
+                claims.push(claim);
             }
             Ok(())
         };

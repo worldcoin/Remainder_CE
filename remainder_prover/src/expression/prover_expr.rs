@@ -292,7 +292,7 @@ impl<F: Field> Expression<F, ProverExpr> {
             .evaluate_sumcheck_node_beta_cascade_bookkeeping_table(
                 &[beta_values],
                 &self.mle_vec,
-                &vec![F::ONE],
+                &[F::ONE],
                 dummy_round_index,
                 0,
             )
@@ -827,28 +827,20 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Constant(constant) => PostSumcheckLayerTree::constant(*constant),
             ExpressionNode::Selector(mle_index, a, b) => {
-                let left_prod = PostSumcheckLayerTree::<F, F>::mult(
-                    PostSumcheckLayerTree::constant(F::ONE - mle_index.val().unwrap()),
-                    a.get_post_sumcheck_layer(mle_vec),
-                );
-                let right_prod = PostSumcheckLayerTree::<F, F>::mult(
-                    PostSumcheckLayerTree::constant(mle_index.val().unwrap()),
-                    b.get_post_sumcheck_layer(mle_vec),
-                );
-                PostSumcheckLayerTree::<F, F>::add(left_prod, right_prod)
+                let left_prod =
+                    a.get_post_sumcheck_layer(mle_vec) * (F::ONE - mle_index.val().unwrap());
+                let right_prod = b.get_post_sumcheck_layer(mle_vec) * mle_index.val().unwrap();
+                left_prod + right_prod
             }
-            ExpressionNode::Sum(a, b) => PostSumcheckLayerTree::<F, F>::add(
-                a.get_post_sumcheck_layer(mle_vec),
-                b.get_post_sumcheck_layer(mle_vec),
-            ),
-            ExpressionNode::Product(a, b) => PostSumcheckLayerTree::<F, F>::mult(
-                a.get_post_sumcheck_layer(mle_vec),
-                b.get_post_sumcheck_layer(mle_vec),
-            ),
-            ExpressionNode::Scaled(a, scale_factor) => PostSumcheckLayerTree::<F, F>::mult(
-                a.get_post_sumcheck_layer(mle_vec),
-                PostSumcheckLayerTree::constant(*scale_factor),
-            ),
+            ExpressionNode::Sum(a, b) => {
+                a.get_post_sumcheck_layer(mle_vec) + b.get_post_sumcheck_layer(mle_vec)
+            }
+            ExpressionNode::Product(a, b) => {
+                a.get_post_sumcheck_layer(mle_vec) * b.get_post_sumcheck_layer(mle_vec)
+            }
+            ExpressionNode::Scaled(a, scale_factor) => {
+                a.get_post_sumcheck_layer(mle_vec) * *scale_factor
+            }
         }
     }
 

@@ -527,17 +527,17 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
         // MLE operations
         let mle_node = match self.gate_operation {
-            BinaryOperation::Add => PostSumcheckLayerTree::<F, F>::add(
-                PostSumcheckLayerTree::<F, F>::mle(&lhs_mle),
-                PostSumcheckLayerTree::<F, F>::mle(&rhs_mle),
-            ),
-            BinaryOperation::Mul => PostSumcheckLayerTree::<F, F>::mult(
-                PostSumcheckLayerTree::<F, F>::mle(&lhs_mle),
-                PostSumcheckLayerTree::<F, F>::mle(&rhs_mle),
-            ),
+            BinaryOperation::Add => {
+                PostSumcheckLayerTree::<F, F>::mle(lhs_mle)
+                    + PostSumcheckLayerTree::<F, F>::mle(rhs_mle)
+            }
+            BinaryOperation::Mul => {
+                PostSumcheckLayerTree::<F, F>::mle(lhs_mle)
+                    * PostSumcheckLayerTree::<F, F>::mle(rhs_mle)
+            }
         };
         // multiply by constant
-        PostSumcheckLayerTree::<F, F>::mult(mle_node, PostSumcheckLayerTree::constant(f_1_uv))
+        mle_node * f_1_uv
     }
 
     fn get_claims(&self) -> Result<Vec<Claim<F>>> {
@@ -949,20 +949,17 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
         // MLE operations
         let mle_node = match self.gate_operation {
-            BinaryOperation::Add => PostSumcheckLayerTree::<F, Option<F>>::add(
-                PostSumcheckLayerTree::<F, Option<F>>::mle(&self.lhs_mle, lhs_challenges),
-                PostSumcheckLayerTree::<F, Option<F>>::mle(&self.rhs_mle, rhs_challenges),
-            ),
-            BinaryOperation::Mul => PostSumcheckLayerTree::<F, Option<F>>::mult(
-                PostSumcheckLayerTree::<F, Option<F>>::mle(&self.lhs_mle, lhs_challenges),
-                PostSumcheckLayerTree::<F, Option<F>>::mle(&self.rhs_mle, rhs_challenges),
-            ),
+            BinaryOperation::Add => {
+                PostSumcheckLayerTree::<F, Option<F>>::mle(&self.lhs_mle, lhs_challenges)
+                    + PostSumcheckLayerTree::<F, Option<F>>::mle(&self.rhs_mle, rhs_challenges)
+            }
+            BinaryOperation::Mul => {
+                PostSumcheckLayerTree::<F, Option<F>>::mle(&self.lhs_mle, lhs_challenges)
+                    * PostSumcheckLayerTree::<F, Option<F>>::mle(&self.rhs_mle, rhs_challenges)
+            }
         };
         // multiply by constant
-        PostSumcheckLayerTree::<F, Option<F>>::mult(
-            mle_node,
-            PostSumcheckLayerTree::constant(f_1_uv),
-        )
+        mle_node * f_1_uv
     }
 
     fn max_degree(&self) -> usize {

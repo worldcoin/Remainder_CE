@@ -102,18 +102,26 @@ impl<F: Field, T> PostSumcheckLayerTree<F, T> {
 
     // Helper function to decide whether a multiplication node requires commitment
     fn requires_mult_value(lhs: &Self, rhs: &Self) -> bool {
-        let left_child_is_constant = if let Self::Constant { .. } = lhs {
-            true
-        } else {
-            false
-        };
-        let right_child_is_constant = if let Self::Constant { .. } = rhs {
-            true
-        } else {
-            false
-        };
+        let left_child_is_constant = matches!(lhs, Self::Constant { .. });
+        let right_child_is_constant = matches!(rhs, Self::Constant { .. });
         // Only requires value if neither child is constant
         !left_child_is_constant && !right_child_is_constant
+    }
+}
+
+impl<F: Field, T> Add for PostSumcheckLayerTree<F, T> {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self {
+        Self::Add {
+            left: Box::new(self),
+            right: Box::new(rhs),
+        }
+    }
+}
+impl<F: Field, T> Add<F> for PostSumcheckLayerTree<F, T> {
+    type Output = Self;
+    fn add(self, rhs: F) -> Self {
+        self + Self::Constant { coefficient: rhs }
     }
 }
 
@@ -126,23 +134,23 @@ impl<F: Field> PostSumcheckLayerTree<F, Option<F>> {
             value: None,
         }
     }
+}
 
-    /// Creates a multiplication node from two nodes
-    pub fn mult(lhs: Self, rhs: Self) -> Self {
-        let requires_value = Self::requires_mult_value(&lhs, &rhs);
+impl<F: Field> Mul for PostSumcheckLayerTree<F, Option<F>> {
+    type Output = Self;
+    fn mul(self, rhs: Self) -> Self {
+        let requires_value = Self::requires_mult_value(&self, &rhs);
         Self::Mult {
-            left: Box::new(lhs),
+            left: Box::new(self),
             right: Box::new(rhs),
             value: if requires_value { Some(None) } else { None },
         }
     }
-
-    /// Creates an addition node from two nodes
-    pub fn add(lhs: Self, rhs: Self) -> Self {
-        Self::Add {
-            left: Box::new(lhs),
-            right: Box::new(rhs),
-        }
+}
+impl<F: Field> Mul<F> for PostSumcheckLayerTree<F, Option<F>> {
+    type Output = Self;
+    fn mul(self, rhs: F) -> Self {
+        self * Self::Constant { coefficient: rhs }
     }
 }
 
@@ -152,7 +160,7 @@ impl<F: Field> PostSumcheckLayerTree<F, F> {
         match self {
             PostSumcheckLayerTree::Mle { value, .. } => *value,
             PostSumcheckLayerTree::Constant { coefficient } => *coefficient,
-            PostSumcheckLayerTree::Add { left, right} => {
+            PostSumcheckLayerTree::Add { left, right } => {
                 left.get_field_value() + right.get_field_value()
             }
             PostSumcheckLayerTree::Mult { left, right, value } => {
@@ -176,24 +184,24 @@ impl<F: Field> PostSumcheckLayerTree<F, F> {
             value: mle.value(),
         }
     }
+}
 
-    /// Creates a multiplication node from two nodes
-    pub fn mult(lhs: Self, rhs: Self) -> Self {
-        let value = lhs.get_field_value() * rhs.get_field_value();
-        let requires_value = Self::requires_mult_value(&lhs, &rhs);
+impl<F: Field> Mul for PostSumcheckLayerTree<F, F> {
+    type Output = Self;
+    fn mul(self, rhs: Self) -> Self {
+        let value = self.get_field_value() * rhs.get_field_value();
+        let requires_value = Self::requires_mult_value(&self, &rhs);
         Self::Mult {
-            left: Box::new(lhs),
+            left: Box::new(self),
             right: Box::new(rhs),
             value: if requires_value { Some(value) } else { None },
         }
     }
-
-    /// Creates an addition node from two nodes
-    pub fn add(lhs: Self, rhs: Self) -> Self {
-        Self::Add {
-            left: Box::new(lhs),
-            right: Box::new(rhs),
-        }
+}
+impl<F: Field> Mul<F> for PostSumcheckLayerTree<F, F> {
+    type Output = Self;
+    fn mul(self, rhs: F) -> Self {
+        self * Self::Constant { coefficient: rhs }
     }
 }
 
@@ -207,7 +215,7 @@ pub fn new_with_values<F: Field, S, T: Clone>(
 ) -> PostSumcheckLayerTree<F, T> {
     match post_sumcheck_layer {
         PostSumcheckLayerTree::Constant { coefficient } => PostSumcheckLayerTree::Constant {
-            coefficient: coefficient.clone(),
+            coefficient: *coefficient,
         },
         PostSumcheckLayerTree::Mle {
             layer_id, point, ..
@@ -220,14 +228,14 @@ pub fn new_with_values<F: Field, S, T: Clone>(
                 new_value
             },
         },
-        PostSumcheckLayerTree::Add { left, right} => PostSumcheckLayerTree::Add {
+        PostSumcheckLayerTree::Add { left, right } => PostSumcheckLayerTree::Add {
             left: Box::new(new_with_values(left, values, next_index)),
             right: Box::new(new_with_values(right, values, next_index)),
         },
         PostSumcheckLayerTree::Mult { left, right, value } => PostSumcheckLayerTree::Mult {
             left: Box::new(new_with_values(left, values, next_index)),
             right: Box::new(new_with_values(right, values, next_index)),
-            value: if let Some(_) = value {
+            value: if value.is_some() {
                 let new_value = values[*next_index].clone();
                 *next_index += 1;
                 Some(new_value)
@@ -246,14 +254,11 @@ impl<F: Field, T: Clone> PostSumcheckLayerTree<F, T> {
         match self {
             Self::Constant { .. } => Vec::new(),
             Self::Mle { value, .. } => vec![value.clone()],
-            Self::Add { left, right} => {
+            Self::Add { left, right } => {
                 let left_values = left.get_values();
                 let right_values = right.get_values();
                 // include value if necessary
-                left_values
-                    .into_iter()
-                    .chain(right_values)
-                    .collect()
+                left_values.into_iter().chain(right_values).collect()
             }
             Self::Mult { left, right, value } => {
                 let left_values = left.get_values();
@@ -301,7 +306,7 @@ where
         match tree {
             PostSumcheckLayerTree::Constant { coefficient } => (
                 Self::Constant {
-                    coefficient: coefficient.clone(),
+                    coefficient: *coefficient,
                 },
                 EvalResult::F(*coefficient),
             ),
@@ -378,7 +383,7 @@ where
             PostSumcheckLayerTree::Mle { value, .. } => EvalResult::T(value.clone()),
             PostSumcheckLayerTree::Constant { coefficient } => EvalResult::F(*coefficient),
             PostSumcheckLayerTree::Add { left, right } => {
-                let computed_result = match (
+                match (
                     left.get_result_helper(one.clone()),
                     right.get_result_helper(one.clone()),
                 ) {
@@ -386,8 +391,7 @@ where
                     (EvalResult::T(t1), EvalResult::F(f2)) => EvalResult::T(t1 + one.clone() * f2),
                     (EvalResult::F(f1), EvalResult::T(t2)) => EvalResult::T(t2 + one.clone() * f1),
                     (EvalResult::F(f1), EvalResult::F(f2)) => EvalResult::F(f1 + f2),
-                };
-                computed_result
+                }
             }
             PostSumcheckLayerTree::Mult { left, right, value } => {
                 let computed_result = match (
@@ -431,15 +435,13 @@ where
                 left_triples
                     .into_iter()
                     .chain(right_triples)
-                    .chain(
-                        if let Some(z) = value {
-                            let x = left.get_result(one.clone());
-                            let y = right.get_result(one.clone());
-                            vec![(x, y, z.clone())]
-                        } else {
-                            Vec::new()
-                        }
-                    )
+                    .chain(if let Some(z) = value {
+                        let x = left.get_result(one.clone());
+                        let y = right.get_result(one.clone());
+                        vec![(x, y, z.clone())]
+                    } else {
+                        Vec::new()
+                    })
                     .collect()
             }
         }

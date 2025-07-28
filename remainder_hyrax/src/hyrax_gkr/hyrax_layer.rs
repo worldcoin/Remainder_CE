@@ -295,7 +295,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             .get_product_triples(committer.committed_scalar(&C::Scalar::ONE, &C::Scalar::ZERO))
             .iter()
             .map(|(x, y, z)| {
-                ProofOfProduct::prove(&x, &y, &z, committer, &mut blinding_rng, transcript)
+                ProofOfProduct::prove(x, y, z, committer, &mut blinding_rng, transcript)
             })
             .collect();
 
@@ -463,7 +463,7 @@ pub fn committed_scalar_psl_as_commitments<C: PrimeOrderCurve>(
 ) -> PostSumcheckLayerTree<C::Scalar, C> {
     match post_sumcheck_layer {
         PostSumcheckLayerTree::Constant { coefficient } => PostSumcheckLayerTree::Constant {
-            coefficient: coefficient.clone(),
+            coefficient: *coefficient,
         },
         PostSumcheckLayerTree::Mle {
             layer_id,
@@ -481,11 +481,7 @@ pub fn committed_scalar_psl_as_commitments<C: PrimeOrderCurve>(
         PostSumcheckLayerTree::Mult { left, right, value } => PostSumcheckLayerTree::Mult {
             left: Box::new(committed_scalar_psl_as_commitments(left)),
             right: Box::new(committed_scalar_psl_as_commitments(right)),
-            value: if let Some(val) = value {
-                Some(val.commitment)
-            } else {
-                None
-            },
+            value: value.as_ref().map(|val| val.commitment),
         },
     }
 }
