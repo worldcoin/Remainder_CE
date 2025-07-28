@@ -198,8 +198,8 @@ impl<F: Field> DenseMle<F> {
     }
 
     /// Constructs a new `DenseMle` with specified MLE indices, normally when we are
-    /// trying to construct a new MLE based off of a previous MLE, such as in [MatMult], but
-    /// want to preserve the "prefix bits."
+    /// trying to construct a new MLE based off of a previous MLE, such as in
+    /// [crate::layer::matmult::MatMult], but want to preserve the "prefix vars."
     ///
     /// The MLE should not have ever been mutated if this function is ever called, so none of the
     /// indices should ever be Indexed here.
@@ -217,8 +217,8 @@ impl<F: Field> DenseMle<F> {
         mle
     }
 
-    /// Constructs a new `DenseMle` from an iterator over items of the [MleAble]
-    /// type `T`.
+    /// Constructs a new `DenseMle` from a bookkeeping table represented by
+    /// [`Iterator<Item = F>`] and [LayerId].
     ///
     /// # Example
     /// ```
@@ -243,8 +243,8 @@ impl<F: Field> DenseMle<F> {
         }
     }
 
-    /// Constructs a new `DenseMle` from any valid representation of the
-    /// [MleAble] type `T`.
+    /// Constructs a new `DenseMle` from a bookkeeping table represented by
+    /// [`Vec<F>`] and [LayerId].
     ///
     /// # Example
     /// ```

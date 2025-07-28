@@ -72,7 +72,7 @@ impl<F: Field> OutputLayer<F> {
     }
 
     /// If the MLE is fully-bound, returns its evaluation.
-    /// Otherwise, it returns an [super::OutputLayerError].
+    /// Otherwise, it returns an [OutputLayerError].
     pub fn value(&self) -> Result<F> {
         match &self.mle {
             MleEnum::Dense(_) => unimplemented!(),

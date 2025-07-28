@@ -23,7 +23,7 @@ use super::{
 /// * Finally, the idea of having the [GKRCircuitProverConfig] and
 ///   [GKRCircuitVerifierConfig] together in the same [RwLock] is so that
 ///   we can run an atomic prove + verify test. This is technically less
-///   efficient vs. keeping each of the configs in independent [Lazy<RwLock>],
+///   efficient vs. keeping each of the configs in independent [`Lazy<RwLock>`],
 ///   but gives a nicer abstraction.
 pub static PROVER_VERIFIER_CONFIG: Lazy<
     RwLock<(GKRCircuitProverConfig, GKRCircuitVerifierConfig)>,
@@ -249,6 +249,58 @@ pub fn downgrade<T>(write_guard: RwLockWriteGuard<'_, T>) -> RwLockReadGuard<'_,
 
 // -------------------- Helper fns for execution --------------------
 
+/// This function will run the given function _only_ under the given configs!
+/// It does this by first reading the global config and checking whether
+/// that config matches the expected configs which are passed in, then
+/// * If matches, it performs the function immediately while holding the read
+///   lock and returns.
+/// * If doesn't match, it attempts to acquire a write lock, then writes the
+///   config to the global one, downgrades the write lock to a read lock
+///   (thereby unblocking all other readers), and performs the function.
+#[macro_export]
+macro_rules! perform_function_under_expected_configs {
+    ($func:expr, $expected_prover_config: expr, $expected_verifier_config:expr, $($arg:expr),*) => {{
+
+        loop {
+            // Extra scope allows us to automatically drop the reader reference
+            {
+                // Attempt to get read lock and check prover/verifier config matches
+                let prover_verifier_static_config_read_instance = remainder_shared_types::config::global_config::PROVER_VERIFIER_CONFIG.read();
+                if $expected_prover_config
+                    .matches_global_prover_config(&prover_verifier_static_config_read_instance)
+                    && $expected_verifier_config
+                        .matches_global_verifier_config(&prover_verifier_static_config_read_instance)
+                {
+                    let ret = $func($($arg),*);
+                    break ret;
+                }
+            }
+
+            // Otherwise, write the desired prover/verifier config to the global static var, downgrade into a read lock, and perform the action
+            if let Some(mut prover_verifier_static_config_write_instance) =
+                remainder_shared_types::config::global_config::PROVER_VERIFIER_CONFIG.try_write()
+            {
+                remainder_shared_types::config::global_config::set_global_prover_config(
+                    $expected_prover_config,
+                    &mut prover_verifier_static_config_write_instance,
+                );
+                remainder_shared_types::config::global_config::set_global_verifier_config(
+                    $expected_verifier_config,
+                    &mut prover_verifier_static_config_write_instance,
+                );
+
+                // Downgrade into a read lock and perform the function (this should unblock other readers)
+                let _prover_verifier_static_config_read_instance =
+                    remainder_shared_types::config::global_config::downgrade(prover_verifier_static_config_write_instance);
+
+                // Execute the function with the provided arguments
+                let ret = $func($($arg),*);
+                break ret;
+            }
+        }
+    }};
+}
+
 /// Similar function to [perform_function_under_expected_configs], but only
 /// checks against an expected [GKRCircuitProverConfig].
 #[macro_export]
@@ -329,186 +381,3 @@ macro_rules! perform_function_under_verifier_config {
         }
     }};
 }
-
-/// This function will run the given function _only_ under the given configs!
-/// It does this by first reading the global config and checking whether
-/// that config matches the expected configs which are passed in, then
-/// * If matches, it performs the function immediately while holding the read
-///   lock and returns.
-/// * If doesn't match, it attempts to acquire a write lock, then writes the
-///   config to the global one, downgrades the write lock to a read lock
-///   (thereby unblocking all other readers), and performs the function.
-#[macro_export]
-macro_rules! perform_function_under_expected_configs {
-    ($func:expr, $expected_prover_config: expr, $expected_verifier_config:expr, $($arg:expr),*) => {{
-
-        loop {
-            // Extra scope allows us to automatically drop the reader reference
-            {
-                // Attempt to get read lock and check prover/verifier config matches
-                let prover_verifier_static_config_read_instance = remainder_shared_types::config::global_config::PROVER_VERIFIER_CONFIG.read();
-                if $expected_prover_config
-                    .matches_global_prover_config(&prover_verifier_static_config_read_instance)
-                    && $expected_verifier_config
-                        .matches_global_verifier_config(&prover_verifier_static_config_read_instance)
-                {
-                    let ret = $func($($arg),*);
-                    break ret;
-                }
-            }
-
-            // Otherwise, write the desired prover/verifier config to the global static var, downgrade into a read lock, and perform the action
-            if let Some(mut prover_verifier_static_config_write_instance) =
-                remainder_shared_types::config::global_config::PROVER_VERIFIER_CONFIG.try_write()
-            {
-                remainder_shared_types::config::global_config::set_global_prover_config(
-                    $expected_prover_config,
-                    &mut prover_verifier_static_config_write_instance,
-                );
-                remainder_shared_types::config::global_config::set_global_verifier_config(
-                    $expected_verifier_config,
-                    &mut prover_verifier_static_config_write_instance,
-                );
-
-                // Downgrade into a read lock and perform the function (this should unblock other readers)
-                let _prover_verifier_static_config_read_instance =
-                    remainder_shared_types::config::global_config::downgrade(prover_verifier_static_config_write_instance);
-
-                // Execute the function with the provided arguments
-                let ret = $func($($arg),*);
-                break ret;
-            }
-        }
-    }};
-}
-
-// pub fn perform_function_under_expected_configs<F, A, R>(
-//     f: F,
-//     args: A,
-//     expected_prover_config: &GKRCircuitProverConfig,
-//     expected_verifier_config: &GKRCircuitVerifierConfig,
-// ) -> R
-// where
-//     F: FnOnce(A) -> R,
-// {
-//     loop {
-//         // --- Extra scope allows us to automatically drop the reader reference ---
-//         {
-//             // --- Attempt to get read lock and check prover/verifier config matches ---
-//             let prover_verifier_static_config_read_instance = PROVER_VERIFIER_CONFIG.read();
-//             if expected_prover_config
-//                 .matches_global_prover_config(&prover_verifier_static_config_read_instance)
-//                 && expected_verifier_config
-//                     .matches_global_verifier_config(&prover_verifier_static_config_read_instance)
-//             {
-//                 let ret = f(args);
-//                 return ret;
-//             }
-//         }
-
-//         // --- Otherwise, write the desired prover/verifier config to the global static var, downgrade into a read lock, and perform the action ---
-//         if let Some(mut prover_verifier_static_config_write_instance) =
-//             PROVER_VERIFIER_CONFIG.try_write()
-//         {
-//             set_global_prover_config(
-//                 expected_prover_config,
-//                 &mut prover_verifier_static_config_write_instance,
-//             );
-//             set_global_verifier_config(
-//                 expected_verifier_config,
-//                 &mut prover_verifier_static_config_write_instance,
-//             );
-
-//             // Downgrade into a read lock and perform the function (this should unblock other readers)
-//             let _prover_verifier_static_config_read_instance =
-//                 RwLockWriteGuard::downgrade(prover_verifier_static_config_write_instance);
-
-//             let ret = f(args);
-//             return ret;
-//         }
-//     }
-// }
-
-// /// Similar function to [perform_function_under_expected_configs], but only
-// /// checks against an expected [GKRCircuitProverConfig].
-// pub fn perform_function_under_prover_config<F, A, R>(
-//     f: F,
-//     args: A,
-//     expected_prover_config: &GKRCircuitProverConfig,
-// ) -> R
-// where
-//     F: FnOnce(A) -> R,
-// {
-//     loop {
-//         // --- Additional scope so that the read lock is dropped immediately ---
-//         {
-//             // --- Attempt to get read lock and check prover/verifier config matches ---
-//             let prover_verifier_static_config_read_instance = PROVER_VERIFIER_CONFIG.read();
-//             if expected_prover_config
-//                 .matches_global_prover_config(&prover_verifier_static_config_read_instance)
-//             {
-//                 let ret = f(args);
-//                 return ret;
-//             }
-//         }
-
-//         // --- Otherwise, write the desired prover/verifier config to the global static var ---
-//         if let Some(mut prover_verifier_static_config_write_instance) =
-//             PROVER_VERIFIER_CONFIG.try_write()
-//         {
-//             set_global_prover_config(
-//                 expected_prover_config,
-//                 &mut prover_verifier_static_config_write_instance,
-//             );
-
-//             // Downgrade into a read lock and perform the function (this should unblock other readers)
-//             let _prover_verifier_static_config_read_instance =
-//                 RwLockWriteGuard::downgrade(prover_verifier_static_config_write_instance);
-
-//             let ret = f(args);
-//             return ret;
-//         }
-//     }
-// }
-
-// /// Similar function to [perform_function_under_expected_configs], but only
-// /// checks against an expected [GKRCircuitVerifierConfig].
-// pub fn perform_function_under_verifier_config<F, A, R>(
-//     f: F,
-//     args: A,
-//     expected_verifier_config: &GKRCircuitVerifierConfig,
-// ) -> R
-// where
-//     F: FnOnce(A) -> R,
-// {
-//     loop {
-//         // --- Additional scope so that the read lock is dropped immediately ---
-//         {
-//             // --- Attempt to get read lock and check prover/verifier config matches ---
-//             let prover_verifier_static_config_read_instance = PROVER_VERIFIER_CONFIG.read();
-//             if expected_verifier_config
-//                 .matches_global_verifier_config(&prover_verifier_static_config_read_instance)
-//             {
-//                 let ret = f(args);
-//                 return ret;
-//             }
-//         }
-
-//         // --- Otherwise, write the desired prover/verifier config to the global static var ---
-//         if let Some(mut prover_verifier_static_config_write_instance) =
-//             PROVER_VERIFIER_CONFIG.try_write()
-//         {
-//             set_global_verifier_config(
-//                 expected_verifier_config,
-//                 &mut prover_verifier_static_config_write_instance,
-//             );
-
-//             // Downgrade into a read lock and perform the function (this should unblock other readers)
-//             let _prover_verifier_static_config_read_instance =
-//                 RwLockWriteGuard::downgrade(prover_verifier_static_config_write_instance);
-
-//             let ret = f(args);
-//             return ret;
-//         }
-//     }
-// }

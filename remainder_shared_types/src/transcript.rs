@@ -56,7 +56,7 @@ enum Operation<F> {
     /// with e.g. SHA-256) of the elements which are to be appended.
     ///
     /// Note that this is to defend against attacks of the form written about
-    /// within [https://eprint.iacr.org/2025/118].
+    /// within <https://eprint.iacr.org/2025/118>.
     AppendInput(String, Vec<F>, Vec<F>),
 
     /// A squeeze operation consists of a label (used for debugging purposes)
@@ -215,7 +215,7 @@ impl<F: Field, Tr: TranscriptSponge<F>> ProverTranscript<F> for TranscriptWriter
     }
 
     /// A function which MUST be used on circuit inputs as an additional
-    /// deterrant against the attack specified in [https://eprint.iacr.org/2025/118],
+    /// deterrant against the attack specified in <https://eprint.iacr.org/2025/118>,
     /// by absorbing H(H(H(...H(x)...))) into the `Transcript`, where `x` is
     /// a circuit input and `H` is the hash function defined in the below field.
     fn append_input_elements(&mut self, label: &str, elements: &[F]) {
@@ -257,7 +257,7 @@ impl<F: Field, Tr: TranscriptSponge<F>> TranscriptWriter<F, Tr> {
 
 pub trait VerifierTranscript<F> {
     /// Circuit input elements are treated differently in order to mitigate
-    /// the Rothblum et. al. attack in [https://eprint.iacr.org/2025/118].
+    /// the Rothblum et. al. attack in <https://eprint.iacr.org/2025/118>.
     ///
     /// In particular, a hash chain of the elements is computed and absorbed
     /// by the transcript sponge alongside each of the given elements.
