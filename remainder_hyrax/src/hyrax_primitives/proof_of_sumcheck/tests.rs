@@ -201,15 +201,12 @@ fn test_example_with_regular_layer() {
     let _mle_eval = mle.value() * equality_mle.value();
     let post_sumcheck_layer = PostSumcheckLayerTree::<Fr, Fr>::mult(
         PostSumcheckLayerTree::<Fr, Fr>::mle(&mle),
-        PostSumcheckLayerTree::constant(equality_mle.value())
+        PostSumcheckLayerTree::constant(equality_mle.value()),
     );
     // deliberately avoiding the cleanup to test for prover - verifier coherence
     // post_sumcheck_layer.remove_add_values(false);
-    let post_sumcheck_layer = commit_to_post_sumcheck_layer(
-        &post_sumcheck_layer,
-        &committer,
-        &mut rand::thread_rng(),
-    );
+    let post_sumcheck_layer =
+        commit_to_post_sumcheck_layer(&post_sumcheck_layer, &committer, &mut rand::thread_rng());
     let proof = ProofOfSumcheck::prove(
         &sum_commit,
         &vec![message1, message2],

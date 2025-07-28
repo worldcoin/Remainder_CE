@@ -363,8 +363,7 @@ impl<F: Field> Expression<F, ProverExpr> {
     /// Get the [PostSumcheckLayer] for this expression, which represents the fully bound values of the expression.
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     pub fn get_post_sumcheck_layer(&self) -> PostSumcheckLayerTree<F, F> {
-        self.expression_node
-            .get_post_sumcheck_layer(&self.mle_vec)
+        self.expression_node.get_post_sumcheck_layer(&self.mle_vec)
     }
 
     /// Get the maximum degree of any variable in htis expression
@@ -826,11 +825,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 assert!(mle.is_fully_bounded());
                 PostSumcheckLayerTree::<F, F>::mle(mle)
             }
-            ExpressionNode::Constant(constant) => {
-                PostSumcheckLayerTree::constant(
-                    *constant
-                )
-            }
+            ExpressionNode::Constant(constant) => PostSumcheckLayerTree::constant(*constant),
             ExpressionNode::Selector(mle_index, a, b) => {
                 let left_prod = PostSumcheckLayerTree::<F, F>::mult(
                     PostSumcheckLayerTree::constant(F::ONE - mle_index.val().unwrap()),
@@ -842,24 +837,18 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 );
                 PostSumcheckLayerTree::<F, F>::add(left_prod, right_prod)
             }
-            ExpressionNode::Sum(a, b) => {
-                PostSumcheckLayerTree::<F, F>::add(
-                    a.get_post_sumcheck_layer(mle_vec),
-                    b.get_post_sumcheck_layer(mle_vec),
-                )
-            }
-            ExpressionNode::Product(a, b) => {
-                PostSumcheckLayerTree::<F, F>::mult(
-                    a.get_post_sumcheck_layer(mle_vec),
-                    b.get_post_sumcheck_layer(mle_vec),
-                )
-            }
-            ExpressionNode::Scaled(a, scale_factor) => {
-                PostSumcheckLayerTree::<F, F>::mult(
-                    a.get_post_sumcheck_layer(mle_vec),
-                    PostSumcheckLayerTree::constant(*scale_factor),
-                )
-            }
+            ExpressionNode::Sum(a, b) => PostSumcheckLayerTree::<F, F>::add(
+                a.get_post_sumcheck_layer(mle_vec),
+                b.get_post_sumcheck_layer(mle_vec),
+            ),
+            ExpressionNode::Product(a, b) => PostSumcheckLayerTree::<F, F>::mult(
+                a.get_post_sumcheck_layer(mle_vec),
+                b.get_post_sumcheck_layer(mle_vec),
+            ),
+            ExpressionNode::Scaled(a, scale_factor) => PostSumcheckLayerTree::<F, F>::mult(
+                a.get_post_sumcheck_layer(mle_vec),
+                PostSumcheckLayerTree::constant(*scale_factor),
+            ),
         }
     }
 

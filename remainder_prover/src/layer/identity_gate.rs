@@ -305,10 +305,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         );
 
         PostSumcheckLayerTree::<F, Option<F>>::mult(
-            PostSumcheckLayerTree::<F, Option<F>>::mle(
-                &self.source_mle,
-                round_challenges,
-            ),
+            PostSumcheckLayerTree::<F, Option<F>>::mle(&self.source_mle, round_challenges),
             PostSumcheckLayerTree::constant(f_1_gu),
         )
     }
