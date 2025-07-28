@@ -21,10 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
-    layer::{
-        product::PostSumcheckLayerTree,
-        Layer, LayerError, LayerId, VerificationError,
-    },
+    layer::{product::PostSumcheckLayerTree, Layer, LayerError, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
@@ -540,10 +537,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             ),
         };
         // multiply by constant
-        PostSumcheckLayerTree::<F, F>::mult(
-            mle_node,
-            PostSumcheckLayerTree::constant(f_1_uv),
-        )
+        PostSumcheckLayerTree::<F, F>::mult(mle_node, PostSumcheckLayerTree::constant(f_1_uv))
     }
 
     fn get_claims(&self) -> Result<Vec<Claim<F>>> {

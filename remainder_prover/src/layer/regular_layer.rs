@@ -756,7 +756,8 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         };
 
         PostSumcheckLayerTree::<F, Option<F>>::mult(
-            self.expression.get_post_sumcheck_layer(&all_bound_challenges),
+            self.expression
+                .get_post_sumcheck_layer(&all_bound_challenges),
             PostSumcheckLayerTree::<F, Option<F>>::constant(rlc_beta),
         )
     }
