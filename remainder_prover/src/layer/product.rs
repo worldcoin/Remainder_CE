@@ -34,8 +34,7 @@ pub enum PostSumcheckLayerTree<F: Field, T> {
         left: Box<PostSumcheckLayerTree<F, T>>,
         /// right child
         right: Box<PostSumcheckLayerTree<F, T>>,
-        /// depends on the circuit structure, the prover may or may not commit to an add value
-        value: Option<T>,
+        // the prover never committs to add values
     },
     /// multiplication
     Mult {
@@ -100,6 +99,22 @@ impl<F: Field, T> PostSumcheckLayerTree<F, T> {
             coefficient: constant,
         }
     }
+
+    // Helper function to decide whether a multiplication node requires commitment
+    fn requires_mult_value(lhs: &Self, rhs: &Self) -> bool {
+        let left_child_is_constant = if let Self::Constant { .. } = lhs {
+            true
+        } else {
+            false
+        };
+        let right_child_is_constant = if let Self::Constant { .. } = rhs {
+            true
+        } else {
+            false
+        };
+        // Only requires value if neither child is constant
+        !left_child_is_constant && !right_child_is_constant
+    }
 }
 
 impl<F: Field> PostSumcheckLayerTree<F, Option<F>> {
@@ -114,12 +129,11 @@ impl<F: Field> PostSumcheckLayerTree<F, Option<F>> {
 
     /// Creates a multiplication node from two nodes
     pub fn mult(lhs: Self, rhs: Self) -> Self {
+        let requires_value = Self::requires_mult_value(&lhs, &rhs);
         Self::Mult {
             left: Box::new(lhs),
             right: Box::new(rhs),
-            // some intermediate multiplication values do not need to be recorded
-            // but we write down everything and remove later in [remove_add_values]
-            value: Some(None),
+            value: if requires_value { Some(None) } else { None },
         }
     }
 
@@ -128,9 +142,6 @@ impl<F: Field> PostSumcheckLayerTree<F, Option<F>> {
         Self::Add {
             left: Box::new(lhs),
             right: Box::new(rhs),
-            // some intermediate addition values do not need to be recorded
-            // but we write down everything and remove later in [remove_add_values]
-            value: Some(None),
         }
     }
 }
@@ -141,12 +152,8 @@ impl<F: Field> PostSumcheckLayerTree<F, F> {
         match self {
             PostSumcheckLayerTree::Mle { value, .. } => *value,
             PostSumcheckLayerTree::Constant { coefficient } => *coefficient,
-            PostSumcheckLayerTree::Add { left, right, value } => {
-                if value.is_some() {
-                    value.unwrap()
-                } else {
-                    left.get_field_value() + right.get_field_value()
-                }
+            PostSumcheckLayerTree::Add { left, right} => {
+                left.get_field_value() + right.get_field_value()
             }
             PostSumcheckLayerTree::Mult { left, right, value } => {
                 if value.is_some() {
@@ -173,24 +180,19 @@ impl<F: Field> PostSumcheckLayerTree<F, F> {
     /// Creates a multiplication node from two nodes
     pub fn mult(lhs: Self, rhs: Self) -> Self {
         let value = lhs.get_field_value() * rhs.get_field_value();
+        let requires_value = Self::requires_mult_value(&lhs, &rhs);
         Self::Mult {
             left: Box::new(lhs),
             right: Box::new(rhs),
-            // some intermediate multiplication values do not need to be recorded
-            // but we write down everything and remove later in [remove_add_values]
-            value: Some(value),
+            value: if requires_value { Some(value) } else { None },
         }
     }
 
     /// Creates an addition node from two nodes
     pub fn add(lhs: Self, rhs: Self) -> Self {
-        let value = lhs.get_field_value() + rhs.get_field_value();
         Self::Add {
             left: Box::new(lhs),
             right: Box::new(rhs),
-            // some intermediate addition values do not need to be recorded
-            // but we write down everything and remove later in [remove_add_values]
-            value: Some(value),
         }
     }
 }
@@ -218,16 +220,9 @@ pub fn new_with_values<F: Field, S, T: Clone>(
                 new_value
             },
         },
-        PostSumcheckLayerTree::Add { left, right, value } => PostSumcheckLayerTree::Add {
+        PostSumcheckLayerTree::Add { left, right} => PostSumcheckLayerTree::Add {
             left: Box::new(new_with_values(left, values, next_index)),
             right: Box::new(new_with_values(right, values, next_index)),
-            value: if let Some(_) = value {
-                let new_value = values[*next_index].clone();
-                *next_index += 1;
-                Some(new_value)
-            } else {
-                None
-            },
         },
         PostSumcheckLayerTree::Mult { left, right, value } => PostSumcheckLayerTree::Mult {
             left: Box::new(new_with_values(left, values, next_index)),
@@ -243,47 +238,6 @@ pub fn new_with_values<F: Field, S, T: Clone>(
     }
 }
 
-// OPTIMIZATIONS
-impl<F: Field, T: Clone> PostSumcheckLayerTree<F, T> {
-    /// iterate through the entire tree, remove values of the nodes if
-    /// 1. it is an addition node, AND
-    /// 2. it is not a child of a multiplication node
-    /// `parent_requires_value` is FALSE at root
-    pub fn remove_add_values(&mut self, parent_requires_value: bool) {
-        match self {
-            Self::Mle { .. } => {}
-            Self::Constant { .. } => {}
-            Self::Mult { left, right, value } => {
-                let left_child_is_constant = if let Self::Constant { .. } = **left {
-                    true
-                } else {
-                    false
-                };
-                let right_child_is_constant = if let Self::Constant { .. } = **right {
-                    true
-                } else {
-                    false
-                };
-                // Only requires value if neither child is constant
-                let requires_value = !left_child_is_constant && !right_child_is_constant;
-                left.remove_add_values(requires_value);
-                right.remove_add_values(requires_value);
-                if !parent_requires_value && !requires_value {
-                    *value = None;
-                }
-            }
-            Self::Add { left, right, value } => {
-                left.remove_add_values(false);
-                right.remove_add_values(false);
-                // if the parent do not require the value of an addition node, remove the value
-                if !parent_requires_value {
-                    *value = None;
-                }
-            }
-        }
-    }
-}
-
 // EVALUATIONS
 impl<F: Field, T: Clone> PostSumcheckLayerTree<F, T> {
     /// Returns a vector of the values in post-order
@@ -292,18 +246,13 @@ impl<F: Field, T: Clone> PostSumcheckLayerTree<F, T> {
         match self {
             Self::Constant { .. } => Vec::new(),
             Self::Mle { value, .. } => vec![value.clone()],
-            Self::Add { left, right, value } => {
+            Self::Add { left, right} => {
                 let left_values = left.get_values();
                 let right_values = right.get_values();
                 // include value if necessary
                 left_values
                     .into_iter()
                     .chain(right_values)
-                    .chain(if let Some(val) = value {
-                        vec![val.clone()]
-                    } else {
-                        Vec::new()
-                    })
                     .collect()
             }
             Self::Mult { left, right, value } => {
@@ -320,44 +269,6 @@ impl<F: Field, T: Clone> PostSumcheckLayerTree<F, T> {
                     })
                     .collect()
             }
-        }
-    }
-
-    /// Return a vector of triples (x, y, z) where z=x*y in post-order
-    pub fn get_product_triples(&self) -> Vec<(T, T, T)> {
-        match self {
-            Self::Constant { .. } => Vec::new(),
-            Self::Mle { .. } => Vec::new(),
-            Self::Add { left, right, .. } => {
-                let left_triples = left.get_product_triples();
-                let right_triples = right.get_product_triples();
-                left_triples.into_iter().chain(right_triples).collect()
-            }
-            Self::Mult { left, right, value } => {
-                let left_triples = left.get_product_triples();
-                let right_triples = right.get_product_triples();
-                // only include the product if neither child is constant
-                left_triples
-                    .into_iter()
-                    .chain(right_triples)
-                    .chain(
-                        match (left.get_root_value(), right.get_root_value(), value) {
-                            (Some(x), Some(y), Some(z)) => vec![(x, y, z.clone())],
-                            _ => Vec::new(),
-                        },
-                    )
-                    .collect()
-            }
-        }
-    }
-
-    // Return the value stored at the root
-    fn get_root_value(&self) -> Option<T> {
-        match self {
-            Self::Constant { .. } => None,
-            Self::Mle { value, .. } => Some(value.clone()),
-            Self::Add { value, .. } => value.clone(),
-            Self::Mult { value, .. } => value.clone(),
         }
     }
 }
@@ -418,16 +329,10 @@ where
                     (EvalResult::F(f1), EvalResult::T(t2)) => EvalResult::T(t2 + one.clone() * f1),
                     (EvalResult::F(f1), EvalResult::F(f2)) => EvalResult::F(f1 + f2),
                 };
-                let node_value = if let EvalResult::T(t) = &computed_result {
-                    Some(t.clone())
-                } else {
-                    None
-                };
                 (
                     Self::Add {
                         left: Box::new(left_tree),
                         right: Box::new(right_tree),
-                        value: node_value,
                     },
                     computed_result,
                 )
@@ -450,7 +355,7 @@ where
                     Self::Mult {
                         left: Box::new(left_tree),
                         right: Box::new(right_tree),
-                        value: node_value,
+                        value: if value.is_some() { node_value } else { None },
                     },
                     computed_result,
                 )
@@ -472,7 +377,7 @@ where
         match self {
             PostSumcheckLayerTree::Mle { value, .. } => EvalResult::T(value.clone()),
             PostSumcheckLayerTree::Constant { coefficient } => EvalResult::F(*coefficient),
-            PostSumcheckLayerTree::Add { left, right, value } => {
+            PostSumcheckLayerTree::Add { left, right } => {
                 let computed_result = match (
                     left.get_result_helper(one.clone()),
                     right.get_result_helper(one.clone()),
@@ -482,9 +387,6 @@ where
                     (EvalResult::F(f1), EvalResult::T(t2)) => EvalResult::T(t2 + one.clone() * f1),
                     (EvalResult::F(f1), EvalResult::F(f2)) => EvalResult::F(f1 + f2),
                 };
-                if let Some(val) = value {
-                    assert!(computed_result == EvalResult::T(val.clone()));
-                }
                 computed_result
             }
             PostSumcheckLayerTree::Mult { left, right, value } => {
@@ -508,6 +410,37 @@ where
                     assert!(computed_result == EvalResult::T(val.clone()));
                 }
                 computed_result
+            }
+        }
+    }
+
+    /// Return a vector of triples (x, y, z) where z=x*y in post-order
+    pub fn get_product_triples(&self, one: T) -> Vec<(T, T, T)> {
+        match self {
+            Self::Constant { .. } => Vec::new(),
+            Self::Mle { .. } => Vec::new(),
+            Self::Add { left, right } => {
+                let left_triples = left.get_product_triples(one.clone());
+                let right_triples = right.get_product_triples(one.clone());
+                left_triples.into_iter().chain(right_triples).collect()
+            }
+            Self::Mult { left, right, value } => {
+                let left_triples = left.get_product_triples(one.clone());
+                let right_triples = right.get_product_triples(one.clone());
+                // only include the product if neither child is constant
+                left_triples
+                    .into_iter()
+                    .chain(right_triples)
+                    .chain(
+                        if let Some(z) = value {
+                            let x = left.get_result(one.clone());
+                            let y = right.get_result(one.clone());
+                            vec![(x, y, z.clone())]
+                        } else {
+                            Vec::new()
+                        }
+                    )
+                    .collect()
             }
         }
     }

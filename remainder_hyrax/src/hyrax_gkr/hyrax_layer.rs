@@ -260,13 +260,9 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             &random_coefficients,
         );
 
-        println!("PROVER_PSL: {}", post_sumcheck_layer);
-        println!("DEGREE: {}\n\n", degree);
-
         // Commit to all necessary values
-        let mut post_sumcheck_layer_committed =
+        let post_sumcheck_layer_committed =
             commit_to_post_sumcheck_layer(&post_sumcheck_layer, committer, &mut blinding_rng);
-        post_sumcheck_layer_committed.remove_add_values(false);
 
         // Get the commitments (i.e. points on C)
         let commitments =
@@ -295,8 +291,8 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         );
 
         // perform the proof of products
-        let proofs_of_product = post_sumcheck_layer_committed
-            .get_product_triples()
+        let proofs_of_product: Vec<_> = post_sumcheck_layer_committed
+            .get_product_triples(committer.committed_scalar(&C::Scalar::ONE, &C::Scalar::ZERO))
             .iter()
             .map(|(x, y, z)| {
                 ProofOfProduct::prove(&x, &y, &z, committer, &mut blinding_rng, transcript)
@@ -408,7 +404,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             commitments,
         );
 
-        let mut post_sumcheck_layer_desc = layer_desc.get_post_sumcheck_layer(
+        let post_sumcheck_layer_desc = layer_desc.get_post_sumcheck_layer(
             &bindings,
             &claim_points
                 .iter()
@@ -417,19 +413,14 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             &random_coefficients,
         );
 
-        println!("VERIFIER_PSL: {}", post_sumcheck_layer_desc);
-        let degree = layer_desc.max_degree();
-        println!("DEGREE: {}\n\n", degree);
-
         // Avoid committing to unnecessary values
-        post_sumcheck_layer_desc.remove_add_values(false);
         let post_sumcheck_layer: PostSumcheckLayerTree<C::Scalar, C> =
             new_with_values(&post_sumcheck_layer_desc, commitments, &mut 0);
 
         // Verify the proof of sumcheck!
         proof_of_sumcheck.verify(
             &claim_eval,
-            degree,
+            layer_desc.max_degree(),
             &post_sumcheck_layer,
             &bindings,
             committer,
@@ -438,7 +429,11 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
 
         // Extract the triples of commitments that must be proven in the proof of product
         // and verify the proofs of product
-        let product_triples: Vec<(C, C, C)> = post_sumcheck_layer.get_product_triples();
+        let product_triples: Vec<(C, C, C)> = post_sumcheck_layer.get_product_triples(
+            committer
+                .committed_scalar(&C::Scalar::ONE, &C::Scalar::ZERO)
+                .commitment,
+        );
         assert_eq!(product_triples.len(), proofs_of_product.len());
         product_triples
             .iter()
@@ -479,14 +474,9 @@ pub fn committed_scalar_psl_as_commitments<C: PrimeOrderCurve>(
             point: point.clone(),
             value: value.commitment,
         },
-        PostSumcheckLayerTree::Add { left, right, value } => PostSumcheckLayerTree::Add {
+        PostSumcheckLayerTree::Add { left, right } => PostSumcheckLayerTree::Add {
             left: Box::new(committed_scalar_psl_as_commitments(left)),
             right: Box::new(committed_scalar_psl_as_commitments(right)),
-            value: if let Some(val) = value {
-                Some(val.commitment)
-            } else {
-                None
-            },
         },
         PostSumcheckLayerTree::Mult { left, right, value } => PostSumcheckLayerTree::Mult {
             left: Box::new(committed_scalar_psl_as_commitments(left)),
