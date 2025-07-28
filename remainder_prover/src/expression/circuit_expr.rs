@@ -109,8 +109,8 @@ impl<F: Field> Expression<F, ExprDescription> {
     /// Returns the maximum degree of b_{curr_round} within an expression
     /// (and therefore the number of prover messages we need to send)
     pub fn get_round_degree(&self, curr_round: usize) -> usize {
-        let mut get_degree_closure = |expr: &ExpressionNode<F, ExprDescription>,
-                                      _mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec|
+        let get_degree_closure = |expr: &ExpressionNode<F, ExprDescription>,
+                                  _mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec|
          -> Result<usize> {
             Ok(match expr {
                 // If encountering an MLE, determing if b_{curr_round} is a variable
@@ -130,8 +130,7 @@ impl<F: Field> Expression<F, ExprDescription> {
         // By default, all rounds have degree at least 2 (beta table included)
         let round_degree = max(
             1,
-            self.reduce(&mut get_degree_closure, &max, &usize::add)
-                .unwrap(),
+            self.reduce(&get_degree_closure, &max, &usize::add).unwrap(),
         );
         // add 1 cuz beta table but idk if we would ever use this without a beta table
         round_degree + 1
@@ -282,9 +281,9 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     /// and collecting the leaf node indices.
     pub(crate) fn get_all_rounds(
         &self,
-        mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec,
+        _mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
-        let degree_per_index = self.get_degree_list(mle_vec);
+        let degree_per_index = self.get_degree_list(_mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] > 0)
             .collect()
@@ -293,9 +292,9 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     /// traverse an expression tree in order to get all of the nonlinear rounds in an expression.
     pub fn get_all_nonlinear_rounds(
         &self,
-        mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec,
+        _mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
-        let degree_per_index = self.get_degree_list(mle_vec);
+        let degree_per_index = self.get_degree_list(_mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] > 1)
             .collect()
@@ -304,7 +303,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     /// a recursive helper to obtain the degree of every variable
     pub fn get_degree_list(
         &self,
-        mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec,
+        _mle_vec: &<ExprDescription as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
         // degree of each index
         let mut degree_per_index = Vec::new();
@@ -328,8 +327,8 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
         match self {
             // in a product, we need the union of all the indices in each of the individual mle refs.
             ExpressionNode::Product(a, b) => {
-                let a_degree_per_index = a.get_degree_list(mle_vec);
-                let b_degree_per_index = b.get_degree_list(mle_vec);
+                let a_degree_per_index = a.get_degree_list(_mle_vec);
+                let b_degree_per_index = b.get_degree_list(_mle_vec);
                 // nonlinear operator -- sum over the degree
                 for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
                     if let Some(a_degree) = a_degree_per_index.get(i) {
@@ -353,8 +352,8 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                 if let MleIndex::Indexed(i) = sel_index {
                     add_degree(&mut degree_per_index, *i, 1);
                 };
-                let a_degree_per_index = a.get_degree_list(mle_vec);
-                let b_degree_per_index = b.get_degree_list(mle_vec);
+                let a_degree_per_index = a.get_degree_list(_mle_vec);
+                let b_degree_per_index = b.get_degree_list(_mle_vec);
                 // linear operator -- take the max degree
                 for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
                     if let Some(a_degree) = a_degree_per_index.get(i) {
@@ -367,8 +366,8 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             }
             // in sum, take the max degree of each children
             ExpressionNode::Sum(a, b) => {
-                let a_degree_per_index = a.get_degree_list(mle_vec);
-                let b_degree_per_index = b.get_degree_list(mle_vec);
+                let a_degree_per_index = a.get_degree_list(_mle_vec);
+                let b_degree_per_index = b.get_degree_list(_mle_vec);
                 // linear operator -- take the max degree
                 for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
                     if let Some(a_degree) = a_degree_per_index.get(i) {
@@ -381,7 +380,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             }
             // scaled and negated, does not affect degree
             ExpressionNode::Scaled(a, _) => {
-                degree_per_index = a.get_degree_list(mle_vec);
+                degree_per_index = a.get_degree_list(_mle_vec);
             }
             // for a constant there are no new indices.
             ExpressionNode::Constant(_) => {}
@@ -488,28 +487,22 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
                     // contains indexed bits
                     _ => panic!("should not have any other index here"),
                 };
-                let left_prod = PostSumcheckLayerTree::<F, Option<F>>::mult(
-                    PostSumcheckLayerTree::constant(F::ONE - idx_val),
-                    a.get_post_sumcheck_layer(challenges, _mle_vec),
-                );
-                let right_prod = PostSumcheckLayerTree::<F, Option<F>>::mult(
-                    PostSumcheckLayerTree::constant(idx_val),
-                    b.get_post_sumcheck_layer(challenges, _mle_vec),
-                );
-                PostSumcheckLayerTree::<F, Option<F>>::add(left_prod, right_prod)
+                let left_prod =
+                    a.get_post_sumcheck_layer(challenges, _mle_vec) * (F::ONE - idx_val);
+                let right_prod = b.get_post_sumcheck_layer(challenges, _mle_vec) * idx_val;
+                left_prod + right_prod
             }
-            ExpressionNode::Sum(a, b) => PostSumcheckLayerTree::<F, Option<F>>::add(
-                a.get_post_sumcheck_layer(challenges, _mle_vec),
-                b.get_post_sumcheck_layer(challenges, _mle_vec),
-            ),
-            ExpressionNode::Product(a, b) => PostSumcheckLayerTree::<F, Option<F>>::mult(
-                a.get_post_sumcheck_layer(challenges, _mle_vec),
-                b.get_post_sumcheck_layer(challenges, _mle_vec),
-            ),
-            ExpressionNode::Scaled(a, scale_factor) => PostSumcheckLayerTree::<F, Option<F>>::mult(
-                a.get_post_sumcheck_layer(challenges, _mle_vec),
-                PostSumcheckLayerTree::constant(*scale_factor),
-            ),
+            ExpressionNode::Sum(a, b) => {
+                a.get_post_sumcheck_layer(challenges, _mle_vec)
+                    + b.get_post_sumcheck_layer(challenges, _mle_vec)
+            }
+            ExpressionNode::Product(a, b) => {
+                a.get_post_sumcheck_layer(challenges, _mle_vec)
+                    * b.get_post_sumcheck_layer(challenges, _mle_vec)
+            }
+            ExpressionNode::Scaled(a, scale_factor) => {
+                a.get_post_sumcheck_layer(challenges, _mle_vec) * *scale_factor
+            }
         }
     }
 

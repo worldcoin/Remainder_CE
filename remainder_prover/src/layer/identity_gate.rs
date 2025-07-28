@@ -304,10 +304,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             &random_coefficients_scaled_by_beta_bound,
         );
 
-        PostSumcheckLayerTree::<F, Option<F>>::mult(
-            PostSumcheckLayerTree::<F, Option<F>>::mle(&self.source_mle, round_challenges),
-            PostSumcheckLayerTree::constant(f_1_gu),
-        )
+        PostSumcheckLayerTree::<F, Option<F>>::mle(&self.source_mle, round_challenges) * f_1_gu
     }
 
     fn max_degree(&self) -> usize {
@@ -730,10 +727,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             &random_coefficients_scaled_by_beta_bound,
         );
 
-        PostSumcheckLayerTree::<F, F>::mult(
-            PostSumcheckLayerTree::<F, F>::mle(&self.source_mle),
-            PostSumcheckLayerTree::constant(f_1_gu),
-        )
+        PostSumcheckLayerTree::<F, F>::mle(&self.source_mle) * f_1_gu
     }
 
     fn get_claims(&self) -> Result<Vec<Claim<F>>> {

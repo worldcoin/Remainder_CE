@@ -132,9 +132,9 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
     /// traverse an expression tree in order to get all of the nonlinear rounds in an expression.
     pub fn get_all_nonlinear_rounds(
         &self,
-        mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
+        _mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
-        let degree_per_index = self.get_rounds_helper(mle_vec);
+        let degree_per_index = self.get_rounds_helper(_mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] > 1)
             .collect()
@@ -143,7 +143,7 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
     // a recursive helper for get_all_rounds, get_all_nonlinear_rounds, and get_all_linear_rounds
     fn get_rounds_helper(
         &self,
-        mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
+        _mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
         // degree of each index
         let mut degree_per_index = Vec::new();
@@ -167,8 +167,8 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
         match self {
             // in a product, we need the union of all the indices in each of the individual mle refs.
             ExpressionNode::Product(a, b) => {
-                let a_degree_per_index = a.get_rounds_helper(mle_vec);
-                let b_degree_per_index = b.get_rounds_helper(mle_vec);
+                let a_degree_per_index = a.get_rounds_helper(_mle_vec);
+                let b_degree_per_index = b.get_rounds_helper(_mle_vec);
                 // nonlinear operator -- sum over the degree
                 for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
                     if let Some(a_degree) = a_degree_per_index.get(i) {
@@ -192,8 +192,8 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
                 if let MleIndex::Indexed(i) = sel_index {
                     add_degree(&mut degree_per_index, *i, 1);
                 };
-                let a_degree_per_index = a.get_rounds_helper(mle_vec);
-                let b_degree_per_index = b.get_rounds_helper(mle_vec);
+                let a_degree_per_index = a.get_rounds_helper(_mle_vec);
+                let b_degree_per_index = b.get_rounds_helper(_mle_vec);
                 // linear operator -- take the max degree
                 for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
                     if let Some(a_degree) = a_degree_per_index.get(i) {
@@ -206,8 +206,8 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
             }
             // in sum, take the max degree of each children
             ExpressionNode::Sum(a, b) => {
-                let a_degree_per_index = a.get_rounds_helper(mle_vec);
-                let b_degree_per_index = b.get_rounds_helper(mle_vec);
+                let a_degree_per_index = a.get_rounds_helper(_mle_vec);
+                let b_degree_per_index = b.get_rounds_helper(_mle_vec);
                 // linear operator -- take the max degree
                 for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
                     if let Some(a_degree) = a_degree_per_index.get(i) {
@@ -220,7 +220,7 @@ impl<F: Field> ExpressionNode<F, VerifierExpr> {
             }
             // scaled and negated, does not affect degree
             ExpressionNode::Scaled(a, _) => {
-                degree_per_index = a.get_rounds_helper(mle_vec);
+                degree_per_index = a.get_rounds_helper(_mle_vec);
             }
             // for a constant there are no new indices.
             ExpressionNode::Constant(_) => {}

@@ -278,10 +278,8 @@ impl<F: Field> Layer<F> for MatMult<F> {
         _claim_challenges: &[&[F]],
         _random_coefficients: &[F],
     ) -> PostSumcheckLayerTree<F, F> {
-        PostSumcheckLayerTree::<F, F>::mult(
-            PostSumcheckLayerTree::<F, F>::mle(&self.matrix_a.mle),
-            PostSumcheckLayerTree::<F, F>::mle(&self.matrix_b.mle),
-        )
+        PostSumcheckLayerTree::<F, F>::mle(&self.matrix_a.mle)
+            * PostSumcheckLayerTree::<F, F>::mle(&self.matrix_b.mle)
     }
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<Claim<F>>> {
@@ -650,10 +648,8 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
             .collect_vec();
         pre_bound_matrix_b_mle.set_mle_indices(matrix_b_new_indices);
 
-        PostSumcheckLayerTree::<F, Option<F>>::mult(
-            PostSumcheckLayerTree::<F, Option<F>>::mle(&pre_bound_matrix_a_mle, round_challenges),
-            PostSumcheckLayerTree::<F, Option<F>>::mle(&pre_bound_matrix_b_mle, round_challenges),
-        )
+        PostSumcheckLayerTree::<F, Option<F>>::mle(&pre_bound_matrix_a_mle, round_challenges)
+            * PostSumcheckLayerTree::<F, Option<F>>::mle(&pre_bound_matrix_b_mle, round_challenges)
     }
 
     fn max_degree(&self) -> usize {
