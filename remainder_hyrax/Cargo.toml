@@ -42,6 +42,10 @@ print-trace = [
 name = "pcs_bench"
 harness = false
 
+[[bench]]
+name = "iris_code"
+harness = false
+
 [[bin]]
 name = "world_gen_iriscode_secret_share_circuit_descriptions"
 path = "src/bin/world_gen_iriscode_secret_share_circuit_descriptions.rs"
