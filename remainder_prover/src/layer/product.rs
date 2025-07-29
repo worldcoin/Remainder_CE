@@ -368,56 +368,6 @@ where
         }
     }
 
-    /// evaluate and verify any redundant values
-    /// supply the committed value for ONE for constant evaluation
-    pub fn get_result(&self, one: T) -> T {
-        match self.get_result_helper(one.clone()) {
-            EvalResult::T(t) => t,
-            EvalResult::F(f) => one * f,
-        }
-    }
-
-    // recursive helper
-    fn get_result_helper(&self, one: T) -> EvalResult<F, T> {
-        match self {
-            PostSumcheckLayerTree::Mle { value, .. } => EvalResult::T(value.clone()),
-            PostSumcheckLayerTree::Constant { coefficient } => EvalResult::F(*coefficient),
-            PostSumcheckLayerTree::Add { left, right } => {
-                match (
-                    left.get_result_helper(one.clone()),
-                    right.get_result_helper(one.clone()),
-                ) {
-                    (EvalResult::T(t1), EvalResult::T(t2)) => EvalResult::T(t1 + t2),
-                    (EvalResult::T(t1), EvalResult::F(f2)) => EvalResult::T(t1 + one.clone() * f2),
-                    (EvalResult::F(f1), EvalResult::T(t2)) => EvalResult::T(t2 + one.clone() * f1),
-                    (EvalResult::F(f1), EvalResult::F(f2)) => EvalResult::F(f1 + f2),
-                }
-            }
-            PostSumcheckLayerTree::Mult { left, right, value } => {
-                let computed_result = match (
-                    left.get_result_helper(one.clone()),
-                    right.get_result_helper(one.clone()),
-                ) {
-                    (EvalResult::T(_), EvalResult::T(_)) => {
-                        // cannot perform multiplication on T, instead query `value`
-                        if let Some(val) = value {
-                            EvalResult::T(val.clone())
-                        } else {
-                            panic!("Cannot obtain the hyrax commitment of a multiplication!")
-                        }
-                    }
-                    (EvalResult::T(t1), EvalResult::F(f2)) => EvalResult::T(t1 * f2),
-                    (EvalResult::F(f1), EvalResult::T(t2)) => EvalResult::T(t2 * f1),
-                    (EvalResult::F(f1), EvalResult::F(f2)) => EvalResult::F(f1 * f2),
-                };
-                if let Some(val) = value {
-                    assert!(computed_result == EvalResult::T(val.clone()));
-                }
-                computed_result
-            }
-        }
-    }
-
     /// Return a vector of triples (x, y, z) where z=x*y in post-order
     pub fn get_product_triples(&self, one: T) -> Vec<(T, T, T)> {
         match self {
@@ -436,13 +386,64 @@ where
                     .into_iter()
                     .chain(right_triples)
                     .chain(if let Some(z) = value {
-                        let x = left.get_result(one.clone());
-                        let y = right.get_result(one.clone());
+                        // note that the two child branches has been recursed and verified above
+                        // here we can retrieve values without checking its correctness
+                        let x = left.get_result_no_check(one.clone());
+                        let y = right.get_result_no_check(one.clone());
                         vec![(x, y, z.clone())]
                     } else {
                         Vec::new()
                     })
                     .collect()
+            }
+        }
+    }
+
+    /// evaluate internal node, do not check for correctness
+    pub fn get_result_no_check(&self, one: T) -> T {
+        match self.get_result_no_check_helper(one.clone()) {
+            EvalResult::T(t) => t,
+            EvalResult::F(f) => one * f,
+        }
+    }
+
+    // recursive helper
+    fn get_result_no_check_helper(&self, one: T) -> EvalResult<F, T> {
+        match self {
+            PostSumcheckLayerTree::Mle { value, .. } => EvalResult::T(value.clone()),
+            PostSumcheckLayerTree::Constant { coefficient } => EvalResult::F(*coefficient),
+            PostSumcheckLayerTree::Add { left, right } => {
+                match (
+                    left.get_result_no_check_helper(one.clone()),
+                    right.get_result_no_check_helper(one.clone()),
+                ) {
+                    (EvalResult::T(t1), EvalResult::T(t2)) => EvalResult::T(t1 + t2),
+                    (EvalResult::T(t1), EvalResult::F(f2)) => EvalResult::T(t1 + one.clone() * f2),
+                    (EvalResult::F(f1), EvalResult::T(t2)) => EvalResult::T(t2 + one.clone() * f1),
+                    (EvalResult::F(f1), EvalResult::F(f2)) => EvalResult::F(f1 + f2),
+                }
+            }
+            PostSumcheckLayerTree::Mult { left, right, value } => {
+                if let Some(val) = value {
+                    EvalResult::T(val.clone())
+                } else {
+                    match (
+                        left.get_result_no_check_helper(one.clone()),
+                        right.get_result_no_check_helper(one.clone()),
+                    ) {
+                        (EvalResult::T(_), EvalResult::T(_)) => {
+                            // cannot perform multiplication on T, instead query `value`
+                            if let Some(val) = value {
+                                EvalResult::T(val.clone())
+                            } else {
+                                panic!("Cannot obtain the hyrax commitment of a multiplication!")
+                            }
+                        }
+                        (EvalResult::T(t1), EvalResult::F(f2)) => EvalResult::T(t1 * f2),
+                        (EvalResult::F(f1), EvalResult::T(t2)) => EvalResult::T(t2 * f1),
+                        (EvalResult::F(f1), EvalResult::F(f2)) => EvalResult::F(f1 * f2),
+                    }
+                }
             }
         }
     }
