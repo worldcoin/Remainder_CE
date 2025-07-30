@@ -34,7 +34,7 @@ pub enum PostSumcheckLayerTree<F: Field, T> {
         left: Box<PostSumcheckLayerTree<F, T>>,
         /// right child
         right: Box<PostSumcheckLayerTree<F, T>>,
-        // the prover never committs to add values
+        // the prover never commits to add values
     },
     /// multiplication
     Mult {
