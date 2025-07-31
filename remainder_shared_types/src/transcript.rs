@@ -151,11 +151,8 @@ pub trait ProverTranscript<F: Field> {
     fn append_input_elements(&mut self, label: &str, elements: &[F]);
     fn get_challenge(&mut self, label: &str) -> F;
     fn get_challenges(&mut self, label: &str, num_elements: usize) -> Vec<F>;
-    fn get_extension_field_challenge<const N_COEFF: usize, E: ExtensionField<F, N_COEFF>>(
-        &mut self,
-        label: &str,
-    ) -> E;
-    fn append_extension_field_elements<const N_COEFF: usize, E: ExtensionField<F, N_COEFF>>(
+    fn get_extension_field_challenge<E: ExtensionField<F>>(&mut self, label: &str) -> E;
+    fn append_extension_field_elements<E: ExtensionField<F>>(
         &mut self,
         label: &str,
         elements: &[E],
@@ -240,17 +237,13 @@ impl<F: Field, Tr: TranscriptSponge<F>> ProverTranscript<F> for TranscriptWriter
         }
     }
 
-    fn get_extension_field_challenge<const N_COEFF: usize, E: ExtensionField<F, N_COEFF>>(
-        &mut self,
-        label: &str,
-    ) -> E {
-        self.transcript.squeeze_elements(label, N_COEFF);
-        let extension_elem_coeffs = self.sponge.squeeze_elements(N_COEFF);
-        let fixed_len_slice_base_field_elems = extension_elem_coeffs.as_slice().try_into().unwrap();
-        E::from_basis_elem_coeffs(&fixed_len_slice_base_field_elems)
+    fn get_extension_field_challenge<E: ExtensionField<F>>(&mut self, label: &str) -> E {
+        self.transcript.squeeze_elements(label, E::N_COEFF);
+        let extension_elem_coeffs = self.sponge.squeeze_elements(E::N_COEFF);
+        E::from_basis_elem_coeffs(&extension_elem_coeffs)
     }
 
-    fn append_extension_field_elements<const N_COEFF: usize, E: ExtensionField<F, N_COEFF>>(
+    fn append_extension_field_elements<E: ExtensionField<F>>(
         &mut self,
         label: &str,
         elements: &[E],

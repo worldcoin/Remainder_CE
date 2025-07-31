@@ -62,3 +62,5 @@ pub mod zk_iriscode_ss;
 
 // module for worldcoin mpc circuits
 pub mod worldcoin_mpc;
+
+pub mod extension_field_prover;

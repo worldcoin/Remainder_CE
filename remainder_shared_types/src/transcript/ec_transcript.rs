@@ -302,24 +302,16 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
             .append_input_elements(label, elements, &hash_chain_digest);
     }
 
-    fn get_extension_field_challenge<
-        const N_COEFF: usize,
-        E: crate::field::ExtensionField<C::Base, N_COEFF>,
-    >(
+    fn get_extension_field_challenge<E: crate::field::ExtensionField<C::Base>>(
         &mut self,
         label: &str,
     ) -> E {
-        self.transcript.squeeze_elements(label, N_COEFF);
-        let base_field_coeffs = self.sponge.squeeze_elements(N_COEFF);
-        let fixed_len_slice_base_field_coeffs: [<C as PrimeOrderCurve>::Base; N_COEFF] =
-            base_field_coeffs.as_slice().try_into().unwrap();
-        E::from_basis_elem_coeffs(&fixed_len_slice_base_field_coeffs)
+        self.transcript.squeeze_elements(label, E::N_COEFF);
+        let base_field_coeffs = self.sponge.squeeze_elements(E::N_COEFF);
+        E::from_basis_elem_coeffs(&base_field_coeffs)
     }
 
-    fn append_extension_field_elements<
-        const N_COEFF: usize,
-        E: crate::field::ExtensionField<C::Base, N_COEFF>,
-    >(
+    fn append_extension_field_elements<E: crate::field::ExtensionField<C::Base>>(
         &mut self,
         label: &str,
         elements: &[E],
