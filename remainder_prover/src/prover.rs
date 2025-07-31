@@ -45,7 +45,7 @@ use remainder_shared_types::config::global_config::{
     get_current_global_prover_config, get_current_global_verifier_config, global_claim_agg_strategy,
 };
 use remainder_shared_types::config::{ClaimAggregationStrategy, ProofConfig};
-use remainder_shared_types::field::Halo2FFTFriendlyField;
+use remainder_shared_types::field::{ExtensionField, Halo2FFTFriendlyField};
 use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
 use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::transcript::{ProverTranscript, TranscriptWriter};
@@ -178,7 +178,8 @@ pub fn prove<F: Halo2FFTFriendlyField>(
 
     // Mutate the transcript to contain the proof of the intermediate layers of the circuit,
     // and return the claims on the input layer.
-    let input_layer_claims = prove_circuit(circuit_description, inputs, transcript_writer).unwrap();
+    let input_layer_claims =
+        prove_circuit::<F, F>(circuit_description, inputs, transcript_writer).unwrap();
 
     // If in debug mode, then check the claims on all input layers.
     if cfg!(debug_assertions) {
@@ -336,11 +337,11 @@ pub fn verify<F: Halo2FFTFriendlyField>(
 
 /// Assumes that the inputs have already been added to the transcript (if necessary).
 /// Returns the vector of claims on the input layers.
-pub fn prove_circuit<F: Field>(
+pub fn prove_circuit<F: Field, E: ExtensionField<F>>(
     circuit_description: &GKRCircuitDescription<F>,
     inputs: &HashMap<LayerId, MultilinearExtension<F>>,
     transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
-) -> Result<Vec<Claim<F>>> {
+) -> Result<Vec<Claim<E>>> {
     // Note: no need to return the Transcript, since it is already in the TranscriptWriter!
     // Note(Ben): this can't be an instance method, because it consumes the intermediate layers!
     // Note(Ben): this is a GKR specific method.  So it makes sense for IT to define the challenge sampler, so that the circuit can be instantiated (rather than leaving this complexity to the calling context).
@@ -684,7 +685,10 @@ impl<F: Field> GKRCircuitDescription<F> {
     /// * `transcript_reader`: servers as the proof.
     /// Returns claims on the input layers.
     #[instrument(skip_all, err)]
-    fn verify(&self, transcript_reader: &mut impl VerifierTranscript<F>) -> Result<Vec<Claim<F>>> {
+    pub(crate) fn verify(
+        &self,
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<Vec<Claim<F>>> {
         // Get the verifier challenges from the transcript.
         let fiat_shamir_challenges: Vec<FiatShamirChallenge<F>> = self
             .fiat_shamir_challenges
