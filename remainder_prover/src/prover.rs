@@ -603,7 +603,6 @@ impl<F: Field> GKRCircuitDescription<F> {
             .iter()
             .for_each(|input_layer_description| {
                 let input_layer_id = input_layer_description.layer_id;
-                dbg!(&input_layer_id);
                 let combined_mle = input_data.get(&input_layer_id).unwrap();
                 let mle_outputs_necessary = mle_claim_map.get(&input_layer_id).unwrap();
                 // Compute all data outputs necessary for future layers for each
