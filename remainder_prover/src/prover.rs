@@ -10,7 +10,6 @@ pub mod proof_system;
 /// Struct for representing a list of layers
 pub mod layers;
 
-use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
 use self::layers::Layers;
