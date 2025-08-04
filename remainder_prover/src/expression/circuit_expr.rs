@@ -746,8 +746,8 @@ impl<F: Field> Expression<F, ExprDescription> {
     /// Create a nested selector Expression that selects between 2^k Expressions
     /// by creating a binary tree of Selector Expressions.
     /// The order of the leaves is the order of the input expressions.
-    /// (Note that this is very different from calling `select()` consecutively.)
-    pub fn selectors(expressions: Vec<Self>) -> Self {
+    /// (Note that this is very different from calling [Self::select] consecutively.)
+    pub fn select_bin(expressions: Vec<Self>) -> Self {
         // Ensure length is a power of two
         assert!(expressions.len().is_power_of_two());
         let mut expressions = expressions;
