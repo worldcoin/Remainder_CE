@@ -111,7 +111,7 @@ fn regular_layer_test_prove_verify_selector() {
 
     let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_1.mle_indices());
     let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_2.mle_indices());
-    let mut circuit_expression = Expression::<Fr, ExprDescription>::selectors(vec![
+    let mut circuit_expression = Expression::<Fr, ExprDescription>::select_bin(vec![
         Expression::from_mle_desc(circuit_mle_1),
         Expression::from_mle_desc(circuit_mle_2),
     ]);
@@ -156,7 +156,7 @@ fn regular_layer_test_prove_verify_complex() {
 
     let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_1.mle_indices());
     let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_2.mle_indices());
-    let mut circuit_expression = Expression::<Fr, ExprDescription>::selectors(vec![
+    let mut circuit_expression = Expression::<Fr, ExprDescription>::select_bin(vec![
         Expression::<Fr, ExprDescription>::products(vec![
             circuit_mle_1.clone(),
             circuit_mle_2.clone(),
