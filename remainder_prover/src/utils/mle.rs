@@ -138,11 +138,11 @@ pub fn get_total_mle_indices<F: Field>(
 /// use itertools::{Itertools};
 /// let mle1 = MultilinearExtension::new(vec![Fr::from(2)]);
 /// let mle2 = MultilinearExtension::new(vec![Fr::from(1), Fr::from(3)]);
-/// let result = build_composite_mle(&[(&mle1, &vec![false, true]), (&mle2, &vec![true])]);
+/// let result = build_composite_mle(&[(&mle1, vec![false, true]), (&mle2, vec![true])]);
 /// assert_eq!(*result.f.iter().collect_vec().clone(), vec![Fr::from(0), Fr::from(2), Fr::from(1), Fr::from(3)]);
 /// ```
 pub fn build_composite_mle<F: Field>(
-    mles: &[(&MultilinearExtension<F>, &Vec<bool>)],
+    mles: &[(&MultilinearExtension<F>, Vec<bool>)],
 ) -> MultilinearExtension<F> {
     assert!(!mles.is_empty());
     let out_num_vars = mles[0].0.num_vars() + mles[0].1.len();
