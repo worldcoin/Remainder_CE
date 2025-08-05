@@ -14,7 +14,7 @@ use anyhow::Result;
 
 /// Does a dummy version of sumcheck with a testing RNG.
 pub(crate) fn dummy_sumcheck<F: Field>(
-    expr: &mut Expression<F, ProverExpr>,
+    expr: &mut Expression<F, ProverMle<F>>,
     rng: &mut impl Rng,
     layer_claim: RawClaim<F>,
 ) -> Vec<(Vec<F>, Option<F>)> {
@@ -63,7 +63,7 @@ pub(crate) fn dummy_sumcheck<F: Field>(
 /// can change this to take prev round random challenge, and then compute the new random challenge
 pub fn verify_sumcheck_messages<F: Field>(
     messages: Vec<(Vec<F>, Option<F>)>,
-    mut expression: Expression<F, ProverExpr>,
+    mut expression: Expression<F, ProverMle<F>>,
     layer_claim: RawClaim<F>,
     rng: &mut impl Rng,
 ) -> Result<F> {
@@ -168,7 +168,7 @@ pub(crate) fn get_dummy_claim<F: Field>(
 }
 
 pub(crate) fn get_dummy_expression_eval<F: Field>(
-    expression: &Expression<F, ProverExpr>,
+    expression: &Expression<F, ProverMle<F>>,
     rng: &mut impl Rng,
 ) -> RawClaim<F> {
     let mut expression = expression.clone();
@@ -201,8 +201,8 @@ pub(crate) fn get_dummy_expression_eval<F: Field>(
 #[test]
 fn eval_expr_nums() {
     let new_beta = BetaValues::new(vec![(0, Fr::one())]);
-    let expression1: Expression<Fr, ProverExpr> =
-        Expression::<Fr, ProverExpr>::constant(Fr::from(6));
+    let expression1: Expression<Fr, ProverMle<Fr>> =
+        Expression::<Fr, ProverMle<Fr>>::constant(Fr::from(6));
     let res = expression1.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 0, 1);
     let exp = SumcheckEvals(vec![Fr::from(0), Fr::from(6)]);
     assert_eq!(res, exp);
@@ -256,7 +256,7 @@ fn test_quadratic_sum() {
     let mle_v2 = vec![Fr::from(2), Fr::from(1), Fr::from(3), Fr::from(5)];
     let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle1, mle2]);
+    let mut expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle1, mle2]);
     expression.index_mle_indices(0);
     let res = expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 0, 3);
     let exp = SumcheckEvals(vec![
@@ -289,7 +289,7 @@ fn test_quadratic_sum_differently_sized_mles2() {
     let mle_v2 = vec![Fr::from(2), Fr::from(1), Fr::from(3), Fr::from(5)];
     let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle1, mle2]);
+    let mut expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle1, mle2]);
     expression.index_mle_indices(0);
     expression.fix_variable_at_index(2, Fr::from(3));
     let res = expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 1, 3);
@@ -325,7 +325,7 @@ fn test_dummy_sumcheck_1() {
     let mle_1 = mle_new;
     let mle_2 = mle_2;
 
-    let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_1, mle_2]);
+    let mut expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle_1, mle_2]);
     expression.index_mle_indices(0);
 
     let verifier_expr = expression.clone();
@@ -356,7 +356,7 @@ fn test_dummy_sumcheck_2() {
     let mle_1 = mle1;
     let mle_2 = mle2;
 
-    let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_1, mle_2]);
+    let mut expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle_1, mle_2]);
     expression.index_mle_indices(0);
     let verifier_expr = expression.clone();
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
@@ -395,7 +395,7 @@ fn test_dummy_sumcheck_3() {
     let mle_1 = mle1;
     let mle_2 = mle2;
 
-    let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_1, mle_2]);
+    let mut expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle_1, mle_2]);
     expression.index_mle_indices(0);
     let verifier_expr = expression.clone();
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
@@ -454,9 +454,9 @@ fn test_dummy_sumcheck_concat() {
     let mle_1 = mle1;
     let mle_2 = mle2;
 
-    let mut expression = Expression::<Fr, ProverExpr>::mle(mle_1);
+    let mut expression = Expression::<Fr, ProverMle<Fr>>::mle(mle_1);
     expression.index_mle_indices(0);
-    let mut expr2 = Expression::<Fr, ProverExpr>::mle(mle_2);
+    let mut expr2 = Expression::<Fr, ProverMle<Fr>>::mle(mle_2);
     expr2.index_mle_indices(0);
 
     let mut expression = expr2.select(expression);
@@ -494,9 +494,9 @@ fn test_dummy_sumcheck_concat_2() {
     let mle_1 = mle1;
     let mle_2 = mle2;
 
-    let mut expression = Expression::<Fr, ProverExpr>::mle(mle_1);
+    let mut expression = Expression::<Fr, ProverMle<Fr>>::mle(mle_1);
     expression.index_mle_indices(0);
-    let mut expr2 = Expression::<Fr, ProverExpr>::mle(mle_2);
+    let mut expr2 = Expression::<Fr, ProverMle<Fr>>::mle(mle_2);
     expr2.index_mle_indices(0);
 
     let mut expression = expr2.select(expression);
@@ -536,7 +536,7 @@ fn test_dummy_sumcheck_concat_aggro() {
     let mle_output = DenseMle::new_from_iter(mle_output_v2, LayerId::Input(0));
     let layer_claims = get_dummy_claim(mle_output, &mut rng, None);
 
-    let expression = Expression::<Fr, ProverExpr>::products(vec![mle_1, mle_2]);
+    let expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle_1, mle_2]);
     let expr2 = expression.clone();
 
     let mut expression = expr2.select(expression);
@@ -560,8 +560,8 @@ fn test_dummy_sumcheck_concat_aggro_aggro() {
     let mle_1 = mle1;
     let mle_2 = mle2;
 
-    let expression = Expression::<Fr, ProverExpr>::mle(mle_1);
-    let expr2 = Expression::<Fr, ProverExpr>::mle(mle_2);
+    let expression = Expression::<Fr, ProverMle<Fr>>::mle(mle_1);
+    let expr2 = Expression::<Fr, ProverMle<Fr>>::mle(mle_2);
 
     let expression = expr2.clone().select(expression);
     let mut expression_aggro = expression.select(expr2);
@@ -585,8 +585,8 @@ fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
     let mle_1 = mle1;
     let mle_2 = mle2;
 
-    let expression = Expression::<Fr, ProverExpr>::mle(mle_1);
-    let expr2 = Expression::<Fr, ProverExpr>::mle(mle_2);
+    let expression = Expression::<Fr, ProverMle<Fr>>::mle(mle_1);
+    let expr2 = Expression::<Fr, ProverMle<Fr>>::mle(mle_2);
 
     let expression = expr2.clone().select(expression);
     let expression_aggro = expression.select(expr2.clone());
@@ -610,8 +610,8 @@ fn test_dummy_sumcheck_sum() {
     let mle_1 = mle1;
     let mle_2 = mle2;
 
-    let expression = Expression::<Fr, ProverExpr>::mle(mle_1);
-    let expr2 = Expression::<Fr, ProverExpr>::mle(mle_2);
+    let expression = Expression::<Fr, ProverMle<Fr>>::mle(mle_1);
+    let expr2 = Expression::<Fr, ProverMle<Fr>>::mle(mle_2);
 
     let expression = expr2.clone().select(expression);
     let mut expression_aggro = expression.select(expr2);

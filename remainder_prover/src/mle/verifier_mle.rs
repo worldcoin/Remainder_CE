@@ -1,7 +1,7 @@
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
-use crate::layer::LayerId;
+use crate::{layer::LayerId, mle::AbstractMle};
 
 use super::MleIndex;
 
@@ -22,6 +22,18 @@ pub struct VerifierMle<F: Field> {
     eval: F,
 }
 
+impl<F: Field> AbstractMle<F> for VerifierMle<F> {
+    /// Returns the MLE indices of this MLE.
+    fn mle_indices(&self) -> &[MleIndex<F>] {
+        &self.var_indices
+    }
+
+    /// Returns the [LayerId] of this MLE.
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+}
+
 impl<F: Field> VerifierMle<F> {
     /// Constructor for the [VerifierMle] using layer_id and the
     /// MLE indices that will go into this MLE. Additionally includes
@@ -34,19 +46,9 @@ impl<F: Field> VerifierMle<F> {
         }
     }
 
-    /// Returns the layer_id of this MLE.
-    pub fn layer_id(&self) -> LayerId {
-        self.layer_id
-    }
-
     /// Returns the num_vars of this MLE.
     pub fn num_vars(&self) -> usize {
         self.var_indices.len()
-    }
-
-    /// Returns the MLE indices of this MLE.
-    pub fn var_indices(&self) -> &[MleIndex<F>] {
-        &self.var_indices
     }
 
     /// Returns the fully bound value of this MLE.

@@ -4,7 +4,7 @@ use itertools::Itertools;
 use std::fmt::Debug;
 
 use crate::{
-    mle::{betavalues::BetaValues, Mle},
+    mle::{betavalues::BetaValues, AbstractMle, Mle},
     sumcheck::*,
     utils::mle::{
         compute_flipped_bit_idx_and_values_lexicographic,

@@ -15,8 +15,7 @@ use crate::{
     },
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
-        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
-        mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
+        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex
     },
     sumcheck::*,
 };
@@ -205,7 +204,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
     fn sumcheck_round_indices(&self) -> Vec<usize> {
         let num_vars = self
             .source_mle
-            .var_indices()
+            .mle_indices()
             .iter()
             .fold(0_usize, |acc, idx| {
                 acc + match idx {
@@ -228,7 +227,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         // FREE/INDEXED vars
         let num_u = self
             .source_mle
-            .var_indices()
+            .mle_indices()
             .iter()
             .fold(0_usize, |acc, idx| {
                 acc + match idx {
@@ -368,7 +367,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         let output_data = MultilinearExtension::new(remap_table);
         assert_eq!(
             output_data.num_vars(),
-            mle_output_necessary.var_indices().len()
+            mle_output_necessary.mle_indices().len()
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
@@ -442,7 +441,7 @@ impl<F: Field> VerifierLayer<F> for VerifierIdentityGateLayer<F> {
 
     fn get_claims(&self) -> Result<Vec<Claim<F>>> {
         // Grab the claim on the left side.
-        let source_vars = self.source_mle.var_indices();
+        let source_vars = self.source_mle.mle_indices();
         let source_point = source_vars
             .iter()
             .map(|idx| match idx {
