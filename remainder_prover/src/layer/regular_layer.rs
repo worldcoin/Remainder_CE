@@ -451,6 +451,10 @@ impl<F: Field> RegularLayerDescription<F> {
     pub fn new_raw(id: LayerId, expression: Expression<F, ExprDescription>) -> Self {
         Self { id, expression }
     }
+
+    pub fn get_num_vars(&self) -> usize {
+        self.expression.num_vars()
+    }
 }
 
 /// The verifier's counterpart of a [RegularLayer].
