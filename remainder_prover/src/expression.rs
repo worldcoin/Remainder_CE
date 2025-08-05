@@ -44,7 +44,6 @@
 //!   [crate::mle::verifier_mle::VerifierMle]s rather than [crate::mle::mle_description::MleDescription]s.
 
 #![allow(missing_docs)]
-pub mod abstract_expr;
 pub mod circuit_expr;
 pub mod expr_errors;
 pub mod generic_expr;

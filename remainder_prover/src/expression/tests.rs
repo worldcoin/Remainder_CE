@@ -10,7 +10,8 @@ use std::collections::HashSet;
 use remainder_shared_types::Fr;
 
 use crate::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression, prover_expr::ProverExpr},
+    abstract_expr::AbstractExpression,
+    expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::LayerId,
     layouter::nodes::NodeId,
     mle::dense::DenseMle,
@@ -22,15 +23,15 @@ fn test_abstract_expr_get_sources() {
     let node_id_2 = NodeId::new();
     let node_id_3 = NodeId::new();
 
-    let expression1 = Expression::<Fr, AbstractExpr>::constant(Fr::one());
+    let expression1 = AbstractExpression::<Fr>::constant(Fr::one());
 
-    let expression2 = Expression::<Fr, AbstractExpr>::mle(node_id_1);
+    let expression2 = AbstractExpression::<Fr>::mle(node_id_1);
 
     let expression3 = expression1 - expression2;
 
     let expression4 = (expression3.clone()) * Fr::from(2);
 
-    let expression5 = Expression::<Fr, AbstractExpr>::products(vec![node_id_2, node_id_3]);
+    let expression5 = AbstractExpression::<Fr>::products(vec![node_id_2, node_id_3]);
 
     let expr = expression4.clone() + expression5.clone();
 

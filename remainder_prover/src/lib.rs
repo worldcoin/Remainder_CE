@@ -20,6 +20,9 @@ pub mod components;
 // components.
 pub mod digits;
 
+// abstract expression interface to the user
+pub mod abstract_expr;
+
 // module for defining the expressions (and relavant helper
 // functions) for which the prover and the verifier interact with
 pub mod expression;
