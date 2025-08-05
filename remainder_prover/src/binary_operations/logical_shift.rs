@@ -4,11 +4,9 @@ use std::cmp::{max, min};
 
 use itertools::Itertools;
 use num::abs;
+use remainder_shared_types::Field;
 
-use crate::layouter::{
-    component::Component,
-    nodes::{identity_gate::IdentityGateNode, CircuitNode},
-};
+use crate::layouter::builder::{CircuitBuilder, NodeRef};
 
 /// A component that performs logical bit shift operations using [IdentityGateNode].
 ///
@@ -21,7 +19,7 @@ use crate::layouter::{
 /// Requires that the input node has already been verified to contain binary digits.
 #[derive(Clone, Debug)]
 pub struct ShiftNode {
-    output: IdentityGateNode,
+    output: NodeRef,
 }
 
 impl ShiftNode {
@@ -32,18 +30,23 @@ impl ShiftNode {
     /// # Requires
     /// `input` is assumed to only contain binary digits (i.e. only values from the set
     /// `{F::ZERO, F::ONE}` for a field `F`).
-    pub fn new(num_vars: usize, shift_amount: i32, input: &impl CircuitNode) -> Self {
+    pub fn new<F: Field>(
+        builder_ref: &mut CircuitBuilder<F>,
+        num_vars: usize,
+        shift_amount: i32,
+        input: &NodeRef,
+    ) -> Self {
         // Compute the bit reroutings that effectively shift the
         // input MLE by the appropriate amount.
         let shift_wirings = generate_shift_wirings(num_vars, shift_amount);
-        let output = IdentityGateNode::new(input, shift_wirings, num_vars, None);
+        let output = builder_ref.add_identity_gate_node(input, shift_wirings, num_vars, None);
 
         Self { output }
     }
 
     /// Returns a reference to the node containing the shifted value.
-    pub fn get_output(&self) -> &IdentityGateNode {
-        &self.output
+    pub fn get_output(&self) -> NodeRef {
+        self.output.clone()
     }
 }
 
@@ -70,15 +73,6 @@ fn generate_shift_wirings(num_vars: usize, shift_amount: i32) -> Vec<(u32, u32)>
         (0..(1 << num_vars) - shift_amount as u32)
             .map(|i| (i, i + shift_amount))
             .collect_vec()
-    }
-}
-
-impl<N> Component<N> for ShiftNode
-where
-    N: CircuitNode + From<IdentityGateNode>,
-{
-    fn yield_nodes(self) -> Vec<N> {
-        vec![self.output.into()]
     }
 }
 
