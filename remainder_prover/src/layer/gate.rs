@@ -27,8 +27,7 @@ use crate::{
     },
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
-        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
-        mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
+        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex
     },
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
@@ -674,13 +673,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
         // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED
         // BITS
-        let num_u = self.lhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
+        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
         }) - self.num_dataparallel_vars;
-        let num_v = self.rhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
+        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
@@ -804,13 +803,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {
-        let num_u = self.lhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
+        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
         }) - self.num_dataparallel_vars;
-        let num_v = self.rhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
+        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
@@ -828,13 +827,13 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
         // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED
         // BITS
-        let num_u = self.lhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
+        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
         }) - self.num_dataparallel_vars;
-        let num_v = self.rhs_mle.var_indices().iter().fold(0_usize, |acc, idx| {
+        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
@@ -1056,7 +1055,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         let output_data = MultilinearExtension::new(res_table);
         assert_eq!(
             output_data.num_vars(),
-            mle_output_necessary.var_indices().len()
+            mle_output_necessary.mle_indices().len()
         );
 
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
@@ -1145,7 +1144,7 @@ impl<F: Field> VerifierLayer<F> for VerifierGateLayer<F> {
     fn get_claims(&self) -> Result<Vec<Claim<F>>> {
         // Grab the claim on the left side.
         // TODO!(ryancao): Do error handling here!
-        let lhs_vars = self.lhs_mle.var_indices();
+        let lhs_vars = self.lhs_mle.mle_indices();
         let lhs_point = lhs_vars
             .iter()
             .map(|idx| match idx {
@@ -1167,7 +1166,7 @@ impl<F: Field> VerifierLayer<F> for VerifierGateLayer<F> {
 
         // Grab the claim on the right side.
         // TODO!(ryancao): Do error handling here!
-        let rhs_vars: &[MleIndex<F>] = self.rhs_mle.var_indices();
+        let rhs_vars: &[MleIndex<F>] = self.rhs_mle.mle_indices();
         let rhs_point = rhs_vars
             .iter()
             .map(|idx| match idx {
