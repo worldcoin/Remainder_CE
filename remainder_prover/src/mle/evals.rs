@@ -34,7 +34,7 @@ pub enum DimensionError {
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
-/// the dimension information of the MLE. contains the dim: [IxDyn], see ndarray
+/// the dimension information of the MLE. contains the dim: [type@IxDyn], see ndarray
 /// for more detailed documentation and the names of the axes.
 pub struct DimInfo {
     dims: IxDyn,
@@ -203,8 +203,7 @@ impl<F: Field> Evaluations<F> {
     /// If `self` represents a fully-bound boolean function (i.e.
     /// [Self::num_vars] is zero), it returns its value. Otherwise panics.
     pub fn value(&self) -> F {
-        assert_eq!(self.num_vars(), 0);
-        assert!(self.evals.len() <= 1);
+        assert!(self.is_fully_bound());
         self.first()
     }
 

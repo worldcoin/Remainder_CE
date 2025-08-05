@@ -4,38 +4,54 @@ pub mod curves;
 pub mod pedersen;
 pub mod transcript;
 pub mod utils;
-
-use std::hash::Hash;
-
-use halo2curves::ff::{FromUniformBytes, WithSmallOrderMulGroup};
-use serde::{Deserialize, Serialize};
-
-pub use halo2curves::ff::Field as ff_field;
-
 pub use halo2curves;
 pub use halo2curves::bn256::{Fq, Fr};
-pub use poseidon::Poseidon;
-
+pub use halo2curves::ff::Field as ff_field;
+use halo2curves::ff::{FromUniformBytes, WithSmallOrderMulGroup};
 use halo2curves::CurveExt;
 pub use halo2curves::{bn256::G1 as Bn256Point, group::Group};
+pub use poseidon::Poseidon;
+use serde::{Deserialize, Serialize};
+use std::hash::Hash;
 pub type Scalar = <Bn256Point as Group>::Scalar;
 pub type Base = <Bn256Point as CurveExt>::Base;
 
 /// The primary finite field used within a GKR circuit, as well as within
 /// sumcheck. Note that the field's size should be large enough such that
-/// d / |F| bits of computational soundness is considered secure!
+/// `depth(C) * deg(C) / |F|` bits of computational soundness is considered
+/// secure, where `depth(C)` is the depth of the GKR circuit and `deg(C)` is
+/// the maximum degree of any layerwise polynomial relationship.
+///
+/// ### Note
+/// We use the Halo2 implementation of BN-256's scalar field ([crate::Fr])
+/// everywhere currently for testing purposes, as well as the Halo2
+/// implementation of BN-256's curve elements ([crate::Bn256Point]) within
+/// Hyrax as Pedersen group elements. The Halo2 implementation of BN-256's
+/// base field ([crate::Fq]) is also available as a re-export, although
+/// this is not used in any circuits by default.
+///
+/// ### Sub-traits
+/// * [FromUniformBytes] -- see associated trait documentation for more details.
+///   Our use-case is specifically for compatibility with [Poseidon], which we
+///   are using as the hash function instantiation of a verifier's public coins (see
+///   `impl` block for [Poseidon::new], for example).
+/// * [Hash] -- necessary for creating a hashed representation of a circuit,
+///   as well as storing [Field] values within data structures e.g. `HashMap`.
+/// * [Ord] -- not strictly necessary for cryptographic purposes, but useful
+///   for comparing elements against one another. Consider replacing with [Eq].
+/// * [Serialize], [Deserialize] -- necessary for writing values to file using
+///   Serde.
+/// * [HasByteRepresentation] -- necessary for converting a field element into
+///   its u8 limbs. This is useful for e.g. computing a block-based hash function
+///   over a field whose num bytes integer representation does not evenly divide
+///   the hash function's block size (e.g. a 136-bit field against a 256-bit hash
+///   block).
+/// * [Zeroizable] -- necessary for actively over-writing otherwise sensitive
+///   values which may still be stored in RAM (e.g. blinding factors within a
+///   Hyrax commitment, or intermediate MLE values within a GKR circuit).
 pub trait Field:
-ff_field
-    + FromUniformBytes<64> // only need this bc of Poseidon transcript,
-                              // see func `next_field_element_without_rejection`
-
-    + WithSmallOrderMulGroup<3> // only need this bc of halo2_fft,
-                                   // EvaluationDomain<F> uses ZETA to compute the
-                                   // `EvaluationDomain`
-
-                                   // These two traits will ideally be removed, bc
-                                   // they actually are a sub trait of `PrimeField`
-                                   // which sumcheck does not need
+    ff_field
+    + FromUniformBytes<64>
     + Hash
     + Ord
     + Serialize
@@ -44,11 +60,9 @@ ff_field
     + Zeroizable
 {
 }
-
 impl<
         F: ff_field
             + FromUniformBytes<64>
-            + WithSmallOrderMulGroup<3>
             + Hash
             + Ord
             + Serialize
@@ -58,6 +72,14 @@ impl<
     > Field for F
 {
 }
+
+/// A field which is FFT-friendly under Halo2's EvaluationDomain-based algorithm.
+/// [WithSmallOrderMulGroup] -- see associated trait documentation for more
+/// details. Our use-case is specifically for Halo2's FFT implementation, which
+/// uses Halo2's `EvaluationDomain` to compute extended evaluations of a
+/// power-of-two degree polynomial.
+pub trait Halo2FFTFriendlyField: Field + WithSmallOrderMulGroup<3> {}
+impl<F: Field + WithSmallOrderMulGroup<3>> Halo2FFTFriendlyField for F {}
 
 /// Simple trait which allows us to convert to and from
 /// a little-endian byte representation.

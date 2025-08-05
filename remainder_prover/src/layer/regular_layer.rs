@@ -103,14 +103,14 @@ impl<F: Field> RegularLayer<F> {
                 ExpressionNode::Mle(mle_vec_index) => {
                     let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
                     let val = mle.mle.value();
-                    transcript_writer.append("Leaf MLE value", val);
+                    transcript_writer.append("Fully bound MLE evaluation", val);
                     Ok(())
                 }
                 ExpressionNode::Product(mle_vec_indices) => {
                     for mle_vec_index in mle_vec_indices {
                         let mle = &mle_vec[mle_vec_index.index()];
                         let eval = mle.mle.value();
-                        transcript_writer.append("Product MLE value", eval);
+                        transcript_writer.append("Fully bound MLE evaluation", eval);
                     }
                     Ok(())
                 }
@@ -174,9 +174,13 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
                 "failed at round {round_index}, layer {layer_id}",
             );
             // Append the evaluations to the transcript.
-            transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
+            // Since the verifier can deduce g_i(0) by computing claim - g_i(1), the prover does not send g_i(0)
+            transcript_writer.append_elements(
+                "Sumcheck round univariate evaluations",
+                &prover_sumcheck_message[1..],
+            );
             // Sample the challenge
-            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            let challenge = transcript_writer.get_challenge("Sumcheck round challenge");
             // "Bind" the challenge to the expression at this point.
             self.bind_round_variable(round_index, challenge)?;
             // For debug mode, update the previous message and challenge for the purpose
@@ -590,29 +594,34 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             // at most `degree`. If the prover appended more evaluations,
             // there will be a transcript read error later on in the proving
             // process which will result in the proof not verifying.
+            // Furthermore, since the verifier can deduce g_i(0) by computing `claim - g_i(1)`,
+            // the prover does not include g_i(0) in the message. Instead, the verifier
+            // reserves the spot of g_i(0) when reading from the transcript, and compute g_i(0)
+            // afterwards.
             // TODO(Makis):
             //   1. Modify the Transcript interface to catch any errors sooner.
             //   2. This line is assuming a representation for the polynomial!
             //   We should hide that under another function whose job is to take
             //   the trascript reader and read the polynomial in whatever
             //   representation is being used.
-            let g_cur_round = transcript_reader.consume_elements("Sumcheck message", degree + 1)?;
+            let mut g_cur_round: Vec<_> = [Ok(F::from(0))]
+                .into_iter()
+                .chain((0..degree).map(|_| {
+                    transcript_reader.consume_element("Sumcheck round univariate evaluations")
+                }))
+                .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
-            let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
+            let challenge = transcript_reader.get_challenge("Sumcheck round challenge")?;
 
             // TODO(Makis): After refactoring `SumcheckEvals` to be a
             // representation of a univariate polynomial, `evaluate_at_a_point`
             // should just be a method.
-            // Verify that:
-            //       `g_i(0) + g_i(1) == g_{i - 1}(r_{i-1})`
-            let g_i_zero = evaluate_at_a_point(&g_cur_round, F::ZERO).unwrap();
-            let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
+            // Compute:
+            //       `g_i(0) = g_{i - 1}(r_{i-1}) - g_i(1)`
             let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
-
-            if g_i_zero + g_i_one != g_prev_r_prev {
-                return Err(anyhow!(VerificationError::SumcheckFailed));
-            }
+            let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
+            g_cur_round[0] = g_prev_r_prev - g_i_one;
 
             g_prev_round = g_cur_round;
             prev_challenge = challenge;

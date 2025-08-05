@@ -37,7 +37,7 @@ pub struct Product<F: Field, T> {
 }
 
 impl<F: Field> Product<F, Option<F>> {
-    /// Creates a new Product from a vector of [MleDescriptions].
+    /// Creates a new Product from a vector of [`MleDescription<F>`].
     pub fn new(mles: &[MleDescription<F>], coefficient: F, bindings: &[F]) -> Self {
         if mles.is_empty() {
             return Product {
@@ -58,7 +58,7 @@ impl<F: Field> Product<F, Option<F>> {
         }
     }
 
-    /// Creates a new Product from a vector of [MleDescriptions].
+    /// Creates a new Product from a vector of [`MleDescription<F>`].
     pub fn new_from_mul_gate(
         mles: &[MleDescription<F>],
         coefficient: F,
@@ -98,7 +98,7 @@ impl<F: Field> Product<F, F> {
     /// Panics if any are not fully bound.
     pub fn new(mles: &[DenseMle<F>], coefficient: F) -> Self {
         // ensure all MLEs are fully bound
-        assert!(mles.iter().all(|mle| mle.len() == 1));
+        assert!(mles.iter().all(|mle| mle.is_fully_bounded()));
         if mles.is_empty() {
             return Product {
                 intermediates: vec![Intermediate::Composite { value: F::ONE }],
@@ -149,7 +149,8 @@ pub enum Intermediate<F: Field, T> {
 }
 
 impl<F: Field, T: Copy> PostSumcheckLayer<F, T> {
-    /// Returns a vector of the values of the intermediates (in an order compatible with [set_values]).
+    /// Returns a vector of the values of the intermediates
+    /// (in an order compatible with [new_with_values]).
     pub fn get_values(&self) -> Vec<T> {
         self.0
             .iter()
@@ -173,7 +174,7 @@ impl<F: Field, T: Copy> PostSumcheckLayer<F, T> {
 }
 
 /// Set the values of the PostSumcheckLayer to the given values, panicking if the lengths do not match,
-/// returning a new instance. Counterpart to [get_values].
+/// returning a new instance. Counterpart to [PostSumcheckLayer::get_values].
 pub fn new_with_values<F: Field, S, T: Clone>(
     post_sumcheck_layer: &PostSumcheckLayer<F, S>,
     values: &[T],

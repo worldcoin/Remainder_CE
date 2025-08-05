@@ -1,5 +1,6 @@
 use itertools::Itertools;
 
+use remainder_shared_types::Halo2FFTFriendlyField;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
@@ -72,7 +73,7 @@ where
 
 impl<F> LcEncoding<F> for LigeroAuxInfo<F>
 where
-    F: Field,
+    F: Halo2FFTFriendlyField,
 {
     type Err = &'static str;
 
