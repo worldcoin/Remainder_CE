@@ -10,7 +10,6 @@ pub mod proof_system;
 /// Struct for representing a list of layers
 pub mod layers;
 
-use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
 use self::layers::Layers;
@@ -573,14 +572,10 @@ impl<F: Field> GKRCircuitDescription<F> {
                     .into_iter()
                     .for_each(|circuit_mle| {
                         let layer_id = circuit_mle.layer_id();
-                        if let Entry::Vacant(e) = mle_claim_map.entry(layer_id) {
-                            e.insert(HashSet::from([circuit_mle]));
-                        } else {
-                            mle_claim_map
-                                .get_mut(&layer_id)
-                                .unwrap()
-                                .insert(circuit_mle);
-                        }
+                        mle_claim_map
+                            .entry(layer_id)
+                            .or_default()
+                            .insert(circuit_mle);
                     })
             });
 
@@ -590,14 +585,10 @@ impl<F: Field> GKRCircuitDescription<F> {
         output_layer_descriptions.iter().for_each(|output_layer| {
             let layer_source_mle = &output_layer.mle;
             let layer_id = layer_source_mle.layer_id();
-            if let Entry::Vacant(e) = mle_claim_map.entry(layer_id) {
-                e.insert(HashSet::from([&output_layer.mle]));
-            } else {
-                mle_claim_map
-                    .get_mut(&layer_id)
-                    .unwrap()
-                    .insert(&output_layer.mle);
-            }
+            mle_claim_map
+                .entry(layer_id)
+                .or_default()
+                .insert(&output_layer.mle);
         });
 
         // Step 1: populate the circuit map with all of the data necessary in
