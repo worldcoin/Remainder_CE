@@ -243,7 +243,7 @@ pub trait VerifierLayer<F: Field> {
     fn get_claims(&self) -> Result<Vec<Claim<F>>>;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Copy, PartialOrd)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Ord, Serialize, Deserialize, Copy, PartialOrd)]
 /// The location of a layer within the GKR circuit
 pub enum LayerId {
     /// An Mle located in the input layer
