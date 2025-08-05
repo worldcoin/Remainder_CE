@@ -1,9 +1,16 @@
 //! A wrapper `enum` type around various implementations of MLEs.
 
 use super::{dense::DenseMle, evals::EvaluationsIterator, zero::ZeroMle, MleIndex};
-use crate::{layer::LayerId, mle::Mle};
+use crate::{
+    layer::LayerId,
+    mle::{
+        evals::{Evaluations, MultilinearExtension},
+        Mle,
+    },
+};
+use ark_std::cfg_into_iter;
 use itertools::{repeat_n, Itertools};
-use remainder_shared_types::Field;
+use remainder_shared_types::{field::ExtensionField, Field};
 use serde::{Deserialize, Serialize};
 
 /// A wrapper type for various kinds of MLEs.

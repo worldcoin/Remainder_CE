@@ -359,7 +359,7 @@ pub fn prove_circuit<F: Field, E: ExtensionField<F>>(
     } = instantiated_circuit;
 
     // Maps a `LayerId` to a collection of claims made on that layer.
-    let mut claim_tracker = ClaimTracker::new();
+    let mut claim_tracker = ClaimTracker::<E>::new();
 
     // --------- STAGE 1: Output Claim Generation ---------
     let claims_timer = start_timer!(|| "Output claims generation");
