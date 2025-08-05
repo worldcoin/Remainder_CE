@@ -105,10 +105,26 @@ pub fn verify_sumcheck_messages<F: Field>(
     let final_chal = F::from(rng.gen::<u64>());
     challenges.push(final_chal);
 
+    // Beta bound is not interlaced
+    let claim_point = layer_claim.get_point();
+    let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
+    let nonlinear_claims = expression_nonlinear_indices
+        .iter()
+        .map(|idx| claim_point[*idx])
+        .collect_vec();
+    let beta_bound = BetaValues::compute_beta_over_two_challenges(&nonlinear_claims, &challenges);
+    // MLE bound is evaluated with challenges interlaced with linear claims
+    let claim_point = layer_claim.get_point();
+    let expression_linear_indices = expression.get_all_linear_rounds();
+    expression_linear_indices
+        .iter()
+        .sorted()
+        .for_each(|round_idx| {
+            challenges.insert(*round_idx, claim_point[*round_idx]);
+        });
+
     // uses the expression to make one single oracle query
     let mle_bound = expression.evaluate_expr(challenges.clone()).unwrap();
-    let beta_bound =
-        BetaValues::compute_beta_over_two_challenges(layer_claim.get_point(), &challenges);
     let oracle_query = mle_bound * beta_bound;
 
     let prev_at_r =
@@ -291,8 +307,8 @@ fn test_quadratic_sum_differently_sized_mles2() {
 fn test_dummy_sumcheck_1() {
     let mut rng = test_rng();
     let mle_vec = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(2)];
-
     let mle_new: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
+
     let mle_v2 = vec![Fr::from(1), Fr::from(5), Fr::from(1), Fr::from(5)];
     let mle_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
@@ -310,8 +326,11 @@ fn test_dummy_sumcheck_1() {
     let mle_2 = mle_2;
 
     let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_1, mle_2]);
+    expression.index_mle_indices(0);
+
+    let verifier_expr = expression.clone();
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
-    let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
+    let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
 
@@ -338,8 +357,10 @@ fn test_dummy_sumcheck_2() {
     let mle_2 = mle2;
 
     let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_1, mle_2]);
+    expression.index_mle_indices(0);
+    let verifier_expr = expression.clone();
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
-    let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
+    let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
 
@@ -365,7 +386,7 @@ fn test_dummy_sumcheck_3() {
     let mle_output = DenseMle::new_from_iter(
         mle1.clone()
             .into_iter()
-            .zip(mle2.clone().into_iter().chain(mle2.clone()))
+            .zip(mle2.clone().into_iter().flat_map(|x| [x, x]))
             .map(|(first, second)| first * second),
         LayerId::Input(0),
     );
@@ -375,8 +396,10 @@ fn test_dummy_sumcheck_3() {
     let mle_2 = mle2;
 
     let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_1, mle_2]);
+    expression.index_mle_indices(0);
+    let verifier_expr = expression.clone();
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
-    let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
+    let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
 
@@ -385,10 +408,12 @@ fn test_dummy_sumcheck_3() {
 fn test_dummy_sumcheck_sum_small() {
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(1), Fr::from(2)];
-    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
+    let mut mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
+    mle1.index_mle_indices(0);
 
     let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
-    let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
+    let mut mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
+    mle2.index_mle_indices(0);
 
     let mle_output = DenseMle::new_from_iter(
         mle1.clone()
@@ -419,20 +444,23 @@ fn test_dummy_sumcheck_concat() {
     let mle_v2 = vec![Fr::from(2), Fr::from(3)];
     let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let output: DenseMle<Fr> = DenseMle::new_from_raw(
+    let mle_output: DenseMle<Fr> = DenseMle::new_from_raw(
         vec![Fr::from(5), Fr::from(2), Fr::from(2), Fr::from(3)],
         LayerId::Input(0),
     );
 
-    let layer_claims = get_dummy_claim(output, &mut rng, None);
+    let layer_claims = get_dummy_claim(mle_output, &mut rng, None);
 
     let mle_1 = mle1;
     let mle_2 = mle2;
 
-    let expression = Expression::<Fr, ProverExpr>::mle(mle_1);
-    let expr2 = Expression::<Fr, ProverExpr>::mle(mle_2);
+    let mut expression = Expression::<Fr, ProverExpr>::mle(mle_1);
+    expression.index_mle_indices(0);
+    let mut expr2 = Expression::<Fr, ProverExpr>::mle(mle_2);
+    expr2.index_mle_indices(0);
 
     let mut expression = expr2.select(expression);
+    expression.index_mle_indices(0);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -448,7 +476,7 @@ fn test_dummy_sumcheck_concat_2() {
     let mle_v2 = vec![Fr::from(1), Fr::from(3), Fr::from(1), Fr::from(6)];
     let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mle_out = DenseMle::<Fr>::new_from_raw(
+    let mle_output = DenseMle::<Fr>::new_from_raw(
         vec![
             Fr::from(1),
             Fr::from(1),
@@ -461,15 +489,18 @@ fn test_dummy_sumcheck_concat_2() {
         ],
         LayerId::Input(0),
     );
-    let layer_claims = get_dummy_claim(mle_out, &mut rng, None);
+    let layer_claims = get_dummy_claim(mle_output, &mut rng, None);
 
     let mle_1 = mle1;
     let mle_2 = mle2;
 
-    let expression = Expression::<Fr, ProverExpr>::mle(mle_1);
-    let expr2 = Expression::<Fr, ProverExpr>::mle(mle_2);
+    let mut expression = Expression::<Fr, ProverExpr>::mle(mle_1);
+    expression.index_mle_indices(0);
+    let mut expr2 = Expression::<Fr, ProverExpr>::mle(mle_2);
+    expr2.index_mle_indices(0);
 
     let mut expression = expr2.select(expression);
+    expression.index_mle_indices(0);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -497,22 +528,23 @@ fn test_dummy_sumcheck_concat_aggro() {
     let mle_1 = mle1.clone();
     let mle_2 = mle2.clone();
 
-    let mle_output = DenseMle::new_from_iter(
-        mle1.into_iter()
-            .zip(mle2.clone().into_iter().chain(mle2))
-            .map(|(first, second)| first * second)
-            .flat_map(|x| vec![x, x]),
-        LayerId::Input(0),
-    );
+    let mle_output_v2 = mle1
+        .into_iter()
+        .zip(mle2.clone().into_iter().flat_map(|x| [x, x]))
+        .map(|(first, second)| first * second);
+    let mle_output_v2 = mle_output_v2.clone().into_iter().chain(mle_output_v2);
+    let mle_output = DenseMle::new_from_iter(mle_output_v2, LayerId::Input(0));
     let layer_claims = get_dummy_claim(mle_output, &mut rng, None);
 
     let expression = Expression::<Fr, ProverExpr>::products(vec![mle_1, mle_2]);
     let expr2 = expression.clone();
 
     let mut expression = expr2.select(expression);
+    expression.index_mle_indices(0);
+    let verifier_expr = expression.clone();
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
 
-    let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
+    let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
 
@@ -534,9 +566,9 @@ fn test_dummy_sumcheck_concat_aggro_aggro() {
     let expression = expr2.clone().select(expression);
     let mut expression_aggro = expression.select(expr2);
     let layer_claims = get_dummy_expression_eval(&expression_aggro, &mut rng);
+    let verifier_expr = expression_aggro.clone();
     let res_messages = dummy_sumcheck(&mut expression_aggro, &mut rng, layer_claims.clone());
-    let verifyres =
-        verify_sumcheck_messages(res_messages, expression_aggro, layer_claims, &mut rng);
+    let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
 
@@ -560,9 +592,9 @@ fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
     let expression_aggro = expression.select(expr2.clone());
     let mut expression_aggro_aggro = expression_aggro.select(expr2);
     let layer_claims = get_dummy_expression_eval(&expression_aggro_aggro, &mut rng);
+    let verifier_expr = expression_aggro_aggro.clone();
     let res_messages = dummy_sumcheck(&mut expression_aggro_aggro, &mut rng, layer_claims.clone());
-    let verifyres =
-        verify_sumcheck_messages(res_messages, expression_aggro_aggro, layer_claims, &mut rng);
+    let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
 
@@ -584,9 +616,9 @@ fn test_dummy_sumcheck_sum() {
     let expression = expr2.clone().select(expression);
     let mut expression_aggro = expression.select(expr2);
     let layer_claims = get_dummy_expression_eval(&expression_aggro, &mut rng);
+    let verifier_expr = expression_aggro.clone();
     let res_messages = dummy_sumcheck(&mut expression_aggro, &mut rng, layer_claims.clone());
-    let verifyres =
-        verify_sumcheck_messages(res_messages, expression_aggro, layer_claims, &mut rng);
+    let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
 

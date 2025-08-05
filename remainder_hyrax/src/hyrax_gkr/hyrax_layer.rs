@@ -245,7 +245,8 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
                     converter,
                 );
                 messages.push(round_commit.clone());
-                transcript.append_ec_point("sumcheck message commitment", round_commit.commitment);
+                transcript
+                    .append_ec_point("Commitment to sumcheck message", round_commit.commitment);
 
                 let challenge = transcript.get_scalar_field_challenge("sumcheck round challenge");
                 bindings.push(challenge);
@@ -271,7 +272,10 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             committed_scalar_psl_as_commitments(&post_sumcheck_layer_committed).get_values();
 
         // Add each of the commitments to the transcript
-        transcript.append_ec_points("commitment to product input/outputs", &commitments);
+        transcript.append_ec_points(
+            "Commitments to all the layer's leaf values and intermediates",
+            &commitments,
+        );
 
         // Get the claims made in this layer
         let committed_claims: Vec<_> = post_sumcheck_layer_committed
@@ -375,8 +379,10 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // Verify the proof of sumcheck
         // Append first sumcheck message to transcript, which is the proported sum.
         if num_sumcheck_rounds_expected > 0 {
-            transcript
-                .append_ec_point("sumcheck message commitment", proof_of_sumcheck.messages[0]);
+            transcript.append_ec_point(
+                "Commitment to sumcheck message",
+                proof_of_sumcheck.messages[0],
+            );
         }
 
         // Collect the "bindings" for each of the sumcheck rounds. Add sumcheck messages to transcript.
@@ -389,7 +395,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
                 let challenge = transcript.get_scalar_field_challenge("sumcheck round challenge");
                 bindings.push(challenge);
 
-                transcript.append_ec_point("sumcheck message commitment", *message);
+                transcript.append_ec_point("Commitment to sumcheck message", *message);
             });
 
         // Final challenge in sumcheck -- needed for "oracle query".
@@ -402,7 +408,10 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         assert_eq!(bindings.len(), num_sumcheck_rounds_expected);
 
         // Add the commitments made by the prover to the transcript
-        transcript.append_ec_points("commitment to product input/outputs", commitments);
+        transcript.append_ec_points(
+            "Commitments to all the layer's leaf values and intermediates",
+            commitments,
+        );
 
         let post_sumcheck_layer_desc = layer_desc.get_post_sumcheck_layer(
             &bindings,
@@ -563,10 +572,10 @@ impl<C: PrimeOrderCurve> HyraxClaim<C::Scalar, CommittedScalar<C>> {
 
 /// Represents a claim made on a layer by an atomic factor of a product.
 /// T could be:
-///     C::Scalar (if used by the prover), or
-///     CommittedScalar<C> (if used by the prover)
+///     `C::Scalar` (if used by the prover), or
+///     `CommittedScalar<C>` (if used by the prover)
 ///     to interface with claim aggregation code in remainder
-///     C (this is the verifier's view, i.e. just the commitment)
+///     `C` (this is the verifier's view, i.e. just the commitment)
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: Field, T: DeserializeOwned")]
 pub struct HyraxClaim<F: Field, T: Serialize + DeserializeOwned> {
