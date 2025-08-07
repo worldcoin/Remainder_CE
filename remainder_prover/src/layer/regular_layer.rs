@@ -522,7 +522,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             .iter()
             .for_each(|(expression_node, prefix_bit_vec)| {
                 let full_bookkeeping_table = expression_node
-                    .compute_bookkeeping_table(circuit_map)
+                    .compute_bookkeeping_table(circuit_map, &self.expression.mle_vec)
                     .unwrap();
                 prefix_bit_vec
                     .iter()
@@ -608,6 +608,8 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
                     transcript_reader.consume_element("Sumcheck round univariate evaluations")
                 }))
                 .collect::<Result<_, _>>()?;
+
+            println!("V ROUND_INDEX: {:?}, DEGREE: {:?}", round_index, degree);
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck round challenge")?;
