@@ -27,7 +27,6 @@ use remainder_shared_types::Field;
 use std::{
     cmp::max,
     collections::HashSet,
-    ops::Neg,
 };
 
 use anyhow::{anyhow, Ok, Result};
@@ -71,18 +70,18 @@ impl<F: Field> Expression<F, ProverMle<F>> {
     /// If the bookkeeping table has more than 1 element, it
     /// throws an ExpressionError::EvaluateNotFullyBoundError
     pub fn transform_to_verifier_expression(self) -> Result<Expression<F, VerifierMle<F>>> {
-        let (mut expression_node, mle_vec) = self.deconstruct();
+        let (expression_node, mle_vec) = self.deconstruct();
         // Check that every MLE is fully bounded
         let verifier_mles = mle_vec.into_iter().map(|m| {
             if !m.is_fully_bounded() {
                 return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
             }
-            VerifierMle::new(
+            Ok(VerifierMle::new(
                 m.layer_id(),
                 m.mle_indices().to_vec(),
                 m.value(),
-            )
-        });
+            ))
+        }).collect::<Result<Vec<_>>>()?;
 
         Ok(Expression::new(
             expression_node,
@@ -116,7 +115,7 @@ impl<F: Field> Expression<F, ProverMle<F>> {
 
         // ----- this is literally a check -----
         let mut observer_fn = |exp: &ExpressionNode<F>,
-                               mle_vec: &ProverMle<F>|
+                               mle_vec: &[ProverMle<F>]|
          -> Result<()> {
             match exp {
                 ExpressionNode::Mle(mle_vec_idx) => {
@@ -223,33 +222,6 @@ impl<F: Field> Expression<F, ProverMle<F>> {
             )
     }
 
-    /// Traverses the expression tree to return all indices within the
-    /// expression. Can only be used after indexing the expression.
-    pub fn get_all_rounds(&self) -> Vec<usize> {
-        let (expression_node, mle_vec) = self.deconstruct_ref();
-        let mut all_rounds = expression_node.get_all_rounds(mle_vec);
-        all_rounds.sort();
-        all_rounds
-    }
-
-    /// this traverses the expression tree to get all of the nonlinear rounds. can only be used after indexing the expression.
-    /// returns the indices sorted.
-    pub fn get_all_nonlinear_rounds(&self) -> Vec<usize> {
-        let (expression_node, mle_vec) = self.deconstruct_ref();
-        let mut nonlinear_rounds = expression_node.get_all_nonlinear_rounds(mle_vec);
-        nonlinear_rounds.sort();
-        nonlinear_rounds
-    }
-
-    /// this traverses the expression tree to get all of the linear rounds. can only be used after indexing the expression.
-    /// returns the indices sorted.
-    pub fn get_all_linear_rounds(&self) -> Vec<usize> {
-        let (expression_node, mle_vec) = self.deconstruct_ref();
-        let mut linear_rounds = expression_node.get_all_linear_rounds(mle_vec);
-        linear_rounds.sort();
-        linear_rounds
-    }
-
     /// Mutate the MLE indices that are [MleIndex::Free] in the expression and
     /// turn them into [MleIndex::Indexed]. Returns the max number of bits
     /// that are indexed.
@@ -270,11 +242,6 @@ impl<F: Field> Expression<F, ProverMle<F>> {
         self.expression_node
             .get_post_sumcheck_layer_prover(multiplier, &self.mle_vec)
     }
-
-    /// Get the maximum degree of any variable in htis expression
-    pub fn get_max_degree(&self) -> usize {
-        self.expression_node.get_max_degree(&self.mle_vec)
-    }
 }
 
 impl<F: Field> ExpressionNode<F> {
@@ -283,7 +250,7 @@ impl<F: Field> ExpressionNode<F> {
         &mut self,
         round_index: usize,
         challenge: F,
-        mle_vec: &mut ProverMle<F>, // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
+        mle_vec: &mut [ProverMle<F>], // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
     ) {
         match self {
             ExpressionNode::Selector(index, a, b) => {
@@ -329,7 +296,7 @@ impl<F: Field> ExpressionNode<F> {
         &mut self,
         round_index: usize,
         challenge: F,
-        mle_vec: &mut ProverMle<F>, // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
+        mle_vec: &mut [ProverMle<F>], // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
     ) {
         match self {
             ExpressionNode::Selector(index, a, b) => {
@@ -375,7 +342,7 @@ impl<F: Field> ExpressionNode<F> {
         beta_values: &BetaValues<F>,
         round_index: usize,
         degree: usize,
-        mle_vec: &ProverMle<F>,
+        mle_vec: &[ProverMle<F>],
     ) -> SumcheckEvals<F> {
         match self {
             ExpressionNode::Constant(constant) => {
@@ -535,7 +502,7 @@ impl<F: Field> ExpressionNode<F> {
     pub fn evaluate_sumcheck_node_beta_cascade(
         &self,
         beta_vec: &[&BetaValues<F>],
-        mle_vec: &ProverMle<F>,
+        mle_vec: &[ProverMle<F>],
         random_coefficients: &[F],
         round_index: usize,
         degree: usize,
@@ -851,7 +818,7 @@ impl<F: Field> ExpressionNode<F> {
     pub fn index_mle_indices_node(
         &mut self,
         curr_index: usize,
-        mle_vec: &mut ProverMle<F>,
+        mle_vec: &mut [ProverMle<F>],
     ) -> usize {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
@@ -890,7 +857,7 @@ impl<F: Field> ExpressionNode<F> {
     pub fn get_expression_num_free_variables_node(
         &self,
         curr_size: usize,
-        mle_vec: &ProverMle<F>,
+        mle_vec: &[ProverMle<F>],
     ) -> usize {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
@@ -954,7 +921,7 @@ impl<F: Field> ExpressionNode<F> {
     pub fn get_post_sumcheck_layer_prover(
         &self,
         multiplier: F,
-        mle_vec: &ProverMle<F>,
+        mle_vec: &[ProverMle<F>],
     ) -> PostSumcheckLayer<F, F> {
         let mut products: Vec<Product<F, F>> = vec![];
         match self {

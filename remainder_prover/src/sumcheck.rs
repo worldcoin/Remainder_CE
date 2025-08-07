@@ -419,7 +419,7 @@ pub(crate) fn get_round_degree<F: Field>(
     // By default, all rounds have degree at least 2 (beta table included)
     let mut round_degree = 1;
 
-    let mut get_degree_closure = |expr: &ExpressionNode<F, ProverMle<F>>,
+    let mut get_degree_closure = |expr: &ExpressionNode<F>,
                                   mle_vec: &[ProverMle<F>]|
      -> Result<()> {
         let round_degree = &mut round_degree;

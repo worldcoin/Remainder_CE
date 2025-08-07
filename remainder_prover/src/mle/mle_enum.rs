@@ -6,11 +6,7 @@ use itertools::{repeat_n, Itertools};
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
-use remainder_shared_types::Field;
-
-use crate::{layer::LayerId, mle::{AbstractMle, Mle}};
-
-use super::{dense::DenseMle, evals::EvaluationsIterator, zero::ZeroMle, MleIndex};
+use crate::mle::AbstractMle;
 
 /// A wrapper type for various kinds of [MleRef]s.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

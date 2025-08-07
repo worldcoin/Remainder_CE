@@ -11,7 +11,7 @@ use remainder_shared_types::Fr;
 
 use crate::{
     abstract_expr::AbstractExpression,
-    expression::{generic_expr::Expression, prover_expr::ProverExpr},
+    expression::generic_expr::Expression,
     layer::LayerId,
     layouter::nodes::NodeId,
     mle::dense::DenseMle,
