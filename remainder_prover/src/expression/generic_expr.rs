@@ -169,15 +169,53 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
 
         self.traverse_mut(&mut increment_closure).unwrap();
     }
-}
 
-/// expression constructors
-impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
-    /// Create a mle Expression that contains one MLE
-    pub fn mle(mle: M) -> Self {
-        let mle_node = ExpressionNode::Mle(MleVecIndex::new(0));
+    /// Returns the total number of variables (i.e. number of rounds of sumcheck)
+    /// within the MLE representing the output "data" of this particular expression.
+    ///
+    /// Note that unlike within the AbstractExpr case, we don't need to return
+    /// a `Result` since all MLEs within a `ExprDescription` are instantiated with their appropriate number of variables.
+    pub fn num_vars(&self) -> usize {
+        self.expression_node.get_num_vars(&self.mle_vec)
+    }
 
-        Expression::new(mle_node, [mle].to_vec())
+    /// Traverses the expression tree to return all indices within the
+    /// expression. Can only be used after indexing the expression.
+    pub fn get_all_rounds(&self) -> Vec<usize> {
+        let (expression_node, mle_vec) = self.deconstruct_ref();
+        let mut all_rounds = expression_node.get_all_rounds(mle_vec);
+        all_rounds.sort();
+        all_rounds
+    }
+
+    /// this traverses the expression tree to get all of the nonlinear rounds. can only be used after indexing the expression.
+    /// returns the indices sorted.
+    pub fn get_all_nonlinear_rounds(&self) -> Vec<usize> {
+        let (expression_node, mle_vec) = self.deconstruct_ref();
+        let mut nonlinear_rounds = expression_node.get_all_nonlinear_rounds(mle_vec);
+        nonlinear_rounds.sort();
+        nonlinear_rounds
+    }
+
+    /// this traverses the expression tree to get all of the linear rounds. can only be used after indexing the expression.
+    /// returns the indices sorted.
+    pub fn get_all_linear_rounds(&self) -> Vec<usize> {
+        let (expression_node, mle_vec) = self.deconstruct_ref();
+        let mut linear_rounds = expression_node.get_all_linear_rounds(mle_vec);
+        linear_rounds.sort();
+        linear_rounds
+    }
+
+    /// Get the maximum degree of any variable in htis expression
+    pub fn get_max_degree(&self) -> usize {
+        self.expression_node.get_max_degree(&self.mle_vec)
+    }
+
+    /// Returns the maximum degree of b_{curr_round} within an expression
+    /// (and therefore the number of prover messages we need to send)
+    pub fn get_round_degree(&self, curr_round: usize) -> usize {
+        let (expression_node, mle_vec) = self.deconstruct_ref();
+        *expression_node.get_rounds_helper(mle_vec).get(curr_round).unwrap_or(&2)
     }
 }
 
@@ -232,31 +270,32 @@ impl<F: Field> ExpressionNode<F> {
     /// Evaluate the polynomial using the provided closures to perform the
     /// operations.
     #[allow(clippy::too_many_arguments)]
-    pub fn reduce<T>(
+    pub fn reduce<M: AbstractMle<F>, T>(
         &self,
+        mle_vec: &[M],
         constant: &impl Fn(F) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&MleVecIndex) -> T,
+        mle_eval: &impl Fn(&M) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[MleVecIndex]) -> T,
+        product: &impl Fn(&[&M]) -> T,
         scaled: &impl Fn(T, F) -> T,
     ) -> T {
         match self {
             ExpressionNode::Constant(scalar) => constant(*scalar),
             ExpressionNode::Selector(index, a, b) => {
-                let lhs = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
-                let rhs = b.reduce(constant, selector_column, mle_eval, sum, product, scaled);
+                let lhs = a.reduce(mle_vec, constant, selector_column, mle_eval, sum, product, scaled);
+                let rhs = b.reduce(mle_vec, constant, selector_column, mle_eval, sum, product, scaled);
                 selector_column(index, lhs, rhs)
             }
-            ExpressionNode::Mle(query) => mle_eval(query),
+            ExpressionNode::Mle(query) => mle_eval(query.get_mle(mle_vec)),
             ExpressionNode::Sum(a, b) => {
-                let a = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
-                let b = b.reduce(constant, selector_column, mle_eval, sum, product, scaled);
+                let a = a.reduce(mle_vec, constant, selector_column, mle_eval, sum, product, scaled);
+                let b = b.reduce(mle_vec, constant, selector_column, mle_eval, sum, product, scaled);
                 sum(a, b)
             }
-            ExpressionNode::Product(queries) => product(queries),
+            ExpressionNode::Product(queries) => product(&queries.iter().map(|q| q.get_mle(mle_vec)).collect::<Vec<_>>()),
             ExpressionNode::Scaled(a, f) => {
-                let a = a.reduce(constant, selector_column, mle_eval, sum, product, scaled);
+                let a = a.reduce(mle_vec, constant, selector_column, mle_eval, sum, product, scaled);
                 scaled(a, *f)
             }
         }
@@ -294,6 +333,11 @@ impl<F: Field> ExpressionNode<F> {
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] == 1)
             .collect()
+    }
+
+    /// Get the maximum degree of an ExpressionNode, recursively.
+    pub fn get_max_degree<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> usize {
+        self.get_rounds_helper(mle_vec).into_iter().max().unwrap()
     }
 
     // a recursive helper for get_all_rounds, get_all_nonlinear_rounds, and get_all_linear_rounds
@@ -382,9 +426,25 @@ impl<F: Field> ExpressionNode<F> {
         degree_per_index
     }
 
-    /// Get the maximum degree of an ExpressionNode, recursively.
-    pub fn get_max_degree<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> usize {
-        self.get_rounds_helper(mle_vec).into_iter().max().unwrap()
+    /// Returns the total number of variables (i.e. number of rounds of sumcheck) within
+    /// the MLE representing the output "data" of this particular expression.
+    ///
+    /// Note that unlike within the `AbstractExpression` case, we don't need to return
+    /// a `Result` since all MLEs extentiating `AbstractMle` are instantiated with their
+    /// appropriate number of variables.
+    pub fn get_num_vars<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> usize {
+        match self {
+            ExpressionNode::Constant(_) => 0,
+            ExpressionNode::Selector(_, lhs, rhs) => {
+                max(lhs.get_num_vars(mle_vec) + 1, rhs.get_num_vars(mle_vec) + 1)
+            }
+            ExpressionNode::Mle(circuit_mle_desc) => circuit_mle_desc.get_mle(mle_vec).num_free_vars(),
+            ExpressionNode::Sum(lhs, rhs) => max(lhs.get_num_vars(mle_vec), rhs.get_num_vars(mle_vec)),
+            ExpressionNode::Product(nodes) => nodes.iter().fold(0, |cur_max, circuit_mle_desc| {
+                max(cur_max, circuit_mle_desc.get_mle(mle_vec).num_free_vars())
+            }),
+            ExpressionNode::Scaled(expr, _) => expr.get_num_vars(mle_vec),
+        }
     }
 }
 
@@ -420,16 +480,21 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F> {
     }
 }
 
-// operators on generic MLEs
+// constructors and operators on generic MLEs
 impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
-    /// Create a constant Expression that contains one field element
+    /// create a constant Expression that contains one field element
     pub fn constant(constant: F) -> Self {
         let mle_node = ExpressionNode::Constant(constant);
-
         Expression::new(mle_node, [].to_vec())
     }
 
-    /// negates an Expression
+    /// create an MLE expression that contains one MLE
+    pub fn mle(mle: M) -> Self {
+        let mle_node = ExpressionNode::Mle(MleVecIndex::new(0));
+        Expression::new(mle_node, [mle].to_vec())
+    }
+
+    /// negates an expression
     pub fn negated(expression: Self) -> Self {
         let (node, mle_vec) = expression.deconstruct();
 
@@ -438,14 +503,14 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
         Expression::new(mle_node, mle_vec)
     }
 
-    /// scales an Expression by a field element
+    /// scales an expression by a field element
     pub fn scaled(expression: Self, scale: F) -> Self {
         let (node, mle_vec) = expression.deconstruct();
 
         Expression::new(ExpressionNode::Scaled(Box::new(node), scale), mle_vec)
     }
 
-    /// Create a Sum Expression that contains two MLEs
+    /// create a sum expression that contains two MLEs
     pub fn sum(lhs: Self, mut rhs: Self) -> Self {
         let offset = lhs.num_mle();
         rhs.increment_mle_vec_indices(offset);
@@ -459,13 +524,28 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
         Expression::new(sum_node, sum_mle_vec)
     }
 
-    /// Create a product Expression that multiplies many MLEs together
+    /// create a product expression that multiplies many MLEs together
     pub fn products(product_list: Vec<M>) -> Self {
         let mle_vec_indices = (0..product_list.len()).map(MleVecIndex::new).collect::<Vec<_>>();
 
         let product_node = ExpressionNode::Product(mle_vec_indices);
 
         Expression::new(product_node, product_list)
+    }
+
+    /// create a select expression without reason about index changes
+    pub fn select_with_index(index: MleIndex<F>, lhs: Self, mut rhs: Self) -> Self {
+        let offset = lhs.num_mle();
+        rhs.increment_mle_vec_indices(offset);
+        let (lhs_node, lhs_mle_vec) = lhs.deconstruct();
+        let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
+
+        let concat_node =
+            ExpressionNode::Selector(index, Box::new(lhs_node), Box::new(rhs_node));
+
+        let concat_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect::<Vec<_>>();
+
+        Expression::new(concat_node, concat_mle_vec)
     }
 }
 

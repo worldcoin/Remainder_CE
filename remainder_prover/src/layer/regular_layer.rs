@@ -826,10 +826,11 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
         let mut claims: Vec<Claim<F>> = Vec::new();
 
         let mut observer_fn = |exp: &ExpressionNode<F>,
-                               _mle_vec: &[VerifierMle<F>]|
+                               mle_vec: &[VerifierMle<F>]|
          -> Result<()> {
             match exp {
-                ExpressionNode::Mle(verifier_mle) => {
+                ExpressionNode::Mle(verifier_index) => {
+                    let verifier_mle = verifier_index.get_mle(mle_vec);
                     let fixed_mle_indices = verifier_mle
                         .mle_indices()
                         .iter()
@@ -853,7 +854,8 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
                     // Push it into the list of claims
                     claims.push(claim);
                 }
-                ExpressionNode::Product(verifier_mle_vec) => {
+                ExpressionNode::Product(verifier_index_vec) => {
+                    let verifier_mle_vec = verifier_index_vec.iter().map(|i| i.get_mle(mle_vec));
                     for verifier_mle in verifier_mle_vec {
                         let fixed_mle_indices = verifier_mle
                             .mle_indices()

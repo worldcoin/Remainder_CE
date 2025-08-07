@@ -42,7 +42,7 @@ impl<F: Field> Expression<F, VerifierMle<F>> {
         };
         let mle_eval = |verifier_mle: &VerifierMle<F>| -> Result<F> { Ok(verifier_mle.value()) };
         let sum = |lhs: Result<F>, rhs: Result<F>| Ok(lhs? + rhs?);
-        let product = |verifier_mles: &[VerifierMle<F>]| -> Result<F> {
+        let product = |verifier_mles: &[&VerifierMle<F>]| -> Result<F> {
             verifier_mles
                 .iter()
                 .try_fold(F::ONE, |acc, verifier_mle| Ok(acc * verifier_mle.value()))
@@ -50,6 +50,7 @@ impl<F: Field> Expression<F, VerifierMle<F>> {
         let scaled = |val: Result<F>, scalar: F| Ok(val? * scalar);
 
         self.expression_node.reduce(
+            &self.mle_vec,
             &constant,
             &selector_column,
             &mle_eval,
@@ -57,15 +58,5 @@ impl<F: Field> Expression<F, VerifierMle<F>> {
             &product,
             &scaled,
         )
-    }
-
-    /// Traverses the expression tree to get the indices of all the nonlinear
-    /// rounds. Returns a sorted vector of indices.
-    pub fn get_all_nonlinear_rounds(&mut self) -> Vec<usize> {
-        let (expression_node, mle_vec) = self.deconstruct_mut();
-        let mut nonlinear_rounds: Vec<usize> =
-            expression_node.get_all_nonlinear_rounds(mle_vec);
-        nonlinear_rounds.sort();
-        nonlinear_rounds
     }
 }
