@@ -161,6 +161,7 @@ fn regular_layer_test_prove_verify_complex() {
         ]),
         Expression::mle(circuit_mle_2) + Expression::mle(circuit_mle_1),
     ]);
+    dbg!(&circuit_expression);
     circuit_expression.index_mle_vars(0);
     let sum = Expression::<Fr, ProverMle<Fr>>::sum(leaf_mle_2, leaf_mle_1);
 

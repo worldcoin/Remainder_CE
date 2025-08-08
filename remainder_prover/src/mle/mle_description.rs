@@ -83,7 +83,8 @@ impl<F: Field> MleDescription<F> {
     /// on the data that should be stored in this MLE.
     pub fn into_dense_mle(&self, circuit_map: &CircuitMap<F>) -> DenseMle<F> {
         let data = circuit_map.get_data_from_circuit_mle(self).unwrap();
-        DenseMle::new_with_prefix_bits((*data).clone(), self.layer_id(), self.prefix_bits())
+        // DenseMle::new_with_prefix_bits((*data).clone(), self.layer_id(), self.prefix_bits())
+        DenseMle::new_with_indices((*data).clone(), self.layer_id(), self.mle_indices())
     }
 
     /// Bind the variable with index `var_index` to `value`. Note that since
