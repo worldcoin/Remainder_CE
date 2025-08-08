@@ -1,9 +1,9 @@
 use super::digits::DigitComponents;
 use crate::components::Components;
-use crate::digits::{complementary_decomposition, digits_to_field, to_slice_of_mles};
+use remainder::digits::{complementary_decomposition, digits_to_field, to_slice_of_mles};
 use crate::layouter::builder::{CircuitBuilder, LayerVisibility};
-use crate::mle::evals::MultilinearExtension;
-use crate::prover::helpers::test_circuit_with_runtime_optimized_config;
+use remainder::mle::evals::MultilinearExtension;
+use remainder::prover::helpers::test_circuit_with_runtime_optimized_config;
 use itertools::Itertools;
 use remainder_shared_types::Fr;
 

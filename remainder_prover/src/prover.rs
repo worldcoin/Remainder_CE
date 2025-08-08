@@ -24,9 +24,8 @@ use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{layer_enum::LayerEnum, LayerId};
 use crate::layer::{Layer, LayerDescription, VerifierLayer};
-use crate::layouter::builder::{ProvableCircuit, VerifiableCircuit};
-use crate::layouter::layouting::{CircuitLocation, CircuitMap};
-use crate::layouter::nodes::NodeId;
+use crate::circuit_layout::{ProvableCircuit, VerifiableCircuit};
+use crate::circuit_layout::{CircuitLocation, CircuitMap};
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
@@ -80,9 +79,6 @@ pub enum GKRError {
     #[error("Error when verifying output layer")]
     /// Error when verifying output layer
     ErrorWhenVerifyingOutputLayer,
-    /// InputShred length mismatch
-    #[error("InputShred with NodeId {0} should have {1} variables, but has {2}")]
-    InputShredLengthMismatch(NodeId, usize, usize),
 }
 
 /// A proof of the sumcheck protocol; Outer vec is rounds, inner vec is evaluations

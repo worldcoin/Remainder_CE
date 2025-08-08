@@ -3,8 +3,6 @@
 
 /// Helper functions used in the gate sumcheck algorithms.
 pub mod gate_helpers;
-mod new_interface_tests;
-
 use std::{cmp::max, collections::HashSet};
 
 use gate_helpers::{
@@ -25,7 +23,7 @@ use crate::{
         product::{PostSumcheckLayer, Product},
         Layer, LayerError, LayerId, VerificationError,
     },
-    layouter::layouting::{CircuitLocation, CircuitMap},
+    circuit_layout::{CircuitLocation, CircuitMap},
     mle::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
         mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,

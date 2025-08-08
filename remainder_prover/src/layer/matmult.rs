@@ -18,7 +18,7 @@ use super::{
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
     layer::VerificationError,
-    layouter::layouting::{CircuitLocation, CircuitMap},
+    circuit_layout::{CircuitLocation, CircuitMap},
     mle::{
         dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription,
         verifier_mle::VerifierMle, Mle, MleIndex,

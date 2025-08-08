@@ -4,7 +4,7 @@
 /// to create one layerwise bookkeeping table.
 pub mod compile_inputs;
 use super::{CircuitNode, NodeId};
-use crate::{layer::LayerId, mle::evals::MultilinearExtension};
+use remainder::{layer::LayerId, mle::evals::MultilinearExtension};
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 

@@ -13,7 +13,7 @@ use crate::{
         gate::gate_helpers::compute_fully_bound_identity_gate_function, LayerError,
         VerificationError,
     },
-    layouter::layouting::{CircuitLocation, CircuitMap},
+    circuit_layout::{CircuitLocation, CircuitMap},
     mle::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
         mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,

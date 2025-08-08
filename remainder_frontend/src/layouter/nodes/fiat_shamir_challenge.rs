@@ -16,10 +16,10 @@ use ark_std::log2;
 
 use remainder_shared_types::Field;
 
-use crate::{
+use remainder::{
     input_layer::fiat_shamir_challenge::FiatShamirChallengeDescription,
     layer::LayerId,
-    layouter::{builder::CircuitMap, layouting::CircuitLocation},
+    circuit_layout::{CircuitMap, CircuitLocation},
 };
 
 use super::{CircuitNode, NodeId};
@@ -59,7 +59,7 @@ impl FiatShamirChallengeNode {
     /// circuit description for a [FiatShamirChallengeNode].
     pub fn generate_circuit_description<F: Field>(
         &self,
-        circuit_map: &mut CircuitMap,
+        circuit_map: &mut CircuitMap<F>,
     ) -> FiatShamirChallengeDescription<F> {
         let layer_id = LayerId::next_fiat_shamir_challenge_layer_id();
         let fsc_layer = FiatShamirChallengeDescription::new(layer_id, self.get_num_vars());
@@ -74,9 +74,9 @@ impl FiatShamirChallengeNode {
 #[cfg(test)]
 mod test {
     use remainder_shared_types::Fr;
+    use crate::layouter::builder::{CircuitBuilder, LayerVisibility};
 
-    use crate::{
-        layouter::builder::{CircuitBuilder, LayerVisibility},
+    use remainder::{
         mle::evals::MultilinearExtension,
         prover::helpers::test_circuit_with_runtime_optimized_config,
     };
