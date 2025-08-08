@@ -598,7 +598,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             }
             ExpressionNode::Mle(mle) => {
                 products.push(Product::<F, Option<F>>::new(
-                    &[mle.clone()],
+                    std::slice::from_ref(mle),
                     multiplier,
                     challenges,
                 ));

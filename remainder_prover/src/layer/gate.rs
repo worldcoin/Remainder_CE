@@ -530,8 +530,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
         match self.gate_operation {
             BinaryOperation::Add => PostSumcheckLayer(vec![
-                Product::<F, F>::new(&[lhs_mle.clone()], f_1_uv),
-                Product::<F, F>::new(&[rhs_mle.clone()], f_1_uv),
+                Product::<F, F>::new(std::slice::from_ref(lhs_mle), f_1_uv),
+                Product::<F, F>::new(std::slice::from_ref(rhs_mle), f_1_uv),
             ]),
             BinaryOperation::Mul => PostSumcheckLayer(vec![Product::<F, F>::new(
                 &[lhs_mle.clone(), rhs_mle.clone()],
@@ -949,8 +949,16 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
         match self.gate_operation {
             BinaryOperation::Add => PostSumcheckLayer(vec![
-                Product::<F, Option<F>>::new(&[self.lhs_mle.clone()], f_1_uv, lhs_challenges),
-                Product::<F, Option<F>>::new(&[self.rhs_mle.clone()], f_1_uv, rhs_challenges),
+                Product::<F, Option<F>>::new(
+                    std::slice::from_ref(&self.lhs_mle),
+                    f_1_uv,
+                    lhs_challenges,
+                ),
+                Product::<F, Option<F>>::new(
+                    std::slice::from_ref(&self.rhs_mle),
+                    f_1_uv,
+                    rhs_challenges,
+                ),
             ]),
             BinaryOperation::Mul => {
                 PostSumcheckLayer(vec![Product::<F, Option<F>>::new_from_mul_gate(

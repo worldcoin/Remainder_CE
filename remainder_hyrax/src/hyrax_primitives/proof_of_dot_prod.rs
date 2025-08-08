@@ -168,14 +168,14 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
         if first_vector.len() == 1 && second_vector.is_empty() {
             first_vector[0]
         } else if second_vector.len() == 1 && first_vector.is_empty() {
-            return second_vector[0];
+            second_vector[0]
         } else {
-            return first_vector
+            first_vector
                 .iter()
                 .zip(second_vector.iter())
                 .fold(C::Scalar::ZERO, |acc, (first, second)| {
                     acc + (*first * second)
-                });
+                })
         }
     }
 }
