@@ -1282,7 +1282,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
                 assert!(mle.is_fully_bounded());
-                products.push(Product::<F, F>::new(&[mle.clone()], multiplier));
+                products.push(Product::<F, F>::new(std::slice::from_ref(mle), multiplier));
             }
             ExpressionNode::Product(mle_vec_indices) => {
                 let mles = mle_vec_indices
