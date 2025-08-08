@@ -23,7 +23,7 @@ use crate::{
     layer::{Layer, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle},
-    sumcheck::{evaluate_at_a_point, get_round_degree},
+    sumcheck::evaluate_at_a_point,
 };
 
 use super::{
@@ -259,7 +259,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         let newbeta = &self.beta_vals_vec;
 
         // Grabs the degree of univariate polynomial we are sending over.
-        let degree = get_round_degree(expression, round_index);
+        let degree = expression.get_round_degree(round_index);
 
         // Computes the sumcheck message using the beta cascade algorithm.
         let prover_sumcheck_message = expression.evaluate_sumcheck_beta_cascade(
@@ -608,8 +608,6 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
                     transcript_reader.consume_element("Sumcheck round univariate evaluations")
                 }))
                 .collect::<Result<_, _>>()?;
-
-            println!("V ROUND_INDEX: {:?}, DEGREE: {:?}", round_index, degree);
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck round challenge")?;

@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     claims::RawClaim,
-    expression::generic_expr::ExpressionNode,
+    expression::{generic_expr::{Expression, ExpressionNode}, prover_expr::ProverMle},
     layer::LayerId,
     mle::{betavalues::BetaValues, dense::DenseMle},
 };
@@ -46,7 +46,7 @@ pub(crate) fn dummy_sumcheck<F: Field>(
         }
 
         // Grabs the degree of univariate polynomial we are sending over
-        let degree = get_round_degree(expr, round_index);
+        let degree = expr.get_round_degree(round_index);
 
         // Gives back the evaluations g(0), g(1), ..., g(d - 1)
         let eval =

@@ -215,7 +215,8 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
     /// (and therefore the number of prover messages we need to send)
     pub fn get_round_degree(&self, curr_round: usize) -> usize {
         let (expression_node, mle_vec) = self.deconstruct_ref();
-        *expression_node.get_rounds_helper(mle_vec).get(curr_round).unwrap_or(&2)
+        let max_var_degree = *expression_node.get_rounds_helper(mle_vec).get(curr_round).unwrap_or(&1);
+        max_var_degree + 1 // for eq
     }
 }
 
