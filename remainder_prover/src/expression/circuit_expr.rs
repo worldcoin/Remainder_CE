@@ -3,14 +3,12 @@
 //! other layers. See documentation in [crate::expression] for more details.
 
 use crate::{
-    layer::{
+    expression::expr_errors::ExpressionError, layer::{
         gate::BinaryOperation,
         product::{PostSumcheckLayer, Product},
-    },
-    layouter::layouting::CircuitMap,
-    mle::{
+    }, layouter::layouting::CircuitMap, mle::{
         dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle, MleIndex
-    },
+    }
 };
 use ark_std::log2;
 use itertools::Itertools;
@@ -20,7 +18,7 @@ use remainder_shared_types::{transcript::VerifierTranscript, Field};
 
 use super::generic_expr::{Expression, ExpressionNode};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 impl<F: Field> Expression<F, MleDescription<F>> {
     /// Binds the variables of this expression to `point`, and retrieves the
@@ -31,10 +29,11 @@ impl<F: Field> Expression<F, MleDescription<F>> {
         point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Expression<F, VerifierMle<F>>> {
-        let (expression_node, mle_vec) = self.clone().deconstruct();
+        let (mut expression_node, mle_vec) = self.clone().deconstruct();
         let verifier_mles = mle_vec.into_iter().map(|m|
             m.into_verifier_mle(point, transcript_reader)
         ).collect::<Result<Vec<_>, _>>()?;
+        expression_node.bind_selector(point);
         Ok(Expression::new(
             expression_node,
             verifier_mles,
@@ -77,6 +76,29 @@ impl<F: Field> Expression<F, MleDescription<F>> {
 }
 
 impl<F: Field> ExpressionNode<F> {
+    /// Turn this expression into a [VerifierExpr] which represents a fully bound expression.
+    /// Should only be applicable after a full layer of sumcheck.
+    pub fn bind_selector(
+        &mut self,
+        point: &[F],
+    ) {
+        let mut bind_selector_closure = |expr: &mut ExpressionNode<F>|
+         -> Result<()> {
+            match expr {
+                ExpressionNode::Selector(index, ..) => match index {
+                    MleIndex::Indexed(idx) => { 
+                        *index = MleIndex::Bound(point[*idx], *idx); 
+                        Ok(()) 
+                    },
+                    _ => Err(anyhow!(ExpressionError::SelectorBitNotBoundError)),
+                }
+                _ => Ok(()),
+            }
+        };
+
+        self.traverse_node_mut(&mut bind_selector_closure).unwrap();
+    }
+
     /// Compute the expression-wise bookkeeping table (coefficients of the MLE representing the expression)
     /// for a given [ExprDescription]. This uses a [CircuitMap] in order to grab the correct data
     /// corresponding to the [MleDescription].

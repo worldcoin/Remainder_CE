@@ -547,7 +547,7 @@ impl<F: Field> ExpressionNode<F> {
             // are in by comparing the round_index to the selector index which is an
             // argument to the closure.
             ExpressionNode::Selector(index, a, b) => {
-                match index {
+                let output = match index {
                     MleIndex::Indexed(indexed_bit) => {
                         let (lhs_evals, rhs_evals) = (
                             beta_vec
@@ -714,7 +714,8 @@ impl<F: Field> ExpressionNode<F> {
                             .unwrap()
                     }
                     _ => panic!("selector index should not be a Free or Fixed bit"),
-                }
+                };
+                output
             }
             // the mle evaluation takes in the mle ref, and the corresponding unbound
             // and bound beta values to pass into the `beta_cascade` function
@@ -823,12 +824,17 @@ impl<F: Field> ExpressionNode<F> {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
                 let mut new_index = curr_index;
-                if *mle_index == MleIndex::Free {
-                    *mle_index = MleIndex::Indexed(curr_index);
-                    new_index += 1;
-                }
+                match mle_index {
+                    MleIndex::Free => {
+                        *mle_index = MleIndex::Indexed(curr_index);
+                        new_index += 1;
+                    }
+                    MleIndex::Fixed(_bit) => {}
+                    _ => panic!("should not have indexed or bound bits at this point!"),
+                };
                 let a_bits = a.index_mle_indices_node(new_index, mle_vec);
                 let b_bits = b.index_mle_indices_node(new_index, mle_vec);
+
                 max(a_bits, b_bits)
             }
             ExpressionNode::Mle(mle_vec_idx) => {

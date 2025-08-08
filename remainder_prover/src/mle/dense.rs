@@ -198,21 +198,9 @@ impl<F: Field> DenseMle<F> {
         }
     }
 
-    /// Constructs a new `DenseMle` with specified MLE indices, normally when we are
-    /// trying to construct a new MLE based off of a previous MLE, such as in
-    /// [crate::layer::matmult::MatMult], but want to preserve the "prefix vars."
-    ///
-    /// The MLE should not have ever been mutated if this function is ever called, so none of the
-    /// indices should ever be Indexed here.
-    pub fn new_with_indices(data: &[F], layer_id: LayerId, mle_indices: &[MleIndex<F>]) -> Self {
+    /// Constructs a new `DenseMle` with specified MLE indices
+    pub fn new_with_indices(data: MultilinearExtension<F>, layer_id: LayerId, mle_indices: &[MleIndex<F>]) -> Self {
         let mut mle = DenseMle::new_from_raw(data.to_vec(), layer_id);
-
-        let all_indices_free_or_fixed = mle_indices.iter().all(|index| {
-            index == &MleIndex::Free
-                || index == &MleIndex::Fixed(true)
-                || index == &MleIndex::Fixed(false)
-        });
-        assert!(all_indices_free_or_fixed);
 
         mle.mle_indices = mle_indices.to_vec();
         mle

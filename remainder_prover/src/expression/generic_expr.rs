@@ -131,10 +131,10 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
     /// similar to traverse, but allows mutation of self (expression node and mle_vec)
     pub fn traverse_mut(
         &mut self,
-        observer_fn: &mut impl FnMut(&mut ExpressionNode<F>, &mut [M]) -> Result<()>,
+        observer_fn: &mut impl FnMut(&mut ExpressionNode<F>) -> Result<()>,
     ) -> Result<()> {
         self.expression_node
-            .traverse_node_mut(observer_fn, &mut self.mle_vec)
+            .traverse_node_mut(observer_fn)
     }
 
     /// returns the number of MleRefs in the expression
@@ -146,8 +146,7 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
     pub fn increment_mle_vec_indices(&mut self, offset: usize) {
         // define a closure that increments the MleVecIndex by the given amount
         // use traverse_mut
-        let mut increment_closure = |expr: &mut ExpressionNode<F>,
-                                     _mle_vec: &mut [M]|
+        let mut increment_closure = |expr: &mut ExpressionNode<F>|
          -> Result<()> {
             match expr {
                 ExpressionNode::Mle(mle_vec_index) => {
@@ -246,24 +245,23 @@ impl<F: Field> ExpressionNode<F> {
     }
 
     /// similar to traverse, but allows mutation of self (expression node and mle_vec)
-    pub fn traverse_node_mut<M: AbstractMle<F>>(
+    pub fn traverse_node_mut(
         &mut self,
-        observer_fn: &mut impl FnMut(&mut ExpressionNode<F>, &mut [M]) -> Result<()>,
-        mle_vec: &mut [M],
+        observer_fn: &mut impl FnMut(&mut ExpressionNode<F>) -> Result<()>
     ) -> Result<()> {
-        observer_fn(self, mle_vec)?;
+        observer_fn(self)?;
         match self {
             ExpressionNode::Constant(_) | ExpressionNode::Mle(_) | ExpressionNode::Product(_) => {
                 Ok(())
             }
-            ExpressionNode::Scaled(exp, _) => exp.traverse_node_mut(observer_fn, mle_vec),
+            ExpressionNode::Scaled(exp, _) => exp.traverse_node_mut(observer_fn),
             ExpressionNode::Selector(_, lhs, rhs) => {
-                lhs.traverse_node_mut(observer_fn, mle_vec)?;
-                rhs.traverse_node_mut(observer_fn, mle_vec)
+                lhs.traverse_node_mut(observer_fn)?;
+                rhs.traverse_node_mut(observer_fn)
             }
             ExpressionNode::Sum(lhs, rhs) => {
-                lhs.traverse_node_mut(observer_fn, mle_vec)?;
-                rhs.traverse_node_mut(observer_fn, mle_vec)
+                lhs.traverse_node_mut(observer_fn)?;
+                rhs.traverse_node_mut(observer_fn)
             }
         }
     }

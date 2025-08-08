@@ -83,6 +83,22 @@ impl<F: Field> RegularLayer<F> {
         }
     }
 
+    /// Creates a new `RegularLayer` from an `Expression` and a `LayerId`
+    /// assumes that the expression is already indexed
+    pub fn new_from_indexed_expr(id: LayerId, expression: Expression<F, ProverMle<F>>) -> Self {
+        // Compute nonlinear rounds from `expression`
+        let sumcheck_rounds = match global_claim_agg_strategy() {
+            ClaimAggregationStrategy::Interpolative => expression.get_all_nonlinear_rounds(),
+            ClaimAggregationStrategy::RLC => expression.get_all_rounds(),
+        };
+        RegularLayer {
+            id,
+            expression,
+            sumcheck_rounds,
+            beta_vals_vec: None,
+        }
+    }
+
     /// Returns a reference to the expression that this layer is proving.
     pub fn get_expression(&self) -> &Expression<F, ProverMle<F>> {
         &self.expression
@@ -802,7 +818,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
 
     fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
         let prover_expr = self.expression.into_prover_expression(circuit_map);
-        let regular_layer = RegularLayer::new_raw(self.layer_id(), prover_expr);
+        let regular_layer = RegularLayer::new_from_indexed_expr(self.layer_id(), prover_expr);
         regular_layer.into()
     }
 
