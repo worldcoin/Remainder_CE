@@ -23,7 +23,7 @@ use crate::{
         verifier_expr::VerifierExpr,
     },
     layer::{Layer, LayerId, VerificationError},
-    layouter::layouting::{CircuitLocation, CircuitMap},
+    circuit_layout::{CircuitLocation, CircuitMap},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription, Mle},
     sumcheck::{evaluate_at_a_point, get_round_degree},
 };

@@ -2,7 +2,7 @@ use remainder_shared_types::{transcript::VerifierTranscript, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    expression::expr_errors::ExpressionError, layer::LayerId, layouter::layouting::CircuitMap,
+    expression::expr_errors::ExpressionError, layer::LayerId, circuit_layout::CircuitMap,
 };
 
 use super::{dense::DenseMle, verifier_mle::VerifierMle, MleIndex};

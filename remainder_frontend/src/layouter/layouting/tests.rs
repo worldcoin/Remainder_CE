@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::expression::abstract_expr::AbstractExpr;
-use crate::expression::generic_expr::Expression;
-use crate::layer::gate::BinaryOperation;
+use crate::abstract_expr::AbstractExpression;
+use remainder::expression::generic_expr::Expression;
+use remainder::layer::gate::BinaryOperation;
 use crate::layouter::nodes::{CircuitNode, NodeId};
 use crate::layouter::{
     layouting::{layout, Graph},
@@ -19,7 +19,7 @@ use crate::layouter::{
         CompilableNode,
     },
 };
-use crate::mle::evals::MultilinearExtension;
+use remainder::mle::evals::MultilinearExtension;
 use itertools::all;
 use quickcheck::{quickcheck, Arbitrary, TestResult};
 use remainder_shared_types::{Field, Fr};
@@ -166,7 +166,7 @@ impl Arbitrary for NodesToLayout<Fr> {
                 .filter(|_| *g.choose(&[true, false]).unwrap())
                 .collect();
 
-            let sector = Sector::new(Expression::<Fr, AbstractExpr>::products(inputs), 2);
+            let sector = Sector::new(AbstractExpression::products(inputs), 2);
             nodes_so_far.push(Box::new(sector.clone()) as Box<dyn CircuitNode>);
             sector_nodes.push(sector);
 

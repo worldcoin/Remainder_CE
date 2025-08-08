@@ -9,6 +9,10 @@ extern crate quickcheck;
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
+pub mod circuit_building_context;
+
+pub mod circuit_layout;
+
 // module for tracking all the claims, aggregating them,
 // and generating proofs of aggregation
 pub mod claims;

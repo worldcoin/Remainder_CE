@@ -7,7 +7,7 @@ use crate::{
         gate::BinaryOperation,
         product::{PostSumcheckLayer, Product},
     },
-    layouter::layouting::CircuitMap,
+    circuit_layout::CircuitMap,
     mle::{
         evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle,
         MleIndex,

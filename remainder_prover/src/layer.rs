@@ -18,7 +18,8 @@ use thiserror::Error;
 use crate::{
     claims::{Claim, ClaimError, RawClaim},
     expression::expr_errors::ExpressionError,
-    layouter::{context::CircuitBuildingContext, layouting::CircuitMap},
+    circuit_layout::CircuitMap,
+    circuit_building_context::CircuitBuildingContext,
     mle::mle_description::MleDescription,
     sumcheck::InterpError,
 };

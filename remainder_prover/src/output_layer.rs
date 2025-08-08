@@ -18,7 +18,7 @@ use crate::{
 
 use crate::{
     claims::ClaimError,
-    layouter::layouting::CircuitMap,
+    circuit_layout::CircuitMap,
     mle::{
         dense::DenseMle, mle_description::MleDescription, mle_enum::MleEnum,
         verifier_mle::VerifierMle, zero::ZeroMle, Mle, MleIndex,
