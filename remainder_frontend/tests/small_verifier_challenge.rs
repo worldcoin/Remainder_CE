@@ -1,9 +1,11 @@
 use crate::utils::TestUtilComponents;
 pub mod utils;
 
-use remainder::layouter::builder::{Circuit, CircuitBuilder, FSNodeRef, LayerVisibility, NodeRef};
 use remainder::mle::evals::MultilinearExtension;
 use remainder::prover::helpers::test_circuit_with_runtime_optimized_config;
+use remainder_frontend::layouter::builder::{
+    Circuit, CircuitBuilder, FSNodeRef, LayerVisibility, NodeRef,
+};
 use remainder_shared_types::{Field, Fr};
 
 // A simple component which takes a FS Challenge node of 0 variables

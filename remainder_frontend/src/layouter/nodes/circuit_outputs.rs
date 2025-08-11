@@ -3,10 +3,9 @@
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::Field;
 
+use crate::layouter::builder::CircuitMap;
 use remainder::{
-    circuit_layout::{CircuitMap, CircuitLocation},
-    mle::MleIndex,
-    output_layer::OutputLayerDescription,
+    circuit_layout::CircuitLocation, mle::MleIndex, output_layer::OutputLayerDescription,
 };
 
 use super::{CircuitNode, NodeId};
@@ -58,7 +57,7 @@ impl OutputNode {
     /// represents the circuit description of an [OutputNode].
     pub fn generate_circuit_description<F: Field>(
         &self,
-        circuit_map: &mut CircuitMap<F>,
+        circuit_map: &mut CircuitMap,
     ) -> Result<OutputLayerDescription<F>> {
         let (circuit_location, num_vars) =
             circuit_map.get_location_num_vars_from_node_id(&self.source)?;

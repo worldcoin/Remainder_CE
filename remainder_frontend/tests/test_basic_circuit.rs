@@ -1,8 +1,8 @@
 use remainder::{
-    layouter::builder::{CircuitBuilder, LayerVisibility},
     mle::evals::{Evaluations, MultilinearExtension},
     prover::helpers::test_circuit_with_runtime_optimized_config,
 };
+use remainder_frontend::layouter::builder::{CircuitBuilder, LayerVisibility};
 use remainder_shared_types::Fr;
 
 #[test]

@@ -2,13 +2,11 @@
 /// module or submodule.
 use remainder_shared_types::Field;
 
-use crate::{
-    layouter::nodes::{
-        circuit_inputs::{InputLayerNode, InputShred, InputShredData},
-        CircuitNode,
-    },
-    mle::evals::MultilinearExtension,
+use crate::layouter::nodes::{
+    circuit_inputs::{InputLayerNode, InputShred, InputShredData},
+    CircuitNode,
 };
+use remainder::mle::evals::MultilinearExtension;
 
 /// Using the number of variables, get an input shred that represents
 /// this information.

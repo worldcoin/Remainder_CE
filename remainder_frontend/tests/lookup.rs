@@ -1,8 +1,7 @@
 use remainder::{
-    layouter::builder::{Circuit, CircuitBuilder, LayerVisibility},
-    mle::evals::MultilinearExtension,
-    prover::helpers::test_circuit_with_runtime_optimized_config,
+    mle::evals::MultilinearExtension, prover::helpers::test_circuit_with_runtime_optimized_config,
 };
+use remainder_frontend::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility};
 use remainder_shared_types::{Field, Fr};
 
 pub mod utils;

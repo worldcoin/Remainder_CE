@@ -33,7 +33,7 @@ macro_rules! layer_enum {
                 fn compute_data_outputs(
                     &self,
                     mle_outputs_necessary: &std::collections::HashSet<&$crate::mle::mle_description::MleDescription<F>>,
-                    circuit_map: &mut $crate::circuit_layout::CircuitMap<F>,
+                    circuit_map: &mut $crate::circuit_layout::CircuitEvalMap<F>,
                 ) {
                     match self {
                         $(
@@ -99,7 +99,7 @@ macro_rules! layer_enum {
 
                 fn convert_into_prover_layer(
                     &self,
-                    circuit_map: &$crate::circuit_layout::CircuitMap<F>
+                    circuit_map: &$crate::circuit_layout::CircuitEvalMap<F>
                 ) -> LayerEnum<F> {
                     match self {
                         $(

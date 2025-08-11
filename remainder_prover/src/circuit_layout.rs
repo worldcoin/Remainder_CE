@@ -8,7 +8,9 @@ use itertools::Itertools;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
-use crate::input_layer::ligero_input_layer::{LigeroInputLayerDescription, LigeroInputLayerDescriptionWithPrecommit};
+use crate::input_layer::ligero_input_layer::{
+    LigeroInputLayerDescription, LigeroInputLayerDescriptionWithPrecommit,
+};
 use crate::prover::GKRCircuitDescription;
 use crate::{
     layer::LayerId,
@@ -20,13 +22,13 @@ use anyhow::{anyhow, Result};
 /// A HashMap that records during circuit compilation where nodes live in the
 /// circuit and what data they yield.
 #[derive(Debug)]
-pub struct CircuitMap<F: Field>(pub(crate) HashMap<CircuitLocation, MultilinearExtension<F>>);
+pub struct CircuitEvalMap<F: Field>(pub(crate) HashMap<CircuitLocation, MultilinearExtension<F>>);
 /// A map that maps layer ID to all the MLEs that are output from that layer.
 /// Together these MLEs are combined along with the information from their
 /// prefix bits to form the layerwise bookkeeping table.
 pub type LayerMap<F> = HashMap<LayerId, Vec<DenseMle<F>>>;
 
-impl<F: Field> CircuitMap<F> {
+impl<F: Field> CircuitEvalMap<F> {
     /// Create a new circuit map, which maps circuit location to the data stored
     /// at that location.removing
     pub fn new() -> Self {
@@ -81,7 +83,7 @@ impl<F: Field> CircuitMap<F> {
     }
 }
 
-impl<F: Field> Default for CircuitMap<F> {
+impl<F: Field> Default for CircuitEvalMap<F> {
     fn default() -> Self {
         Self::new()
     }
@@ -118,6 +120,19 @@ pub struct ProvableCircuit<F: Field> {
 }
 
 impl<F: Field> ProvableCircuit<F> {
+    /// Constructor
+    pub fn new(
+        circuit_description: GKRCircuitDescription<F>,
+        inputs: HashMap<LayerId, MultilinearExtension<F>>,
+        private_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithPrecommit<F>>,
+    ) -> Self {
+        Self {
+            circuit_description,
+            inputs,
+            private_inputs,
+        }
+    }
+
     /// # WARNING
     /// To be used only for testing and debugging.
     ///

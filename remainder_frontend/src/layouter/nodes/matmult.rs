@@ -2,16 +2,18 @@
 
 use remainder_shared_types::Field;
 
-use crate::{
+use remainder::{
+    circuit_layout::CircuitLocation,
     layer::{
         layer_enum::LayerDescriptionEnum,
         matmult::{MatMultLayerDescription, MatrixDescription},
         LayerId,
     },
-    layouter::{builder::CircuitMap, layouting::CircuitLocation},
     mle::mle_description::MleDescription,
     utils::mle::get_total_mle_indices,
 };
+
+use crate::layouter::builder::CircuitMap;
 
 use super::{CircuitNode, CompilableNode, NodeId};
 
@@ -111,16 +113,12 @@ impl<F: Field> CompilableNode<F> for MatMultNode {
 
 #[cfg(test)]
 mod test {
-    use remainder_shared_types::Fr;
+    use remainder_shared_types::{Field, Fr};
 
-    use crate::{
-        layouter::builder::{Circuit, CircuitBuilder, LayerVisibility},
-        mle::evals::MultilinearExtension,
-    };
+    use crate::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility};
+    use remainder::mle::evals::MultilinearExtension;
 
-    use remainder_shared_types::Field;
-
-    use crate::prover::helpers::test_circuit_with_runtime_optimized_config;
+    use remainder::prover::helpers::test_circuit_with_runtime_optimized_config;
 
     /// Creates the [GKRCircuitDescription] and an associated helper input
     /// function allowing for ease of proving for the matmul test circuit.

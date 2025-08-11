@@ -5,12 +5,15 @@ mod tests {
     use rand::Rng;
     use remainder_shared_types::{curves::ConstantRng, Field, Fr};
 
-    use crate::{
-        components::Components,
-        layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, NodeRef},
+    use remainder::{
+        layer::gate::BinaryOperation,
         mle::evals::MultilinearExtension,
         prover::helpers::test_circuit_with_runtime_optimized_config,
         utils::mle::{get_random_mle, get_random_mle_from_capacity},
+    };
+    use remainder_frontend::{
+        components::Components,
+        layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, NodeRef},
     };
 
     struct TestComponents;
@@ -438,7 +441,7 @@ mod tests {
             &mle_input_shred,
             &neg_mle_input_shred,
             nonzero_gates,
-            super::super::BinaryOperation::Add,
+            BinaryOperation::Add,
             None,
         );
 
@@ -504,7 +507,7 @@ mod tests {
             &dataparallel_mle_input_shred,
             &dataparallel_neg_mle_input_shred,
             nonzero_gates,
-            super::super::BinaryOperation::Add,
+            BinaryOperation::Add,
             Some(NUM_DATAPARALLEL_BITS),
         );
 
@@ -551,7 +554,7 @@ mod tests {
             &mle_input_shred,
             &neg_mle_input_shred,
             nonzero_gates,
-            super::super::BinaryOperation::Add,
+            BinaryOperation::Add,
             None,
         );
 
@@ -601,7 +604,7 @@ mod tests {
             &mle_1_input_shred,
             &neg_mle_2_input_shred,
             nonzero_gates.clone(),
-            super::super::BinaryOperation::Mul,
+            BinaryOperation::Mul,
             None,
         );
 
@@ -609,7 +612,7 @@ mod tests {
             &mle_1_input_shred,
             &mle_2_input_shred,
             nonzero_gates.clone(),
-            super::super::BinaryOperation::Mul,
+            BinaryOperation::Mul,
             None,
         );
 
@@ -617,7 +620,7 @@ mod tests {
             &pos_mul_output,
             &neg_mul_output,
             nonzero_gates,
-            super::super::BinaryOperation::Add,
+            BinaryOperation::Add,
             None,
         );
 
@@ -679,7 +682,7 @@ mod tests {
             &dataparallel_mle_input_shred,
             &dataparallel_neg_mle_input_shred,
             nonzero_gates,
-            super::super::BinaryOperation::Add,
+            BinaryOperation::Add,
             Some(NUM_DATAPARALLEL_BITS),
         );
 
@@ -742,7 +745,7 @@ mod tests {
             &mle_1_input_shred,
             &neg_mle_2_input_shred,
             nonzero_gates.clone(),
-            super::super::BinaryOperation::Mul,
+            BinaryOperation::Mul,
             Some(NUM_DATAPARALLEL_VARS),
         );
 
@@ -750,7 +753,7 @@ mod tests {
             &mle_1_input_shred,
             &mle_2_input_shred,
             nonzero_gates.clone(),
-            super::super::BinaryOperation::Mul,
+            BinaryOperation::Mul,
             Some(NUM_DATAPARALLEL_VARS),
         );
 
@@ -758,7 +761,7 @@ mod tests {
             &pos_mul_output,
             &neg_mul_output,
             nonzero_gates,
-            super::super::BinaryOperation::Add,
+            BinaryOperation::Add,
             Some(NUM_DATAPARALLEL_VARS),
         );
 

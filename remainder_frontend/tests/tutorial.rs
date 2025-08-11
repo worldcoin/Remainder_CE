@@ -1,7 +1,5 @@
-use remainder::{
-    layouter::builder::{Circuit, CircuitBuilder, LayerVisibility},
-    prover::helpers::test_circuit_with_runtime_optimized_config,
-};
+use remainder::prover::helpers::test_circuit_with_runtime_optimized_config;
+use remainder_frontend::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility};
 use remainder_shared_types::Fr;
 
 use tracing::Level;

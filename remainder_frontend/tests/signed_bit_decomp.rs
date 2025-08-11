@@ -1,9 +1,10 @@
 use itertools::Itertools;
 use remainder::{
+    mle::evals::MultilinearExtension, prover::helpers::test_circuit_with_runtime_optimized_config,
+};
+use remainder_frontend::{
     const_expr,
     layouter::builder::{Circuit, CircuitBuilder, LayerVisibility},
-    mle::evals::MultilinearExtension,
-    prover::helpers::test_circuit_with_runtime_optimized_config,
 };
 use remainder_shared_types::Fr;
 

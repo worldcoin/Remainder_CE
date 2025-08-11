@@ -1,8 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::abstract_expr::AbstractExpression;
-use remainder::expression::generic_expr::Expression;
-use remainder::layer::gate::BinaryOperation;
 use crate::layouter::nodes::{CircuitNode, NodeId};
 use crate::layouter::{
     layouting::{layout, Graph},
@@ -19,9 +17,10 @@ use crate::layouter::{
         CompilableNode,
     },
 };
-use remainder::mle::evals::MultilinearExtension;
 use itertools::all;
 use quickcheck::{quickcheck, Arbitrary, TestResult};
+use remainder::layer::gate::BinaryOperation;
+use remainder::mle::evals::MultilinearExtension;
 use remainder_shared_types::{Field, Fr};
 
 /// Dependency graph wrapper for Quickcheck.
@@ -221,40 +220,42 @@ impl Arbitrary for NodesToLayout<Fr> {
     }
 }
 
-#[quickcheck]
-fn toposorted_property(graph: Graph<usize>) -> TestResult {
-    let sorted_nodes = &graph.topo_sort().unwrap();
-    let mut ids_seen = HashSet::new();
+quickcheck! {
+    fn toposorted_property(graph: Graph<usize>) -> TestResult {
+        let sorted_nodes = &graph.topo_sort().unwrap();
+        let mut ids_seen = HashSet::new();
 
-    // Every node's sources, in order of topo sort, must have already been seen.
-    TestResult::from_bool(sorted_nodes.into_iter().all(|u| {
-        let vs = graph.repr.get(&u).unwrap();
-        ids_seen.insert(u);
-        vs.into_iter().all(|v_id| ids_seen.contains(&v_id))
-    }))
+        // Every node's sources, in order of topo sort, must have already been seen.
+        TestResult::from_bool(sorted_nodes.into_iter().all(|u| {
+            let vs = graph.repr.get(&u).unwrap();
+            ids_seen.insert(u);
+            vs.into_iter().all(|v_id| ids_seen.contains(&v_id))
+        }))
+    }
 }
 
-#[quickcheck]
-fn test_layout_nodes(nodes_to_layout: NodesToLayout<Fr>) -> TestResult {
-    let (input_layer_nodes, fs_challenge_nodes, intermediate_nodes, _, _) =
-        nodes_to_layout.layout();
-    let mut ids_seen = HashSet::new();
-    input_layer_nodes.iter().for_each(|input_layer| {
-        input_layer.input_shreds.iter().for_each(|shred| {
-            ids_seen.insert(shred.id());
-        })
-    });
-    ids_seen.extend(fs_challenge_nodes.iter().map(|fs_node| fs_node.id()));
-    TestResult::from_bool(all(intermediate_nodes, |group| {
-        // Every source of a node in a group must have been seen before we add
-        // them to the list of ids already seen.
-        let group_sources_seen = all(&group, |node| {
-            let vs = node.sources();
-            all(vs, |v_node| ids_seen.contains(&v_node))
+quickcheck! {
+    fn test_layout_nodes(nodes_to_layout: NodesToLayout<Fr>) -> TestResult {
+        let (input_layer_nodes, fs_challenge_nodes, intermediate_nodes, _, _) =
+            nodes_to_layout.layout();
+        let mut ids_seen = HashSet::new();
+        input_layer_nodes.iter().for_each(|input_layer| {
+            input_layer.input_shreds.iter().for_each(|shred| {
+                ids_seen.insert(shred.id());
+            })
         });
-        ids_seen.extend(group.iter().map(|node| node.id()));
-        group_sources_seen
-    }))
+        ids_seen.extend(fs_challenge_nodes.iter().map(|fs_node| fs_node.id()));
+        TestResult::from_bool(all(intermediate_nodes, |group| {
+            // Every source of a node in a group must have been seen before we add
+            // them to the list of ids already seen.
+            let group_sources_seen = all(&group, |node| {
+                let vs = node.sources();
+                all(vs, |v_node| ids_seen.contains(&v_node))
+            });
+            ids_seen.extend(group.iter().map(|node| node.id()));
+            group_sources_seen
+        }))
+    }
 }
 
 #[test]

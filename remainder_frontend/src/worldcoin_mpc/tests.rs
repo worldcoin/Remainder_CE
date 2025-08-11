@@ -1,10 +1,10 @@
 use remainder_shared_types::Fr;
 
-use crate::prover::helpers::test_circuit_with_memory_optimized_config;
 use crate::worldcoin_mpc::circuits::build_circuit;
 use crate::worldcoin_mpc::circuits::mpc_attach_data;
 use crate::worldcoin_mpc::data::fetch_inversed_test_data;
 use crate::worldcoin_mpc::data::generate_trivial_test_data;
+use remainder::prover::helpers::test_circuit_with_memory_optimized_config;
 
 #[test]
 fn test_mpc_circuit_with_mock_data() {

@@ -16,13 +16,12 @@ use ark_std::log2;
 
 use remainder_shared_types::Field;
 
-use remainder::{
-    input_layer::fiat_shamir_challenge::FiatShamirChallengeDescription,
-    layer::LayerId,
-    circuit_layout::{CircuitMap, CircuitLocation},
-};
-
 use super::{CircuitNode, NodeId};
+use crate::layouter::builder::CircuitMap;
+use remainder::{
+    circuit_layout::CircuitLocation,
+    input_layer::fiat_shamir_challenge::FiatShamirChallengeDescription, layer::LayerId,
+};
 
 #[derive(Debug, Clone)]
 /// The node representing the random challenge that the verifier supplies via
@@ -59,7 +58,7 @@ impl FiatShamirChallengeNode {
     /// circuit description for a [FiatShamirChallengeNode].
     pub fn generate_circuit_description<F: Field>(
         &self,
-        circuit_map: &mut CircuitMap<F>,
+        circuit_map: &mut CircuitMap,
     ) -> FiatShamirChallengeDescription<F> {
         let layer_id = LayerId::next_fiat_shamir_challenge_layer_id();
         let fsc_layer = FiatShamirChallengeDescription::new(layer_id, self.get_num_vars());
@@ -73,8 +72,8 @@ impl FiatShamirChallengeNode {
 
 #[cfg(test)]
 mod test {
-    use remainder_shared_types::Fr;
     use crate::layouter::builder::{CircuitBuilder, LayerVisibility};
+    use remainder_shared_types::Fr;
 
     use remainder::{
         mle::evals::MultilinearExtension,

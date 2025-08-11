@@ -1,6 +1,9 @@
 use remainder_shared_types::Field;
 
-use crate::{abstract_expr::AbstractExpression, layouter::builder::{CircuitBuilder, NodeRef}};
+use crate::{
+    abstract_expr::AbstractExpression,
+    layouter::builder::{CircuitBuilder, NodeRef},
+};
 
 /// Digits-related circuit components
 pub struct DigitComponents;
@@ -71,9 +74,8 @@ impl DigitComponents {
         builder_ref: &mut CircuitBuilder<F>,
         mles: &[&NodeRef<F>],
     ) -> NodeRef<F> {
-        let sector = builder_ref.add_sector(AbstractExpression::binary_tree_selector(
-            mles.to_vec(),
-        ));
+        let sector =
+            builder_ref.add_sector(AbstractExpression::binary_tree_selector(mles.to_vec()));
         sector
     }
 }

@@ -3,9 +3,10 @@ use ndarray::Array2;
 use remainder_shared_types::{Field, Fr};
 
 use crate::{
-    layouter::builder::{Circuit, LayerVisibility, ProvableCircuit},
+    layouter::builder::{Circuit, LayerVisibility},
     zk_iriscode_ss::data::build_iriscode_circuit_data,
 };
+use remainder::circuit_layout::ProvableCircuit;
 
 use super::{
     circuits::{build_iriscode_circuit_description, iriscode_ss_attach_data},
@@ -118,7 +119,7 @@ pub fn circuit_description_and_input_builder() -> Result<Circuit<Fr>> {
 /// If `image_bytes` is `None`, the default test image is used.
 /// # Example:
 /// ```
-/// use remainder::zk_iriscode_ss::v3::circuit_description_and_inputs;
+/// use remainder_frontend::zk_iriscode_ss::v3::circuit_description_and_inputs;
 /// let provable_circuit_result = circuit_description_and_inputs(false, None);
 /// ```
 pub fn circuit_description_and_inputs(

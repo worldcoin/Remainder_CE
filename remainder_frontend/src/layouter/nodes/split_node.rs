@@ -3,10 +3,8 @@
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::Field;
 
-use crate::{
-    layer::layer_enum::LayerDescriptionEnum,
-    layouter::{builder::CircuitMap, layouting::CircuitLocation},
-};
+use crate::layouter::builder::CircuitMap;
+use remainder::{circuit_layout::CircuitLocation, layer::layer_enum::LayerDescriptionEnum};
 
 use super::{CircuitNode, CompilableNode, NodeId};
 
@@ -83,7 +81,7 @@ impl<F: Field> CompilableNode<F> for SplitNode {
 /// 0,0,0 -> 0,0,1 -> 0,1,0 -> 0,1,1 -> 1,0,0 -> 1,0,1 -> 1,1,0 -> 1,1,1
 /// # Example:
 /// ```
-/// use remainder::layouter::nodes::split_node::bits_iter;
+/// use remainder_frontend::layouter::nodes::split_node::bits_iter;
 /// let bits_iter = bits_iter(2);
 /// let bits: Vec<Vec<bool>> = bits_iter.collect();
 /// assert_eq!(bits, vec![
@@ -121,8 +119,10 @@ pub fn bits_iter(num_bits: usize) -> impl Iterator<Item = Vec<bool>> {
 #[cfg(test)]
 mod test {
     use crate::{
-        expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+        abstract_expr::AbstractExpression,
         layouter::builder::{Circuit, CircuitBuilder, LayerVisibility},
+    };
+    use remainder::{
         mle::evals::MultilinearExtension,
         prover::helpers::test_circuit_with_runtime_optimized_config,
     };
@@ -179,10 +179,9 @@ mod test {
         let input2 = builder.add_input_shred("Input 2", num_vars, &input_layer);
         let input3 = builder.add_input_shred("Input 3", num_vars, &input_layer);
 
-        let concatenator =
-            builder.add_sector(Expression::<F, AbstractExpr>::binary_tree_selector(vec![
-                &input0, &input1, &input2, &input3,
-            ]));
+        let concatenator = builder.add_sector(AbstractExpression::binary_tree_selector(vec![
+            &input0, &input1, &input2, &input3,
+        ]));
 
         let splits = builder.add_split_node(&concatenator, num_vars);
         assert_eq!(splits.len(), 4);

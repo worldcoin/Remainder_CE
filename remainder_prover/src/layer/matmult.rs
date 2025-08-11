@@ -16,9 +16,9 @@ use super::{
     Layer, LayerDescription, LayerError, LayerId, VerifierLayer,
 };
 use crate::{
+    circuit_layout::{CircuitEvalMap, CircuitLocation},
     claims::{Claim, ClaimError, RawClaim},
     layer::VerificationError,
-    circuit_layout::{CircuitLocation, CircuitMap},
     mle::{
         dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription,
         verifier_mle::VerifierMle, Mle, MleIndex,
@@ -336,7 +336,7 @@ impl<F: Field> MatrixDescription<F> {
 
     /// Convert the circuit description of a matrix into the prover
     /// view of a matrix, using the [CircuitMap].
-    pub fn into_matrix(&self, circuit_map: &CircuitMap<F>) -> Matrix<F> {
+    pub fn into_matrix(&self, circuit_map: &CircuitEvalMap<F>) -> Matrix<F> {
         let dense_mle = self.mle.into_dense_mle(circuit_map);
         Matrix {
             mle: dense_mle,
@@ -463,7 +463,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
     fn compute_data_outputs(
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
-        circuit_map: &mut CircuitMap<F>,
+        circuit_map: &mut CircuitEvalMap<F>,
     ) {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
@@ -664,7 +664,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         vec![&self.matrix_a.mle, &self.matrix_b.mle]
     }
 
-    fn convert_into_prover_layer<'a>(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
+    fn convert_into_prover_layer<'a>(&self, circuit_map: &CircuitEvalMap<F>) -> LayerEnum<F> {
         let prover_matrix_a = self.matrix_a.into_matrix(circuit_map);
         let prover_matrix_b = self.matrix_b.into_matrix(circuit_map);
         let matmult_layer = MatMult::new(self.layer_id, prover_matrix_a, prover_matrix_b);

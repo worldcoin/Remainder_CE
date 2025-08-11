@@ -1,4 +1,4 @@
-use crate::prover::helpers::test_circuit_with_runtime_optimized_config;
+use remainder::prover::helpers::test_circuit_with_runtime_optimized_config;
 
 use super::test_helpers::small_circuit_description_and_inputs;
 use super::v3::circuit_description_and_inputs;

@@ -1,11 +1,11 @@
 use ark_std::test_rng;
 
 use remainder::{
-    layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, NodeRef},
     mle::{dense::DenseMle, Mle},
     prover::helpers::test_circuit_with_runtime_optimized_config,
     utils::mle::get_dummy_random_mle_vec,
 };
+use remainder_frontend::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, NodeRef};
 use remainder_shared_types::{Field, Fr};
 use utils::TestUtilComponents;
 

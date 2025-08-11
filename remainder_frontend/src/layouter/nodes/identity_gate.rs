@@ -3,11 +3,12 @@
 
 use remainder_shared_types::Field;
 
-use crate::{
+use crate::layouter::builder::CircuitMap;
+use remainder::{
+    circuit_layout::CircuitLocation,
     layer::{
         identity_gate::IdentityGateLayerDescription, layer_enum::LayerDescriptionEnum, LayerId,
     },
-    layouter::{builder::CircuitMap, layouting::CircuitLocation},
     mle::mle_description::MleDescription,
     utils::mle::get_total_mle_indices,
 };
@@ -106,12 +107,12 @@ impl<F: Field> CompilableNode<F> for IdentityGateNode {
 #[cfg(test)]
 mod test {
 
-    use ark_std::test_rng;
-    use rand::Rng;
+    use ark_std::{rand::Rng, test_rng};
     use remainder_shared_types::{Field, Fr};
 
-    use crate::{
-        layouter::builder::{Circuit, CircuitBuilder, LayerVisibility},
+    use crate::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility};
+
+    use remainder::{
         mle::evals::MultilinearExtension,
         prover::helpers::test_circuit_with_runtime_optimized_config,
     };

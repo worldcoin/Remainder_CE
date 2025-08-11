@@ -5,16 +5,17 @@ use itertools::Itertools;
 use rand::Rng;
 use remainder_shared_types::Field;
 
-use crate::{
+use remainder::{
     layer::{
         gate::{compute_gate_data_outputs, BinaryOperation},
         matmult::product_two_matrices_from_flattened_vectors,
     },
     mle::evals::MultilinearExtension,
-    worldcoin_mpc::parameters::{
-        EVALUATION_POINTS_U64, GR4_MULTIPLICATION_WIRINGS, TEST_MASKED_IRIS_CODES,
-        TEST_RANDOMNESSES, TEST_SHARES,
-    },
+};
+
+use crate::worldcoin_mpc::parameters::{
+    EVALUATION_POINTS_U64, GR4_MULTIPLICATION_WIRINGS, TEST_MASKED_IRIS_CODES, TEST_RANDOMNESSES,
+    TEST_SHARES,
 };
 
 use super::parameters::{ENCODING_MATRIX_U64_TRANSPOSE, GR4_MODULUS};

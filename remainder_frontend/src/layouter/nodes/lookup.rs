@@ -1,20 +1,18 @@
 //! Nodes that implement LogUp.
 
-use crate::expression::abstract_expr::AbstractExpr;
-use crate::expression::circuit_expr::ExprDescription;
-use crate::layer::layer_enum::LayerDescriptionEnum;
-use crate::layer::regular_layer::RegularLayerDescription;
-use crate::layer::LayerId;
+use crate::abstract_expr::AbstractExpression;
+use remainder::{
+    expression::{circuit_expr::ExprDescription, generic_expr::Expression},
+    layer::{layer_enum::LayerDescriptionEnum, regular_layer::RegularLayerDescription, LayerId},
+    mle::{mle_description::MleDescription, MleIndex},
+    output_layer::OutputLayerDescription,
+    utils::mle::get_total_mle_indices,
+};
+
 use crate::layouter::builder::CircuitMap;
-use crate::mle::mle_description::MleDescription;
-use crate::mle::MleIndex;
-use crate::output_layer::OutputLayerDescription;
-use crate::utils::mle::get_total_mle_indices;
 
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::Field;
-
-use crate::expression::generic_expr::Expression;
 
 use super::fiat_shamir_challenge::FiatShamirChallengeNode;
 use super::{CircuitNode, NodeId};
@@ -125,7 +123,7 @@ impl LookupTable {
         &self,
         circuit_map: &mut CircuitMap,
     ) -> Result<LookupCircuitDescription<F>> {
-        type AE<F> = Expression<F, AbstractExpr>;
+        type AE<F> = AbstractExpression<F>;
         type CE<F> = Expression<F, ExprDescription>;
 
         // Ensure that number of LookupConstraints is a power of two (otherwise when we concat the

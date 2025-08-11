@@ -1,12 +1,10 @@
 use remainder_shared_types::Fr;
 
-use crate::{
-    layouter::builder::ProvableCircuit,
-    worldcoin_mpc::{
-        circuits::build_circuit,
-        data::{fetch_inversed_test_data, generate_trivial_test_data},
-    },
+use crate::worldcoin_mpc::{
+    circuits::build_circuit,
+    data::{fetch_inversed_test_data, generate_trivial_test_data},
 };
+use remainder::circuit_layout::ProvableCircuit;
 
 use super::circuits::mpc_attach_data;
 
