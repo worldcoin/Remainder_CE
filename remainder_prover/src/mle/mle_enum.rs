@@ -4,11 +4,11 @@ use super::{dense::DenseMle, evals::EvaluationsIterator, zero::ZeroMle, MleIndex
 use crate::{
     layer::LayerId,
     mle::{
-        evals::{Evaluations, MultilinearExtension},
+        dense::{fix_variable_to_new_dense_mle, fix_variable_var_conversion},
+        evals::{bit_packed_vector::BitPackedIterator, Evaluations, MultilinearExtension},
         Mle,
     },
 };
-use ark_std::cfg_into_iter;
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::{field::ExtensionField, Field};
 use serde::{Deserialize, Serialize};
@@ -134,5 +134,115 @@ impl<F: Field> From<DenseMle<F>> for MleEnum<F> {
 impl<F: Field> From<ZeroMle<F>> for MleEnum<F> {
     fn from(value: ZeroMle<F>) -> Self {
         Self::Zero(value)
+    }
+}
+
+/// Creates a new [ZeroMle<E>] which is a "bound" version of the given
+/// `prev_zero_mle` (which is a [ZeroMle<F>] to the (extension field)
+/// `challenge` at the formal variable with the `index` label.
+fn fix_variable_to_new_zero_mle<F: Field, E: ExtensionField<F>>(
+    prev_zero_mle: &ZeroMle<F>,
+    index: usize,
+    challenge: E,
+) -> ZeroMle<E> {
+    assert!(prev_zero_mle.num_free_vars() > 0);
+    let converted_mle_indices =
+        fix_variable_var_conversion(&prev_zero_mle.mle_indices, index, challenge);
+    ZeroMle {
+        mle_indices: converted_mle_indices,
+        num_vars: prev_zero_mle.num_free_vars() - 1,
+        layer_id: prev_zero_mle.layer_id,
+        zero: [E::ZERO],
+        zero_eval: Evaluations::new(prev_zero_mle.num_free_vars() - 1, vec![E::ZERO]),
+        indexed: true,
+    }
+}
+
+/// Given an [MleEnum<F>] to "fix variable" for, creates and returns an
+/// [MleEnum<E>] with the variable labeled `index` bound to `challenge`.
+pub fn fix_variable_to_new_mle_enum<F: Field, E: ExtensionField<F>>(
+    mle: &MleEnum<F>,
+    index: usize,
+    challenge: E,
+) -> MleEnum<E> {
+    match mle {
+        MleEnum::Dense(dense_mle) => {
+            MleEnum::Dense(fix_variable_to_new_dense_mle(dense_mle, index, challenge))
+        }
+        MleEnum::Zero(zero_mle) => {
+            MleEnum::Zero(fix_variable_to_new_zero_mle(zero_mle, index, challenge))
+        }
+    }
+}
+
+pub fn convert_base_mle_enum_to_ext<F: Field, E: ExtensionField<F>>(
+    base_mle_enum: &MleEnum<F>,
+) -> MleEnum<E> {
+    match base_mle_enum {
+        MleEnum::Dense(dense_mle) => todo!(),
+        MleEnum::Zero(zero_mle) => todo!(),
+    }
+}
+
+/// Lift from [MleEnum<F>] to [MleEnum<E>] in the wrapper way.
+impl<F: Field, E: ExtensionField<F>> LiftTo<MleEnum<E>> for MleEnum<F> {
+    fn lift(&self) -> MleEnum<E> {
+        match self {
+            MleEnum::Dense(dense_mle) => MleEnum::Dense(dense_mle.lift()),
+            MleEnum::Zero(zero_mle) => MleEnum::Zero(zero_mle.lift()),
+        }
+    }
+}
+
+/// Lift from [ZeroMle<F>] to [ZeroMle<E>] in the trivial way.
+impl<F: Field, E: ExtensionField<F>> LiftTo<ZeroMle<E>> for ZeroMle<F> {
+    fn lift(&self) -> ZeroMle<E> {
+        let new_mle_indices: Vec<MleIndex<E>> = self
+            .mle_indices
+            .clone()
+            .into_iter()
+            .map(|mle_var| mle_var.lift())
+            .collect();
+        ZeroMle {
+            layer_id: self.layer_id,
+            mle_indices: new_mle_indices,
+            num_vars: self.num_vars,
+            zero: [E::ZERO],
+            zero_eval: self.zero_eval.lift(),
+            indexed: self.indexed,
+        }
+    }
+}
+
+/// Lift from [DenseMle<F>] to [DenseMle<E>] in the trivial way.
+impl<F: Field, E: ExtensionField<F>> LiftTo<DenseMle<E>> for DenseMle<F> {
+    fn lift(&self) -> DenseMle<E> {
+        let new_mle = self.mle.lift();
+        let new_mle_indices: Vec<MleIndex<E>> = self
+            .mle_indices
+            .clone()
+            .into_iter()
+            .map(|mle_var| mle_var.lift())
+            .collect();
+        DenseMle {
+            layer_id: self.layer_id,
+            mle: new_mle,
+            mle_indices: new_mle_indices,
+        }
+    }
+}
+
+/// ChatGPT-inspired trait which allows us to "lift" a data struct over base
+/// field elements, e.g., into one over extension field elements.
+pub trait LiftTo<T> {
+    fn lift(&self) -> T;
+}
+
+/// Lift from [MultilinearExtension<F>] to [MultilinearExtension<E>] in the
+/// trivial way.
+impl<F: Field, E: ExtensionField<F>> LiftTo<MultilinearExtension<E>> for MultilinearExtension<F> {
+    fn lift(self: &MultilinearExtension<F>) -> MultilinearExtension<E> {
+        let new_evaluations: Evaluations<E> = self.f.lift();
+        MultilinearExtension { f: new_evaluations }
     }
 }

@@ -16,7 +16,7 @@ use thiserror::Error;
 
 use serde::{Deserialize, Serialize};
 
-use crate::layer::LayerId;
+use crate::{layer::LayerId, mle::mle_enum::LiftTo};
 
 /// Errors to do with aggregating and collecting claims.
 #[derive(Error, Debug, Clone)]
@@ -81,6 +81,16 @@ impl<F: Field> RawClaim<F> {
     /// Returns the expected evaluation.
     pub fn get_eval(&self) -> F {
         self.evaluation
+    }
+}
+
+/// Lifts a [RawClaim<F>] to a [RawClaim<E>] in the trivial way.
+impl<F: Field, E: ExtensionField<F>> LiftTo<RawClaim<E>> for RawClaim<F> {
+    fn lift(&self) -> RawClaim<E> {
+        RawClaim {
+            point: self.point.lift(),
+            evaluation: self.evaluation.into(),
+        }
     }
 }
 

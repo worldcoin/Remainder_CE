@@ -152,6 +152,11 @@ pub trait ProverTranscript<F: Field> {
     fn get_challenge(&mut self, label: &str) -> F;
     fn get_challenges(&mut self, label: &str, num_elements: usize) -> Vec<F>;
     fn get_extension_field_challenge<E: ExtensionField<F>>(&mut self, label: &str) -> E;
+    fn get_extension_field_challenges<E: ExtensionField<F>>(
+        &mut self,
+        label: &str,
+        num_elements: usize,
+    ) -> Vec<E>;
     fn append_extension_field_elements<E: ExtensionField<F>>(
         &mut self,
         label: &str,
@@ -256,6 +261,34 @@ impl<F: Field, Tr: TranscriptSponge<F>> ProverTranscript<F> for TranscriptWriter
         // Then, absorb as usual
         self.sponge.absorb_elements(&base_field_coeffs);
         self.transcript.append_elements(label, &base_field_coeffs);
+    }
+
+    fn get_extension_field_challenges<E: ExtensionField<F>>(
+        &mut self,
+        label: &str,
+        num_elements: usize,
+    ) -> Vec<E> {
+        // TODO: Should we log this within the `self.transcript`?
+        if num_elements == 0 {
+            vec![]
+        } else {
+            (0..num_elements)
+                .map(|ext_field_elem_number| {
+                    // For each extension field element we wish to sample,
+                    // simply squeeze the corresponding number of base field
+                    // coefficients from the transcript.
+                    let base_field_coeffs = self.sponge.squeeze_elements(E::N_COEFF);
+                    self.transcript.squeeze_elements(
+                        &format!(
+                            "{}: extension field element number {}",
+                            label, ext_field_elem_number
+                        ),
+                        E::N_COEFF,
+                    );
+                    E::from_basis_elem_coeffs(&base_field_coeffs)
+                })
+                .collect()
+        }
     }
 }
 

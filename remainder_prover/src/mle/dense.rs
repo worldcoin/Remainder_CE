@@ -11,13 +11,18 @@ use serde::{Deserialize, Serialize};
 use super::{evals::EvaluationsIterator, mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
     claims::RawClaim,
-    mle::evals::{Evaluations, MultilinearExtension},
+    mle::{
+        evals::{
+            fix_variable_at_index_to_bookkeeping_table_copy, Evaluations, MultilinearExtension,
+        },
+        mle_enum::LiftTo,
+    },
 };
 use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::LayerId,
 };
-use remainder_shared_types::Field;
+use remainder_shared_types::{field::ExtensionField, Field};
 
 /// An implementation of an [Mle] using a dense representation.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -338,5 +343,71 @@ impl<F: Field> IntoIterator for DenseMle<F> {
     fn into_iter(self) -> Self::IntoIter {
         // TEMPORARY: get_evals_vector()
         self.mle.iter().collect::<Vec<F>>().into_iter()
+    }
+}
+
+/// Creates a new [DenseMle] which is a "bound" version of the given
+/// `previous_mle` to the (extension field) `challenge` at the formal
+/// variable with the `index` label.
+pub fn fix_variable_to_new_dense_mle<F: Field, E: ExtensionField<F>>(
+    previous_mle: &DenseMle<F>,
+    index: usize,
+    challenge: E,
+) -> DenseMle<E> {
+    let new_multilinear_extension =
+        fix_variable_at_index_to_bookkeeping_table_copy(&previous_mle.mle, index, challenge);
+
+    // We want to keep the same variables, but with the `index`-th variable
+    // fixed to the given challenge.
+    let new_mle_vars = fix_variable_var_conversion(&previous_mle.mle_indices, index, challenge);
+
+    DenseMle {
+        layer_id: previous_mle.layer_id,
+        mle: new_multilinear_extension,
+        mle_indices: new_mle_vars,
+    }
+}
+
+/// Given a slice of previous MLE variables [MleIndex<F>], creates a new list of
+/// [MleIndex<E>] with the (free) one labeled `index` bound to `challenge`.
+pub fn fix_variable_var_conversion<F: Field, E: ExtensionField<F>>(
+    prev_mle_vars: &[MleIndex<F>],
+    index: usize,
+    challenge: E,
+) -> Vec<MleIndex<E>> {
+    // We want to keep the same variables, but with the `index`-th variable
+    // fixed to the given challenge.
+    prev_mle_vars
+        .iter()
+        .map(|var| match var {
+            // Previously bound challenges stay the same, but are cast into `E`
+            // elements.
+            MleIndex::Bound(prev_bound_challenge_val, var_idx) => {
+                MleIndex::Bound((*prev_bound_challenge_val).into(), *var_idx)
+            }
+            // Fixed 0/1 variable values stay the same.
+            MleIndex::Fixed(fixed_val) => MleIndex::Fixed(*fixed_val),
+            // Free variables stay the same unless they are getting bound
+            // to the current challenge.
+            MleIndex::Indexed(var_idx) => {
+                if *var_idx == index {
+                    return MleIndex::Bound(challenge, *var_idx);
+                }
+                MleIndex::Indexed(*var_idx)
+            }
+            MleIndex::Free => panic!("We should not be here prior to indexing"),
+        })
+        .collect()
+}
+
+/// Simple lift from [MleIndex<F>] to [MleIndex<E>].
+impl<F: Field, E: ExtensionField<F>> LiftTo<MleIndex<E>> for MleIndex<F> {
+    fn lift(&self) -> MleIndex<E> {
+        match self {
+            MleIndex::Fixed(val) => MleIndex::Fixed(*val),
+            MleIndex::Free => MleIndex::Free,
+            MleIndex::Indexed(var_idx) => MleIndex::Indexed(*var_idx),
+            MleIndex::Bound(base_chal, var_idx) => MleIndex::Bound((*base_chal).into(), *var_idx),
+        }
     }
 }

@@ -61,7 +61,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 #[cfg(feature = "parallel")]
 use rayon::prelude::ParallelSlice;
 
-use remainder_shared_types::Field;
+use remainder_shared_types::{field::ExtensionField, Field};
 
 /// Errors to do with the evaluation of MleRefs.
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -454,20 +454,23 @@ pub(crate) fn get_round_degree<F: Field>(
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary
 /// point
-pub fn evaluate_at_a_point<F: Field>(given_evals: &[F], point: F) -> Result<F> {
+pub fn evaluate_at_a_point<F: Field, E: ExtensionField<F>>(
+    given_evals: &[F],
+    point: E,
+) -> Result<E> {
     // Special case for the constant polynomial.
     if given_evals.len() == 1 {
-        return Ok(given_evals[0]);
+        return Ok(given_evals[0].into());
     }
 
     debug_assert!(given_evals.len() > 1);
 
     // Special cases for `point == 0` and `point == 1`.
-    if point == F::ZERO {
-        return Ok(given_evals[0]);
+    if point == E::ZERO {
+        return Ok(given_evals[0].into());
     }
-    if point == F::ONE {
-        return Ok(*given_evals.get(1).unwrap_or(&given_evals[0]));
+    if point == E::ONE {
+        return Ok((*given_evals.get(1).unwrap_or(&given_evals[0])).into());
     }
 
     // Need degree + 1 evaluations to interpolate
@@ -493,5 +496,5 @@ pub fn evaluate_at_a_point<F: Field>(given_evals: &[F], point: F) -> Result<F> {
             |(x, (num, denom))| given_evals[x] * num * denom.invert().unwrap(),
         )
         .reduce(|x, y| x + y);
-    eval.ok_or(anyhow!("Interpretation Error: No Inverse"))
+    (eval.into()).ok_or(anyhow!("Interpretation Error: No Inverse"))
 }
