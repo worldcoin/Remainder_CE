@@ -1699,6 +1699,8 @@ dependencies = [
  "anyhow",
  "ark-serialize",
  "ark-std",
+ "bincode",
+ "clap",
  "criterion",
  "itertools 0.14.0",
  "ndarray",
@@ -1706,14 +1708,19 @@ dependencies = [
  "once_cell",
  "quickcheck",
  "rand",
+ "rand_chacha",
  "rayon",
  "remainder",
+ "remainder-hyrax",
  "remainder-ligero",
  "remainder-shared-types",
  "serde",
+ "serde_json",
+ "sha256",
  "thiserror 2.0.12",
  "tracing",
  "tracing-subscriber",
+ "zeroize",
 ]
 
 [[package]]
