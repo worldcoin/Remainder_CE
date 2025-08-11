@@ -1,11 +1,12 @@
 use remainder::{
-    const_expr,
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    layouter::builder::{
-        Circuit, CircuitBuilder, LayerVisibility, ProvableCircuit, VerifiableCircuit,
-    },
+    circuit_layout::{ProvableCircuit, VerifiableCircuit},
     mle::evals::MultilinearExtension,
     prover::{prove, verify},
+};
+use remainder_frontend::{
+    abstract_expr::AbstractExpression,
+    const_expr,
+    layouter::builder::{Circuit, CircuitBuilder, LayerVisibility},
 };
 use remainder_shared_types::{
     config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig, ProofConfig},
@@ -55,8 +56,7 @@ fn build_circuit() -> Circuit<Fr> {
 
     let main_sector_5 = builder.add_sector(
         // (1 + l)^6 - r * 5 + 1
-        Expression::<Fr, AbstractExpr>::pow(6, &lhs + Fr::from(1)) - &rhs * Fr::from(5)
-            + Fr::from(1)
+        AbstractExpression::pow(6, &lhs + Fr::from(1)) - &rhs * Fr::from(5) + Fr::from(1)
             - &expected_output,
     );
     builder.set_output(&main_sector_5);

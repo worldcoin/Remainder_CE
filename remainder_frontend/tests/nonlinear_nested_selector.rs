@@ -1,8 +1,8 @@
 use ark_std::test_rng;
 
-use remainder::{
+use remainder::prover::helpers::test_circuit_with_runtime_optimized_config;
+use remainder_frontend::{
     layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, NodeRef},
-    prover::helpers::test_circuit_with_runtime_optimized_config,
     sel_expr,
 };
 use remainder_shared_types::Field;

@@ -13,6 +13,8 @@ pub mod layers;
 use std::collections::{HashMap, HashSet};
 
 use self::layers::Layers;
+use crate::circuit_layout::{CircuitEvalMap, CircuitLocation};
+use crate::circuit_layout::{ProvableCircuit, VerifiableCircuit};
 use crate::claims::claim_aggregation::{prover_aggregate_claims, verifier_aggregate_claims};
 use crate::claims::{Claim, ClaimTracker};
 use crate::expression::circuit_expr::filter_bookkeeping_table;
@@ -24,8 +26,6 @@ use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{layer_enum::LayerEnum, LayerId};
 use crate::layer::{Layer, LayerDescription, VerifierLayer};
-use crate::circuit_layout::{ProvableCircuit, VerifiableCircuit};
-use crate::circuit_layout::{CircuitLocation, CircuitMap};
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
@@ -79,6 +79,9 @@ pub enum GKRError {
     #[error("Error when verifying output layer")]
     /// Error when verifying output layer
     ErrorWhenVerifyingOutputLayer,
+    /// InputShred length mismatch
+    #[error("InputShred with NodeId {0} should have {1} variables, but has {2}")]
+    InputShredLengthMismatch(usize, usize, usize),
 }
 
 /// A proof of the sumcheck protocol; Outer vec is rounds, inner vec is evaluations
@@ -589,7 +592,7 @@ impl<F: Field> GKRCircuitDescription<F> {
 
         // Step 1: populate the circuit map with all of the data necessary in
         // order to instantiate the circuit.
-        let mut circuit_map = CircuitMap::new();
+        let mut circuit_map = CircuitEvalMap::new();
         let mut prover_input_layers: Vec<InputLayer<F>> = Vec::new();
         let mut fiat_shamir_challenges = Vec::new();
         // Step 1a: populate the circuit map by compiling the necessary data

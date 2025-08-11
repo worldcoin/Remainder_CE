@@ -1,12 +1,7 @@
 use remainder_shared_types::Field;
 
-use crate::{
-    expression::{
-        abstract_expr::{AbstractExpr, ExprBuilder},
-        generic_expr::Expression,
-    },
-    layouter::builder::{CircuitBuilder, NodeRef},
-};
+use crate::abstract_expr::{AbstractExpression, ExprBuilder};
+use crate::layouter::builder::{CircuitBuilder, NodeRef};
 
 /// Components for Zk iris code computation
 pub struct ZkIriscodeComponent;
@@ -21,10 +16,14 @@ impl ZkIriscodeComponent {
         rh_multiplicands: Vec<&NodeRef<F>>,
     ) -> NodeRef<F> {
         assert_eq!(lh_multiplicands.len(), rh_multiplicands.len());
-        let sector = builder_ref.add_sector(lh_multiplicands.iter().zip(rh_multiplicands).fold(
-            Expression::<F, AbstractExpr>::constant(F::ZERO),
-            |acc, (lh, rh)| acc + ExprBuilder::products(vec![lh.id(), rh.id()]),
-        ));
+        let sector = builder_ref.add_sector(
+            lh_multiplicands
+                .iter()
+                .zip(rh_multiplicands)
+                .fold(AbstractExpression::constant(F::ZERO), |acc, (lh, rh)| {
+                    acc + ExprBuilder::products(vec![lh.id(), rh.id()])
+                }),
+        );
         sector
     }
 }
@@ -33,8 +32,8 @@ impl ZkIriscodeComponent {
 mod test {
     use remainder_shared_types::{Field, Fr};
 
-    use crate::{
-        layouter::builder::{Circuit, CircuitBuilder, LayerVisibility},
+    use crate::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility};
+    use remainder::{
         mle::evals::MultilinearExtension,
         prover::helpers::test_circuit_with_runtime_optimized_config,
     };

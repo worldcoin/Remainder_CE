@@ -27,13 +27,8 @@ use std::{
 
 use remainder_shared_types::Field;
 
-use crate::{
-    layouter::{
-        builder::CircuitMap,
-        layouting::{CircuitLocation, LayoutingError},
-        nodes::NodeId,
-    },
-};
+use crate::layouter::{builder::CircuitMap, layouting::LayoutingError, nodes::NodeId};
+use remainder::{circuit_layout::CircuitLocation, expression::generic_expr::ExpressionNode};
 
 use remainder::{
     expression::{circuit_expr::ExprDescription, generic_expr::Expression},
@@ -113,8 +108,7 @@ impl<F: Field> AbstractExpression<F> {
     /// find all the sources this expression depend on
     pub fn get_sources(&self) -> Vec<NodeId> {
         let mut sources = vec![];
-        let mut get_sources_closure = |expr_node: &AbstractExpression<F>|
-         -> Result<()> {
+        let mut get_sources_closure = |expr_node: &AbstractExpression<F>| -> Result<()> {
             if let AbstractExpression::Product(node_id_vec) = expr_node {
                 sources.extend(node_id_vec.iter());
             } else if let AbstractExpression::Mle(node_id) = expr_node {
@@ -207,13 +201,7 @@ impl<F: Field> AbstractExpression<F> {
             expressions = expressions
                 .into_iter()
                 .tuples()
-                .map(|(lhs, rhs)|
-                    Self::Selector(
-                        MleIndex::Free,
-                        Box::new(lhs),
-                        Box::new(rhs),
-                    )
-                )
+                .map(|(lhs, rhs)| Self::Selector(MleIndex::Free, Box::new(lhs), Box::new(rhs)))
                 .collect();
         }
         expressions[0].clone()
@@ -236,10 +224,7 @@ impl<F: Field> AbstractExpression<F> {
     }
 
     /// Multiplication for expressions, DO NOT USE ON SELECTORS
-    pub fn mult(
-        lhs: Self,
-        rhs: Self,
-    ) -> Self {
+    pub fn mult(lhs: Self, rhs: Self) -> Self {
         let switch = |lhs, rhs| Self::mult(rhs, lhs);
 
         // Simplify the expression into scaled and products
@@ -320,14 +305,14 @@ impl<F: Field> AbstractExpression<F> {
     fn build_circuit_node(
         self,
         node_map: &HashMap<NodeId, (usize, &CircuitLocation)>,
-    ) -> Result<Self> {
+    ) -> Result<ExpressionNode<F, ExprDescription>> {
         // Note that the node_map is the map of node_ids to the internal vec of MLEs, not the circuit_map
         match self {
-            AbstractExpression::Constant(val) => Ok(AbstractExpression::Constant(val)),
+            AbstractExpression::Constant(val) => Ok(ExpressionNode::Constant(val)),
             AbstractExpression::Selector(mle_index, lhs, rhs) => {
                 let lhs = lhs.build_circuit_node(node_map)?;
                 let rhs = rhs.build_circuit_node(node_map)?;
-                Ok(AbstractExpression::Selector(
+                Ok(ExpressionNode::Selector(
                     mle_index,
                     Box::new(lhs),
                     Box::new(rhs),
@@ -345,12 +330,12 @@ impl<F: Field> AbstractExpression<F> {
                     .ok_or(LayoutingError::DanglingNodeId(node_id))?;
                 let total_indices = get_total_mle_indices(prefix_bits, *num_vars);
                 let circuit_mle = MleDescription::new(*layer_id, &total_indices);
-                Ok(AbstractExpression::Mle(circuit_mle))
+                Ok(ExpressionNode::Mle(circuit_mle))
             }
             AbstractExpression::Sum(lhs, rhs) => {
                 let lhs = lhs.build_circuit_node(node_map)?;
                 let rhs = rhs.build_circuit_node(node_map)?;
-                Ok(AbstractExpression::Sum(Box::new(lhs), Box::new(rhs)))
+                Ok(ExpressionNode::Sum(Box::new(lhs), Box::new(rhs)))
             }
             AbstractExpression::Product(nodes) => {
                 let circuit_mles = nodes
@@ -370,11 +355,11 @@ impl<F: Field> AbstractExpression<F> {
                         MleDescription::new(*layer_id, &total_indices)
                     })
                     .collect::<Vec<MleDescription<F>>>();
-                Ok(AbstractExpression::Product(circuit_mles))
+                Ok(ExpressionNode::Product(circuit_mles))
             }
             AbstractExpression::Scaled(expr, scalar) => {
                 let expr = expr.build_circuit_node(node_map)?;
-                Ok(AbstractExpression::Scaled(Box::new(expr), scalar))
+                Ok(ExpressionNode::Scaled(Box::new(expr), scalar))
             }
         }
     }
@@ -458,8 +443,8 @@ impl<F: Field, Rhs: IntoExpr<F>> MulAssign<Rhs> for AbstractExpression<F> {
 #[macro_export]
 macro_rules! const_expr {
     ($val:expr) => {{
-        use remainder::expression::generic_expr::{Expression, ExpressionNode};
-        Expression::new(AbstractExpression::Constant($val), ())
+        use remainder_frontend::abstract_expr::AbstractExpression;
+        AbstractExpression::Constant($val)
     }};
 }
 
@@ -469,8 +454,7 @@ macro_rules! const_expr {
 #[macro_export]
 macro_rules! sel_expr {
     ($($expr:expr),+ $(,)?) => {{
-        use remainder::expression::generic_expr::{Expression};
-        use remainder::expression::abstract_expr::{AbstractExpr, IntoExpr};
+        use remainder_frontend::abstract_expr::{AbstractExpression, IntoExpr};
         let v = vec![$($expr.into_expr()),+];
         AbstractExpression::<F>::select_seq(v)
     }};
@@ -480,7 +464,9 @@ macro_rules! sel_expr {
 impl<F: std::fmt::Debug + Field> std::fmt::Debug for AbstractExpression<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AbstractExpression::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
+            AbstractExpression::Constant(scalar) => {
+                f.debug_tuple("Constant").field(scalar).finish()
+            }
             AbstractExpression::Selector(index, a, b) => f
                 .debug_tuple("Selector")
                 .field(index)

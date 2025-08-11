@@ -4,22 +4,16 @@
 mod tests;
 
 use itertools::any;
+use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::{hash_map::Entry, HashMap};
 use std::fmt::Debug;
 use std::hash::Hash;
 
 use itertools::Itertools;
 use remainder_shared_types::Field;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::layouter::nodes::sector::Sector;
-
-use remainder::{
-    layer::LayerId,
-    mle::{dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription},
-};
 
 use super::nodes::{
     circuit_inputs::{InputLayerNode, InputShred},

@@ -4,10 +4,10 @@ pub use remainder_shared_types::{Field, Fr};
 use serde::{Deserialize, Serialize};
 
 use crate::abstract_expr::AbstractExpression;
-use remainder::layer::layer_enum::LayerDescriptionEnum;
 use crate::layouter::builder::CircuitMap;
+use remainder::layer::layer_enum::LayerDescriptionEnum;
 
-use super::context::CircuitBuildingContext;
+use remainder::circuit_building_context::CircuitBuildingContext;
 
 use anyhow::Result;
 
@@ -47,6 +47,11 @@ impl NodeId {
     /// creates an [AbstractExpression<F>] from this NodeId
     pub fn expr<F: Field>(self) -> AbstractExpression<F> {
         AbstractExpression::<F>::mle(self)
+    }
+
+    /// Obtain the integer value, for printing GkrError messages
+    pub fn get_id(self) -> usize {
+        self.0
     }
 }
 

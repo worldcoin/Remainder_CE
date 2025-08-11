@@ -1,10 +1,12 @@
 #![allow(clippy::type_complexity)]
-use crate::input_layer::ligero_input_layer::LigeroInputLayerDescription;
-use crate::input_layer::InputLayerDescription;
-use crate::layouter::builder::{LayerVisibility, ProvableCircuit};
+use crate::layouter::builder::LayerVisibility;
 use crate::zk_iriscode_ss::circuits::build_iriscode_circuit_description;
 use crate::zk_iriscode_ss::data::{build_iriscode_circuit_data, wirings_to_reroutings};
 use ndarray::Array2;
+use remainder::circuit_layout::ProvableCircuit;
+use remainder::input_layer::{
+    ligero_input_layer::LigeroInputLayerDescription, InputLayerDescription,
+};
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::Fr;
 

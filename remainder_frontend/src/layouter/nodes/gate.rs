@@ -4,15 +4,17 @@ use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::Field;
 
-use crate::{
+use remainder::{
+    circuit_layout::CircuitLocation,
     layer::{
         gate::{BinaryOperation, GateLayerDescription},
         layer_enum::LayerDescriptionEnum,
         LayerId,
     },
-    layouter::{builder::CircuitMap, layouting::CircuitLocation},
     mle::{mle_description::MleDescription, MleIndex},
 };
+
+use crate::layouter::builder::CircuitMap;
 
 use super::{CircuitNode, CompilableNode, NodeId};
 
@@ -126,15 +128,13 @@ impl<F: Field> CompilableNode<F> for GateNode {
 #[cfg(test)]
 mod test {
 
-    use ark_std::test_rng;
+    use ark_std::{rand::Rng, test_rng};
     use itertools::Itertools;
-    use rand::Rng;
     use remainder_shared_types::Fr;
 
-    use crate::{
-        layer::gate::BinaryOperation,
-        layouter::builder::{CircuitBuilder, LayerVisibility},
-        mle::evals::MultilinearExtension,
+    use crate::layouter::builder::{CircuitBuilder, LayerVisibility};
+    use remainder::{
+        layer::gate::BinaryOperation, mle::evals::MultilinearExtension,
         prover::helpers::test_circuit_with_runtime_optimized_config,
     };
 

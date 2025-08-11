@@ -5,10 +5,14 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use remainder_shared_types::Field;
 
-use crate::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+use remainder::{
+    circuit_layout::CircuitLocation,
     layer::{layer_enum::LayerDescriptionEnum, regular_layer::RegularLayerDescription, LayerId},
-    layouter::{builder::CircuitMap, layouting::CircuitLocation, nodes::CompilableNode},
+};
+
+use crate::{
+    abstract_expr::AbstractExpression,
+    layouter::{builder::CircuitMap, nodes::CompilableNode},
 };
 
 use super::{CircuitNode, NodeId};
@@ -19,13 +23,13 @@ use anyhow::Result;
 /// A sector node in the circuit DAG, can have multiple inputs, and a single output
 pub struct Sector<F: Field> {
     id: NodeId,
-    expr: Expression<F, AbstractExpr>,
+    expr: AbstractExpression<F>,
     num_vars: usize,
 }
 
 impl<F: Field> Sector<F> {
     /// creates a new sector node
-    pub fn new(expr: Expression<F, AbstractExpr>, num_vars: usize) -> Self {
+    pub fn new(expr: AbstractExpression<F>, num_vars: usize) -> Self {
         Self {
             id: NodeId::new(),
             expr,
@@ -105,7 +109,7 @@ fn compile_layer<F: Field>(
 
         // Add any new selector nodes that are needed for padding
         for _ in 0..padding_bits {
-            smallest = Expression::<_, AbstractExpr>::constant(F::ZERO).select(smallest);
+            smallest = AbstractExpression::constant(F::ZERO).select(smallest);
             for node_id in &smallest_ids {
                 let prefix_bits = prefix_bits.get_mut(node_id).unwrap();
                 prefix_bits.push(true);

@@ -2,14 +2,18 @@ use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder::layer::LayerId;
-use remainder::layouter::builder::{CircuitBuilder, NodeRef};
-use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputShred, InputShredData};
-use remainder::layouter::nodes::CircuitNode;
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
+use remainder_frontend::layouter::{
+    builder::{CircuitBuilder, NodeRef},
+    nodes::{
+        circuit_inputs::{InputLayerNode, InputShred, InputShredData},
+        CircuitNode,
+    },
+};
 
 use remainder::mle::dense::DenseMle;
 use remainder::mle::MleIndex;
-use remainder::sel_expr;
+use remainder_frontend::sel_expr;
 use remainder_shared_types::{Field, Fr, IntoVecF};
 
 /// Returns an MLE with all Fr::one() for testing according to the number of variables.

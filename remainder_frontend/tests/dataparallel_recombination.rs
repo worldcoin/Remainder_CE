@@ -1,8 +1,10 @@
 use ark_std::test_rng;
 use remainder::{
-    layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, NodeRef},
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     prover::helpers::test_circuit_with_runtime_optimized_config,
+};
+use remainder_frontend::{
+    layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, NodeRef},
     sel_expr,
 };
 use remainder_shared_types::{Field, Fr};

@@ -1,12 +1,13 @@
 #![allow(clippy::type_complexity)]
 
 use crate::components::digits::DigitComponents;
-use crate::input_layer::InputLayerDescription;
-use crate::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, ProvableCircuit};
-use crate::mle::evals::MultilinearExtension;
-use crate::prover::GKRCircuitDescription;
-use crate::utils::arithmetic::log2_ceil;
+use crate::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility};
 use crate::zk_iriscode_ss::components::ZkIriscodeComponent;
+use remainder::circuit_layout::ProvableCircuit;
+use remainder::input_layer::InputLayerDescription;
+use remainder::mle::evals::MultilinearExtension;
+use remainder::prover::GKRCircuitDescription;
+use remainder::utils::arithmetic::log2_ceil;
 
 use itertools::Itertools;
 use remainder_shared_types::Field;

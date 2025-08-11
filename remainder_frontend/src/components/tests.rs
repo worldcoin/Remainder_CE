@@ -1,10 +1,10 @@
 use super::digits::DigitComponents;
 use crate::components::Components;
-use remainder::digits::{complementary_decomposition, digits_to_field, to_slice_of_mles};
+use crate::digits::{complementary_decomposition, digits_to_field, to_slice_of_mles};
 use crate::layouter::builder::{CircuitBuilder, LayerVisibility};
+use itertools::Itertools;
 use remainder::mle::evals::MultilinearExtension;
 use remainder::prover::helpers::test_circuit_with_runtime_optimized_config;
-use itertools::Itertools;
 use remainder_shared_types::Fr;
 
 #[test]

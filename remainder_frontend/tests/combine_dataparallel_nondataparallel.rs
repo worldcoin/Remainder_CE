@@ -2,10 +2,9 @@ use ark_std::test_rng;
 use itertools::Itertools;
 
 use remainder::{
-    layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, NodeRef},
-    mle::dense::DenseMle,
-    prover::helpers::test_circuit_with_runtime_optimized_config,
+    mle::dense::DenseMle, prover::helpers::test_circuit_with_runtime_optimized_config,
 };
+use remainder_frontend::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, NodeRef};
 use remainder_shared_types::Field;
 
 pub mod utils;

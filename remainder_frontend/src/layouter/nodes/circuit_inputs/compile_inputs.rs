@@ -2,11 +2,9 @@ use ark_std::log2;
 use itertools::Itertools;
 use remainder_shared_types::Field;
 
-use crate::layouter::nodes::CircuitNode;
+use crate::layouter::{builder::CircuitMap, nodes::CircuitNode};
 use remainder::{
-    input_layer::InputLayerDescription,
-    circuit_layout::{CircuitMap, CircuitLocation},
-    utils::mle::argsort,
+    circuit_layout::CircuitLocation, input_layer::InputLayerDescription, utils::mle::argsort,
 };
 
 use super::InputLayerNode;
@@ -64,7 +62,7 @@ impl InputLayerNode {
     /// an input layer, adding the input shreds to the circuit map.
     pub fn generate_input_layer_description<F: Field>(
         &self,
-        circuit_map: &mut CircuitMap<F>,
+        circuit_map: &mut CircuitMap,
     ) -> Result<InputLayerDescription> {
         let Self {
             id: _,

@@ -16,16 +16,9 @@ use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    expression::{
-        abstract_expr::{AbstractExpr, IntoExpr},
-        generic_expr::Expression,
-    },
-    input_layer::ligero_input_layer::{
-        LigeroInputLayerDescription, LigeroInputLayerDescriptionWithPrecommit,
-    },
-    layer::{gate::BinaryOperation, layer_enum::LayerDescriptionEnum, LayerId},
+    abstract_expr::{AbstractExpression, IntoExpr},
     layouter::{
-        layouting::{CircuitLocation, LayoutingError},
+        layouting::LayoutingError,
         nodes::{
             circuit_inputs::{InputLayerNode, InputShred},
             circuit_outputs::OutputNode,
@@ -39,6 +32,11 @@ use crate::{
             CircuitNode, NodeId,
         },
     },
+};
+use remainder::{
+    circuit_layout::{CircuitLocation, ProvableCircuit},
+    input_layer::ligero_input_layer::LigeroInputLayerDescription,
+    layer::{gate::BinaryOperation, layer_enum::LayerDescriptionEnum, LayerId},
     mle::evals::MultilinearExtension,
     output_layer::OutputLayerDescription,
     prover::{GKRCircuitDescription, GKRError},
@@ -69,7 +67,7 @@ impl<F: Field> NodeRef<F> {
 
     /// Generates an abstract expression containing a single MLE with the data in the node
     /// referenced to by [Self].
-    pub fn expr(&self) -> Expression<F, AbstractExpr> {
+    pub fn expr(&self) -> AbstractExpression<F> {
         self.ptr.upgrade().unwrap().id().expr()
     }
 
@@ -80,12 +78,12 @@ impl<F: Field> NodeRef<F> {
 }
 
 impl<F: Field> IntoExpr<F> for NodeRef<F> {
-    fn into_expr(self) -> Expression<F, AbstractExpr> {
+    fn into_expr(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
 impl<F: Field> IntoExpr<F> for &NodeRef<F> {
-    fn into_expr(self) -> Expression<F, AbstractExpr> {
+    fn into_expr(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
@@ -108,18 +106,18 @@ impl<F: Field> InputLayerNodeRef<F> {
 
     /// Generates an abstract expression containing a single MLE with the data in the node
     /// referenced to by [Self].
-    pub fn expr(&self) -> Expression<F, AbstractExpr> {
+    pub fn expr(&self) -> AbstractExpression<F> {
         self.ptr.upgrade().unwrap().id().expr()
     }
 }
 
 impl<F: Field> IntoExpr<F> for InputLayerNodeRef<F> {
-    fn into_expr(self) -> Expression<F, AbstractExpr> {
+    fn into_expr(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
 impl<F: Field> IntoExpr<F> for &InputLayerNodeRef<F> {
-    fn into_expr(self) -> Expression<F, AbstractExpr> {
+    fn into_expr(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
@@ -142,7 +140,7 @@ impl<F: Field> FSNodeRef<F> {
 
     /// Generates an abstract expression containing a single MLE with the data in the node
     /// referenced to by [Self].
-    pub fn expr(&self) -> Expression<F, AbstractExpr> {
+    pub fn expr(&self) -> AbstractExpression<F> {
         self.ptr.upgrade().unwrap().id().expr()
     }
 }
@@ -154,12 +152,12 @@ impl<F: Field> Into<NodeRef<F>> for FSNodeRef<F> {
 }
 
 impl<F: Field> IntoExpr<F> for FSNodeRef<F> {
-    fn into_expr(self) -> Expression<F, AbstractExpr> {
+    fn into_expr(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
 impl<F: Field> IntoExpr<F> for &FSNodeRef<F> {
-    fn into_expr(self) -> Expression<F, AbstractExpr> {
+    fn into_expr(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
@@ -178,7 +176,7 @@ impl LookupTableNodeRef {
 
     /// Generates an abstract expression containing a single MLE with the data in the node
     /// referenced to by [Self].
-    pub fn expr<F: Field>(&self) -> Expression<F, AbstractExpr> {
+    pub fn expr<F: Field>(&self) -> AbstractExpression<F> {
         self.ptr.upgrade().unwrap().id().expr()
     }
 }
@@ -197,7 +195,7 @@ impl LookupConstraintNodeRef {
 
     /// Generates an abstract expression containing a single MLE with the data in the node
     /// referenced to by [Self].
-    pub fn expr<F: Field>(&self) -> Expression<F, AbstractExpr> {
+    pub fn expr<F: Field>(&self) -> AbstractExpression<F> {
         self.ptr.upgrade().unwrap().id().expr()
     }
 }
@@ -463,7 +461,7 @@ impl<F: Field> CircuitBuilder<F> {
 
     /// Adds a [Sector] to the builder's node collection.
     /// Returns a typed reference to the newly created node.
-    pub fn add_sector(&mut self, expr: Expression<F, AbstractExpr>) -> NodeRef<F> {
+    pub fn add_sector(&mut self, expr: AbstractExpression<F>) -> NodeRef<F> {
         let node_ids_in_use: HashSet<NodeId> = expr.get_sources().into_iter().collect();
 
         let num_vars_map: HashMap<NodeId, usize> = node_ids_in_use
@@ -472,7 +470,7 @@ impl<F: Field> CircuitBuilder<F> {
             .collect();
 
         let num_vars = expr
-            .num_vars(&num_vars_map)
+            .get_num_vars(&num_vars_map)
             .expect("Internal error duing 'num_vars' computation of an AbstractExpression");
 
         let node = Rc::new(Sector::<F>::new(expr, num_vars));
@@ -1108,7 +1106,7 @@ impl<F: Field> Circuit<F> {
                     self.circuit_map.get_shred_location(input_shred_id).unwrap();
                 if num_vars != mle.num_vars() {
                     return Err(anyhow!(GKRError::InputShredLengthMismatch(
-                        input_shred_id,
+                        input_shred_id.get_id(),
                         num_vars,
                         mle.num_vars(),
                     )));
@@ -1150,11 +1148,11 @@ impl<F: Field> Circuit<F> {
             })
             .collect();
 
-        Ok(ProvableCircuit {
-            circuit_description: self.circuit_description.clone(),
+        Ok(ProvableCircuit::new(
+            self.circuit_description.clone(),
             inputs,
-            private_inputs: ligero_private_inputs,
-        })
+            ligero_private_inputs,
+        ))
     }
 }
 
@@ -1162,7 +1160,7 @@ impl<F: Field> Circuit<F> {
 macro_rules! impl_add {
     ($Lhs:ty) => {
         impl<F: Field, Rhs: IntoExpr<F>> Add<Rhs> for $Lhs {
-            type Output = Expression<F, AbstractExpr>;
+            type Output = AbstractExpression<F>;
 
             fn add(self, rhs: Rhs) -> Self::Output {
                 self.expr() + rhs.into_expr()
@@ -1180,7 +1178,7 @@ impl_add!(&FSNodeRef<F>);
 macro_rules! impl_sub {
     ($Lhs:ty) => {
         impl<F: Field, Rhs: IntoExpr<F>> Sub<Rhs> for $Lhs {
-            type Output = Expression<F, AbstractExpr>;
+            type Output = AbstractExpression<F>;
 
             fn sub(self, rhs: Rhs) -> Self::Output {
                 self.expr() - rhs.into_expr()
@@ -1198,7 +1196,7 @@ impl_sub!(&FSNodeRef<F>);
 macro_rules! impl_mul {
     ($Lhs:ty) => {
         impl<F: Field, Rhs: IntoExpr<F>> Mul<Rhs> for $Lhs {
-            type Output = Expression<F, AbstractExpr>;
+            type Output = AbstractExpression<F>;
 
             fn mul(self, rhs: Rhs) -> Self::Output {
                 self.expr() * rhs.into_expr()

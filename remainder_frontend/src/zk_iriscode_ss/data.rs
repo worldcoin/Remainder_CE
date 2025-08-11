@@ -1,9 +1,9 @@
 use crate::digits::{complementary_decomposition, digits_to_field, to_slice_of_mles};
-use crate::mle::evals::MultilinearExtension;
-use crate::utils::arithmetic::i64_to_field;
-use crate::utils::mle::pad_with;
 use itertools::Itertools;
 use ndarray::{Array, Array2};
+use remainder::mle::evals::MultilinearExtension;
+use remainder::utils::arithmetic::i64_to_field;
+use remainder::utils::mle::pad_with;
 use remainder_shared_types::Field;
 
 /// Input data for the Worldcoin iriscode circuit.

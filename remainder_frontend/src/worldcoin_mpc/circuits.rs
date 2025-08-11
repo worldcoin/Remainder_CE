@@ -4,14 +4,15 @@ use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    input_layer::InputLayerDescription,
-    layer::gate::BinaryOperation,
-    layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, ProvableCircuit},
-    prover::GKRCircuitDescription,
+    layouter::builder::{Circuit, CircuitBuilder, LayerVisibility},
     worldcoin_mpc::{
         components::WorldcoinMpcComponents,
         parameters::{GR4_ELEM_BIT_LENGTH, GR4_MULTIPLICATION_WIRINGS},
     },
+};
+use remainder::{
+    circuit_layout::ProvableCircuit, input_layer::InputLayerDescription,
+    layer::gate::BinaryOperation, prover::GKRCircuitDescription,
 };
 
 use super::{
