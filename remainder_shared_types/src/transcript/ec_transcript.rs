@@ -325,6 +325,35 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
         self.sponge.absorb_elements(&base_field_coeffs);
         self.transcript.append_elements(label, &base_field_coeffs);
     }
+
+    /// TODO(ryancao): We should *also* compute scalar field challenges from this.
+    fn get_extension_field_challenges<E: crate::field::ExtensionField<C::Base>>(
+        &mut self,
+        label: &str,
+        num_elements: usize,
+    ) -> Vec<E> {
+        // TODO: Should we log this within the `self.transcript`?
+        if num_elements == 0 {
+            vec![]
+        } else {
+            (0..num_elements)
+                .map(|ext_field_elem_number| {
+                    // For each extension field element we wish to sample,
+                    // simply squeeze the corresponding number of base field
+                    // coefficients from the transcript.
+                    let base_field_coeffs = self.sponge.squeeze_elements(E::N_COEFF);
+                    self.transcript.squeeze_elements(
+                        &format!(
+                            "{}: extension field element number {}",
+                            label, ext_field_elem_number
+                        ),
+                        E::N_COEFF,
+                    );
+                    E::from_basis_elem_coeffs(&base_field_coeffs)
+                })
+                .collect()
+        }
+    }
 }
 
 #[cfg(test)]

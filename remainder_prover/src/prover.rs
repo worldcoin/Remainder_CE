@@ -31,8 +31,11 @@ use crate::layouter::nodes::{CircuitNode, NodeId};
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
-use crate::mle::mle_enum::MleEnum;
-use crate::output_layer::{OutputLayer, OutputLayerDescription};
+use crate::mle::mle_enum::{LiftTo, MleEnum};
+use crate::output_layer::{
+    bind_base_field_output_layer_to_ext_field_output_layer_with_ext_field_challenge, OutputLayer,
+    OutputLayerDescription,
+};
 use crate::utils::mle::verify_claim;
 use ark_std::{end_timer, start_timer};
 use helpers::get_circuit_description_hash_as_field_elems;
@@ -380,11 +383,29 @@ pub fn prove_circuit<F: Field, E: ExtensionField<F>>(
             }
         };
 
-        let challenges = transcript_writer
-            .get_challenges("Challenge on the output layer", output.num_free_vars());
-        output.fix_layer(&challenges)?;
+        let challenges = transcript_writer.get_extension_field_challenges(
+            "Challenge on the output layer",
+            output.num_free_vars(),
+        );
 
-        let claim = output.get_claim()?;
+        // If there is at least one challenge, we need to fix variable to get
+        // the extension field version of the output layer...
+        let mut ext_field_output_layer = if challenges.len() > 0 {
+            bind_base_field_output_layer_to_ext_field_output_layer_with_ext_field_challenge(
+                output,
+                0,
+                challenges[0],
+            )
+        }
+        // ...Otherwise, we simply lift the whole thing to an extension field
+        // output layer (there are zero variables)
+        else {
+            output.lift()
+        };
+
+        ext_field_output_layer.fix_layer(&challenges)?;
+
+        let claim = ext_field_output_layer.get_claim()?;
         claim_tracker.insert(claim.get_to_layer_id(), claim);
     }
 

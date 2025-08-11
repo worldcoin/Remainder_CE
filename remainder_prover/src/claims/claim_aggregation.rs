@@ -5,6 +5,7 @@ use std::cmp::max;
 use ark_std::{cfg_into_iter, end_timer, start_timer};
 use remainder_shared_types::{
     config::global_config::global_prover_claim_agg_constant_column_optimization,
+    field::ExtensionField,
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
@@ -40,11 +41,11 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 ///   this layer, in order to aggregate into the layerwise bookkeeping table.
 /// * `transcript_writer`: is used to post the interpolation polynomial
 ///   evaluations and generate challenges.
-pub fn prover_aggregate_claims<F: Field>(
-    claims: &[Claim<F>],
+pub fn prover_aggregate_claims<F: Field, E: ExtensionField<F>>(
+    claims: &[Claim<E>],
     output_mles_from_layer: Vec<DenseMle<F>>,
     transcript_writer: &mut impl ProverTranscript<F>,
-) -> Result<RawClaim<F>> {
+) -> Result<RawClaim<E>> {
     let num_claims = claims.len();
     debug_assert!(num_claims > 0);
     info!("High-level claim aggregation on {num_claims} claims.");

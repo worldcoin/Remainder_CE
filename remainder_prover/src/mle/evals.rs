@@ -15,7 +15,7 @@ pub mod bit_packed_vector;
 use bit_packed_vector::BitPackedVector;
 use zeroize::Zeroize;
 
-use crate::utils::arithmetic::i64_to_field;
+use crate::{mle::mle_enum::LiftTo, utils::arithmetic::i64_to_field};
 
 use anyhow::{anyhow, Result};
 
@@ -722,4 +722,26 @@ pub fn fix_variable_at_index_to_bookkeeping_table_copy<F: Field, E: ExtensionFie
     debug_assert_eq!(new_evals.len(), 1 << (num_vars - 1));
     let new_evals = Evaluations::new(num_vars - 1, new_evals);
     MultilinearExtension::new_from_evals(new_evals)
+}
+
+/// Lift from [Evaluations<F>] to [Evaluations<E>] in the trivial way.
+impl<F: Field, E: ExtensionField<F>> LiftTo<Evaluations<E>> for Evaluations<F> {
+    fn lift(&self) -> Evaluations<E> {
+        let raw_evals: Vec<E> = self.iter().map(|eval| eval.into()).collect();
+        let converted_evals: BitPackedVector<E> = BitPackedVector::new(&raw_evals);
+        let ret: Evaluations<E> = Evaluations {
+            evals: converted_evals,
+            num_vars: self.num_vars(),
+            zero: E::ZERO,
+        };
+
+        ret
+    }
+}
+
+/// Lift from [Vec<F>] to [Vec<E>] in the trivial way.
+impl<F: Field, E: ExtensionField<F>> LiftTo<Vec<E>> for Vec<F> {
+    fn lift(&self) -> Vec<E> {
+        self.iter().map(|val| (*val).into()).collect()
+    }
 }

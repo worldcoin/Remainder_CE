@@ -5,6 +5,7 @@
 
 use itertools::Itertools;
 use remainder_shared_types::{
+    field::ExtensionField,
     transcript::{TranscriptReaderError, VerifierTranscript},
     Field,
 };
@@ -14,6 +15,7 @@ use thiserror::Error;
 use crate::{
     claims::Claim,
     layer::{LayerError, LayerId},
+    mle::mle_enum::{fix_variable_to_new_mle_enum, LiftTo},
 };
 
 use crate::{
@@ -148,6 +150,31 @@ impl<F: Field> OutputLayer<F> {
             self.mle.layer_id(),
             self.mle.layer_id(),
         ))
+    }
+}
+
+/// Given a fresh [OutputLayer<F>], creates a new [OutputLayer<E>] derived by
+/// binding the (free) variable labeled `index` to `challenge`.
+pub fn bind_base_field_output_layer_to_ext_field_output_layer_with_ext_field_challenge<
+    F: Field,
+    E: ExtensionField<F>,
+>(
+    orig_output_layer: &OutputLayer<F>,
+    index: usize,
+    challenge: E,
+) -> OutputLayer<E> {
+    let output_layer_mle_with_first_variable_fixed =
+        fix_variable_to_new_mle_enum(orig_output_layer.get_mle(), index, challenge);
+    OutputLayer {
+        mle: output_layer_mle_with_first_variable_fixed,
+    }
+}
+
+/// Trivial implementation of "lifting" an [OutputLayer<F>] to [OutputLayer<E>].
+impl<F: Field, E: ExtensionField<F>> LiftTo<OutputLayer<E>> for OutputLayer<F> {
+    fn lift(&self) -> OutputLayer<E> {
+        let converted_mle = self.mle.lift();
+        OutputLayer { mle: converted_mle }
     }
 }
 

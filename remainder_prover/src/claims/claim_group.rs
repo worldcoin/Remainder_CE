@@ -2,6 +2,7 @@ use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use remainder_shared_types::{
     config::global_config::global_verifier_claim_agg_constant_column_optimization,
+    field::ExtensionField,
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
@@ -12,7 +13,7 @@ use crate::{
         claim_aggregation::{get_num_wlx_evaluations, get_wlx_evaluations},
         ClaimError,
     },
-    mle::dense::DenseMle,
+    mle::{dense::DenseMle, mle_enum::LiftTo},
     sumcheck::evaluate_at_a_point,
 };
 
@@ -227,7 +228,7 @@ impl<F: Field> ClaimGroup<F> {
     /// operating on the points and not on the results. However, the ClaimGroup API
     /// is convenient for accessing columns and makes the implementation more
     /// readable. We should consider alternative designs.
-    fn compute_aggregated_challenges(&self, r_star: F) -> Result<Vec<F>> {
+    fn compute_aggregated_challenges<E: ExtensionField<F>>(&self, r_star: E) -> Result<Vec<E>> {
         if self.is_empty() {
             return Err(anyhow!(ClaimError::ClaimAggroError));
         }
@@ -236,7 +237,7 @@ impl<F: Field> ClaimGroup<F> {
 
         // Compute r = l(r*) by performing Lagrange interpolation on each coordinate
         // using `evaluate_at_a_point`.
-        let r: Vec<F> = cfg_into_iter!(0..num_vars)
+        let r: Vec<E> = cfg_into_iter!(0..num_vars)
             .map(|idx| {
                 let evals = self.get_points_column(idx);
                 // Interpolate the value l(r*) from the values
@@ -265,11 +266,11 @@ impl<F: Field> ClaimGroup<F> {
     /// # Returns
     ///
     /// If successful, returns a single aggregated claim.
-    pub fn prover_aggregate(
+    pub fn prover_aggregate<E: ExtensionField<F>>(
         &self,
         layer_mles: &[DenseMle<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<RawClaim<F>> {
+    ) -> Result<RawClaim<E>> {
         let num_claims = self.get_num_claims();
         debug_assert!(num_claims > 0);
         info!("ClaimGroup aggregation on {num_claims} claims.");
@@ -277,7 +278,7 @@ impl<F: Field> ClaimGroup<F> {
         // Do nothing if there is only one claim.
         if num_claims == 1 {
             debug!("Received 1 claim. Doing nothing.");
-            return Ok(self.claims[0].clone());
+            return Ok(self.claims[0].lift());
         }
         assert!(self.get_claim_points_matrix().len() > 1);
 
@@ -300,8 +301,9 @@ impl<F: Field> ClaimGroup<F> {
         );
 
         // Next, sample `r^\star` from the transcript.
-        let agg_chal = transcript_writer
-            .get_challenge("Challenge for claim aggregation interpolation polynomial");
+        let agg_chal = transcript_writer.get_extension_field_challenge::<E>(
+            "Challenge for claim aggregation interpolation polynomial",
+        );
         debug!("Aggregate challenge: {:#?}", agg_chal);
 
         let aggregated_challenges = self.compute_aggregated_challenges(agg_chal).unwrap();
