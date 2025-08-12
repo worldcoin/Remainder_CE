@@ -95,8 +95,8 @@ pub fn prover_aggregate_claims<F: Field, E: ExtensionField<F>>(
 ///
 /// # Panics
 ///  if `claim_vecs` is empty.
-pub fn get_num_wlx_evaluations<F: Field>(
-    claim_vecs: &[Vec<F>],
+pub fn get_num_wlx_evaluations<F: Field, E: ExtensionField<F>>(
+    claim_vecs: &[Vec<E>],
 ) -> (usize, Option<Vec<usize>>, Vec<usize>) {
     let num_claims = claim_vecs.len();
     let num_vars = claim_vecs[0].len();
@@ -142,13 +142,13 @@ pub fn get_num_wlx_evaluations<F: Field>(
 /// Returns a vector of evaluations of this layer's MLE on a sequence of
 /// points computed by interpolating a polynomial that passes through the
 /// points of `claims_vecs`.
-pub fn get_wlx_evaluations<F: Field>(
-    claim_vecs: &[Vec<F>],
-    claimed_vals: &[F],
+pub fn get_wlx_evaluations<F: Field, E: ExtensionField<F>>(
+    claim_vecs: &[Vec<E>],
+    claimed_vals: &[E],
     claim_mles: Vec<DenseMle<F>>,
     num_claims: usize,
     num_idx: usize,
-) -> Result<Vec<F>> {
+) -> Result<Vec<E>> {
     // get the number of evaluations
 
     let (num_evals, common_idx) = if global_prover_claim_agg_constant_column_optimization() {

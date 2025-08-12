@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use remainder_shared_types::{
@@ -30,29 +32,31 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 /// achieve faster access times.
 /// Invariant: All claims are on the same number of variables.
 #[derive(Clone, Debug)]
-pub struct ClaimGroup<F: Field> {
+pub struct ClaimGroup<F: Field, E: ExtensionField<F>> {
     /// A vector of raw claims in F^n.
-    pub claims: Vec<RawClaim<F>>,
+    pub claims: Vec<RawClaim<E>>,
 
     /// A 2D matrix with the claim's points as its rows.
-    claim_points_matrix: Vec<Vec<F>>,
+    claim_points_matrix: Vec<Vec<E>>,
 
     /// The points in `claims` is effectively a matrix of elements in F. We also
     /// store the transpose of this matrix for convenient access.
-    claim_points_transpose: Vec<Vec<F>>,
+    claim_points_transpose: Vec<Vec<E>>,
 
     /// A vector of `self.get_num_claims()` elements. For each claim i,
     /// `result_vector[i]` stores the expected result of the i-th claim.
-    result_vector: Vec<F>,
+    result_vector: Vec<E>,
+
+    _phantom_data: PhantomData<F>,
 }
 
-impl<F: Field> ClaimGroup<F> {
+impl<F: Field, E: ExtensionField<F>> ClaimGroup<F, E> {
     /// Generates a [ClaimGroup] from a collection of [Claim]s.
     /// All claims agree on the [Claim::to_layer_id] field and returns
     /// [ClaimError::LayerIdMismatch] otherwise.  Returns
     /// [ClaimError::NumVarsMismatch] if the collection of claims do not all
     /// agree on the number of variables.
-    pub fn new(claims: Vec<Claim<F>>) -> Result<Self> {
+    pub fn new(claims: Vec<Claim<E>>) -> Result<Self> {
         let num_claims = claims.len();
         if num_claims == 0 {
             return Ok(Self {
@@ -60,6 +64,7 @@ impl<F: Field> ClaimGroup<F> {
                 claim_points_matrix: vec![],
                 claim_points_transpose: vec![],
                 result_vector: vec![],
+                _phantom_data: Default::default(),
             });
         }
         // Check all claims match on the `to_layer_id` field.
@@ -77,7 +82,7 @@ impl<F: Field> ClaimGroup<F> {
     /// Generates a new [ClaimGroup] from a collection of [RawClaim]s.
     /// Returns [ClaimError::NumVarsMismatch] if the collection of claims
     /// do not all agree on the number of variables.
-    pub fn new_from_raw_claims(claims: Vec<RawClaim<F>>) -> Result<Self> {
+    pub fn new_from_raw_claims(claims: Vec<RawClaim<E>>) -> Result<Self> {
         let num_claims = claims.len();
 
         if num_claims == 0 {
@@ -86,6 +91,7 @@ impl<F: Field> ClaimGroup<F> {
                 claim_points_matrix: vec![],
                 claim_points_transpose: vec![],
                 result_vector: vec![],
+                _phantom_data: Default::default(),
             });
         }
 
@@ -99,22 +105,23 @@ impl<F: Field> ClaimGroup<F> {
         // Populate the points_matrix
         let points_matrix: Vec<_> = claims
             .iter()
-            .map(|claim| -> Vec<F> { claim.get_point().to_vec() })
+            .map(|claim| -> Vec<E> { claim.get_point().to_vec() })
             .collect();
 
         // Compute the claim points transpose.
-        let claim_points_transpose: Vec<Vec<F>> = (0..num_vars)
+        let claim_points_transpose: Vec<Vec<E>> = (0..num_vars)
             .map(|j| (0..num_claims).map(|i| claims[i].get_point()[j]).collect())
             .collect();
 
         // Compute the result vector.
-        let result_vector: Vec<F> = (0..num_claims).map(|i| claims[i].get_eval()).collect();
+        let result_vector: Vec<E> = (0..num_claims).map(|i| claims[i].get_eval()).collect();
 
         Ok(Self {
             claims,
             claim_points_matrix: points_matrix,
             claim_points_transpose,
             result_vector,
+            _phantom_data: Default::default(),
         })
     }
 
@@ -140,36 +147,36 @@ impl<F: Field> ClaimGroup<F> {
     /// claim points as its rows.
     /// # Panics
     /// When i is not in the range: 0 <= i < `self.get_num_vars()`.
-    pub fn get_points_column(&self, i: usize) -> &Vec<F> {
+    pub fn get_points_column(&self, i: usize) -> &Vec<E> {
         &self.claim_points_transpose[i]
     }
 
     /// Returns a reference to an "m x n" matrix where n = `self.get_num_vars()`
     /// and m = `self.get_num_claims()` with the claim points as its rows.
-    pub fn get_claim_points_matrix(&self) -> &Vec<Vec<F>> {
+    pub fn get_claim_points_matrix(&self) -> &Vec<Vec<E>> {
         &self.claim_points_matrix
     }
 
     /// Returns a reference to a vector with m = `self.get_num_claims()`
     /// elements containing the results of all claims.
-    pub fn get_results(&self) -> &Vec<F> {
+    pub fn get_results(&self) -> &Vec<E> {
         &self.result_vector
     }
 
     /// Returns a reference to the i-th claim.
-    pub fn get_raw_claim(&self, i: usize) -> &RawClaim<F> {
+    pub fn get_raw_claim(&self, i: usize) -> &RawClaim<E> {
         &self.claims[i]
     }
 
     /// Returns a reference to a vector of claims contained in this group.
-    pub fn get_raw_claims(&self) -> &[RawClaim<F>] {
+    pub fn get_raw_claims(&self) -> &[RawClaim<E>] {
         &self.claims
     }
 
     /// Returns `claims` sorted by `from_layer_id` to prepare them for grouping.
     /// Also performs claim de-duplication by eliminating copies of claims
     /// on the same point.
-    fn preprocess_claims(mut claims: Vec<Claim<F>>) -> Vec<Claim<F>> {
+    fn preprocess_claims(mut claims: Vec<Claim<E>>) -> Vec<Claim<E>> {
         // Sort claims on the `from_layer_id` field.
         claims.sort_by(|claim1, claim2| {
             claim1
@@ -188,7 +195,7 @@ impl<F: Field> ClaimGroup<F> {
     }
 
     /// Partition `claims` into groups to be aggregated together.
-    pub fn form_claim_groups(claims: Vec<Claim<F>>) -> Vec<Self> {
+    pub fn form_claim_groups(claims: Vec<Claim<E>>) -> Vec<Self> {
         // Sort claims by `from_layer_id` and remove duplicates.
         let claims = Self::preprocess_claims(claims);
 
@@ -228,7 +235,7 @@ impl<F: Field> ClaimGroup<F> {
     /// operating on the points and not on the results. However, the ClaimGroup API
     /// is convenient for accessing columns and makes the implementation more
     /// readable. We should consider alternative designs.
-    fn compute_aggregated_challenges<E: ExtensionField<F>>(&self, r_star: E) -> Result<Vec<E>> {
+    fn compute_aggregated_challenges(&self, r_star: E) -> Result<Vec<E>> {
         if self.is_empty() {
             return Err(anyhow!(ClaimError::ClaimAggroError));
         }
@@ -266,7 +273,7 @@ impl<F: Field> ClaimGroup<F> {
     /// # Returns
     ///
     /// If successful, returns a single aggregated claim.
-    pub fn prover_aggregate<E: ExtensionField<F>>(
+    pub fn prover_aggregate(
         &self,
         layer_mles: &[DenseMle<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
@@ -330,7 +337,7 @@ impl<F: Field> ClaimGroup<F> {
     pub fn verifier_aggregate(
         &self,
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<RawClaim<F>> {
+    ) -> Result<RawClaim<E>> {
         let num_claims = self.get_num_claims();
         debug_assert!(num_claims > 0);
         info!("Low-level claim aggregation on {num_claims} claims.");
