@@ -134,8 +134,6 @@ mod test {
         let rot_wirings = generate_rot_wirings(8, -1);
         let mut expected_wires = vec![(255, 0)];
         (1..256).for_each(|i| expected_wires.push((i - 1 as u32, i as u32)));
-        println!("{rot_wirings:?}");
-        println!("{expected_wires:?}");
         assert_eq!(rot_wirings, expected_wires);
     }
 }
