@@ -23,8 +23,7 @@ use crate::{
     sumcheck::InterpError,
 };
 use remainder_shared_types::{
-    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
-    Field,
+    field::ExtensionField, transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript}, Field
 };
 
 use anyhow::Result;
@@ -101,13 +100,13 @@ pub enum VerificationError {
 ///
 /// Each `Layer` is a sub-protocol that takes in some `Claim` and creates a proof
 /// that the `Claim` is correct
-pub trait Layer<F: Field> {
+pub trait Layer<F: Field, E: ExtensionField<F>> {
     /// Gets this layer's ID.
     fn layer_id(&self) -> LayerId;
 
     /// Initialize this layer and perform any necessary pre-computation: beta
     /// table, number of rounds, etc.
-    fn initialize(&mut self, claim_point: &[F]) -> Result<()>;
+    fn initialize(&mut self, claim_point: &[E]) -> Result<()>;
 
     /// Tries to prove `claims` for this layer. There is only a single
     /// aggregated claim if our
@@ -123,7 +122,7 @@ pub trait Layer<F: Field> {
     /// transcript.
     fn prove(
         &mut self,
-        claims: &[&RawClaim<F>],
+        claims: &[&RawClaim<E>],
         transcript: &mut impl ProverTranscript<F>,
     ) -> Result<()>;
 
@@ -133,12 +132,12 @@ pub trait Layer<F: Field> {
     fn compute_round_sumcheck_message(
         &mut self,
         round_index: usize,
-        random_coefficients: &[F],
+        random_coefficients: &[E],
     ) -> Result<Vec<F>>;
 
     /// Mutate the underlying bookkeeping tables to "bind" the given `challenge` to the bit.
     /// labeled with that `round_index`.
-    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<()>;
+    fn bind_round_variable(&mut self, round_index: usize, challenge: E) -> Result<()>;
 
     /// The list of sumcheck rounds this layer will prove, by index.
     fn sumcheck_round_indices(&self) -> Vec<usize>;
@@ -151,19 +150,19 @@ pub trait Layer<F: Field> {
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     fn get_post_sumcheck_layer(
         &self,
-        round_challenges: &[F],
-        claim_challenges: &[&[F]],
-        random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, F>;
+        round_challenges: &[E],
+        claim_challenges: &[&[E]],
+        random_coefficients: &[E],
+    ) -> PostSumcheckLayer<F, E>;
 
     /// Generates and returns all claims that this layer makes onto previous
     /// layers.
-    fn get_claims(&self) -> Result<Vec<Claim<F>>>;
+    fn get_claims(&self) -> Result<Vec<Claim<E>>>;
 
     /// Transforms the underlying expression in the layer to the expression that
     /// must be sumchecked over to verify claims combined using the RLC claim
     /// aggregation method presented in Libra (2019).
-    fn initialize_rlc(&mut self, random_coefficients: &[F], claims: &[&RawClaim<F>]);
+    fn initialize_rlc(&mut self, random_coefficients: &[E], claims: &[&RawClaim<E>]);
 }
 
 /// A circuit-description counterpart of the GKR [Layer] trait.

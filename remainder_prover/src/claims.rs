@@ -9,7 +9,7 @@ pub mod tests;
 
 pub mod claim_aggregation;
 
-use std::{collections::HashMap, fmt, marker::PhantomData};
+use std::{collections::HashMap, fmt};
 
 use remainder_shared_types::{field::ExtensionField, Field};
 use thiserror::Error;

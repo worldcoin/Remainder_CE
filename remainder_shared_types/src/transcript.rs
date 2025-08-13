@@ -149,19 +149,49 @@ pub trait ProverTranscript<F: Field> {
     fn append(&mut self, label: &str, elem: F);
     fn append_elements(&mut self, label: &str, elements: &[F]);
     fn append_input_elements(&mut self, label: &str, elements: &[F]);
-    fn get_challenge(&mut self, label: &str) -> F;
-    fn get_challenges(&mut self, label: &str, num_elements: usize) -> Vec<F>;
-    fn get_extension_field_challenge<E: ExtensionField<F>>(&mut self, label: &str) -> E;
-    fn get_extension_field_challenges<E: ExtensionField<F>>(
+    fn append_extension_field_element<E: ExtensionField<F>>(
         &mut self,
         label: &str,
-        num_elements: usize,
-    ) -> Vec<E>;
+        element: E,
+    ) {
+        // First, convert to base field coefficients
+        let base_field_coeffs = element.to_basis_elem_coeffs();
+        // Then, absorb as usual
+        self.append_elements(label, &base_field_coeffs);
+    }
     fn append_extension_field_elements<E: ExtensionField<F>>(
         &mut self,
         label: &str,
         elements: &[E],
-    );
+    ) {
+        // First, convert to base field coefficients
+        let base_field_coeffs = elements
+            .iter()
+            .flat_map(|extension_field_elem| extension_field_elem.to_basis_elem_coeffs())
+            .collect_vec();
+        // Then, absorb as usual
+        self.append_elements(label, &base_field_coeffs);
+    }
+
+    fn get_challenge(&mut self, label: &str) -> F;
+    fn get_challenges(&mut self, label: &str, num_elements: usize) -> Vec<F>;
+    fn get_extension_field_challenge<E: ExtensionField<F>>(&mut self, label: &str) -> E {
+        let base_field_coeffs = self.get_challenges(label, E::N_COEFF);
+        E::from_basis_elem_coeffs(&base_field_coeffs)
+    }
+
+    fn get_extension_field_challenges<E: ExtensionField<F>>(
+        &mut self,
+        label: &str,
+        num_elements: usize,
+    ) -> Vec<E> {
+        (0..num_elements)
+            .map(|_| {
+                let base_field_coeffs = self.get_challenges(label, E::N_COEFF);
+                E::from_basis_elem_coeffs(&base_field_coeffs)
+            })
+            .collect()
+    }
 }
 
 /// The prover-side interface for interacting with a transcript sponge. A
@@ -241,55 +271,6 @@ impl<F: Field, Tr: TranscriptSponge<F>> ProverTranscript<F> for TranscriptWriter
             self.sponge.absorb_elements(&elements_hash_chain_digest);
         }
     }
-
-    fn get_extension_field_challenge<E: ExtensionField<F>>(&mut self, label: &str) -> E {
-        self.transcript.squeeze_elements(label, E::N_COEFF);
-        let extension_elem_coeffs = self.sponge.squeeze_elements(E::N_COEFF);
-        E::from_basis_elem_coeffs(&extension_elem_coeffs)
-    }
-
-    fn append_extension_field_elements<E: ExtensionField<F>>(
-        &mut self,
-        label: &str,
-        elements: &[E],
-    ) {
-        // First, convert to base field coefficients
-        let base_field_coeffs = elements
-            .iter()
-            .flat_map(|extension_field_elem| extension_field_elem.to_basis_elem_coeffs())
-            .collect_vec();
-        // Then, absorb as usual
-        self.sponge.absorb_elements(&base_field_coeffs);
-        self.transcript.append_elements(label, &base_field_coeffs);
-    }
-
-    fn get_extension_field_challenges<E: ExtensionField<F>>(
-        &mut self,
-        label: &str,
-        num_elements: usize,
-    ) -> Vec<E> {
-        // TODO: Should we log this within the `self.transcript`?
-        if num_elements == 0 {
-            vec![]
-        } else {
-            (0..num_elements)
-                .map(|ext_field_elem_number| {
-                    // For each extension field element we wish to sample,
-                    // simply squeeze the corresponding number of base field
-                    // coefficients from the transcript.
-                    let base_field_coeffs = self.sponge.squeeze_elements(E::N_COEFF);
-                    self.transcript.squeeze_elements(
-                        &format!(
-                            "{}: extension field element number {}",
-                            label, ext_field_elem_number
-                        ),
-                        E::N_COEFF,
-                    );
-                    E::from_basis_elem_coeffs(&base_field_coeffs)
-                })
-                .collect()
-        }
-    }
 }
 
 impl<F: Field, Tr: TranscriptSponge<F>> TranscriptWriter<F, Tr> {
@@ -312,7 +293,7 @@ impl<F: Field, Tr: TranscriptSponge<F>> TranscriptWriter<F, Tr> {
     }
 }
 
-pub trait VerifierTranscript<F> {
+pub trait VerifierTranscript<F: Field> {
     /// Circuit input elements are treated differently in order to mitigate
     /// the Rothblum et. al. attack in <https://eprint.iacr.org/2025/118>.
     ///
@@ -325,12 +306,47 @@ pub trait VerifierTranscript<F> {
     ) -> Result<(Vec<F>, Vec<F>)>;
 
     fn consume_element(&mut self, label: &'static str) -> Result<F>;
-
     fn consume_elements(&mut self, label: &'static str, num_elements: usize) -> Result<Vec<F>>;
+    fn consume_extension_field_element<E: ExtensionField<F>>(
+        &mut self,
+        label: &'static str,
+    ) -> Result<E> {
+        let extension_elem_coeffs = self.consume_elements(label, E::N_COEFF)?;
+        Ok(E::from_basis_elem_coeffs(&extension_elem_coeffs))
+    }
+    fn consume_extension_field_elements<E: ExtensionField<F>>(
+        &mut self,
+        label: &'static str,
+        num_elements: usize,
+    ) -> Result<Vec<E>> {
+        (0..num_elements)
+            .map(|_| {
+                let extension_elem_coeffs = self.consume_elements(label, E::N_COEFF)?;
+                Ok(E::from_basis_elem_coeffs(&extension_elem_coeffs))
+            })
+            .collect()
+    }
 
     fn get_challenge(&mut self, label: &'static str) -> Result<F>;
-
     fn get_challenges(&mut self, label: &'static str, num_elements: usize) -> Result<Vec<F>>;
+
+    fn get_extension_field_challenge<E: ExtensionField<F>>(&mut self, label: &'static str) -> Result<E> {
+        let extension_elem_coeffs = self.get_challenges(label, E::N_COEFF)?;
+        Ok(E::from_basis_elem_coeffs(&extension_elem_coeffs))
+    }
+
+    fn get_extension_field_challenges<E: ExtensionField<F>>(
+        &mut self, 
+        label: &'static str, 
+        num_elements: usize,
+    ) -> Result<Vec<E>> {
+        (0..num_elements)
+            .map(|_| {
+                let extension_elem_coeffs = self.get_challenges(label, E::N_COEFF)?;
+                Ok(E::from_basis_elem_coeffs(&extension_elem_coeffs))
+            })
+            .collect()
+    }
 }
 
 /// Errors that a `TranscriptReader` may produce.

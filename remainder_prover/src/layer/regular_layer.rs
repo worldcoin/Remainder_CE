@@ -7,9 +7,7 @@ use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 use remainder_shared_types::{
-    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy},
-    transcript::{ProverTranscript, VerifierTranscript},
-    Field,
+    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy}, field::ExtensionField, transcript::{ProverTranscript, VerifierTranscript}, Field
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -45,7 +43,7 @@ use anyhow::{anyhow, Ok, Result};
 /// Proofs are generated with the Sumcheck protocol.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: Field")]
-pub struct RegularLayer<F: Field> {
+pub struct RegularLayer<F: Field, E: ExtensionField<F>> {
     /// This layer's ID.
     id: LayerId,
 
@@ -62,10 +60,10 @@ pub struct RegularLayer<F: Field> {
 
     /// Stores the beta values associated with the `expression`.
     /// Initially set to `None`. Computed during initialization.
-    beta_vals_vec: Option<Vec<BetaValues<F>>>,
+    beta_vals_vec: Option<Vec<BetaValues<E>>>,
 }
 
-impl<F: Field> RegularLayer<F> {
+impl<F: Field, E: ExtensionField<F>> RegularLayer<F, E> {
     /// Creates a new `RegularLayer` from an `Expression` and a `LayerId`
     ///
     /// The `Expression` is the relationship this `Layer` proves

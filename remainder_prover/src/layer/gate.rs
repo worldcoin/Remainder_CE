@@ -5,7 +5,7 @@
 pub mod gate_helpers;
 mod new_interface_tests;
 
-use std::{cmp::max, collections::HashSet};
+use std::{cmp::max, collections::HashSet, marker::PhantomData};
 
 use gate_helpers::{
     compute_fully_bound_binary_gate_function, fold_binary_gate_wiring_into_mles_phase_1,
@@ -13,9 +13,7 @@ use gate_helpers::{
 };
 use itertools::Itertools;
 use remainder_shared_types::{
-    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy},
-    transcript::{ProverTranscript, VerifierTranscript},
-    Field,
+    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy}, field::ExtensionField, transcript::{ProverTranscript, VerifierTranscript}, Field
 };
 use serde::{Deserialize, Serialize};
 
@@ -27,8 +25,7 @@ use crate::{
     },
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
-        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
-        mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
+        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, mle_enum::LiftTo, verifier_mle::VerifierMle, Mle, MleIndex
     },
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
@@ -74,7 +71,7 @@ impl BinaryOperation {
 /// gates.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: Field")]
-pub struct GateLayer<F: Field> {
+pub struct GateLayer<F: Field, E: ExtensionField<F>> {
     /// The layer id associated with this gate layer.
     pub layer_id: LayerId,
     /// The number of bits representing the number of "dataparallel" copies of the circuit.
@@ -84,25 +81,27 @@ pub struct GateLayer<F: Field> {
     /// on gates with labels x and y.
     pub nonzero_gates: Vec<(u32, u32, u32)>,
     /// The left side of the expression, i.e. the mle that makes up the "x" variables.
-    pub lhs: DenseMle<F>,
+    pub lhs: DenseMle<E>,
     /// The right side of the expression, i.e. the mle that makes up the "y" variables.
-    pub rhs: DenseMle<F>,
+    pub rhs: DenseMle<E>,
     /// The mles that are constructed when initializing phase 1 (binding the x variables).
-    pub phase_1_mles: Option<Vec<Vec<DenseMle<F>>>>,
+    pub phase_1_mles: Option<Vec<Vec<DenseMle<E>>>>,
     /// The mles that are constructed when initializing phase 2 (binding the y variables).
-    pub phase_2_mles: Option<Vec<Vec<DenseMle<F>>>>,
+    pub phase_2_mles: Option<Vec<Vec<DenseMle<E>>>>,
     /// The gate operation representing the fan-in-two relationship.
     pub gate_operation: BinaryOperation,
     /// the beta table which enumerates the incoming claim's challenge points on the
     /// dataparallel vars of the MLE
-    beta_g2_vec: Option<Vec<BetaValues<F>>>,
+    beta_g2_vec: Option<Vec<BetaValues<E>>>,
     /// The incoming claim's challenge points.
-    g_vec: Option<Vec<Vec<F>>>,
+    g_vec: Option<Vec<Vec<E>>>,
     /// the number of rounds in phase 1
     num_rounds_phase1: usize,
+
+    _phantom: PhantomData<F>,
 }
 
-impl<F: Field> Layer<F> for GateLayer<F> {
+impl<F: Field, E: ExtensionField<F>> Layer<F, E> for GateLayer<F, E> {
     /// Gets this layer's id.
     fn layer_id(&self) -> LayerId {
         self.layer_id
@@ -110,7 +109,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
     fn prove(
         &mut self,
-        claims: &[&RawClaim<F>],
+        claims: &[&RawClaim<E>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<()> {
         let original_lhs_num_free_vars = self.lhs.num_free_vars();
@@ -119,11 +118,11 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             ClaimAggregationStrategy::Interpolative => {
                 assert_eq!(claims.len(), 1);
                 self.initialize(claims[0].get_point())?;
-                vec![F::ONE]
+                vec![E::ONE]
             }
             ClaimAggregationStrategy::RLC => {
                 let random_coefficients =
-                    transcript_writer.get_challenges("RLC Claim Agg Coefficients", claims.len());
+                    transcript_writer.get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len());
                 self.initialize_rlc(&random_coefficients, claims);
                 random_coefficients
             }
@@ -135,7 +134,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 .unwrap();
             transcript_writer
                 .append_elements("Sumcheck round univariate evaluations", &sumcheck_message);
-            let challenge = transcript_writer.get_challenge("Sumcheck round challenge");
+            let challenge = transcript_writer.get_extension_field_challenge("Sumcheck round challenge");
             self.bind_round_variable(*round_idx, challenge).unwrap();
         });
 
@@ -201,16 +200,16 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
         // Finally, send the claimed values for each of the bound MLEs to the verifier
         // First, send the claimed value of V_{i + 1}(g_2, u)
-        let lhs_reduced = &self.phase_1_mles.as_ref().unwrap()[0][1];
-        let rhs_reduced = &self.phase_2_mles.as_ref().unwrap()[0][1];
-        transcript_writer.append("Fully bound MLE evaluation", lhs_reduced.value());
+        let lhs_reduced: &DenseMle<E> = &self.phase_1_mles.as_ref().unwrap()[0][1];
+        let rhs_reduced: &DenseMle<E> = &self.phase_2_mles.as_ref().unwrap()[0][1];
+        transcript_writer.append_extension_field_element("Fully bound MLE evaluation", lhs_reduced.value());
         // Next, send the claimed value of V_{i + 1}(g_2, v)
-        transcript_writer.append("Fully bound MLE evaluation", rhs_reduced.value());
+        transcript_writer.append_extension_field_element("Fully bound MLE evaluation", rhs_reduced.value());
 
         Ok(())
     }
 
-    fn initialize(&mut self, claim_point: &[F]) -> Result<()> {
+    fn initialize(&mut self, claim_point: &[E]) -> Result<()> {
         self.beta_g2_vec = Some(vec![BetaValues::new(
             claim_point[..self.num_dataparallel_vars]
                 .iter()
@@ -225,10 +224,10 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         Ok(())
     }
 
-    fn initialize_rlc(&mut self, _random_coefficients: &[F], claims: &[&RawClaim<F>]) {
+    fn initialize_rlc(&mut self, _random_coefficients: &[E], claims: &[&RawClaim<E>]) {
         self.lhs.index_mle_indices(0);
         self.rhs.index_mle_indices(0);
-        let (g_vec, beta_g2_vec): (Vec<Vec<F>>, Vec<BetaValues<F>>) = claims
+        let (g_vec, beta_g2_vec): (Vec<Vec<E>>, Vec<BetaValues<E>>) = claims
             .iter()
             .map(|claim| {
                 (
@@ -250,8 +249,8 @@ impl<F: Field> Layer<F> for GateLayer<F> {
     fn compute_round_sumcheck_message(
         &mut self,
         round_index: usize,
-        random_coefficients: &[F],
-    ) -> Result<Vec<F>> {
+        random_coefficients: &[E],
+    ) -> Result<Vec<E>> {
         let rounds_before_phase_2 = self.num_dataparallel_vars + self.num_rounds_phase1;
 
         if round_index < self.num_dataparallel_vars {
@@ -311,13 +310,13 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                 .iter()
                 .fold(0, |acc, elem| max(acc, elem.len()));
 
-            let init_mles: Vec<Vec<&DenseMle<F>>> = self
+            let init_mles: Vec<Vec<&DenseMle<E>>> = self
                 .phase_1_mles
                 .as_ref()
                 .unwrap()
                 .iter()
                 .map(|mle_vec| {
-                    let mle_reference: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                    let mle_reference = mle_vec.iter().collect();
                     mle_reference
                 })
                 .collect();
@@ -382,13 +381,13 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                     .iter()
                     .fold(0, |acc, elem| max(acc, elem.len()));
 
-                let init_mles: Vec<Vec<&DenseMle<F>>> = self
+                let init_mles: Vec<Vec<&DenseMle<E>>> = self
                     .phase_2_mles
                     .as_ref()
                     .unwrap()
                     .iter()
                     .map(|mle_vec| {
-                        let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                        let mle_references: Vec<&DenseMle<E>> = mle_vec.iter().collect();
                         mle_references
                     })
                     .collect();
@@ -417,7 +416,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         }
     }
 
-    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<()> {
+    fn bind_round_variable(&mut self, round_index: usize, challenge: E) -> Result<()> {
         if round_index < self.num_dataparallel_vars {
             self.beta_g2_vec
                 .as_mut()
@@ -480,10 +479,10 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
     fn get_post_sumcheck_layer(
         &self,
-        round_challenges: &[F],
-        claim_challenges: &[&[F]],
-        random_coefficients: &[F],
-    ) -> super::product::PostSumcheckLayer<F, F> {
+        round_challenges: &[E],
+        claim_challenges: &[&[E]],
+        random_coefficients: &[E],
+    ) -> super::product::PostSumcheckLayer<E, E> {
         assert_eq!(claim_challenges.len(), random_coefficients.len());
         let lhs_mle = &self.phase_1_mles.as_ref().unwrap()[0][1];
         let rhs_mle = &self.phase_2_mles.as_ref().unwrap()[0][1];
@@ -514,7 +513,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
                         &dataparallel_sumcheck_challenges,
                     )
                 } else {
-                    F::ONE
+                    E::ONE
                 };
                 beta_bound * random_coeff
             })
@@ -530,24 +529,24 @@ impl<F: Field> Layer<F> for GateLayer<F> {
 
         match self.gate_operation {
             BinaryOperation::Add => PostSumcheckLayer(vec![
-                Product::<F, F>::new(&[lhs_mle.clone()], f_1_uv),
-                Product::<F, F>::new(&[rhs_mle.clone()], f_1_uv),
+                Product::<E, E>::new(&[lhs_mle.clone()], f_1_uv),
+                Product::<E, E>::new(&[rhs_mle.clone()], f_1_uv),
             ]),
-            BinaryOperation::Mul => PostSumcheckLayer(vec![Product::<F, F>::new(
+            BinaryOperation::Mul => PostSumcheckLayer(vec![Product::<E, E>::new(
                 &[lhs_mle.clone(), rhs_mle.clone()],
                 f_1_uv,
             )]),
         }
     }
 
-    fn get_claims(&self) -> Result<Vec<Claim<F>>> {
+    fn get_claims(&self) -> Result<Vec<Claim<E>>> {
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
         let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
 
         let mut claims = vec![];
 
         // Grab the claim on the left side.
-        let mut fixed_mle_indices_u: Vec<F> = vec![];
+        let mut fixed_mle_indices_u: Vec<E> = vec![];
         for index in lhs_reduced.mle_indices() {
             fixed_mle_indices_u.push(
                 index
@@ -556,7 +555,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             );
         }
         let val = lhs_reduced.value();
-        let claim: Claim<F> = Claim::new(
+        let claim: Claim<E> = Claim::new(
             fixed_mle_indices_u,
             val,
             self.layer_id(),
@@ -565,7 +564,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
         claims.push(claim);
 
         // Grab the claim on the right side.
-        let mut fixed_mle_indices_v: Vec<F> = vec![];
+        let mut fixed_mle_indices_v: Vec<E> = vec![];
         for index in rhs_reduced.mle_indices() {
             fixed_mle_indices_v.push(
                 index
@@ -574,7 +573,7 @@ impl<F: Field> Layer<F> for GateLayer<F> {
             );
         }
         let val = rhs_reduced.value();
-        let claim: Claim<F> = Claim::new(
+        let claim: Claim<E> = Claim::new(
             fixed_mle_indices_v,
             val,
             self.layer_id(),
@@ -1191,7 +1190,7 @@ impl<F: Field> VerifierLayer<F> for VerifierGateLayer<F> {
     }
 }
 
-impl<F: Field> GateLayer<F> {
+impl<F: Field, E: ExtensionField<F>> GateLayer<F, E> {
     /// Construct a new gate layer
     ///
     /// # Arguments
@@ -1222,8 +1221,8 @@ impl<F: Field> GateLayer<F> {
         GateLayer {
             num_dataparallel_vars,
             nonzero_gates,
-            lhs,
-            rhs,
+            lhs: lhs.lift(),
+            rhs: rhs.lift(),
             layer_id,
             phase_1_mles: None,
             phase_2_mles: None,
@@ -1231,13 +1230,15 @@ impl<F: Field> GateLayer<F> {
             beta_g2_vec: None,
             g_vec: None,
             num_rounds_phase1,
+            
+            _phantom: Default::default(),
         }
     }
 
     /// Initialize phase 1, or the necessary mles in order to bind the variables in the `lhs` of the
     /// expression. Once this phase is initialized, the sumcheck rounds binding the "x" variables can
     /// be performed.
-    fn init_phase_1(&mut self, challenges: Vec<F>) {
+    fn init_phase_1(&mut self, challenges: Vec<E>) {
         let beta_g2_fully_bound = self.beta_g2_vec.as_ref().unwrap()[0].fold_updated_values();
 
         let (a_hg_lhs_vec, a_hg_rhs_vec) = fold_binary_gate_wiring_into_mles_phase_1(
@@ -1276,7 +1277,7 @@ impl<F: Field> GateLayer<F> {
         self.phase_1_mles = Some(phase_1_mles);
     }
 
-    fn init_phase_1_rlc(&mut self, challenges: &[&[F]], random_coefficients: &[F]) {
+    fn init_phase_1_rlc(&mut self, challenges: &[&[E]], random_coefficients: &[E]) {
         let random_coefficients_scaled_by_beta_g2 = self
             .beta_g2_vec
             .as_ref()
@@ -1328,7 +1329,7 @@ impl<F: Field> GateLayer<F> {
     /// Initialize phase 2, or the necessary mles in order to bind the variables in the `rhs` of the
     /// expression. Once this phase is initialized, the sumcheck rounds binding the "y" variables can
     /// be performed.
-    fn init_phase_2(&mut self, u_claim: &[F], f_at_u: F, g1_claim_points: &[F]) {
+    fn init_phase_2(&mut self, u_claim: &[E], f_at_u: E, g1_claim_points: &[E]) {
         let beta_g2_fully_bound = self.beta_g2_vec.as_ref().unwrap()[0].fold_updated_values();
 
         let (a_f1_lhs, a_f1_rhs) = fold_binary_gate_wiring_into_mles_phase_2(
@@ -1368,10 +1369,10 @@ impl<F: Field> GateLayer<F> {
 
     fn init_phase_2_rlc(
         &mut self,
-        u_claim: &[F],
-        f_at_u: F,
-        g1_claim_points: &[&[F]],
-        random_coefficients: &[F],
+        u_claim: &[E],
+        f_at_u: E,
+        g1_claim_points: &[&[E]],
+        random_coefficients: &[E],
     ) {
         let random_coefficients_scaled_by_beta_g2 = self
             .beta_g2_vec

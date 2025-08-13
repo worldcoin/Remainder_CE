@@ -1,12 +1,11 @@
 //! This module contains the implementation of the matrix multiplication layer
 
-use std::collections::HashSet;
+use std::{collections::HashSet, marker::PhantomData};
 
 use ::serde::{Deserialize, Serialize};
 use itertools::Itertools;
 use remainder_shared_types::{
-    transcript::{ProverTranscript, VerifierTranscript},
-    Field,
+    field::ExtensionField, transcript::{ProverTranscript, VerifierTranscript}, Field
 };
 
 use super::{
@@ -20,8 +19,7 @@ use crate::{
     layer::VerificationError,
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
-        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription,
-        verifier_mle::VerifierMle, Mle, MleIndex,
+        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, mle_enum::LiftTo, verifier_mle::VerifierMle, Mle, MleIndex
     },
     sumcheck::evaluate_at_a_point,
 };
@@ -69,6 +67,17 @@ impl<F: Field> Matrix<F> {
     }
 }
 
+/// Lift from [Matrix<F>>] to [Matrix<E>] in the trivial way.
+impl<F: Field, E: ExtensionField<F>> LiftTo<Matrix<E>> for Matrix<F> {
+    fn lift(&self) -> Matrix<E> {
+        Matrix {
+            mle: self.mle.lift(),
+            rows_num_vars: self.rows_num_vars,
+            cols_num_vars: self.cols_num_vars,
+        }
+    }
+}
+
 /// Used to represent a matrix multiplication layer.
 ///
 /// #Attributes:
@@ -77,16 +86,18 @@ impl<F: Field> Matrix<F> {
 /// * `matrix_b` - the righthand side matrix in the multiplication.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: Field")]
-pub struct MatMult<F: Field> {
+pub struct MatMult<F: Field, E: ExtensionField<F>> {
     layer_id: LayerId,
-    matrix_a: Matrix<F>,
-    matrix_b: Matrix<F>,
+    matrix_a: Matrix<E>,
+    matrix_b: Matrix<E>,
     num_vars_middle_ab: usize,
+
+    _phantom: PhantomData<F>,
 }
 
-impl<F: Field> MatMult<F> {
+impl<F: Field, E: ExtensionField<F>> MatMult<F, E> {
     /// Create a new matrix multiplication layer.
-    pub fn new(layer_id: LayerId, matrix_a: Matrix<F>, matrix_b: Matrix<F>) -> MatMult<F> {
+    pub fn new(layer_id: LayerId, matrix_a: Matrix<F>, matrix_b: Matrix<F>) -> MatMult<F, E> {
         // Check to make sure the inner dimensions of the matrices we are
         // producting match. I.e., the number of variables representing the
         // columns of matrix a are the same as the number of variables
@@ -95,9 +106,11 @@ impl<F: Field> MatMult<F> {
         let num_vars_middle_ab = matrix_a.cols_num_vars;
         MatMult {
             layer_id,
-            matrix_a,
-            matrix_b,
+            matrix_a: matrix_a.lift(),
+            matrix_b: matrix_b.lift(),
             num_vars_middle_ab,
+
+            _phantom: Default::default(),
         }
     }
 
@@ -115,7 +128,7 @@ impl<F: Field> MatMult<F> {
     ///   MLE representing the output of this layer.
     /// * `claim_b`: the last log_num_cols variables of the claim made on the
     ///   MLE representing the output of this layer.
-    fn pre_processing_step(&mut self, claim_a: Vec<F>, claim_b: Vec<F>) {
+    fn pre_processing_step(&mut self, claim_a: Vec<E>, claim_b: Vec<E>) {
         let matrix_a_mle = &mut self.matrix_a.mle;
         let matrix_b_mle = &mut self.matrix_b.mle;
 
@@ -162,14 +175,14 @@ impl<F: Field> MatMult<F> {
     }
 
     fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
-        transcript_writer.append_elements(
+        transcript_writer.append_extension_field_elements(
             "Fully bound MLE evaluation",
             &[self.matrix_a.mle.value(), self.matrix_b.mle.value()],
         );
     }
 }
 
-impl<F: Field> Layer<F> for MatMult<F> {
+impl<F: Field, E: ExtensionField<F>> Layer<F, E> for MatMult<F, E> {
     // Since we pre-process the matrices first, by pre-binding the
     // row variables of matrix A and the column variables of matrix B,
     // the number of rounds of sumcheck is simply the number of variables
@@ -177,7 +190,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
     // matrices in this matrix product.
     fn prove(
         &mut self,
-        claims: &[&RawClaim<F>],
+        claims: &[&RawClaim<E>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<()> {
         println!(
@@ -199,13 +212,13 @@ impl<F: Field> Layer<F> for MatMult<F> {
 
         for round in 0..num_vars_middle {
             // Compute the round's sumcheck message.
-            let message = self.compute_round_sumcheck_message(round, &[F::ONE])?;
+            let message = self.compute_round_sumcheck_message(round, &[E::ONE])?;
             // Add to transcript.
             // Since the verifier can deduce g_i(0) by computing claim - g_i(1), the prover does not send g_i(0)
             transcript_writer
                 .append_elements("Sumcheck round univariate evaluations", &message[1..]);
             // Sample the challenge to bind the round's MatMult expression to.
-            let challenge = transcript_writer.get_challenge("Sumcheck round challenge");
+            let challenge = transcript_writer.get_extension_field_challenge("Sumcheck round challenge");
             // Bind the Matrix MLEs to this variable.
             self.bind_round_variable(round, challenge)?;
         }
@@ -222,7 +235,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
         self.layer_id
     }
 
-    fn initialize(&mut self, claim_point: &[F]) -> Result<()> {
+    fn initialize(&mut self, claim_point: &[E]) -> Result<()> {
         // Split the claim on the MLE representing the output of this layer
         // accordingly.
         // We need to make sure the number of variables in the claim is the
@@ -237,7 +250,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
         Ok(())
     }
 
-    fn initialize_rlc(&mut self, _random_coefficients: &[F], _claims: &[&RawClaim<F>]) {
+    fn initialize_rlc(&mut self, _random_coefficients: &[E], _claims: &[&RawClaim<E>]) {
         // This function is not implemented for MatMult layers because we should
         // never be using RLC claim aggregation for MatMult layers. Instead, we always
         // use interpolative claim aggregation.
@@ -247,15 +260,15 @@ impl<F: Field> Layer<F> for MatMult<F> {
     fn compute_round_sumcheck_message(
         &mut self,
         round_index: usize,
-        _random_coefficients: &[F],
-    ) -> Result<Vec<F>> {
+        _random_coefficients: &[E],
+    ) -> Result<Vec<E>> {
         let mles = vec![&self.matrix_a.mle, &self.matrix_b.mle];
         let sumcheck_message =
             compute_sumcheck_message_no_beta_table(&mles, round_index, 2).unwrap();
         Ok(sumcheck_message)
     }
 
-    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<()> {
+    fn bind_round_variable(&mut self, round_index: usize, challenge: E) -> Result<()> {
         self.matrix_a.mle.fix_variable(round_index, challenge);
         self.matrix_b.mle.fix_variable(round_index, challenge);
 
@@ -274,15 +287,15 @@ impl<F: Field> Layer<F> for MatMult<F> {
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     fn get_post_sumcheck_layer(
         &self,
-        _round_challenges: &[F],
-        _claim_challenges: &[&[F]],
-        _random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, F> {
+        _round_challenges: &[E],
+        _claim_challenges: &[&[E]],
+        _random_coefficients: &[E],
+    ) -> PostSumcheckLayer<E, E> {
         let mles = vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()];
-        PostSumcheckLayer(vec![Product::<F, F>::new(&mles, F::ONE)])
+        PostSumcheckLayer(vec![Product::<E, E>::new(&mles, E::ONE)])
     }
     /// Get the claims that this layer makes on other layers
-    fn get_claims(&self) -> Result<Vec<Claim<F>>> {
+    fn get_claims(&self) -> Result<Vec<Claim<E>>> {
         let claims = vec![&self.matrix_a.mle, &self.matrix_b.mle]
             .into_iter()
             .map(|matrix_mle| {
@@ -298,7 +311,7 @@ impl<F: Field> Layer<F> for MatMult<F> {
                     .collect_vec();
 
                 let matrix_val = matrix_mle.value();
-                let claim: Claim<F> = Claim::new(
+                let claim: Claim<E> = Claim::new(
                     matrix_fixed_indices,
                     matrix_val,
                     self.layer_id,
