@@ -6,11 +6,10 @@ use core::fmt::Debug;
 use evals::EvaluationsIterator;
 use serde::{Deserialize, Serialize};
 
-use crate::{claims::RawClaim, layer::LayerId};
-use remainder_shared_types::Field;
+use crate::{claims::RawClaim, layer::LayerId, mle::mle_enum::LiftTo};
+use remainder_shared_types::{field::ExtensionField, Field};
 
 use self::mle_enum::MleEnum;
-use dyn_clonable::*;
 
 /// Contains the default, dense implementation of an [Mle].
 pub mod dense;
@@ -49,8 +48,9 @@ pub mod verifier_mle;
 /// IntoIterator and FromIterator, this is to ensure that the semantic ordering
 /// within T is always consistent.
 #[allow(clippy::len_without_is_empty)]
-#[clonable]
 pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
+    type ExtendedMle<E: ExtensionField<F>>: Mle<E>;
+
     /// Returns the number of free variables this Mle is defined on.
     /// Equivalently, this is the log_2 of the size of the unpruned bookkeeping
     /// table.
@@ -116,6 +116,14 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     /// Returns the `(curr_index + number of IndexedBits now in the MleIndices)`.
     fn index_mle_indices(&mut self, curr_index: usize) -> usize;
 
+    /// Similar to [fix_variable], but binds to a point in extension field.
+    /// Returns the binded mle in extension field, do not modify the original MLE
+    fn fix_variable_ext<E: ExtensionField<F>>(mle: &Self, round_index: usize, challenge: E) -> (Self::ExtendedMle<E>, Option<RawClaim<E>>);
+
+    /// Similar to [fix_variable_at_index], but binds to a point in extension field.
+    /// Returns the binded mle in extension field, do not modify the original MLE
+    fn fix_variable_at_index_ext<E: ExtensionField<F>>(mle: &Self, indexed_bit_index: usize, point: E) -> (Self::ExtendedMle<E>, Option<RawClaim<E>>);
+
     /// Get the associated enum that this MLE is a part of ([MleEnum::Dense] or [MleEnum::Zero]).
     fn get_enum(self) -> MleEnum<F>;
 }
@@ -169,6 +177,25 @@ impl<F: Field> MleIndex<F> {
             MleIndex::Bound(chal, _) => Some(*chal),
             _ => None,
         }
+    }
+}
+
+/// Simple lift from [MleIndex<F>] to [MleIndex<E>].
+impl<F: Field, E: ExtensionField<F>> LiftTo<MleIndex<E>> for MleIndex<F> {
+    fn lift(&self) -> MleIndex<E> {
+        match self {
+            MleIndex::Fixed(val) => MleIndex::Fixed(*val),
+            MleIndex::Free => MleIndex::Free,
+            MleIndex::Indexed(var_idx) => MleIndex::Indexed(*var_idx),
+            MleIndex::Bound(base_chal, var_idx) => MleIndex::Bound((*base_chal).into(), *var_idx),
+        }
+    }
+}
+
+/// Simple lift from [Vec<MleIndex<F>>] to [Vec<MleIndex<E>>].
+impl<F: Field, E: ExtensionField<F>> LiftTo<Vec<MleIndex<E>>> for Vec<MleIndex<F>> {
+    fn lift(&self) -> Vec<MleIndex<E>> {
+        self.iter().map(|i| i.lift()).collect::<Vec<_>>()
     }
 }
 

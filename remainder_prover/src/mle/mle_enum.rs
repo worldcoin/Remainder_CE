@@ -5,7 +5,7 @@ use crate::{
     layer::LayerId,
     mle::{
         dense::{fix_variable_to_new_dense_mle, fix_variable_var_conversion},
-        evals::{bit_packed_vector::BitPackedIterator, Evaluations, MultilinearExtension},
+        evals::{Evaluations, MultilinearExtension},
         Mle,
     },
 };
@@ -24,6 +24,8 @@ pub enum MleEnum<F: Field> {
 }
 
 impl<F: Field> Mle<F> for MleEnum<F> {
+    type ExtendedMle<E: ExtensionField<F>> = MleEnum<E>;
+
     fn len(&self) -> usize {
         match self {
             MleEnum::Dense(item) => item.len(),
@@ -92,6 +94,40 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         match self {
             MleEnum::Dense(item) => item.fix_variable_at_index(indexed_bit_index, point),
             MleEnum::Zero(item) => item.fix_variable_at_index(indexed_bit_index, point),
+        }
+    }
+
+    fn fix_variable_ext<E: ExtensionField<F>>(
+        mle: &Self,
+        round_index: usize,
+        challenge: E,
+    ) -> (MleEnum<E>, Option<crate::claims::RawClaim<E>>) {
+        match mle {
+            MleEnum::Dense(item) => {
+                let (mle, claim) = DenseMle::fix_variable_ext(item, round_index, challenge);
+                (MleEnum::Dense(mle), claim)
+            }
+            MleEnum::Zero(item) => {
+                let (mle, claim) = ZeroMle::fix_variable_ext(item, round_index, challenge);
+                (MleEnum::Zero(mle), claim)
+            }
+        }
+    }
+
+    fn fix_variable_at_index_ext<E: ExtensionField<F>>(
+        mle: &Self,
+        indexed_bit_index: usize,
+        point: E,
+    ) -> (MleEnum<E>, Option<crate::claims::RawClaim<E>>) {
+        match mle {
+            MleEnum::Dense(item) => {
+                let (mle, claim) = DenseMle::fix_variable_at_index_ext(item, indexed_bit_index, point);
+                (MleEnum::Dense(mle), claim)
+            }
+            MleEnum::Zero(item) => {
+                let (mle, claim) = ZeroMle::fix_variable_at_index_ext(item, indexed_bit_index, point);
+                (MleEnum::Zero(mle), claim)
+            }
         }
     }
 
@@ -172,15 +208,6 @@ pub fn fix_variable_to_new_mle_enum<F: Field, E: ExtensionField<F>>(
         MleEnum::Zero(zero_mle) => {
             MleEnum::Zero(fix_variable_to_new_zero_mle(zero_mle, index, challenge))
         }
-    }
-}
-
-pub fn convert_base_mle_enum_to_ext<F: Field, E: ExtensionField<F>>(
-    base_mle_enum: &MleEnum<F>,
-) -> MleEnum<E> {
-    match base_mle_enum {
-        MleEnum::Dense(dense_mle) => todo!(),
-        MleEnum::Zero(zero_mle) => todo!(),
     }
 }
 

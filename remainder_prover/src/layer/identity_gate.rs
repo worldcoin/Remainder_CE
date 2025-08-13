@@ -4,7 +4,7 @@
 use std::{
     cmp::Ordering,
     collections::HashSet,
-    fmt::{Debug, Formatter},
+    fmt::{Debug, Formatter}, marker::PhantomData,
 };
 
 use crate::{
@@ -15,16 +15,13 @@ use crate::{
     },
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
-        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
-        mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
+        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, mle_enum::LiftTo, verifier_mle::VerifierMle, Mle, MleIndex
     },
     sumcheck::*,
 };
 use itertools::Itertools;
 use remainder_shared_types::{
-    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy},
-    transcript::{ProverTranscript, VerifierTranscript},
-    Field,
+    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy}, field::ExtensionField, transcript::{ProverTranscript, VerifierTranscript}, Field
 };
 use serde::{Deserialize, Serialize};
 
@@ -472,21 +469,21 @@ impl<F: Field> VerifierLayer<F> for VerifierIdentityGateLayer<F> {
 
 /// The layer trait implementation for [IdentityGate], which has the proving
 /// functionality as well as the modular functions for each round of sumcheck.
-impl<F: Field> Layer<F> for IdentityGate<F> {
+impl<F: Field, E: ExtensionField<F>> Layer<F, E> for IdentityGate<F, E> {
     fn prove(
         &mut self,
-        claims: &[&RawClaim<F>],
+        claims: &[&RawClaim<E>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<()> {
         let random_coefficients = match global_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => {
                 assert_eq!(claims.len(), 1);
                 self.initialize(claims[0].get_point())?;
-                vec![F::ONE]
+                vec![E::ONE]
             }
             ClaimAggregationStrategy::RLC => {
                 let random_coefficients =
-                    transcript_writer.get_challenges("RLC Claim Agg Coefficients", claims.len());
+                    transcript_writer.get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len());
                 self.initialize_rlc(&random_coefficients, claims);
                 random_coefficients
             }
@@ -501,7 +498,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 "Sumcheck round univariate evaluations",
                 &sumcheck_message[1..],
             );
-            let challenge = transcript_writer.get_challenge("Sumcheck round challenge");
+            let challenge = transcript_writer.get_extension_field_challenge("Sumcheck round challenge");
             self.bind_round_variable(*round_idx, challenge).unwrap();
         });
         self.append_leaf_mles_to_transcript(transcript_writer);
@@ -512,7 +509,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         self.layer_id
     }
 
-    fn initialize(&mut self, claim_point: &[F]) -> Result<()> {
+    fn initialize(&mut self, claim_point: &[E]) -> Result<()> {
         self.challenges_vec = Some(vec![claim_point.to_vec()]);
         let g2_challenges = &claim_point[..self.num_dataparallel_vars];
         let g1_challenges = &claim_point[self.num_dataparallel_vars..];
@@ -527,7 +524,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         Ok(())
     }
 
-    fn initialize_rlc(&mut self, random_coefficients: &[F], claims: &[&RawClaim<F>]) {
+    fn initialize_rlc(&mut self, random_coefficients: &[E], claims: &[&RawClaim<E>]) {
         assert_eq!(random_coefficients.len(), claims.len());
 
         // Split all of the claimed challenges into whether they are claimed
@@ -538,7 +535,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                 .map(|claim| claim.get_point().to_vec())
                 .collect_vec(),
         );
-        let (g2_challenges_vec, g1_challenges_vec): (Vec<&[F]>, Vec<&[F]>) = claims
+        let (g2_challenges_vec, g1_challenges_vec): (Vec<&[E]>, Vec<&[E]>) = claims
             .iter()
             .map(|claim| claim.get_point().split_at(self.num_dataparallel_vars))
             .unzip();
@@ -564,8 +561,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
     fn compute_round_sumcheck_message(
         &mut self,
         round_index: usize,
-        random_coefficients: &[F],
-    ) -> Result<Vec<F>> {
+        random_coefficients: &[E],
+    ) -> Result<Vec<E>> {
         match round_index.cmp(&self.num_dataparallel_vars) {
             // Dataparallel phase.
             Ordering::Less => {
@@ -603,7 +600,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                             let beta_g2_fully_bound = if self.num_dataparallel_vars > 0 {
                                 self.beta_g2_vec.as_ref().unwrap()[0].fold_updated_values()
                             } else {
-                                F::ONE
+                                E::ONE
                             };
 
                             self.init_phase_1(
@@ -622,7 +619,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                                         if self.num_dataparallel_vars > 0 {
                                             beta_values.fold_updated_values() * random_coeff
                                         } else {
-                                            F::ONE * random_coeff
+                                            E::ONE * random_coeff
                                         }
                                     })
                                     .collect_vec()
@@ -645,7 +642,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                     }
                 }
 
-                let mles: Vec<&DenseMle<F>> =
+                let mles: Vec<&DenseMle<E>> =
                     vec![&self.a_hg_mle_phase_1.as_ref().unwrap(), &self.source_mle];
                 let independent_variable = mles
                     .iter()
@@ -660,7 +657,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         }
     }
 
-    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<()> {
+    fn bind_round_variable(&mut self, round_index: usize, challenge: E) -> Result<()> {
         if round_index < self.num_dataparallel_vars {
             self.beta_g2_vec
                 .as_mut()
@@ -697,10 +694,10 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 
     fn get_post_sumcheck_layer(
         &self,
-        round_challenges: &[F],
-        claim_challenges: &[&[F]],
-        random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, F> {
+        round_challenges: &[E],
+        claim_challenges: &[&[E]],
+        random_coefficients: &[E],
+    ) -> PostSumcheckLayer<E, E> {
         assert_eq!(claim_challenges.len(), random_coefficients.len());
         let random_coefficients_scaled_by_beta_bound = claim_challenges
             .iter()
@@ -713,7 +710,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
                         &round_challenges[..self.num_dataparallel_vars],
                     )
                 } else {
-                    F::ONE
+                    E::ONE
                 };
                 beta_bound * random_coeff
             })
@@ -731,15 +728,15 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             &random_coefficients_scaled_by_beta_bound,
         );
 
-        PostSumcheckLayer(vec![Product::<F, F>::new(
+        PostSumcheckLayer(vec![Product::<E, E>::new(
             &[self.source_mle.clone()],
             f_1_gu,
         )])
     }
 
-    fn get_claims(&self) -> Result<Vec<Claim<F>>> {
+    fn get_claims(&self) -> Result<Vec<Claim<E>>> {
         let mut claims = vec![];
-        let mut fixed_mle_indices_u: Vec<F> = vec![];
+        let mut fixed_mle_indices_u: Vec<E> = vec![];
 
         for index in self.source_mle.mle_indices() {
             fixed_mle_indices_u.push(
@@ -749,7 +746,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             );
         }
         let val = self.source_mle.first();
-        let claim: Claim<F> = Claim::new(
+        let claim: Claim<E> = Claim::new(
             fixed_mle_indices_u,
             val,
             self.layer_id(),
@@ -765,7 +762,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
 /// from the `source_mle` that are not necessarily regular.
 #[derive(Error, Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: Field")]
-pub struct IdentityGate<F: Field> {
+pub struct IdentityGate<F: Field, E: ExtensionField<F>> {
     /// Layer ID for this gate.
     layer_id: LayerId,
     /// Wiring tuples are of the form `(dest_idx, src_idx)`, which specifies
@@ -773,26 +770,28 @@ pub struct IdentityGate<F: Field> {
     /// be copied into `dest_idx` of the output MLE.
     wiring: Vec<(u32, u32)>,
     /// The MLE from which we are selecting the indices.
-    source_mle: DenseMle<F>,
+    source_mle: DenseMle<E>,
     /// The [BetaValues] struct which enumerates the incoming claim's challenge
     /// points on the dataparallel vars of the MLE.
-    beta_g2_vec: Option<Vec<BetaValues<F>>>,
+    beta_g2_vec: Option<Vec<BetaValues<E>>>,
     /// The nondataparallel claim points in the layer.
-    g1_challenges_vec: Option<Vec<Vec<F>>>,
+    g1_challenges_vec: Option<Vec<Vec<E>>>,
     /// The claim points in the layer (both nondataparallel and dataparallel)
     /// challenges.
-    challenges_vec: Option<Vec<Vec<F>>>,
+    challenges_vec: Option<Vec<Vec<E>>>,
     /// The MLE initialized in phase 1, which contains the beta values over
     /// `g1_challenges` folded into the wiring function.
-    a_hg_mle_phase_1: Option<DenseMle<F>>,
+    a_hg_mle_phase_1: Option<DenseMle<E>>,
     /// The total number of variables in the layer.
     total_num_vars: usize,
     /// The number of vars representing the number of "dataparallel" copies of
     /// the circuit.
     num_dataparallel_vars: usize,
+
+    _phantom: PhantomData<F>,
 }
 
-impl<F: Field> IdentityGate<F> {
+impl<F: Field, E: ExtensionField<F>> IdentityGate<F, E> {
     /// Create a new [IdentityGate] struct.
     pub fn new(
         layer_id: LayerId,
@@ -800,23 +799,25 @@ impl<F: Field> IdentityGate<F> {
         mle: DenseMle<F>,
         total_num_vars: usize,
         num_dataparallel_vars: usize,
-    ) -> IdentityGate<F> {
+    ) -> IdentityGate<F, E> {
         IdentityGate {
             layer_id,
             wiring,
-            source_mle: mle,
+            source_mle: mle.lift(),
             beta_g2_vec: None,
             a_hg_mle_phase_1: None,
             total_num_vars,
             num_dataparallel_vars,
             g1_challenges_vec: None,
             challenges_vec: None,
+
+            _phantom: Default::default(),
         }
     }
 
     fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
         assert!(self.source_mle.is_fully_bounded());
-        transcript_writer.append("Fully bound MLE evaluation", self.source_mle.first());
+        transcript_writer.append_extension_field_element("Fully bound MLE evaluation", self.source_mle.first());
     }
 
     /// Initialize the bookkeeping table necessary for phase 1, which is the
@@ -827,7 +828,7 @@ impl<F: Field> IdentityGate<F> {
     /// For the random coefficients, we simply use the fully bound value of
     /// beta_g2 since this is the value that scales all of the sumcheck
     /// evaluations.
-    fn init_phase_1(&mut self, challenge: &[F], fully_bound_beta_g2: F) {
+    fn init_phase_1(&mut self, challenge: &[E], fully_bound_beta_g2: E) {
         let a_hg_mle_vec = fold_wiring_into_beta_mle_identity_gate(
             &self.wiring,
             &[challenge],
@@ -844,7 +845,7 @@ impl<F: Field> IdentityGate<F> {
     /// binding of the non-dataparallel variables in the source MLE. This is the
     /// initialization function used when we are doing RLC claim
     /// aggregation.
-    fn init_phase_1_rlc(&mut self, challenges: &[&[F]], random_coefficients: &[F]) {
+    fn init_phase_1_rlc(&mut self, challenges: &[&[E]], random_coefficients: &[E]) {
         let a_hg_mle_vec = fold_wiring_into_beta_mle_identity_gate(
             &self.wiring,
             challenges,

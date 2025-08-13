@@ -150,7 +150,6 @@ pub fn get_wlx_evaluations<F: Field, E: ExtensionField<F>>(
     num_idx: usize,
 ) -> Result<Vec<E>> {
     // get the number of evaluations
-
     let (num_evals, common_idx) = if global_prover_claim_agg_constant_column_optimization() {
         let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
         (num_evals, common_idx)
@@ -165,15 +164,15 @@ pub fn get_wlx_evaluations<F: Field, E: ExtensionField<F>>(
     }
 
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
-    let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
+    let next_evals: Vec<E> = cfg_into_iter!(num_claims..num_evals)
         .map(|idx| {
             // get the challenge l(idx)
-            let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+            let new_chal: Vec<E> = cfg_into_iter!(0..num_idx)
                 .map(|claim_idx| {
-                    let evals: Vec<F> = cfg_into_iter!(claim_vecs)
+                    let evals: Vec<E> = cfg_into_iter!(claim_vecs)
                         .map(|claim| claim[claim_idx])
                         .collect();
-                    evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
+                    evaluate_at_a_point(&evals, E::from(idx as u64)).unwrap()
                 })
                 .collect();
 

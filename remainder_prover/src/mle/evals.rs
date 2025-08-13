@@ -527,7 +527,7 @@ impl<F: Field> MultilinearExtension<F> {
     /// Evaluate `\tilde{f}` at `point \in F^n`.
     /// # Panics
     /// If `point` does not contain exactly `self.num_vars()` elements.
-    pub fn evaluate_at_point(&self, point: &[F]) -> F {
+    pub fn evaluate_at_point<E: ExtensionField<F>>(&self, point: &[E]) -> E {
         let n = self.num_vars();
         assert_eq!(n, point.len());
 
@@ -537,16 +537,16 @@ impl<F: Field> MultilinearExtension<F> {
             .clone()
             .iter() // was into_iter()
             .enumerate()
-            .fold(F::ZERO, |acc, (idx, v)| {
-                let beta = (0..n).fold(F::ONE, |acc, i| {
+            .fold(E::ZERO, |acc, (idx, v)| {
+                let beta = (0..n).fold(E::ONE, |acc, i| {
                     let bit_i = idx & (1 << (n - 1 - i));
                     if bit_i > 0 {
-                        acc * point[i]
+                        point[i] * acc
                     } else {
-                        acc * (F::ONE - point[i])
+                        (E::ONE - point[i]) * acc
                     }
                 });
-                acc + v * beta
+                acc + beta * v
             })
     }
 
@@ -556,8 +556,8 @@ impl<F: Field> MultilinearExtension<F> {
         self.f.len()
     }
 
-    /// Wrapper around [fix_variable_at_index_to_bookkeeping_table_copy()]
-    /// which destructively modifies `self`.
+    /// Fix a variable to a base field element,
+    /// destructively modifies `self`.
     pub fn fix_variable_at_index(&mut self, var_index: usize, point: F) {
         let num_vars = self.num_vars();
         let new_evals = fix_variable_at_index_to_bookkeeping_table_copy(&self, var_index, point);
@@ -565,11 +565,29 @@ impl<F: Field> MultilinearExtension<F> {
         *self = new_evals;
     }
 
-    /// Optimized version of `fix_variable_at_index` for `var_index == 0`.
+    /// Fix a variable to an extension field element,
+    /// returns a new mle and leaves the original mle untouched.
+    pub fn fix_variable_at_index_ext<E: ExtensionField<F>>(mle: &Self, var_index: usize, point: E) -> MultilinearExtension<E> {
+        let num_vars = mle.num_vars();
+        let new_evals = fix_variable_at_index_to_bookkeeping_table_copy(&mle, var_index, point);
+        debug_assert_eq!(new_evals.len(), 1 << (num_vars - 1));
+        new_evals
+    }
+
+    /// Shortcut for [fix_variable_at_index] when `var_index == 0`.
     /// # Panics
     /// If `self.num_vars() == 0`.
     pub fn fix_variable(&mut self, point: F) {
+        assert!(self.num_vars() > 0);
         self.fix_variable_at_index(0, point);
+    }
+
+    /// Shortcut for [fix_variable_at_index_ext] when `var_index == 0`.
+    /// # Panics
+    /// If `self.num_vars() == 0`.
+    pub fn fix_variable_ext<E: ExtensionField<F>>(mle: &Self, point: E) -> MultilinearExtension<E> {
+        assert!(mle.num_vars() > 0);
+        Self::fix_variable_at_index_ext(mle, 0, point)
     }
 
     /// Stacks the MLEs into a single MLE, assuming they are stored in a "big

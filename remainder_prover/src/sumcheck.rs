@@ -483,9 +483,9 @@ pub fn evaluate_at_a_point<F: Field, E: ExtensionField<F>>(
                     .map(|x| F::from(x as u64))
                     .fold(
                         // Compute vector of (numerator, denominator)
-                        (F::ONE, F::ONE),
+                        (E::ONE, E::ONE),
                         |(num, denom), val| {
-                            (num * (point - val), denom * (F::from(x as u64) - val))
+                            (num * (point - val), denom * (E::from(x as u64) - val))
                         },
                     )
             },
@@ -493,8 +493,8 @@ pub fn evaluate_at_a_point<F: Field, E: ExtensionField<F>>(
         .enumerate()
         .map(
             // Add up barycentric weight * current eval at point
-            |(x, (num, denom))| given_evals[x] * num * denom.invert().unwrap(),
+            |(x, (num, denom))| num * denom.invert().unwrap() * given_evals[x],
         )
         .reduce(|x, y| x + y);
-    (eval.into()).ok_or(anyhow!("Interpretation Error: No Inverse"))
+    eval.ok_or(anyhow!("Interpretation Error: No Inverse"))
 }

@@ -1,10 +1,12 @@
 //! A space-efficient implementation of an MLE which contains only zeros.
 
 use itertools::{repeat_n, Itertools};
+use remainder_shared_types::field::ExtensionField;
 use serde::{Deserialize, Serialize};
 
 use crate::claims::RawClaim;
 use crate::layer::LayerId;
+use crate::mle::mle_enum::LiftTo;
 use remainder_shared_types::Field;
 
 use super::evals::{Evaluations, EvaluationsIterator};
@@ -47,6 +49,8 @@ impl<F: Field> ZeroMle<F> {
 }
 
 impl<F: Field> Mle<F> for ZeroMle<F> {
+    type ExtendedMle<E: ExtensionField<F>> = ZeroMle<E>;
+
     fn mle_indices(&self) -> &[MleIndex<F>] {
         &self.mle_indices
     }
@@ -81,6 +85,49 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
 
     fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<RawClaim<F>> {
         self.fix_variable(indexed_bit_index, point)
+    }
+
+    fn fix_variable_ext<E: ExtensionField<F>>(mle: &Self, round_index: usize, challenge: E) -> (
+        ZeroMle<E>,
+        Option<RawClaim<E>>,
+     ) {
+        let mut new_mle_indices = mle.mle_indices.lift();
+
+        for mle_index in new_mle_indices.iter_mut() {
+            if *mle_index == MleIndex::Indexed(round_index) {
+                mle_index.bind_index(challenge);
+            }
+        }
+
+        // One fewer free variable to sumcheck through
+        let new_mle = ZeroMle::<E> {
+            mle_indices: new_mle_indices,
+            num_vars: mle.num_vars - 1,
+            layer_id: mle.layer_id,
+            zero: [mle.zero[0].into()],
+            zero_eval: mle.zero_eval.lift(),
+            indexed: mle.indexed,
+        };
+
+        if new_mle.num_vars == 0 {
+            let send_claim = RawClaim::new(
+                new_mle.mle_indices
+                    .iter()
+                    .map(|index| index.val().unwrap())
+                    .collect_vec(),
+                E::ZERO,
+            );
+            (new_mle, Some(send_claim))
+        } else {
+            (new_mle, None)
+        }
+    }
+
+    fn fix_variable_at_index_ext<E: ExtensionField<F>>(mle: &Self, indexed_bit_index: usize, point: E) -> (
+        ZeroMle<E>,
+        Option<RawClaim<E>>,
+     ) {
+        Self::fix_variable_ext(mle, indexed_bit_index, point)
     }
 
     fn index_mle_indices(&mut self, curr_index: usize) -> usize {

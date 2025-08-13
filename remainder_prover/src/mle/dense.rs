@@ -37,6 +37,8 @@ pub struct DenseMle<F: Field> {
 }
 
 impl<F: Field> Mle<F> for DenseMle<F> {
+    type ExtendedMle<E: ExtensionField<F>> = DenseMle<E>;
+
     fn num_free_vars(&self) -> usize {
         self.mle.num_vars()
     }
@@ -148,6 +150,105 @@ impl<F: Field> Mle<F> for DenseMle<F> {
             Some(fixed_claim_return)
         } else {
             None
+        }
+    }
+
+    fn fix_variable_at_index_ext<E: ExtensionField<F>>(
+        mle: &Self, 
+        indexed_bit_index: usize, 
+        point: E,
+    ) -> (DenseMle<E>, Option<RawClaim<E>>) {
+        let mut new_mle_indices = mle.mle_indices.lift();
+
+        // Bind the `MleIndex::IndexedBit(index)` to the challenge `point`.
+
+        // First, find the bit corresponding to `index` and compute its absolute
+        // index. For example, if `mle_indices` is equal to
+        // `[MleIndex::Fixed(0), MleIndex::Bound(42, 0), MleIndex::IndexedBit(1),
+        // MleIndex::Bound(17, 2) MleIndex::IndexedBit(3))]`
+        // then `fix_variable_at_index(3, r)` will fix `IndexedBit(3)`, which is
+        // the 2nd indexed bit, to `r`
+
+        // Count of the bit we're fixing. In the above example
+        // `bit_count == 2`.
+        let (index_found, bit_count) =
+            new_mle_indices
+                .iter_mut()
+                .fold((false, 0), |state, mle_index| {
+                    if state.0 {
+                        // Index already found; do nothing.
+                        state
+                    } else if let MleIndex::Indexed(current_bit_index) = *mle_index {
+                        if current_bit_index == indexed_bit_index {
+                            // Found the indexed bit in the current index;
+                            // bind it and increment the bit count.
+                            mle_index.bind_index(point);
+                            (true, state.1 + 1)
+                        } else {
+                            // Index not yet found but this is an indexed
+                            // bit; increasing bit count.
+                            (false, state.1 + 1)
+                        }
+                    } else {
+                        // Index not yet found but the current bit is not an
+                        // indexed bit; do nothing.
+                        state
+                    }
+                });
+
+        assert!(index_found);
+        debug_assert!(1 <= bit_count && bit_count <= mle.num_free_vars());
+
+        let new_mle = DenseMle::<E> {
+            layer_id: mle.layer_id,
+            mle_indices: new_mle_indices,
+            mle: MultilinearExtension::fix_variable_at_index_ext(&mle.mle, bit_count - 1, point),
+        };
+
+        if new_mle.is_fully_bounded() {
+            let fixed_claim_return = RawClaim::new(
+                new_mle.mle_indices
+                    .iter()
+                    .map(|index| index.val().unwrap())
+                    .collect_vec(),
+                new_mle.mle.value(),
+            );
+            (new_mle, Some(fixed_claim_return))
+        } else {
+            (new_mle, None)
+        }
+    }
+
+    fn fix_variable_ext<E: ExtensionField<F>>(
+        mle: &Self,
+        index: usize, 
+        binding: E,
+    ) -> (DenseMle<E>, Option<RawClaim<E>>) {
+        let mut new_mle_indices = mle.mle_indices.lift();
+
+        for mle_index in new_mle_indices.iter_mut() {
+            if *mle_index == MleIndex::Indexed(index) {
+                mle_index.bind_index(binding);
+            }
+        }
+        // Update the bookkeeping table.
+        let new_mle = DenseMle::<E> {
+            layer_id: mle.layer_id,
+            mle_indices: new_mle_indices,
+            mle: MultilinearExtension::fix_variable_ext(&mle.mle, binding),
+        };
+
+        if new_mle.is_fully_bounded() {
+            let fixed_claim_return = RawClaim::new(
+                new_mle.mle_indices
+                    .iter()
+                    .map(|index| index.val().unwrap())
+                    .collect_vec(),
+                new_mle.mle.value(),
+            );
+            (new_mle, Some(fixed_claim_return))
+        } else {
+            (new_mle, None)
         }
     }
 
@@ -398,16 +499,4 @@ pub fn fix_variable_var_conversion<F: Field, E: ExtensionField<F>>(
             MleIndex::Free => panic!("We should not be here prior to indexing"),
         })
         .collect()
-}
-
-/// Simple lift from [MleIndex<F>] to [MleIndex<E>].
-impl<F: Field, E: ExtensionField<F>> LiftTo<MleIndex<E>> for MleIndex<F> {
-    fn lift(&self) -> MleIndex<E> {
-        match self {
-            MleIndex::Fixed(val) => MleIndex::Fixed(*val),
-            MleIndex::Free => MleIndex::Free,
-            MleIndex::Indexed(var_idx) => MleIndex::Indexed(*var_idx),
-            MleIndex::Bound(base_chal, var_idx) => MleIndex::Bound((*base_chal).into(), *var_idx),
-        }
-    }
 }

@@ -302,7 +302,7 @@ impl<F: Field, E: ExtensionField<F>> ClaimGroup<F, E> {
         let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 
         // Append evaluations to the transcript before sampling a challenge.
-        transcript_writer.append_elements(
+        transcript_writer.append_extension_field_elements(
             "Claim aggregation interpolation polynomial evaluations",
             &relevant_wlx_evaluations,
         );
@@ -360,7 +360,7 @@ impl<F: Field, E: ExtensionField<F>> ClaimGroup<F, E> {
         };
 
         let num_relevant_wlx_evaluations = num_wlx_evaluations - num_claims;
-        let relevant_wlx_evaluations = transcript_reader.consume_elements(
+        let relevant_wlx_evaluations = transcript_reader.consume_extension_field_elements(
             "Claim aggregation interpolation polynomial evaluations",
             num_relevant_wlx_evaluations,
         )?;
@@ -373,7 +373,7 @@ impl<F: Field, E: ExtensionField<F>> ClaimGroup<F, E> {
 
         // Next, sample `r^\star` from the transcript.
         let agg_chal = transcript_reader
-            .get_challenge("Challenge for claim aggregation interpolation polynomial")?;
+            .get_extension_field_challenge("Challenge for claim aggregation interpolation polynomial")?;
         debug!("Aggregate challenge: {:#?}", agg_chal);
 
         let aggregated_challenges = self.compute_aggregated_challenges(agg_chal).unwrap();
