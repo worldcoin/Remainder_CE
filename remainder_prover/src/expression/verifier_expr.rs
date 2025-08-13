@@ -22,10 +22,7 @@ use crate::mle::{verifier_mle::VerifierMle, MleIndex};
 
 use remainder_shared_types::Field;
 
-use super::{
-    expr_errors::ExpressionError,
-    generic_expr::Expression,
-};
+use super::{expr_errors::ExpressionError, generic_expr::Expression};
 
 use anyhow::{anyhow, Ok, Result};
 

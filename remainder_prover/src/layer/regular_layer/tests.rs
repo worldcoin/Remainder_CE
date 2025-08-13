@@ -161,20 +161,16 @@ fn regular_layer_test_prove_verify_complex() {
         ]),
         Expression::mle(circuit_mle_2) + Expression::mle(circuit_mle_1),
     ]);
-    dbg!(&circuit_expression);
     circuit_expression.index_mle_vars(0);
+
     let sum = Expression::<Fr, ProverMle<Fr>>::sum(leaf_mle_2, leaf_mle_1);
-
     let prod = Expression::<Fr, ProverMle<Fr>>::products(vec![mle_1.clone(), mle_2.clone()]);
-
     let mut root = prod.select(sum);
 
     let claim = RawClaim::<Fr>::new(vec![Fr::from(4), Fr::from(2), Fr::from(3)], Fr::from(37));
-
     let mut layer = RegularLayer::new_raw(crate::layer::LayerId::Layer(0), root.clone());
 
     let mut transcript = TranscriptWriter::<_, PoseidonSponge<_>>::new("Regular Layer Test");
-
     layer.prove(&[&claim], &mut transcript).unwrap();
 
     let transcript_raw = transcript.get_transcript();

@@ -13,7 +13,8 @@ use thiserror::Error;
 
 use crate::{
     claims::Claim,
-    layer::{LayerError, LayerId}, mle::AbstractMle,
+    layer::{LayerError, LayerId},
+    mle::AbstractMle,
 };
 
 use crate::{

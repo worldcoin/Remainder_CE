@@ -11,12 +11,12 @@ use serde::{Deserialize, Serialize};
 use super::{evals::EvaluationsIterator, mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
     claims::RawClaim,
-    mle::{evals::{Evaluations, MultilinearExtension}, AbstractMle},
+    mle::{
+        evals::{Evaluations, MultilinearExtension},
+        AbstractMle,
+    },
 };
-use crate::{
-    expression::generic_expr::Expression,
-    layer::LayerId,
-};
+use crate::{expression::generic_expr::Expression, layer::LayerId};
 use remainder_shared_types::Field;
 
 /// An implementation of an [Mle] using a dense representation.
@@ -199,7 +199,11 @@ impl<F: Field> DenseMle<F> {
     }
 
     /// Constructs a new `DenseMle` with specified MLE indices
-    pub fn new_with_indices(data: MultilinearExtension<F>, layer_id: LayerId, mle_indices: &[MleIndex<F>]) -> Self {
+    pub fn new_with_indices(
+        data: MultilinearExtension<F>,
+        layer_id: LayerId,
+        mle_indices: &[MleIndex<F>],
+    ) -> Self {
         let mut mle = DenseMle::new_from_raw(data.to_vec(), layer_id);
 
         mle.mle_indices = mle_indices.to_vec();

@@ -18,11 +18,15 @@ use crate::{
     claims::{Claim, ClaimError, RawClaim},
     expression::{
         circuit_expr::filter_bookkeeping_table,
-        generic_expr::{Expression, ExpressionNode}, prover_expr::ProverMle,
+        generic_expr::{Expression, ExpressionNode},
+        prover_expr::ProverMle,
     },
     layer::{Layer, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
-    mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle},
+    mle::{
+        betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription,
+        verifier_mle::VerifierMle, AbstractMle, Mle,
+    },
     sumcheck::evaluate_at_a_point,
 };
 
@@ -110,30 +114,29 @@ impl<F: Field> RegularLayer<F> {
         &self,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<()> {
-        let mut observer_fn = |expr_node: &ExpressionNode<F>,
-                               mle_vec: &[ProverMle<F>]|
-         -> Result<()> {
-            match expr_node {
-                ExpressionNode::Mle(mle_vec_index) => {
-                    let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
-                    let val = mle.mle.value();
-                    transcript_writer.append("Fully bound MLE evaluation", val);
-                    Ok(())
-                }
-                ExpressionNode::Product(mle_vec_indices) => {
-                    for mle_vec_index in mle_vec_indices {
-                        let mle = &mle_vec[mle_vec_index.index()];
-                        let eval = mle.mle.value();
-                        transcript_writer.append("Fully bound MLE evaluation", eval);
+        let mut observer_fn =
+            |expr_node: &ExpressionNode<F>, mle_vec: &[ProverMle<F>]| -> Result<()> {
+                match expr_node {
+                    ExpressionNode::Mle(mle_vec_index) => {
+                        let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
+                        let val = mle.mle.value();
+                        transcript_writer.append("Fully bound MLE evaluation", val);
+                        Ok(())
                     }
-                    Ok(())
+                    ExpressionNode::Product(mle_vec_indices) => {
+                        for mle_vec_index in mle_vec_indices {
+                            let mle = &mle_vec[mle_vec_index.index()];
+                            let eval = mle.mle.value();
+                            transcript_writer.append("Fully bound MLE evaluation", eval);
+                        }
+                        Ok(())
+                    }
+                    ExpressionNode::Constant(_)
+                    | ExpressionNode::Scaled(_, _)
+                    | ExpressionNode::Sum(_, _)
+                    | ExpressionNode::Selector(_, _, _) => Ok(()),
                 }
-                ExpressionNode::Constant(_)
-                | ExpressionNode::Scaled(_, _)
-                | ExpressionNode::Sum(_, _)
-                | ExpressionNode::Selector(_, _, _) => Ok(()),
-            }
-        };
+            };
 
         let _ = self.expression.traverse(&mut observer_fn);
 
@@ -372,9 +375,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         // Basically we just want to go down it and pass up claims.
         // We can only add a new claim if we see an MLE with all its indices
         // bound.
-        let mut observer_fn = |expr: &ExpressionNode<F>,
-                               mle_vec: &[ProverMle<F>]|
-         -> Result<()> {
+        let mut observer_fn = |expr: &ExpressionNode<F>, mle_vec: &[ProverMle<F>]| -> Result<()> {
             match expr {
                 ExpressionNode::Mle(mle_vec_idx) => {
                     let mle = mle_vec_idx.get_mle(mle_vec);
@@ -841,9 +842,7 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
 
         let mut claims: Vec<Claim<F>> = Vec::new();
 
-        let mut observer_fn = |exp: &ExpressionNode<F>,
-                               mle_vec: &[VerifierMle<F>]|
-         -> Result<()> {
+        let mut observer_fn = |exp: &ExpressionNode<F>, mle_vec: &[VerifierMle<F>]| -> Result<()> {
             match exp {
                 ExpressionNode::Mle(verifier_index) => {
                     let verifier_mle = verifier_index.get_mle(mle_vec);

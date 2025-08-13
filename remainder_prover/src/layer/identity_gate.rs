@@ -15,7 +15,8 @@ use crate::{
     },
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
-        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex
+        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
+        mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex,
     },
     sumcheck::*,
 };

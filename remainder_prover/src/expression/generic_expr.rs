@@ -3,9 +3,14 @@
 //! summary.
 
 use crate::mle::{AbstractMle, MleIndex};
+use itertools::Itertools;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
-use std::{cmp::max, hash::Hash, ops::{Add, Mul, Neg, Sub}};
+use std::{
+    cmp::max,
+    hash::Hash,
+    ops::{Add, Mul, Neg, Sub},
+};
 
 use anyhow::{Ok, Result};
 
@@ -59,11 +64,7 @@ pub enum ExpressionNode<F: Field> {
     /// [ExpressionNode::Constant] can be an expression tree's leaf.
     Constant(F),
     /// See documentation for [ExpressionNode].
-    Selector(
-        MleIndex<F>,
-        Box<ExpressionNode<F>>,
-        Box<ExpressionNode<F>>,
-    ),
+    Selector(MleIndex<F>, Box<ExpressionNode<F>>, Box<ExpressionNode<F>>),
     /// An [ExpressionNode] representing the leaf of an expression tree which
     /// points to a multilinear extension.
     Mle(MleVecIndex),
@@ -133,8 +134,7 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
         &mut self,
         observer_fn: &mut impl FnMut(&mut ExpressionNode<F>) -> Result<()>,
     ) -> Result<()> {
-        self.expression_node
-            .traverse_node_mut(observer_fn)
+        self.expression_node.traverse_node_mut(observer_fn)
     }
 
     /// returns the number of MleRefs in the expression
@@ -146,8 +146,7 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
     pub fn increment_mle_vec_indices(&mut self, offset: usize) {
         // define a closure that increments the MleVecIndex by the given amount
         // use traverse_mut
-        let mut increment_closure = |expr: &mut ExpressionNode<F>|
-         -> Result<()> {
+        let mut increment_closure = |expr: &mut ExpressionNode<F>| -> Result<()> {
             match expr {
                 ExpressionNode::Mle(mle_vec_index) => {
                     mle_vec_index.increment(offset);
@@ -214,7 +213,10 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
     /// (and therefore the number of prover messages we need to send)
     pub fn get_round_degree(&self, curr_round: usize) -> usize {
         let (expression_node, mle_vec) = self.deconstruct_ref();
-        let max_var_degree = *expression_node.get_rounds_helper(mle_vec).get(curr_round).unwrap_or(&1);
+        let max_var_degree = *expression_node
+            .get_rounds_helper(mle_vec)
+            .get(curr_round)
+            .unwrap_or(&1);
         max_var_degree + 1 // for eq
     }
 }
@@ -247,7 +249,7 @@ impl<F: Field> ExpressionNode<F> {
     /// similar to traverse, but allows mutation of self (expression node and mle_vec)
     pub fn traverse_node_mut(
         &mut self,
-        observer_fn: &mut impl FnMut(&mut ExpressionNode<F>) -> Result<()>
+        observer_fn: &mut impl FnMut(&mut ExpressionNode<F>) -> Result<()>,
     ) -> Result<()> {
         observer_fn(self)?;
         match self {
@@ -282,19 +284,64 @@ impl<F: Field> ExpressionNode<F> {
         match self {
             ExpressionNode::Constant(scalar) => constant(*scalar),
             ExpressionNode::Selector(index, a, b) => {
-                let lhs = a.reduce(mle_vec, constant, selector_column, mle_eval, sum, product, scaled);
-                let rhs = b.reduce(mle_vec, constant, selector_column, mle_eval, sum, product, scaled);
+                let lhs = a.reduce(
+                    mle_vec,
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    sum,
+                    product,
+                    scaled,
+                );
+                let rhs = b.reduce(
+                    mle_vec,
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    sum,
+                    product,
+                    scaled,
+                );
                 selector_column(index, lhs, rhs)
             }
             ExpressionNode::Mle(query) => mle_eval(query.get_mle(mle_vec)),
             ExpressionNode::Sum(a, b) => {
-                let a = a.reduce(mle_vec, constant, selector_column, mle_eval, sum, product, scaled);
-                let b = b.reduce(mle_vec, constant, selector_column, mle_eval, sum, product, scaled);
+                let a = a.reduce(
+                    mle_vec,
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    sum,
+                    product,
+                    scaled,
+                );
+                let b = b.reduce(
+                    mle_vec,
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    sum,
+                    product,
+                    scaled,
+                );
                 sum(a, b)
             }
-            ExpressionNode::Product(queries) => product(&queries.iter().map(|q| q.get_mle(mle_vec)).collect::<Vec<_>>()),
+            ExpressionNode::Product(queries) => product(
+                &queries
+                    .iter()
+                    .map(|q| q.get_mle(mle_vec))
+                    .collect::<Vec<_>>(),
+            ),
             ExpressionNode::Scaled(a, f) => {
-                let a = a.reduce(mle_vec, constant, selector_column, mle_eval, sum, product, scaled);
+                let a = a.reduce(
+                    mle_vec,
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    sum,
+                    product,
+                    scaled,
+                );
                 scaled(a, *f)
             }
         }
@@ -302,10 +349,7 @@ impl<F: Field> ExpressionNode<F> {
 
     /// this traverses the expression to get all of the rounds, in total. requires going through each of the nodes
     /// and collecting the leaf node indices.
-    pub(crate) fn get_all_rounds<M: AbstractMle<F>>(
-        &self,
-        mle_vec: &[M],
-    ) -> Vec<usize> {
+    pub(crate) fn get_all_rounds<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> Vec<usize> {
         let degree_per_index = self.get_rounds_helper(mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] > 0)
@@ -313,10 +357,7 @@ impl<F: Field> ExpressionNode<F> {
     }
 
     /// traverse an expression tree in order to get all of the nonlinear rounds in an expression.
-    pub fn get_all_nonlinear_rounds<M: AbstractMle<F>>(
-        &self,
-        mle_vec: &[M],
-    ) -> Vec<usize> {
+    pub fn get_all_nonlinear_rounds<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> Vec<usize> {
         let degree_per_index = self.get_rounds_helper(mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] > 1)
@@ -324,10 +365,7 @@ impl<F: Field> ExpressionNode<F> {
     }
 
     /// get all of the linear rounds from an expression tree
-    pub fn get_all_linear_rounds<M: AbstractMle<F>>(
-        &self,
-        mle_vec: &[M],
-    ) -> Vec<usize> {
+    pub fn get_all_linear_rounds<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> Vec<usize> {
         let degree_per_index = self.get_rounds_helper(mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] == 1)
@@ -437,8 +475,12 @@ impl<F: Field> ExpressionNode<F> {
             ExpressionNode::Selector(_, lhs, rhs) => {
                 max(lhs.get_num_vars(mle_vec) + 1, rhs.get_num_vars(mle_vec) + 1)
             }
-            ExpressionNode::Mle(circuit_mle_desc) => circuit_mle_desc.get_mle(mle_vec).num_free_vars(),
-            ExpressionNode::Sum(lhs, rhs) => max(lhs.get_num_vars(mle_vec), rhs.get_num_vars(mle_vec)),
+            ExpressionNode::Mle(circuit_mle_desc) => {
+                circuit_mle_desc.get_mle(mle_vec).num_free_vars()
+            }
+            ExpressionNode::Sum(lhs, rhs) => {
+                max(lhs.get_num_vars(mle_vec), rhs.get_num_vars(mle_vec))
+            }
             ExpressionNode::Product(nodes) => nodes.iter().fold(0, |cur_max, circuit_mle_desc| {
                 max(cur_max, circuit_mle_desc.get_mle(mle_vec).num_free_vars())
             }),
@@ -448,7 +490,9 @@ impl<F: Field> ExpressionNode<F> {
 }
 
 // defines how the Expressions are printed and displayed
-impl<F: std::fmt::Debug + Field, M: std::fmt::Debug + AbstractMle<F>> std::fmt::Debug for Expression<F, M> {
+impl<F: std::fmt::Debug + Field, M: std::fmt::Debug + AbstractMle<F>> std::fmt::Debug
+    for Expression<F, M>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Expression")
             .field("Expression_Node", &self.expression_node)
@@ -518,33 +562,95 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
         let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
 
         let sum_node = ExpressionNode::Sum(Box::new(lhs_node), Box::new(rhs_node));
-        let sum_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect::<Vec<_>>();
+        let sum_mle_vec = lhs_mle_vec
+            .into_iter()
+            .chain(rhs_mle_vec)
+            .collect::<Vec<_>>();
 
         Expression::new(sum_node, sum_mle_vec)
     }
 
     /// create a product expression that multiplies many MLEs together
     pub fn products(product_list: Vec<M>) -> Self {
-        let mle_vec_indices = (0..product_list.len()).map(MleVecIndex::new).collect::<Vec<_>>();
+        let mle_vec_indices = (0..product_list.len())
+            .map(MleVecIndex::new)
+            .collect::<Vec<_>>();
 
         let product_node = ExpressionNode::Product(mle_vec_indices);
 
         Expression::new(product_node, product_list)
     }
 
+    /// create a selector which describes the polynomial relationship
+    /// `(1 - x_0) * Self(x_1, ..., x_{n_lhs}) + b_0 * rhs(x_1, ..., x_{n_rhs})`
+    pub fn select(self, mut rhs: Self) -> Self {
+        let offset = self.num_mle();
+        rhs.increment_mle_vec_indices(offset);
+
+        let (lhs_node, lhs_mle_vec) = self.deconstruct();
+        let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
+        let concat_mle_vec = lhs_mle_vec
+            .into_iter()
+            .chain(rhs_mle_vec)
+            .collect::<Vec<_>>();
+
+        // Finally, a selector against the two (equal-num-vars) sides!
+        let concat_node =
+            ExpressionNode::Selector(MleIndex::Free, Box::new(lhs_node), Box::new(rhs_node));
+
+        Expression::new(concat_node, concat_mle_vec)
+    }
+
     /// create a select expression without reason about index changes
     pub fn select_with_index(index: MleIndex<F>, lhs: Self, mut rhs: Self) -> Self {
         let offset = lhs.num_mle();
         rhs.increment_mle_vec_indices(offset);
+
         let (lhs_node, lhs_mle_vec) = lhs.deconstruct();
         let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
 
-        let concat_node =
-            ExpressionNode::Selector(index, Box::new(lhs_node), Box::new(rhs_node));
+        let concat_node = ExpressionNode::Selector(index, Box::new(lhs_node), Box::new(rhs_node));
 
-        let concat_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect::<Vec<_>>();
+        let concat_mle_vec = lhs_mle_vec
+            .into_iter()
+            .chain(rhs_mle_vec)
+            .collect::<Vec<_>>();
 
         Expression::new(concat_node, concat_mle_vec)
+    }
+
+    /// Create a nested selector Expression that selects between 2^k Expressions
+    /// by creating a binary tree of Selector Expressions.
+    /// The order of the leaves is the order of the input expressions.
+    /// (Note that this is very different from calling [Self::select] consecutively.)
+    pub fn binary_tree_selector(expressions: Vec<Self>) -> Self {
+        // Ensure length is a power of two
+        assert!(expressions.len().is_power_of_two());
+        let mut expressions = expressions;
+        while expressions.len() > 1 {
+            // Iterate over consecutive pairs of expressions, creating a new expression that selects between them
+            expressions = expressions
+                .into_iter()
+                .tuples()
+                .map(|(lhs, mut rhs)| {
+                    let offset = lhs.num_mle();
+                    rhs.increment_mle_vec_indices(offset);
+
+                    let (lhs_node, lhs_mle_vec) = lhs.deconstruct();
+                    let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
+
+                    let selector_node = ExpressionNode::Selector(
+                        MleIndex::Free,
+                        Box::new(lhs_node),
+                        Box::new(rhs_node),
+                    );
+                    let selector_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect_vec();
+
+                    Expression::new(selector_node, selector_mle_vec)
+                })
+                .collect();
+        }
+        expressions[0].clone()
     }
 }
 

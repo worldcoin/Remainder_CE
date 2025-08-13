@@ -17,7 +17,8 @@ use remainder_shared_types::Fr;
 #[test]
 fn test_get_claim() {
     // [1, 1, 1, 1] \oplus (1 - (1 * (1 + V[1, 1, 1, 1]))) * 2
-    let expression1: Expression<Fr, ProverMle<Fr>> = Expression::<Fr, ProverMle<Fr>>::constant(Fr::one());
+    let expression1: Expression<Fr, ProverMle<Fr>> =
+        Expression::<Fr, ProverMle<Fr>>::constant(Fr::one());
     let mle = DenseMle::<Fr>::new_from_raw(
         vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
         LayerId::Input(0),
