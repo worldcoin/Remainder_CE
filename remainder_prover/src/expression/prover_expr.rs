@@ -13,10 +13,13 @@ use super::{
     generic_expr::{Expression, ExpressionNode},
 };
 use crate::{
-    expression::generic_expr::MleVecIndex, layer::product::Product, mle::{betavalues::BetaValues, dense::DenseMle, AbstractMle, MleIndex}, sumcheck::{
+    expression::generic_expr::MleVecIndex,
+    layer::product::Product,
+    mle::{betavalues::BetaValues, dense::DenseMle, AbstractMle, MleIndex},
+    sumcheck::{
         apply_updated_beta_values_to_evals, beta_cascade, beta_cascade_no_independent_variable,
         SumcheckEvals,
-    }
+    },
 };
 use crate::{
     layer::{gate::BinaryOperation, product::PostSumcheckLayer},
@@ -24,10 +27,7 @@ use crate::{
 };
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::Field;
-use std::{
-    cmp::max,
-    collections::HashSet,
-};
+use std::{cmp::max, collections::HashSet};
 
 use anyhow::{anyhow, Ok, Result};
 pub type ProverMle<F> = DenseMle<F>;
@@ -35,22 +35,6 @@ pub type ProverMle<F> = DenseMle<F>;
 /// this is what the prover manipulates to prove the correctness of the computation.
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
 impl<F: Field> Expression<F, ProverMle<F>> {
-    /// See documentation in [super::circuit_expr::ExprDescription]'s `select()`
-    /// function for more details!
-    pub fn select(self, mut rhs: Expression<F, ProverMle<F>>) -> Self {
-        let offset = self.num_mle();
-        rhs.increment_mle_vec_indices(offset);
-        let (lhs_node, lhs_mle_vec) = self.deconstruct();
-        let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
-
-        let concat_node =
-            ExpressionNode::Selector(MleIndex::Free, Box::new(lhs_node), Box::new(rhs_node));
-
-        let concat_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect_vec();
-
-        Expression::new(concat_node, concat_mle_vec)
-    }
-
     /// Create a product Expression that raises one MLE to a given power
     pub fn pow(pow: usize, mle: ProverMle<F>) -> Self {
         let mle_vec_indices = (0..pow).map(|_index| MleVecIndex::new(0)).collect_vec();
@@ -72,21 +56,21 @@ impl<F: Field> Expression<F, ProverMle<F>> {
     pub fn transform_to_verifier_expression(self) -> Result<Expression<F, VerifierMle<F>>> {
         let (expression_node, mle_vec) = self.deconstruct();
         // Check that every MLE is fully bounded
-        let verifier_mles = mle_vec.into_iter().map(|m| {
-            if !m.is_fully_bounded() {
-                return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
-            }
-            Ok(VerifierMle::new(
-                m.layer_id(),
-                m.mle_indices().to_vec(),
-                m.value(),
-            ))
-        }).collect::<Result<Vec<_>>>()?;
+        let verifier_mles = mle_vec
+            .into_iter()
+            .map(|m| {
+                if !m.is_fully_bounded() {
+                    return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
+                }
+                Ok(VerifierMle::new(
+                    m.layer_id(),
+                    m.mle_indices().to_vec(),
+                    m.value(),
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
-        Ok(Expression::new(
-            expression_node,
-            verifier_mles,
-        ))
+        Ok(Expression::new(expression_node, verifier_mles))
     }
 
     /// fix the variable at a certain round index, always MSB index
@@ -114,9 +98,7 @@ impl<F: Field> Expression<F, ProverMle<F>> {
             });
 
         // ----- this is literally a check -----
-        let mut observer_fn = |exp: &ExpressionNode<F>,
-                               mle_vec: &[ProverMle<F>]|
-         -> Result<()> {
+        let mut observer_fn = |exp: &ExpressionNode<F>, mle_vec: &[ProverMle<F>]| -> Result<()> {
             match exp {
                 ExpressionNode::Mle(mle_vec_idx) => {
                     let mle = mle_vec_idx.get_mle(mle_vec);
@@ -402,13 +384,14 @@ impl<F: Field> ExpressionNode<F> {
                 lhs_eval + rhs_eval
             }
             ExpressionNode::Product(mle_idx_vec) => {
-                let (mles, mles_bookkeeping_tables): (Vec<&ProverMle<F>>, Vec<Vec<F>>) = mle_idx_vec
-                    .iter()
-                    .map(|mle_vec_index| {
-                        let mle = mle_vec_index.get_mle(mle_vec);
-                        (mle, mle.mle.to_vec())
-                    })
-                    .unzip();
+                let (mles, mles_bookkeeping_tables): (Vec<&ProverMle<F>>, Vec<Vec<F>>) =
+                    mle_idx_vec
+                        .iter()
+                        .map(|mle_vec_index| {
+                            let mle = mle_vec_index.get_mle(mle_vec);
+                            (mle, mle.mle.to_vec())
+                        })
+                        .unzip();
 
                 let mut unique_mle_indices = HashSet::new();
 

@@ -20,7 +20,8 @@ use crate::{
     layer::VerificationError,
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
-        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex
+        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription,
+        verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex,
     },
     sumcheck::evaluate_at_a_point,
 };

@@ -1,7 +1,10 @@
 use super::*;
 use crate::{
     claims::RawClaim,
-    expression::{generic_expr::{Expression, ExpressionNode}, prover_expr::ProverMle},
+    expression::{
+        generic_expr::{Expression, ExpressionNode},
+        prover_expr::ProverMle,
+    },
     layer::LayerId,
     mle::{betavalues::BetaValues, dense::DenseMle},
 };

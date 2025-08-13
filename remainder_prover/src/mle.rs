@@ -39,7 +39,9 @@ pub mod verifier_mle;
 
 /// Abstract structure of an Mle
 /// Including its number of variables, indices,layer_id, but not evaluations
-pub trait AbstractMle<F: Field>: Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
+pub trait AbstractMle<F: Field>:
+    Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize<'de>
+{
     /// Returns the number of free variables this Mle is defined on.
     /// Equivalently, this is the log_2 of the size of the unpruned bookkeeping
     /// table.

@@ -10,11 +10,8 @@ use std::collections::HashSet;
 use remainder_shared_types::Fr;
 
 use crate::{
-    abstract_expr::AbstractExpression,
-    expression::generic_expr::Expression,
-    layer::LayerId,
-    layouter::nodes::NodeId,
-    mle::dense::DenseMle,
+    abstract_expr::AbstractExpression, expression::generic_expr::Expression, layer::LayerId,
+    layouter::nodes::NodeId, mle::dense::DenseMle,
 };
 
 #[test]
@@ -44,7 +41,8 @@ fn test_abstract_expr_get_sources() {
 
 #[test]
 fn test_constants_eval() {
-    let expression1: Expression<Fr, DenseMle<Fr>> = Expression::<Fr, DenseMle<Fr>>::constant(Fr::one());
+    let expression1: Expression<Fr, DenseMle<Fr>> =
+        Expression::<Fr, DenseMle<Fr>>::constant(Fr::one());
 
     let expression2: Expression<Fr, DenseMle<Fr>> =
         Expression::<Fr, DenseMle<Fr>>::constant(Fr::from(2));
@@ -454,7 +452,8 @@ fn test_linear_mle_indices_2() {
 
 #[test]
 fn big_test_eval() {
-    let expression1: Expression<Fr, DenseMle<Fr>> = Expression::<Fr, DenseMle<Fr>>::constant(Fr::one());
+    let expression1: Expression<Fr, DenseMle<Fr>> =
+        Expression::<Fr, DenseMle<Fr>>::constant(Fr::one());
 
     let mle = DenseMle::new_from_raw(
         vec![Fr::one(), Fr::from(3), Fr::from(2), Fr::one()],

@@ -2,7 +2,8 @@ use remainder_shared_types::{transcript::VerifierTranscript, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    expression::expr_errors::ExpressionError, layer::LayerId, layouter::layouting::CircuitMap, mle::AbstractMle,
+    expression::expr_errors::ExpressionError, layer::LayerId, layouter::layouting::CircuitMap,
+    mle::AbstractMle,
 };
 
 use super::{dense::DenseMle, verifier_mle::VerifierMle, MleIndex};
@@ -61,6 +62,17 @@ impl<F: Field> MleDescription<F> {
                     let indexed_mle_index = MleIndex::Indexed(index_counter);
                     index_counter += 1;
                     *mle_index = indexed_mle_index;
+                }
+                // If the MLE is indexed the same way, then skip
+                // If the MLE is indexed a different way, panic
+                // TODO (Benny): we need to handle the case that an MLE is indexed in two ways eventually
+                //               perhaps through cloning?
+                MleIndex::Indexed(i) => {
+                    if *i == index_counter {
+                        index_counter += 1;
+                    } else {
+                        panic!("Indexing the same MLE in two different ways is currently not supported!")
+                    }
                 }
                 MleIndex::Fixed(_bit) => {}
                 _ => panic!("We should not have indexed or bound bits at this point!"),
@@ -124,7 +136,7 @@ impl<F: Field> MleDescription<F> {
             .map(|mle_index| match mle_index {
                 MleIndex::Indexed(idx) => Ok(MleIndex::Bound(point[*idx], *idx)),
                 MleIndex::Fixed(val) => Ok(MleIndex::Fixed(*val)),
-                _ => Err(anyhow!(ExpressionError::SelectorBitNotBoundError)),
+                _ => Err(anyhow!(ExpressionError::EvaluateNotFullyIndexedError)),
             })
             .collect::<Result<Vec<MleIndex<F>>>>()?;
 

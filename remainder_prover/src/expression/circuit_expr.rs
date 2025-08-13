@@ -3,16 +3,19 @@
 //! other layers. See documentation in [crate::expression] for more details.
 
 use crate::{
-    expression::expr_errors::ExpressionError, layer::{
+    expression::expr_errors::ExpressionError,
+    layer::{
         gate::BinaryOperation,
         product::{PostSumcheckLayer, Product},
-    }, layouter::layouting::CircuitMap, mle::{
-        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle, MleIndex
-    }
+    },
+    layouter::layouting::CircuitMap,
+    mle::{
+        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription,
+        verifier_mle::VerifierMle, MleIndex,
+    },
 };
 use ark_std::log2;
 use itertools::Itertools;
-use std::cmp::max;
 
 use remainder_shared_types::{transcript::VerifierTranscript, Field};
 
@@ -30,14 +33,15 @@ impl<F: Field> Expression<F, MleDescription<F>> {
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Expression<F, VerifierMle<F>>> {
         let (mut expression_node, mle_vec) = self.clone().deconstruct();
-        let verifier_mles = mle_vec.into_iter().map(|m|
-            m.into_verifier_mle(point, transcript_reader)
-        ).collect::<Result<Vec<_>, _>>()?;
         expression_node.bind_selector(point);
-        Ok(Expression::new(
-            expression_node,
-            verifier_mles,
-        ))
+
+        println!("MLES: {:?}", self.mle_vec);
+
+        let verifier_mles = mle_vec
+            .into_iter()
+            .map(|m| m.into_verifier_mle(point, transcript_reader))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Expression::new(expression_node, verifier_mles))
     }
 
     /// Get the [MleDescription]s for this expression.
@@ -47,20 +51,22 @@ impl<F: Field> Expression<F, MleDescription<F>> {
 
     /// Label the free variables in an expression.
     pub fn index_mle_vars(&mut self, start_index: usize) {
-        self.expression_node.index_mle_vars(start_index, &mut self.mle_vec);
+        self.expression_node
+            .index_mle_vars(start_index, &mut self.mle_vec);
     }
 
     /// Get the [Expression<F, DenseMle<F>>] corresponding to this [Expression<F, MleDescription<F>>] using the
     /// associated data in the [CircuitMap].
-    pub fn into_prover_expression(&self, circuit_map: &CircuitMap<F>) -> Expression<F, DenseMle<F>> {
+    pub fn into_prover_expression(
+        &self,
+        circuit_map: &CircuitMap<F>,
+    ) -> Expression<F, DenseMle<F>> {
         let (expression_node, mle_vec) = self.clone().deconstruct();
-        let prover_mles = mle_vec.into_iter().map(|m|
-            m.into_dense_mle(circuit_map)
-        ).collect();
-        Expression::new(
-            expression_node,
-            prover_mles,
-        )
+        let prover_mles = mle_vec
+            .into_iter()
+            .map(|m| m.into_dense_mle(circuit_map))
+            .collect();
+        Expression::new(expression_node, prover_mles)
     }
 
     /// Get the [PostSumcheckLayer] for this expression, which represents the fully bound values of the expression.
@@ -78,20 +84,16 @@ impl<F: Field> Expression<F, MleDescription<F>> {
 impl<F: Field> ExpressionNode<F> {
     /// Turn this expression into a [VerifierExpr] which represents a fully bound expression.
     /// Should only be applicable after a full layer of sumcheck.
-    pub fn bind_selector(
-        &mut self,
-        point: &[F],
-    ) {
-        let mut bind_selector_closure = |expr: &mut ExpressionNode<F>|
-         -> Result<()> {
+    pub fn bind_selector(&mut self, point: &[F]) {
+        let mut bind_selector_closure = |expr: &mut ExpressionNode<F>| -> Result<()> {
             match expr {
                 ExpressionNode::Selector(index, ..) => match index {
-                    MleIndex::Indexed(idx) => { 
-                        *index = MleIndex::Bound(point[*idx], *idx); 
-                        Ok(()) 
-                    },
+                    MleIndex::Indexed(idx) => {
+                        *index = MleIndex::Bound(point[*idx], *idx);
+                        Ok(())
+                    }
                     _ => Err(anyhow!(ExpressionError::SelectorBitNotBoundError)),
-                }
+                },
                 _ => Ok(()),
             }
         };
@@ -109,7 +111,8 @@ impl<F: Field> ExpressionNode<F> {
     ) -> Option<MultilinearExtension<F>> {
         let output_data: Option<MultilinearExtension<F>> = match self {
             ExpressionNode::Mle(mle_vec_index) => {
-                let maybe_mle = circuit_map.get_data_from_circuit_mle(mle_vec_index.get_mle(mle_vec));
+                let maybe_mle =
+                    circuit_map.get_data_from_circuit_mle(mle_vec_index.get_mle(mle_vec));
                 if let Ok(mle) = maybe_mle {
                     Some(mle.clone())
                 } else {
@@ -172,11 +175,7 @@ impl<F: Field> ExpressionNode<F> {
     }
 
     /// Label the MLE indices of an expression, starting from the `start_index`.
-    pub fn index_mle_vars(
-        &mut self, 
-        start_index: usize,
-        mle_vec: &mut [MleDescription<F>],
-    ) {
+    pub fn index_mle_vars(&mut self, start_index: usize, mle_vec: &mut [MleDescription<F>]) {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
                 match mle_index {
@@ -192,11 +191,13 @@ impl<F: Field> ExpressionNode<F> {
                 b.index_mle_vars(start_index, mle_vec);
             }
             ExpressionNode::Mle(index_vec) => {
-                index_vec.get_mle_mut(mle_vec).index_mle_indices(start_index);
+                index_vec
+                    .get_mle_mut(mle_vec)
+                    .index_mle_indices(start_index);
             }
-            ExpressionNode::Product(index_vecs) => {
-                index_vecs.iter().for_each(|i| i.get_mle_mut(mle_vec).index_mle_indices(start_index))
-            }
+            ExpressionNode::Product(index_vecs) => index_vecs
+                .iter()
+                .for_each(|i| i.get_mle_mut(mle_vec).index_mle_indices(start_index)),
             ExpressionNode::Scaled(a, _scale_factor) => {
                 a.index_mle_vars(start_index, mle_vec);
             }
@@ -252,12 +253,22 @@ impl<F: Field> ExpressionNode<F> {
                 ));
             }
             ExpressionNode::Product(mles) => {
-                let product = Product::<F, Option<F>>::new(&mles.iter().map(|m| m.get_mle(mle_vec).clone()).collect::<Vec<_>>(), multiplier, challenges);
+                let product = Product::<F, Option<F>>::new(
+                    &mles
+                        .iter()
+                        .map(|m| m.get_mle(mle_vec).clone())
+                        .collect::<Vec<_>>(),
+                    multiplier,
+                    challenges,
+                );
                 products.push(product);
             }
             ExpressionNode::Scaled(a, scale_factor) => {
                 let acc = multiplier * scale_factor;
-                products.extend(a.get_post_sumcheck_layer_verifier(acc, challenges, mle_vec).0);
+                products.extend(
+                    a.get_post_sumcheck_layer_verifier(acc, challenges, mle_vec)
+                        .0,
+                );
             }
             ExpressionNode::Constant(constant) => {
                 products.push(Product::<F, Option<F>>::new(
@@ -268,101 +279,6 @@ impl<F: Field> ExpressionNode<F> {
             }
         }
         PostSumcheckLayer(products)
-    }
-}
-
-impl<F: Field> Expression<F, MleDescription<F>> {
-
-    /// Creates an [Expression<F, ExprDescription>] which describes the polynomial relationship
-    /// `(1 - x_0) * Self(x_1, ..., x_{n_lhs}) + b_0 * rhs(x_1, ..., x_{n_rhs})`
-    ///
-    /// NOTE that by default, performing a `select()` over an LHS and an RHS
-    /// with different numbers of variables will create a selector tree such that
-    /// the side with fewer variables always falls down the left-most side of
-    /// that subtree.
-    ///
-    /// For example, if we are calling `select()` on two MLEs,
-    /// V_i(x_0, ..., x_4) and V_i(x_0, ..., x_6)
-    /// then the resulting expression will have a single top-level selector, and
-    /// will forcibly move the first MLE (with two fewer variables) to the left-most
-    /// subtree with 5 variables:
-    /// (1 - x_0) * (1 - x_1) * (1 - x_2) * V_i(x_3, ..., x_7) +
-    /// x_0 * V_i(x_1, ..., x_7)
-    pub fn select(self, rhs: Expression<F, MleDescription<F>>) -> Self {
-        let (lhs_node, lhs_mle_vec) = self.deconstruct();
-        let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
-
-        // Compute the difference in number of free variables, to add the appropriate number of selectors
-        let num_left_selectors = max(0, rhs_node.get_num_vars(&rhs_mle_vec) - lhs_node.get_num_vars(&lhs_mle_vec));
-        let num_right_selectors = max(0, lhs_node.get_num_vars(&lhs_mle_vec) - rhs_node.get_num_vars(&rhs_mle_vec));
-
-        let lhs_subtree = if num_left_selectors > 0 {
-            // Always "go left" and "select" against a constant zero
-            (0..num_left_selectors).fold(lhs_node, |cur_subtree, _| {
-                ExpressionNode::Selector(
-                    MleIndex::Free,
-                    Box::new(cur_subtree),
-                    Box::new(ExpressionNode::Constant(F::ZERO)),
-                )
-            })
-        } else {
-            lhs_node
-        };
-
-        let rhs_subtree = if num_right_selectors > 0 {
-            // Always "go left" and "select" against a constant zero
-            (0..num_right_selectors).fold(rhs_node, |cur_subtree, _| {
-                ExpressionNode::Selector(
-                    MleIndex::Free,
-                    Box::new(cur_subtree),
-                    Box::new(ExpressionNode::Constant(F::ZERO)),
-                )
-            })
-        } else {
-            rhs_node
-        };
-
-        // Sanitycheck
-        debug_assert_eq!(lhs_subtree.get_num_vars(&lhs_mle_vec), rhs_subtree.get_num_vars(&rhs_mle_vec));
-
-        // Finally, a selector against the two (equal-num-vars) sides!
-        let concat_node =
-            ExpressionNode::Selector(MleIndex::Free, Box::new(lhs_subtree), Box::new(rhs_subtree));
-
-        let concat_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect_vec();
-
-        Expression::new(concat_node, concat_mle_vec)
-    }
-
-    /// Create a nested selector Expression that selects between 2^k Expressions
-    /// by creating a binary tree of Selector Expressions.
-    /// The order of the leaves is the order of the input expressions.
-    /// (Note that this is very different from calling [Self::select] consecutively.)
-    pub fn binary_tree_selector(expressions: Vec<Self>) -> Self {
-        // Ensure length is a power of two
-        assert!(expressions.len().is_power_of_two());
-        let mut expressions = expressions;
-        while expressions.len() > 1 {
-            // Iterate over consecutive pairs of expressions, creating a new expression that selects between them
-            expressions = expressions
-                .into_iter()
-                .tuples()
-                .map(|(lhs, rhs)| {
-                    let (lhs_node, lhs_mle_vec) = lhs.deconstruct();
-                    let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
-
-                    let selector_node = ExpressionNode::Selector(
-                        MleIndex::Free,
-                        Box::new(lhs_node),
-                        Box::new(rhs_node),
-                    );
-                    let selector_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect_vec();
-
-                    Expression::new(selector_node, selector_mle_vec)
-                })
-                .collect();
-        }
-        expressions[0].clone()
     }
 }
 
