@@ -367,6 +367,7 @@ impl<F: Field> ExpressionNode<F> {
     /// get all of the linear rounds from an expression tree
     pub fn get_all_linear_rounds<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> Vec<usize> {
         let degree_per_index = self.get_rounds_helper(mle_vec);
+        println!("DEGREE_PER_INDEX: {:?}", degree_per_index);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] == 1)
             .collect()
@@ -429,6 +430,7 @@ impl<F: Field> ExpressionNode<F> {
                 };
                 let a_degree_per_index = a.get_rounds_helper(mle_vec);
                 let b_degree_per_index = b.get_rounds_helper(mle_vec);
+
                 // linear operator -- take the max degree
                 for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
                     if let Some(a_degree) = a_degree_per_index.get(i) {
@@ -608,42 +610,42 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
             .chain(rhs_mle_vec)
             .collect::<Vec<_>>();
 
-        // Compute the difference in number of free variables, to add the appropriate number of selectors
-        let left_num_vars = lhs_node.get_num_vars(&concat_mle_vec);
-        let right_num_vars = rhs_node.get_num_vars(&concat_mle_vec);
+        // // Compute the difference in number of free variables, to add the appropriate number of selectors
+        // let left_num_vars = lhs_node.get_num_vars(&concat_mle_vec);
+        // let right_num_vars = rhs_node.get_num_vars(&concat_mle_vec);
 
-        let lhs_subtree = if left_num_vars < right_num_vars {
-            // Always "go left" and "select" against a constant zero
-            (0..right_num_vars - left_num_vars).fold(lhs_node, |cur_subtree, _| {
-                ExpressionNode::Selector(
-                    MleIndex::Free,
-                    Box::new(cur_subtree),
-                    Box::new(ExpressionNode::Constant(F::ZERO)),
-                )
-            })
-        } else {
-            lhs_node
-        };
+        // let lhs_node = if left_num_vars < right_num_vars {
+        //     // Always "go left" and "select" against a constant zero
+        //     (0..right_num_vars - left_num_vars).fold(lhs_node, |cur_subtree, _| {
+        //         ExpressionNode::Selector(
+        //             MleIndex::Free,
+        //             Box::new(cur_subtree),
+        //             Box::new(ExpressionNode::Constant(F::ZERO)),
+        //         )
+        //     })
+        // } else {
+        //     lhs_node
+        // };
 
-        let rhs_subtree = if left_num_vars > right_num_vars {
-            // Always "go left" and "select" against a constant zero
-            (0..left_num_vars - right_num_vars).fold(rhs_node, |cur_subtree, _| {
-                ExpressionNode::Selector(
-                    MleIndex::Free,
-                    Box::new(cur_subtree),
-                    Box::new(ExpressionNode::Constant(F::ZERO)),
-                )
-            })
-        } else {
-            rhs_node
-        };
+        // let rhs_node = if left_num_vars > right_num_vars {
+        //     // Always "go left" and "select" against a constant zero
+        //     (0..left_num_vars - right_num_vars).fold(rhs_node, |cur_subtree, _| {
+        //         ExpressionNode::Selector(
+        //             MleIndex::Free,
+        //             Box::new(cur_subtree),
+        //             Box::new(ExpressionNode::Constant(F::ZERO)),
+        //         )
+        //     })
+        // } else {
+        //     rhs_node
+        // };
 
-        // Sanitycheck
-        debug_assert_eq!(lhs_subtree.get_num_vars(&concat_mle_vec), rhs_subtree.get_num_vars(&concat_mle_vec));
+        // // Sanitycheck
+        // debug_assert_eq!(lhs_node.get_num_vars(&concat_mle_vec), rhs_node.get_num_vars(&concat_mle_vec));
 
         // Finally, a selector against the two (equal-num-vars) sides!
         let concat_node =
-            ExpressionNode::Selector(MleIndex::Free, Box::new(lhs_subtree), Box::new(rhs_subtree));
+            ExpressionNode::Selector(MleIndex::Free, Box::new(lhs_node), Box::new(rhs_node));
 
         Expression::new(concat_node, concat_mle_vec)
     }
