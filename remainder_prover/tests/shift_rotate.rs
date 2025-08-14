@@ -7,9 +7,9 @@ use remainder::{
     prover::helpers::test_circuit_with_memory_optimized_config,
 };
 use remainder_shared_types::Fr;
-use tracing::Level;
-use tracing_subscriber::fmt;
-use tracing_subscriber::{self};
+// use tracing::Level;
+// use tracing_subscriber::fmt;
+// use tracing_subscriber::{self};
 
 fn build_rotate_circuit(arity: usize, rotation_bits: i32) -> Circuit<Fr> {
     let mut builder = CircuitBuilder::new();
@@ -83,7 +83,7 @@ fn sample_right_rot_data(mut circuit: Circuit<Fr>) -> ProvableCircuit<Fr> {
 
 #[test]
 fn left_rotate_test() {
-    let _subscriber = fmt().with_max_level(Level::DEBUG).init();
+    // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
 
     let circuit = build_rotate_circuit(3, -2);
     let provable_circuit = sample_left_rot_data(circuit);
@@ -92,7 +92,7 @@ fn left_rotate_test() {
 
 #[test]
 fn right_rotate_test() {
-    let _subscriber = fmt().with_max_level(Level::DEBUG).init();
+    // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
 
     let circuit = build_rotate_circuit(3, 5);
     let provable_circuit = sample_right_rot_data(circuit);

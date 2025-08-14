@@ -10,6 +10,16 @@ use crate::layouter::builder::{CircuitBuilder, NodeRef};
 
 use remainder_shared_types::Field;
 
+const fn sha_words_2_num_vars(value: usize) -> usize {
+    if value == 32 {
+        5
+    } else if value == 64 {
+        6
+    } else {
+        panic!("Invalid SHA wordsize")
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ChGate {
     ch_sector: NodeRef,
@@ -83,7 +93,6 @@ impl MajGate {
         let x_p_y_p_z =
             x_vars.expr() + y_vars.expr() + z_vars.expr() - const_2.clone() * xyz.clone();
 
-        // Computes the normalized version of xor
         let maj_sector = builder_ref.add_sector(xy + yz + xz - const_2 * xyz * x_p_y_p_z);
 
         Self { maj_sector }
@@ -94,21 +103,13 @@ impl MajGate {
     }
 }
 
-const fn sha_words_2_num_vars(value: usize) -> usize {
-    if value == 32 {
-        5
-    } else if value == 64 {
-        6
-    } else {
-        panic!("Invalid SHA wordsize")
-    }
-}
-
-/// The Capital Sigma function described on Printed Page Number 10
-/// in NIST SP-180.4. The const parameters have following meaning
-///  ROTR1 : Value of rotation in first ROTR
-///  ROTR2 : Value of rotation in second ROTR
-///  ROTR3 : Value of rotation in third ROTR
+/// The Capital Sigma function described on Printed Page Number 10 in
+/// NIST SP-180.4. The const parameters have following meaning ROTR1 :
+///  Value of rotation in first ROTR ROTR2 : Value of rotation in second
+///  ROTR ROTR3 : Value of rotation in third ROTR
+///
+/// NOTE: In this code the wires are assumed to be numbers in MSB first
+/// (i.e., most significant bit is treated as wire 0.
 #[derive(Clone, Debug)]
 pub struct Sigma<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i32> {
     sigma_sector: NodeRef,
@@ -123,9 +124,16 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i3
         let rotr2 = RotateNode::new(builder_ref, num_vars, ROTR2, x_vars);
         let rotr3 = RotateNode::new(builder_ref, num_vars, ROTR3, x_vars);
 
-        let sigma_sector = builder_ref.add_sector(
-            rotr1.get_output().expr() + rotr2.get_output().expr() + rotr3.get_output().expr(),
-        );
+        let r1_expr = rotr1.get_output().expr();
+        let r2_expr = rotr2.get_output().expr();
+        let r3_expr = rotr3.get_output().expr();
+        let r1_xor_r2 = r1_expr.clone() + r2_expr.clone()
+            - ExprBuilder::constant(F::from(2)) * r1_expr * r2_expr;
+
+        let r1_xor_r2_xor_r3 = r1_xor_r2.clone() + r3_expr.clone()
+            - ExprBuilder::constant(F::from(2)) * r1_xor_r2 * r3_expr;
+
+        let sigma_sector = builder_ref.add_sector(r1_xor_r2_xor_r3);
 
         Self { sigma_sector }
     }
@@ -139,7 +147,10 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i3
 /// in NIST SP-180.4. The const parameters have following meaning
 ///  ROTR1 : Value of rotation in first ROTR
 ///  ROTR2 : Value of rotation in second ROTR
-///  SHR3 : Value of rotation in third ROTR
+///  SHR3 : Value of rotation in third SHR
+///
+/// NOTE: In this code the wires are assumed to be numbers in MSB first
+/// (i.e., most significant bit is represented with wire 0)
 #[derive(Clone, Debug)]
 pub struct SmallSigma<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32> {
     sigma_sector: NodeRef,
@@ -154,9 +165,17 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32
         let rotr2 = RotateNode::new(builder_ref, num_vars, ROTR2, x_vars);
         let shr3 = ShiftNode::new(builder_ref, num_vars, SHR3, x_vars);
 
-        let sigma_sector = builder_ref.add_sector(
-            rotr1.get_output().expr() + rotr2.get_output().expr() + shr3.get_output().expr(),
-        );
+        let r1_expr = rotr1.get_output().expr();
+        let r2_expr = rotr2.get_output().expr();
+        let s3_expr = shr3.get_output().expr();
+
+        let r1_xor_r2 = r1_expr.clone() + r2_expr.clone()
+            - ExprBuilder::constant(F::from(2)) * r1_expr * r2_expr;
+
+        let r1_xor_r2_xor_s3 = r1_xor_r2.clone() + s3_expr.clone()
+            - ExprBuilder::constant(F::from(2)) * r1_xor_r2 * s3_expr;
+
+        let sigma_sector = builder_ref.add_sector(r1_xor_r2_xor_s3);
 
         Self { sigma_sector }
     }
