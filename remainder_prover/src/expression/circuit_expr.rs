@@ -35,8 +35,6 @@ impl<F: Field> Expression<F, MleDescription<F>> {
         let (mut expression_node, mle_vec) = self.clone().deconstruct();
         expression_node.bind_selector(point);
 
-        println!("MLES: {:?}", self.mle_vec);
-
         let verifier_mles = mle_vec
             .into_iter()
             .map(|m| m.into_verifier_mle(point, transcript_reader))
@@ -62,7 +60,7 @@ impl<F: Field> Expression<F, MleDescription<F>> {
         circuit_map: &CircuitMap<F>,
     ) -> Expression<F, DenseMle<F>> {
         let (expression_node, mle_vec) = self.clone().deconstruct();
-        let prover_mles = mle_vec
+        let prover_mles: Vec<_> = mle_vec
             .into_iter()
             .map(|m| m.into_dense_mle(circuit_map))
             .collect();
