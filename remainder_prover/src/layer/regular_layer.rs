@@ -24,8 +24,8 @@ use crate::{
     layer::{Layer, LayerId, VerificationError},
     layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
-        betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription,
-        verifier_mle::VerifierMle, AbstractMle, Mle,
+        betavalues::BetaValues, mle_description::MleDescription, verifier_mle::VerifierMle,
+        AbstractMle, Mle,
     },
     sumcheck::evaluate_at_a_point,
 };
@@ -107,41 +107,6 @@ impl<F: Field> RegularLayer<F> {
     pub fn get_expression(&self) -> &Expression<F, ProverMle<F>> {
         &self.expression
     }
-
-    /// Traverse the fully-bound `self.expression` and append all MLE values
-    /// to the trascript.
-    pub fn append_leaf_mles_to_transcript(
-        &self,
-        transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<()> {
-        let mut observer_fn =
-            |expr_node: &ExpressionNode<F>, mle_vec: &[ProverMle<F>]| -> Result<()> {
-                match expr_node {
-                    ExpressionNode::Mle(mle_vec_index) => {
-                        let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
-                        let val = mle.mle.value();
-                        transcript_writer.append("Fully bound MLE evaluation", val);
-                        Ok(())
-                    }
-                    ExpressionNode::Product(mle_vec_indices) => {
-                        for mle_vec_index in mle_vec_indices {
-                            let mle = &mle_vec[mle_vec_index.index()];
-                            let eval = mle.mle.value();
-                            transcript_writer.append("Fully bound MLE evaluation", eval);
-                        }
-                        Ok(())
-                    }
-                    ExpressionNode::Constant(_)
-                    | ExpressionNode::Scaled(_, _)
-                    | ExpressionNode::Sum(_, _)
-                    | ExpressionNode::Selector(_, _, _) => Ok(()),
-                }
-            };
-
-        let _ = self.expression.traverse(&mut observer_fn);
-
-        Ok(())
-    }
 }
 
 impl<F: Field> Layer<F> for RegularLayer<F> {
@@ -209,8 +174,11 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         // By now, `self.expression` should be fully bound.
         assert_eq!(self.expression.get_expression_num_free_variables(), 0);
 
-        // Append the values of the leaf MLEs to the transcript.
-        self.append_leaf_mles_to_transcript(transcript_writer)?;
+        // Append the evaluations of the MLEs to the transcript.
+        for mle in &self.expression.mle_vec {
+            let val = mle.mle.value();
+            transcript_writer.append("Fully bound MLE evaluation", val);
+        }
 
         Ok(())
     }
