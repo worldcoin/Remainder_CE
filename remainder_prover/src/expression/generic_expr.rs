@@ -581,22 +581,69 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
         Expression::new(product_node, product_list)
     }
 
-    /// create a selector which describes the polynomial relationship
+    /// Creates an [Expression] which describes the polynomial relationship
     /// `(1 - x_0) * Self(x_1, ..., x_{n_lhs}) + b_0 * rhs(x_1, ..., x_{n_rhs})`
+    ///
+    /// NOTE that by default, performing a `select()` over an LHS and an RHS
+    /// with different numbers of variables will create a selector tree such that
+    /// the side with fewer variables always falls down the left-most side of
+    /// that subtree.
+    ///
+    /// For example, if we are calling `select()` on two MLEs,
+    /// V_i(x_0, ..., x_4) and V_i(x_0, ..., x_6)
+    /// then the resulting expression will have a single top-level selector, and
+    /// will forcibly move the first MLE (with two fewer variables) to the left-most
+    /// subtree with 5 variables:
+    /// (1 - x_0) * (1 - x_1) * (1 - x_2) * V_i(x_3, ..., x_7) +
+    /// x_0 * V_i(x_1, ..., x_7)
     pub fn select(self, mut rhs: Self) -> Self {
         let offset = self.num_mle();
         rhs.increment_mle_vec_indices(offset);
 
         let (lhs_node, lhs_mle_vec) = self.deconstruct();
         let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
+
         let concat_mle_vec = lhs_mle_vec
             .into_iter()
             .chain(rhs_mle_vec)
             .collect::<Vec<_>>();
 
+        // Compute the difference in number of free variables, to add the appropriate number of selectors
+        let left_num_vars = lhs_node.get_num_vars(&concat_mle_vec);
+        let right_num_vars = rhs_node.get_num_vars(&concat_mle_vec);
+
+        let lhs_subtree = if left_num_vars < right_num_vars {
+            // Always "go left" and "select" against a constant zero
+            (0..right_num_vars - left_num_vars).fold(lhs_node, |cur_subtree, _| {
+                ExpressionNode::Selector(
+                    MleIndex::Free,
+                    Box::new(cur_subtree),
+                    Box::new(ExpressionNode::Constant(F::ZERO)),
+                )
+            })
+        } else {
+            lhs_node
+        };
+
+        let rhs_subtree = if left_num_vars > right_num_vars {
+            // Always "go left" and "select" against a constant zero
+            (0..left_num_vars - right_num_vars).fold(rhs_node, |cur_subtree, _| {
+                ExpressionNode::Selector(
+                    MleIndex::Free,
+                    Box::new(cur_subtree),
+                    Box::new(ExpressionNode::Constant(F::ZERO)),
+                )
+            })
+        } else {
+            rhs_node
+        };
+
+        // Sanitycheck
+        debug_assert_eq!(lhs_subtree.get_num_vars(&concat_mle_vec), rhs_subtree.get_num_vars(&concat_mle_vec));
+
         // Finally, a selector against the two (equal-num-vars) sides!
         let concat_node =
-            ExpressionNode::Selector(MleIndex::Free, Box::new(lhs_node), Box::new(rhs_node));
+            ExpressionNode::Selector(MleIndex::Free, Box::new(lhs_subtree), Box::new(rhs_subtree));
 
         Expression::new(concat_node, concat_mle_vec)
     }

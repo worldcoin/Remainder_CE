@@ -80,3 +80,7 @@ harness = false
 [[bench]]
 name = "polynomials"
 harness = false
+
+[[bench]]
+name = "polynomials_same_root"
+harness = false
