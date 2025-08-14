@@ -440,6 +440,7 @@ fn test_linear_mle_indices_2() {
     );
     let mut expression_full = expression_half.select(expression_other_half);
     expression_full.index_mle_indices(0);
+
     let all_linear_indices = expression_full
         .expression_node
         .get_all_linear_rounds(&expression_full.mle_vec);
