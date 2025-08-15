@@ -452,6 +452,7 @@ impl<F: Field> RegularLayerDescription<F> {
         Self { id, expression }
     }
 
+    /// Get the number of variables in the underlying expression of the layer.
     pub fn get_num_vars(&self) -> usize {
         self.expression.num_vars()
     }
