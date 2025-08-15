@@ -3,12 +3,11 @@
 //! other layers. See documentation in [crate::expression] for more details.
 
 use crate::{
-    expression::expr_errors::ExpressionError,
+    circuit_layout::CircuitEvalMap,
     layer::{
         gate::BinaryOperation,
         product::{PostSumcheckLayer, Product},
     },
-    layouter::layouting::CircuitMap,
     mle::{
         dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription,
         verifier_mle::VerifierMle, MleIndex,
@@ -56,8 +55,11 @@ impl<F: Field> Expression<F, MleDescription<F>> {
     /// Get the [Expression<F, DenseMle<F>>] corresponding to this [Expression<F, MleDescription<F>>] using the
     /// associated data in the [CircuitMap].
     pub fn into_prover_expression(
+        
         &self,
-        circuit_map: &CircuitMap<F>,
+       
+        circuit_map: &CircuitEvalMap<F>,
+    ,
     ) -> Expression<F, DenseMle<F>> {
         let (expression_node, mle_vec) = self.clone().deconstruct();
         let prover_mles: Vec<_> = mle_vec
@@ -104,7 +106,7 @@ impl<F: Field> ExpressionNode<F> {
     /// corresponding to the [MleDescription].
     pub fn compute_bookkeeping_table(
         &self,
-        circuit_map: &CircuitMap<F>,
+        circuit_map: &CircuitEvalMap<F>,
         mle_vec: &[MleDescription<F>],
     ) -> Option<MultilinearExtension<F>> {
         let output_data: Option<MultilinearExtension<F>> = match self {

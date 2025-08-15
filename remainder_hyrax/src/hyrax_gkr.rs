@@ -44,9 +44,6 @@ pub mod hyrax_layer;
 /// The module that contains all functions necessary to do operations on an
 /// output layer.
 pub mod hyrax_output_layer;
-#[cfg(test)]
-/// The testing module for integration tests
-pub mod tests;
 
 /// The struct that holds all the respective proofs that the verifier needs in
 /// order to verify a Hyrax proof, i.e. the circuit proof along with the proofs
