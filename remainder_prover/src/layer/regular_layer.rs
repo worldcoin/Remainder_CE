@@ -23,8 +23,11 @@ use crate::{
         prover_expr::ProverMle,
     },
     layer::{Layer, LayerId, VerificationError},
-    mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription, Mle},
-    sumcheck::{evaluate_at_a_point, get_round_degree},
+    mle::{
+        betavalues::BetaValues, mle_description::MleDescription, verifier_mle::VerifierMle,
+        AbstractMle, Mle,
+    },
+    sumcheck::evaluate_at_a_point,
 };
 
 use super::{

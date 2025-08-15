@@ -4,6 +4,7 @@
 
 use crate::{
     circuit_layout::CircuitEvalMap,
+    expression::expr_errors::ExpressionError,
     layer::{
         gate::BinaryOperation,
         product::{PostSumcheckLayer, Product},
@@ -55,11 +56,8 @@ impl<F: Field> Expression<F, MleDescription<F>> {
     /// Get the [Expression<F, DenseMle<F>>] corresponding to this [Expression<F, MleDescription<F>>] using the
     /// associated data in the [CircuitMap].
     pub fn into_prover_expression(
-        
         &self,
-       
         circuit_map: &CircuitEvalMap<F>,
-    ,
     ) -> Expression<F, DenseMle<F>> {
         let (expression_node, mle_vec) = self.clone().deconstruct();
         let prover_mles: Vec<_> = mle_vec

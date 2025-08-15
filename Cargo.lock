@@ -1712,7 +1712,6 @@ dependencies = [
  "rand_chacha",
  "rayon",
  "remainder",
- "remainder-hyrax",
  "remainder-ligero",
  "remainder-shared-types",
  "serde",

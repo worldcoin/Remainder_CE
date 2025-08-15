@@ -13,15 +13,6 @@ use itertools::Itertools;
 use remainder_shared_types::Field;
 use thiserror::Error;
 
-use crate::{
-    layer::LayerId,
-    layouter::nodes::sector::Sector,
-    mle::{
-        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, AbstractMle,
-    },
-};
-use crate::layouter::nodes::sector::Sector;
-
 use super::nodes::{
     circuit_inputs::{InputLayerNode, InputShred},
     circuit_outputs::OutputNode,
@@ -33,6 +24,7 @@ use super::nodes::{
     split_node::SplitNode,
     CircuitNode, CompilableNode, NodeId,
 };
+use crate::layouter::nodes::sector::Sector;
 
 use anyhow::{anyhow, Result};
 

@@ -1,26 +1,14 @@
 //! Nodes that implement LogUp.
 
 use crate::abstract_expr::AbstractExpression;
-<<<<<<< HEAD:remainder_prover/src/layouter/nodes/lookup.rs
-use crate::layer::layer_enum::LayerDescriptionEnum;
-use crate::layer::regular_layer::RegularLayerDescription;
-use crate::layer::LayerId;
 use crate::layouter::builder::CircuitMap;
-use crate::mle::mle_description::MleDescription;
-use crate::mle::{AbstractMle, MleIndex};
-use crate::output_layer::OutputLayerDescription;
-use crate::utils::mle::get_total_mle_indices;
-=======
 use remainder::{
-    expression::{circuit_expr::ExprDescription, generic_expr::Expression},
+    expression::generic_expr::Expression,
     layer::{layer_enum::LayerDescriptionEnum, regular_layer::RegularLayerDescription, LayerId},
-    mle::{mle_description::MleDescription, MleIndex},
+    mle::{mle_description::MleDescription, AbstractMle, MleIndex},
     output_layer::OutputLayerDescription,
     utils::mle::get_total_mle_indices,
 };
-
-use crate::layouter::builder::CircuitMap;
->>>>>>> benny/extract_frontend:remainder_frontend/src/layouter/nodes/lookup.rs
 
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::Field;
@@ -135,12 +123,7 @@ impl LookupTable {
         circuit_map: &mut CircuitMap,
     ) -> Result<LookupCircuitDescription<F>> {
         type AE<F> = AbstractExpression<F>;
-<<<<<<< HEAD:remainder_prover/src/layouter/nodes/lookup.rs
         type CE<F> = Expression<F, MleDescription<F>>;
-=======
-        type CE<F> = Expression<F, ExprDescription>;
->>>>>>> benny/extract_frontend:remainder_frontend/src/layouter/nodes/lookup.rs
-
         // Ensure that number of LookupConstraints is a power of two (otherwise when we concat the
         // constrained nodes, there will be padding, and the padding value is potentially not in the
         // table

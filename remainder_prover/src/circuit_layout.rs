@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::input_layer::ligero_input_layer::{
     LigeroInputLayerDescription, LigeroInputLayerDescriptionWithPrecommit,
 };
+use crate::mle::AbstractMle;
 use crate::prover::GKRCircuitDescription;
 use crate::{
     layer::LayerId,

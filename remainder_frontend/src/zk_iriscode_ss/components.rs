@@ -1,14 +1,9 @@
 use remainder_shared_types::Field;
 
-<<<<<<< HEAD:remainder_prover/src/zk_iriscode_ss/components.rs
 use crate::{
     abstract_expr::{AbstractExpression, ExprBuilder},
     layouter::builder::{CircuitBuilder, NodeRef},
 };
-=======
-use crate::abstract_expr::{AbstractExpression, ExprBuilder};
-use crate::layouter::builder::{CircuitBuilder, NodeRef};
->>>>>>> benny/extract_frontend:remainder_frontend/src/zk_iriscode_ss/components.rs
 
 /// Components for Zk iris code computation
 pub struct ZkIriscodeComponent;
@@ -23,12 +18,6 @@ impl ZkIriscodeComponent {
         rh_multiplicands: Vec<&NodeRef<F>>,
     ) -> NodeRef<F> {
         assert_eq!(lh_multiplicands.len(), rh_multiplicands.len());
-<<<<<<< HEAD:remainder_prover/src/zk_iriscode_ss/components.rs
-        let sector = builder_ref.add_sector(lh_multiplicands.iter().zip(rh_multiplicands).fold(
-            AbstractExpression::<F>::constant(F::ZERO),
-            |acc, (lh, rh)| acc + ExprBuilder::products(vec![lh.id(), rh.id()]),
-        ));
-=======
         let sector = builder_ref.add_sector(
             lh_multiplicands
                 .iter()
@@ -37,7 +26,6 @@ impl ZkIriscodeComponent {
                     acc + ExprBuilder::products(vec![lh.id(), rh.id()])
                 }),
         );
->>>>>>> benny/extract_frontend:remainder_frontend/src/zk_iriscode_ss/components.rs
         sector
     }
 }
