@@ -12,16 +12,16 @@ use super::{evals::EvaluationsIterator, mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
     claims::RawClaim,
     mle::{
+        {
         evals::{
             fix_variable_at_index_to_bookkeeping_table_copy, Evaluations, MultilinearExtension,
         },
         mle_enum::LiftTo,
     },
+        AbstractMle,
+    },
 };
-use crate::{
-    expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::LayerId,
-};
+use crate::{expression::generic_expr::Expression, layer::LayerId};
 use remainder_shared_types::{field::ExtensionField, Field};
 
 /// An implementation of an [Mle] using a dense representation.
@@ -36,13 +36,22 @@ pub struct DenseMle<F: Field> {
     pub mle_indices: Vec<MleIndex<F>>,
 }
 
-impl<F: Field> Mle<F> for DenseMle<F> {
+impl<F: Field> AbstractMle<F> for DenseMle<F> {
     type ExtendedMle<E: ExtensionField<F>> = DenseMle<E>;
 
     fn num_free_vars(&self) -> usize {
         self.mle.num_vars()
     }
 
+    fn mle_indices(&self) -> &[MleIndex<F>] {
+        &self.mle_indices
+    }
+
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+}
+impl<F: Field> Mle<F> for DenseMle<F> {
     fn get_padded_evaluations(&self) -> Vec<F> {
         let size: usize = 1 << self.mle.num_vars();
         let padding = size - self.mle.len();
@@ -55,20 +64,12 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         self.mle_indices.clone_from(&new_bits);
     }
 
-    fn layer_id(&self) -> LayerId {
-        self.layer_id
-    }
-
     fn len(&self) -> usize {
         self.mle.len()
     }
 
     fn iter(&self) -> EvaluationsIterator<F> {
         self.mle.iter()
-    }
-
-    fn mle_indices(&self) -> &[MleIndex<F>] {
-        &self.mle_indices
     }
 
     fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<RawClaim<F>> {
@@ -303,21 +304,13 @@ impl<F: Field> DenseMle<F> {
         }
     }
 
-    /// Constructs a new `DenseMle` with specified MLE indices, normally when we are
-    /// trying to construct a new MLE based off of a previous MLE, such as in
-    /// [crate::layer::matmult::MatMult], but want to preserve the "prefix vars."
-    ///
-    /// The MLE should not have ever been mutated if this function is ever called, so none of the
-    /// indices should ever be Indexed here.
-    pub fn new_with_indices(data: &[F], layer_id: LayerId, mle_indices: &[MleIndex<F>]) -> Self {
+    /// Constructs a new `DenseMle` with specified MLE indices
+    pub fn new_with_indices(
+        data: MultilinearExtension<F>,
+        layer_id: LayerId,
+        mle_indices: &[MleIndex<F>],
+    ) -> Self {
         let mut mle = DenseMle::new_from_raw(data.to_vec(), layer_id);
-
-        let all_indices_free_or_fixed = mle_indices.iter().all(|index| {
-            index == &MleIndex::Free
-                || index == &MleIndex::Fixed(true)
-                || index == &MleIndex::Fixed(false)
-        });
-        assert!(all_indices_free_or_fixed);
 
         mle.mle_indices = mle_indices.to_vec();
         mle
@@ -416,8 +409,8 @@ impl<F: Field> DenseMle<F> {
     }
 
     /// Creates an expression from the current MLE.
-    pub fn expression(self) -> Expression<F, ProverExpr> {
-        Expression::<F, ProverExpr>::mle(self)
+    pub fn expression(self) -> Expression<F, DenseMle<F>> {
+        Expression::<F, DenseMle<F>>::mle(self)
     }
 
     /// Returns the evaluation challenges for a fully-bound MLE.

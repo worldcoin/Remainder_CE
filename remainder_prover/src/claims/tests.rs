@@ -1,5 +1,5 @@
 use crate::expression::generic_expr::Expression;
-use crate::expression::prover_expr::ProverExpr;
+use crate::expression::prover_expr::ProverMle;
 use crate::layer::regular_layer::RegularLayer;
 use crate::layer::Layer;
 use crate::mle::dense::DenseMle;
@@ -17,12 +17,13 @@ use remainder_shared_types::Fr;
 #[test]
 fn test_get_claim() {
     // [1, 1, 1, 1] \oplus (1 - (1 * (1 + V[1, 1, 1, 1]))) * 2
-    let expression1: Expression<Fr, ProverExpr> = Expression::<Fr, ProverExpr>::constant(Fr::one());
+    let expression1: Expression<Fr, ProverMle<Fr>> =
+        Expression::<Fr, ProverMle<Fr>>::constant(Fr::one());
     let mle = DenseMle::<Fr>::new_from_raw(
         vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
         LayerId::Input(0),
     );
-    let expression3 = Expression::<Fr, ProverExpr>::mle(mle);
+    let expression3 = Expression::<Fr, ProverMle<Fr>>::mle(mle);
     let expression = expression1.clone() + expression3.clone();
     let expression = expression1 - expression;
     let expression = expression * Fr::from(2);
@@ -34,7 +35,7 @@ fn test_get_claim() {
 /// Builds a vector of [Claim]s by evaluation an expression `expr` on
 /// each point in `points`.
 fn claims_from_expr_and_points(
-    expr: &Expression<Fr, ProverExpr>,
+    expr: &Expression<Fr, ProverMle<Fr>>,
     points: &Vec<Vec<Fr>>,
 ) -> Vec<Claim<Fr>> {
     points
@@ -202,7 +203,7 @@ fn test_aggro_claim_4() {
     let mle2 = mle2.clone();
 
     let output_mles_from_layer = vec![mle.clone(), mle2.clone()];
-    let expr = Expression::<Fr, ProverExpr>::products(vec![mle, mle2]);
+    let expr = Expression::<Fr, ProverMle<Fr>>::products(vec![mle, mle2]);
     let mut expr_copy = expr.clone();
 
     let layer = RegularLayer::new_raw(LayerId::Input(0), expr);
@@ -253,7 +254,7 @@ fn test_aggro_claim_negative_1() {
     let output_mles_from_layer = vec![mle1.clone()];
 
     let mle = mle1.clone();
-    let mut expr = Expression::<Fr, ProverExpr>::mle(mle);
+    let mut expr = Expression::<Fr, ProverMle<Fr>>::mle(mle);
 
     let layer = RegularLayer::new_raw(LayerId::Input(0), expr.clone());
 
@@ -307,7 +308,7 @@ fn test_aggro_claim_negative_2() {
     ];
     let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
     let mle = mle1.clone();
-    let expr = Expression::<Fr, ProverExpr>::mle(mle);
+    let expr = Expression::<Fr, ProverMle<Fr>>::mle(mle);
     let mut expr_copy = expr.clone();
     let output_mle_from_layer = vec![mle1.clone()];
 

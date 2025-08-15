@@ -4,7 +4,7 @@
 
 use crate::{
     mle::{
-        dense::DenseMle, evals::{Evaluations, MultilinearExtension}, mle_enum::LiftTo, Mle, MleIndex
+        dense::DenseMle, evals::{Evaluations, MultilinearExtension}, mle_enum::LiftTo, AbstractMle, Mle, MleIndex
     },
     utils::mle::evaluate_mle_at_a_point_gray_codes,
 };

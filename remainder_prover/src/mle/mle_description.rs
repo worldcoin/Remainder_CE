@@ -2,7 +2,8 @@ use remainder_shared_types::{transcript::VerifierTranscript, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    expression::expr_errors::ExpressionError, layer::LayerId, layouter::layouting::CircuitMap,
+    circuit_layout::CircuitEvalMap, expression::expr_errors::ExpressionError, layer::LayerId,
+    mle::AbstractMle,
 };
 
 use super::{dense::DenseMle, verifier_mle::VerifierMle, MleIndex};
@@ -20,6 +21,18 @@ pub struct MleDescription<F: Field> {
 
     /// A list of indices where the free variables have been assigned an index.
     var_indices: Vec<MleIndex<F>>,
+}
+
+impl<F: Field> AbstractMle<F> for MleDescription<F> {
+    /// Returns the [LayerId] of this MleDescription.
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+
+    /// Returns the MLE indices of this MleDescription.
+    fn mle_indices(&self) -> &[MleIndex<F>] {
+        &self.var_indices
+    }
 }
 
 impl<F: Field> MleDescription<F> {
@@ -50,30 +63,20 @@ impl<F: Field> MleDescription<F> {
                     index_counter += 1;
                     *mle_index = indexed_mle_index;
                 }
+                // If the MLE is indexed the same way, then skip
+                // If the MLE is indexed a different way, panic
+                // TODO (Benny): we need to handle the case that an MLE is indexed in two ways eventually
+                //               perhaps through cloning?
+                MleIndex::Indexed(i) => {
+                    if *i == index_counter {
+                        index_counter += 1;
+                    } else {
+                        panic!("Indexing the same MLE in two different ways is currently not supported!")
+                    }
+                }
                 MleIndex::Fixed(_bit) => {}
                 _ => panic!("We should not have indexed or bound bits at this point!"),
             });
-    }
-
-    /// Returns the [LayerId] of this MleDescription.
-    pub fn layer_id(&self) -> LayerId {
-        self.layer_id
-    }
-
-    /// Returns the MLE indices of this MleDescription.
-    pub fn var_indices(&self) -> &[MleIndex<F>] {
-        &self.var_indices
-    }
-
-    /// The number of [MleIndex::Indexed] OR [MleIndex::Free] bits in this MLE.
-    pub fn num_free_vars(&self) -> usize {
-        self.var_indices.iter().fold(0, |acc, idx| {
-            acc + match idx {
-                MleIndex::Free => 1,
-                MleIndex::Indexed(_) => 1,
-                _ => 0,
-            }
-        })
     }
 
     /// Get the bits in the MLE that are fixed bits.
@@ -90,9 +93,10 @@ impl<F: Field> MleDescription<F> {
     /// Convert this MLE into a [DenseMle] using the [CircuitMap],
     /// which holds information using the prefix bits and layer id
     /// on the data that should be stored in this MLE.
-    pub fn into_dense_mle(&self, circuit_map: &CircuitMap<F>) -> DenseMle<F> {
+    pub fn into_dense_mle(&self, circuit_map: &CircuitEvalMap<F>) -> DenseMle<F> {
         let data = circuit_map.get_data_from_circuit_mle(self).unwrap();
-        DenseMle::new_with_prefix_bits((*data).clone(), self.layer_id(), self.prefix_bits())
+        // DenseMle::new_with_prefix_bits((*data).clone(), self.layer_id(), self.prefix_bits())
+        DenseMle::new_with_indices((*data).clone(), self.layer_id(), self.mle_indices())
     }
 
     /// Bind the variable with index `var_index` to `value`. Note that since
@@ -132,7 +136,7 @@ impl<F: Field> MleDescription<F> {
             .map(|mle_index| match mle_index {
                 MleIndex::Indexed(idx) => Ok(MleIndex::Bound(point[*idx], *idx)),
                 MleIndex::Fixed(val) => Ok(MleIndex::Fixed(*val)),
-                _ => Err(anyhow!(ExpressionError::SelectorBitNotBoundError)),
+                _ => Err(anyhow!(ExpressionError::EvaluateNotFullyIndexedError)),
             })
             .collect::<Result<Vec<MleIndex<F>>>>()?;
 
