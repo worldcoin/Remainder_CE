@@ -1,6 +1,6 @@
 #![allow(clippy::type_complexity)]
 
-use crate::layouter::builder::ProvableCircuit;
+use crate::circuit_layout::ProvableCircuit;
 use crate::prover::verify;
 use ark_std::{end_timer, start_timer};
 

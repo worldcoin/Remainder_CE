@@ -3,8 +3,6 @@
 
 /// Helper functions used in the gate sumcheck algorithms.
 pub mod gate_helpers;
-mod new_interface_tests;
-
 use std::{cmp::max, collections::HashSet};
 
 use gate_helpers::{
@@ -20,12 +18,12 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    circuit_layout::{CircuitEvalMap, CircuitLocation},
     claims::{Claim, ClaimError, RawClaim},
     layer::{
         product::{PostSumcheckLayer, Product},
         Layer, LayerError, LayerId, VerificationError,
     },
-    layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
         mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex,
@@ -979,7 +977,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         vec![&self.lhs_mle, &self.rhs_mle]
     }
 
-    fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
+    fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<F>) -> LayerEnum<F> {
         let lhs_mle = self.lhs_mle.into_dense_mle(circuit_map);
         let rhs_mle = self.rhs_mle.into_dense_mle(circuit_map);
         let num_dataparallel_vars = if self.num_dataparallel_vars == 0 {
@@ -1006,7 +1004,7 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
     fn compute_data_outputs(
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
-        circuit_map: &mut CircuitMap<F>,
+        circuit_map: &mut CircuitEvalMap<F>,
     ) {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();

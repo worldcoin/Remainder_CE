@@ -8,7 +8,4 @@
 pub mod hyrax_gkr;
 pub mod hyrax_pcs;
 pub mod hyrax_primitives;
-pub mod hyrax_worldcoin;
-pub mod hyrax_worldcoin_mpc;
 pub mod utils;
-pub mod zk_iriscode_ss;
