@@ -17,10 +17,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     abstract_expr::{AbstractExpression, IntoExpr},
-    input_layer::ligero_input_layer::{
-        LigeroInputLayerDescription, LigeroInputLayerDescriptionWithPrecommit,
-    },
-    layer::{gate::BinaryOperation, layer_enum::LayerDescriptionEnum, LayerId},
     layouter::{
         layouting::LayoutingError,
         nodes::{

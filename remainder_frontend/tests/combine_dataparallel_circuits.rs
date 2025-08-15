@@ -2,12 +2,7 @@ use ark_std::test_rng;
 
 use itertools::Itertools;
 use remainder::{
-<<<<<<< HEAD:remainder_prover/tests/combine_dataparallel_circuits.rs
-    layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, NodeRef},
     mle::{dense::DenseMle, AbstractMle},
-=======
-    mle::{dense::DenseMle, Mle},
->>>>>>> benny/extract_frontend:remainder_frontend/tests/combine_dataparallel_circuits.rs
     prover::helpers::test_circuit_with_memory_optimized_config,
     utils::mle::get_random_mle,
 };

@@ -5,13 +5,8 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use remainder_shared_types::Field;
 
-<<<<<<< HEAD:remainder_prover/src/layouter/nodes/sector.rs
-use crate::{
-    abstract_expr::AbstractExpression,
-=======
 use remainder::{
     circuit_layout::CircuitLocation,
->>>>>>> benny/extract_frontend:remainder_frontend/src/layouter/nodes/sector.rs
     layer::{layer_enum::LayerDescriptionEnum, regular_layer::RegularLayerDescription, LayerId},
 };
 

@@ -179,11 +179,7 @@ mod test {
         let input2 = builder.add_input_shred("Input 2", num_vars, &input_layer);
         let input3 = builder.add_input_shred("Input 3", num_vars, &input_layer);
 
-<<<<<<< HEAD:remainder_prover/src/layouter/nodes/split_node.rs
-        let concatenator = builder.add_sector(AbstractExpression::<F>::binary_tree_selector(vec![
-=======
         let concatenator = builder.add_sector(AbstractExpression::binary_tree_selector(vec![
->>>>>>> benny/extract_frontend:remainder_frontend/src/layouter/nodes/split_node.rs
             &input0, &input1, &input2, &input3,
         ]));
 

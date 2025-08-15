@@ -4,7 +4,6 @@ pub use remainder_shared_types::{Field, Fr};
 use serde::{Deserialize, Serialize};
 
 use crate::abstract_expr::AbstractExpression;
-use crate::layer::layer_enum::LayerDescriptionEnum;
 use crate::layouter::builder::CircuitMap;
 use remainder::layer::layer_enum::LayerDescriptionEnum;
 
@@ -48,14 +47,11 @@ impl NodeId {
     /// creates an [AbstractExpression<F>] from this NodeId
     pub fn expr<F: Field>(self) -> AbstractExpression<F> {
         AbstractExpression::<F>::mle(self)
-<<<<<<< HEAD:remainder_prover/src/layouter/nodes.rs
-=======
     }
 
     /// Obtain the integer value, for printing GkrError messages
     pub fn get_id(self) -> usize {
         self.0
->>>>>>> benny/extract_frontend:remainder_frontend/src/layouter/nodes.rs
     }
 }
 

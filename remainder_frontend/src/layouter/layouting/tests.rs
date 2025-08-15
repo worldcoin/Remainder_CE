@@ -1,8 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::abstract_expr::AbstractExpression;
-use crate::layer::gate::BinaryOperation;
-use crate::layouter::nodes::{CircuitNode, NodeId};
 use crate::layouter::{
     layouting::{layout, Graph},
     nodes::{
@@ -15,7 +13,7 @@ use crate::layouter::{
         matmult::MatMultNode,
         sector::Sector,
         split_node::SplitNode,
-        CompilableNode,
+        CircuitNode, CompilableNode, NodeId,
     },
 };
 use itertools::all;

@@ -1,13 +1,5 @@
 use remainder::{
-<<<<<<< HEAD:remainder_prover/tests/mult_overload_checks.rs
-    abstract_expr::AbstractExpression,
-    const_expr,
-    layouter::builder::{
-        Circuit, CircuitBuilder, LayerVisibility, ProvableCircuit, VerifiableCircuit,
-    },
-=======
     circuit_layout::{ProvableCircuit, VerifiableCircuit},
->>>>>>> benny/extract_frontend:remainder_frontend/tests/mult_overload_checks.rs
     mle::evals::MultilinearExtension,
     prover::{prove, verify},
 };

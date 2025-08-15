@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     circuit_layout::CircuitEvalMap, expression::expr_errors::ExpressionError, layer::LayerId,
+    mle::AbstractMle,
 };
 
 use super::{dense::DenseMle, verifier_mle::VerifierMle, MleIndex};
