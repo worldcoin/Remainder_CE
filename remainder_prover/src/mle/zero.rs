@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::claims::RawClaim;
 use crate::layer::LayerId;
 use crate::mle::mle_enum::LiftTo;
+use crate::mle::AbstractMle;
 use remainder_shared_types::Field;
 
 use super::evals::{Evaluations, EvaluationsIterator};
@@ -48,7 +49,7 @@ impl<F: Field> ZeroMle<F> {
     }
 }
 
-impl<F: Field> Mle<F> for ZeroMle<F> {
+impl<F: Field> AbstractMle<F> for ZeroMle<F> {
     type ExtendedMle<E: ExtensionField<F>> = ZeroMle<E>;
 
     fn mle_indices(&self) -> &[MleIndex<F>] {
@@ -59,6 +60,11 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         self.num_vars
     }
 
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+}
+impl<F: Field> Mle<F> for ZeroMle<F> {
     fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<RawClaim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::Indexed(round_index) {
@@ -140,10 +146,6 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         }
 
         curr_index + new_indices
-    }
-
-    fn layer_id(&self) -> LayerId {
-        self.layer_id
     }
 
     fn get_enum(self) -> MleEnum<F> {

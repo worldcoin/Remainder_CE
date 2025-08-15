@@ -44,9 +44,6 @@ pub mod hyrax_layer;
 /// The module that contains all functions necessary to do operations on an
 /// output layer.
 pub mod hyrax_output_layer;
-#[cfg(test)]
-/// The testing module for integration tests
-pub mod tests;
 
 /// The struct that holds all the respective proofs that the verifier needs in
 /// order to verify a Hyrax proof, i.e. the circuit proof along with the proofs
@@ -391,8 +388,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
         .sorted_by_key(|(layer_id, _)| layer_id.get_raw_input_layer_id())
         .for_each(|(_layer_id, mle)| {
             let il_timer = start_timer!(|| format!(
-                "Appending public input layer for {0} to transcript",
-                _layer_id
+                "Appending public input layer for {_layer_id} to transcript"
             ));
             transcript.append_input_scalar_field_elems(
                 "Public input layer values",

@@ -10,12 +10,12 @@
 use super::{
     circuit_expr::evaluate_bookkeeping_tables_given_operation,
     expr_errors::ExpressionError,
-    generic_expr::{Expression, ExpressionNode, ExpressionType},
-    verifier_expr::VerifierExpr,
+    generic_expr::{Expression, ExpressionNode},
 };
 use crate::{
+    expression::generic_expr::MleVecIndex,
     layer::product::Product,
-    mle::{betavalues::BetaValues, dense::DenseMle, MleIndex},
+    mle::{betavalues::BetaValues, dense::DenseMle, AbstractMle, MleIndex},
     sumcheck::{
         apply_updated_beta_values_to_evals, beta_cascade, beta_cascade_no_independent_variable,
         SumcheckEvals,
@@ -27,82 +27,16 @@ use crate::{
 };
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::Field;
-use serde::{Deserialize, Serialize};
-use std::{
-    cmp::max,
-    collections::HashSet,
-    fmt::Debug,
-    ops::{Add, Mul, Neg, Sub},
-};
+use std::{cmp::max, collections::HashSet};
 
 use anyhow::{anyhow, Ok, Result};
-
-/// mid-term solution for deduplication of DenseMleRefs
-/// basically a wrapper around usize, which denotes the index
-/// of the MleRef in an expression's MleRef list/// Generic Expressions
-///
-/// TODO(ryancao): We should deprecate this and instead just have
-/// references to the `DenseMLE<F>`s which are stored in the circuit_map.
-#[derive(Serialize, Deserialize, Clone, Debug, Hash)]
-pub struct MleVecIndex(usize);
-
-impl MleVecIndex {
-    /// create a new MleRefIndex
-    pub fn new(index: usize) -> Self {
-        MleVecIndex(index)
-    }
-
-    /// returns the index
-    pub fn index(&self) -> usize {
-        self.0
-    }
-
-    /// add the index with an increment amount
-    pub fn increment(&mut self, offset: usize) {
-        self.0 += offset;
-    }
-
-    /// return the actual mle in the vec within the prover expression
-    pub fn get_mle<'a, F: Field>(&self, mle_vec: &'a [DenseMle<F>]) -> &'a DenseMle<F> {
-        &mle_vec[self.0]
-    }
-
-    /// return the actual mle in the vec within the prover expression
-    pub fn get_mle_mut<'a, F: Field>(&self, mle_vec: &'a mut [DenseMle<F>]) -> &'a mut DenseMle<F> {
-        &mut mle_vec[self.0]
-    }
-}
-
-/// Prover Expression
-/// the leaf nodes of the expression tree are DenseMleRefs
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ProverExpr;
-impl<F: Field> ExpressionType<F> for ProverExpr {
-    type MLENodeRepr = MleVecIndex;
-    type MleVec = Vec<DenseMle<F>>;
-}
+pub type ProverMle<F> = DenseMle<F>;
 
 /// this is what the prover manipulates to prove the correctness of the computation.
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
-impl<F: Field> Expression<F, ProverExpr> {
-    /// See documentation in [super::circuit_expr::ExprDescription]'s `select()`
-    /// function for more details!
-    pub fn select(self, mut rhs: Expression<F, ProverExpr>) -> Self {
-        let offset = self.num_mle();
-        rhs.increment_mle_vec_indices(offset);
-        let (lhs_node, lhs_mle_vec) = self.deconstruct();
-        let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
-
-        let concat_node =
-            ExpressionNode::Selector(MleIndex::Free, Box::new(lhs_node), Box::new(rhs_node));
-
-        let concat_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect_vec();
-
-        Expression::new(concat_node, concat_mle_vec)
-    }
-
+impl<F: Field> Expression<F, ProverMle<F>> {
     /// Create a product Expression that raises one MLE to a given power
-    pub fn pow(pow: usize, mle: DenseMle<F>) -> Self {
+    pub fn pow(pow: usize, mle: ProverMle<F>) -> Self {
         let mle_vec_indices = (0..pow).map(|_index| MleVecIndex::new(0)).collect_vec();
 
         let product_node = ExpressionNode::Product(mle_vec_indices);
@@ -110,109 +44,33 @@ impl<F: Field> Expression<F, ProverExpr> {
         Expression::new(product_node, vec![mle])
     }
 
-    /// Create a product Expression that multiplies many MLEs together
-    pub fn products(product_list: <ProverExpr as ExpressionType<F>>::MleVec) -> Self {
-        let mle_vec_indices = (0..product_list.len()).map(MleVecIndex::new).collect_vec();
-
-        let product_node = ExpressionNode::Product(mle_vec_indices);
-
-        Expression::new(product_node, product_list)
-    }
-
-    /// Create a mle Expression that contains one MLE
-    pub fn mle(mle: DenseMle<F>) -> Self {
-        let mle_node = ExpressionNode::Mle(MleVecIndex::new(0));
-
-        Expression::new(mle_node, [mle].to_vec())
-    }
-
-    /// Create a constant Expression that contains one field element
-    pub fn constant(constant: F) -> Self {
-        let mle_node = ExpressionNode::Constant(constant);
-
-        Expression::new(mle_node, [].to_vec())
-    }
-
-    /// negates an Expression
-    pub fn negated(expression: Self) -> Self {
-        let (node, mle_vec) = expression.deconstruct();
-
-        let mle_node = ExpressionNode::Scaled(Box::new(node), F::from(1).neg());
-
-        Expression::new(mle_node, mle_vec)
-    }
-
-    /// Create a Sum Expression that contains two MLEs
-    pub fn sum(lhs: Self, mut rhs: Self) -> Self {
-        let offset = lhs.num_mle();
-        rhs.increment_mle_vec_indices(offset);
-
-        let (lhs_node, lhs_mle_vec) = lhs.deconstruct();
-        let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
-
-        let sum_node = ExpressionNode::Sum(Box::new(lhs_node), Box::new(rhs_node));
-        let sum_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect_vec();
-
-        Expression::new(sum_node, sum_mle_vec)
-    }
-
-    /// scales an Expression by a field element
-    pub fn scaled(expression: Expression<F, ProverExpr>, scale: F) -> Self {
-        let (node, mle_vec) = expression.deconstruct();
-
-        Expression::new(ExpressionNode::Scaled(Box::new(node), scale), mle_vec)
-    }
-
-    /// returns the number of MleRefs in the expression
-    pub fn num_mle(&self) -> usize {
-        self.mle_vec.len()
-    }
-
-    /// which increments all the MleVecIndex in the expression by *param* amount
-    pub fn increment_mle_vec_indices(&mut self, offset: usize) {
-        // define a closure that increments the MleVecIndex by the given amount
-        // use traverse_mut
-        let mut increment_closure = |expr: &mut ExpressionNode<F, ProverExpr>,
-                                     _mle_vec: &mut Vec<DenseMle<F>>|
-         -> Result<()> {
-            match expr {
-                ExpressionNode::Mle(mle_vec_index) => {
-                    mle_vec_index.increment(offset);
-                    Ok(())
-                }
-                ExpressionNode::Product(mle_indices) => {
-                    for mle_vec_index in mle_indices {
-                        mle_vec_index.increment(offset);
-                    }
-                    Ok(())
-                }
-                ExpressionNode::Constant(_)
-                | ExpressionNode::Scaled(_, _)
-                | ExpressionNode::Sum(_, _)
-                | ExpressionNode::Selector(_, _, _) => Ok(()),
-            }
-        };
-
-        self.traverse_mut(&mut increment_closure).unwrap();
-    }
-
     /// Transforms the prover expression to a verifier expression.
     ///
     /// Should only be called when the entire expression is fully bound.
     ///
-    /// Traverses the expression and changes the DenseMle to VerifierMle,
+    /// Traverses the expression and changes the ProverMle to VerifierMle,
     /// by grabbing their bookkeeping table's 1st and only element.
     ///
     /// If the bookkeeping table has more than 1 element, it
     /// throws an ExpressionError::EvaluateNotFullyBoundError
-    pub fn transform_to_verifier_expression(self) -> Result<Expression<F, VerifierExpr>> {
-        let (mut expression_node, mle_vec) = self.deconstruct();
-        Ok(Expression::new(
-            expression_node
-                .transform_to_verifier_expression_node(&mle_vec)
-                .unwrap(),
-            (),
-        ))
+    pub fn transform_to_verifier_expression(self) -> Result<Expression<F, VerifierMle<F>>> {
+        let (expression_node, mle_vec) = self.deconstruct();
+        // Check that every MLE is fully bounded
+        let verifier_mles = mle_vec
+            .into_iter()
+            .map(|m| {
+                if !m.is_fully_bounded() {
+                    return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
+                }
+                Ok(VerifierMle::new(
+                    m.layer_id(),
+                    m.mle_indices().to_vec(),
+                    m.value(),
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(Expression::new(expression_node, verifier_mles))
     }
 
     /// fix the variable at a certain round index, always MSB index
@@ -240,9 +98,7 @@ impl<F: Field> Expression<F, ProverExpr> {
             });
 
         // ----- this is literally a check -----
-        let mut observer_fn = |exp: &ExpressionNode<F, ProverExpr>,
-                               mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
-         -> Result<()> {
+        let mut observer_fn = |exp: &ExpressionNode<F>, mle_vec: &[ProverMle<F>]| -> Result<()> {
             match exp {
                 ExpressionNode::Mle(mle_vec_idx) => {
                     let mle = mle_vec_idx.get_mle(mle_vec);
@@ -348,33 +204,6 @@ impl<F: Field> Expression<F, ProverExpr> {
             )
     }
 
-    /// Traverses the expression tree to return all indices within the
-    /// expression. Can only be used after indexing the expression.
-    pub fn get_all_rounds(&self) -> Vec<usize> {
-        let (expression_node, mle_vec) = self.deconstruct_ref();
-        let mut all_rounds = expression_node.get_all_rounds(mle_vec);
-        all_rounds.sort();
-        all_rounds
-    }
-
-    /// this traverses the expression tree to get all of the nonlinear rounds. can only be used after indexing the expression.
-    /// returns the indices sorted.
-    pub fn get_all_nonlinear_rounds(&self) -> Vec<usize> {
-        let (expression_node, mle_vec) = self.deconstruct_ref();
-        let mut nonlinear_rounds = expression_node.get_all_nonlinear_rounds(mle_vec);
-        nonlinear_rounds.sort();
-        nonlinear_rounds
-    }
-
-    /// this traverses the expression tree to get all of the linear rounds. can only be used after indexing the expression.
-    /// returns the indices sorted.
-    pub fn get_all_linear_rounds(&self) -> Vec<usize> {
-        let (expression_node, mle_vec) = self.deconstruct_ref();
-        let mut linear_rounds = expression_node.get_all_linear_rounds(mle_vec);
-        linear_rounds.sort();
-        linear_rounds
-    }
-
     /// Mutate the MLE indices that are [MleIndex::Free] in the expression and
     /// turn them into [MleIndex::Indexed]. Returns the max number of bits
     /// that are indexed.
@@ -393,88 +222,17 @@ impl<F: Field> Expression<F, ProverExpr> {
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     pub fn get_post_sumcheck_layer(&self, multiplier: F) -> PostSumcheckLayer<F, F> {
         self.expression_node
-            .get_post_sumcheck_layer(multiplier, &self.mle_vec)
-    }
-
-    /// Get the maximum degree of any variable in htis expression
-    pub fn get_max_degree(&self) -> usize {
-        self.expression_node.get_max_degree(&self.mle_vec)
+            .get_post_sumcheck_layer_prover(multiplier, &self.mle_vec)
     }
 }
 
-impl<F: Field> ExpressionNode<F, ProverExpr> {
-    /// Transforms the expression to a verifier expression
-    /// should only be called when no variables are bound in the expression.
-    /// Traverses the expression and changes the DenseMle to MleDescription.
-    pub fn transform_to_verifier_expression_node(
-        &mut self,
-        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
-    ) -> Result<ExpressionNode<F, VerifierExpr>> {
-        match self {
-            ExpressionNode::Constant(scalar) => Ok(ExpressionNode::Constant(*scalar)),
-            ExpressionNode::Selector(index, a, b) => Ok(ExpressionNode::Selector(
-                index.clone(),
-                Box::new(a.transform_to_verifier_expression_node(mle_vec)?),
-                Box::new(b.transform_to_verifier_expression_node(mle_vec)?),
-            )),
-            ExpressionNode::Mle(mle_vec_idx) => {
-                let mle = mle_vec_idx.get_mle(mle_vec);
-
-                if !mle.is_fully_bounded() {
-                    return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
-                }
-
-                let layer_id = mle.layer_id();
-                let mle_indices = mle.mle_indices().to_vec();
-                let eval = mle.value();
-
-                Ok(ExpressionNode::Mle(VerifierMle::new(
-                    layer_id,
-                    mle_indices,
-                    eval,
-                )))
-            }
-            ExpressionNode::Sum(a, b) => Ok(ExpressionNode::Sum(
-                Box::new(a.transform_to_verifier_expression_node(mle_vec)?),
-                Box::new(b.transform_to_verifier_expression_node(mle_vec)?),
-            )),
-            ExpressionNode::Product(mle_vec_indices) => {
-                let mles = mle_vec_indices
-                    .iter_mut()
-                    .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
-                    .collect_vec();
-
-                for mle in mles.iter() {
-                    if !mle.is_fully_bounded() {
-                        return Err(anyhow!(ExpressionError::EvaluateNotFullyBoundError));
-                    }
-                }
-
-                Ok(ExpressionNode::Product(
-                    mles.into_iter()
-                        .map(|mle| {
-                            VerifierMle::new(
-                                mle.layer_id(),
-                                mle.mle_indices().to_vec(),
-                                mle.value(),
-                            )
-                        })
-                        .collect_vec(),
-                ))
-            }
-            ExpressionNode::Scaled(mle, scalar) => Ok(ExpressionNode::Scaled(
-                Box::new(mle.transform_to_verifier_expression_node(mle_vec)?),
-                *scalar,
-            )),
-        }
-    }
-
+impl<F: Field> ExpressionNode<F> {
     /// fix the variable at a certain round index, always the most significant index.
     pub fn fix_variable_node(
         &mut self,
         round_index: usize,
         challenge: F,
-        mle_vec: &mut <ProverExpr as ExpressionType<F>>::MleVec, // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
+        mle_vec: &mut [ProverMle<F>], // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
     ) {
         match self {
             ExpressionNode::Selector(index, a, b) => {
@@ -520,7 +278,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         &mut self,
         round_index: usize,
         challenge: F,
-        mle_vec: &mut <ProverExpr as ExpressionType<F>>::MleVec, // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
+        mle_vec: &mut [ProverMle<F>], // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
     ) {
         match self {
             ExpressionNode::Selector(index, a, b) => {
@@ -566,7 +324,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         beta_values: &BetaValues<F>,
         round_index: usize,
         degree: usize,
-        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+        mle_vec: &[ProverMle<F>],
     ) -> SumcheckEvals<F> {
         match self {
             ExpressionNode::Constant(constant) => {
@@ -626,13 +384,14 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                 lhs_eval + rhs_eval
             }
             ExpressionNode::Product(mle_idx_vec) => {
-                let (mles, mles_bookkeeping_tables): (Vec<&DenseMle<F>>, Vec<Vec<F>>) = mle_idx_vec
-                    .iter()
-                    .map(|mle_vec_index| {
-                        let mle = mle_vec_index.get_mle(mle_vec);
-                        (mle, mle.mle.to_vec())
-                    })
-                    .unzip();
+                let (mles, mles_bookkeeping_tables): (Vec<&ProverMle<F>>, Vec<Vec<F>>) =
+                    mle_idx_vec
+                        .iter()
+                        .map(|mle_vec_index| {
+                            let mle = mle_vec_index.get_mle(mle_vec);
+                            (mle, mle.mle.to_vec())
+                        })
+                        .unzip();
 
                 let mut unique_mle_indices = HashSet::new();
 
@@ -726,7 +485,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     pub fn evaluate_sumcheck_node_beta_cascade(
         &self,
         beta_vec: &[&BetaValues<F>],
-        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+        mle_vec: &[ProverMle<F>],
         random_coefficients: &[F],
         round_index: usize,
         degree: usize,
@@ -771,7 +530,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             // are in by comparing the round_index to the selector index which is an
             // argument to the closure.
             ExpressionNode::Selector(index, a, b) => {
-                match index {
+                let output = match index {
                     MleIndex::Indexed(indexed_bit) => {
                         let (lhs_evals, rhs_evals) = (
                             beta_vec
@@ -938,7 +697,8 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                             .unwrap()
                     }
                     _ => panic!("selector index should not be a Free or Fixed bit"),
-                }
+                };
+                output
             }
             // the mle evaluation takes in the mle ref, and the corresponding unbound
             // and bound beta values to pass into the `beta_cascade` function
@@ -1042,17 +802,22 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     pub fn index_mle_indices_node(
         &mut self,
         curr_index: usize,
-        mle_vec: &mut <ProverExpr as ExpressionType<F>>::MleVec,
+        mle_vec: &mut [ProverMle<F>],
     ) -> usize {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
                 let mut new_index = curr_index;
-                if *mle_index == MleIndex::Free {
-                    *mle_index = MleIndex::Indexed(curr_index);
-                    new_index += 1;
-                }
+                match mle_index {
+                    MleIndex::Free => {
+                        *mle_index = MleIndex::Indexed(curr_index);
+                        new_index += 1;
+                    }
+                    MleIndex::Fixed(_bit) => {}
+                    _ => panic!("should not have indexed or bound bits at this point!"),
+                };
                 let a_bits = a.index_mle_indices_node(new_index, mle_vec);
                 let b_bits = b.index_mle_indices_node(new_index, mle_vec);
+
                 max(a_bits, b_bits)
             }
             ExpressionNode::Mle(mle_vec_idx) => {
@@ -1077,131 +842,11 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
         }
     }
 
-    /// this traverses the expression to get all of the rounds, in total. requires going through each of the nodes
-    /// and collecting the leaf node indices.
-    pub(crate) fn get_all_rounds(
-        &self,
-        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
-    ) -> Vec<usize> {
-        let degree_per_index = self.get_rounds_helper(mle_vec);
-        (0..degree_per_index.len())
-            .filter(|&i| degree_per_index[i] > 0)
-            .collect()
-    }
-
-    /// traverse an expression tree in order to get all of the nonlinear rounds in an expression.
-    pub fn get_all_nonlinear_rounds(
-        &self,
-        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
-    ) -> Vec<usize> {
-        let degree_per_index = self.get_rounds_helper(mle_vec);
-        (0..degree_per_index.len())
-            .filter(|&i| degree_per_index[i] > 1)
-            .collect()
-    }
-
-    /// get all of the linear rounds from an expression tree
-    pub fn get_all_linear_rounds(
-        &self,
-        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
-    ) -> Vec<usize> {
-        let degree_per_index = self.get_rounds_helper(mle_vec);
-        (0..degree_per_index.len())
-            .filter(|&i| degree_per_index[i] == 1)
-            .collect()
-    }
-
-    // a recursive helper for get_all_rounds, get_all_nonlinear_rounds, and get_all_linear_rounds
-    fn get_rounds_helper(&self, mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> Vec<usize> {
-        // degree of each index
-        let mut degree_per_index = Vec::new();
-        // set the degree of the corresponding index to max(OLD_DEGREE, NEW_DEGREE)
-        let max_degree = |degree_per_index: &mut Vec<usize>, index: usize, new_degree: usize| {
-            if degree_per_index.len() <= index {
-                degree_per_index.extend(vec![0; index + 1 - degree_per_index.len()]);
-            }
-            if degree_per_index[index] < new_degree {
-                degree_per_index[index] = new_degree;
-            }
-        };
-        // set the degree of the corresponding index to OLD_DEGREE + NEW_DEGREE
-        let add_degree = |degree_per_index: &mut Vec<usize>, index: usize, new_degree: usize| {
-            if degree_per_index.len() <= index {
-                degree_per_index.extend(vec![0; index + 1 - degree_per_index.len()]);
-            }
-            degree_per_index[index] += new_degree;
-        };
-
-        match self {
-            // in a product, we need the union of all the indices in each of the individual mle refs.
-            ExpressionNode::Product(mle_vec_indices) => {
-                let mles = mle_vec_indices
-                    .iter()
-                    .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
-                    .collect_vec();
-                mles.into_iter().for_each(|mle| {
-                    mle.mle_indices.iter().for_each(|mle_index| {
-                        if let MleIndex::Indexed(i) = mle_index {
-                            add_degree(&mut degree_per_index, *i, 1);
-                        }
-                    })
-                });
-            }
-            // in an mle, we need all of the mle indices in the mle.
-            ExpressionNode::Mle(mle_vec_idx) => {
-                let mle = mle_vec_idx.get_mle(mle_vec);
-                mle.mle_indices.iter().for_each(|mle_index| {
-                    if let MleIndex::Indexed(i) = mle_index {
-                        max_degree(&mut degree_per_index, *i, 1);
-                    }
-                });
-            }
-            // in selector, take the max degree of each children, and add 1 degree to the selector itself
-            ExpressionNode::Selector(sel_index, a, b) => {
-                if let MleIndex::Indexed(i) = sel_index {
-                    add_degree(&mut degree_per_index, *i, 1);
-                };
-                let a_degree_per_index = a.get_rounds_helper(mle_vec);
-                let b_degree_per_index = b.get_rounds_helper(mle_vec);
-                // linear operator -- take the max degree
-                for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
-                    if let Some(a_degree) = a_degree_per_index.get(i) {
-                        max_degree(&mut degree_per_index, i, *a_degree);
-                    }
-                    if let Some(b_degree) = b_degree_per_index.get(i) {
-                        max_degree(&mut degree_per_index, i, *b_degree);
-                    }
-                }
-            }
-            // in sum, take the max degree of each children
-            ExpressionNode::Sum(a, b) => {
-                let a_degree_per_index = a.get_rounds_helper(mle_vec);
-                let b_degree_per_index = b.get_rounds_helper(mle_vec);
-                // linear operator -- take the max degree
-                for i in 0..max(a_degree_per_index.len(), b_degree_per_index.len()) {
-                    if let Some(a_degree) = a_degree_per_index.get(i) {
-                        max_degree(&mut degree_per_index, i, *a_degree);
-                    }
-                    if let Some(b_degree) = b_degree_per_index.get(i) {
-                        max_degree(&mut degree_per_index, i, *b_degree);
-                    }
-                }
-            }
-            // scaled and negated, does not affect degree
-            ExpressionNode::Scaled(a, _) => {
-                degree_per_index = a.get_rounds_helper(mle_vec);
-            }
-            // for a constant there are no new indices.
-            ExpressionNode::Constant(_) => {}
-        }
-        degree_per_index
-    }
-
     /// Gets the number of free variables in an expression.
     pub fn get_expression_num_free_variables_node(
         &self,
         curr_size: usize,
-        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+        mle_vec: &[ProverMle<F>],
     ) -> usize {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
@@ -1262,22 +907,22 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     /// Recursively get the [PostSumcheckLayer] for an Expression node, which is the fully bound
     /// representation of an expression.
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
-    pub fn get_post_sumcheck_layer(
+    pub fn get_post_sumcheck_layer_prover(
         &self,
         multiplier: F,
-        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+        mle_vec: &[ProverMle<F>],
     ) -> PostSumcheckLayer<F, F> {
         let mut products: Vec<Product<F, F>> = vec![];
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
                 let left_side_acc = multiplier * (F::ONE - mle_index.val().unwrap());
                 let right_side_acc = multiplier * (mle_index.val().unwrap());
-                products.extend(a.get_post_sumcheck_layer(left_side_acc, mle_vec).0);
-                products.extend(b.get_post_sumcheck_layer(right_side_acc, mle_vec).0);
+                products.extend(a.get_post_sumcheck_layer_prover(left_side_acc, mle_vec).0);
+                products.extend(b.get_post_sumcheck_layer_prover(right_side_acc, mle_vec).0);
             }
             ExpressionNode::Sum(a, b) => {
-                products.extend(a.get_post_sumcheck_layer(multiplier, mle_vec).0);
-                products.extend(b.get_post_sumcheck_layer(multiplier, mle_vec).0);
+                products.extend(a.get_post_sumcheck_layer_prover(multiplier, mle_vec).0);
+                products.extend(b.get_post_sumcheck_layer_prover(multiplier, mle_vec).0);
             }
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
@@ -1294,94 +939,12 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Scaled(a, scale_factor) => {
                 let acc = multiplier * scale_factor;
-                products.extend(a.get_post_sumcheck_layer(acc, mle_vec).0);
+                products.extend(a.get_post_sumcheck_layer_prover(acc, mle_vec).0);
             }
             ExpressionNode::Constant(constant) => {
                 products.push(Product::<F, F>::new(&[], *constant * multiplier));
             }
         }
         PostSumcheckLayer(products)
-    }
-
-    /// Get the maximum degree of an ExpressionNode, recursively.
-    fn get_max_degree(&self, _mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> usize {
-        match self {
-            ExpressionNode::Selector(_, a, b) | ExpressionNode::Sum(a, b) => {
-                let a_degree = a.get_max_degree(_mle_vec);
-                let b_degree = b.get_max_degree(_mle_vec);
-                max(a_degree, b_degree)
-            }
-            ExpressionNode::Mle(_) => {
-                // 1 for the current MLE
-                1
-            }
-            ExpressionNode::Product(mles) => {
-                // max degree is the number of MLEs in a product
-                mles.len()
-            }
-            ExpressionNode::Scaled(a, _) => a.get_max_degree(_mle_vec),
-            ExpressionNode::Constant(_) => 1,
-        }
-    }
-}
-
-impl<F: Field> Neg for Expression<F, ProverExpr> {
-    type Output = Expression<F, ProverExpr>;
-    fn neg(self) -> Self::Output {
-        Expression::<F, ProverExpr>::negated(self)
-    }
-}
-
-/// implement the Add, Sub, and Mul traits for the Expression
-impl<F: Field> Add for Expression<F, ProverExpr> {
-    type Output = Expression<F, ProverExpr>;
-    fn add(self, rhs: Expression<F, ProverExpr>) -> Expression<F, ProverExpr> {
-        Expression::<F, ProverExpr>::sum(self, rhs)
-    }
-}
-
-impl<F: Field> Sub for Expression<F, ProverExpr> {
-    type Output = Expression<F, ProverExpr>;
-    fn sub(self, rhs: Expression<F, ProverExpr>) -> Expression<F, ProverExpr> {
-        self.add(rhs.neg())
-    }
-}
-
-impl<F: Field> Mul<F> for Expression<F, ProverExpr> {
-    type Output = Expression<F, ProverExpr>;
-    fn mul(self, rhs: F) -> Self::Output {
-        Expression::<F, ProverExpr>::scaled(self, rhs)
-    }
-}
-
-// defines how the Expressions are printed and displayed
-impl<F: std::fmt::Debug + Field> std::fmt::Debug for Expression<F, ProverExpr> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Expression")
-            .field("Expression_Node", &self.expression_node)
-            .field("MleRef_Vec", &self.mle_vec)
-            .finish()
-    }
-}
-
-// defines how the ExpressionNodes are printed and displayed
-impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F, ProverExpr> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExpressionNode::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
-            ExpressionNode::Selector(index, a, b) => f
-                .debug_tuple("Selector")
-                .field(index)
-                .field(a)
-                .field(b)
-                .finish(),
-            // Skip enum variant and print query struct directly to maintain backwards compatibility.
-            ExpressionNode::Mle(_mle) => f.debug_struct("Mle").field("mle", _mle).finish(),
-            ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
-            ExpressionNode::Product(a) => f.debug_tuple("Product").field(a).finish(),
-            ExpressionNode::Scaled(poly, scalar) => {
-                f.debug_tuple("Scaled").field(poly).field(scalar).finish()
-            }
-        }
     }
 }

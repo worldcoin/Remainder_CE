@@ -49,13 +49,7 @@ use ark_std::{cfg_chunks, cfg_into_iter};
 use itertools::{repeat_n, Itertools};
 use thiserror::Error;
 
-use crate::{
-    expression::{
-        generic_expr::{Expression, ExpressionNode, ExpressionType},
-        prover_expr::ProverExpr,
-    },
-    mle::{Mle, MleIndex},
-};
+use crate::mle::{Mle, MleIndex};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 #[cfg(feature = "parallel")]
@@ -409,47 +403,6 @@ pub fn beta_cascade_no_independent_variable<F: Field>(
     let eval_vec: Vec<F> = repeat_n(evaluated_bookkeeping_table[0], degree + 1).collect();
 
     apply_updated_beta_values_to_evals(eval_vec, beta_updated_vals.iter().product())
-}
-
-/// Returns the maximum degree of b_{curr_round} within an expression (and
-/// therefore the number of prover messages we need to send)
-pub(crate) fn get_round_degree<F: Field>(
-    expr: &Expression<F, ProverExpr>,
-    curr_round: usize,
-) -> usize {
-    // By default, all rounds have degree at least 2 (beta table included)
-    let mut round_degree = 1;
-
-    let mut get_degree_closure = |expr: &ExpressionNode<F, ProverExpr>,
-                                  mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
-     -> Result<()> {
-        let round_degree = &mut round_degree;
-
-        // The only exception is within a product of MLEs
-        if let ExpressionNode::Product(mle_vec_indices) = expr {
-            let mut product_round_degree: usize = 0;
-            for mle_vec_index in mle_vec_indices {
-                let mle = mle_vec_index.get_mle(mle_vec);
-
-                let mle_indices = mle.mle_indices();
-                for mle_index in mle_indices {
-                    if *mle_index == MleIndex::Indexed(curr_round) {
-                        product_round_degree += 1;
-                        break;
-                    }
-                }
-            }
-            if *round_degree < product_round_degree {
-                *round_degree = product_round_degree;
-            }
-        }
-        Ok(())
-    };
-
-    expr.traverse(&mut get_degree_closure).unwrap();
-    // add 1 cuz beta table but idk if we would ever use this without a beta
-    // table
-    round_degree + 1
 }
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary

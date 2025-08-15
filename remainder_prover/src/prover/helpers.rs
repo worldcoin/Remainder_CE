@@ -1,8 +1,6 @@
 #![allow(clippy::type_complexity)]
-use crate::input_layer::ligero_input_layer::LigeroInputLayerDescriptionWithPrecommit;
 
-use crate::layer::LayerId;
-use crate::mle::evals::MultilinearExtension;
+use crate::circuit_layout::ProvableCircuit;
 use crate::prover::verify;
 use ark_std::{end_timer, start_timer};
 
@@ -20,7 +18,6 @@ use remainder_shared_types::{perform_function_under_expected_configs, Field};
 use serde_json;
 use sha3::Digest;
 use sha3::Sha3_256;
-use std::collections::HashMap;
 use std::fs::File;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::BufWriter;
@@ -107,12 +104,7 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
 /// Function which calls [test_circuit_internal] with the appropriate expected
 /// prover/verifier config.
 pub fn test_circuit_with_config<F: Halo2FFTFriendlyField>(
-    circuit_description: &GKRCircuitDescription<F>,
-    private_input_layer_description_and_precommits: HashMap<
-        LayerId,
-        LigeroInputLayerDescriptionWithPrecommit<F>,
-    >,
-    inputs: &HashMap<LayerId, MultilinearExtension<F>>,
+    provable_circuit: &ProvableCircuit<F>,
     expected_prover_config: &GKRCircuitProverConfig,
     expected_verifier_config: &GKRCircuitVerifierConfig,
 ) {
@@ -120,21 +112,14 @@ pub fn test_circuit_with_config<F: Halo2FFTFriendlyField>(
         test_circuit_internal,
         expected_prover_config,
         expected_verifier_config,
-        circuit_description,
-        private_input_layer_description_and_precommits,
-        inputs
+        provable_circuit
     )
 }
 
 /// Function which calls [test_circuit_internal] with the appropriate expected
 /// prover/verifier config.
 pub fn test_circuit_with_runtime_optimized_config<F: Halo2FFTFriendlyField>(
-    circuit_description: &GKRCircuitDescription<F>,
-    private_input_layer_description_and_precommits: HashMap<
-        LayerId,
-        LigeroInputLayerDescriptionWithPrecommit<F>,
-    >,
-    inputs: &HashMap<LayerId, MultilinearExtension<F>>,
+    provable_circuit: &ProvableCircuit<F>,
 ) {
     let expected_prover_config = GKRCircuitProverConfig::runtime_optimized_default();
     let expected_verifier_config =
@@ -143,20 +128,13 @@ pub fn test_circuit_with_runtime_optimized_config<F: Halo2FFTFriendlyField>(
         test_circuit_internal,
         &expected_prover_config,
         &expected_verifier_config,
-        circuit_description,
-        private_input_layer_description_and_precommits,
-        inputs
+        provable_circuit
     )
 }
 
 /// Function which calls [test_circuit_internal] with a memory-optimized default.
 pub fn test_circuit_with_memory_optimized_config<F: Halo2FFTFriendlyField>(
-    circuit_description: &GKRCircuitDescription<F>,
-    private_input_layer_description_and_precommits: HashMap<
-        LayerId,
-        LigeroInputLayerDescriptionWithPrecommit<F>,
-    >,
-    inputs: &HashMap<LayerId, MultilinearExtension<F>>,
+    provable_circuit: &ProvableCircuit<F>,
 ) {
     let expected_prover_config = GKRCircuitProverConfig::memory_optimized_default();
     let expected_verifier_config =
@@ -165,30 +143,19 @@ pub fn test_circuit_with_memory_optimized_config<F: Halo2FFTFriendlyField>(
         test_circuit_internal,
         &expected_prover_config,
         &expected_verifier_config,
-        circuit_description,
-        private_input_layer_description_and_precommits,
-        inputs
+        provable_circuit
     )
 }
 
 /// Function which instantiates a circuit description with the given inputs
 /// and precommits and both attempts to both prove and verify said circuit.
-fn test_circuit_internal<F: Halo2FFTFriendlyField>(
-    circuit_description: &GKRCircuitDescription<F>,
-    private_input_layer_description_and_precommits: HashMap<
-        LayerId,
-        LigeroInputLayerDescriptionWithPrecommit<F>,
-    >,
-    inputs: &HashMap<LayerId, MultilinearExtension<F>>,
-) {
+fn test_circuit_internal<F: Halo2FFTFriendlyField>(provable_circuit: &ProvableCircuit<F>) {
     let mut transcript_writer =
         TranscriptWriter::<F, PoseidonSponge<F>>::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
 
     match prove(
-        inputs,
-        &private_input_layer_description_and_precommits,
-        circuit_description,
+        provable_circuit,
         global_prover_circuit_description_hash_type(),
         &mut transcript_writer,
     ) {
@@ -198,29 +165,10 @@ fn test_circuit_internal<F: Halo2FFTFriendlyField>(
             let mut transcript_reader = TranscriptReader::<F, PoseidonSponge<F>>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
-            // Extract the public inputs (i.e. those which do not appear in the `private_input_layer_description_and_precommits`)
-            let public_input_layers = inputs
-                .clone()
-                .into_iter()
-                .filter_map(|(layer_id, layer_description)| {
-                    if private_input_layer_description_and_precommits.contains_key(&layer_id) {
-                        None
-                    } else {
-                        Some((layer_id, layer_description))
-                    }
-                })
-                .collect();
-
-            // Additionally, extract the ligero input layer descriptions
-            let private_input_layer_descriptions = private_input_layer_description_and_precommits
-                .into_values()
-                .map(|(layer_description, _)| layer_description)
-                .collect_vec();
+            let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
 
             match verify(
-                &public_input_layers,
-                &private_input_layer_descriptions,
-                circuit_description,
+                &verifiable_circuit,
                 global_verifier_circuit_description_hash_type(),
                 &mut transcript_reader,
                 &proof_config,

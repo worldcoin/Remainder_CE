@@ -15,12 +15,13 @@ use thiserror::Error;
 use crate::{
     claims::Claim,
     layer::{LayerError, LayerId},
+    mle::AbstractMle,
     mle::mle_enum::{fix_variable_to_new_mle_enum, LiftTo},
 };
 
 use crate::{
+    circuit_layout::CircuitEvalMap,
     claims::ClaimError,
-    layouter::layouting::CircuitMap,
     mle::{
         dense::DenseMle, mle_description::MleDescription, mle_enum::MleEnum,
         verifier_mle::VerifierMle, zero::ZeroMle, Mle, MleIndex,
@@ -219,7 +220,7 @@ impl<F: Field> OutputLayerDescription<F> {
     }
 
     /// Convert this into the prover view of an output layer, using the [CircuitMap].
-    pub fn into_prover_output_layer(&self, circuit_map: &CircuitMap<F>) -> OutputLayer<F> {
+    pub fn into_prover_output_layer(&self, circuit_map: &CircuitEvalMap<F>) -> OutputLayer<F> {
         let output_mle = circuit_map.get_data_from_circuit_mle(&self.mle).unwrap();
         let prefix_bits = self.mle.prefix_bits();
         let prefix_bits_mle_index = prefix_bits
@@ -286,7 +287,7 @@ impl<F: Field> OutputLayerDescription<F> {
         debug_assert_eq!(mle.num_free_vars(), 0);
 
         let verifier_output_layer =
-            VerifierOutputLayer::new_zero(self.mle.layer_id(), mle.var_indices(), F::ZERO);
+            VerifierOutputLayer::new_zero(self.mle.layer_id(), mle.mle_indices(), F::ZERO);
 
         Ok(verifier_output_layer)
     }
@@ -349,7 +350,7 @@ impl<F: Field> VerifierOutputLayer<F> {
 
         let prefix_bits: Vec<MleIndex<F>> = self
             .mle
-            .var_indices()
+            .mle_indices()
             .iter()
             .filter(|index| matches!(index, MleIndex::Fixed(_bit)))
             .cloned()
@@ -357,7 +358,7 @@ impl<F: Field> VerifierOutputLayer<F> {
 
         let claim_point: Vec<F> = self
             .mle
-            .var_indices()
+            .mle_indices()
             .iter()
             .map(|index| {
                 index
@@ -377,7 +378,7 @@ impl<F: Field> VerifierOutputLayer<F> {
         let mut claim_mle = MleEnum::Zero(ZeroMle::new(num_free_vars, Some(prefix_bits), layer_id));
         claim_mle.index_mle_indices(0);
 
-        for mle_index in self.mle.var_indices().iter() {
+        for mle_index in self.mle.mle_indices().iter() {
             if let MleIndex::Bound(val, idx) = mle_index {
                 claim_mle.fix_variable(*idx, *val);
             }
