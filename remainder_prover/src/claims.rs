@@ -11,7 +11,7 @@ pub mod claim_aggregation;
 
 use std::{collections::HashMap, fmt};
 
-use remainder_shared_types::{field::ExtensionField, Field};
+use remainder_shared_types::{extension_field::ExtensionField, Field};
 use thiserror::Error;
 
 use serde::{Deserialize, Serialize};
@@ -85,8 +85,8 @@ impl<F: Field> RawClaim<F> {
 }
 
 /// Lifts a [RawClaim<F>] to a [RawClaim<E>] in the trivial way.
-impl<F: Field, E: ExtensionField<F>> LiftTo<RawClaim<E>> for RawClaim<F> {
-    fn lift(&self) -> RawClaim<E> {
+impl<E: ExtensionField> LiftTo<RawClaim<E>> for RawClaim<E::BaseField> {
+    fn lift(self) -> RawClaim<E> {
         RawClaim {
             point: self.point.lift(),
             evaluation: self.evaluation.into(),
@@ -160,6 +160,19 @@ impl<F: Field> From<Claim<F>> for RawClaim<F> {
         Self {
             point: value.claim.point,
             evaluation: value.claim.evaluation,
+        }
+    }
+}
+
+/// Lifts a [Claim<F>] to a [Claim<E>] in the trivial way.
+impl<E: ExtensionField> LiftTo<Claim<E>> for Claim<E::BaseField> {
+    fn lift(self) -> Claim<E> {
+        let from_layer_id = self.get_from_layer_id();
+        let to_layer_id = self.get_to_layer_id();
+        Claim {
+            claim: self.claim.lift(),
+            from_layer_id,
+            to_layer_id,
         }
     }
 }

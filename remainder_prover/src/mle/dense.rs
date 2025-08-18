@@ -12,17 +12,12 @@ use super::{evals::EvaluationsIterator, mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
     claims::RawClaim,
     mle::{
-        {
-        evals::{
-            fix_variable_at_index_to_bookkeeping_table_copy, Evaluations, MultilinearExtension,
-        },
-        mle_enum::LiftTo,
-    },
+        evals::{Evaluations, MultilinearExtension},
         AbstractMle,
     },
 };
 use crate::{expression::generic_expr::Expression, layer::LayerId};
-use remainder_shared_types::{field::ExtensionField, Field};
+use remainder_shared_types::{extension_field::ExtensionField, Field};
 
 /// An implementation of an [Mle] using a dense representation.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -50,8 +45,6 @@ impl<F: Field> AbstractMle<F> for DenseMle<F> {
     }
 }
 impl<F: Field> Mle<F> for DenseMle<F> {
-    type ExtendedMle<E: ExtensionField<F>> = DenseMle<E>;
-
     fn get_padded_evaluations(&self) -> Vec<F> {
         let size: usize = 1 << self.mle.num_vars();
         let padding = size - self.mle.len();
@@ -151,105 +144,6 @@ impl<F: Field> Mle<F> for DenseMle<F> {
             Some(fixed_claim_return)
         } else {
             None
-        }
-    }
-
-    fn fix_variable_at_index_ext<E: ExtensionField<F>>(
-        mle: &Self, 
-        indexed_bit_index: usize, 
-        point: E,
-    ) -> (DenseMle<E>, Option<RawClaim<E>>) {
-        let mut new_mle_indices = mle.mle_indices.clone().lift();
-
-        // Bind the `MleIndex::IndexedBit(index)` to the challenge `point`.
-
-        // First, find the bit corresponding to `index` and compute its absolute
-        // index. For example, if `mle_indices` is equal to
-        // `[MleIndex::Fixed(0), MleIndex::Bound(42, 0), MleIndex::IndexedBit(1),
-        // MleIndex::Bound(17, 2) MleIndex::IndexedBit(3))]`
-        // then `fix_variable_at_index(3, r)` will fix `IndexedBit(3)`, which is
-        // the 2nd indexed bit, to `r`
-
-        // Count of the bit we're fixing. In the above example
-        // `bit_count == 2`.
-        let (index_found, bit_count) =
-            new_mle_indices
-                .iter_mut()
-                .fold((false, 0), |state, mle_index| {
-                    if state.0 {
-                        // Index already found; do nothing.
-                        state
-                    } else if let MleIndex::Indexed(current_bit_index) = *mle_index {
-                        if current_bit_index == indexed_bit_index {
-                            // Found the indexed bit in the current index;
-                            // bind it and increment the bit count.
-                            mle_index.bind_index(point);
-                            (true, state.1 + 1)
-                        } else {
-                            // Index not yet found but this is an indexed
-                            // bit; increasing bit count.
-                            (false, state.1 + 1)
-                        }
-                    } else {
-                        // Index not yet found but the current bit is not an
-                        // indexed bit; do nothing.
-                        state
-                    }
-                });
-
-        assert!(index_found);
-        debug_assert!(1 <= bit_count && bit_count <= mle.num_free_vars());
-
-        let new_mle = DenseMle::<E> {
-            layer_id: mle.layer_id,
-            mle_indices: new_mle_indices,
-            mle: MultilinearExtension::fix_variable_at_index_ext(&mle.mle, bit_count - 1, point),
-        };
-
-        if new_mle.is_fully_bounded() {
-            let fixed_claim_return = RawClaim::new(
-                new_mle.mle_indices
-                    .iter()
-                    .map(|index| index.val().unwrap())
-                    .collect_vec(),
-                new_mle.mle.value(),
-            );
-            (new_mle, Some(fixed_claim_return))
-        } else {
-            (new_mle, None)
-        }
-    }
-
-    fn fix_variable_ext<E: ExtensionField<F>>(
-        mle: &Self,
-        index: usize, 
-        binding: E,
-    ) -> (DenseMle<E>, Option<RawClaim<E>>) {
-        let mut new_mle_indices = mle.mle_indices.clone().lift();
-
-        for mle_index in new_mle_indices.iter_mut() {
-            if *mle_index == MleIndex::Indexed(index) {
-                mle_index.bind_index(binding);
-            }
-        }
-        // Update the bookkeeping table.
-        let new_mle = DenseMle::<E> {
-            layer_id: mle.layer_id,
-            mle_indices: new_mle_indices,
-            mle: MultilinearExtension::fix_variable_ext(&mle.mle, binding),
-        };
-
-        if new_mle.is_fully_bounded() {
-            let fixed_claim_return = RawClaim::new(
-                new_mle.mle_indices
-                    .iter()
-                    .map(|index| index.val().unwrap())
-                    .collect_vec(),
-                new_mle.mle.value(),
-            );
-            (new_mle, Some(fixed_claim_return))
-        } else {
-            (new_mle, None)
         }
     }
 
@@ -408,11 +302,6 @@ impl<F: Field> DenseMle<F> {
         Self::new_from_iter(mle_flattened, layer_id)
     }
 
-    /// Creates an expression from the current MLE.
-    pub fn expression(self) -> Expression<F, DenseMle<F>> {
-        Expression::<F, DenseMle<F>>::mle(self)
-    }
-
     /// Returns the evaluation challenges for a fully-bound MLE.
     ///
     /// Note that this function panics if a particular challenge is neither
@@ -429,6 +318,13 @@ impl<F: Field> DenseMle<F> {
     }
 }
 
+impl<E: ExtensionField> DenseMle<E> {
+    /// Creates an expression from the current MLE.
+    pub fn expression(self) -> Expression<E, DenseMle<E>> {
+        Expression::<E, DenseMle<E>>::mle(self)
+    }
+}
+
 impl<F: Field> IntoIterator for DenseMle<F> {
     type Item = F;
 
@@ -438,58 +334,4 @@ impl<F: Field> IntoIterator for DenseMle<F> {
         // TEMPORARY: get_evals_vector()
         self.mle.iter().collect::<Vec<F>>().into_iter()
     }
-}
-
-/// Creates a new [DenseMle] which is a "bound" version of the given
-/// `previous_mle` to the (extension field) `challenge` at the formal
-/// variable with the `index` label.
-pub fn fix_variable_to_new_dense_mle<F: Field, E: ExtensionField<F>>(
-    previous_mle: &DenseMle<F>,
-    index: usize,
-    challenge: E,
-) -> DenseMle<E> {
-    let new_multilinear_extension =
-        fix_variable_at_index_to_bookkeeping_table_copy(&previous_mle.mle, index, challenge);
-
-    // We want to keep the same variables, but with the `index`-th variable
-    // fixed to the given challenge.
-    let new_mle_vars = fix_variable_var_conversion(&previous_mle.mle_indices, index, challenge);
-
-    DenseMle {
-        layer_id: previous_mle.layer_id,
-        mle: new_multilinear_extension,
-        mle_indices: new_mle_vars,
-    }
-}
-
-/// Given a slice of previous MLE variables [MleIndex<F>], creates a new list of
-/// [MleIndex<E>] with the (free) one labeled `index` bound to `challenge`.
-pub fn fix_variable_var_conversion<F: Field, E: ExtensionField<F>>(
-    prev_mle_vars: &[MleIndex<F>],
-    index: usize,
-    challenge: E,
-) -> Vec<MleIndex<E>> {
-    // We want to keep the same variables, but with the `index`-th variable
-    // fixed to the given challenge.
-    prev_mle_vars
-        .iter()
-        .map(|var| match var {
-            // Previously bound challenges stay the same, but are cast into `E`
-            // elements.
-            MleIndex::Bound(prev_bound_challenge_val, var_idx) => {
-                MleIndex::Bound((*prev_bound_challenge_val).into(), *var_idx)
-            }
-            // Fixed 0/1 variable values stay the same.
-            MleIndex::Fixed(fixed_val) => MleIndex::Fixed(*fixed_val),
-            // Free variables stay the same unless they are getting bound
-            // to the current challenge.
-            MleIndex::Indexed(var_idx) => {
-                if *var_idx == index {
-                    return MleIndex::Bound(challenge, *var_idx);
-                }
-                MleIndex::Indexed(*var_idx)
-            }
-            MleIndex::Free => panic!("We should not be here prior to indexing"),
-        })
-        .collect()
 }

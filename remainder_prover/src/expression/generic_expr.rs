@@ -4,12 +4,12 @@
 
 use crate::mle::{AbstractMle, MleIndex};
 use itertools::Itertools;
-use remainder_shared_types::{Field, extension_field::ExtensionField};
+use remainder_shared_types::{extension_field::ExtensionField, Field};
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::max,
     hash::Hash,
-    ops::{Add, Mul, Neg, Sub},
+    ops::{Add, Neg, Sub},
 };
 
 use anyhow::{Ok, Result};
@@ -493,8 +493,8 @@ impl<E: ExtensionField> ExpressionNode<E> {
 }
 
 // defines how the Expressions are printed and displayed
-impl<F: std::fmt::Debug + Field, M: std::fmt::Debug + AbstractMle<F>> std::fmt::Debug
-    for Expression<F, M>
+impl<E: std::fmt::Debug + ExtensionField, M: std::fmt::Debug + AbstractMle<E>> std::fmt::Debug
+    for Expression<E, M>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Expression")
@@ -505,7 +505,7 @@ impl<F: std::fmt::Debug + Field, M: std::fmt::Debug + AbstractMle<F>> std::fmt::
 }
 
 // defines how the ExpressionNodes are printed and displayed
-impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F> {
+impl<E: std::fmt::Debug + ExtensionField> std::fmt::Debug for ExpressionNode<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExpressionNode::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
@@ -527,9 +527,9 @@ impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F> {
 }
 
 // constructors and operators on generic MLEs
-impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
+impl<E: ExtensionField, M: AbstractMle<E>> Expression<E, M> {
     /// create a constant Expression that contains one field element
-    pub fn constant(constant: F) -> Self {
+    pub fn constant(constant: E::BaseField) -> Self {
         let mle_node = ExpressionNode::Constant(constant);
         Expression::new(mle_node, [].to_vec())
     }
@@ -544,13 +544,13 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
     pub fn negated(expression: Self) -> Self {
         let (node, mle_vec) = expression.deconstruct();
 
-        let mle_node = ExpressionNode::Scaled(Box::new(node), F::from(1).neg());
+        let mle_node = ExpressionNode::Scaled(Box::new(node), E::BaseField::from(1).neg());
 
         Expression::new(mle_node, mle_vec)
     }
 
     /// scales an expression by a field element
-    pub fn scaled(expression: Self, scale: F) -> Self {
+    pub fn scaled(expression: Self, scale: E::BaseField) -> Self {
         let (node, mle_vec) = expression.deconstruct();
 
         Expression::new(ExpressionNode::Scaled(Box::new(node), scale), mle_vec)
@@ -652,7 +652,7 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
     }
 
     /// create a select expression without reason about index changes
-    pub fn select_with_index(index: MleIndex<F>, lhs: Self, mut rhs: Self) -> Self {
+    pub fn select_with_index(index: MleIndex<E>, lhs: Self, mut rhs: Self) -> Self {
         let offset = lhs.num_mle();
         rhs.increment_mle_vec_indices(offset);
 
@@ -704,51 +704,24 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
     }
 }
 
-impl<F: Field, M: AbstractMle<F>> From<F> for Expression<F, M> {
-    fn from(f: F) -> Self {
-        Expression::<F, M>::constant(f)
-    }
-}
-
-impl<F: Field, M: AbstractMle<F>> Neg for Expression<F, M> {
-    type Output = Expression<F, M>;
+impl<E: ExtensionField, M: AbstractMle<E>> Neg for Expression<E, M> {
+    type Output = Expression<E, M>;
     fn neg(self) -> Self::Output {
-        Expression::<F, M>::negated(self)
+        Expression::<E, M>::negated(self)
     }
 }
 
 /// implement the Add, Sub, and Mul traits for the Expression
-impl<F: Field, M: AbstractMle<F>> Add for Expression<F, M> {
-    type Output = Expression<F, M>;
-    fn add(self, rhs: Expression<F, M>) -> Expression<F, M> {
-        Expression::<F, M>::sum(self, rhs)
-    }
-}
-impl<F: Field, M: AbstractMle<F>> Add<F> for Expression<F, M> {
-    type Output = Expression<F, M>;
-    fn add(self, rhs: F) -> Expression<F, M> {
-        let rhs_expr = Expression::<F, M>::constant(rhs);
-        Expression::<F, M>::sum(self, rhs_expr)
+impl<E: ExtensionField, M: AbstractMle<E>> Add for Expression<E, M> {
+    type Output = Expression<E, M>;
+    fn add(self, rhs: Expression<E, M>) -> Expression<E, M> {
+        Expression::<E, M>::sum(self, rhs)
     }
 }
 
-impl<F: Field, M: AbstractMle<F>> Sub for Expression<F, M> {
-    type Output = Expression<F, M>;
-    fn sub(self, rhs: Expression<F, M>) -> Expression<F, M> {
+impl<E: ExtensionField, M: AbstractMle<E>> Sub for Expression<E, M> {
+    type Output = Expression<E, M>;
+    fn sub(self, rhs: Expression<E, M>) -> Expression<E, M> {
         self.add(rhs.neg())
-    }
-}
-impl<F: Field, M: AbstractMle<F>> Sub<F> for Expression<F, M> {
-    type Output = Expression<F, M>;
-    fn sub(self, rhs: F) -> Expression<F, M> {
-        let rhs_expr = Expression::<F, M>::constant(rhs);
-        Expression::<F, M>::sum(self, rhs_expr.neg())
-    }
-}
-
-impl<F: Field, M: AbstractMle<F>> Mul<F> for Expression<F, M> {
-    type Output = Expression<F, M>;
-    fn mul(self, rhs: F) -> Self::Output {
-        Expression::<F, M>::scaled(self, rhs)
     }
 }

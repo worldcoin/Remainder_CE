@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 use remainder_shared_types::{
-    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy}, field::ExtensionField, transcript::{ProverTranscript, VerifierTranscript}, Field
+    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy}, extension_field::ExtensionField, transcript::{ProverTranscript, VerifierTranscript}
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -45,14 +45,14 @@ use anyhow::{anyhow, Ok, Result};
 /// Proofs are generated with the Sumcheck protocol.
 /// Regular layers are always operated on extension fields
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: Field")]
-pub struct RegularLayer<F: Field> {
+#[serde(bound = "E: ExtensionField")]
+pub struct RegularLayer<E: ExtensionField> {
     /// This layer's ID.
     id: LayerId,
 
     /// The polynomial expression defining this layer.
     /// It includes information on how this layer relates to the others.
-    pub(crate) expression: Expression<F, ProverMle<F>>,
+    pub(crate) expression: Expression<E, ProverMle<E>>,
 
     /// Stores the indices of the sumcheck rounds in this GKR layer so we
     /// only produce sumcheck proofs over those. When we use interpolative
@@ -63,15 +63,15 @@ pub struct RegularLayer<F: Field> {
 
     /// Stores the beta values associated with the `expression`.
     /// Initially set to `None`. Computed during initialization.
-    beta_vals_vec: Option<Vec<BetaValues<F>>>,
+    beta_vals_vec: Option<Vec<BetaValues<E>>>,
 }
 
-impl<F: Field> RegularLayer<F> {
+impl<E: ExtensionField> RegularLayer<E> {
     /// Creates a new `RegularLayer` from an `Expression` and a `LayerId`
     ///
     /// The `Expression` is the relationship this `Layer` proves
     /// and the `LayerId` is the location of this `Layer` in the overall circuit
-    pub fn new_raw(id: LayerId, mut expression: Expression<F, ProverMle<F>>) -> Self {
+    pub fn new_raw(id: LayerId, mut expression: Expression<E, ProverMle<E>>) -> Self {
         // Compute nonlinear rounds from `expression`
         expression.index_mle_indices(0);
         let sumcheck_rounds = match global_claim_agg_strategy() {
@@ -88,7 +88,7 @@ impl<F: Field> RegularLayer<F> {
 
     /// Creates a new `RegularLayer` from an `Expression` and a `LayerId`
     /// assumes that the expression is already indexed
-    pub fn new_from_indexed_expr(id: LayerId, expression: Expression<F, ProverMle<F>>) -> Self {
+    pub fn new_from_indexed_expr(id: LayerId, expression: Expression<E, ProverMle<E>>) -> Self {
         // Compute nonlinear rounds from `expression`
         let sumcheck_rounds = match global_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => expression.get_all_nonlinear_rounds(),
@@ -103,12 +103,12 @@ impl<F: Field> RegularLayer<F> {
     }
 
     /// Returns a reference to the expression that this layer is proving.
-    pub fn get_expression(&self) -> &Expression<F, ProverMle<F>> {
+    pub fn get_expression(&self) -> &Expression<E, ProverMle<E>> {
         &self.expression
     }
 }
 
-impl<F: Field, E: ExtensionField<F>> Layer<F, E> for RegularLayer<F> {
+impl<E: ExtensionField> Layer<E> for RegularLayer<E> {
     fn layer_id(&self) -> LayerId {
         self.id
     }
@@ -116,7 +116,7 @@ impl<F: Field, E: ExtensionField<F>> Layer<F, E> for RegularLayer<F> {
     fn prove(
         &mut self,
         claims: &[&RawClaim<E>],
-        transcript_writer: &mut impl ProverTranscript<F>,
+        transcript_writer: &mut impl ProverTranscript<E::BaseField>,
     ) -> Result<()> {
         info!("Proving a GKR Layer.");
 
@@ -176,7 +176,7 @@ impl<F: Field, E: ExtensionField<F>> Layer<F, E> for RegularLayer<F> {
         // Append the evaluations of the MLEs to the transcript.
         for mle in &self.expression.mle_vec {
             let val = mle.mle.value();
-            transcript_writer.append("Fully bound MLE evaluation", val);
+            transcript_writer.append_extension_field_element("Fully bound MLE evaluation", val);
         }
 
         Ok(())
@@ -320,7 +320,7 @@ impl<F: Field, E: ExtensionField<F>> Layer<F, E> for RegularLayer<F> {
         let rlc_beta = sumcheck_claim_points_vec
             .iter()
             .zip(random_coefficients)
-            .fold(F::ZERO, |acc, (elem, random_coeff)| {
+            .fold(E::ZERO, |acc, (elem, random_coeff)| {
                 assert_eq!(round_challenges.len(), elem.len());
                 let fully_bound_beta =
                     BetaValues::compute_beta_over_two_challenges(round_challenges, elem);
@@ -336,13 +336,13 @@ impl<F: Field, E: ExtensionField<F>> Layer<F, E> for RegularLayer<F> {
         // Return basically a list of (usize, Claim)
         let layerwise_expr = &self.expression;
 
-        let mut claims: Vec<Claim<F>> = Vec::new();
+        let mut claims: Vec<Claim<E>> = Vec::new();
 
         // Define how to parse the expression tree.
         // Basically we just want to go down it and pass up claims.
         // We can only add a new claim if we see an MLE with all its indices
         // bound.
-        let mut observer_fn = |expr: &ExpressionNode<F>, mle_vec: &[ProverMle<F>]| -> Result<()> {
+        let mut observer_fn = |expr: &ExpressionNode<E>, mle_vec: &[ProverMle<E>]| -> Result<()> {
             match expr {
                 ExpressionNode::Mle(mle_vec_idx) => {
                     let mle = mle_vec_idx.get_mle(mle_vec);
@@ -417,44 +417,44 @@ impl<F: Field, E: ExtensionField<F>> Layer<F, E> for RegularLayer<F> {
 
 /// The circuit description counterpart of a [RegularLayer].
 #[derive(Serialize, Deserialize, Clone, Debug, Hash)]
-#[serde(bound = "F: Field")]
-pub struct RegularLayerDescription<F: Field> {
+#[serde(bound = "E: ExtensionField")]
+pub struct RegularLayerDescription<E: ExtensionField> {
     /// This layer's ID.
     id: LayerId,
 
     /// A structural description of the polynomial expression defining this
     /// layer. The leaves of the expression describe the MLE characteristics
     /// without storing any values.
-    expression: Expression<F, MleDescription<F>>,
+    expression: Expression<E, MleDescription<E>>,
 }
 
-impl<F: Field> RegularLayerDescription<F> {
+impl<E: ExtensionField> RegularLayerDescription<E> {
     /// Generates a new [RegularLayerDescription] given raw data.
-    pub fn new_raw(id: LayerId, expression: Expression<F, MleDescription<F>>) -> Self {
+    pub fn new_raw(id: LayerId, expression: Expression<E, MleDescription<E>>) -> Self {
         Self { id, expression }
     }
 }
 
 /// The verifier's counterpart of a [RegularLayer].
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: Field")]
-pub struct VerifierRegularLayer<F: Field> {
+#[serde(bound = "E: ExtensionField")]
+pub struct VerifierRegularLayer<E: ExtensionField> {
     /// This layer's ID.
     id: LayerId,
 
     /// A fully-bound expression defining the layer.
-    expression: Expression<F, VerifierMle<F>>,
+    expression: Expression<E, VerifierMle<E>>,
 }
 
-impl<F: Field> VerifierRegularLayer<F> {
+impl<E: ExtensionField> VerifierRegularLayer<E> {
     /// Generates a new [VerifierRegularLayer] given raw data.
-    pub(crate) fn new_raw(id: LayerId, expression: Expression<F, VerifierMle<F>>) -> Self {
+    pub(crate) fn new_raw(id: LayerId, expression: Expression<E, VerifierMle<E>>) -> Self {
         Self { id, expression }
     }
 }
 
-impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
-    type VerifierLayer = VerifierRegularLayer<F>;
+impl<E: ExtensionField> LayerDescription<E> for RegularLayerDescription<E> {
+    type VerifierLayer = VerifierRegularLayer<E>;
 
     fn layer_id(&self) -> LayerId {
         self.id
@@ -462,11 +462,11 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
 
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &HashSet<&MleDescription<F>>,
-        circuit_map: &mut CircuitEvalMap<F>,
+        mle_outputs_necessary: &HashSet<&MleDescription<E>>,
+        circuit_map: &mut CircuitEvalMap<E>,
     ) {
         let mut expression_nodes_to_compile =
-            HashMap::<&ExpressionNode<F>, Vec<(Vec<bool>, Vec<bool>)>>::new();
+            HashMap::<&ExpressionNode<E>, Vec<(Vec<bool>, Vec<bool>)>>::new();
 
         mle_outputs_necessary
             .iter()
@@ -525,9 +525,9 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
 
     fn verify_rounds(
         &self,
-        claims: &[&RawClaim<F>],
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<VerifierLayerEnum<F>> {
+        claims: &[&RawClaim<E>],
+        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
+    ) -> Result<VerifierLayerEnum<E>> {
         let rounds_sumchecked_over = match global_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => self.expression.get_all_nonlinear_rounds(),
             ClaimAggregationStrategy::RLC => self.expression.get_all_rounds(),
@@ -540,10 +540,10 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         let random_coefficients = match global_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => {
                 assert_eq!(claims.len(), 1);
-                vec![F::ONE]
+                vec![E::ONE]
             }
             ClaimAggregationStrategy::RLC => {
-                transcript_reader.get_challenges("RLC Claim Agg Coefficients", claims.len())?
+                transcript_reader.get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len())?
             }
         };
 
@@ -557,13 +557,13 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             ClaimAggregationStrategy::RLC => vec![random_coefficients
                 .iter()
                 .zip(claims)
-                .fold(F::ZERO, |acc, (rlc_val, claim)| {
+                .fold(E::ZERO, |acc, (rlc_val, claim)| {
                     acc + *rlc_val * claim.get_eval()
                 })],
         };
 
         // Previous round's challege: r_{i-1}.
-        let mut prev_challenge = F::ZERO;
+        let mut prev_challenge = E::ZERO;
 
         // For round 1 <= i <= n, perform the check:
         for round_index in &rounds_sumchecked_over {
@@ -586,15 +586,15 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             //   We should hide that under another function whose job is to take
             //   the trascript reader and read the polynomial in whatever
             //   representation is being used.
-            let mut g_cur_round: Vec<_> = [Ok(F::from(0))]
+            let mut g_cur_round: Vec<_> = [Ok(E::from(0))]
                 .into_iter()
                 .chain((0..degree).map(|_| {
-                    transcript_reader.consume_element("Sumcheck round univariate evaluations")
+                    transcript_reader.consume_extension_field_element("Sumcheck round univariate evaluations")
                 }))
                 .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
-            let challenge = transcript_reader.get_challenge("Sumcheck round challenge")?;
+            let challenge = transcript_reader.get_extension_field_challenge("Sumcheck round challenge")?;
 
             // TODO(Makis): After refactoring `SumcheckEvals` to be a
             // representation of a univariate polynomial, `evaluate_at_a_point`
@@ -602,7 +602,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
             // Compute:
             //       `g_i(0) = g_{i - 1}(r_{i-1}) - g_i(1)`
             let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
-            let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
+            let g_i_one = evaluate_at_a_point(&g_cur_round, E::ONE).unwrap();
             g_cur_round[0] = g_prev_r_prev - g_i_one;
 
             g_prev_round = g_cur_round;
@@ -623,7 +623,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         // Build point interlacing linear-round challenges with nonlinear-round
         // challenges.
         let mut nonlinear_idx = 0;
-        let point: &Vec<F> = match global_claim_agg_strategy() {
+        let point: &Vec<E> = match global_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => &(0..num_vars)
                 .map(|idx| {
                     if var_is_linear[idx] {
@@ -654,7 +654,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         let beta_fn_evaluated_at_challenge_point = match global_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => {
                 // Compute `\beta((r_1, ..., r_n), (u_1, ..., u_n))`.
-                let claim_nonlinear_vals: Vec<F> = rounds_sumchecked_over
+                let claim_nonlinear_vals: Vec<E> = rounds_sumchecked_over
                     .iter()
                     .map(|idx| (claims[0].get_point()[*idx]))
                     .collect();
@@ -662,7 +662,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
                 BetaValues::compute_beta_over_two_challenges(&claim_nonlinear_vals, &challenges)
             }
             ClaimAggregationStrategy::RLC => random_coefficients.iter().zip(claims).fold(
-                F::ZERO,
+                E::ZERO,
                 |acc, (random_coeff, claim)| {
                     acc + *random_coeff
                         * BetaValues::compute_beta_over_two_challenges(
@@ -698,9 +698,9 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
 
     fn convert_into_verifier_layer(
         &self,
-        sumcheck_challenges: &[F],
-        _claim_point: &[&[F]],
-        transcript_reader: &mut impl VerifierTranscript<F>,
+        sumcheck_challenges: &[E],
+        _claim_point: &[&[E]],
+        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
     ) -> Result<Self::VerifierLayer> {
         let verifier_expr = self
             .expression
@@ -714,10 +714,10 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     fn get_post_sumcheck_layer(
         &self,
-        round_challenges: &[F],
-        claim_challenges: &[&[F]],
-        random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, Option<F>> {
+        round_challenges: &[E],
+        claim_challenges: &[&[E]],
+        random_coefficients: &[E],
+    ) -> PostSumcheckLayer<E, Option<E>> {
         let sumcheck_round_indices = self.sumcheck_round_indices();
         // Filter the claim to get the values of the claim pertaining to the nonlinear rounds.
         let sumcheck_claim_points_vec = claim_challenges
@@ -741,7 +741,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         let rlc_beta = sumcheck_claim_points_vec
             .iter()
             .zip(random_coefficients)
-            .fold(F::ZERO, |acc, (elem, random_coeff)| {
+            .fold(E::ZERO, |acc, (elem, random_coeff)| {
                 assert_eq!(round_challenges.len(), elem.len());
                 let fully_bound_beta =
                     BetaValues::compute_beta_over_two_challenges(round_challenges, elem);
@@ -780,11 +780,11 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         self.expression.get_max_degree() + 1
     }
 
-    fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
+    fn get_circuit_mles(&self) -> Vec<&MleDescription<E>> {
         self.expression.get_circuit_mles()
     }
 
-    fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<F>) -> LayerEnum<F> {
+    fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<E>) -> LayerEnum<E> {
         let prover_expr = self.expression.into_prover_expression(circuit_map);
         let regular_layer = RegularLayer::new_from_indexed_expr(self.layer_id(), prover_expr);
         regular_layer.into()
@@ -795,21 +795,21 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
     }
 }
 
-impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
+impl<E: ExtensionField> VerifierLayer<E> for VerifierRegularLayer<E> {
     fn layer_id(&self) -> LayerId {
         self.id
     }
 
-    fn get_claims(&self) -> Result<Vec<Claim<F>>> {
+    fn get_claims(&self) -> Result<Vec<Claim<E>>> {
         let expr = &self.expression;
 
         // Define how to parse the expression tree
         // - Basically we just want to go down it and pass up claims
         // - We can only add a new claim if we see an MLE with all its indices bound
 
-        let mut claims: Vec<Claim<F>> = Vec::new();
+        let mut claims: Vec<Claim<E>> = Vec::new();
 
-        let mut observer_fn = |exp: &ExpressionNode<F>, mle_vec: &[VerifierMle<F>]| -> Result<()> {
+        let mut observer_fn = |exp: &ExpressionNode<E>, mle_vec: &[VerifierMle<E>]| -> Result<()> {
             match exp {
                 ExpressionNode::Mle(verifier_index) => {
                     let verifier_mle = verifier_index.get_mle(mle_vec);
@@ -826,7 +826,7 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
                     let claimed_value = verifier_mle.value();
 
                     // Construct the claim
-                    let claim: Claim<F> = Claim::new(
+                    let claim: Claim<E> = Claim::new(
                         fixed_mle_indices,
                         claimed_value,
                         self.layer_id(),
@@ -851,7 +851,7 @@ impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
                         let claimed_value = verifier_mle.value();
 
                         // Construct the claim
-                        let claim: Claim<F> = Claim::new(
+                        let claim: Claim<E> = Claim::new(
                             fixed_mle_indices,
                             claimed_value,
                             self.layer_id(),

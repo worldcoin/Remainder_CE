@@ -24,7 +24,7 @@ use crate::{
     sumcheck::InterpError,
 };
 use remainder_shared_types::{
-    field::ExtensionField, transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript}, Field
+    extension_field::ExtensionField, transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript}
 };
 
 use anyhow::Result;
@@ -101,7 +101,7 @@ pub enum VerificationError {
 ///
 /// Each `Layer` is a sub-protocol that takes in some `Claim` and creates a proof
 /// that the `Claim` is correct
-pub trait Layer<F: Field, E: ExtensionField<F>> {
+pub trait Layer<E: ExtensionField> {
     /// Gets this layer's ID.
     fn layer_id(&self) -> LayerId;
 
@@ -124,7 +124,7 @@ pub trait Layer<F: Field, E: ExtensionField<F>> {
     fn prove(
         &mut self,
         claims: &[&RawClaim<E>],
-        transcript: &mut impl ProverTranscript<F>,
+        transcript: &mut impl ProverTranscript<E::BaseField>,
     ) -> Result<()>;
 
     /// Return the evaluations of the univariate polynomial generated during this round of sumcheck.
@@ -167,10 +167,10 @@ pub trait Layer<F: Field, E: ExtensionField<F>> {
 }
 
 /// A circuit-description counterpart of the GKR [Layer] trait.
-pub trait LayerDescription<F: Field> {
+pub trait LayerDescription<E: ExtensionField> {
     /// The associated type that the verifier uses to work with a layer of this
     /// kind.
-    type VerifierLayer: VerifierLayer<F> + Debug + Serialize + for<'a> Deserialize<'a>;
+    type VerifierLayer: VerifierLayer<E> + Debug + Serialize + for<'a> Deserialize<'a>;
 
     /// Returns this layer's ID.
     fn layer_id(&self) -> LayerId;
@@ -186,9 +186,9 @@ pub trait LayerDescription<F: Field> {
     /// The proof is implicitly included in the `transcript`.
     fn verify_rounds(
         &self,
-        claims: &[&RawClaim<F>],
-        transcript: &mut impl VerifierTranscript<F>,
-    ) -> Result<VerifierLayerEnum<F>>;
+        claims: &[&RawClaim<E>],
+        transcript: &mut impl VerifierTranscript<E::BaseField>,
+    ) -> Result<VerifierLayerEnum<E>>;
 
     /// The list of sumcheck rounds this layer will prove, by index.
     fn sumcheck_round_indices(&self) -> Vec<usize>;
@@ -198,19 +198,19 @@ pub trait LayerDescription<F: Field> {
     /// expression to become a verifier expression.
     fn convert_into_verifier_layer(
         &self,
-        sumcheck_bindings: &[F],
-        claim_points: &[&[F]],
-        transcript: &mut impl VerifierTranscript<F>,
+        sumcheck_bindings: &[E],
+        claim_points: &[&[E]],
+        transcript: &mut impl VerifierTranscript<E::BaseField>,
     ) -> Result<Self::VerifierLayer>;
 
     /// Gets the [PostSumcheckLayer] for this layer.
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     fn get_post_sumcheck_layer(
         &self,
-        round_challenges: &[F],
-        claim_challenges: &[&[F]],
-        random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, Option<F>>;
+        round_challenges: &[E],
+        claim_challenges: &[&[E]],
+        random_coefficients: &[E],
+    ) -> PostSumcheckLayer<E, Option<E>>;
 
     /// The maximum degree for any univariate in the sumcheck protocol.
     fn max_degree(&self) -> usize;
@@ -223,24 +223,24 @@ pub trait LayerDescription<F: Field> {
     /// that populates these bookkeeping tables and mutate the circuit map to reflect this.
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &HashSet<&MleDescription<F>>,
-        circuit_map: &mut CircuitEvalMap<F>,
+        mle_outputs_necessary: &HashSet<&MleDescription<E>>,
+        circuit_map: &mut CircuitEvalMap<E>,
     );
 
     /// The [MleDescription]s that make up the leaves of the expression in this layer.
-    fn get_circuit_mles(&self) -> Vec<&MleDescription<F>>;
+    fn get_circuit_mles(&self) -> Vec<&MleDescription<E>>;
 
     /// Given a [CircuitMap], turn this [LayerDescription] into a ProverLayer.
-    fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<F>) -> LayerEnum<F>;
+    fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<E>) -> LayerEnum<E>;
 }
 
 /// A verifier counterpart of a GKR [Layer] trait.
-pub trait VerifierLayer<F: Field> {
+pub trait VerifierLayer<E: ExtensionField> {
     /// Returns this layer's ID.
     fn layer_id(&self) -> LayerId;
 
     /// Get the claims that this layer makes on other layers.
-    fn get_claims(&self) -> Result<Vec<Claim<F>>>;
+    fn get_claims(&self) -> Result<Vec<Claim<E>>>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Ord, Serialize, Deserialize, Copy, PartialOrd)]

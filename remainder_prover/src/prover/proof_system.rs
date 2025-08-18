@@ -10,17 +10,17 @@ macro_rules! layer_enum {
 
         paste::paste! {
             #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-            #[serde(bound = "F: Field")]
+            #[serde(bound = "E: ExtensionField")]
             #[doc = r"Remainder generated trait enum"]
-            pub enum [<$type_name Enum>]<F: Field> {
+            pub enum [<$type_name Enum>]<E: ExtensionField> {
                 $(
                     #[doc = "Remainder generated layer variant"]
                     $var_name(Box<$variant>),
                 )*
             }
 
-            impl<F: Field> $crate::layer::LayerDescription<F> for [<$type_name DescriptionEnum>]<F> {
-                type VerifierLayer = [<Verifier $type_name Enum>]<F>;
+            impl<E: ExtensionField> $crate::layer::LayerDescription<E> for [<$type_name DescriptionEnum>]<E> {
+                type VerifierLayer = [<Verifier $type_name Enum>]<E>;
 
                 fn layer_id(&self) -> super::LayerId {
                     match self {
@@ -32,8 +32,8 @@ macro_rules! layer_enum {
 
                 fn compute_data_outputs(
                     &self,
-                    mle_outputs_necessary: &std::collections::HashSet<&$crate::mle::mle_description::MleDescription<F>>,
-                    circuit_map: &mut $crate::circuit_layout::CircuitEvalMap<F>,
+                    mle_outputs_necessary: &std::collections::HashSet<&$crate::mle::mle_description::MleDescription<E>>,
+                    circuit_map: &mut $crate::circuit_layout::CircuitEvalMap<E>,
                 ) {
                     match self {
                         $(
@@ -44,9 +44,9 @@ macro_rules! layer_enum {
 
                 fn verify_rounds(
                     &self,
-                    claims: &[&$crate::claims::RawClaim<F>],
-                    transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
-                ) -> anyhow::Result<VerifierLayerEnum<F>> {
+                    claims: &[&$crate::claims::RawClaim<E>],
+                    transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<E::BaseField>,
+                ) -> anyhow::Result<VerifierLayerEnum<E>> {
                     match self {
                         $(
                             Self::$var_name(layer) => Ok(layer.verify_rounds(claims, transcript)?),
@@ -66,9 +66,9 @@ macro_rules! layer_enum {
 
                 fn convert_into_verifier_layer(
                     &self,
-                    sumcheck_bindings: &[F],
-                    claim_points: &[&[F]],
-                    transcript_reader: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
+                    sumcheck_bindings: &[E],
+                    claim_points: &[&[E]],
+                    transcript_reader: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<E::BaseField>,
                 ) -> anyhow::Result<Self::VerifierLayer> {
                     match self {
                         $(
@@ -79,7 +79,7 @@ macro_rules! layer_enum {
 
                 fn get_circuit_mles(
                     &self,
-                ) -> Vec<& $crate::mle::mle_description::MleDescription<F>> {
+                ) -> Vec<& $crate::mle::mle_description::MleDescription<E>> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.get_circuit_mles(),
@@ -99,8 +99,8 @@ macro_rules! layer_enum {
 
                 fn convert_into_prover_layer(
                     &self,
-                    circuit_map: &$crate::circuit_layout::CircuitEvalMap<F>
-                ) -> LayerEnum<F> {
+                    circuit_map: &$crate::circuit_layout::CircuitEvalMap<E>
+                ) -> LayerEnum<E> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.convert_into_prover_layer(circuit_map),
@@ -110,10 +110,10 @@ macro_rules! layer_enum {
 
                 fn get_post_sumcheck_layer(
                     &self,
-                    round_challenges: &[F],
-                    claim_challenges: &[&[F]],
-                    random_coefficients: &[F],
-                ) -> $crate::layer::PostSumcheckLayer<F, Option<F>> {
+                    round_challenges: &[E],
+                    claim_challenges: &[&[E]],
+                    random_coefficients: &[E],
+                ) -> $crate::layer::PostSumcheckLayer<E, Option<E>> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges, random_coefficients),
@@ -130,7 +130,7 @@ macro_rules! layer_enum {
                 }
             }
 
-            impl<F: Field> $crate::layer::VerifierLayer<F> for [<Verifier$type_name Enum>]<F> {
+            impl<E: ExtensionField> $crate::layer::VerifierLayer<E> for [<Verifier$type_name Enum>]<E> {
                 fn layer_id(&self) -> super::LayerId {
                     match self {
                         $(
@@ -139,7 +139,7 @@ macro_rules! layer_enum {
                     }
                 }
 
-                fn get_claims(&self) -> anyhow::Result<Vec<$crate::claims::Claim<F>>> {
+                fn get_claims(&self) -> anyhow::Result<Vec<$crate::claims::Claim<E>>> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.get_claims(),
@@ -148,7 +148,7 @@ macro_rules! layer_enum {
                 }
             }
 
-            impl<F: Field, E: ExtensionField<F>> $crate::layer::Layer<F, E> for [<$type_name Enum>]<F> {
+            impl<E: ExtensionField> $crate::layer::Layer<E> for [<$type_name Enum>]<E> {
                 fn layer_id(&self) -> super::LayerId {
                     match self {
                         $(
@@ -160,7 +160,7 @@ macro_rules! layer_enum {
                 fn prove(
                     &mut self,
                     claims: &[&$crate::claims::RawClaim<E>],
-                    transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
+                    transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<E::BaseField>,
                 ) -> anyhow::Result<()> {
                     match self {
                         $(
@@ -177,7 +177,7 @@ macro_rules! layer_enum {
                     }
                 }
 
-                fn compute_round_sumcheck_message(&mut self, round_index: usize, random_coefficients: &[E]) -> anyhow::Result<Vec<F>> {
+                fn compute_round_sumcheck_message(&mut self, round_index: usize, random_coefficients: &[E]) -> anyhow::Result<Vec<E>> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.compute_round_sumcheck_message(round_index, random_coefficients),
@@ -214,7 +214,7 @@ macro_rules! layer_enum {
                     round_challenges: &[E],
                     claim_challenges: &[&[E]],
                     random_coefficients: &[E],
-                ) -> $crate::layer::PostSumcheckLayer<F, E> {
+                ) -> $crate::layer::PostSumcheckLayer<E, E> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges, random_coefficients),
@@ -241,8 +241,8 @@ macro_rules! layer_enum {
             }
 
         $(
-            impl<F: Field> From<$variant> for [<$type_name Enum>]<F> {
-                fn from(var: $variant) -> [<$type_name Enum>]<F> {
+            impl<E: ExtensionField> From<$variant> for [<$type_name Enum>]<E> {
+                fn from(var: $variant) -> [<$type_name Enum>]<E> {
                     Self::$var_name(Box::new(var))
                 }
             }

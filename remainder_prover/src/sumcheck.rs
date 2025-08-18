@@ -55,7 +55,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 #[cfg(feature = "parallel")]
 use rayon::prelude::ParallelSlice;
 
-use remainder_shared_types::{field::ExtensionField, Field};
+use remainder_shared_types::Field;
 
 /// Errors to do with the evaluation of MleRefs.
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -407,23 +407,23 @@ pub fn beta_cascade_no_independent_variable<F: Field>(
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary
 /// point
-pub fn evaluate_at_a_point<F: Field, E: ExtensionField<F>>(
+pub fn evaluate_at_a_point<F: Field>(
     given_evals: &[F],
-    point: E,
-) -> Result<E> {
+    point: F,
+) -> Result<F> {
     // Special case for the constant polynomial.
     if given_evals.len() == 1 {
-        return Ok(given_evals[0].into());
+        return Ok(given_evals[0]);
     }
 
     debug_assert!(given_evals.len() > 1);
 
     // Special cases for `point == 0` and `point == 1`.
-    if point == E::ZERO {
-        return Ok(given_evals[0].into());
+    if point == F::ZERO {
+        return Ok(given_evals[0]);
     }
-    if point == E::ONE {
-        return Ok((*given_evals.get(1).unwrap_or(&given_evals[0])).into());
+    if point == F::ONE {
+        return Ok(*given_evals.get(1).unwrap_or(&given_evals[0]));
     }
 
     // Need degree + 1 evaluations to interpolate
@@ -436,9 +436,9 @@ pub fn evaluate_at_a_point<F: Field, E: ExtensionField<F>>(
                     .map(|x| F::from(x as u64))
                     .fold(
                         // Compute vector of (numerator, denominator)
-                        (E::ONE, E::ONE),
+                        (F::ONE, F::ONE),
                         |(num, denom), val| {
-                            (num * (point - val), denom * (E::from(x as u64) - val))
+                            (num * (point - val), denom * (F::from(x as u64) - val))
                         },
                     )
             },

@@ -17,21 +17,21 @@ use crate::{
 use ark_std::log2;
 use itertools::Itertools;
 
-use remainder_shared_types::{transcript::VerifierTranscript, Field};
+use remainder_shared_types::{extension_field::ExtensionField, transcript::VerifierTranscript, Field};
 
 use super::generic_expr::{Expression, ExpressionNode};
 
 use anyhow::{anyhow, Result};
 
-impl<F: Field> Expression<F, MleDescription<F>> {
+impl<E: ExtensionField> Expression<E, MleDescription<E>> {
     /// Binds the variables of this expression to `point`, and retrieves the
-    /// leaf MLE values from the `transcript_reader`.  Returns a `Expression<F,
-    /// VerifierMle<F>>` version of `self`.
+    /// leaf MLE values from the `transcript_reader`.  
+    /// Returns a [Expression<E, VerifierMle<E>>] version of [self].
     pub fn bind(
         &self,
-        point: &[F],
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Expression<F, VerifierMle<F>>> {
+        point: &[E],
+        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
+    ) -> Result<Expression<E, VerifierMle<E>>> {
         let (mut expression_node, mle_vec) = self.clone().deconstruct();
         expression_node.bind_selector(point);
 
@@ -43,7 +43,7 @@ impl<F: Field> Expression<F, MleDescription<F>> {
     }
 
     /// Get the [MleDescription]s for this expression.
-    pub fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
+    pub fn get_circuit_mles(&self) -> Vec<&MleDescription<E>> {
         self.mle_vec.iter().collect()
     }
 
@@ -53,12 +53,12 @@ impl<F: Field> Expression<F, MleDescription<F>> {
             .index_mle_vars(start_index, &mut self.mle_vec);
     }
 
-    /// Get the [Expression<F, DenseMle<F>>] corresponding to this [Expression<F, MleDescription<F>>] using the
+    /// Get the [Expression<E, DenseMle<E>>] corresponding to this [Expression<E, MleDescription<E>>] using the
     /// associated data in the [CircuitMap].
     pub fn into_prover_expression(
         &self,
-        circuit_map: &CircuitEvalMap<F>,
-    ) -> Expression<F, DenseMle<F>> {
+        circuit_map: &CircuitEvalMap<E>,
+    ) -> Expression<E, DenseMle<E>> {
         let (expression_node, mle_vec) = self.clone().deconstruct();
         let prover_mles: Vec<_> = mle_vec
             .into_iter()
@@ -71,19 +71,18 @@ impl<F: Field> Expression<F, MleDescription<F>> {
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     pub fn get_post_sumcheck_layer(
         &self,
-        multiplier: F,
-        challenges: &[F],
-    ) -> PostSumcheckLayer<F, Option<F>> {
+        multiplier: E,
+        challenges: &[E],
+    ) -> PostSumcheckLayer<E, Option<E>> {
         self.expression_node
             .get_post_sumcheck_layer_verifier(multiplier, challenges, &self.mle_vec)
     }
 }
 
-impl<F: Field> ExpressionNode<F> {
-    /// Turn this expression into a [VerifierExpr] which represents a fully bound expression.
-    /// Should only be applicable after a full layer of sumcheck.
-    pub fn bind_selector(&mut self, point: &[F]) {
-        let mut bind_selector_closure = |expr: &mut ExpressionNode<F>| -> Result<()> {
+impl<E: ExtensionField> ExpressionNode<E> {
+    /// Bind all selectors according to the claim points
+    pub fn bind_selector(&mut self, point: &[E]) {
+        let mut bind_selector_closure = |expr: &mut ExpressionNode<E>| -> Result<()> {
             match expr {
                 ExpressionNode::Selector(index, ..) => match index {
                     MleIndex::Indexed(idx) => {
@@ -104,10 +103,10 @@ impl<F: Field> ExpressionNode<F> {
     /// corresponding to the [MleDescription].
     pub fn compute_bookkeeping_table(
         &self,
-        circuit_map: &CircuitEvalMap<F>,
-        mle_vec: &[MleDescription<F>],
-    ) -> Option<MultilinearExtension<F>> {
-        let output_data: Option<MultilinearExtension<F>> = match self {
+        circuit_map: &CircuitEvalMap<E>,
+        mle_vec: &[MleDescription<E>],
+    ) -> Option<MultilinearExtension<E>> {
+        let output_data: Option<MultilinearExtension<E>> = match self {
             ExpressionNode::Mle(mle_vec_index) => {
                 let maybe_mle =
                     circuit_map.get_data_from_circuit_mle(mle_vec_index.get_mle(mle_vec));
@@ -125,7 +124,7 @@ impl<F: Field> ExpressionNode<F> {
                             .get_data_from_circuit_mle(mle_vec_index.get_mle(mle_vec)) // Returns Result
                             .map(|data| data.to_vec()) // Map Ok value to slice
                     })
-                    .collect::<Result<Vec<Vec<F>>>>() // Collect all into a Result
+                    .collect::<Result<Vec<Vec<E>>>>() // Collect all into a Result
                     .ok()?;
                 Some(evaluate_bookkeeping_tables_given_operation(
                     &mle_bookkeeping_tables,
@@ -148,7 +147,7 @@ impl<F: Field> ExpressionNode<F> {
                 Some(MultilinearExtension::new(
                     a_bookkeeping_table
                         .iter()
-                        .map(|elem| elem * scale)
+                        .map(|elem| elem * *scale)
                         .collect_vec(),
                 ))
             }
@@ -166,14 +165,14 @@ impl<F: Field> ExpressionNode<F> {
                         .collect_vec(),
                 ))
             }
-            ExpressionNode::Constant(value) => Some(MultilinearExtension::new(vec![*value])),
+            ExpressionNode::Constant(value) => Some(MultilinearExtension::new(vec![(*value).into()])),
         };
 
         output_data
     }
 
     /// Label the MLE indices of an expression, starting from the `start_index`.
-    pub fn index_mle_vars(&mut self, start_index: usize, mle_vec: &mut [MleDescription<F>]) {
+    pub fn index_mle_vars(&mut self, start_index: usize, mle_vec: &mut [MleDescription<E>]) {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
                 match mle_index {
@@ -208,11 +207,11 @@ impl<F: Field> ExpressionNode<F> {
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     pub fn get_post_sumcheck_layer_verifier(
         &self,
-        multiplier: F,
-        challenges: &[F],
-        mle_vec: &[MleDescription<F>],
-    ) -> PostSumcheckLayer<F, Option<F>> {
-        let mut products: Vec<Product<F, Option<F>>> = vec![];
+        multiplier: E,
+        challenges: &[E],
+        mle_vec: &[MleDescription<E>],
+    ) -> PostSumcheckLayer<E, Option<E>> {
+        let mut products: Vec<Product<E, Option<E>>> = vec![];
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
                 let idx_val = match mle_index {
@@ -222,7 +221,7 @@ impl<F: Field> ExpressionNode<F> {
                     // contains indexed bits
                     _ => panic!("should not have any other index here"),
                 };
-                let left_side_acc = multiplier * (F::ONE - idx_val);
+                let left_side_acc = multiplier * (E::ONE - idx_val);
                 let right_side_acc = multiplier * (idx_val);
                 products.extend(
                     a.get_post_sumcheck_layer_verifier(left_side_acc, challenges, mle_vec)
@@ -244,14 +243,14 @@ impl<F: Field> ExpressionNode<F> {
                 );
             }
             ExpressionNode::Mle(mle) => {
-                products.push(Product::<F, Option<F>>::new(
+                products.push(Product::<E, Option<E>>::new(
                     &[mle.get_mle(mle_vec).clone()],
                     multiplier,
                     challenges,
                 ));
             }
             ExpressionNode::Product(mles) => {
-                let product = Product::<F, Option<F>>::new(
+                let product = Product::<E, Option<E>>::new(
                     &mles
                         .iter()
                         .map(|m| m.get_mle(mle_vec).clone())
@@ -262,16 +261,16 @@ impl<F: Field> ExpressionNode<F> {
                 products.push(product);
             }
             ExpressionNode::Scaled(a, scale_factor) => {
-                let acc = multiplier * scale_factor;
+                let acc = multiplier * *scale_factor;
                 products.extend(
                     a.get_post_sumcheck_layer_verifier(acc, challenges, mle_vec)
                         .0,
                 );
             }
             ExpressionNode::Constant(constant) => {
-                products.push(Product::<F, Option<F>>::new(
+                products.push(Product::<E, Option<E>>::new(
                     &[],
-                    *constant * multiplier,
+                    multiplier * *constant,
                     challenges,
                 ));
             }

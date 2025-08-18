@@ -20,31 +20,31 @@
 
 use crate::mle::{verifier_mle::VerifierMle, MleIndex};
 
-use remainder_shared_types::Field;
+use remainder_shared_types::extension_field::ExtensionField;
 
 use super::{expr_errors::ExpressionError, generic_expr::Expression};
 
 use anyhow::{anyhow, Ok, Result};
 
-impl<F: Field> Expression<F, VerifierMle<F>> {
+impl<E: ExtensionField> Expression<E, VerifierMle<E>> {
     /// Evaluate this fully bound expression.
-    pub fn evaluate(&self) -> Result<F> {
-        let constant = |c| Ok(c);
-        let selector_column = |idx: &MleIndex<F>, lhs: Result<F>, rhs: Result<F>| -> Result<F> {
+    pub fn evaluate(&self) -> Result<E> {
+        let constant = |c| Ok(E::from(c));
+        let selector_column = |idx: &MleIndex<E>, lhs: Result<E>, rhs: Result<E>| -> Result<E> {
             // Selector bit must be bound
             if let MleIndex::Bound(val, _) = idx {
-                return Ok(*val * rhs? + (F::ONE - val) * lhs?);
+                return Ok(*val * rhs? + (E::ONE - val) * lhs?);
             }
             Err(anyhow!(ExpressionError::SelectorBitNotBoundError))
         };
-        let mle_eval = |verifier_mle: &VerifierMle<F>| -> Result<F> { Ok(verifier_mle.value()) };
-        let sum = |lhs: Result<F>, rhs: Result<F>| Ok(lhs? + rhs?);
-        let product = |verifier_mles: &[&VerifierMle<F>]| -> Result<F> {
+        let mle_eval = |verifier_mle: &VerifierMle<E>| -> Result<E> { Ok(verifier_mle.value()) };
+        let sum = |lhs: Result<E>, rhs: Result<E>| Ok(lhs? + rhs?);
+        let product = |verifier_mles: &[&VerifierMle<E>]| -> Result<E> {
             verifier_mles
                 .iter()
-                .try_fold(F::ONE, |acc, verifier_mle| Ok(acc * verifier_mle.value()))
+                .try_fold(E::ONE, |acc, verifier_mle| Ok(acc * verifier_mle.value()))
         };
-        let scaled = |val: Result<F>, scalar: F| Ok(val? * scalar);
+        let scaled = |val: Result<E>, scalar: E::BaseField| Ok(val? * scalar);
 
         self.expression_node.reduce(
             &self.mle_vec,

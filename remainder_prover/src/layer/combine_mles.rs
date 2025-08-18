@@ -4,15 +4,15 @@
 
 use crate::{
     mle::{
-        dense::DenseMle, evals::{Evaluations, MultilinearExtension}, mle_enum::LiftTo, AbstractMle, Mle, MleIndex
+        dense::DenseMle, evals::{Evaluations, MultilinearExtension}, AbstractMle, Mle, MleIndex
     },
     utils::mle::evaluate_mle_at_a_point_gray_codes,
 };
-use ark_std::{cfg_iter, cfg_iter_mut};
+use ark_std::cfg_iter_mut;
 
 use itertools::Itertools;
 
-use remainder_shared_types::{field::ExtensionField, Field};
+use remainder_shared_types::Field;
 use thiserror::Error;
 
 use anyhow::{anyhow, Ok, Result};
@@ -38,17 +38,14 @@ pub enum CombineMleRefError {
 
 /// This fixes mles with shared points in the claims so that we don't repeatedly
 /// do so.
-pub fn pre_fix_mles<F: Field, E: ExtensionField<F>>(mles: &[DenseMle<F>], chal_point: &[E], common_idx: Vec<usize>) -> Vec<DenseMle<E>> {
-    cfg_iter!(mles).map(|mle| {
-        // TODO (Benny): this is certainly not the best way to do this
-        let mut ext_mle = mle.lift();
+pub fn pre_fix_mles<F: Field>(mles: &mut [DenseMle<F>], chal_point: &[F], common_idx: Vec<usize>) {
+    cfg_iter_mut!(mles).for_each(|mle| {
         common_idx.iter().for_each(|chal_idx| {
-            if let MleIndex::Indexed(idx_bit_num) = ext_mle.mle_indices()[*chal_idx] {
-                ext_mle.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
+            if let MleIndex::Indexed(idx_bit_num) = mle.mle_indices()[*chal_idx] {
+                mle.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
             }
         });
-        ext_mle
-    }).collect()
+    });
 }
 
 /// Function that prepares all the mles to be combined. We simply index all the
@@ -73,7 +70,7 @@ pub fn get_indexed_layer_mles_to_combine<F: Field>(mles: Vec<DenseMle<F>>) -> Ve
 /// their prefix bits, and then fixing variable on this combined mle (which is
 /// the layerwise bookkeeping table). Instead, we fix variable as we combine as
 /// this keeps the bookkeeping table sizes at one.
-pub fn combine_mles_with_aggregate<F: Field, E: ExtensionField<F>>(mles: &[DenseMle<F>], chal_point: &[E]) -> Result<E> {
+pub fn combine_mles_with_aggregate<F: Field>(mles: &[DenseMle<F>], chal_point: &[F]) -> Result<F> {
     // We go through all of the mles and fix variable in all of them given at
     // the correct indices so that they are fully bound.
     let fix_var_mles = mles

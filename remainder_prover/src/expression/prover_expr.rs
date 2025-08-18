@@ -15,7 +15,7 @@ use super::{
 use crate::{
     expression::generic_expr::MleVecIndex,
     layer::product::Product,
-    mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::LiftTo, AbstractMle, MleIndex},
+    mle::{betavalues::BetaValues, dense::DenseMle, AbstractMle, MleIndex},
     sumcheck::{
         apply_updated_beta_values_to_evals, beta_cascade, beta_cascade_no_independent_variable,
         SumcheckEvals,
@@ -26,24 +26,17 @@ use crate::{
     mle::{verifier_mle::VerifierMle, Mle},
 };
 use itertools::{repeat_n, Itertools};
-use remainder_shared_types::{Field, field::ExtensionField};
+use remainder_shared_types::extension_field::ExtensionField;
 use std::{cmp::max, collections::HashSet};
 
 use anyhow::{anyhow, Ok, Result};
 pub type ProverMle<F> = DenseMle<F>;
 
-/// Lift from [Expression<F, ProverMle<F>>] to [Expression<E, ProverMle<E>>].
-impl<F: Field, E: ExtensionField<F>> LiftTo<Expression<E, ProverMle<E>>> for Expression<F, ProverMle<F>> {
-    fn lift(self) -> Expression<E, ProverMle<E>> {
-        Expression::new(self.expression_node.lift(), self.mle_vec.into_iter().map(|m| m.lift()).collect())
-    }
-}
-
 /// this is what the prover manipulates to prove the correctness of the computation.
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
-impl<F: Field> Expression<F, ProverMle<F>> {
+impl<E: ExtensionField> Expression<E, ProverMle<E>> {
     /// Create a product Expression that raises one MLE to a given power
-    pub fn pow(pow: usize, mle: ProverMle<F>) -> Self {
+    pub fn pow(pow: usize, mle: ProverMle<E>) -> Self {
         let mle_vec_indices = (0..pow).map(|_index| MleVecIndex::new(0)).collect_vec();
         let product_node = ExpressionNode::Product(mle_vec_indices);
 
@@ -59,7 +52,7 @@ impl<F: Field> Expression<F, ProverMle<F>> {
     ///
     /// If the bookkeeping table has more than 1 element, it
     /// throws an ExpressionError::EvaluateNotFullyBoundError
-    pub fn transform_to_verifier_expression(self) -> Result<Expression<F, VerifierMle<F>>> {
+    pub fn transform_to_verifier_expression(self) -> Result<Expression<E, VerifierMle<E>>> {
         let (expression_node, mle_vec) = self.deconstruct();
         // Check that every MLE is fully bounded
         let verifier_mles = mle_vec
@@ -80,21 +73,21 @@ impl<F: Field> Expression<F, ProverMle<F>> {
     }
 
     /// fix the variable at a certain round index, always MSB index
-    pub fn fix_variable(&mut self, round_index: usize, challenge: F) {
+    pub fn fix_variable(&mut self, round_index: usize, challenge: E) {
         let (expression_node, mle_vec) = self.deconstruct_mut();
 
         expression_node.fix_variable_node(round_index, challenge, mle_vec)
     }
 
     /// fix the variable at a certain round index, arbitrary index
-    pub fn fix_variable_at_index(&mut self, round_index: usize, challenge: F) {
+    pub fn fix_variable_at_index(&mut self, round_index: usize, challenge: E) {
         let (expression_node, mle_vec) = self.deconstruct_mut();
 
         expression_node.fix_variable_at_index_node(round_index, challenge, mle_vec)
     }
 
     /// evaluates an expression on the given challenges points, by fixing the variables
-    pub fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F> {
+    pub fn evaluate_expr(&mut self, challenges: Vec<E>) -> Result<E> {
         // It's as simple as fixing all variables
         challenges
             .iter()
@@ -104,7 +97,7 @@ impl<F: Field> Expression<F, ProverMle<F>> {
             });
 
         // ----- this is literally a check -----
-        let mut observer_fn = |exp: &ExpressionNode<F>, mle_vec: &[ProverMle<F>]| -> Result<()> {
+        let mut observer_fn = |exp: &ExpressionNode<E>, mle_vec: &[ProverMle<E>]| -> Result<()> {
             match exp {
                 ExpressionNode::Mle(mle_vec_idx) => {
                     let mle = mle_vec_idx.get_mle(mle_vec);
@@ -177,11 +170,11 @@ impl<F: Field> Expression<F, ProverMle<F>> {
     /// expression, which is the `round_index`.
     pub fn evaluate_sumcheck_beta_cascade(
         &self,
-        beta: &[&BetaValues<F>],
-        random_coefficients: &[F],
+        beta: &[&BetaValues<E>],
+        random_coefficients: &[E],
         round_index: usize,
         degree: usize,
-    ) -> SumcheckEvals<F> {
+    ) -> SumcheckEvals<E> {
         self.expression_node.evaluate_sumcheck_node_beta_cascade(
             beta,
             &self.mle_vec,
@@ -197,10 +190,10 @@ impl<F: Field> Expression<F, ProverMle<F>> {
     /// by this value.
     pub fn evaluate_sumcheck_node_beta_cascade_sum(
         &self,
-        beta_values: &BetaValues<F>,
+        beta_values: &BetaValues<E>,
         round_index: usize,
         degree: usize,
-    ) -> SumcheckEvals<F> {
+    ) -> SumcheckEvals<E> {
         self.expression_node
             .evaluate_sumcheck_node_beta_cascade_sum(
                 beta_values,
@@ -226,19 +219,19 @@ impl<F: Field> Expression<F, ProverMle<F>> {
 
     /// Get the [PostSumcheckLayer] for this expression, which represents the fully bound values of the expression.
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
-    pub fn get_post_sumcheck_layer(&self, multiplier: F) -> PostSumcheckLayer<F, F> {
+    pub fn get_post_sumcheck_layer(&self, multiplier: E) -> PostSumcheckLayer<E, E> {
         self.expression_node
             .get_post_sumcheck_layer_prover(multiplier, &self.mle_vec)
     }
 }
 
-impl<F: Field> ExpressionNode<F> {
+impl<E: ExtensionField> ExpressionNode<E> {
     /// fix the variable at a certain round index, always the most significant index.
     pub fn fix_variable_node(
         &mut self,
         round_index: usize,
-        challenge: F,
-        mle_vec: &mut [ProverMle<F>], // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
+        challenge: E,
+        mle_vec: &mut [ProverMle<E>], // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
     ) {
         match self {
             ExpressionNode::Selector(index, a, b) => {
@@ -283,8 +276,8 @@ impl<F: Field> ExpressionNode<F> {
     pub fn fix_variable_at_index_node(
         &mut self,
         round_index: usize,
-        challenge: F,
-        mle_vec: &mut [ProverMle<F>], // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
+        challenge: E,
+        mle_vec: &mut [ProverMle<E>], // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
     ) {
         match self {
             ExpressionNode::Selector(index, a, b) => {
@@ -327,14 +320,14 @@ impl<F: Field> ExpressionNode<F> {
 
     pub fn evaluate_sumcheck_node_beta_cascade_sum(
         &self,
-        beta_values: &BetaValues<F>,
+        beta_values: &BetaValues<E>,
         round_index: usize,
         degree: usize,
-        mle_vec: &[ProverMle<F>],
-    ) -> SumcheckEvals<F> {
+        mle_vec: &[ProverMle<E>],
+    ) -> SumcheckEvals<E> {
         match self {
             ExpressionNode::Constant(constant) => {
-                SumcheckEvals(repeat_n(*constant, degree + 1).collect())
+                SumcheckEvals(repeat_n((*constant).into(), degree + 1).collect())
             }
             ExpressionNode::Selector(selector_mle_index, lhs, rhs) => {
                 let lhs_eval = lhs.evaluate_sumcheck_node_beta_cascade_sum(
@@ -352,14 +345,14 @@ impl<F: Field> ExpressionNode<F> {
                 match selector_mle_index {
                     MleIndex::Indexed(var_number) => {
                         let index_claim = beta_values.get_unbound_value(*var_number).unwrap();
-                        (lhs_eval * (F::ONE - index_claim)) + (rhs_eval * index_claim)
+                        (lhs_eval * (E::ONE - index_claim)) + (rhs_eval * index_claim)
                     }
                     MleIndex::Bound(bound_value, var_number) => {
-                        let identity = F::ONE;
+                        let identity = E::ONE;
                         let beta_bound = beta_values
                             .get_updated_value(*var_number)
                             .unwrap_or(identity);
-                        ((lhs_eval * (F::ONE - bound_value)) + (rhs_eval * bound_value))
+                        ((lhs_eval * (E::ONE - bound_value)) + (rhs_eval * bound_value))
                             * beta_bound
                     }
                     _ => panic!("Invalid MLE Index for a selector bit, should be free or indexed"),
@@ -390,7 +383,7 @@ impl<F: Field> ExpressionNode<F> {
                 lhs_eval + rhs_eval
             }
             ExpressionNode::Product(mle_idx_vec) => {
-                let (mles, mles_bookkeeping_tables): (Vec<&ProverMle<F>>, Vec<Vec<F>>) =
+                let (mles, mles_bookkeeping_tables): (Vec<&ProverMle<E>>, Vec<Vec<E>>) =
                     mle_idx_vec
                         .iter()
                         .map(|mle_vec_index| {
@@ -429,7 +422,7 @@ impl<F: Field> ExpressionNode<F> {
                     round_index,
                     degree,
                     mle_vec,
-                ) * scale
+                ) * E::from(*scale)
             }
         }
     }
@@ -490,12 +483,12 @@ impl<F: Field> ExpressionNode<F> {
     #[allow(clippy::too_many_arguments)]
     pub fn evaluate_sumcheck_node_beta_cascade(
         &self,
-        beta_vec: &[&BetaValues<F>],
-        mle_vec: &[ProverMle<F>],
-        random_coefficients: &[F],
+        beta_vec: &[&BetaValues<E>],
+        mle_vec: &[ProverMle<E>],
+        random_coefficients: &[E],
         round_index: usize,
         degree: usize,
-    ) -> SumcheckEvals<F> {
+    ) -> SumcheckEvals<E> {
         match self {
             // Each different type of expression node (constant, selector, product, sum,
             // neg, scaled, mle) is treated differently, so we create closures for each
@@ -512,7 +505,7 @@ impl<F: Field> ExpressionNode<F> {
                     .map(|(beta_table, random_coeff)| {
                         let folded_updated_vals = beta_table.fold_updated_values();
                         let index_claim = beta_table.get_unbound_value(round_index).unwrap();
-                        let one_minus_index_claim = F::ONE - index_claim;
+                        let one_minus_index_claim = E::ONE - index_claim;
                         let beta_step = index_claim - one_minus_index_claim;
                         let evals =
                             std::iter::successors(Some(one_minus_index_claim), move |item| {
@@ -525,7 +518,7 @@ impl<F: Field> ExpressionNode<F> {
                     })
                     .reduce(|acc, elem| acc + elem)
                     .unwrap();
-                sumcheck_eval_not_scaled_by_constant * constant
+                sumcheck_eval_not_scaled_by_constant * E::from(*constant)
             }
 
             // the selector is split into three cases:
@@ -572,8 +565,8 @@ impl<F: Field> ExpressionNode<F> {
                                     .zip((lhs_evals.iter().zip(rhs_evals.iter())).zip(random_coefficients))
                                     .map(|(beta_table, ((a, b), random_coeff))| {
                                         let index_claim = beta_table.get_unbound_value(*indexed_bit).unwrap();
-                                        let a_eval: &SumcheckEvals<F> = a;
-                                        let b_eval: &SumcheckEvals<F> = b;
+                                        let a_eval: &SumcheckEvals<E> = a;
+                                        let b_eval: &SumcheckEvals<E> = b;
                                         // when the selector bit is not the independent variable and
                                         // has not been bound yet, we are simply summing over
                                         // everything. in order to take the beta values into account
@@ -581,9 +574,9 @@ impl<F: Field> ExpressionNode<F> {
                                         // selector we want to multiply by (1 - g_i) and for
                                         // everything on the "right" side of the selector we want to
                                         // multiply by g_i. we can then add these!
-                                        let a_with_sel: SumcheckEvals<F> =
-                                            a_eval.clone() * (F::ONE - index_claim);
-                                        let b_with_sel: SumcheckEvals<F> = b_eval.clone() * index_claim;
+                                        let a_with_sel: SumcheckEvals<E> =
+                                            a_eval.clone() * (E::ONE - index_claim);
+                                        let b_with_sel: SumcheckEvals<E> = b_eval.clone() * index_claim;
                                         (a_with_sel + b_with_sel) * random_coeff
                                     })
                                     .reduce(|acc, elem| acc + elem)
@@ -609,7 +602,7 @@ impl<F: Field> ExpressionNode<F> {
                                                 // evaluations at the points 0, 1, ... for the
                                                 // independent variable.
                                                 let eval_len = first_evals.len();
-                                                let one_minus_index_claim = F::ONE - index_claim;
+                                                let one_minus_index_claim = E::ONE - index_claim;
                                                 let beta_step = index_claim - one_minus_index_claim;
                                                 let beta_evals = std::iter::successors(
                                                     Some(one_minus_index_claim),
@@ -627,7 +620,7 @@ impl<F: Field> ExpressionNode<F> {
                                                         .enumerate()
                                                         .map(|(idx, first_eval)| {
                                                             first_eval
-                                                                * (F::ONE - F::from(idx as u64))
+                                                                * (E::ONE - E::from(idx as u64))
                                                                 * beta_evals[idx]
                                                         })
                                                         .collect(),
@@ -639,7 +632,7 @@ impl<F: Field> ExpressionNode<F> {
                                                         .enumerate()
                                                         .map(|(idx, second_eval)| {
                                                             second_eval
-                                                            * F::from(idx as u64) * beta_evals[idx]
+                                                            * E::from(idx as u64) * beta_evals[idx]
                                                         })
                                                         .collect(),
                                                 );
@@ -671,7 +664,7 @@ impl<F: Field> ExpressionNode<F> {
                                     a.evaluate_sumcheck_node_beta_cascade(
                                         &[*beta],
                                         mle_vec,
-                                        &[F::ONE],
+                                        &[E::ONE],
                                         round_index,
                                         degree,
                                     )
@@ -683,14 +676,14 @@ impl<F: Field> ExpressionNode<F> {
                                     b.evaluate_sumcheck_node_beta_cascade(
                                         &[*beta],
                                         mle_vec,
-                                        &[F::ONE],
+                                        &[E::ONE],
                                         round_index,
                                         degree,
                                     )
                                 })
                                 .collect_vec(),
                         );
-                        let coeff_neg = F::ONE - coeff;
+                        let coeff_neg = E::ONE - coeff;
                         (lhs_evals.iter().zip(rhs_evals))
                             .zip(random_coefficients)
                             .map(|((a, b), random_coeff)| {
@@ -710,7 +703,7 @@ impl<F: Field> ExpressionNode<F> {
             // and bound beta values to pass into the `beta_cascade` function
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
-                let (unbound_beta_vec, bound_beta_vec): (Vec<Vec<F>>, Vec<Vec<F>>) = beta_vec
+                let (unbound_beta_vec, bound_beta_vec): (Vec<Vec<E>>, Vec<Vec<E>>) = beta_vec
                     .iter()
                     .map(|beta| {
                         beta.get_relevant_beta_unbound_and_bound(
@@ -766,7 +759,7 @@ impl<F: Field> ExpressionNode<F> {
                     .filter(move |mle_index| unique_mle_indices.insert(mle_index.clone()))
                     .collect_vec();
 
-                let (unbound_beta_vec, bound_beta_vec): (Vec<Vec<F>>, Vec<Vec<F>>) = beta_vec
+                let (unbound_beta_vec, bound_beta_vec): (Vec<Vec<E>>, Vec<Vec<E>>) = beta_vec
                     .iter()
                     .map(|beta| {
                         beta.get_relevant_beta_unbound_and_bound(
@@ -797,7 +790,7 @@ impl<F: Field> ExpressionNode<F> {
                     round_index,
                     degree,
                 );
-                a * scale
+                a * E::from(*scale)
             }
         }
     }
@@ -808,7 +801,7 @@ impl<F: Field> ExpressionNode<F> {
     pub fn index_mle_indices_node(
         &mut self,
         curr_index: usize,
-        mle_vec: &mut [ProverMle<F>],
+        mle_vec: &mut [ProverMle<E>],
     ) -> usize {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
@@ -852,7 +845,7 @@ impl<F: Field> ExpressionNode<F> {
     pub fn get_expression_num_free_variables_node(
         &self,
         curr_size: usize,
-        mle_vec: &[ProverMle<F>],
+        mle_vec: &[ProverMle<E>],
     ) -> usize {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
@@ -915,13 +908,13 @@ impl<F: Field> ExpressionNode<F> {
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     pub fn get_post_sumcheck_layer_prover(
         &self,
-        multiplier: F,
-        mle_vec: &[ProverMle<F>],
-    ) -> PostSumcheckLayer<F, F> {
-        let mut products: Vec<Product<F, F>> = vec![];
+        multiplier: E,
+        mle_vec: &[ProverMle<E>],
+    ) -> PostSumcheckLayer<E, E> {
+        let mut products: Vec<Product<E, E>> = vec![];
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
-                let left_side_acc = multiplier * (F::ONE - mle_index.val().unwrap());
+                let left_side_acc = multiplier * (E::ONE - mle_index.val().unwrap());
                 let right_side_acc = multiplier * (mle_index.val().unwrap());
                 products.extend(a.get_post_sumcheck_layer_prover(left_side_acc, mle_vec).0);
                 products.extend(b.get_post_sumcheck_layer_prover(right_side_acc, mle_vec).0);
@@ -933,22 +926,22 @@ impl<F: Field> ExpressionNode<F> {
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
                 assert!(mle.is_fully_bounded());
-                products.push(Product::<F, F>::new(&[mle.clone()], multiplier));
+                products.push(Product::<E, E>::new(&[mle.clone()], multiplier));
             }
             ExpressionNode::Product(mle_vec_indices) => {
                 let mles = mle_vec_indices
                     .iter()
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec).clone())
                     .collect_vec();
-                let product = Product::<F, F>::new(&mles, multiplier);
+                let product = Product::<E, E>::new(&mles, multiplier);
                 products.push(product);
             }
             ExpressionNode::Scaled(a, scale_factor) => {
-                let acc = multiplier * scale_factor;
+                let acc = multiplier * *scale_factor;
                 products.extend(a.get_post_sumcheck_layer_prover(acc, mle_vec).0);
             }
             ExpressionNode::Constant(constant) => {
-                products.push(Product::<F, F>::new(&[], *constant * multiplier));
+                products.push(Product::<E, E>::new(&[], multiplier * *constant));
             }
         }
         PostSumcheckLayer(products)

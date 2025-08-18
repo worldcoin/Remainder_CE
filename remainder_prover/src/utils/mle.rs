@@ -5,7 +5,7 @@ use std::iter::repeat_with;
 use itertools::{repeat_n, FoldWhile, Itertools};
 use rand::Rng;
 use rayon::prelude::*;
-use remainder_shared_types::{field::ExtensionField, Field};
+use remainder_shared_types::Field;
 
 use crate::{
     claims::RawClaim,
@@ -503,17 +503,17 @@ pub fn evaluate_mle_at_a_point_lexicographic_order<F: Field>(
 /// of 1.
 ///
 /// Currently does not support for when the value in the point is either 0 or 1.
-pub fn evaluate_mle_at_a_point_gray_codes<F: Field, E: ExtensionField<F>>(
+pub fn evaluate_mle_at_a_point_gray_codes<F: Field>(
     mle: &MultilinearExtension<F>,
-    point: &[E],
-) -> E {
+    point: &[F],
+) -> F {
     let n = point.len();
     let mle_num_vars = mle.num_vars();
     assert_eq!(n, mle_num_vars);
     // The gray codes start at index 1, so we start with the first value which
     // is \widetilde{\beta}(\vec{0}, point).
     let starting_beta_value =
-        BetaValues::compute_beta_over_two_challenges(&vec![E::ZERO; mle_num_vars], point);
+        BetaValues::compute_beta_over_two_challenges(&vec![F::ZERO; mle_num_vars], point);
     // This is the value that gets multiplied to the first MLE coefficient,
     // which is (1 - r_1) * (1 - r_2) * ... * (1 - r_n) where (r_1, ..., r_n) is
     // the point.
@@ -525,7 +525,7 @@ pub fn evaluate_mle_at_a_point_gray_codes<F: Field, E: ExtensionField<F>>(
         .collect_vec();
     let one_minus_inverses = point
         .iter()
-        .map(|elem| (E::ONE - elem).invert().unwrap())
+        .map(|elem| (F::ONE - elem).invert().unwrap())
         .collect_vec();
 
     // We simply compute the correct inverse and new multiplicative term for

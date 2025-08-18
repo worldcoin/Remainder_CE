@@ -51,5 +51,3 @@ pub mod sumcheck;
 pub mod utils;
 
 pub use remainder_shared_types;
-
-pub mod extension_field_prover;

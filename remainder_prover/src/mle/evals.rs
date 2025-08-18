@@ -6,7 +6,7 @@ use itertools::{EitherOrBoth::*, Itertools};
 use ndarray::{Dimension, IxDyn};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use remainder_shared_types::{field::ExtensionField, Field};
+use remainder_shared_types::{extension_field::ExtensionField, Field};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -525,9 +525,8 @@ impl<F: Field> MultilinearExtension<F> {
     }
 
     /// Evaluate `\tilde{f}` at `point \in F^n`.
-    /// # Panics
-    /// If `point` does not contain exactly `self.num_vars()` elements.
-    pub fn evaluate_at_point<E: ExtensionField<F>>(&self, point: &[E]) -> E {
+    /// Panics if `point` does not contain exactly `self.num_vars()` elements.
+    pub fn evaluate_at_point(&self, point: &[F]) -> F {
         let n = self.num_vars();
         assert_eq!(n, point.len());
 
@@ -537,13 +536,13 @@ impl<F: Field> MultilinearExtension<F> {
             .clone()
             .iter() // was into_iter()
             .enumerate()
-            .fold(E::ZERO, |acc, (idx, v)| {
-                let beta = (0..n).fold(E::ONE, |acc, i| {
+            .fold(F::ZERO, |acc, (idx, v)| {
+                let beta = (0..n).fold(F::ONE, |acc, i| {
                     let bit_i = idx & (1 << (n - 1 - i));
                     if bit_i > 0 {
                         point[i] * acc
                     } else {
-                        (E::ONE - point[i]) * acc
+                        (F::ONE - point[i]) * acc
                     }
                 });
                 acc + beta * v
@@ -556,38 +555,70 @@ impl<F: Field> MultilinearExtension<F> {
         self.f.len()
     }
 
-    /// Fix a variable to a base field element,
-    /// destructively modifies `self`.
+    /// Fix the 0-based `var_index`-th bit of `\tilde{f}` to an arbitrary field
+    /// element `point \in F` by destructively modifying `self`.
+    /// # Params
+    /// * `var_index`: A 0-based index of the input variable to be fixed.
+    /// * `point`: The field element to set `x_{var_index}` equal to.
+    /// # Example
+    /// If `self` represents a function `\tilde{f}: F^3 -> F`,
+    /// `self.fix_variable_at_index(1, r)` fixes the middle variable to `r \in
+    /// F`. After the invocation, `self` represents a function `\tilde{g}: F^2
+    /// -> F` defined as the multilinear extension of the following function:
+    /// `g(b_0, b_1) = \tilde{f}(b_0, r, b_1)`.
+    /// # Panics
+    /// if `var_index` is outside the interval `[0, self.num_vars())`.
     pub fn fix_variable_at_index(&mut self, var_index: usize, point: F) {
         let num_vars = self.num_vars();
-        let new_evals = fix_variable_at_index_to_bookkeeping_table_copy(&self, var_index, point);
-        debug_assert_eq!(new_evals.len(), 1 << (num_vars - 1));
-        *self = new_evals;
-    }
+        let lsb_mask = (1_usize << (num_vars - 1 - var_index)) - 1;
 
-    /// Fix a variable to an extension field element,
-    /// returns a new mle and leaves the original mle untouched.
-    pub fn fix_variable_at_index_ext<E: ExtensionField<F>>(mle: &Self, var_index: usize, point: E) -> MultilinearExtension<E> {
-        let num_vars = mle.num_vars();
-        let new_evals = fix_variable_at_index_to_bookkeeping_table_copy(&mle, var_index, point);
+        let num_pairs = 1_usize << (num_vars - 1);
+
+        let new_evals: Vec<F> = cfg_into_iter!(0..num_pairs)
+            .map(|idx| {
+                // This iteration computes the value of
+                // `f'(idx[0], ..., idx[var_index-1], idx[var_index+1], ..., idx[num_vars - 1])`
+                // where `f'` is the resulting function after fixing the
+                // the `var_index`-th variable.
+                // To do this, we must combine the values of:
+                // `f(idx1) = f(idx[0], ..., idx[var_index-1], 0, idx[var_index+1], ..., idx[num_vars-1])`
+                // and
+                // `f(idx2) = f(idx[0], ..., idx[var_index-1], 1, idx[var_index+1], ..., idx[num_vars-1])`
+                // Below we compute `idx1` and `idx2` corresponding to the two
+                // indices above.
+
+                // Compute the two indices by inserting a `0` and a `1`
+                // respectively in the appropriate position of `idx`. For
+                // example, if `var_index == 2` and `self.num_vars == 5`, then
+                // `lsb_mask == 0b0011` (the `num_var - 1 - var_index` LSBs are
+                // on). When, for example `idx == 0b1010`, it is split into a
+                // "right part": `lsb_idx == 0b00 0 10`, and a "shifted left
+                // part": `msb_idx == 0b10 0 00`.  The two parts are then
+                // combined with the middle bit on and off respectively: `idx1
+                // == 0b10 0 10`, `idx2 == 0b10 1 10`.
+                let lsb_idx = idx & lsb_mask;
+                let msb_idx = (idx & (!lsb_mask)) << 1;
+                let mid_idx = lsb_mask + 1;
+
+                let idx1 = lsb_idx | msb_idx;
+                let idx2 = lsb_idx | mid_idx | msb_idx;
+
+                let val1 = self.get(idx1).unwrap_or(F::ZERO);
+                let val2 = self.get(idx2).unwrap_or(F::ZERO);
+
+                val1 + (val2 - val1) * point
+            })
+            .collect();
+
         debug_assert_eq!(new_evals.len(), 1 << (num_vars - 1));
-        new_evals
+        self.f = Evaluations::new(num_vars - 1, new_evals);
     }
 
     /// Shortcut for [fix_variable_at_index] when `var_index == 0`.
-    /// # Panics
-    /// If `self.num_vars() == 0`.
+    /// Panics if `self.num_vars() == 0`.
     pub fn fix_variable(&mut self, point: F) {
         assert!(self.num_vars() > 0);
         self.fix_variable_at_index(0, point);
-    }
-
-    /// Shortcut for [fix_variable_at_index_ext] when `var_index == 0`.
-    /// # Panics
-    /// If `self.num_vars() == 0`.
-    pub fn fix_variable_ext<E: ExtensionField<F>>(mle: &Self, point: E) -> MultilinearExtension<E> {
-        assert!(mle.num_vars() > 0);
-        Self::fix_variable_at_index_ext(mle, 0, point)
     }
 
     /// Stacks the MLEs into a single MLE, assuming they are stored in a "big
@@ -674,77 +705,9 @@ impl<F: Field> MultilinearExtension<F> {
     }
 }
 
-/// Fix the 0-based `var_index`-th bit of `\tilde{f}` to an arbitrary field
-/// element `point \in F` and return the resulting [MultilinearExtension].
-/// Note that this function is optionally generic over an MLE whose evaluations
-/// currently reside in the base field, but which gets converted into one
-/// whose evaluations reside in an extension field as the result of an
-/// extension field challenge.
-/// # Params
-/// * `var_index`: A 0-based index of the input variable to be fixed.
-/// * `point`: The field element to set `x_{var_index}` equal to.
-/// # Example
-/// If `mle` represents a function `\tilde{f}: F^3 -> F`,
-/// `mle.fix_variable_at_index(1, r)` fixes the middle variable to `r \in
-/// F`. After the invocation, `mle` represents a function `\tilde{g}: F^2
-/// -> F` defined as the multilinear extension of the following function:
-/// `g(b_0, b_1) = \tilde{f}(b_0, r, b_1)`.
-/// # Panics
-/// if `var_index` is outside the interval `[0, mle.num_vars())`.
-pub fn fix_variable_at_index_to_bookkeeping_table_copy<F: Field, E: ExtensionField<F>>(
-    mle: &MultilinearExtension<F>,
-    var_index: usize,
-    challenge: E,
-) -> MultilinearExtension<E> {
-    let num_vars = mle.num_vars();
-    let lsb_mask = (1_usize << (num_vars - 1 - var_index)) - 1;
-
-    let num_pairs = 1_usize << (num_vars - 1);
-
-    let new_evals: Vec<E> = cfg_into_iter!(0..num_pairs)
-        .map(|idx| {
-            // This iteration computes the value of
-            // `f'(idx[0], ..., idx[var_index-1], idx[var_index+1], ..., idx[num_vars - 1])`
-            // where `f'` is the resulting function after fixing the
-            // the `var_index`-th variable.
-            // To do this, we must combine the values of:
-            // `f(idx1) = f(idx[0], ..., idx[var_index-1], 0, idx[var_index+1], ..., idx[num_vars-1])`
-            // and
-            // `f(idx2) = f(idx[0], ..., idx[var_index-1], 1, idx[var_index+1], ..., idx[num_vars-1])`
-            // Below we compute `idx1` and `idx2` corresponding to the two
-            // indices above.
-
-            // Compute the two indices by inserting a `0` and a `1`
-            // respectively in the appropriate position of `idx`. For
-            // example, if `var_index == 2` and `self.num_vars == 5`, then
-            // `lsb_mask == 0b0011` (the `num_var - 1 - var_index` LSBs are
-            // on). When, for example `idx == 0b1010`, it is split into a
-            // "right part": `lsb_idx == 0b00 0 10`, and a "shifted left
-            // part": `msb_idx == 0b10 0 00`.  The two parts are then
-            // combined with the middle bit on and off respectively: `idx1
-            // == 0b10 0 10`, `idx2 == 0b10 1 10`.
-            let lsb_idx = idx & lsb_mask;
-            let msb_idx = (idx & (!lsb_mask)) << 1;
-            let mid_idx = lsb_mask + 1;
-
-            let idx1 = lsb_idx | msb_idx;
-            let idx2 = lsb_idx | mid_idx | msb_idx;
-
-            let val1 = mle.get(idx1).unwrap_or(F::ZERO);
-            let val2 = mle.get(idx2).unwrap_or(F::ZERO);
-
-            challenge * (val2 - val1) + val1
-        })
-        .collect();
-
-    debug_assert_eq!(new_evals.len(), 1 << (num_vars - 1));
-    let new_evals = Evaluations::new(num_vars - 1, new_evals);
-    MultilinearExtension::new_from_evals(new_evals)
-}
-
 /// Lift from [Evaluations<F>] to [Evaluations<E>] in the trivial way.
 /// TODO (Benny): we need to avoid cloning here!!!
-impl<F: Field, E: ExtensionField<F>> LiftTo<Evaluations<E>> for Evaluations<F> {
+impl<E: ExtensionField> LiftTo<Evaluations<E>> for Evaluations<E::BaseField> {
     fn lift(self) -> Evaluations<E> {
         let raw_evals: Vec<E> = self.iter().map(|eval| eval.into()).collect();
         let converted_evals: BitPackedVector<E> = BitPackedVector::new(&raw_evals);
@@ -758,7 +721,7 @@ impl<F: Field, E: ExtensionField<F>> LiftTo<Evaluations<E>> for Evaluations<F> {
 }
 
 /// Lift from [Vec<F>] to [Vec<E>] in the trivial way.
-impl<F: Field, E: ExtensionField<F>> LiftTo<Vec<E>> for Vec<F> {
+impl<E: ExtensionField> LiftTo<Vec<E>> for Vec<E::BaseField> {
     fn lift(self) -> Vec<E> {
         self.iter().map(|val| (*val).into()).collect()
     }
