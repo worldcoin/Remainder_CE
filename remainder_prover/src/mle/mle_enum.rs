@@ -217,7 +217,7 @@ pub fn fix_variable_to_new_mle_enum<F: Field, E: ExtensionField<F>>(
 
 /// Lift from [MleEnum<F>] to [MleEnum<E>] in the wrapper way.
 impl<F: Field, E: ExtensionField<F>> LiftTo<MleEnum<E>> for MleEnum<F> {
-    fn lift(&self) -> MleEnum<E> {
+    fn lift(self) -> MleEnum<E> {
         match self {
             MleEnum::Dense(dense_mle) => MleEnum::Dense(dense_mle.lift()),
             MleEnum::Zero(zero_mle) => MleEnum::Zero(zero_mle.lift()),
@@ -227,10 +227,9 @@ impl<F: Field, E: ExtensionField<F>> LiftTo<MleEnum<E>> for MleEnum<F> {
 
 /// Lift from [ZeroMle<F>] to [ZeroMle<E>] in the trivial way.
 impl<F: Field, E: ExtensionField<F>> LiftTo<ZeroMle<E>> for ZeroMle<F> {
-    fn lift(&self) -> ZeroMle<E> {
+    fn lift(self) -> ZeroMle<E> {
         let new_mle_indices: Vec<MleIndex<E>> = self
             .mle_indices
-            .clone()
             .into_iter()
             .map(|mle_var| mle_var.lift())
             .collect();
@@ -247,11 +246,10 @@ impl<F: Field, E: ExtensionField<F>> LiftTo<ZeroMle<E>> for ZeroMle<F> {
 
 /// Lift from [DenseMle<F>] to [DenseMle<E>] in the trivial way.
 impl<F: Field, E: ExtensionField<F>> LiftTo<DenseMle<E>> for DenseMle<F> {
-    fn lift(&self) -> DenseMle<E> {
+    fn lift(self) -> DenseMle<E> {
         let new_mle = self.mle.lift();
         let new_mle_indices: Vec<MleIndex<E>> = self
             .mle_indices
-            .clone()
             .into_iter()
             .map(|mle_var| mle_var.lift())
             .collect();
@@ -266,13 +264,13 @@ impl<F: Field, E: ExtensionField<F>> LiftTo<DenseMle<E>> for DenseMle<F> {
 /// ChatGPT-inspired trait which allows us to "lift" a data struct over base
 /// field elements, e.g., into one over extension field elements.
 pub trait LiftTo<T> {
-    fn lift(&self) -> T;
+    fn lift(self) -> T;
 }
 
 /// Lift from [MultilinearExtension<F>] to [MultilinearExtension<E>] in the
 /// trivial way.
 impl<F: Field, E: ExtensionField<F>> LiftTo<MultilinearExtension<E>> for MultilinearExtension<F> {
-    fn lift(self: &MultilinearExtension<F>) -> MultilinearExtension<E> {
+    fn lift(self: MultilinearExtension<F>) -> MultilinearExtension<E> {
         let new_evaluations: Evaluations<E> = self.f.lift();
         MultilinearExtension { f: new_evaluations }
     }

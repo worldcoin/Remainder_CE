@@ -1,6 +1,5 @@
 use std::marker::PhantomData;
-
-use remainder_shared_types::Field;
+use remainder_shared_types::{Field, field::ExtensionField};
 
 use crate::{
     layer::{
@@ -14,13 +13,14 @@ use crate::mle::Mle;
 
 #[derive(Clone, Debug)]
 /// The list of Layers that make up the GKR circuit
-pub struct Layers<F: Field, T: Layer<F>> {
+pub struct Layers<F: Field, E: ExtensionField<F>, T: Layer<F, E>> {
     /// A Vec of pointers to various layer types
     pub layers: Vec<T>,
     marker: PhantomData<F>,
+    marker_ext: PhantomData<E>,
 }
 
-impl<F: Field, T: Layer<F>> Layers<F, T> {
+impl<F: Field, E: ExtensionField<F>, T: Layer<F, E>> Layers<F, E, T> {
     /// Add a batched Add Gate layer to a list of layers
     /// In the batched case, consider a vector of mles corresponding to an mle for each "batch" or "copy".
     /// Add a Gate layer to a list of layers
@@ -48,7 +48,7 @@ impl<F: Field, T: Layer<F>> Layers<F, T> {
         gate_operation: BinaryOperation,
     ) -> DenseMle<F>
     where
-        T: From<GateLayer<F>>,
+        T: From<GateLayer<F, E>>,
     {
         let id = LayerId::Layer(self.layers.len());
         // constructor for batched mul gate struct
@@ -99,6 +99,7 @@ impl<F: Field, T: Layer<F>> Layers<F, T> {
         Self {
             layers: Vec::new(),
             marker: PhantomData,
+            marker_ext: PhantomData,
         }
     }
 
@@ -107,6 +108,7 @@ impl<F: Field, T: Layer<F>> Layers<F, T> {
         Self {
             layers,
             marker: PhantomData,
+            marker_ext: PhantomData,
         }
     }
 
@@ -116,7 +118,7 @@ impl<F: Field, T: Layer<F>> Layers<F, T> {
     }
 }
 
-impl<F: Field, T: Layer<F>> Default for Layers<F, T> {
+impl<F: Field, E: ExtensionField<F>, T: Layer<F, E>> Default for Layers<F, E, T> {
     fn default() -> Self {
         Self::new()
     }

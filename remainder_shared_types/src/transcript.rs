@@ -9,7 +9,7 @@ use thiserror::Error;
 use tracing::warn;
 use utils::sha256_hash_chain_on_field_elems;
 
-use crate::{field::ExtensionField, Field};
+use crate::{field::P3StyleExtensionField, Field};
 use std::fmt::Debug;
 
 pub mod counting_transcript;
@@ -149,7 +149,7 @@ pub trait ProverTranscript<F: Field> {
     fn append(&mut self, label: &str, elem: F);
     fn append_elements(&mut self, label: &str, elements: &[F]);
     fn append_input_elements(&mut self, label: &str, elements: &[F]);
-    fn append_extension_field_element<E: ExtensionField<F>>(
+    fn append_extension_field_element<E: P3StyleExtensionField<F>>(
         &mut self,
         label: &str,
         element: E,
@@ -159,7 +159,7 @@ pub trait ProverTranscript<F: Field> {
         // Then, absorb as usual
         self.append_elements(label, &base_field_coeffs);
     }
-    fn append_extension_field_elements<E: ExtensionField<F>>(
+    fn append_extension_field_elements<E: P3StyleExtensionField<F>>(
         &mut self,
         label: &str,
         elements: &[E],
@@ -175,12 +175,12 @@ pub trait ProverTranscript<F: Field> {
 
     fn get_challenge(&mut self, label: &str) -> F;
     fn get_challenges(&mut self, label: &str, num_elements: usize) -> Vec<F>;
-    fn get_extension_field_challenge<E: ExtensionField<F>>(&mut self, label: &str) -> E {
+    fn get_extension_field_challenge<E: P3StyleExtensionField<F>>(&mut self, label: &str) -> E {
         let base_field_coeffs = self.get_challenges(label, E::N_COEFF);
         E::from_basis_elem_coeffs(&base_field_coeffs)
     }
 
-    fn get_extension_field_challenges<E: ExtensionField<F>>(
+    fn get_extension_field_challenges<E: P3StyleExtensionField<F>>(
         &mut self,
         label: &str,
         num_elements: usize,
@@ -307,14 +307,14 @@ pub trait VerifierTranscript<F: Field> {
 
     fn consume_element(&mut self, label: &'static str) -> Result<F>;
     fn consume_elements(&mut self, label: &'static str, num_elements: usize) -> Result<Vec<F>>;
-    fn consume_extension_field_element<E: ExtensionField<F>>(
+    fn consume_extension_field_element<E: P3StyleExtensionField<F>>(
         &mut self,
         label: &'static str,
     ) -> Result<E> {
         let extension_elem_coeffs = self.consume_elements(label, E::N_COEFF)?;
         Ok(E::from_basis_elem_coeffs(&extension_elem_coeffs))
     }
-    fn consume_extension_field_elements<E: ExtensionField<F>>(
+    fn consume_extension_field_elements<E: P3StyleExtensionField<F>>(
         &mut self,
         label: &'static str,
         num_elements: usize,
@@ -330,12 +330,12 @@ pub trait VerifierTranscript<F: Field> {
     fn get_challenge(&mut self, label: &'static str) -> Result<F>;
     fn get_challenges(&mut self, label: &'static str, num_elements: usize) -> Result<Vec<F>>;
 
-    fn get_extension_field_challenge<E: ExtensionField<F>>(&mut self, label: &'static str) -> Result<E> {
+    fn get_extension_field_challenge<E: P3StyleExtensionField<F>>(&mut self, label: &'static str) -> Result<E> {
         let extension_elem_coeffs = self.get_challenges(label, E::N_COEFF)?;
         Ok(E::from_basis_elem_coeffs(&extension_elem_coeffs))
     }
 
-    fn get_extension_field_challenges<E: ExtensionField<F>>(
+    fn get_extension_field_challenges<E: P3StyleExtensionField<F>>(
         &mut self, 
         label: &'static str, 
         num_elements: usize,

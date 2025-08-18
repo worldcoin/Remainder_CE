@@ -5,7 +5,7 @@ use std::cmp::max;
 use ark_std::{cfg_into_iter, end_timer, start_timer};
 use remainder_shared_types::{
     config::global_config::global_prover_claim_agg_constant_column_optimization,
-    field::ExtensionField,
+    extension_field::ExtensionField,
     transcript::{ProverTranscript, VerifierTranscript},
     Field,
 };
@@ -41,10 +41,10 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 ///   this layer, in order to aggregate into the layerwise bookkeeping table.
 /// * `transcript_writer`: is used to post the interpolation polynomial
 ///   evaluations and generate challenges.
-pub fn prover_aggregate_claims<F: Field, E: ExtensionField<F>>(
+pub fn prover_aggregate_claims<E: ExtensionField>(
     claims: &[Claim<E>],
-    output_mles_from_layer: Vec<DenseMle<F>>,
-    transcript_writer: &mut impl ProverTranscript<F>,
+    output_mles_from_layer: Vec<DenseMle<E>>,
+    transcript_writer: &mut impl ProverTranscript<E::BaseField>,
 ) -> Result<RawClaim<E>> {
     let num_claims = claims.len();
     debug_assert!(num_claims > 0);
@@ -95,7 +95,7 @@ pub fn prover_aggregate_claims<F: Field, E: ExtensionField<F>>(
 ///
 /// # Panics
 ///  if `claim_vecs` is empty.
-pub fn get_num_wlx_evaluations<F: Field, E: ExtensionField<F>>(
+pub fn get_num_wlx_evaluations<E: ExtensionField>(
     claim_vecs: &[Vec<E>],
 ) -> (usize, Option<Vec<usize>>, Vec<usize>) {
     let num_claims = claim_vecs.len();
@@ -142,10 +142,10 @@ pub fn get_num_wlx_evaluations<F: Field, E: ExtensionField<F>>(
 /// Returns a vector of evaluations of this layer's MLE on a sequence of
 /// points computed by interpolating a polynomial that passes through the
 /// points of `claims_vecs`.
-pub fn get_wlx_evaluations<F: Field, E: ExtensionField<F>>(
+pub fn get_wlx_evaluations<E: ExtensionField>(
     claim_vecs: &[Vec<E>],
     claimed_vals: &[E],
-    claim_mles: Vec<DenseMle<F>>,
+    claim_mles: Vec<DenseMle<E>>,
     num_claims: usize,
     num_idx: usize,
 ) -> Result<Vec<E>> {

@@ -1,6 +1,7 @@
 pub mod circuit_hash;
 pub mod config;
 pub mod curves;
+pub mod extension_field;
 pub mod field;
 pub mod pedersen;
 pub mod transcript;

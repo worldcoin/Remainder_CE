@@ -302,7 +302,7 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
             .append_input_elements(label, elements, &hash_chain_digest);
     }
 
-    fn get_extension_field_challenge<E: crate::field::ExtensionField<C::Base>>(
+    fn get_extension_field_challenge<E: crate::field::P3StyleExtensionField<C::Base>>(
         &mut self,
         label: &str,
     ) -> E {
@@ -311,7 +311,7 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
         E::from_basis_elem_coeffs(&base_field_coeffs)
     }
 
-    fn append_extension_field_elements<E: crate::field::ExtensionField<C::Base>>(
+    fn append_extension_field_elements<E: crate::field::P3StyleExtensionField<C::Base>>(
         &mut self,
         label: &str,
         elements: &[E],
@@ -327,7 +327,7 @@ impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base
     }
 
     /// TODO(ryancao): We should *also* compute scalar field challenges from this.
-    fn get_extension_field_challenges<E: crate::field::ExtensionField<C::Base>>(
+    fn get_extension_field_challenges<E: crate::field::P3StyleExtensionField<C::Base>>(
         &mut self,
         label: &str,
         num_elements: usize,

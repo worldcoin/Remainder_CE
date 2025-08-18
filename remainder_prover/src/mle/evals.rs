@@ -743,8 +743,9 @@ pub fn fix_variable_at_index_to_bookkeeping_table_copy<F: Field, E: ExtensionFie
 }
 
 /// Lift from [Evaluations<F>] to [Evaluations<E>] in the trivial way.
+/// TODO (Benny): we need to avoid cloning here!!!
 impl<F: Field, E: ExtensionField<F>> LiftTo<Evaluations<E>> for Evaluations<F> {
-    fn lift(&self) -> Evaluations<E> {
+    fn lift(self) -> Evaluations<E> {
         let raw_evals: Vec<E> = self.iter().map(|eval| eval.into()).collect();
         let converted_evals: BitPackedVector<E> = BitPackedVector::new(&raw_evals);
         let ret: Evaluations<E> = Evaluations {
@@ -752,14 +753,13 @@ impl<F: Field, E: ExtensionField<F>> LiftTo<Evaluations<E>> for Evaluations<F> {
             num_vars: self.num_vars(),
             zero: E::ZERO,
         };
-
         ret
     }
 }
 
 /// Lift from [Vec<F>] to [Vec<E>] in the trivial way.
 impl<F: Field, E: ExtensionField<F>> LiftTo<Vec<E>> for Vec<F> {
-    fn lift(&self) -> Vec<E> {
+    fn lift(self) -> Vec<E> {
         self.iter().map(|val| (*val).into()).collect()
     }
 }

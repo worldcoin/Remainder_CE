@@ -82,16 +82,6 @@ pub trait AbstractMle<F: Field>:
 pub trait Mle<F: Field>: Clone + Debug + Send + Sync + AbstractMle<F> {
     type ExtendedMle<E: ExtensionField<F>>: Mle<E>;
 
-    /// Returns the number of free variables this Mle is defined on.
-    /// Equivalently, this is the log_2 of the size of the unpruned bookkeeping
-    /// table.
-    fn num_free_vars(&self) -> usize;
-
-    /// An MLE is fully bounded if it has no more free variables.
-    fn is_fully_bounded(&self) -> bool {
-        self.num_free_vars() == 0
-    }
-
     /// Get the padded set of evaluations over the boolean hypercube; useful for
     /// constructing the input layer.
     fn get_padded_evaluations(&self) -> Vec<F>;

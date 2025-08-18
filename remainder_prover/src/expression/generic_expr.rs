@@ -4,7 +4,7 @@
 
 use crate::mle::{AbstractMle, MleIndex};
 use itertools::Itertools;
-use remainder_shared_types::Field;
+use remainder_shared_types::{Field, extension_field::ExtensionField};
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::max,
@@ -58,23 +58,26 @@ impl MleVecIndex {
 /// * [ExpressionNode::Sum], i.e. \widetilde{V}_{j_1 > i}(b_1, ..., b_{m_1 \leq n}) + \widetilde{V}_{j_2 > i}(b_1, ..., b_{m_2 \leq n})
 /// * [ExpressionNode::Scaled], i.e. c * Expr(b_1, ..., b_{m \leq n}) for c \in mathbb{F}
 #[derive(Serialize, Deserialize, Clone, PartialEq, Hash, Eq)]
-#[serde(bound = "F: Field")]
-pub enum ExpressionNode<F: Field> {
+#[serde(bound = "E: ExtensionField")]
+pub enum ExpressionNode<E: ExtensionField> {
     /// See documentation for [ExpressionNode]. Note that
     /// [ExpressionNode::Constant] can be an expression tree's leaf.
-    Constant(F),
+    /// Constants are always in base field
+    Constant(E::BaseField),
     /// See documentation for [ExpressionNode].
-    Selector(MleIndex<F>, Box<ExpressionNode<F>>, Box<ExpressionNode<F>>),
+    /// Mle indices are always in extension field
+    Selector(MleIndex<E>, Box<ExpressionNode<E>>, Box<ExpressionNode<E>>),
     /// An [ExpressionNode] representing the leaf of an expression tree which
     /// points to a multilinear extension.
     Mle(MleVecIndex),
     /// See documentation for [ExpressionNode].
-    Sum(Box<ExpressionNode<F>>, Box<ExpressionNode<F>>),
+    Sum(Box<ExpressionNode<E>>, Box<ExpressionNode<E>>),
     /// The product of several multilinear extension functions. This is also
     /// an expression tree's leaf.
     Product(Vec<MleVecIndex>),
     /// See documentation for [ExpressionNode].
-    Scaled(Box<ExpressionNode<F>>, F),
+    /// Scales are always in base field
+    Scaled(Box<ExpressionNode<E>>, E::BaseField),
 }
 
 /// The high-level idea is that an [Expression] is generic over an MLE type
@@ -82,19 +85,19 @@ pub enum ExpressionNode<F: Field> {
 /// [Vec<AbstractMle<F>>] containing the unique leaf representations for the
 /// leaves of the [ExpressionNode] tree.
 #[derive(Serialize, Deserialize, Clone, Hash)]
-#[serde(bound = "F: Field")]
-pub struct Expression<F: Field, M: AbstractMle<F>> {
+#[serde(bound = "E: ExtensionField")]
+pub struct Expression<E: ExtensionField, M: AbstractMle<E>> {
     /// The root of the expression "tree".
-    pub expression_node: ExpressionNode<F>,
+    pub expression_node: ExpressionNode<E>,
     /// The unique owned copies of all MLEs which are "leaves" within the
     /// expression "tree".
     pub mle_vec: Vec<M>,
 }
 
 /// generic methods shared across all types of expressions
-impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
+impl<E: ExtensionField, M: AbstractMle<E>> Expression<E, M> {
     /// Create a new expression
-    pub fn new(expression_node: ExpressionNode<F>, mle_vec: Vec<M>) -> Self {
+    pub fn new(expression_node: ExpressionNode<E>, mle_vec: Vec<M>) -> Self {
         Self {
             expression_node,
             mle_vec,
@@ -102,19 +105,19 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
     }
 
     /// Returns a reference to the internal `expression_node` and `mle_vec` fields.
-    pub fn deconstruct_ref(&self) -> (&ExpressionNode<F>, &[M]) {
+    pub fn deconstruct_ref(&self) -> (&ExpressionNode<E>, &[M]) {
         (&self.expression_node, &self.mle_vec)
     }
 
     /// Returns a mutable reference to the `expression_node` and `mle_vec`
     /// present within the given [Expression].
-    pub fn deconstruct_mut(&mut self) -> (&mut ExpressionNode<F>, &mut [M]) {
+    pub fn deconstruct_mut(&mut self) -> (&mut ExpressionNode<E>, &mut [M]) {
         (&mut self.expression_node, &mut self.mle_vec)
     }
 
     /// Takes ownership of the [Expression] and returns the owned values to its
     /// internal `expression_node` and `mle_vec`.
-    pub fn deconstruct(self) -> (ExpressionNode<F>, Vec<M>) {
+    pub fn deconstruct(self) -> (ExpressionNode<E>, Vec<M>) {
         (self.expression_node, self.mle_vec)
     }
 
@@ -123,7 +126,7 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
     /// helper function is implemented on it, with the mle_vec reference passed in
     pub fn traverse(
         &self,
-        observer_fn: &mut impl FnMut(&ExpressionNode<F>, &[M]) -> Result<()>,
+        observer_fn: &mut impl FnMut(&ExpressionNode<E>, &[M]) -> Result<()>,
     ) -> Result<()> {
         self.expression_node
             .traverse_node(observer_fn, &self.mle_vec)
@@ -132,7 +135,7 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
     /// similar to traverse, but allows mutation of self (expression node and mle_vec)
     pub fn traverse_mut(
         &mut self,
-        observer_fn: &mut impl FnMut(&mut ExpressionNode<F>) -> Result<()>,
+        observer_fn: &mut impl FnMut(&mut ExpressionNode<E>) -> Result<()>,
     ) -> Result<()> {
         self.expression_node.traverse_node_mut(observer_fn)
     }
@@ -146,7 +149,7 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
     pub fn increment_mle_vec_indices(&mut self, offset: usize) {
         // define a closure that increments the MleVecIndex by the given amount
         // use traverse_mut
-        let mut increment_closure = |expr: &mut ExpressionNode<F>| -> Result<()> {
+        let mut increment_closure = |expr: &mut ExpressionNode<E>| -> Result<()> {
             match expr {
                 ExpressionNode::Mle(mle_vec_index) => {
                     mle_vec_index.increment(offset);
@@ -222,11 +225,11 @@ impl<F: Field, M: AbstractMle<F>> Expression<F, M> {
 }
 
 /// Generic helper methods shared across all types of [ExpressionNode]s.
-impl<F: Field> ExpressionNode<F> {
+impl<E: ExtensionField> ExpressionNode<E> {
     /// traverse the expression tree, and applies the observer_fn to all child node / the mle_vec reference
-    pub fn traverse_node<M: AbstractMle<F>>(
+    pub fn traverse_node<M: AbstractMle<E>>(
         &self,
-        observer_fn: &mut impl FnMut(&ExpressionNode<F>, &[M]) -> Result<()>,
+        observer_fn: &mut impl FnMut(&ExpressionNode<E>, &[M]) -> Result<()>,
         mle_vec: &[M],
     ) -> Result<()> {
         observer_fn(self, mle_vec)?;
@@ -249,7 +252,7 @@ impl<F: Field> ExpressionNode<F> {
     /// similar to traverse, but allows mutation of self (expression node and mle_vec)
     pub fn traverse_node_mut(
         &mut self,
-        observer_fn: &mut impl FnMut(&mut ExpressionNode<F>) -> Result<()>,
+        observer_fn: &mut impl FnMut(&mut ExpressionNode<E>) -> Result<()>,
     ) -> Result<()> {
         observer_fn(self)?;
         match self {
@@ -268,18 +271,17 @@ impl<F: Field> ExpressionNode<F> {
         }
     }
 
-    /// Evaluate the polynomial using the provided closures to perform the
-    /// operations.
+    /// Evaluate the polynomial using the provided closures to perform the operations.
     #[allow(clippy::too_many_arguments)]
-    pub fn reduce<M: AbstractMle<F>, T>(
+    pub fn reduce<M: AbstractMle<E>, T>(
         &self,
         mle_vec: &[M],
-        constant: &impl Fn(F) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
+        constant: &impl Fn(E::BaseField) -> T,
+        selector_column: &impl Fn(&MleIndex<E>, T, T) -> T,
         mle_eval: &impl Fn(&M) -> T,
         sum: &impl Fn(T, T) -> T,
         product: &impl Fn(&[&M]) -> T,
-        scaled: &impl Fn(T, F) -> T,
+        scaled: &impl Fn(T, E::BaseField) -> T,
     ) -> T {
         match self {
             ExpressionNode::Constant(scalar) => constant(*scalar),
@@ -349,7 +351,7 @@ impl<F: Field> ExpressionNode<F> {
 
     /// this traverses the expression to get all of the rounds, in total. requires going through each of the nodes
     /// and collecting the leaf node indices.
-    pub(crate) fn get_all_rounds<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> Vec<usize> {
+    pub(crate) fn get_all_rounds<M: AbstractMle<E>>(&self, mle_vec: &[M]) -> Vec<usize> {
         let degree_per_index = self.get_rounds_helper(mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] > 0)
@@ -357,7 +359,7 @@ impl<F: Field> ExpressionNode<F> {
     }
 
     /// traverse an expression tree in order to get all of the nonlinear rounds in an expression.
-    pub fn get_all_nonlinear_rounds<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> Vec<usize> {
+    pub fn get_all_nonlinear_rounds<M: AbstractMle<E>>(&self, mle_vec: &[M]) -> Vec<usize> {
         let degree_per_index = self.get_rounds_helper(mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] > 1)
@@ -365,21 +367,20 @@ impl<F: Field> ExpressionNode<F> {
     }
 
     /// get all of the linear rounds from an expression tree
-    pub fn get_all_linear_rounds<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> Vec<usize> {
+    pub fn get_all_linear_rounds<M: AbstractMle<E>>(&self, mle_vec: &[M]) -> Vec<usize> {
         let degree_per_index = self.get_rounds_helper(mle_vec);
-        println!("DEGREE_PER_INDEX: {:?}", degree_per_index);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] == 1)
             .collect()
     }
 
     /// Get the maximum degree of an ExpressionNode, recursively.
-    pub fn get_max_degree<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> usize {
+    pub fn get_max_degree<M: AbstractMle<E>>(&self, mle_vec: &[M]) -> usize {
         self.get_rounds_helper(mle_vec).into_iter().max().unwrap()
     }
 
     // a recursive helper for get_all_rounds, get_all_nonlinear_rounds, and get_all_linear_rounds
-    fn get_rounds_helper<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> Vec<usize> {
+    fn get_rounds_helper<M: AbstractMle<E>>(&self, mle_vec: &[M]) -> Vec<usize> {
         // degree of each index
         let mut degree_per_index = Vec::new();
         // set the degree of the corresponding index to max(OLD_DEGREE, NEW_DEGREE)
@@ -471,7 +472,7 @@ impl<F: Field> ExpressionNode<F> {
     /// Note that unlike within the `AbstractExpression` case, we don't need to return
     /// a `Result` since all MLEs extentiating `AbstractMle` are instantiated with their
     /// appropriate number of variables.
-    pub fn get_num_vars<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> usize {
+    pub fn get_num_vars<M: AbstractMle<E>>(&self, mle_vec: &[M]) -> usize {
         match self {
             ExpressionNode::Constant(_) => 0,
             ExpressionNode::Selector(_, lhs, rhs) => {
