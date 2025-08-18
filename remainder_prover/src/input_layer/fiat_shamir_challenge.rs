@@ -1,7 +1,5 @@
 //! A part of the input layer that is random and secured through F-S
 
-use std::marker::PhantomData;
-
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
@@ -23,25 +21,21 @@ pub struct FiatShamirChallenge<F: Field> {
 
 /// Verifier's description of a [FiatShamirChallenge].
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Hash)]
-#[serde(bound = "F: Field")]
-pub struct FiatShamirChallengeDescription<F: Field> {
+pub struct FiatShamirChallengeDescription {
     /// The layer ID.
     layer_id: LayerId,
 
     /// The number of variables needed to index the data of this verifier challenge.
     pub num_bits: usize,
-
-    _marker: PhantomData<F>,
 }
 
-impl<F: Field> FiatShamirChallengeDescription<F> {
+impl FiatShamirChallengeDescription {
     /// Constructor for the [FiatShamirChallengeDescription] using the
     /// number of bits that are in the MLE of the layer.
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         Self {
             layer_id,
             num_bits,
-            _marker: PhantomData,
         }
     }
 }
@@ -65,7 +59,7 @@ impl<F: Field> FiatShamirChallenge<F> {
     }
 }
 
-impl<F: Field> FiatShamirChallengeDescription<F> {
+impl FiatShamirChallengeDescription {
     /// Return the layer id.
     pub fn layer_id(&self) -> LayerId {
         self.layer_id
@@ -75,7 +69,7 @@ impl<F: Field> FiatShamirChallengeDescription<F> {
     /// [FiatShamirChallengeDescription] and the given values.
     /// Panics if the length of `values` is not equal to the number of
     /// evaluations in the MLE.
-    pub fn instantiate(&self, values: Vec<F>) -> FiatShamirChallenge<F> {
+    pub fn instantiate<F: Field>(&self, values: Vec<F>) -> FiatShamirChallenge<F> {
         assert_eq!(values.len(), 1 << self.num_bits);
         FiatShamirChallenge {
             mle: MultilinearExtension::new(values),

@@ -1,12 +1,9 @@
-use std::marker::PhantomData;
-
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use remainder_shared_types::{
     config::global_config::global_verifier_claim_agg_constant_column_optimization,
-    field::ExtensionField,
+    extension_field::ExtensionField,
     transcript::{ProverTranscript, VerifierTranscript},
-    Field,
 };
 use tracing::{debug, info};
 
@@ -32,7 +29,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 /// achieve faster access times.
 /// Invariant: All claims are on the same number of variables.
 #[derive(Clone, Debug)]
-pub struct ClaimGroup<F: Field, E: ExtensionField<F>> {
+pub struct ClaimGroup<E: ExtensionField> {
     /// A vector of raw claims in F^n.
     pub claims: Vec<RawClaim<E>>,
 
@@ -46,11 +43,9 @@ pub struct ClaimGroup<F: Field, E: ExtensionField<F>> {
     /// A vector of `self.get_num_claims()` elements. For each claim i,
     /// `result_vector[i]` stores the expected result of the i-th claim.
     result_vector: Vec<E>,
-
-    _phantom_data: PhantomData<F>,
 }
 
-impl<F: Field, E: ExtensionField<F>> ClaimGroup<F, E> {
+impl<E: ExtensionField> ClaimGroup<E> {
     /// Generates a [ClaimGroup] from a collection of [Claim]s.
     /// All claims agree on the [Claim::to_layer_id] field and returns
     /// [ClaimError::LayerIdMismatch] otherwise.  Returns
@@ -64,7 +59,6 @@ impl<F: Field, E: ExtensionField<F>> ClaimGroup<F, E> {
                 claim_points_matrix: vec![],
                 claim_points_transpose: vec![],
                 result_vector: vec![],
-                _phantom_data: Default::default(),
             });
         }
         // Check all claims match on the `to_layer_id` field.
@@ -91,7 +85,6 @@ impl<F: Field, E: ExtensionField<F>> ClaimGroup<F, E> {
                 claim_points_matrix: vec![],
                 claim_points_transpose: vec![],
                 result_vector: vec![],
-                _phantom_data: Default::default(),
             });
         }
 
@@ -121,7 +114,6 @@ impl<F: Field, E: ExtensionField<F>> ClaimGroup<F, E> {
             claim_points_matrix: points_matrix,
             claim_points_transpose,
             result_vector,
-            _phantom_data: Default::default(),
         })
     }
 
@@ -275,8 +267,8 @@ impl<F: Field, E: ExtensionField<F>> ClaimGroup<F, E> {
     /// If successful, returns a single aggregated claim.
     pub fn prover_aggregate(
         &self,
-        layer_mles: &[DenseMle<F>],
-        transcript_writer: &mut impl ProverTranscript<F>,
+        layer_mles: &[DenseMle<E>],
+        transcript_writer: &mut impl ProverTranscript<E::BaseField>,
     ) -> Result<RawClaim<E>> {
         let num_claims = self.get_num_claims();
         debug_assert!(num_claims > 0);
@@ -336,7 +328,7 @@ impl<F: Field, E: ExtensionField<F>> ClaimGroup<F, E> {
     /// If successful, returns a single aggregated claim.
     pub fn verifier_aggregate(
         &self,
-        transcript_reader: &mut impl VerifierTranscript<F>,
+        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
     ) -> Result<RawClaim<E>> {
         let num_claims = self.get_num_claims();
         debug_assert!(num_claims > 0);

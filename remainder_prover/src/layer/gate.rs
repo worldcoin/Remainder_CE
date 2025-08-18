@@ -23,8 +23,7 @@ use crate::{
         Layer, LayerError, LayerId, VerificationError,
     },
     mle::{
-        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
-        mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex,
+        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, mle_enum::LiftTo, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex
     },
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };

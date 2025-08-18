@@ -19,8 +19,7 @@ use crate::{
     claims::{Claim, ClaimError, RawClaim},
     layer::VerificationError,
     mle::{
-        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription,
-        verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex,
+        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, mle_enum::LiftTo, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex
     },
     sumcheck::evaluate_at_a_point,
 };
@@ -217,7 +216,7 @@ impl<F: Field, E: ExtensionField<F>> Layer<F, E> for MatMult<F, E> {
             // Add to transcript.
             // Since the verifier can deduce g_i(0) by computing claim - g_i(1), the prover does not send g_i(0)
             transcript_writer
-                .append_elements("Sumcheck round univariate evaluations", &message[1..]);
+                .append_extension_field_elements("Sumcheck round univariate evaluations", &message[1..]);
             // Sample the challenge to bind the round's MatMult expression to.
             let challenge = transcript_writer.get_extension_field_challenge("Sumcheck round challenge");
             // Bind the Matrix MLEs to this variable.

@@ -43,9 +43,10 @@ use anyhow::{anyhow, Ok, Result};
 /// MLEs of previous layers.
 ///
 /// Proofs are generated with the Sumcheck protocol.
+/// Regular layers are always operated on extension fields
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: Field")]
-pub struct RegularLayer<F: Field, E: ExtensionField<F>> {
+pub struct RegularLayer<F: Field> {
     /// This layer's ID.
     id: LayerId,
 
@@ -62,10 +63,10 @@ pub struct RegularLayer<F: Field, E: ExtensionField<F>> {
 
     /// Stores the beta values associated with the `expression`.
     /// Initially set to `None`. Computed during initialization.
-    beta_vals_vec: Option<Vec<BetaValues<E>>>,
+    beta_vals_vec: Option<Vec<BetaValues<F>>>,
 }
 
-impl<F: Field, E: ExtensionField<F>> RegularLayer<F, E> {
+impl<F: Field> RegularLayer<F> {
     /// Creates a new `RegularLayer` from an `Expression` and a `LayerId`
     ///
     /// The `Expression` is the relationship this `Layer` proves
@@ -107,14 +108,14 @@ impl<F: Field, E: ExtensionField<F>> RegularLayer<F, E> {
     }
 }
 
-impl<F: Field> Layer<F> for RegularLayer<F> {
+impl<F: Field, E: ExtensionField<F>> Layer<F, E> for RegularLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.id
     }
 
     fn prove(
         &mut self,
-        claims: &[&RawClaim<F>],
+        claims: &[&RawClaim<E>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<()> {
         info!("Proving a GKR Layer.");
@@ -124,11 +125,11 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
             ClaimAggregationStrategy::Interpolative => {
                 assert_eq!(claims.len(), 1);
                 self.initialize(claims[0].get_point())?;
-                vec![F::ONE]
+                vec![E::ONE]
             }
             ClaimAggregationStrategy::RLC => {
                 let random_coefficients =
-                    transcript_writer.get_challenges("RLC Claim Agg Coefficients", claims.len());
+                    transcript_writer.get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len());
                 self.initialize_rlc(&random_coefficients, claims);
                 random_coefficients
             }
@@ -137,10 +138,10 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         let mut previous_round_message = vec![claims
             .iter()
             .zip(&random_coefficients)
-            .fold(F::ZERO, |acc, (claim, random_coeff)| {
+            .fold(E::ZERO, |acc, (claim, random_coeff)| {
                 acc + claim.get_eval() * random_coeff
             })];
-        let mut previous_challenge = F::ZERO;
+        let mut previous_challenge = E::ZERO;
 
         let layer_id = self.layer_id();
         for round_index in self.sumcheck_rounds.clone() {
@@ -155,12 +156,12 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
             );
             // Append the evaluations to the transcript.
             // Since the verifier can deduce g_i(0) by computing claim - g_i(1), the prover does not send g_i(0)
-            transcript_writer.append_elements(
+            transcript_writer.append_extension_field_elements(
                 "Sumcheck round univariate evaluations",
                 &prover_sumcheck_message[1..],
             );
             // Sample the challenge
-            let challenge = transcript_writer.get_challenge("Sumcheck round challenge");
+            let challenge = transcript_writer.get_extension_field_challenge("Sumcheck round challenge");
             // "Bind" the challenge to the expression at this point.
             self.bind_round_variable(round_index, challenge)?;
             // For debug mode, update the previous message and challenge for the purpose
@@ -185,7 +186,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
     /// layer of GKR. This includes pre-fixing all of the rounds within the
     /// layer which are linear, and then appropriately initializing the
     /// necessary beta values over the nonlinear rounds.
-    fn initialize(&mut self, claim_point: &[F]) -> Result<()> {
+    fn initialize(&mut self, claim_point: &[E]) -> Result<()> {
         let expression = &mut self.expression;
         let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
         let expression_linear_indices = expression.get_all_linear_rounds();
@@ -213,7 +214,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         Ok(())
     }
 
-    fn initialize_rlc(&mut self, _random_coefficients: &[F], claims: &[&RawClaim<F>]) {
+    fn initialize_rlc(&mut self, _random_coefficients: &[E], claims: &[&RawClaim<E>]) {
         // We need the beta values over all the indices of the expression, as we
         // cannot perform the linear round optimization with RLC claim agg since
         // we have multiple points to bind each MLE to.
@@ -237,8 +238,8 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
     fn compute_round_sumcheck_message(
         &mut self,
         round_index: usize,
-        random_coefficients: &[F],
-    ) -> Result<Vec<F>> {
+        random_coefficients: &[E],
+    ) -> Result<Vec<E>> {
         // Grabs the expression/beta table.
         let expression = &self.expression;
         let newbeta = &self.beta_vals_vec;
@@ -257,7 +258,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         Ok(prover_sumcheck_message.0)
     }
 
-    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<()> {
+    fn bind_round_variable(&mut self, round_index: usize, challenge: E) -> Result<()> {
         // Grabs the expression/beta table.
         let expression = &mut self.expression;
         let beta_vals_vec = &mut self.beta_vals_vec;
@@ -292,10 +293,10 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
     fn get_post_sumcheck_layer(
         &self,
-        round_challenges: &[F],
-        claim_challenges: &[&[F]],
-        random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, F> {
+        round_challenges: &[E],
+        claim_challenges: &[&[E]],
+        random_coefficients: &[E],
+    ) -> PostSumcheckLayer<E, E> {
         let sumcheck_round_indices = self.sumcheck_round_indices();
         // Filter the claim to get the values of the claim pertaining to the nonlinear rounds.
         let sumcheck_claim_points_vec = claim_challenges
@@ -329,7 +330,7 @@ impl<F: Field> Layer<F> for RegularLayer<F> {
         self.expression.get_post_sumcheck_layer(rlc_beta)
     }
 
-    fn get_claims(&self) -> Result<Vec<Claim<F>>> {
+    fn get_claims(&self) -> Result<Vec<Claim<E>>> {
         // First off, parse the expression that is associated with the layer.
         // Next, get to the actual claims that are generated by each expression and grab them
         // Return basically a list of (usize, Claim)

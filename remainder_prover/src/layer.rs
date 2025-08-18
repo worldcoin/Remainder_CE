@@ -134,7 +134,7 @@ pub trait Layer<F: Field, E: ExtensionField<F>> {
         &mut self,
         round_index: usize,
         random_coefficients: &[E],
-    ) -> Result<Vec<F>>;
+    ) -> Result<Vec<E>>;
 
     /// Mutate the underlying bookkeeping tables to "bind" the given `challenge` to the bit.
     /// labeled with that `round_index`.
@@ -154,7 +154,7 @@ pub trait Layer<F: Field, E: ExtensionField<F>> {
         round_challenges: &[E],
         claim_challenges: &[&[E]],
         random_coefficients: &[E],
-    ) -> PostSumcheckLayer<F, E>;
+    ) -> PostSumcheckLayer<E, E>;
 
     /// Generates and returns all claims that this layer makes onto previous
     /// layers.

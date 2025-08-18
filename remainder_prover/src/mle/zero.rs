@@ -50,8 +50,6 @@ impl<F: Field> ZeroMle<F> {
 }
 
 impl<F: Field> AbstractMle<F> for ZeroMle<F> {
-    type ExtendedMle<E: ExtensionField<F>> = ZeroMle<E>;
-
     fn mle_indices(&self) -> &[MleIndex<F>] {
         &self.mle_indices
     }
@@ -65,6 +63,8 @@ impl<F: Field> AbstractMle<F> for ZeroMle<F> {
     }
 }
 impl<F: Field> Mle<F> for ZeroMle<F> {
+    type ExtendedMle<E: ExtensionField<F>> = ZeroMle<E>;
+
     fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<RawClaim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::Indexed(round_index) {

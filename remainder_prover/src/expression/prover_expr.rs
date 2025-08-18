@@ -15,7 +15,7 @@ use super::{
 use crate::{
     expression::generic_expr::MleVecIndex,
     layer::product::Product,
-    mle::{betavalues::BetaValues, dense::DenseMle, AbstractMle, MleIndex},
+    mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::LiftTo, AbstractMle, MleIndex},
     sumcheck::{
         apply_updated_beta_values_to_evals, beta_cascade, beta_cascade_no_independent_variable,
         SumcheckEvals,
@@ -26,11 +26,18 @@ use crate::{
     mle::{verifier_mle::VerifierMle, Mle},
 };
 use itertools::{repeat_n, Itertools};
-use remainder_shared_types::Field;
+use remainder_shared_types::{Field, field::ExtensionField};
 use std::{cmp::max, collections::HashSet};
 
 use anyhow::{anyhow, Ok, Result};
 pub type ProverMle<F> = DenseMle<F>;
+
+/// Lift from [Expression<F, ProverMle<F>>] to [Expression<E, ProverMle<E>>].
+impl<F: Field, E: ExtensionField<F>> LiftTo<Expression<E, ProverMle<E>>> for Expression<F, ProverMle<F>> {
+    fn lift(self) -> Expression<E, ProverMle<E>> {
+        Expression::new(self.expression_node.lift(), self.mle_vec.into_iter().map(|m| m.lift()).collect())
+    }
+}
 
 /// this is what the prover manipulates to prove the correctness of the computation.
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
@@ -38,7 +45,6 @@ impl<F: Field> Expression<F, ProverMle<F>> {
     /// Create a product Expression that raises one MLE to a given power
     pub fn pow(pow: usize, mle: ProverMle<F>) -> Self {
         let mle_vec_indices = (0..pow).map(|_index| MleVecIndex::new(0)).collect_vec();
-
         let product_node = ExpressionNode::Product(mle_vec_indices);
 
         Expression::new(product_node, vec![mle])

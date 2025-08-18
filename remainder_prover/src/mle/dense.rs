@@ -37,8 +37,6 @@ pub struct DenseMle<F: Field> {
 }
 
 impl<F: Field> AbstractMle<F> for DenseMle<F> {
-    type ExtendedMle<E: ExtensionField<F>> = DenseMle<E>;
-
     fn num_free_vars(&self) -> usize {
         self.mle.num_vars()
     }
@@ -52,6 +50,8 @@ impl<F: Field> AbstractMle<F> for DenseMle<F> {
     }
 }
 impl<F: Field> Mle<F> for DenseMle<F> {
+    type ExtendedMle<E: ExtensionField<F>> = DenseMle<E>;
+
     fn get_padded_evaluations(&self) -> Vec<F> {
         let size: usize = 1 << self.mle.num_vars();
         let padding = size - self.mle.len();
@@ -159,7 +159,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         indexed_bit_index: usize, 
         point: E,
     ) -> (DenseMle<E>, Option<RawClaim<E>>) {
-        let mut new_mle_indices = mle.mle_indices.lift();
+        let mut new_mle_indices = mle.mle_indices.clone().lift();
 
         // Bind the `MleIndex::IndexedBit(index)` to the challenge `point`.
 
@@ -225,7 +225,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         index: usize, 
         binding: E,
     ) -> (DenseMle<E>, Option<RawClaim<E>>) {
-        let mut new_mle_indices = mle.mle_indices.lift();
+        let mut new_mle_indices = mle.mle_indices.clone().lift();
 
         for mle_index in new_mle_indices.iter_mut() {
             if *mle_index == MleIndex::Indexed(index) {

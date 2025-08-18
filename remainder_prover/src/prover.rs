@@ -102,15 +102,15 @@ impl<F: Field> From<Vec<Vec<F>>> for SumcheckProof<F> {
 
 /// The witness of a GKR circuit, used to actually prove the circuit
 #[derive(Debug)]
-pub struct InstantiatedCircuit<F: Field> {
+pub struct InstantiatedCircuit<F: Field, E: ExtensionField<F>> {
     /// The intermediate layers of the circuit
-    pub layers: Layers<F, LayerEnum<F>>,
+    pub layers: Layers<F, E, LayerEnum<F>>,
     /// The output layers of the circuit
     pub output_layers: Vec<OutputLayer<F>>,
     /// The input layers of the circuit
     pub input_layers: Vec<InputLayer<F>>,
     /// The verifier challenges
-    pub fiat_shamir_challenges: Vec<FiatShamirChallenge<F>>,
+    pub fiat_shamir_challenges: Vec<FiatShamirChallenge<E>>,
     /// Maps LayerId to the MLE of its values
     pub layer_map: HashMap<LayerId, Vec<DenseMle<F>>>,
 }
@@ -531,7 +531,7 @@ pub struct GKRCircuitDescription<F: Field> {
     /// The circuit descriptions of the input layers.
     pub input_layers: Vec<InputLayerDescription>,
     /// The circuit descriptions of the verifier challengs
-    pub fiat_shamir_challenges: Vec<FiatShamirChallengeDescription<F>>,
+    pub fiat_shamir_challenges: Vec<FiatShamirChallengeDescription>,
     /// The circuit descriptions of the intermediate layers.
     pub intermediate_layers: Vec<LayerDescriptionEnum<F>>,
     /// The circuit desriptions of the output layers.
@@ -565,11 +565,11 @@ impl<F: Field> GKRCircuitDescription<F> {
     /// * `input_data`: a [HashMap] mapping layer ids to the MLEs.
     /// * `challenge_sampler`: a closure that takes a string and a usize and returns that many field
     ///   elements; should be a wrapper of an instance method of the appropriate transcript.
-    pub fn instantiate(
+    pub fn instantiate<E: ExtensionField<F>>(
         &self,
         input_data: &HashMap<LayerId, MultilinearExtension<F>>,
         challenge_sampler: &mut impl FnMut(usize) -> Vec<F>,
-    ) -> InstantiatedCircuit<F> {
+    ) -> InstantiatedCircuit<F, E> {
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
             fiat_shamir_challenges: fiat_shamir_challenge_descriptions,
