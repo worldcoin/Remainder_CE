@@ -367,7 +367,6 @@ impl<F: Field> ExpressionNode<F> {
     /// get all of the linear rounds from an expression tree
     pub fn get_all_linear_rounds<M: AbstractMle<F>>(&self, mle_vec: &[M]) -> Vec<usize> {
         let degree_per_index = self.get_rounds_helper(mle_vec);
-        println!("DEGREE_PER_INDEX: {:?}", degree_per_index);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] == 1)
             .collect()
