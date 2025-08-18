@@ -1,4 +1,4 @@
-use remainder_shared_types::{transcript::VerifierTranscript, Field};
+use remainder_shared_types::{extension_field::ExtensionField, transcript::VerifierTranscript, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -123,13 +123,15 @@ impl<F: Field> MleDescription<F> {
             })
             .collect()
     }
+}
 
+impl<E: ExtensionField> MleDescription<E> {
     /// Convert this MLE into a [VerifierMle], which represents a fully-bound MLE.
     pub fn into_verifier_mle(
         &self,
-        point: &[F],
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<VerifierMle<F>> {
+        point: &[E],
+        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
+    ) -> Result<VerifierMle<E>> {
         let verifier_indices = self
             .var_indices
             .iter()
@@ -138,9 +140,9 @@ impl<F: Field> MleDescription<F> {
                 MleIndex::Fixed(val) => Ok(MleIndex::Fixed(*val)),
                 _ => Err(anyhow!(ExpressionError::EvaluateNotFullyIndexedError)),
             })
-            .collect::<Result<Vec<MleIndex<F>>>>()?;
+            .collect::<Result<Vec<MleIndex<E>>>>()?;
 
-        let eval = transcript_reader.consume_element("Fully bound MLE evaluation")?;
+        let eval = transcript_reader.consume_extension_field_element("Fully bound MLE evaluation")?;
 
         Ok(VerifierMle::new(self.layer_id, verifier_indices, eval))
     }

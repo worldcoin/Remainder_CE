@@ -95,8 +95,8 @@ pub fn prover_aggregate_claims<E: ExtensionField>(
 ///
 /// # Panics
 ///  if `claim_vecs` is empty.
-pub fn get_num_wlx_evaluations<E: ExtensionField>(
-    claim_vecs: &[Vec<E>],
+pub fn get_num_wlx_evaluations<F: Field>(
+    claim_vecs: &[Vec<F>],
 ) -> (usize, Option<Vec<usize>>, Vec<usize>) {
     let num_claims = claim_vecs.len();
     let num_vars = claim_vecs[0].len();
@@ -142,13 +142,13 @@ pub fn get_num_wlx_evaluations<E: ExtensionField>(
 /// Returns a vector of evaluations of this layer's MLE on a sequence of
 /// points computed by interpolating a polynomial that passes through the
 /// points of `claims_vecs`.
-pub fn get_wlx_evaluations<E: ExtensionField>(
-    claim_vecs: &[Vec<E>],
-    claimed_vals: &[E],
-    claim_mles: Vec<DenseMle<E>>,
+pub fn get_wlx_evaluations<F: Field>(
+    claim_vecs: &[Vec<F>],
+    claimed_vals: &[F],
+    claim_mles: Vec<DenseMle<F>>,
     num_claims: usize,
     num_idx: usize,
-) -> Result<Vec<E>> {
+) -> Result<Vec<F>> {
     // get the number of evaluations
     let (num_evals, common_idx) = if global_prover_claim_agg_constant_column_optimization() {
         let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
@@ -164,15 +164,15 @@ pub fn get_wlx_evaluations<E: ExtensionField>(
     }
 
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
-    let next_evals: Vec<E> = cfg_into_iter!(num_claims..num_evals)
+    let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
         .map(|idx| {
             // get the challenge l(idx)
-            let new_chal: Vec<E> = cfg_into_iter!(0..num_idx)
+            let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
                 .map(|claim_idx| {
-                    let evals: Vec<E> = cfg_into_iter!(claim_vecs)
+                    let evals: Vec<F> = cfg_into_iter!(claim_vecs)
                         .map(|claim| claim[claim_idx])
                         .collect();
-                    evaluate_at_a_point(&evals, E::from(idx as u64)).unwrap()
+                    evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                 })
                 .collect();
 
@@ -197,10 +197,10 @@ pub fn get_wlx_evaluations<E: ExtensionField>(
 /// # Returns
 ///
 /// If successful, returns a single aggregated claim.
-pub fn verifier_aggregate_claims<F: Field>(
-    claims: &[Claim<F>],
-    transcript_reader: &mut impl VerifierTranscript<F>,
-) -> Result<RawClaim<F>> {
+pub fn verifier_aggregate_claims<E: ExtensionField>(
+    claims: &[Claim<E>],
+    transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
+) -> Result<RawClaim<E>> {
     let num_claims = claims.len();
     debug_assert!(num_claims > 0);
     info!("High-level claim aggregation on {num_claims} claims.");

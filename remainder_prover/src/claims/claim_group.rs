@@ -12,7 +12,7 @@ use crate::{
         claim_aggregation::{get_num_wlx_evaluations, get_wlx_evaluations},
         ClaimError,
     },
-    mle::{dense::DenseMle, mle_enum::LiftTo},
+    mle::dense::DenseMle,
     sumcheck::evaluate_at_a_point,
 };
 
@@ -277,7 +277,7 @@ impl<E: ExtensionField> ClaimGroup<E> {
         // Do nothing if there is only one claim.
         if num_claims == 1 {
             debug!("Received 1 claim. Doing nothing.");
-            return Ok(self.claims[0].lift());
+            return Ok(self.claims[0].clone());
         }
         assert!(self.get_claim_points_matrix().len() > 1);
 

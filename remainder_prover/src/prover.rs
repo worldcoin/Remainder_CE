@@ -31,10 +31,7 @@ use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
 use crate::mle::mle_enum::{LiftTo, MleEnum};
 use crate::mle::AbstractMle;
-use crate::output_layer::{
-    bind_base_field_output_layer_to_ext_field_output_layer_with_ext_field_challenge, OutputLayer,
-    OutputLayerDescription,
-};
+use crate::output_layer::{OutputLayer, OutputLayerDescription};
 use crate::utils::mle::verify_claim;
 use ark_std::{end_timer, start_timer};
 use helpers::get_circuit_description_hash_as_field_elems;
@@ -47,11 +44,12 @@ use remainder_shared_types::config::global_config::{
     get_current_global_prover_config, get_current_global_verifier_config, global_claim_agg_strategy,
 };
 use remainder_shared_types::config::{ClaimAggregationStrategy, ProofConfig};
-use remainder_shared_types::field::{ExtensionField, Halo2FFTFriendlyField};
+use remainder_shared_types::extension_field::ExtensionField;
+use remainder_shared_types::field::Halo2FFTFriendlyField;
 use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
 use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::transcript::{ProverTranscript, TranscriptWriter};
-use remainder_shared_types::Field;
+use remainder_shared_types::{Field, halo2_field};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, info};
@@ -102,17 +100,17 @@ impl<F: Field> From<Vec<Vec<F>>> for SumcheckProof<F> {
 
 /// The witness of a GKR circuit, used to actually prove the circuit
 #[derive(Debug)]
-pub struct InstantiatedCircuit<F: Field, E: ExtensionField<F>> {
+pub struct InstantiatedCircuit<E: ExtensionField> {
     /// The intermediate layers of the circuit
-    pub layers: Layers<F, E, LayerEnum<F>>,
+    pub layers: Layers<E, LayerEnum<E>>,
     /// The output layers of the circuit
-    pub output_layers: Vec<OutputLayer<F>>,
+    pub output_layers: Vec<OutputLayer<E>>,
     /// The input layers of the circuit
-    pub input_layers: Vec<InputLayer<F>>,
+    pub input_layers: Vec<InputLayer<E>>,
     /// The verifier challenges
     pub fiat_shamir_challenges: Vec<FiatShamirChallenge<E>>,
     /// Maps LayerId to the MLE of its values
-    pub layer_map: HashMap<LayerId, Vec<DenseMle<F>>>,
+    pub layer_map: HashMap<LayerId, Vec<DenseMle<E>>>,
 }
 
 /// Write the GKR proof to transcript.
@@ -179,7 +177,7 @@ pub fn prove<F: Halo2FFTFriendlyField>(
     // Mutate the transcript to contain the proof of the intermediate layers of the circuit,
     // and return the claims on the input layer.
     let input_layer_claims =
-        prove_circuit::<F, F>(provable_circuit, transcript_writer).unwrap();
+        prove_circuit::<F>(provable_circuit, transcript_writer).unwrap();
 
     // If in debug mode, then check the claims on all input layers.
     if cfg!(debug_assertions) {
@@ -351,16 +349,16 @@ pub fn verify<F: Halo2FFTFriendlyField>(
 
 /// Assumes that the inputs have already been added to the transcript (if necessary).
 /// Returns the vector of claims on the input layers.
-pub fn prove_circuit<F: Field, E: ExtensionField<F>>(
-    provable_circuit: &ProvableCircuit<F>,
-    transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
+pub fn prove_circuit<E: ExtensionField>(
+    provable_circuit: &ProvableCircuit<E>,
+    transcript_writer: &mut TranscriptWriter<E::BaseField, PoseidonSponge<E::BaseField>>,
 ) -> Result<Vec<Claim<E>>> {
     // Note: no need to return the Transcript, since it is already in the TranscriptWriter!
     // Note(Ben): this can't be an instance method, because it consumes the intermediate layers!
     // Note(Ben): this is a GKR specific method.  So it makes sense for IT to define the challenge sampler, so that the circuit can be instantiated (rather than leaving this complexity to the calling context).
 
     let mut challenge_sampler =
-        |size| transcript_writer.get_challenges("Verifier challenges", size);
+        |size| transcript_writer.get_extension_field_challenges("Verifier challenges", size);
     let instantiated_circuit = provable_circuit
         .get_gkr_circuit_description_ref()
         .instantiate(provable_circuit.get_inputs_ref(), &mut challenge_sampler);
@@ -391,7 +389,7 @@ pub fn prove_circuit<F: Field, E: ExtensionField<F>>(
             }
             // Just write a single zero into the transcript since the counts (layer size) are already included in the circuit description
             MleEnum::Zero(_) => {
-                transcript_writer.append_elements("Output layer MLE evals", &[F::ZERO])
+                transcript_writer.append_elements("Output layer MLE evals", &[E::BaseField::ZERO])
             }
         };
 
@@ -526,19 +524,19 @@ pub fn prove_circuit<F: Field, E: ExtensionField<F>>(
 /// The complete description of a layered circuit whose output validity can be
 /// proven against a set of committed inputs.
 #[derive(Debug, Serialize, Deserialize, Hash, Clone)]
-#[serde(bound = "F: Field")]
-pub struct GKRCircuitDescription<F: Field> {
+#[serde(bound = "E: ExtensionField")]
+pub struct GKRCircuitDescription<E: ExtensionField> {
     /// The circuit descriptions of the input layers.
     pub input_layers: Vec<InputLayerDescription>,
     /// The circuit descriptions of the verifier challengs
     pub fiat_shamir_challenges: Vec<FiatShamirChallengeDescription>,
     /// The circuit descriptions of the intermediate layers.
-    pub intermediate_layers: Vec<LayerDescriptionEnum<F>>,
+    pub intermediate_layers: Vec<LayerDescriptionEnum<E>>,
     /// The circuit desriptions of the output layers.
-    pub output_layers: Vec<OutputLayerDescription<F>>,
+    pub output_layers: Vec<OutputLayerDescription<E>>,
 }
 
-impl<F: Field> GKRCircuitDescription<F> {
+impl<E: ExtensionField> GKRCircuitDescription<E> {
     /// Label the MLE indices contained within a circuit description, starting
     /// each layer with the start_index.
     pub fn index_mle_indices(&mut self, start_index: usize) {
@@ -565,11 +563,11 @@ impl<F: Field> GKRCircuitDescription<F> {
     /// * `input_data`: a [HashMap] mapping layer ids to the MLEs.
     /// * `challenge_sampler`: a closure that takes a string and a usize and returns that many field
     ///   elements; should be a wrapper of an instance method of the appropriate transcript.
-    pub fn instantiate<E: ExtensionField<F>>(
+    pub fn instantiate(
         &self,
-        input_data: &HashMap<LayerId, MultilinearExtension<F>>,
-        challenge_sampler: &mut impl FnMut(usize) -> Vec<F>,
-    ) -> InstantiatedCircuit<F, E> {
+        input_data: &HashMap<LayerId, MultilinearExtension<E::BaseField>>,
+        challenge_sampler: &mut impl FnMut(usize) -> Vec<E>,
+    ) -> InstantiatedCircuit<E> {
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
             fiat_shamir_challenges: fiat_shamir_challenge_descriptions,
@@ -583,7 +581,7 @@ impl<F: Field> GKRCircuitDescription<F> {
         // and its second half is also used in a future layer, we would expect
         // both of these to be represented as MLE descriptions in the HashSet
         // associated with this layer with the appropriate prefix bits.
-        let mut mle_claim_map = HashMap::<LayerId, HashSet<&MleDescription<F>>>::new();
+        let mut mle_claim_map = HashMap::<LayerId, HashSet<&MleDescription<E>>>::new();
         // Do a forward pass through all of the intermediate layer descriptions
         // and look into the "future" to see which parts of each layer are
         // required for future layers.
@@ -617,7 +615,7 @@ impl<F: Field> GKRCircuitDescription<F> {
         // Step 1: populate the circuit map with all of the data necessary in
         // order to instantiate the circuit.
         let mut circuit_map = CircuitEvalMap::new();
-        let mut prover_input_layers: Vec<InputLayer<F>> = Vec::new();
+        let mut prover_input_layers: Vec<InputLayer<E>> = Vec::new();
         let mut fiat_shamir_challenges = Vec::new();
         // Step 1a: populate the circuit map by compiling the necessary data
         // outputs for each of the input layers, while writing the commitments
@@ -633,10 +631,10 @@ impl<F: Field> GKRCircuitDescription<F> {
                 mle_outputs_necessary.iter().for_each(|mle_output| {
                     let prefix_bits = mle_output.prefix_bits();
                     let output = filter_bookkeeping_table(combined_mle, &prefix_bits);
-                    circuit_map.add_node(CircuitLocation::new(input_layer_id, prefix_bits), output);
+                    circuit_map.add_node(CircuitLocation::new(input_layer_id, prefix_bits), output.lift());
                 });
                 let prover_input_layer = InputLayer {
-                    mle: combined_mle.clone(),
+                    mle: combined_mle.clone().lift(),
                     layer_id: input_layer_id,
                 };
                 prover_input_layers.push(prover_input_layer);
@@ -675,7 +673,7 @@ impl<F: Field> GKRCircuitDescription<F> {
         // Step 2: Using the fully populated circuit map, convert each of the
         // layer descriptions into concretized layers. Step 2a: Concretize the
         // intermediate layer descriptions.
-        let mut prover_intermediate_layers: Vec<LayerEnum<F>> =
+        let mut prover_intermediate_layers: Vec<LayerEnum<E>> =
             Vec::with_capacity(intermediate_layer_descriptions.len());
         intermediate_layer_descriptions
             .iter()
@@ -686,7 +684,7 @@ impl<F: Field> GKRCircuitDescription<F> {
             });
 
         // Step 2b: Concretize the output layer descriptions.
-        let mut prover_output_layers: Vec<OutputLayer<F>> = Vec::new();
+        let mut prover_output_layers: Vec<OutputLayer<E>> = Vec::new();
         output_layer_descriptions
             .iter()
             .for_each(|output_layer_description| {
@@ -712,15 +710,15 @@ impl<F: Field> GKRCircuitDescription<F> {
     #[instrument(skip_all, err)]
     pub(crate) fn verify(
         &self,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Vec<Claim<F>>> {
+        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
+    ) -> Result<Vec<Claim<E>>> {
         // Get the verifier challenges from the transcript.
-        let fiat_shamir_challenges: Vec<FiatShamirChallenge<F>> = self
+        let fiat_shamir_challenges: Vec<FiatShamirChallenge<E>> = self
             .fiat_shamir_challenges
             .iter()
             .map(|fs_desc| {
                 let values = transcript_reader
-                    .get_challenges("Verifier challenges", 1 << fs_desc.num_bits)
+                    .get_extension_field_challenges("Verifier challenges", 1 << fs_desc.num_bits)
                     .unwrap();
                 fs_desc.instantiate(values)
             })

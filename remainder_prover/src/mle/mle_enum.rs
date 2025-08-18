@@ -4,13 +4,12 @@ use super::{dense::DenseMle, evals::EvaluationsIterator, zero::ZeroMle, MleIndex
 use crate::{
     layer::LayerId,
     mle::{
-        dense::{fix_variable_to_new_dense_mle, fix_variable_var_conversion},
         evals::{Evaluations, MultilinearExtension},
         Mle,
     },
 };
 use itertools::{repeat_n, Itertools};
-use remainder_shared_types::{field::ExtensionField, Field};
+use remainder_shared_types::{extension_field::ExtensionField, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::mle::AbstractMle;
@@ -49,8 +48,6 @@ impl<F: Field> AbstractMle<F> for MleEnum<F> {
 }
 
 impl<F: Field> Mle<F> for MleEnum<F> {
-    type ExtendedMle<E: ExtensionField<F>> = MleEnum<E>;
-
     fn len(&self) -> usize {
         match self {
             MleEnum::Dense(item) => item.len(),
@@ -108,40 +105,6 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         }
     }
 
-    fn fix_variable_ext<E: ExtensionField<F>>(
-        mle: &Self,
-        round_index: usize,
-        challenge: E,
-    ) -> (MleEnum<E>, Option<crate::claims::RawClaim<E>>) {
-        match mle {
-            MleEnum::Dense(item) => {
-                let (mle, claim) = DenseMle::fix_variable_ext(item, round_index, challenge);
-                (MleEnum::Dense(mle), claim)
-            }
-            MleEnum::Zero(item) => {
-                let (mle, claim) = ZeroMle::fix_variable_ext(item, round_index, challenge);
-                (MleEnum::Zero(mle), claim)
-            }
-        }
-    }
-
-    fn fix_variable_at_index_ext<E: ExtensionField<F>>(
-        mle: &Self,
-        indexed_bit_index: usize,
-        point: E,
-    ) -> (MleEnum<E>, Option<crate::claims::RawClaim<E>>) {
-        match mle {
-            MleEnum::Dense(item) => {
-                let (mle, claim) = DenseMle::fix_variable_at_index_ext(item, indexed_bit_index, point);
-                (MleEnum::Dense(mle), claim)
-            }
-            MleEnum::Zero(item) => {
-                let (mle, claim) = ZeroMle::fix_variable_at_index_ext(item, indexed_bit_index, point);
-                (MleEnum::Zero(mle), claim)
-            }
-        }
-    }
-
     fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         match self {
             MleEnum::Dense(item) => item.index_mle_indices(curr_index),
@@ -177,46 +140,8 @@ impl<F: Field> From<ZeroMle<F>> for MleEnum<F> {
     }
 }
 
-/// Creates a new [ZeroMle<E>] which is a "bound" version of the given
-/// `prev_zero_mle` (which is a [ZeroMle<F>] to the (extension field)
-/// `challenge` at the formal variable with the `index` label.
-fn fix_variable_to_new_zero_mle<F: Field, E: ExtensionField<F>>(
-    prev_zero_mle: &ZeroMle<F>,
-    index: usize,
-    challenge: E,
-) -> ZeroMle<E> {
-    assert!(prev_zero_mle.num_free_vars() > 0);
-    let converted_mle_indices =
-        fix_variable_var_conversion(&prev_zero_mle.mle_indices, index, challenge);
-    ZeroMle {
-        mle_indices: converted_mle_indices,
-        num_vars: prev_zero_mle.num_free_vars() - 1,
-        layer_id: prev_zero_mle.layer_id,
-        zero: [E::ZERO],
-        zero_eval: Evaluations::new(prev_zero_mle.num_free_vars() - 1, vec![E::ZERO]),
-        indexed: true,
-    }
-}
-
-/// Given an [MleEnum<F>] to "fix variable" for, creates and returns an
-/// [MleEnum<E>] with the variable labeled `index` bound to `challenge`.
-pub fn fix_variable_to_new_mle_enum<F: Field, E: ExtensionField<F>>(
-    mle: &MleEnum<F>,
-    index: usize,
-    challenge: E,
-) -> MleEnum<E> {
-    match mle {
-        MleEnum::Dense(dense_mle) => {
-            MleEnum::Dense(fix_variable_to_new_dense_mle(dense_mle, index, challenge))
-        }
-        MleEnum::Zero(zero_mle) => {
-            MleEnum::Zero(fix_variable_to_new_zero_mle(zero_mle, index, challenge))
-        }
-    }
-}
-
 /// Lift from [MleEnum<F>] to [MleEnum<E>] in the wrapper way.
-impl<F: Field, E: ExtensionField<F>> LiftTo<MleEnum<E>> for MleEnum<F> {
+impl<E: ExtensionField> LiftTo<MleEnum<E>> for MleEnum<E::BaseField> {
     fn lift(self) -> MleEnum<E> {
         match self {
             MleEnum::Dense(dense_mle) => MleEnum::Dense(dense_mle.lift()),
@@ -226,7 +151,7 @@ impl<F: Field, E: ExtensionField<F>> LiftTo<MleEnum<E>> for MleEnum<F> {
 }
 
 /// Lift from [ZeroMle<F>] to [ZeroMle<E>] in the trivial way.
-impl<F: Field, E: ExtensionField<F>> LiftTo<ZeroMle<E>> for ZeroMle<F> {
+impl<E: ExtensionField> LiftTo<ZeroMle<E>> for ZeroMle<E::BaseField> {
     fn lift(self) -> ZeroMle<E> {
         let new_mle_indices: Vec<MleIndex<E>> = self
             .mle_indices
@@ -245,7 +170,7 @@ impl<F: Field, E: ExtensionField<F>> LiftTo<ZeroMle<E>> for ZeroMle<F> {
 }
 
 /// Lift from [DenseMle<F>] to [DenseMle<E>] in the trivial way.
-impl<F: Field, E: ExtensionField<F>> LiftTo<DenseMle<E>> for DenseMle<F> {
+impl<E: ExtensionField> LiftTo<DenseMle<E>> for DenseMle<E::BaseField> {
     fn lift(self) -> DenseMle<E> {
         let new_mle = self.mle.lift();
         let new_mle_indices: Vec<MleIndex<E>> = self
@@ -269,8 +194,8 @@ pub trait LiftTo<T> {
 
 /// Lift from [MultilinearExtension<F>] to [MultilinearExtension<E>] in the
 /// trivial way.
-impl<F: Field, E: ExtensionField<F>> LiftTo<MultilinearExtension<E>> for MultilinearExtension<F> {
-    fn lift(self: MultilinearExtension<F>) -> MultilinearExtension<E> {
+impl<E: ExtensionField> LiftTo<MultilinearExtension<E>> for MultilinearExtension<E::BaseField> {
+    fn lift(self) -> MultilinearExtension<E> {
         let new_evaluations: Evaluations<E> = self.f.lift();
         MultilinearExtension { f: new_evaluations }
     }

@@ -1,11 +1,11 @@
 //! This module contains the implementation of the matrix multiplication layer
 
-use std::{collections::HashSet, marker::PhantomData};
+use std::collections::HashSet;
 
 use ::serde::{Deserialize, Serialize};
 use itertools::Itertools;
 use remainder_shared_types::{
-    field::ExtensionField, transcript::{ProverTranscript, VerifierTranscript}, Field
+    extension_field::ExtensionField, transcript::{ProverTranscript, VerifierTranscript}, Field
 };
 
 use super::{
@@ -19,7 +19,7 @@ use crate::{
     claims::{Claim, ClaimError, RawClaim},
     layer::VerificationError,
     mle::{
-        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, mle_enum::LiftTo, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex
+        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex
     },
     sumcheck::evaluate_at_a_point,
 };
@@ -67,17 +67,6 @@ impl<F: Field> Matrix<F> {
     }
 }
 
-/// Lift from [Matrix<F>>] to [Matrix<E>] in the trivial way.
-impl<F: Field, E: ExtensionField<F>> LiftTo<Matrix<E>> for Matrix<F> {
-    fn lift(&self) -> Matrix<E> {
-        Matrix {
-            mle: self.mle.lift(),
-            rows_num_vars: self.rows_num_vars,
-            cols_num_vars: self.cols_num_vars,
-        }
-    }
-}
-
 /// Used to represent a matrix multiplication layer.
 ///
 /// #Attributes:
@@ -85,19 +74,17 @@ impl<F: Field, E: ExtensionField<F>> LiftTo<Matrix<E>> for Matrix<F> {
 /// * `matrix_a` - the lefthand side matrix in the multiplication.
 /// * `matrix_b` - the righthand side matrix in the multiplication.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(bound = "F: Field")]
-pub struct MatMult<F: Field, E: ExtensionField<F>> {
+#[serde(bound = "E: ExtensionField")]
+pub struct MatMult<E: ExtensionField> {
     layer_id: LayerId,
     matrix_a: Matrix<E>,
     matrix_b: Matrix<E>,
     num_vars_middle_ab: usize,
-
-    _phantom: PhantomData<F>,
 }
 
-impl<F: Field, E: ExtensionField<F>> MatMult<F, E> {
+impl<E: ExtensionField> MatMult<E> {
     /// Create a new matrix multiplication layer.
-    pub fn new(layer_id: LayerId, matrix_a: Matrix<F>, matrix_b: Matrix<F>) -> MatMult<F, E> {
+    pub fn new(layer_id: LayerId, matrix_a: Matrix<E>, matrix_b: Matrix<E>) -> MatMult<E> {
         // Check to make sure the inner dimensions of the matrices we are
         // producting match. I.e., the number of variables representing the
         // columns of matrix a are the same as the number of variables
@@ -106,11 +93,9 @@ impl<F: Field, E: ExtensionField<F>> MatMult<F, E> {
         let num_vars_middle_ab = matrix_a.cols_num_vars;
         MatMult {
             layer_id,
-            matrix_a: matrix_a.lift(),
-            matrix_b: matrix_b.lift(),
+            matrix_a: matrix_a,
+            matrix_b: matrix_b,
             num_vars_middle_ab,
-
-            _phantom: Default::default(),
         }
     }
 
@@ -174,7 +159,7 @@ impl<F: Field, E: ExtensionField<F>> MatMult<F, E> {
         matrix_a_mle.index_mle_indices(0);
     }
 
-    fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
+    fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<E::BaseField>) {
         transcript_writer.append_extension_field_elements(
             "Fully bound MLE evaluation",
             &[self.matrix_a.mle.value(), self.matrix_b.mle.value()],
@@ -182,7 +167,7 @@ impl<F: Field, E: ExtensionField<F>> MatMult<F, E> {
     }
 }
 
-impl<F: Field, E: ExtensionField<F>> Layer<F, E> for MatMult<F, E> {
+impl<E: ExtensionField> Layer<E> for MatMult<E> {
     // Since we pre-process the matrices first, by pre-binding the
     // row variables of matrix A and the column variables of matrix B,
     // the number of rounds of sumcheck is simply the number of variables
@@ -191,7 +176,7 @@ impl<F: Field, E: ExtensionField<F>> Layer<F, E> for MatMult<F, E> {
     fn prove(
         &mut self,
         claims: &[&RawClaim<E>],
-        transcript_writer: &mut impl ProverTranscript<F>,
+        transcript_writer: &mut impl ProverTranscript<E::BaseField>,
     ) -> Result<()> {
         println!(
             "MatMul::prove_rounds() for a product ({} x {}) * ({} x {}) matrix.",
@@ -388,8 +373,8 @@ impl<F: Field> MatMultLayerDescription<F> {
     }
 }
 
-impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
-    type VerifierLayer = VerifierMatMultLayer<F>;
+impl<E: ExtensionField> LayerDescription<E> for MatMultLayerDescription<E> {
+    type VerifierLayer = VerifierMatMultLayer<E>;
 
     /// Gets this layer's id.
     fn layer_id(&self) -> LayerId {
@@ -398,9 +383,9 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
 
     fn verify_rounds(
         &self,
-        claims: &[&RawClaim<F>],
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<VerifierLayerEnum<F>> {
+        claims: &[&RawClaim<E>],
+        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
+    ) -> Result<VerifierLayerEnum<E>> {
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
 
@@ -414,7 +399,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         let mut g_prev_round = vec![claim.get_eval()];
 
         // Previous round's challege: r_{i-1}.
-        let mut prev_challenge = F::ZERO;
+        let mut prev_challenge = E::ZERO;
 
         // Get the number of rounds, which is exactly the inner dimension of the matrix product.
         assert_eq!(self.matrix_a.cols_num_vars, self.matrix_b.rows_num_vars);
@@ -425,20 +410,20 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
             let degree = 2;
 
             // Read g_i(1), ..., g_i(d+1) from the prover, reserve space to compute g_i(0)
-            let mut g_cur_round: Vec<_> = [Ok(F::from(0))]
+            let mut g_cur_round: Vec<_> = [Ok(E::from(0))]
                 .into_iter()
                 .chain((0..degree).map(|_| {
-                    transcript_reader.consume_element("Sumcheck round univariate evaluations")
+                    transcript_reader.consume_extension_field_element("Sumcheck round univariate evaluations")
                 }))
                 .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
-            let challenge = transcript_reader.get_challenge("Sumcheck round challenge")?;
+            let challenge = transcript_reader.get_extension_field_challenge("Sumcheck round challenge")?;
 
             // Compute:
             //       `g_i(0) = g_{i - 1}(r_{i-1}) - g_i(1)`
             let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
-            let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
+            let g_i_one = evaluate_at_a_point(&g_cur_round, E::ONE).unwrap();
             g_cur_round[0] = g_prev_r_prev - g_i_one;
 
             g_prev_round = g_cur_round;
@@ -451,7 +436,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         // `claim.get_result()` due to how we initialized `g_prev_round`.
         let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge)?;
 
-        let verifier_layer: VerifierMatMultLayer<F> = self
+        let verifier_layer: VerifierMatMultLayer<E> = self
             .convert_into_verifier_layer(&challenges, &[claim.get_point()], transcript_reader)
             .unwrap();
 
@@ -475,8 +460,8 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
     /// Panics if the MLEs for the two matrices provided by the circuit map are of the wrong size.
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &HashSet<&MleDescription<F>>,
-        circuit_map: &mut CircuitEvalMap<F>,
+        mle_outputs_necessary: &HashSet<&MleDescription<E>>,
+        circuit_map: &mut CircuitEvalMap<E>,
     ) {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
@@ -517,9 +502,9 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
 
     fn convert_into_verifier_layer(
         &self,
-        sumcheck_bindings: &[F],
-        claim_points: &[&[F]],
-        transcript_reader: &mut impl VerifierTranscript<F>,
+        sumcheck_bindings: &[E],
+        claim_points: &[&[E]],
+        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
     ) -> Result<Self::VerifierLayer> {
         // For matmult, we only use interpolative claim aggregation.
         assert_eq!(claim_points.len(), 1);
@@ -582,10 +567,10 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
     /// Return the [PostSumcheckLayer], given challenges that fully bind the expression.
     fn get_post_sumcheck_layer(
         &self,
-        round_challenges: &[F],
-        claim_challenges: &[&[F]],
-        _random_coefficients: &[F],
-    ) -> PostSumcheckLayer<F, Option<F>> {
+        round_challenges: &[E],
+        claim_challenges: &[&[E]],
+        _random_coefficients: &[E],
+    ) -> PostSumcheckLayer<E, Option<E>> {
         // We are always using interpolative claim aggregation for MatMult layers.
         assert_eq!(claim_challenges.len(), 1);
         let claim_challenge = claim_challenges[0];
@@ -662,9 +647,9 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         pre_bound_matrix_b_mle.set_mle_indices(matrix_b_new_indices);
         let mles = vec![pre_bound_matrix_a_mle, pre_bound_matrix_b_mle];
 
-        PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
+        PostSumcheckLayer(vec![Product::<E, Option<E>>::new(
             &mles,
-            F::ONE,
+            E::ONE,
             round_challenges,
         )])
     }
@@ -673,11 +658,11 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         2
     }
 
-    fn get_circuit_mles(&self) -> Vec<&MleDescription<F>> {
+    fn get_circuit_mles(&self) -> Vec<&MleDescription<E>> {
         vec![&self.matrix_a.mle, &self.matrix_b.mle]
     }
 
-    fn convert_into_prover_layer<'a>(&self, circuit_map: &CircuitEvalMap<F>) -> LayerEnum<F> {
+    fn convert_into_prover_layer<'a>(&self, circuit_map: &CircuitEvalMap<E>) -> LayerEnum<E> {
         let prover_matrix_a = self.matrix_a.into_matrix(circuit_map);
         let prover_matrix_b = self.matrix_b.into_matrix(circuit_map);
         let matmult_layer = MatMult::new(self.layer_id, prover_matrix_a, prover_matrix_b);
@@ -701,24 +686,24 @@ pub struct VerifierMatrix<F: Field> {
 
 /// The verifier's counterpart of a [MatMult] layer.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: Field")]
-pub struct VerifierMatMultLayer<F: Field> {
+#[serde(bound = "E: ExtensionField")]
+pub struct VerifierMatMultLayer<E: ExtensionField> {
     /// The layer id associated with this gate layer.
     layer_id: LayerId,
 
     /// The LHS Matrix to be multiplied.
-    matrix_a: VerifierMatrix<F>,
+    matrix_a: VerifierMatrix<E>,
 
     /// The RHS Matrix to be multiplied.
-    matrix_b: VerifierMatrix<F>,
+    matrix_b: VerifierMatrix<E>,
 }
 
-impl<F: Field> VerifierLayer<F> for VerifierMatMultLayer<F> {
+impl<E: ExtensionField> VerifierLayer<E> for VerifierMatMultLayer<E> {
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 
-    fn get_claims(&self) -> Result<Vec<Claim<F>>> {
+    fn get_claims(&self) -> Result<Vec<Claim<E>>> {
         let claims = vec![&self.matrix_a, &self.matrix_b]
             .into_iter()
             .map(|matrix| {
@@ -736,7 +721,7 @@ impl<F: Field> VerifierLayer<F> for VerifierMatMultLayer<F> {
 
                 let matrix_claimed_val = matrix.mle.value();
 
-                let claim: Claim<F> = Claim::new(
+                let claim: Claim<E> = Claim::new(
                     matrix_fixed_indices,
                     matrix_claimed_val,
                     self.layer_id,
@@ -750,8 +735,8 @@ impl<F: Field> VerifierLayer<F> for VerifierMatMultLayer<F> {
     }
 }
 
-impl<F: Field> VerifierMatMultLayer<F> {
-    fn evaluate(&self) -> F {
+impl<E: ExtensionField> VerifierMatMultLayer<E> {
+    fn evaluate(&self) -> E {
         self.matrix_a.mle.value() * self.matrix_b.mle.value()
     }
 }

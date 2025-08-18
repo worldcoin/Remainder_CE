@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use remainder_shared_types::{Field, field::ExtensionField};
+use remainder_shared_types::extension_field::ExtensionField;
 
 use crate::{
     layer::{
@@ -13,14 +13,13 @@ use crate::mle::Mle;
 
 #[derive(Clone, Debug)]
 /// The list of Layers that make up the GKR circuit
-pub struct Layers<F: Field, E: ExtensionField<F>, T: Layer<F, E>> {
+pub struct Layers<E: ExtensionField, T: Layer<E>> {
     /// A Vec of pointers to various layer types
     pub layers: Vec<T>,
-    marker: PhantomData<F>,
-    marker_ext: PhantomData<E>,
+    marker: PhantomData<E>,
 }
 
-impl<F: Field, E: ExtensionField<F>, T: Layer<F, E>> Layers<F, E, T> {
+impl<E: ExtensionField, T: Layer<E>> Layers<E, T> {
     /// Add a batched Add Gate layer to a list of layers
     /// In the batched case, consider a vector of mles corresponding to an mle for each "batch" or "copy".
     /// Add a Gate layer to a list of layers
@@ -42,17 +41,17 @@ impl<F: Field, E: ExtensionField<F>, T: Layer<F, E>> Layers<F, E, T> {
     pub fn add_gate(
         &mut self,
         nonzero_gates: Vec<(u32, u32, u32)>,
-        lhs: DenseMle<F>,
-        rhs: DenseMle<F>,
+        lhs: DenseMle<E>,
+        rhs: DenseMle<E>,
         num_dataparallel_bits: Option<usize>,
         gate_operation: BinaryOperation,
-    ) -> DenseMle<F>
+    ) -> DenseMle<E>
     where
-        T: From<GateLayer<F, E>>,
+        T: From<GateLayer<E>>,
     {
         let id = LayerId::Layer(self.layers.len());
         // constructor for batched mul gate struct
-        let gate: GateLayer<F> = GateLayer::new(
+        let gate: GateLayer<E> = GateLayer::new(
             num_dataparallel_bits,
             nonzero_gates.clone(),
             lhs.clone(),
@@ -72,7 +71,7 @@ impl<F: Field, E: ExtensionField<F>, T: Layer<F, E>> Layers<F, E, T> {
         self.layers.push(gate.into());
 
         // iterate through each of the indices and perform the binary operation specified
-        let mut res_table = vec![F::ZERO; res_table_num_entries as usize];
+        let mut res_table = vec![E::ZERO; res_table_num_entries as usize];
         (0..num_dataparallel_vals).for_each(|idx| {
             nonzero_gates
                 .clone()
@@ -80,16 +79,16 @@ impl<F: Field, E: ExtensionField<F>, T: Layer<F, E>> Layers<F, E, T> {
                 .for_each(|(z_ind, x_ind, y_ind)| {
                     let f2_val = lhs
                         .get((idx + (x_ind * num_dataparallel_vals)) as usize)
-                        .unwrap_or(F::ZERO);
+                        .unwrap_or(E::ZERO);
                     let f3_val = rhs
                         .get((idx + (y_ind * num_dataparallel_vals)) as usize)
-                        .unwrap_or(F::ZERO);
+                        .unwrap_or(E::ZERO);
                     res_table[(idx + (z_ind * num_dataparallel_vals)) as usize] =
                         gate_operation.perform_operation(f2_val, f3_val);
                 });
         });
 
-        let res_mle: DenseMle<F> = DenseMle::new_from_raw(res_table, id);
+        let res_mle: DenseMle<E> = DenseMle::new_from_raw(res_table, id);
 
         res_mle
     }
@@ -99,7 +98,6 @@ impl<F: Field, E: ExtensionField<F>, T: Layer<F, E>> Layers<F, E, T> {
         Self {
             layers: Vec::new(),
             marker: PhantomData,
-            marker_ext: PhantomData,
         }
     }
 
@@ -108,7 +106,6 @@ impl<F: Field, E: ExtensionField<F>, T: Layer<F, E>> Layers<F, E, T> {
         Self {
             layers,
             marker: PhantomData,
-            marker_ext: PhantomData,
         }
     }
 
@@ -118,7 +115,7 @@ impl<F: Field, E: ExtensionField<F>, T: Layer<F, E>> Layers<F, E, T> {
     }
 }
 
-impl<F: Field, E: ExtensionField<F>, T: Layer<F, E>> Default for Layers<F, E, T> {
+impl<E: ExtensionField, T: Layer<E>> Default for Layers<E, T> {
     fn default() -> Self {
         Self::new()
     }

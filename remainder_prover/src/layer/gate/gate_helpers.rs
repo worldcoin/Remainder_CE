@@ -12,7 +12,7 @@ use crate::{
         compute_next_beta_values_vec_from_current,
     },
 };
-use remainder_shared_types::{field::ExtensionField, Field};
+use remainder_shared_types::Field;
 
 use crate::mle::{dense::DenseMle, MleIndex};
 use thiserror::Error;
@@ -61,6 +61,7 @@ pub enum GateError {
 ///   least one of the `mles`
 /// * `degree` - degree of `g_k(x)`, i.e. number of evaluations to send (minus
 ///   one!)
+/// Note that this function can be performed in base field
 pub(crate) fn evaluate_mle_product_no_beta_table<F: Field>(
     mles: &[&impl Mle<F>],
     independent_variable: bool,
@@ -1088,15 +1089,15 @@ pub(crate) fn compute_sumcheck_message_data_parallel_identity_gate<F: Field>(
 /// We use a "Rothblum"-inspired sumcheck trick in order to stream the beta MLE
 /// while folding it into the wiring. We use the random coefficients to compute
 /// the RLC of all the beta values.
-pub fn compute_sumcheck_message_data_parallel_gate<F: Field, E: ExtensionField<F>>(
+pub fn compute_sumcheck_message_data_parallel_gate<F: Field>(
     f2_p2_x: &DenseMle<F>,
     f3_p2_y: &DenseMle<F>,
     operation: BinaryOperation,
     wiring: &[(u32, u32, u32)],
     num_dataparallel_vars: usize,
-    challenges_vec: &[&[E]],
-    random_coefficients: &[E],
-) -> Result<Vec<E>> {
+    challenges_vec: &[&[F]],
+    random_coefficients: &[F],
+) -> Result<Vec<F>> {
     let (inverses_vec, one_minus_elem_inverted_vec) =
         compute_inverses_vec_and_one_minus_inverted_vec(challenges_vec);
 
@@ -1138,9 +1139,9 @@ pub fn compute_sumcheck_message_data_parallel_gate<F: Field, E: ExtensionField<F
 
     let evals = cfg_into_iter!(scaled_wirings).fold(
         #[cfg(feature = "parallel")]
-        || (vec![E::ZERO; eval_count], None::<(Vec<E>, u32)>),
+        || (vec![F::ZERO; eval_count], None::<(Vec<F>, u32)>),
         #[cfg(not(feature = "parallel"))]
-        (vec![E::ZERO; eval_count], None::<(Vec<E>, u32)>),
+        (vec![F::ZERO; eval_count], None::<(Vec<F>, u32)>),
         |(mut acc, maybe_current_beta_aux), (scaled_z, scaled_x, scaled_y)| {
             let next_beta_values_at_0 = if let Some((current_beta_values, current_scaled_z)) =
                 maybe_current_beta_aux
@@ -1180,13 +1181,13 @@ pub fn compute_sumcheck_message_data_parallel_gate<F: Field, E: ExtensionField<F
             let rlc_beta_values_at_0 = next_beta_values_at_0
                 .iter()
                 .zip(random_coefficients)
-                .fold(E::ZERO, |acc, (beta_val, random_coeff)| {
+                .fold(F::ZERO, |acc, (beta_val, random_coeff)| {
                     acc + *beta_val * random_coeff
                 });
             let rlc_beta_values_at_1 = next_beta_values_at_1
                 .iter()
                 .zip(random_coefficients)
-                .fold(E::ZERO, |acc, (beta_val, random_coeff)| {
+                .fold(F::ZERO, |acc, (beta_val, random_coeff)| {
                     acc + *beta_val * random_coeff
                 });
             let linear_diff_betas = rlc_beta_values_at_1 - rlc_beta_values_at_0;
@@ -1246,7 +1247,7 @@ pub fn compute_sumcheck_message_data_parallel_gate<F: Field, E: ExtensionField<F
                     g1_z_eval * operation.perform_operation(f2_eval, f3_eval)
                 });
 
-            let evals_iter: Box<dyn Iterator<Item = E>> =
+            let evals_iter: Box<dyn Iterator<Item = F>> =
                 Box::new(g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y);
 
             acc.iter_mut()
@@ -1259,7 +1260,7 @@ pub fn compute_sumcheck_message_data_parallel_gate<F: Field, E: ExtensionField<F
     #[cfg(feature = "parallel")]
     {
         let evals = evals.reduce(
-            || (vec![E::ZERO; eval_count], None),
+            || (vec![F::ZERO; eval_count], None),
             |(mut acc, _), (partial, _)| {
                 acc.iter_mut()
                     .zip(partial)
