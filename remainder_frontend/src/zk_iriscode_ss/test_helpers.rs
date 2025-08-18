@@ -1,14 +1,17 @@
 #![allow(clippy::type_complexity)]
-use crate::layouter::builder::LayerVisibility;
+use crate::layouter::builder::{Circuit, LayerVisibility};
 use crate::zk_iriscode_ss::circuits::build_iriscode_circuit_description;
-use crate::zk_iriscode_ss::data::{build_iriscode_circuit_data, wirings_to_reroutings};
+use crate::zk_iriscode_ss::data::{
+    build_iriscode_circuit_data, wirings_to_reroutings, IriscodeCircuitData,
+};
 use ndarray::Array2;
 use remainder::circuit_layout::ProvableCircuit;
 use remainder::input_layer::{
     ligero_input_layer::LigeroInputLayerDescription, InputLayerDescription,
 };
+use remainder_hyrax::circuit_layout::HyraxProvableCircuit;
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
-use remainder_shared_types::Fr;
+use remainder_shared_types::{Bn256Point, Field, Fr};
 
 use super::circuits::iriscode_ss_attach_data;
 
@@ -31,17 +34,13 @@ pub fn build_ligero_layer_spec(
     }
 }
 
-/// Return the circuit description, "private" input layer description and inputs for a trivial 2x2
-/// identity matrix circuit.
-pub fn small_circuit_description_and_inputs(
+pub fn build_small_circuit_and_data<F: Field, const BASE: u64>(
     use_private_layers: bool,
-) -> Result<ProvableCircuit<Fr>> {
-    const BASE: u64 = 16;
-
+) -> Result<(Circuit<F>, IriscodeCircuitData<F>)> {
     // rewirings for the 2x2 identity matrix
     let wirings = &[(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
     let reroutings = wirings_to_reroutings(wirings, 2, 2);
-    let circuit = build_iriscode_circuit_description::<Fr, 2, 2, 2, 1, 1, 1, BASE, 2>(
+    let circuit = build_iriscode_circuit_description::<F, 2, 2, 2, 1, 1, 1, BASE, 2>(
         if use_private_layers {
             LayerVisibility::Private
         } else {
@@ -50,12 +49,51 @@ pub fn small_circuit_description_and_inputs(
         vec![reroutings.clone().to_vec()],
         reroutings,
     )?;
-    let data = build_iriscode_circuit_data::<Fr, 2, 2, 1, 1, 1, BASE, 2>(
+
+    let data = build_iriscode_circuit_data::<F, 2, 2, 1, 1, 1, BASE, 2>(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
         &[1, 0, 6, -1],
         &[1, 0, 1, 0],
         vec![wirings.clone().to_vec()],
         wirings,
     );
-    iriscode_ss_attach_data::<Fr, BASE>(circuit, data)
+
+    Ok((circuit, data))
+}
+
+/// Return a provable circuit description with public inputs for a trivial 2x2 identity matrix
+/// circuit.
+pub fn small_circuit_description_and_public_inputs() -> Result<ProvableCircuit<Fr>> {
+    const BASE: u64 = 16;
+
+    let (circuit, data) = build_small_circuit_and_data::<_, BASE>(false)?;
+
+    let circuit = iriscode_ss_attach_data::<Fr, BASE>(circuit, data)?;
+
+    circuit.finalize()
+}
+
+/// Return a provable circuit description with public inputs for a trivial 2x2 identity matrix
+/// circuit.
+pub fn small_circuit_description_and_public_inputs_hyrax(
+) -> Result<HyraxProvableCircuit<Bn256Point>> {
+    const BASE: u64 = 16;
+
+    let (circuit, data) = build_small_circuit_and_data::<_, BASE>(false)?;
+
+    let circuit = iriscode_ss_attach_data::<_, BASE>(circuit, data)?;
+
+    circuit.finalize_hyrax()
+}
+
+/// Return a provable circuit description with hyrax private inputs for a trivial 2x2 identity matrix
+/// circuit.
+pub fn small_circuit_description_and_private_inputs() -> Result<HyraxProvableCircuit<Bn256Point>> {
+    const BASE: u64 = 16;
+
+    let (circuit, data) = build_small_circuit_and_data::<Fr, BASE>(false)?;
+
+    let circuit = iriscode_ss_attach_data::<Fr, BASE>(circuit, data)?;
+
+    circuit.finalize_hyrax::<Bn256Point>()
 }

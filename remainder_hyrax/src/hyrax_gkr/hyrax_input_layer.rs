@@ -277,7 +277,7 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
 
 /// The prover's view of the commitment to the input layer, which includes the
 /// blinding factors and the plaintext values.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxProverInputCommitment<C: PrimeOrderCurve> {
     /// The plaintext values

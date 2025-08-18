@@ -18,6 +18,7 @@ use remainder_shared_types::{
 };
 
 use remainder_hyrax::{
+    circuit_layout::HyraxProvableCircuit,
     hyrax_gkr::{verify_hyrax_proof, HyraxProof},
     utils::vandermonde::VandermondeInverse,
 };
@@ -36,7 +37,12 @@ mod tests {
         },
         zk_iriscode_ss::{
             circuits::iriscode_ss_attach_data,
-            v3::{circuit_description_and_input_builder, load_worldcoin_data},
+            test_helpers::{
+                small_circuit_description_and_private_inputs,
+                small_circuit_description_and_public_inputs,
+                small_circuit_description_and_public_inputs_hyrax,
+            },
+            v3::{circuit_description, load_worldcoin_data},
         },
     };
     use remainder_hyrax::{
@@ -44,11 +50,15 @@ mod tests {
         utils::vandermonde::VandermondeInverse,
     };
     use remainder_shared_types::{
-        config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
+        config::{
+            global_config::global_prover_enable_bit_packing, GKRCircuitProverConfig,
+            GKRCircuitVerifierConfig,
+        },
         curves::PrimeOrderCurve,
-        halo2curves::bn256::G1 as Bn256Point,
+        halo2curves::bn256::{Bn256, G1 as Bn256Point},
         pedersen::PedersenCommitter,
-        perform_function_under_prover_config, perform_function_under_verifier_config, Fr, Scalar,
+        perform_function_under_prover_config, perform_function_under_verifier_config, Base, Fr,
+        Scalar,
     };
 
     use super::{
@@ -61,17 +71,15 @@ mod tests {
 
     #[test]
     fn test_small_circuit_both_layers_public() {
-        use crate::zk_iriscode_ss::test_helpers::small_circuit_description_and_inputs;
-        let provable_circuit = small_circuit_description_and_inputs(false).unwrap();
+        let provable_circuit = small_circuit_description_and_public_inputs_hyrax().unwrap();
         test_iriscode_circuit_with_public_layers_helper(provable_circuit);
     }
 
     #[test]
     /// Test a small version of the iriscode circuit with a Hyrax input layer.
     fn test_small_circuit_with_hyrax_layer() {
-        use crate::zk_iriscode_ss::test_helpers::small_circuit_description_and_inputs;
-        let (ic_circuit_desc, inputs) = small_circuit_description_and_inputs();
-        test_iriscode_circuit_with_hyrax_helper(ic_circuit_desc, inputs);
+        let ic_circuit = small_circuit_description_and_private_inputs().unwrap();
+        test_iriscode_circuit_with_hyrax_helper(ic_circuit);
     }
 
     #[ignore] // Takes a long time to run
@@ -83,7 +91,7 @@ mod tests {
         use sha256::digest as sha256_digest;
         // Get the proof description and input builder.
         // This is shared by the prover and the verifier.
-        let (ic_circuit_desc, input_builder_metadata) = circuit_description_and_input_builder();
+        let ic_circuit = circuit_description().unwrap();
 
         // Create the Pedersen committer using the same reference string and parameters as on the Orb
         let committer: PedersenCommitter<Bn256Point> =
@@ -120,14 +128,23 @@ mod tests {
 
                 // Load the inputs to the circuit (these are all MLEs, i.e. in the clear).
                 let data = load_worldcoin_data::<Fr>(serialized_image_commitment.image, is_mask);
-                let inputs = iriscode_ss_attach_data(&input_builder_metadata, data);
+                let circuit = iriscode_ss_attach_data::<
+                    _,
+                    { crate::zk_iriscode_ss::parameters::BASE },
+                >(ic_circuit.clone(), data)
+                .unwrap();
 
+                /*
                 // Extract the auxiliary public inputs for later use by the verifier.
                 // In production, the verifier will have these already.
                 let auxiliary_mle = inputs
                     .get(&ic_circuit_desc.auxiliary_input_layer.layer_id)
                     .unwrap()
                     .clone();
+                */
+
+                let provable_circuit = circuit.finalize_hyrax().unwrap();
+                let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
 
                 // Prove the iriscode circuit with the image precommit.
                 // In production, the prover needs to retain `prover_code_commit`, since it will need this
@@ -135,8 +152,7 @@ mod tests {
                 let (proof, proof_config, _image_commit) = perform_function_under_prover_config!(
                     prove_with_image_precommit,
                     &gkr_circuit_prover_config,
-                    &ic_circuit_desc,
-                    inputs,
+                    provable_circuit,
                     image_commitment.into(),
                     &committer,
                     blinding_rng,
@@ -148,8 +164,7 @@ mod tests {
                         verify_v3_iriscode_proof_and_hash,
                         &gkr_circuit_verifier_config,
                         &proof,
-                        &ic_circuit_desc,
-                        &auxiliary_mle,
+                        &verifiable_circuit,
                         &expected_commitment_hash,
                         &committer,
                         &proof_config
@@ -175,12 +190,15 @@ mod tests {
 /// Test the iriscode circuit v3 with a Hyrax input layer in either the mask (true) or iris (false)
 /// case.
 pub fn test_iriscode_v3_with_hyrax_helper(mask: bool) {
-    let (desc, inputs) = circuit_description_and_inputs(mask, None);
-    test_iriscode_circuit_with_hyrax_helper(desc, inputs);
+    let circuit = circuit_description_and_inputs(mask, None).unwrap();
+    let provable_circuit = circuit.finalize_hyrax().unwrap();
+    test_iriscode_circuit_with_hyrax_helper(provable_circuit);
 }
 
 /// Helper function for testing an iriscode circuit (with any data) with a Hyrax input layer.
-pub fn test_iriscode_circuit_with_public_layers_helper(provable_circuit: ProvableCircuit<Scalar>) {
+pub fn test_iriscode_circuit_with_public_layers_helper(
+    provable_circuit: HyraxProvableCircuit<Bn256Point>,
+) {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
     let blinding_rng = &mut rand::thread_rng();
@@ -198,13 +216,13 @@ pub fn test_iriscode_circuit_with_public_layers_helper(provable_circuit: Provabl
     let gkr_circuit_verifier_config =
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
+    let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
+
     // --- Compute actual Hyrax proof ---
     let (proof, proof_config) = perform_function_under_prover_config!(
         HyraxProof::prove,
         &gkr_circuit_prover_config,
-        provable_circuit.get_inputs_ref(),
-        &HashMap::new(),
-        provable_circuit.get_gkr_circuit_description_ref(),
+        provable_circuit,
         &committer,
         blinding_rng,
         converter,
@@ -219,8 +237,7 @@ pub fn test_iriscode_circuit_with_public_layers_helper(provable_circuit: Provabl
         verify_hyrax_proof,
         &gkr_circuit_verifier_config,
         &proof,
-        &HashMap::new(),
-        provable_circuit.get_gkr_circuit_description_ref(),
+        &verifiable_circuit,
         &committer,
         &mut transcript,
         &proof_config
@@ -230,19 +247,12 @@ pub fn test_iriscode_circuit_with_public_layers_helper(provable_circuit: Provabl
 /// Helper function for testing an iriscode circuit (with any data) with Hyrax input
 /// layers for the private data.
 pub fn test_iriscode_circuit_with_hyrax_helper(
+    provable_circuit: HyraxProvableCircuit<Bn256Point>,
+    /*
     ic_circuit_desc: IriscodeCircuitDescription<Scalar>,
     inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
+    */
 ) {
-    // Print the layer IDs for debugging.
-    println!("Input layer ids:");
-    println!("Image: {:?}", ic_circuit_desc.image_input_layer.layer_id);
-    println!("Digits: {:?}", ic_circuit_desc.digits_input_layer.layer_id);
-    println!(
-        "Auxiliary: {:?}",
-        ic_circuit_desc.auxiliary_input_layer.layer_id
-    );
-    println!("Code: {:?}", ic_circuit_desc.code_input_layer.layer_id);
-
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
     let blinding_rng = &mut rand::thread_rng();
@@ -253,6 +263,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
         "modulus modulus modulus modulus modulus",
         None,
     );
+    /*
     // Set up Hyrax input layer specification.
     let mut prover_hyrax_input_layers = HashMap::new();
     prover_hyrax_input_layers.insert(
@@ -267,6 +278,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
         ic_circuit_desc.digits_input_layer.layer_id,
         (ic_circuit_desc.digits_input_layer.clone().into(), None),
     );
+    */
     // Prove.
     // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
     let gkr_circuit_prover_config =
@@ -274,14 +286,14 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
     let gkr_circuit_verifier_config =
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
+    let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
+
     // --- Compute actual Hyrax proof ---
     let prove_timer = start_timer!(|| "Proving");
     let (proof, proof_config) = perform_function_under_prover_config!(
         HyraxProof::prove,
         &gkr_circuit_prover_config,
-        &inputs,
-        &prover_hyrax_input_layers,
-        &ic_circuit_desc.circuit_description,
+        provable_circuit,
         &committer,
         blinding_rng,
         converter,
@@ -292,6 +304,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
     // Verify.
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
+    /*
     let mut verifier_hyrax_input_layers = HashMap::new();
     verifier_hyrax_input_layers.insert(
         ic_circuit_desc.image_input_layer.layer_id,
@@ -305,13 +318,13 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
         ic_circuit_desc.digits_input_layer.layer_id,
         ic_circuit_desc.digits_input_layer.clone().into(),
     );
+    */
     let verification_timer = start_timer!(|| "verification timer");
     perform_function_under_verifier_config!(
         verify_hyrax_proof,
         &gkr_circuit_verifier_config,
         &proof,
-        &verifier_hyrax_input_layers,
-        &ic_circuit_desc.circuit_description,
+        &verifiable_circuit,
         &committer,
         &mut transcript,
         &proof_config
