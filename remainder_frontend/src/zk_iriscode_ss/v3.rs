@@ -78,10 +78,9 @@ pub fn load_worldcoin_data<F: Field>(
     }
 }
 
-/// Return the [IriscodeCircuitDescription] and the input builder for the v3 iris code circuit, in either
-/// the mask (true) or iris (false) case.
+/// Return the [Circuit] for the v3 iris code circuit.
 #[allow(clippy::type_complexity)]
-pub fn circuit_description_and_input_builder() -> Result<Circuit<Fr>> {
+pub fn circuit_description() -> Result<Circuit<Fr>> {
     let image_strip_reroutings = IMAGE_STRIP_WIRINGS
         .iter()
         .map(|wirings| {
@@ -108,7 +107,7 @@ pub fn circuit_description_and_input_builder() -> Result<Circuit<Fr>> {
         BASE,
         NUM_DIGITS,
     >(
-        LayerVisibility::Public,
+        LayerVisibility::Private,
         image_strip_reroutings,
         lh_matrix_reroutings,
     )
@@ -120,12 +119,12 @@ pub fn circuit_description_and_input_builder() -> Result<Circuit<Fr>> {
 /// # Example:
 /// ```
 /// use remainder_frontend::zk_iriscode_ss::v3::circuit_description_and_inputs;
-/// let provable_circuit_result = circuit_description_and_inputs(false, None);
+/// let circuit_result = circuit_description_and_inputs(false, None);
 /// ```
 pub fn circuit_description_and_inputs(
     is_mask: bool,
     image_bytes: Option<Vec<u8>>,
-) -> Result<ProvableCircuit<Fr>> {
+) -> Result<Circuit<Fr>> {
     let image_bytes = if let Some(image_bytes) = image_bytes {
         image_bytes
     } else {
@@ -136,7 +135,7 @@ pub fn circuit_description_and_inputs(
         dbg!(&image_path);
         read_bytes_from_file(&image_path)
     };
-    let circuit = circuit_description_and_input_builder().unwrap();
+    let circuit = circuit_description().unwrap();
     let data = load_worldcoin_data::<Fr>(image_bytes, is_mask);
     iriscode_ss_attach_data::<Fr, BASE>(circuit, data)
 }

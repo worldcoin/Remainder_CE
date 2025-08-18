@@ -242,7 +242,7 @@ pub fn build_iriscode_circuit_description<
 pub fn iriscode_ss_attach_data<F: Field, const BASE: u64>(
     mut circuit: Circuit<F>,
     iriscode_data: IriscodeCircuitData<F>,
-) -> Result<ProvableCircuit<F>> {
+) -> Result<Circuit<F>> {
     circuit.set_input("Image to reroute", iriscode_data.to_reroute);
     circuit.set_input(
         "RH Multiplicand of MatMult",
@@ -268,5 +268,5 @@ pub fn iriscode_ss_attach_data<F: Field, const BASE: u64>(
         MultilinearExtension::new((0..BASE).map(F::from).collect()),
     );
 
-    circuit.finalize()
+    Ok(circuit)
 }

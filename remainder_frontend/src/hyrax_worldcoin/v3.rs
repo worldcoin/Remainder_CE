@@ -3,10 +3,13 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::hash::Hash;
 
-use crate::zk_iriscode_ss::{
-    circuits::{InputBuilderMetadata, IriscodeCircuitDescription},
-    parameters::IRISCODE_COMMIT_LOG_NUM_COLS,
-    v3::{circuit_description_and_inputs, load_worldcoin_data},
+use crate::{
+    layouter::builder::Circuit,
+    zk_iriscode_ss::{
+        circuits::IriscodeCircuitDescription,
+        parameters::IRISCODE_COMMIT_LOG_NUM_COLS,
+        v3::{circuit_description_and_inputs, load_worldcoin_data},
+    },
 };
 use clap::error;
 use rand::rngs::ThreadRng;
@@ -16,15 +19,16 @@ use remainder::layer::LayerId;
 use remainder::mle::evals::MultilinearExtension;
 use remainder::prover::GKRCircuitDescription;
 use remainder::utils::mle::pad_with;
-use remainder_shared_types::config::{
-    GKRCircuitProverConfig, GKRCircuitVerifierConfig, ProofConfig,
-};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::halo2curves::{bn256::G1 as Bn256Point, group::Group};
 use remainder_shared_types::pedersen::PedersenCommitter;
 use remainder_shared_types::transcript::ec_transcript::{ECTranscript, ECTranscriptTrait};
 use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
 use remainder_shared_types::transcript::Transcript;
+use remainder_shared_types::{
+    config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig, ProofConfig},
+    halo2curves::grumpkin::G1,
+};
 use remainder_shared_types::{
     perform_function_under_prover_config, perform_function_under_verifier_config, Fq, Fr,
 };
@@ -34,11 +38,17 @@ use zeroize::Zeroize;
 
 use super::orb::SerializedImageCommitment;
 use crate::hyrax_worldcoin::orb::{IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING};
-use remainder_hyrax::hyrax_gkr::hyrax_input_layer::{
-    commit_to_input_values, HyraxInputLayerDescription, HyraxProverInputCommitment,
-};
-use remainder_hyrax::hyrax_gkr::{self, verify_hyrax_proof, HyraxProof};
 use remainder_hyrax::utils::vandermonde::VandermondeInverse;
+use remainder_hyrax::{
+    circuit_layout::HyraxProvableCircuit,
+    hyrax_gkr::{self, verify_hyrax_proof, HyraxProof},
+};
+use remainder_hyrax::{
+    circuit_layout::HyraxVerifiableCircuit,
+    hyrax_gkr::hyrax_input_layer::{
+        commit_to_input_values, HyraxInputLayerDescription, HyraxProverInputCommitment,
+    },
+};
 use sha256::digest as sha256_digest;
 use thiserror::Error;
 
@@ -71,12 +81,16 @@ pub enum IriscodeError {
 /// This is a helper function for verifying the v3 masked iriscode is correct.
 pub(crate) fn verify_v3_iriscode_proof_and_hash(
     proof: &HyraxProof<Bn256Point>,
+    verifiable_circuit: &HyraxVerifiableCircuit<Bn256Point>,
+    /*
     ic_circuit_desc: &IriscodeCircuitDescription<Fr>,
     auxiliary_mle: &MultilinearExtension<Fr>,
+    */
     expected_commitment_hash: &str,
     committer: &PedersenCommitter<Bn256Point>,
     proof_config: &ProofConfig,
 ) -> Result<(Vec<Bn256Point>, Vec<Bn256Point>)> {
+    /*
     let mut hyrax_input_layers = HashMap::new();
 
     // The image, with the precommit (must use the same number of columns as were used at the time of committing!)
@@ -106,6 +120,7 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
         ic_circuit_desc.digits_input_layer.layer_id,
         ic_circuit_desc.digits_input_layer.clone().into(),
     );
+    */
 
     // Create a fresh transcript.
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -114,13 +129,13 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
     // Verify the relationship between iris/mask code and image.
     verify_hyrax_proof(
         &proof,
-        &hyrax_input_layers,
-        &ic_circuit_desc.circuit_description,
+        &verifiable_circuit,
         &committer,
         &mut transcript,
         proof_config,
     );
 
+    /*
     // Extract the iris/mask code commitment from the proof.
     let code_commitment = proof
         .hyrax_input_proofs
@@ -138,6 +153,9 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
         .unwrap()
         .input_commitment
         .clone();
+    */
+    let code_commitment = todo!();
+    let image_commitment: Vec<Bn256Point> = todo!();
 
     // Check that the image commitment matches the expected hash.
     let commitment_hash = sha256_digest(
@@ -163,8 +181,11 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
 /// ///
 /// This function is assumed to be called *with the prover config set*!
 pub fn prove_with_image_precommit(
+    provable_circuit: HyraxProvableCircuit<Bn256Point>,
+    /*
     ic_circuit_desc: &IriscodeCircuitDescription<Fr>,
     inputs: HashMap<LayerId, MultilinearExtension<Fr>>,
+    */
     image_precommit: HyraxProverInputCommitment<Bn256Point>,
     committer: &PedersenCommitter<Bn256Point>,
     blinding_rng: &mut (impl CryptoRng + RngCore),
@@ -183,6 +204,7 @@ pub fn prove_with_image_precommit(
         ),
     > = HashMap::new();
 
+    /*
     // The image, with the precommit (must use the same number of columns as were used at the time of committing!)
     let image_hyrax_input_layer_desc = HyraxInputLayerDescription {
         layer_id: ic_circuit_desc.image_input_layer.layer_id,
@@ -220,6 +242,7 @@ pub fn prove_with_image_precommit(
         ic_circuit_desc.digits_input_layer.layer_id,
         (ic_circuit_desc.digits_input_layer.clone().into(), None),
     );
+    */
 
     // Create a fresh transcript.
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -227,15 +250,14 @@ pub fn prove_with_image_precommit(
 
     // Prove the relationship between iris/mask code and image.
     let (proof, proof_config) = HyraxProof::prove(
-        &inputs,
-        &hyrax_input_layers,
-        &ic_circuit_desc.circuit_description,
+        provable_circuit,
         &committer,
         blinding_rng,
         converter,
         &mut transcript,
     );
 
+    /*
     // Zeroize each value in the HashMap
     for (_, mut mle) in inputs {
         mle.zeroize();
@@ -247,8 +269,9 @@ pub fn prove_with_image_precommit(
         .unwrap();
 
     image_precommit.as_mut().unwrap().zeroize();
+    */
 
-    (proof, proof_config, code_commit)
+    (proof, proof_config, todo!() /* code_commit */)
 }
 
 #[derive(Error, Debug)]
@@ -280,7 +303,7 @@ pub struct V3Prover {
     #[serde(default = "VandermondeInverse::new")]
     converter: VandermondeInverse<Scalar>,
 
-    circuit: CircuitAndAuxMles<Fr>,
+    circuit: Circuit<Fr>,
 
     prover_config: GKRCircuitProverConfig,
 
@@ -296,7 +319,7 @@ impl V3Prover {
     }
 
     /// Generate an empty v3 prover with the given configuration.
-    pub fn new(prover_config: GKRCircuitProverConfig, circuit: CircuitAndAuxMles<Fr>) -> Self {
+    pub fn new(prover_config: GKRCircuitProverConfig, circuit: Circuit<Fr>) -> Self {
         Self {
             committer: Self::default_committer(),
             converter: VandermondeInverse::new(),
@@ -349,7 +372,8 @@ impl V3Prover {
         // Load the inputs to the circuit (these are all MLEs, i.e. in the clear).
         let data = load_worldcoin_data::<Fr>(image_bytes, is_mask);
 
-        let inputs = iriscode_ss_attach_data(self.circuit.get_input_builder_metadata(), data);
+        let inputs =
+            iriscode_ss_attach_data(self.circuit.get_input_builder_metadata(), data).unwrap();
 
         // Prove the iriscode circuit with the image precommit.
         let (proof, _, code_commit) = prove_with_image_precommit(
