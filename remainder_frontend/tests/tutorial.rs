@@ -9,7 +9,7 @@ use tracing_subscriber::{self};
 fn build_circuit() -> Circuit<Fr> {
     let mut builder = CircuitBuilder::<Fr>::new();
 
-    let input_layer = builder.add_input_layer(LayerVisibility::Private);
+    let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Private);
 
     let lhs = builder.add_input_shred("LHS", 2, &input_layer);
     let rhs = builder.add_input_shred("RHS", 2, &input_layer);
@@ -29,7 +29,7 @@ fn build_circuit() -> Circuit<Fr> {
 fn build_circuit_concise() -> Circuit<Fr> {
     let mut builder = CircuitBuilder::<Fr>::new();
 
-    let input_layer = builder.add_input_layer(LayerVisibility::Public);
+    let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
 
     let lhs = builder.add_input_shred("LHS", 2, &input_layer);
     let rhs = builder.add_input_shred("RHS", 2, &input_layer);

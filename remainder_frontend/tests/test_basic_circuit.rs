@@ -9,7 +9,7 @@ use remainder_shared_types::Fr;
 fn test_basic_circuit() {
     let mut builder = CircuitBuilder::<Fr>::new();
 
-    let input_layer = builder.add_input_layer(LayerVisibility::Public);
+    let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
 
     let input_shred_1 = builder.add_input_shred("Input 1", 2, &input_layer);
     let input_shred_1_data = MultilinearExtension::new_from_evals(Evaluations::new(

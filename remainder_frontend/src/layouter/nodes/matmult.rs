@@ -130,7 +130,8 @@ mod test {
         let mut builder = CircuitBuilder::<F>::new();
 
         // All inputs are public inputs
-        let public_input_layer_node = builder.add_input_layer(LayerVisibility::Public);
+        let public_input_layer_node =
+            builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
 
         // Inputs to the circuit include the "matrix A MLE" and the "matrix B MLE"
         let matrix_a_mle_shred = builder.add_input_shred(

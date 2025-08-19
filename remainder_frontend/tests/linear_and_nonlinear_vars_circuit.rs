@@ -49,7 +49,7 @@ fn build_linear_and_nonlinear_vars_test_circuit<F: Field>(
     let mut builder = CircuitBuilder::<F>::new();
 
     // All inputs are public
-    let public_input_layer_node = builder.add_input_layer(LayerVisibility::Public);
+    let public_input_layer_node = builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
 
     // "Semantic" circuit inputs
     let selector_mle_shred = builder.add_input_shred(

@@ -10,7 +10,6 @@ use crate::utils::vandermonde::VandermondeInverse;
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 use rand::RngCore;
-use remainder::expression::abstract_expr::ExprBuilder;
 use remainder::expression::circuit_expr::ExprDescription;
 use remainder::expression::generic_expr::Expression;
 use remainder::expression::prover_expr::ProverExpr;
@@ -2007,7 +2006,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     let squaring_sector = builder.add_sector(&[&input_shred], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
-        ExprBuilder::products(vec![mle, mle])
+        mle * mle
     });
 
     // Middle layer 2: subtract middle layer 1 from itself.
@@ -2095,7 +2094,7 @@ fn build_small_regular_test_circuit<F: Field>(
     let squaring_sector = builder.add_sector(&[&input_mle_shred], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
-        ExprBuilder::products(vec![mle, mle])
+        mle * mle
     });
 
     // Middle layer 2: subtract middle layer 1 from itself.
@@ -2225,7 +2224,7 @@ fn build_medium_regular_test_circuit<F: Field>(
     let squaring_sector = builder.add_sector(&[&input_mle_shred], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
-        ExprBuilder::products(vec![mle, mle])
+        mle * mle
     });
 
     // Middle layer 2: Create a layer builder which is sel(square_output + square_output, square_output)
@@ -2430,7 +2429,7 @@ fn buld_identity_regular_test_circuit<F: Field>(
     let squaring_sector = builder.add_sector(&[&input_mle_shred], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
-        ExprBuilder::products(vec![mle, mle])
+        mle * mle
     });
 
     // Create identity gate layer
@@ -2690,7 +2689,7 @@ fn build_identity_matmult_regular_test_circuit<F: Field>(
     let squaring_sector = builder.add_sector(&[&input_mle_shred], |mle_vec| {
         assert_eq!(mle_vec.len(), 1);
         let mle = mle_vec[0];
-        ExprBuilder::products(vec![mle, mle])
+        mle * mle
     });
 
     // Create identity gate layer A
