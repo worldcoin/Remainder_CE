@@ -131,7 +131,8 @@ mod test {
         });
 
         // All inputs are public inputs
-        let public_input_layer_node = builder.add_input_layer(LayerVisibility::Public);
+        let public_input_layer_node =
+            builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
 
         // Inputs to the circuit include the "primary MLE" and the "shifted MLE"
         let mle_shred = builder.add_input_shred(

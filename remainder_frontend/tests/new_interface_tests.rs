@@ -49,7 +49,8 @@ mod tests {
         let mut builder = CircuitBuilder::<F>::new();
 
         // All inputs are public
-        let public_input_layer_node = builder.add_input_layer(LayerVisibility::Public);
+        let public_input_layer_node =
+            builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
 
         // Circuit inputs as semantic "shreds"
         let first_mle_shred =
@@ -117,7 +118,8 @@ mod tests {
         let mut builder = CircuitBuilder::<F>::new();
 
         // All inputs are public
-        let public_input_layer_node = builder.add_input_layer(LayerVisibility::Public);
+        let public_input_layer_node =
+            builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
 
         // Circuit inputs as semantic "shreds"
         let first_mle_shred =
@@ -177,7 +179,8 @@ mod tests {
         let mut builder = CircuitBuilder::<F>::new();
 
         // All inputs are public
-        let public_input_layer_node = builder.add_input_layer(LayerVisibility::Public);
+        let public_input_layer_node =
+            builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
 
         // Circuit inputs as semantic "shreds"
         let dataparallel_first_mle_shred = builder.add_input_shred(
@@ -328,7 +331,8 @@ mod tests {
         let mut builder = CircuitBuilder::<F>::new();
 
         // All inputs are public
-        let public_input_layer_node = builder.add_input_layer(LayerVisibility::Public);
+        let public_input_layer_node =
+            builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
 
         // Circuit inputs as semantic "shreds"
         let dataparallel_first_mle_shred = builder.add_input_shred(
@@ -425,7 +429,7 @@ mod tests {
 
         let neg_mle = MultilinearExtension::new(mle.iter().map(|elem| -elem).collect());
 
-        let input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
         let mle_input_shred =
             builder.add_input_shred("Input MLE", mle.clone().num_vars(), &input_layer);
         let neg_mle_input_shred =
@@ -484,7 +488,7 @@ mod tests {
         let neg_mle_dataparallel =
             MultilinearExtension::new(mle_dataparallel.iter().map(|elem| -elem).collect());
 
-        let input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
         let dataparallel_mle_input_shred = builder.add_input_shred(
             "Dataparallel Input MLE",
             NUM_DATAPARALLEL_BITS + NUM_FREE_BITS,
@@ -545,7 +549,7 @@ mod tests {
             MultilinearExtension::new((0..size).map(|_| Fr::from(rng.gen::<u64>())).collect());
         let neg_mle = MultilinearExtension::new(vec![mle.first().neg()]);
 
-        let input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
         let mle_input_shred = builder.add_input_shred("Input MLE", NUM_FREE_BITS, &input_layer);
         let neg_mle_input_shred = builder.add_input_shred("Neg Input MLE", 0, &input_layer);
 
@@ -587,7 +591,7 @@ mod tests {
 
         let neg_mle_2 = MultilinearExtension::new(mle_2.iter().map(|elem| -elem).collect());
 
-        let input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
         let mle_1_input_shred = builder.add_input_shred("Input MLE 1", NUM_FREE_VARS, &input_layer);
         let mle_2_input_shred = builder.add_input_shred("Input MLE 2", NUM_FREE_VARS, &input_layer);
         let neg_mle_2_input_shred =
@@ -664,7 +668,7 @@ mod tests {
         let neg_mle_dataparallel =
             MultilinearExtension::new(mle_dataparallel.iter().map(|elem| -elem).collect());
 
-        let input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
         let dataparallel_mle_input_shred = builder.add_input_shred(
             "Dataparallel Input MLE",
             NUM_DATAPARALLEL_BITS + NUM_FREE_BITS,
@@ -717,7 +721,7 @@ mod tests {
         let neg_mle_2_dataparallel =
             MultilinearExtension::new(mle_2_dataparallel.iter().map(|elem| -elem).collect());
 
-        let input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
         let mle_1_input_shred = builder.add_input_shred(
             "Input MLE 1",
             NUM_FREE_VARS + NUM_DATAPARALLEL_VARS,

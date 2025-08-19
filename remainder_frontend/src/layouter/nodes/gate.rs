@@ -158,7 +158,7 @@ mod test {
             nonzero_gates.push((idx, idx, idx));
         });
 
-        let input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
 
         let input_shred_pos =
             builder.add_input_shred("Positive Input", NUM_FREE_VARS, &input_layer);
@@ -208,7 +208,7 @@ mod test {
             nonzero_gates.push((idx, idx, idx));
         });
 
-        let input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
 
         let input_shred_pos = builder.add_input_shred(
             "Positive Input",

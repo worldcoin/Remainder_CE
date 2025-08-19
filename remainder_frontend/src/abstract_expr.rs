@@ -58,26 +58,6 @@ pub enum AbstractExpression<F: Field> {
     Scaled(Box<AbstractExpression<F>>, F),
 }
 
-/// Trait used to support operators between any structs that can be turned into abstract expression
-pub trait IntoExpr<F: Field> {
-    fn into_expr(self) -> AbstractExpression<F>;
-}
-
-impl<F: Field> IntoExpr<F> for AbstractExpression<F> {
-    fn into_expr(self) -> AbstractExpression<F> {
-        self
-    }
-}
-
-impl<F: Field> IntoExpr<F> for F {
-    fn into_expr(self) -> AbstractExpression<F> {
-        AbstractExpression::from(self)
-    }
-}
-
-/// alias for circuit building
-pub type ExprBuilder<F> = AbstractExpression<F>;
-
 //  comments for Phase II:
 //  This will be the the circuit "pre-data" stage
 //  will take care of building a prover expression
@@ -177,10 +157,10 @@ impl<F: Field> AbstractExpression<F> {
     }
 
     /// Call [Self::select] sequentially
-    pub fn select_seq<E: Clone + IntoExpr<F>>(expressions: Vec<E>) -> Self {
-        let mut base = expressions[0].clone().into_expr();
+    pub fn select_seq<E: Clone + Into<AbstractExpression<F>>>(expressions: Vec<E>) -> Self {
+        let mut base = expressions[0].clone().into();
         for e in expressions.into_iter().skip(1) {
-            base = Self::select(base, e.into_expr());
+            base = Self::select(base, e.into());
         }
         base
     }
@@ -189,12 +169,12 @@ impl<F: Field> AbstractExpression<F> {
     /// by creating a binary tree of Selector Expressions.
     /// The order of the leaves is the order of the input expressions.
     /// (Note that this is very different from [Self::select_seq].)
-    pub fn binary_tree_selector<E: IntoExpr<F>>(expressions: Vec<E>) -> Self {
+    pub fn binary_tree_selector<E: Into<AbstractExpression<F>>>(expressions: Vec<E>) -> Self {
         // Ensure length is a power of two
         assert!(expressions.len().is_power_of_two());
         let mut expressions = expressions
             .into_iter()
-            .map(|e| e.into_expr())
+            .map(|e| e.into())
             .collect::<Vec<_>>();
         while expressions.len() > 1 {
             // Iterate over consecutive pairs of expressions, creating a new expression that selects between them
@@ -403,37 +383,37 @@ impl<F: Field> From<F> for AbstractExpression<F> {
 }
 
 /// implement the Add, Sub, and Mul traits for the Expression
-impl<F: Field, Rhs: IntoExpr<F>> Add<Rhs> for AbstractExpression<F> {
+impl<F: Field, Rhs: Into<AbstractExpression<F>>> Add<Rhs> for AbstractExpression<F> {
     type Output = AbstractExpression<F>;
     fn add(self, rhs: Rhs) -> Self::Output {
-        AbstractExpression::<F>::sum(self, rhs.into_expr())
+        AbstractExpression::sum(self, rhs.into())
     }
 }
-impl<F: Field, Rhs: IntoExpr<F>> AddAssign<Rhs> for AbstractExpression<F> {
+impl<F: Field, Rhs: Into<AbstractExpression<F>>> AddAssign<Rhs> for AbstractExpression<F> {
     fn add_assign(&mut self, rhs: Rhs) {
         *self = self.clone() + rhs;
     }
 }
 
-impl<F: Field, Rhs: IntoExpr<F>> Sub<Rhs> for AbstractExpression<F> {
+impl<F: Field, Rhs: Into<AbstractExpression<F>>> Sub<Rhs> for AbstractExpression<F> {
     type Output = AbstractExpression<F>;
     fn sub(self, rhs: Rhs) -> Self::Output {
-        AbstractExpression::<F>::sum(self, rhs.into_expr().neg())
+        AbstractExpression::sum(self, rhs.into().neg())
     }
 }
-impl<F: Field, Rhs: IntoExpr<F>> SubAssign<Rhs> for AbstractExpression<F> {
+impl<F: Field, Rhs: Into<AbstractExpression<F>>> SubAssign<Rhs> for AbstractExpression<F> {
     fn sub_assign(&mut self, rhs: Rhs) {
         *self = self.clone() - rhs;
     }
 }
 
-impl<F: Field, Rhs: IntoExpr<F>> Mul<Rhs> for AbstractExpression<F> {
+impl<F: Field, Rhs: Into<AbstractExpression<F>>> Mul<Rhs> for AbstractExpression<F> {
     type Output = AbstractExpression<F>;
     fn mul(self, rhs: Rhs) -> Self::Output {
-        AbstractExpression::<F>::mult(self, rhs.into_expr())
+        AbstractExpression::mult(self, rhs.into())
     }
 }
-impl<F: Field, Rhs: IntoExpr<F>> MulAssign<Rhs> for AbstractExpression<F> {
+impl<F: Field, Rhs: Into<AbstractExpression<F>>> MulAssign<Rhs> for AbstractExpression<F> {
     fn mul_assign(&mut self, rhs: Rhs) {
         *self = self.clone() * rhs;
     }

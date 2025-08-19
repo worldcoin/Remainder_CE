@@ -133,7 +133,7 @@ mod test {
     fn build_basic_split_circuit<F: Field>() -> Circuit<F> {
         let mut builder = CircuitBuilder::<F>::new();
 
-        let input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
         let input = builder.add_input_shred("Input", 3, &input_layer);
         let splits = builder.add_split_node(&input, 2);
         let subtractor = builder.add_sector(&splits[0] - &splits[1]);
@@ -173,7 +173,7 @@ mod test {
         let mut builder = CircuitBuilder::<F>::new();
 
         let num_vars = 2;
-        let input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
         let input0 = builder.add_input_shred("Input 0", num_vars, &input_layer);
         let input1 = builder.add_input_shred("Input 1", num_vars, &input_layer);
         let input2 = builder.add_input_shred("Input 2", num_vars, &input_layer);

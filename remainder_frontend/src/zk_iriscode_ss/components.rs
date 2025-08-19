@@ -1,6 +1,6 @@
 use remainder_shared_types::Field;
 
-use crate::abstract_expr::{AbstractExpression, ExprBuilder};
+use crate::abstract_expr::AbstractExpression;
 use crate::layouter::builder::{CircuitBuilder, NodeRef};
 
 /// Components for Zk iris code computation
@@ -21,7 +21,7 @@ impl ZkIriscodeComponent {
                 .iter()
                 .zip(rh_multiplicands)
                 .fold(AbstractExpression::constant(F::ZERO), |acc, (lh, rh)| {
-                    acc + ExprBuilder::products(vec![lh.id(), rh.id()])
+                    acc + AbstractExpression::products(vec![lh.id(), rh.id()])
                 }),
         );
         sector
@@ -49,7 +49,7 @@ mod test {
         let rh_vector_num_vars = 1;
         let lh_vector_num_vars = 0;
         // Vectors to be summed together
-        let rh_input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let rh_input_layer = builder.add_input_layer("RH", LayerVisibility::Public);
         let rh_input_shreds = (0..n_summands)
             .map(|i| {
                 builder.add_input_shred(
@@ -60,7 +60,7 @@ mod test {
             })
             .collect::<Vec<_>>();
         // Coefficients to multiple the vectors by
-        let lh_input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let lh_input_layer = builder.add_input_layer("LH", LayerVisibility::Public);
         let lh_input_shreds = (0..n_summands)
             .map(|i| {
                 builder.add_input_shred(

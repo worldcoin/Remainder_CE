@@ -16,7 +16,7 @@ use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    abstract_expr::{AbstractExpression, IntoExpr},
+    abstract_expr::AbstractExpression,
     layouter::{
         layouting::LayoutingError,
         nodes::{
@@ -77,13 +77,13 @@ impl<F: Field> NodeRef<F> {
     }
 }
 
-impl<F: Field> IntoExpr<F> for NodeRef<F> {
-    fn into_expr(self) -> AbstractExpression<F> {
+impl<F: Field> Into<AbstractExpression<F>> for NodeRef<F> {
+    fn into(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
-impl<F: Field> IntoExpr<F> for &NodeRef<F> {
-    fn into_expr(self) -> AbstractExpression<F> {
+impl<F: Field> Into<AbstractExpression<F>> for &NodeRef<F> {
+    fn into(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
@@ -111,13 +111,13 @@ impl<F: Field> InputLayerNodeRef<F> {
     }
 }
 
-impl<F: Field> IntoExpr<F> for InputLayerNodeRef<F> {
-    fn into_expr(self) -> AbstractExpression<F> {
+impl<F: Field> Into<AbstractExpression<F>> for InputLayerNodeRef<F> {
+    fn into(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
-impl<F: Field> IntoExpr<F> for &InputLayerNodeRef<F> {
-    fn into_expr(self) -> AbstractExpression<F> {
+impl<F: Field> Into<AbstractExpression<F>> for &InputLayerNodeRef<F> {
+    fn into(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
@@ -151,13 +151,13 @@ impl<F: Field> Into<NodeRef<F>> for FSNodeRef<F> {
     }
 }
 
-impl<F: Field> IntoExpr<F> for FSNodeRef<F> {
-    fn into_expr(self) -> AbstractExpression<F> {
+impl<F: Field> Into<AbstractExpression<F>> for FSNodeRef<F> {
+    fn into(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
-impl<F: Field> IntoExpr<F> for &FSNodeRef<F> {
-    fn into_expr(self) -> AbstractExpression<F> {
+impl<F: Field> Into<AbstractExpression<F>> for &FSNodeRef<F> {
+    fn into(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
@@ -382,15 +382,29 @@ impl<F: Field> CircuitBuilder<F> {
 }
 
 impl<F: Field> CircuitBuilder<F> {
-    /// Adds an [InputLayerNode] to the builder's node collection, intented to become a `layer_visibility`
-    /// input later during circuit instantiation.
+    /// Adds an [InputLayerNode] labeled `layer_label` to the builder's node collection, intented to
+    /// become a `layer_kind` input later during circuit instantiation.
+    ///
     /// Returns a weak pointer to the newly created layer node.
-    pub fn add_input_layer(&mut self, layer_visibility: LayerVisibility) -> InputLayerNodeRef<F> {
+    ///
+    /// Note that Input Layers and Input Shred have disjoint label scopes. A label has to be unique
+    /// only in its respective scope, regardless of the inclusive relation between shreds and input
+    /// layers.
+    ///
+    /// # Panics
+    /// If `layer_label` has already been used for an existing Input Layer.
+    pub fn add_input_layer(
+        &mut self,
+        layer_label: &str,
+        layer_visibility: LayerVisibility,
+    ) -> InputLayerNodeRef<F> {
         let node = Rc::new(InputLayerNode::new(None));
         let node_weak_ref = Rc::downgrade(&node);
 
+        let layer_id = node.input_layer_id();
+
         self.circuit_map
-            .add_input_layer(node.input_layer_id(), layer_visibility);
+            .add_input_layer(layer_id, layer_label, layer_visibility);
 
         self.node_to_ptr
             .insert(node.id(), NodeRef::new(node_weak_ref.clone()));
@@ -690,10 +704,28 @@ mod test {
 
     #[test]
     #[should_panic]
+    pub fn test_unique_input_layer_label() {
+        let mut builder = CircuitBuilder::<Fr>::new();
+
+        let _input_layer1 = builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
+        let _input_layer2 = builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
+    }
+
+    #[test]
+    pub fn test_scope_mixing() {
+        let mut builder = CircuitBuilder::<Fr>::new();
+
+        let input_layer = builder.add_input_layer("label", LayerVisibility::Public);
+
+        builder.add_input_shred("label", 1, &input_layer);
+    }
+
+    #[test]
+    #[should_panic]
     pub fn test_unique_input_shred_label() {
         let mut builder = CircuitBuilder::<Fr>::new();
 
-        let input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let input_layer = builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
         builder.add_input_shred("shred1", 1, &input_layer);
         builder.add_input_shred("shred1", 1, &input_layer);
     }
@@ -703,8 +735,8 @@ mod test {
     pub fn test_unique_input_shred_label2() {
         let mut builder = CircuitBuilder::<Fr>::new();
 
-        let input_layer1 = builder.add_input_layer(LayerVisibility::Public);
-        let input_layer2 = builder.add_input_layer(LayerVisibility::Private);
+        let input_layer1 = builder.add_input_layer("Input Layer 1", LayerVisibility::Public);
+        let input_layer2 = builder.add_input_layer("Input Layer 2", LayerVisibility::Private);
 
         builder.add_input_shred("shred1", 1, &input_layer1);
         builder.add_input_shred("shred1", 1, &input_layer2);
@@ -743,6 +775,7 @@ pub struct CircuitMap {
     state: CircuitMapState,
     shreds_in_layer: HashMap<LayerId, Vec<NodeId>>,
     label_to_shred_id: HashMap<String, NodeId>,
+    layer_label_to_layer_id: HashMap<String, LayerId>,
     layer_visibility: HashMap<LayerId, LayerVisibility>,
     node_location: HashMap<NodeId, (CircuitLocation, usize)>,
 }
@@ -756,6 +789,7 @@ impl CircuitMap {
             state: CircuitMapState::UnderConstruction,
             shreds_in_layer: HashMap::new(),
             label_to_shred_id: HashMap::new(),
+            layer_label_to_layer_id: HashMap::new(),
             layer_visibility: HashMap::new(),
             node_location: HashMap::new(),
         }
@@ -800,15 +834,24 @@ impl CircuitMap {
             .ok_or(anyhow!(LayoutingError::DanglingNodeId(*node_id)))
     }
 
-    /// Adds a new Input Layer with ID `layer_id`, and visibility defined by `layer_visibility`.
+    /// Adds a new Input Layer with ID `layer_id`, label `layer_label`, and visibility defined by
+    /// `layer_kind`.
     ///
     /// # Panics
-    /// If [self] is _not_ in state [CircuitMapState::UnderConstruction], or if a layer with ID
-    /// `layer_id` already exists.
-    pub fn add_input_layer(&mut self, layer_id: LayerId, layer_visibility: LayerVisibility) {
+    /// If [self] is _not_ in state [CircuitMapState::UnderConstruction], or if a layer already
+    /// exists with either an ID equal to `layer_id` or a label equal to `layer_label`.
+    pub fn add_input_layer(
+        &mut self,
+        layer_id: LayerId,
+        layer_label: &str,
+        layer_kind: LayerVisibility,
+    ) {
         assert_eq!(self.state, CircuitMapState::UnderConstruction);
         assert!(!self.layer_visibility.contains_key(&layer_id));
-        self.layer_visibility.insert(layer_id, layer_visibility);
+        assert!(!self.layer_label_to_layer_id.contains_key(layer_label));
+        self.layer_label_to_layer_id
+            .insert(String::from(layer_label), layer_id);
+        self.layer_visibility.insert(layer_id, layer_kind);
     }
 
     /// Adds a new Input Shred labeled `label` with node ID `shred_id`.
@@ -1159,11 +1202,11 @@ impl<F: Field> Circuit<F> {
 /// implement the Add, Sub, and Mul traits for NodeRef and FSNodeRef
 macro_rules! impl_add {
     ($Lhs:ty) => {
-        impl<F: Field, Rhs: IntoExpr<F>> Add<Rhs> for $Lhs {
+        impl<F: Field, Rhs: Into<AbstractExpression<F>>> Add<Rhs> for $Lhs {
             type Output = AbstractExpression<F>;
 
             fn add(self, rhs: Rhs) -> Self::Output {
-                self.expr() + rhs.into_expr()
+                self.expr() + rhs.into()
             }
         }
     };
@@ -1177,11 +1220,11 @@ impl_add!(&FSNodeRef<F>);
 
 macro_rules! impl_sub {
     ($Lhs:ty) => {
-        impl<F: Field, Rhs: IntoExpr<F>> Sub<Rhs> for $Lhs {
+        impl<F: Field, Rhs: Into<AbstractExpression<F>>> Sub<Rhs> for $Lhs {
             type Output = AbstractExpression<F>;
 
             fn sub(self, rhs: Rhs) -> Self::Output {
-                self.expr() - rhs.into_expr()
+                self.expr() - rhs.into()
             }
         }
     };
@@ -1195,11 +1238,11 @@ impl_sub!(&FSNodeRef<F>);
 
 macro_rules! impl_mul {
     ($Lhs:ty) => {
-        impl<F: Field, Rhs: IntoExpr<F>> Mul<Rhs> for $Lhs {
+        impl<F: Field, Rhs: Into<AbstractExpression<F>>> Mul<Rhs> for $Lhs {
             type Output = AbstractExpression<F>;
 
             fn mul(self, rhs: Rhs) -> Self::Output {
-                self.expr() * rhs.into_expr()
+                self.expr() * rhs.into()
             }
         }
     };
