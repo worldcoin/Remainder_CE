@@ -16,7 +16,7 @@ use super::{mle_enum::MleEnum, MleIndex};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(bound = "F: Field")]
 pub struct ZeroMle<F: Field> {
-    pub(crate) mle_indices: Vec<MleIndex<F>>,
+    pub(crate) mle_indices: Vec<MleIndex>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck).
     pub(crate) num_vars: usize,
@@ -29,7 +29,7 @@ pub struct ZeroMle<F: Field> {
 impl<F: Field> ZeroMle<F> {
     /// Constructs a new `ZeroMle` on `num_vars` variables with the
     /// appropriate `prefix_bits` for a layer with ID `layer_id`.
-    pub fn new(num_vars: usize, prefix_bits: Option<Vec<MleIndex<F>>>, layer_id: LayerId) -> Self {
+    pub fn new(num_vars: usize, prefix_bits: Option<Vec<MleIndex>>, layer_id: LayerId) -> Self {
         let mle_indices = prefix_bits
             .into_iter()
             .flatten()
@@ -47,8 +47,8 @@ impl<F: Field> ZeroMle<F> {
     }
 }
 
-impl<F: Field> AbstractMle<F> for ZeroMle<F> {
-    fn mle_indices(&self) -> &[MleIndex<F>] {
+impl<F: Field> AbstractMle for ZeroMle<F> {
+    fn mle_indices(&self) -> &[MleIndex] {
         &self.mle_indices
     }
 
@@ -61,10 +61,10 @@ impl<F: Field> AbstractMle<F> for ZeroMle<F> {
     }
 }
 impl<F: Field> Mle<F> for ZeroMle<F> {
-    fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<RawClaim<F>> {
+    fn fix_variable(&mut self, round_index: usize, challenge: F, bind_list: &mut Vec<Option<F>>) -> Option<RawClaim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::Indexed(round_index) {
-                mle_index.bind_index(challenge);
+                mle_index.bind_index(challenge, bind_list);
             }
         }
 
@@ -75,7 +75,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
             let send_claim = RawClaim::new(
                 self.mle_indices
                     .iter()
-                    .map(|index| index.val().unwrap())
+                    .map(|index| index.val(bind_list).unwrap())
                     .collect_vec(),
                 F::ZERO,
             );
@@ -85,8 +85,8 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         }
     }
 
-    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<RawClaim<F>> {
-        self.fix_variable(indexed_bit_index, point)
+    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F, bind_list: &mut Vec<Option<F>>) -> Option<RawClaim<F>> {
+        self.fix_variable(indexed_bit_index, point, bind_list)
     }
 
     fn index_mle_indices(&mut self, curr_index: usize) -> usize {
@@ -113,7 +113,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
 
     #[doc = " Mutates the MLE in order to set the prefix bits. This is needed when we"]
     #[doc = " are working with dataparallel circuits and new bits need to be added."]
-    fn add_prefix_bits(&mut self, _new_bits: Vec<MleIndex<F>>) {
+    fn add_prefix_bits(&mut self, _new_bits: Vec<MleIndex>) {
         todo!()
     }
 
@@ -130,7 +130,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
     }
 
     fn value(&self) -> F {
-        assert!(self.is_fully_bounded());
+        assert!(self.num_free_vars() == 0);
         F::ZERO
     }
 

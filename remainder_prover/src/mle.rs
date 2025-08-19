@@ -6,8 +6,8 @@ use core::fmt::Debug;
 use evals::EvaluationsIterator;
 use serde::{Deserialize, Serialize};
 
-use crate::{claims::RawClaim, layer::LayerId, mle::mle_enum::LiftTo};
-use remainder_shared_types::{extension_field::ExtensionField, Field};
+use crate::{claims::RawClaim, layer::LayerId};
+use remainder_shared_types::Field;
 
 use self::mle_enum::MleEnum;
 
@@ -39,7 +39,7 @@ pub mod verifier_mle;
 
 /// Abstract structure of an Mle
 /// Including its number of variables, indices,layer_id, but not evaluations
-pub trait AbstractMle<F: Field>:
+pub trait AbstractMle:
     Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize<'de>
 {
     /// Returns the number of free variables this Mle is defined on.
@@ -56,13 +56,43 @@ pub trait AbstractMle<F: Field>:
         })
     }
 
-    /// An MLE is fully bounded if it has no more free variables.
-    fn is_fully_bounded(&self) -> bool {
-        self.num_free_vars() == 0
+    /// AN MLE is unbounded if every variable is Fixed or Indexed
+    fn is_unbounded(&self) -> bool {
+        self.mle_indices().iter().fold(true, |acc, idx| {
+            acc && match idx {
+                MleIndex::Fixed(_) | MleIndex::Indexed(_) => true,
+                _ => false,
+            }
+        })
+    }
+
+    /// Returns an empty bind list
+    fn init_bind_list<F: Field>(&self) -> Vec<Option<F>> {
+        assert!(self.is_unbounded());
+        let len = self.mle_indices().iter().filter_map(|idx| {
+            match idx {
+                MleIndex::Indexed(i) => Some(*i),
+                _ => None,
+            }
+        }).max().unwrap();
+        vec![None; len]
+    }
+
+    /// An MLE is fully bounded if it has no more free variables
+    /// and there is a corresponding list of bound values.
+    fn is_fully_bounded<T>(&self, bind_list: &Vec<Option<T>>) -> bool {
+        self.mle_indices().iter().fold(true, |acc, idx| {
+            acc && match idx {
+                MleIndex::Bound(idx) => {
+                    bind_list[*idx].is_some()
+                }
+                _ => false,
+            }
+        })
     }
 
     /// Get the indicies of the `Mle` that this `MleRef` represents.
-    fn mle_indices(&self) -> &[MleIndex<F>];
+    fn mle_indices(&self) -> &[MleIndex];
 
     /// Get the layer ID of the associated MLE.
     fn layer_id(&self) -> LayerId;
@@ -79,14 +109,14 @@ pub trait AbstractMle<F: Field>:
 /// IntoIterator and FromIterator, this is to ensure that the semantic ordering
 /// within T is always consistent.
 #[allow(clippy::len_without_is_empty)]
-pub trait Mle<F: Field>: Clone + Debug + Send + Sync + AbstractMle<F> {
+pub trait Mle<F: Field>: Clone + Debug + Send + Sync + AbstractMle {
     /// Get the padded set of evaluations over the boolean hypercube; useful for
     /// constructing the input layer.
     fn get_padded_evaluations(&self) -> Vec<F>;
 
     /// Mutates the MLE in order to set the prefix bits. This is needed when we
     /// are working with dataparallel circuits and new bits need to be added.
-    fn add_prefix_bits(&mut self, new_bits: Vec<MleIndex<F>>);
+    fn add_prefix_bits(&mut self, new_bits: Vec<MleIndex>);
 
     /// Returns the length of the current bookkeeping table.
     fn len(&self) -> usize;
@@ -111,7 +141,7 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync + AbstractMle<F> {
     ///
     /// If the new MLE becomes fully bound, returns the evaluation of the fully
     /// bound Mle.
-    fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<RawClaim<F>>;
+    fn fix_variable(&mut self, round_index: usize, challenge: F, bind_list: &mut Vec<Option<F>>) -> Option<RawClaim<F>>;
 
     /// Fix the (indexed) free variable at `indexed_bit_index` with a given
     /// challenge `point`. Mutates `self`` to be the bookeeping table for the
@@ -121,7 +151,7 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync + AbstractMle<F> {
     /// # Panics
     /// If `indexed_bit_index` does not correspond to a
     /// `MleIndex::Indexed(indexed_bit_index)` in `mle_indices`.
-    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<RawClaim<F>>;
+    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F, bind_list: &mut Vec<Option<F>>) -> Option<RawClaim<F>>;
 
     /// Mutates the [MleIndex]es stored in `self` that are [MleIndex::Free] and
     /// turns them into [MleIndex::Indexed] with the bit index being determined
@@ -135,7 +165,7 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync + AbstractMle<F> {
 
 /// Represents all the possible types of indices for an [Mle].
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Eq, Hash)]
-pub enum MleIndex<F> {
+pub enum MleIndex {
     /// A "selector" bit for fixed MLE access.
     Fixed(bool),
 
@@ -147,11 +177,11 @@ pub enum MleIndex<F> {
     Indexed(usize),
 
     /// An index that has been bound to a random challenge by the sumcheck
-    /// protocol.
-    Bound(F, usize),
+    /// protocol. The random challenge is obtained in a separate list.
+    Bound(usize),
 }
 
-impl<F: Field> MleIndex<F> {
+impl MleIndex {
     /// If `self` is a [MleIndex::Free] bit, turns it into an
     /// [MleIndex::Indexed] with index `bit`.  Otherwise, `self` is not
     /// modified.
@@ -163,9 +193,15 @@ impl<F: Field> MleIndex<F> {
 
     /// If `self` is `Indexed(idx)`, bind it to `chal`, i.e. turn it into
     /// a `Bound(chal, idx)` variant. Otherwise, `self` is not modified.
-    pub fn bind_index(&mut self, chal: F) {
+    pub fn bind_index<F: Field>(&mut self, chal: F, bind_list: &mut Vec<Option<F>>) {
         if let MleIndex::Indexed(bit) = self {
-            *self = Self::Bound(chal, *bit)
+            if let Some(old_chal) = bind_list[*bit] {
+                if old_chal != chal {
+                    panic!("Conflicting bind value to index {bit}: {old_chal:?} and {chal:?}")
+                }
+            }
+            bind_list[*bit] = Some(chal);
+            *self = Self::Bound(*bit);
         }
     }
 
@@ -175,32 +211,13 @@ impl<F: Field> MleIndex<F> {
     /// * `Free` bits are *not* evaluated, i.e. `None` is returned.
     /// * `IndexedBit(idx)` bits are *not* evaluated, i.e. `None` is returned.
     /// * `Bound(chal, idx)` variants evaluate to `chal`.
-    pub fn val(&self) -> Option<F> {
+    pub fn val<F: Field>(&self, bind_list: &Vec<Option<F>>) -> Option<F> {
         match self {
             MleIndex::Fixed(true) => Some(F::ONE),
             MleIndex::Fixed(false) => Some(F::ZERO),
-            MleIndex::Bound(chal, _) => Some(*chal),
+            MleIndex::Bound(bit) => Some(bind_list[*bit].unwrap()),
             _ => None,
         }
-    }
-}
-
-/// Simple lift from [MleIndex<F>] to [MleIndex<E>].
-impl<E: ExtensionField> LiftTo<MleIndex<E>> for MleIndex<E::BaseField> {
-    fn lift(self) -> MleIndex<E> {
-        match self {
-            MleIndex::Fixed(val) => MleIndex::Fixed(val),
-            MleIndex::Free => MleIndex::Free,
-            MleIndex::Indexed(var_idx) => MleIndex::Indexed(var_idx),
-            MleIndex::Bound(base_chal, var_idx) => MleIndex::Bound(base_chal.into(), var_idx),
-        }
-    }
-}
-
-/// Simple lift from [Vec<MleIndex<F>>] to [Vec<MleIndex<E>>].
-impl<E: ExtensionField> LiftTo<Vec<MleIndex<E>>> for Vec<MleIndex<E::BaseField>> {
-    fn lift(self) -> Vec<MleIndex<E>> {
-        self.iter().map(|i| i.clone().lift()).collect::<Vec<_>>()
     }
 }
 
@@ -211,68 +228,78 @@ mod test {
 
     #[test]
     fn test_mle_index_val() {
+        let mut bind_list: Vec<Option<Fr>> = vec![None; 100];
+
         // 0 selector bit.
-        assert_eq!(MleIndex::<Fr>::Fixed(false).val(), Some(Fr::zero()));
+        assert_eq!(MleIndex::Fixed(false).val(&bind_list), Some(Fr::zero()));
 
         // 1 selector bit.
-        assert_eq!(MleIndex::<Fr>::Fixed(true).val(), Some(Fr::one()));
-
-        // Bound index.
-        assert_eq!(
-            MleIndex::<Fr>::Bound(Fr::from(42), 0).val(),
-            Some(Fr::from(42))
-        );
+        assert_eq!(MleIndex::Fixed(true).val(&bind_list), Some(Fr::one()));
 
         // Free index.
-        assert_eq!(MleIndex::<Fr>::Free.val(), None);
+        assert_eq!(MleIndex::Free.val(&bind_list), None);
 
         // Indexed bit index.
-        assert_eq!(MleIndex::<Fr>::Indexed(42).val(), None);
+        assert_eq!(MleIndex::Indexed(42).val(&bind_list), None);
+
+        // Bound index.
+        bind_list[0] = Some(Fr::from(42));
+        assert_eq!(
+            MleIndex::Bound(0).val(&bind_list),
+            Some(Fr::from(42))
+        );
     }
 
     #[test]
     fn test_mle_index_bind() {
         // An `Fixed` index remains unaffected.
-        let mut mle_index: MleIndex<Fr> = MleIndex::Fixed(true);
-        mle_index.bind_index(Fr::from(17));
-        assert_eq!(mle_index, MleIndex::<Fr>::Fixed(true));
+        let mut mle_index: MleIndex = MleIndex::Fixed(true);
+        let mut bind_list: Vec<Option<Fr>> = Vec::new();
+        mle_index.bind_index(Fr::from(17), &mut bind_list);
+        assert_eq!(mle_index, MleIndex::Fixed(true));
 
         // A `Free` index remains unaffected.
-        let mut mle_index: MleIndex<Fr> = MleIndex::Free;
-        mle_index.bind_index(Fr::from(17));
-        assert_eq!(mle_index, MleIndex::<Fr>::Free);
+        let mut mle_index: MleIndex = MleIndex::Free;
+        let mut bind_list: Vec<Option<Fr>> = Vec::new();
+        mle_index.bind_index(Fr::from(17), &mut bind_list);
+        assert_eq!(mle_index, MleIndex::Free);
 
         // An `IndexedBit` index gets bound.
-        let mut mle_index: MleIndex<Fr> = MleIndex::Indexed(42);
-        mle_index.bind_index(Fr::from(17));
-        assert_eq!(mle_index, MleIndex::<Fr>::Bound(Fr::from(17), 42));
+        let mut mle_index: MleIndex = MleIndex::Indexed(42);
+        let mut bind_list: Vec<Option<Fr>> = vec![None; 100];
+        mle_index.bind_index(Fr::from(17), &mut bind_list);
+        assert_eq!(mle_index, MleIndex::Bound(42));
+        assert_eq!(mle_index.val(&bind_list), Some(Fr::from(17)));
 
         // An `Bound` index remains unaffected.
-        let mut mle_index: MleIndex<Fr> = MleIndex::Bound(Fr::from(17), 42);
-        mle_index.bind_index(Fr::from(37));
-        assert_eq!(mle_index, MleIndex::<Fr>::Bound(Fr::from(17), 42));
+        mle_index.bind_index(Fr::from(37), &mut bind_list);
+        assert_eq!(mle_index, MleIndex::Bound(42));
+        assert_eq!(mle_index.val(&bind_list), Some(Fr::from(17)));
     }
 
     #[test]
     fn test_mle_index_index() {
         // An `Fixed` index remains unaffected.
-        let mut mle_index: MleIndex<Fr> = MleIndex::Fixed(true);
+        let mut mle_index: MleIndex = MleIndex::Fixed(true);
         mle_index.index_var(17);
-        assert_eq!(mle_index, MleIndex::<Fr>::Fixed(true));
+        assert_eq!(mle_index, MleIndex::Fixed(true));
 
         // A `Free` index becomes `IndexedBit`.
-        let mut mle_index: MleIndex<Fr> = MleIndex::Free;
+        let mut mle_index: MleIndex = MleIndex::Free;
         mle_index.index_var(17);
-        assert_eq!(mle_index, MleIndex::<Fr>::Indexed(17));
+        assert_eq!(mle_index, MleIndex::Indexed(17));
 
         // An `IndexedBit` index remains unaffected.
-        let mut mle_index: MleIndex<Fr> = MleIndex::Indexed(42);
+        let mut mle_index: MleIndex = MleIndex::Indexed(42);
         mle_index.index_var(17);
-        assert_eq!(mle_index, MleIndex::<Fr>::Indexed(42));
+        assert_eq!(mle_index, MleIndex::Indexed(42));
 
         // An `Bound` index remains unaffected.
-        let mut mle_index: MleIndex<Fr> = MleIndex::Bound(Fr::from(17), 42);
+        let mut mle_index: MleIndex = MleIndex::Indexed(42);
+        let mut bind_list: Vec<Option<Fr>> = vec![None; 100];
+        mle_index.bind_index(Fr::from(17), &mut bind_list);
         mle_index.index_var(37);
-        assert_eq!(mle_index, MleIndex::<Fr>::Bound(Fr::from(17), 42));
+        assert_eq!(mle_index, MleIndex::Bound(42));
+        assert_eq!(mle_index.val(&bind_list), Some(Fr::from(17)));
     }
 }

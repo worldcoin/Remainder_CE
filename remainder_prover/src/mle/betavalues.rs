@@ -115,7 +115,7 @@ impl<F: Field> BetaValues<F> {
     /// *bound* value.
     pub fn get_relevant_beta_unbound_and_bound(
         &self,
-        mle_indices: &[MleIndex<F>],
+        mle_indices: &[MleIndex],
         round_index: usize,
         computes_evals: bool,
     ) -> (Vec<F>, Vec<F>) {

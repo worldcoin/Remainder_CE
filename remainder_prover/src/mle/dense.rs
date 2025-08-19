@@ -28,15 +28,15 @@ pub struct DenseMle<F: Field> {
     /// A representation of the MLE on its current state.
     pub mle: MultilinearExtension<F>,
     /// The MleIndices `current_mle`.
-    pub mle_indices: Vec<MleIndex<F>>,
+    pub mle_indices: Vec<MleIndex>,
 }
 
-impl<F: Field> AbstractMle<F> for DenseMle<F> {
+impl<F: Field> AbstractMle for DenseMle<F> {
     fn num_free_vars(&self) -> usize {
         self.mle.num_vars()
     }
 
-    fn mle_indices(&self) -> &[MleIndex<F>] {
+    fn mle_indices(&self) -> &[MleIndex] {
         &self.mle_indices
     }
 
@@ -52,7 +52,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         self.mle.iter().chain(repeat_n(F::ZERO, padding)).collect()
     }
 
-    fn add_prefix_bits(&mut self, mut new_bits: Vec<MleIndex<F>>) {
+    fn add_prefix_bits(&mut self, mut new_bits: Vec<MleIndex>) {
         new_bits.extend(self.mle_indices.clone());
         self.mle_indices.clone_from(&new_bits);
     }
@@ -65,7 +65,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         self.mle.iter()
     }
 
-    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<RawClaim<F>> {
+    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F, bind_list: &mut Vec<Option<F>>) -> Option<RawClaim<F>> {
         // Bind the `MleIndex::IndexedBit(index)` to the challenge `point`.
 
         // First, find the bit corresponding to `index` and compute its absolute
@@ -88,7 +88,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
                         if current_bit_index == indexed_bit_index {
                             // Found the indexed bit in the current index;
                             // bind it and increment the bit count.
-                            mle_index.bind_index(point);
+                            mle_index.bind_index(point, bind_list);
                             (true, state.1 + 1)
                         } else {
                             // Index not yet found but this is an indexed
@@ -107,11 +107,11 @@ impl<F: Field> Mle<F> for DenseMle<F> {
 
         self.mle.fix_variable_at_index(bit_count - 1, point);
 
-        if self.is_fully_bounded() {
+        if self.is_fully_bounded(bind_list) {
             let fixed_claim_return = RawClaim::new(
                 self.mle_indices
                     .iter()
-                    .map(|index| index.val().unwrap())
+                    .map(|index| index.val(bind_list).unwrap())
                     .collect_vec(),
                 self.mle.value(),
             );
@@ -124,20 +124,20 @@ impl<F: Field> Mle<F> for DenseMle<F> {
     /// Bind the bit `index` to the value `binding`.
     /// If this was the last unbound variable, then return a Claim object giving the fully specified
     /// evaluation point and the (single) value of the bookkeeping table.  Otherwise, return None.
-    fn fix_variable(&mut self, index: usize, binding: F) -> Option<RawClaim<F>> {
+    fn fix_variable(&mut self, index: usize, binding: F, bind_list: &mut Vec<Option<F>>) -> Option<RawClaim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::Indexed(index) {
-                mle_index.bind_index(binding);
+                mle_index.bind_index(binding, bind_list);
             }
         }
         // Update the bookkeeping table.
         self.mle.fix_variable(binding);
 
-        if self.is_fully_bounded() {
+        if self.is_fully_bounded(bind_list) {
             let fixed_claim_return = RawClaim::new(
                 self.mle_indices
                     .iter()
-                    .map(|index| index.val().unwrap())
+                    .map(|index| index.val(bind_list).unwrap())
                     .collect_vec(),
                 self.mle.value(),
             );
@@ -186,7 +186,7 @@ impl<F: Field> DenseMle<F> {
     ) -> Self {
         let free_bits = data.num_vars();
 
-        let mle_indices: Vec<MleIndex<F>> = prefix_bits
+        let mle_indices: Vec<MleIndex> = prefix_bits
             .into_iter()
             .map(|bit| MleIndex::Fixed(bit))
             .chain((0..free_bits).map(|_| MleIndex::Free))
@@ -202,7 +202,7 @@ impl<F: Field> DenseMle<F> {
     pub fn new_with_indices(
         data: MultilinearExtension<F>,
         layer_id: LayerId,
-        mle_indices: &[MleIndex<F>],
+        mle_indices: &[MleIndex],
     ) -> Self {
         let mut mle = DenseMle::new_from_raw(data.to_vec(), layer_id);
 
@@ -225,7 +225,7 @@ impl<F: Field> DenseMle<F> {
         let items = iter.collect_vec();
         let num_free_vars = log2(items.len()) as usize;
 
-        let mle_indices: Vec<MleIndex<F>> = ((0..num_free_vars).map(|_| MleIndex::Free)).collect();
+        let mle_indices: Vec<MleIndex> = ((0..num_free_vars).map(|_| MleIndex::Free)).collect();
 
         let current_mle =
             MultilinearExtension::new_from_evals(Evaluations::<F>::new(num_free_vars, items));
@@ -250,7 +250,7 @@ impl<F: Field> DenseMle<F> {
     pub fn new_from_raw(items: Vec<F>, layer_id: LayerId) -> Self {
         let num_free_vars = log2(items.len()) as usize;
 
-        let mle_indices: Vec<MleIndex<F>> = ((0..num_free_vars).map(|_| MleIndex::Free)).collect();
+        let mle_indices: Vec<MleIndex> = ((0..num_free_vars).map(|_| MleIndex::Free)).collect();
 
         let current_mle =
             MultilinearExtension::new_from_evals(Evaluations::<F>::new(num_free_vars, items));
@@ -272,7 +272,7 @@ impl<F: Field> DenseMle<F> {
         prefix_vars: Option<Vec<bool>>,
         maybe_starting_var_index: Option<usize>,
     ) -> Self {
-        let mle_indices: Vec<MleIndex<F>> = prefix_vars
+        let mle_indices: Vec<MleIndex> = prefix_vars
             .unwrap_or_default()
             .into_iter()
             .map(|prefix_var| MleIndex::Fixed(prefix_var))
@@ -306,11 +306,11 @@ impl<F: Field> DenseMle<F> {
     ///
     /// Note that this function panics if a particular challenge is neither
     /// fixed nor bound!
-    pub fn get_bound_point(&self) -> Vec<F> {
+    pub fn get_bound_point(&self, bind_list: &mut Vec<Option<F>>) -> Vec<F> {
         self.mle_indices()
             .iter()
             .map(|index| match index {
-                MleIndex::Bound(chal, _) => *chal,
+                MleIndex::Bound(idx) => bind_list[*idx].unwrap(),
                 MleIndex::Fixed(chal) => F::from(*chal as u64),
                 _ => panic!("MLE index not bound"),
             })

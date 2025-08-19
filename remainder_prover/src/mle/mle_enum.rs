@@ -24,8 +24,8 @@ pub enum MleEnum<F: Field> {
     Zero(ZeroMle<F>),
 }
 
-impl<F: Field> AbstractMle<F> for MleEnum<F> {
-    fn mle_indices(&self) -> &[super::MleIndex<F>] {
+impl<F: Field> AbstractMle for MleEnum<F> {
+    fn mle_indices(&self) -> &[super::MleIndex] {
         match self {
             MleEnum::Dense(item) => item.mle_indices(),
             MleEnum::Zero(item) => item.mle_indices(),
@@ -87,10 +87,11 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         &mut self,
         round_index: usize,
         challenge: F,
+        bind_list: &mut Vec<Option<F>>,
     ) -> Option<crate::claims::RawClaim<F>> {
         match self {
-            MleEnum::Dense(item) => item.fix_variable(round_index, challenge),
-            MleEnum::Zero(item) => item.fix_variable(round_index, challenge),
+            MleEnum::Dense(item) => item.fix_variable(round_index, challenge, bind_list),
+            MleEnum::Zero(item) => item.fix_variable(round_index, challenge, bind_list),
         }
     }
 
@@ -98,10 +99,11 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         &mut self,
         indexed_bit_index: usize,
         point: F,
+        bind_list: &mut Vec<Option<F>>,
     ) -> Option<crate::claims::RawClaim<F>> {
         match self {
-            MleEnum::Dense(item) => item.fix_variable_at_index(indexed_bit_index, point),
-            MleEnum::Zero(item) => item.fix_variable_at_index(indexed_bit_index, point),
+            MleEnum::Dense(item) => item.fix_variable_at_index(indexed_bit_index, point, bind_list),
+            MleEnum::Zero(item) => item.fix_variable_at_index(indexed_bit_index, point, bind_list),
         }
     }
 
@@ -123,7 +125,7 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         }
     }
 
-    fn add_prefix_bits(&mut self, _new_bits: Vec<MleIndex<F>>) {
+    fn add_prefix_bits(&mut self, _new_bits: Vec<MleIndex>) {
         todo!()
     }
 }
@@ -140,8 +142,11 @@ impl<F: Field> From<ZeroMle<F>> for MleEnum<F> {
     }
 }
 
-/// Lift from [MleEnum<F>] to [MleEnum<E>] in the wrapper way.
-impl<E: ExtensionField> LiftTo<MleEnum<E>> for MleEnum<E::BaseField> {
+/// Lift from [MleEnum<F>] to [MleEnum<E>].
+impl<F: Field, E> LiftTo<MleEnum<E>> for MleEnum<F>
+where
+    E: ExtensionField<BaseField = F>,
+{
     fn lift(self) -> MleEnum<E> {
         match self {
             MleEnum::Dense(dense_mle) => MleEnum::Dense(dense_mle.lift()),
@@ -150,17 +155,15 @@ impl<E: ExtensionField> LiftTo<MleEnum<E>> for MleEnum<E::BaseField> {
     }
 }
 
-/// Lift from [ZeroMle<F>] to [ZeroMle<E>] in the trivial way.
-impl<E: ExtensionField> LiftTo<ZeroMle<E>> for ZeroMle<E::BaseField> {
+/// Lift from [ZeroMle<F>] to [ZeroMle<E>].
+impl<F: Field, E> LiftTo<ZeroMle<E>> for ZeroMle<F>
+where
+    E: ExtensionField<BaseField = F>,
+{
     fn lift(self) -> ZeroMle<E> {
-        let new_mle_indices: Vec<MleIndex<E>> = self
-            .mle_indices
-            .into_iter()
-            .map(|mle_var| mle_var.lift())
-            .collect();
         ZeroMle {
             layer_id: self.layer_id,
-            mle_indices: new_mle_indices,
+            mle_indices: self.mle_indices,
             num_vars: self.num_vars,
             zero: [E::ZERO],
             zero_eval: self.zero_eval.lift(),
@@ -169,19 +172,16 @@ impl<E: ExtensionField> LiftTo<ZeroMle<E>> for ZeroMle<E::BaseField> {
     }
 }
 
-/// Lift from [DenseMle<F>] to [DenseMle<E>] in the trivial way.
-impl<E: ExtensionField> LiftTo<DenseMle<E>> for DenseMle<E::BaseField> {
+/// Lift from [DenseMle<F>] to [DenseMle<E>].
+impl<F: Field, E> LiftTo<DenseMle<E>> for DenseMle<F>
+where
+    E: ExtensionField<BaseField = F>,
+{
     fn lift(self) -> DenseMle<E> {
-        let new_mle = self.mle.lift();
-        let new_mle_indices: Vec<MleIndex<E>> = self
-            .mle_indices
-            .into_iter()
-            .map(|mle_var| mle_var.lift())
-            .collect();
         DenseMle {
             layer_id: self.layer_id,
-            mle: new_mle,
-            mle_indices: new_mle_indices,
+            mle: self.mle.lift(),
+            mle_indices: self.mle_indices,
         }
     }
 }
@@ -193,9 +193,11 @@ pub trait LiftTo<T> {
     fn lift(self) -> T;
 }
 
-/// Lift from [MultilinearExtension<F>] to [MultilinearExtension<E>] in the
-/// trivial way.
-impl<E: ExtensionField> LiftTo<MultilinearExtension<E>> for MultilinearExtension<E::BaseField> {
+/// Lift from [MultilinearExtension<F>] to [MultilinearExtension<E>].
+impl<F: Field, E> LiftTo<MultilinearExtension<E>> for MultilinearExtension<F>
+where
+    E: ExtensionField<BaseField = F>,
+{
     fn lift(self) -> MultilinearExtension<E> {
         let new_evaluations: Evaluations<E> = self.f.lift();
         MultilinearExtension { f: new_evaluations }

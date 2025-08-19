@@ -40,11 +40,16 @@ pub enum CombineMleRefError {
 
 /// This fixes mles with shared points in the claims so that we don't repeatedly
 /// do so.
-pub fn pre_fix_mles<F: Field>(mles: &mut [DenseMle<F>], chal_point: &[F], common_idx: Vec<usize>) {
+pub fn pre_fix_mles<F: Field>(
+    mles: &mut [DenseMle<F>], 
+    chal_point: &[F], 
+    common_idx: Vec<usize>,
+    bind_list: &mut Vec<Option<F>>,
+) {
     cfg_iter_mut!(mles).for_each(|mle| {
         common_idx.iter().for_each(|chal_idx| {
             if let MleIndex::Indexed(idx_bit_num) = mle.mle_indices()[*chal_idx] {
-                mle.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
+                mle.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx], bind_list);
             }
         });
     });
