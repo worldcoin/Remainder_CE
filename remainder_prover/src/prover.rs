@@ -49,7 +49,7 @@ use remainder_shared_types::field::Halo2FFTFriendlyField;
 use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
 use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::transcript::{ProverTranscript, TranscriptWriter};
-use remainder_shared_types::{Field, halo2_field};
+use remainder_shared_types::{halo2_field, Field};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, info};
@@ -119,11 +119,14 @@ pub struct InstantiatedCircuit<E: ExtensionField> {
 /// * `inputs` - a map from input layer ID to the MLE of its values (in the clear) for _all_ input layers.
 /// * `ligero_input_layers` - a vector of [LigeroInputLayerDescription]s, optionally paired with pre-computed commitments to their values (if provided, this are not checked, but simply used as is).
 /// * `circuit_description` - the [GKRCircuitDescription] of the circuit to be proven.
-pub fn prove<F: Halo2FFTFriendlyField>(
-    provable_circuit: &ProvableCircuit<F>,
+pub fn prove<E: ExtensionField>(
+    provable_circuit: &ProvableCircuit<E>,
     circuit_description_hash_type: CircuitHashType,
-    transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
-) -> Result<ProofConfig> {
+    transcript_writer: &mut TranscriptWriter<E::BaseField, PoseidonSponge<E::BaseField>>,
+) -> Result<ProofConfig>
+where
+    E::BaseField: Halo2FFTFriendlyField,
+{
     // Grab proof config from global config
     let proof_config = ProofConfig::new_from_prover_config(&get_current_global_prover_config());
 
@@ -132,7 +135,8 @@ pub fn prove<F: Halo2FFTFriendlyField>(
         provable_circuit.get_gkr_circuit_description_ref(),
         circuit_description_hash_type,
     );
-    transcript_writer.append_elements("Circuit description hash", &hash_value_as_field_elems);
+    transcript_writer
+        .append_extension_field_elements("Circuit description hash", &hash_value_as_field_elems);
 
     // Add the input values of any public (i.e. non-ligero) input layers to transcript.
     // Select the public input layers from the input layers, and sort them by layer id, and append
@@ -149,7 +153,7 @@ pub fn prove<F: Halo2FFTFriendlyField>(
 
     // For each Ligero input layer, calculate commitments if not already provided, and then add each
     // commitment to the transcript.
-    let mut ligero_input_commitments = HashMap::<LayerId, LigeroCommitment<F>>::new();
+    let mut ligero_input_commitments = HashMap::<LayerId, LigeroCommitment<E::BaseField>>::new();
 
     provable_circuit
         .get_private_input_layer_ids()
@@ -176,8 +180,7 @@ pub fn prove<F: Halo2FFTFriendlyField>(
 
     // Mutate the transcript to contain the proof of the intermediate layers of the circuit,
     // and return the claims on the input layer.
-    let input_layer_claims =
-        prove_circuit::<F>(provable_circuit, transcript_writer).unwrap();
+    let input_layer_claims = prove_circuit::<E>(provable_circuit, transcript_writer).unwrap();
 
     // If in debug mode, then check the claims on all input layers.
     if cfg!(debug_assertions) {
@@ -185,7 +188,7 @@ pub fn prove<F: Halo2FFTFriendlyField>(
             let input_mle = provable_circuit
                 .get_input_mle(claim.get_to_layer_id())
                 .unwrap();
-            let evaluation = input_mle.evaluate_at_point(claim.get_point());
+            let evaluation = MultilinearExtension::evaluate_at_point_in_ext_field(&input_mle, claim.get_point());
             if evaluation != claim.get_eval() {
                 return Err(anyhow!(GKRError::EvaluationMismatch(
                     claim.get_to_layer_id(),
@@ -198,17 +201,18 @@ pub fn prove<F: Halo2FFTFriendlyField>(
     // Create a Ligero evaluation proof for each claim on a Ligero input layer, writing it to transcript.
     for claim in input_layer_claims.iter() {
         let layer_id = claim.get_to_layer_id();
-        if let Ok((desc, _)) = provable_circuit.get_private_input_layer(layer_id) {
-            let mle = provable_circuit.get_input_mle(layer_id).unwrap();
-            let commitment = ligero_input_commitments.get(&layer_id).unwrap();
-            remainder_ligero_eval_prove(
-                &mle.f.iter().collect_vec(),
-                claim.get_point(),
-                transcript_writer,
-                &desc.aux,
-                commitment,
-            )
-            .unwrap();
+        if let Ok((_desc, _)) = provable_circuit.get_private_input_layer(layer_id) {
+            panic!("Ligero proof currently not supported!");
+            // let mle = provable_circuit.get_input_mle(layer_id).unwrap();
+            // let commitment = ligero_input_commitments.get(&layer_id).unwrap();
+            // remainder_ligero_eval_prove(
+            //     &mle.f.iter().collect_vec(),
+            //     claim.get_point(),
+            //     transcript_writer,
+            //     &desc.aux,
+            //     commitment,
+            // )
+            // .unwrap();
         }
     }
 
@@ -216,12 +220,15 @@ pub fn prove<F: Halo2FFTFriendlyField>(
 }
 
 /// Verify a GKR proof from a transcript.
-pub fn verify<F: Halo2FFTFriendlyField>(
-    verifiable_circuit: &VerifiableCircuit<F>,
+pub fn verify<E: ExtensionField>(
+    verifiable_circuit: &VerifiableCircuit<E>,
     circuit_description_hash_type: CircuitHashType,
-    transcript: &mut impl VerifierTranscript<F>,
+    transcript: &mut impl VerifierTranscript<E::BaseField>,
     proof_config: &ProofConfig,
-) -> Result<()> {
+) -> Result<()> 
+where
+    E::BaseField: Halo2FFTFriendlyField,
+{
     // Check whether proof config matches current global verifier config
     if !get_current_global_verifier_config().matches_proof_config(proof_config) {
         panic!("Error: Attempted to verify a GKR proof whose config doesn't match that of the verifier.");
@@ -244,8 +251,8 @@ pub fn verify<F: Halo2FFTFriendlyField>(
         verifiable_circuit.get_gkr_circuit_description_ref(),
         circuit_description_hash_type,
     );
-    let prover_supplied_circuit_description_hash = transcript
-        .consume_elements("Circuit description hash", hash_value_as_field_elems.len())
+    let prover_supplied_circuit_description_hash: Vec<E> = transcript
+        .consume_extension_field_elements("Circuit description hash", hash_value_as_field_elems.len())
         .unwrap();
     assert_eq!(
         prover_supplied_circuit_description_hash,
@@ -277,7 +284,7 @@ pub fn verify<F: Halo2FFTFriendlyField>(
         .collect::<Result<Vec<_>>>()?;
 
     // Read the Ligero input layer commitments from transcript in order of layer id.
-    let mut ligero_commitments = HashMap::<LayerId, F>::new();
+    let mut ligero_commitments = HashMap::<LayerId, E::BaseField>::new();
     verifiable_circuit
         .get_private_input_layer_ids()
         .into_iter()
@@ -317,7 +324,7 @@ pub fn verify<F: Halo2FFTFriendlyField>(
             .get_public_inputs_ref()
             .get(&claim.get_to_layer_id())
             .unwrap();
-        let evaluation = input_mle.evaluate_at_point(claim.get_point());
+        let evaluation = MultilinearExtension::evaluate_at_point_in_ext_field(&input_mle, claim.get_point());
         if evaluation != claim.get_eval() {
             return Err(anyhow!(GKRError::EvaluationMismatch(
                 claim.get_to_layer_id(),
@@ -327,21 +334,22 @@ pub fn verify<F: Halo2FFTFriendlyField>(
     }
 
     // Check the claims on Ligero input layers via their evaluation proofs.
-    for claim in ligero_input_layer_claims.iter() {
-        let claim_layer_id = claim.get_to_layer_id();
-        let commitment = ligero_commitments.get(&claim_layer_id).unwrap();
-        let desc = verifiable_circuit
-            .get_private_inputs_ref()
-            .iter()
-            .find(|(layer_id, _)| **layer_id == claim_layer_id)
-            .unwrap();
-        remainder_ligero_verify::<F>(
-            commitment,
-            &desc.1.aux,
-            transcript,
-            claim.get_point(),
-            claim.get_eval(),
-        );
+    for _claim in ligero_input_layer_claims.iter() {
+        panic!("Ligero proof currently not supported!");
+        // let claim_layer_id = claim.get_to_layer_id();
+        // let commitment = ligero_commitments.get(&claim_layer_id).unwrap();
+        // let desc = verifiable_circuit
+        //     .get_private_inputs_ref()
+        //     .iter()
+        //     .find(|(layer_id, _)| **layer_id == claim_layer_id)
+        //     .unwrap();
+        // remainder_ligero_verify::<F>(
+        //     commitment,
+        //     &desc.1.aux,
+        //     transcript,
+        //     claim.get_point(),
+        //     claim.get_eval(),
+        // );
     }
 
     Ok(())
@@ -397,25 +405,9 @@ pub fn prove_circuit<E: ExtensionField>(
             "Challenge on the output layer",
             output.num_free_vars(),
         );
+        output.fix_layer(&challenges)?;
 
-        // If there is at least one challenge, we need to fix variable to get
-        // the extension field version of the output layer...
-        let mut ext_field_output_layer = if challenges.len() > 0 {
-            bind_base_field_output_layer_to_ext_field_output_layer_with_ext_field_challenge(
-                output,
-                0,
-                challenges[0],
-            )
-        }
-        // ...Otherwise, we simply lift the whole thing to an extension field
-        // output layer (there are zero variables)
-        else {
-            output
-        };
-
-        ext_field_output_layer.fix_layer(&challenges)?;
-
-        let claim = ext_field_output_layer.get_claim()?;
+        let claim = output.get_claim()?;
         claim_tracker.insert(claim.get_to_layer_id(), claim);
     }
 
@@ -631,7 +623,10 @@ impl<E: ExtensionField> GKRCircuitDescription<E> {
                 mle_outputs_necessary.iter().for_each(|mle_output| {
                     let prefix_bits = mle_output.prefix_bits();
                     let output = filter_bookkeeping_table(combined_mle, &prefix_bits);
-                    circuit_map.add_node(CircuitLocation::new(input_layer_id, prefix_bits), output.lift());
+                    circuit_map.add_node(
+                        CircuitLocation::new(input_layer_id, prefix_bits),
+                        output.lift(),
+                    );
                 });
                 let prover_input_layer = InputLayer {
                     mle: combined_mle.clone().lift(),

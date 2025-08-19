@@ -536,7 +536,7 @@ pub fn evaluate_mle_at_a_point_gray_codes<F: Field>(
     let multiplier_if_flipped_bit_is_one = inverses
         .iter()
         .zip(point.iter())
-        .map(|(inverse, point_elem)| *inverse * (E::ONE - point_elem))
+        .map(|(inverse, point_elem)| *inverse * (F::ONE - point_elem))
         .collect_vec();
     let multiplier_if_flipped_bit_is_zero = one_minus_inverses
         .iter()

@@ -33,10 +33,7 @@ impl FiatShamirChallengeDescription {
     /// Constructor for the [FiatShamirChallengeDescription] using the
     /// number of bits that are in the MLE of the layer.
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
-        Self {
-            layer_id,
-            num_bits,
-        }
+        Self { layer_id, num_bits }
     }
 }
 
@@ -112,7 +109,7 @@ mod tests {
         let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
         let mle = MultilinearExtension::new(mle_vec);
 
-        let fs_desc = FiatShamirChallengeDescription::<Fr>::new(layer_id, mle.num_vars());
+        let fs_desc = FiatShamirChallengeDescription::new(layer_id, mle.num_vars());
         // Nothing really to test for FiatShamirChallenge
         let _fiat_shamir_challenge = FiatShamirChallenge::new(mle);
 

@@ -21,7 +21,7 @@ fn test_constants_eval() {
 
     let expression3 = expression1.clone() + expression2.clone();
 
-    let mut expression = (expression1 - expression2) * Fr::from(2);
+    let mut expression = Expression::scaled(expression1 - expression2, Fr::from(2));
     let mut expression_another = expression.clone() + expression3;
 
     let challenge = vec![Fr::one()];
@@ -82,7 +82,7 @@ fn test_mle_eval_sum_w_constant_then_scale() {
 
     let expression = Expression::<Fr, DenseMle<Fr>>::mle(mle);
     let mut expression =
-        (expression + Expression::<Fr, DenseMle<Fr>>::constant(Fr::from(5))) * Fr::from(2);
+        Expression::scaled(expression + Expression::constant(Fr::from(5)), Fr::from(2));
     let num_indices = expression.index_mle_indices(0);
     assert_eq!(num_indices, 2);
 
@@ -443,7 +443,7 @@ fn big_test_eval() {
 
     let expression = expression1 - expression;
 
-    let expression = expression * Fr::from(2);
+    let expression = Expression::scaled(expression, Fr::from(2));
 
     let mut expression = expression.select(expression3);
     let num_indices = expression.index_mle_indices(0);

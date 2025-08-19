@@ -254,7 +254,9 @@ impl<E: ExtensionField> VerifiableCircuit<E> {
     ///
     /// TODO: This is too transparent. Replace this with methods that answer the queries of the
     /// prover directly, and do _not_ expose it to the circuit developer.
-    pub fn get_private_inputs_ref(&self) -> &HashMap<LayerId, LigeroInputLayerDescription<E::BaseField>> {
+    pub fn get_private_inputs_ref(
+        &self,
+    ) -> &HashMap<LayerId, LigeroInputLayerDescription<E::BaseField>> {
         &self.private_inputs
     }
 
@@ -277,7 +279,10 @@ impl<E: ExtensionField> VerifiableCircuit<E> {
 
     /// Returns the data associated with the public input layer with ID `layer_id`, or an error if
     /// no such public input layer exists.
-    pub fn get_public_input_mle(&self, layer_id: LayerId) -> Result<MultilinearExtension<E::BaseField>> {
+    pub fn get_public_input_mle(
+        &self,
+        layer_id: LayerId,
+    ) -> Result<MultilinearExtension<E::BaseField>> {
         self.public_inputs
             .get(&layer_id)
             .ok_or(anyhow!("Unrecognized Layer ID '{layer_id}'"))

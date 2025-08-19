@@ -186,9 +186,10 @@ impl<E: ExtensionField> LiftTo<DenseMle<E>> for DenseMle<E::BaseField> {
     }
 }
 
-/// ChatGPT-inspired trait which allows us to "lift" a data struct over base
-/// field elements, e.g., into one over extension field elements.
+/// The lift trait allows us to "lift" a data struct over base
+/// field elements into one over extension field elements.
 pub trait LiftTo<T> {
+    /// Lifts a type from base field to extension field
     fn lift(self) -> T;
 }
 

@@ -7,7 +7,9 @@ use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 use remainder_shared_types::{
-    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy}, extension_field::ExtensionField, transcript::{ProverTranscript, VerifierTranscript}
+    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy},
+    extension_field::ExtensionField,
+    transcript::{ProverTranscript, VerifierTranscript},
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -128,8 +130,8 @@ impl<E: ExtensionField> Layer<E> for RegularLayer<E> {
                 vec![E::ONE]
             }
             ClaimAggregationStrategy::RLC => {
-                let random_coefficients =
-                    transcript_writer.get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len());
+                let random_coefficients = transcript_writer
+                    .get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len());
                 self.initialize_rlc(&random_coefficients, claims);
                 random_coefficients
             }
@@ -161,7 +163,8 @@ impl<E: ExtensionField> Layer<E> for RegularLayer<E> {
                 &prover_sumcheck_message[1..],
             );
             // Sample the challenge
-            let challenge = transcript_writer.get_extension_field_challenge("Sumcheck round challenge");
+            let challenge =
+                transcript_writer.get_extension_field_challenge("Sumcheck round challenge");
             // "Bind" the challenge to the expression at this point.
             self.bind_round_variable(round_index, challenge)?;
             // For debug mode, update the previous message and challenge for the purpose
@@ -542,9 +545,8 @@ impl<E: ExtensionField> LayerDescription<E> for RegularLayerDescription<E> {
                 assert_eq!(claims.len(), 1);
                 vec![E::ONE]
             }
-            ClaimAggregationStrategy::RLC => {
-                transcript_reader.get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len())?
-            }
+            ClaimAggregationStrategy::RLC => transcript_reader
+                .get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len())?,
         };
 
         // Represents `g_{i-1}(x)` of the previous round.
@@ -589,12 +591,14 @@ impl<E: ExtensionField> LayerDescription<E> for RegularLayerDescription<E> {
             let mut g_cur_round: Vec<_> = [Ok(E::from(0))]
                 .into_iter()
                 .chain((0..degree).map(|_| {
-                    transcript_reader.consume_extension_field_element("Sumcheck round univariate evaluations")
+                    transcript_reader
+                        .consume_extension_field_element("Sumcheck round univariate evaluations")
                 }))
                 .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
-            let challenge = transcript_reader.get_extension_field_challenge("Sumcheck round challenge")?;
+            let challenge =
+                transcript_reader.get_extension_field_challenge("Sumcheck round challenge")?;
 
             // TODO(Makis): After refactoring `SumcheckEvals` to be a
             // representation of a univariate polynomial, `evaluate_at_a_point`
