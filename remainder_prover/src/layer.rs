@@ -24,7 +24,8 @@ use crate::{
     sumcheck::InterpError,
 };
 use remainder_shared_types::{
-    extension_field::ExtensionField, transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript}
+    extension_field::ExtensionField,
+    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
 };
 
 use anyhow::Result;

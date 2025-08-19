@@ -364,8 +364,9 @@ impl<E: ExtensionField> ClaimGroup<E> {
             .collect_vec();
 
         // Next, sample `r^\star` from the transcript.
-        let agg_chal = transcript_reader
-            .get_extension_field_challenge("Challenge for claim aggregation interpolation polynomial")?;
+        let agg_chal = transcript_reader.get_extension_field_challenge(
+            "Challenge for claim aggregation interpolation polynomial",
+        )?;
         debug!("Aggregate challenge: {:#?}", agg_chal);
 
         let aggregated_challenges = self.compute_aggregated_challenges(agg_chal).unwrap();

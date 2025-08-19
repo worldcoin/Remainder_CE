@@ -407,10 +407,7 @@ pub fn beta_cascade_no_independent_variable<F: Field>(
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary
 /// point
-pub fn evaluate_at_a_point<F: Field>(
-    given_evals: &[F],
-    point: F,
-) -> Result<F> {
+pub fn evaluate_at_a_point<F: Field>(given_evals: &[F], point: F) -> Result<F> {
     // Special case for the constant polynomial.
     if given_evals.len() == 1 {
         return Ok(given_evals[0]);

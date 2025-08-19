@@ -1,5 +1,5 @@
-use std::marker::PhantomData;
 use remainder_shared_types::extension_field::ExtensionField;
+use std::marker::PhantomData;
 
 use crate::{
     layer::{

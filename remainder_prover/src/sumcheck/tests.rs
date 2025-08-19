@@ -11,16 +11,16 @@ use crate::{
 
 use ark_std::test_rng;
 use rand::Rng;
-use remainder_shared_types::Fr;
+use remainder_shared_types::{extension_field::ExtensionField, Fr};
 
 use anyhow::Result;
 
 /// Does a dummy version of sumcheck with a testing RNG.
-pub(crate) fn dummy_sumcheck<F: Field>(
-    expr: &mut Expression<F, ProverMle<F>>,
+pub(crate) fn dummy_sumcheck<E: ExtensionField>(
+    expr: &mut Expression<E, ProverMle<E>>,
     rng: &mut impl Rng,
-    layer_claim: RawClaim<F>,
-) -> Vec<(Vec<F>, Option<F>)> {
+    layer_claim: RawClaim<E>,
+) -> Vec<(Vec<E>, Option<E>)> {
     let claim_point = layer_claim.get_point();
     let expression_nonlinear_indices = expr.get_all_nonlinear_rounds();
     let expression_linear_indices = expr.get_all_linear_rounds();
@@ -37,8 +37,8 @@ pub(crate) fn dummy_sumcheck<F: Field>(
     let mut newbeta = BetaValues::new(betavec);
 
     // The prover messages to the verifier...?
-    let mut messages: Vec<(Vec<F>, Option<F>)> = vec![];
-    let mut challenge: Option<F> = None;
+    let mut messages: Vec<(Vec<E>, Option<E>)> = vec![];
+    let mut challenge: Option<E> = None;
 
     for round_index in expression_nonlinear_indices {
         // First fix the variable representing the challenge from the last round
@@ -53,28 +53,28 @@ pub(crate) fn dummy_sumcheck<F: Field>(
 
         // Gives back the evaluations g(0), g(1), ..., g(d - 1)
         let eval =
-            expr.evaluate_sumcheck_beta_cascade(&vec![&newbeta], &[F::ONE], round_index, degree);
+            expr.evaluate_sumcheck_beta_cascade(&vec![&newbeta], &[E::ONE], round_index, degree);
 
         messages.push((eval.0, challenge));
 
-        challenge = Some(F::from(rng.gen::<u64>()));
+        challenge = Some(E::from(rng.gen::<u64>()));
     }
     messages
 }
 
 /// Returns the curr random challenge if verified correctly, otherwise verify error
 /// can change this to take prev round random challenge, and then compute the new random challenge
-pub fn verify_sumcheck_messages<F: Field>(
-    messages: Vec<(Vec<F>, Option<F>)>,
-    mut expression: Expression<F, ProverMle<F>>,
-    layer_claim: RawClaim<F>,
+pub fn verify_sumcheck_messages<E: ExtensionField>(
+    messages: Vec<(Vec<E>, Option<E>)>,
+    mut expression: Expression<E, ProverMle<E>>,
+    layer_claim: RawClaim<E>,
     rng: &mut impl Rng,
-) -> Result<F> {
+) -> Result<E> {
     if messages.is_empty() {
-        return Ok(F::ZERO);
+        return Ok(E::ZERO);
     }
     let mut prev_evals = &messages[0].0;
-    let mut chal = F::ZERO;
+    let mut chal = E::ZERO;
 
     // Thaler book page 34
     // First round:
@@ -105,7 +105,7 @@ pub fn verify_sumcheck_messages<F: Field>(
     }
 
     // Round v, again Thaler book page 34
-    let final_chal = F::from(rng.gen::<u64>());
+    let final_chal = E::from(rng.gen::<u64>());
     challenges.push(final_chal);
 
     // Beta bound is not interlaced
@@ -139,11 +139,11 @@ pub fn verify_sumcheck_messages<F: Field>(
     Ok(chal)
 }
 
-pub(crate) fn get_dummy_claim<F: Field>(
-    mle: DenseMle<F>,
+pub(crate) fn get_dummy_claim<E: ExtensionField>(
+    mle: DenseMle<E>,
     rng: &mut impl Rng,
-    challenges: Option<Vec<F>>,
-) -> RawClaim<F> {
+    challenges: Option<Vec<E>>,
+) -> RawClaim<E> {
     let mut expression = mle.expression();
     let num_vars = expression.index_mle_indices(0);
     let challenges = if let Some(challenges) = challenges {
@@ -151,7 +151,7 @@ pub(crate) fn get_dummy_claim<F: Field>(
         challenges
     } else {
         (0..num_vars)
-            .map(|_| F::from(rng.gen::<u64>()))
+            .map(|_| E::from(rng.gen::<u64>()))
             .collect_vec()
     };
     let eval = expression.evaluate_expr(challenges).unwrap();
@@ -163,17 +163,17 @@ pub(crate) fn get_dummy_claim<F: Field>(
             .get_mle(mle_vec)
             .mle_indices
             .iter()
-            .map(|index: &MleIndex<F>| index.val().unwrap())
+            .map(|index: &MleIndex<E>| index.val().unwrap())
             .collect_vec(),
         _ => panic!(),
     };
     RawClaim::new(claim, eval)
 }
 
-pub(crate) fn get_dummy_expression_eval<F: Field>(
-    expression: &Expression<F, ProverMle<F>>,
+pub(crate) fn get_dummy_expression_eval<E: ExtensionField>(
+    expression: &Expression<E, ProverMle<E>>,
     rng: &mut impl Rng,
-) -> RawClaim<F> {
+) -> RawClaim<E> {
     let mut expression = expression.clone();
     let num_vars = expression.index_mle_indices(0);
 
@@ -181,7 +181,7 @@ pub(crate) fn get_dummy_expression_eval<F: Field>(
     let expression_linear_indices = expression.get_all_linear_rounds();
 
     let challenges = (0..num_vars)
-        .map(|_| (F::from(rng.gen::<u64>())))
+        .map(|_| (E::from(rng.gen::<u64>())))
         .collect_vec();
     let challenges_enumerate = expression_nonlinear_indices
         .iter()

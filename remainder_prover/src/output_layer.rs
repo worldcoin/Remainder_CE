@@ -241,7 +241,8 @@ impl<E: ExtensionField> OutputLayerDescription<E> {
 
         let num_evals = 1;
 
-        let evals: Vec<E> = transcript_reader.consume_extension_field_elements("Output layer MLE evals", num_evals)?;
+        let evals: Vec<E> = transcript_reader
+            .consume_extension_field_elements("Output layer MLE evals", num_evals)?;
 
         if evals != vec![E::ZERO] {
             return Err(anyhow!(VerifierOutputLayerError::NonZeroEvalForZeroMle));
@@ -253,7 +254,8 @@ impl<E: ExtensionField> OutputLayerDescription<E> {
 
         // Evaluate each output MLE at a random challenge point.
         for bit in 0..bits {
-            let challenge = transcript_reader.get_extension_field_challenge("Challenge on the output layer")?;
+            let challenge =
+                transcript_reader.get_extension_field_challenge("Challenge on the output layer")?;
             mle.fix_variable(bit, challenge);
         }
 

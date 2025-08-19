@@ -11,7 +11,10 @@ use gate_helpers::{
 };
 use itertools::Itertools;
 use remainder_shared_types::{
-    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy}, extension_field::ExtensionField, transcript::{ProverTranscript, VerifierTranscript}, Field
+    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy},
+    extension_field::ExtensionField,
+    transcript::{ProverTranscript, VerifierTranscript},
+    Field,
 };
 use serde::{Deserialize, Serialize};
 
@@ -23,7 +26,8 @@ use crate::{
         Layer, LayerError, LayerId, VerificationError,
     },
     mle::{
-        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex
+        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
+        mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex,
     },
     sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
@@ -117,8 +121,8 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
                 vec![E::ONE]
             }
             ClaimAggregationStrategy::RLC => {
-                let random_coefficients =
-                    transcript_writer.get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len());
+                let random_coefficients = transcript_writer
+                    .get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len());
                 self.initialize_rlc(&random_coefficients, claims);
                 random_coefficients
             }
@@ -128,9 +132,12 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
             let sumcheck_message = self
                 .compute_round_sumcheck_message(*round_idx, &random_coefficients)
                 .unwrap();
-            transcript_writer
-                .append_extension_field_elements("Sumcheck round univariate evaluations", &sumcheck_message);
-            let challenge = transcript_writer.get_extension_field_challenge("Sumcheck round challenge");
+            transcript_writer.append_extension_field_elements(
+                "Sumcheck round univariate evaluations",
+                &sumcheck_message,
+            );
+            let challenge =
+                transcript_writer.get_extension_field_challenge("Sumcheck round challenge");
             self.bind_round_variable(*round_idx, challenge).unwrap();
         });
 
@@ -198,9 +205,11 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
         // First, send the claimed value of V_{i + 1}(g_2, u)
         let lhs_reduced: &DenseMle<E> = &self.phase_1_mles.as_ref().unwrap()[0][1];
         let rhs_reduced: &DenseMle<E> = &self.phase_2_mles.as_ref().unwrap()[0][1];
-        transcript_writer.append_extension_field_element("Fully bound MLE evaluation", lhs_reduced.value());
+        transcript_writer
+            .append_extension_field_element("Fully bound MLE evaluation", lhs_reduced.value());
         // Next, send the claimed value of V_{i + 1}(g_2, v)
-        transcript_writer.append_extension_field_element("Fully bound MLE evaluation", rhs_reduced.value());
+        transcript_writer
+            .append_extension_field_element("Fully bound MLE evaluation", rhs_reduced.value());
 
         Ok(())
     }
@@ -661,9 +670,8 @@ impl<E: ExtensionField> LayerDescription<E> for GateLayerDescription<E> {
                 assert_eq!(claims.len(), 1);
                 vec![E::ONE]
             }
-            ClaimAggregationStrategy::RLC => {
-                transcript_reader.get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len())?
-            }
+            ClaimAggregationStrategy::RLC => transcript_reader
+                .get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len())?,
         };
 
         // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL

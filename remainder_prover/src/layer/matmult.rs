@@ -5,7 +5,9 @@ use std::collections::HashSet;
 use ::serde::{Deserialize, Serialize};
 use itertools::Itertools;
 use remainder_shared_types::{
-    extension_field::ExtensionField, transcript::{ProverTranscript, VerifierTranscript}, Field
+    extension_field::ExtensionField,
+    transcript::{ProverTranscript, VerifierTranscript},
+    Field,
 };
 
 use super::{
@@ -19,7 +21,8 @@ use crate::{
     claims::{Claim, ClaimError, RawClaim},
     layer::VerificationError,
     mle::{
-        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex
+        dense::DenseMle, evals::MultilinearExtension, mle_description::MleDescription,
+        verifier_mle::VerifierMle, AbstractMle, Mle, MleIndex,
     },
     sumcheck::evaluate_at_a_point,
 };
@@ -159,7 +162,10 @@ impl<E: ExtensionField> MatMult<E> {
         matrix_a_mle.index_mle_indices(0);
     }
 
-    fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<E::BaseField>) {
+    fn append_leaf_mles_to_transcript(
+        &self,
+        transcript_writer: &mut impl ProverTranscript<E::BaseField>,
+    ) {
         transcript_writer.append_extension_field_elements(
             "Fully bound MLE evaluation",
             &[self.matrix_a.mle.value(), self.matrix_b.mle.value()],
@@ -200,10 +206,13 @@ impl<E: ExtensionField> Layer<E> for MatMult<E> {
             let message = self.compute_round_sumcheck_message(round, &[E::ONE])?;
             // Add to transcript.
             // Since the verifier can deduce g_i(0) by computing claim - g_i(1), the prover does not send g_i(0)
-            transcript_writer
-                .append_extension_field_elements("Sumcheck round univariate evaluations", &message[1..]);
+            transcript_writer.append_extension_field_elements(
+                "Sumcheck round univariate evaluations",
+                &message[1..],
+            );
             // Sample the challenge to bind the round's MatMult expression to.
-            let challenge = transcript_writer.get_extension_field_challenge("Sumcheck round challenge");
+            let challenge =
+                transcript_writer.get_extension_field_challenge("Sumcheck round challenge");
             // Bind the Matrix MLEs to this variable.
             self.bind_round_variable(round, challenge)?;
         }
@@ -413,12 +422,14 @@ impl<E: ExtensionField> LayerDescription<E> for MatMultLayerDescription<E> {
             let mut g_cur_round: Vec<_> = [Ok(E::from(0))]
                 .into_iter()
                 .chain((0..degree).map(|_| {
-                    transcript_reader.consume_extension_field_element("Sumcheck round univariate evaluations")
+                    transcript_reader
+                        .consume_extension_field_element("Sumcheck round univariate evaluations")
                 }))
                 .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
-            let challenge = transcript_reader.get_extension_field_challenge("Sumcheck round challenge")?;
+            let challenge =
+                transcript_reader.get_extension_field_challenge("Sumcheck round challenge")?;
 
             // Compute:
             //       `g_i(0) = g_{i - 1}(r_{i-1}) - g_i(1)`

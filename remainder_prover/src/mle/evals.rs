@@ -705,6 +705,32 @@ impl<F: Field> MultilinearExtension<F> {
     }
 }
 
+impl<E: ExtensionField> MultilinearExtension<E> {
+    /// Evaluate an MLE in basefield at a point in extension field
+    pub fn evaluate_at_point_in_ext_field(mle: &MultilinearExtension<E::BaseField>, point: &[E]) -> E {
+        let n = mle.num_vars();
+        assert_eq!(n, point.len());
+
+        // TODO: Provide better access mechanism.
+        mle.f
+            .evals
+            .clone()
+            .iter() // was into_iter()
+            .enumerate()
+            .fold(E::ZERO, |acc, (idx, v)| {
+                let beta = (0..n).fold(E::ONE, |acc, i| {
+                    let bit_i = idx & (1 << (n - 1 - i));
+                    if bit_i > 0 {
+                        point[i] * acc
+                    } else {
+                        (E::ONE - point[i]) * acc
+                    }
+                });
+                acc + beta * v
+            })
+    }
+}
+
 /// Lift from [Evaluations<F>] to [Evaluations<E>] in the trivial way.
 /// TODO (Benny): we need to avoid cloning here!!!
 impl<E: ExtensionField> LiftTo<Evaluations<E>> for Evaluations<E::BaseField> {

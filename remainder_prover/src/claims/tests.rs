@@ -26,7 +26,7 @@ fn test_get_claim() {
     let expression3 = Expression::<Fr, ProverMle<Fr>>::mle(mle);
     let expression = expression1.clone() + expression3.clone();
     let expression = expression1 - expression;
-    let expression = expression * Fr::from(2);
+    let expression = Expression::scaled(expression, Fr::from(2));
     let _expression = expression.select(expression3);
 }
 

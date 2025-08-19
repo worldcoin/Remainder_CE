@@ -1,4 +1,6 @@
-use remainder_shared_types::{extension_field::ExtensionField, transcript::VerifierTranscript, Field};
+use remainder_shared_types::{
+    extension_field::ExtensionField, transcript::VerifierTranscript, Field,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -142,7 +144,8 @@ impl<E: ExtensionField> MleDescription<E> {
             })
             .collect::<Result<Vec<MleIndex<E>>>>()?;
 
-        let eval = transcript_reader.consume_extension_field_element("Fully bound MLE evaluation")?;
+        let eval =
+            transcript_reader.consume_extension_field_element("Fully bound MLE evaluation")?;
 
         Ok(VerifierMle::new(self.layer_id, verifier_indices, eval))
     }

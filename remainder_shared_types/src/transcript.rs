@@ -330,14 +330,17 @@ pub trait VerifierTranscript<F: Field> {
     fn get_challenge(&mut self, label: &'static str) -> Result<F>;
     fn get_challenges(&mut self, label: &'static str, num_elements: usize) -> Result<Vec<F>>;
 
-    fn get_extension_field_challenge<E: P3StyleExtensionField<F>>(&mut self, label: &'static str) -> Result<E> {
+    fn get_extension_field_challenge<E: P3StyleExtensionField<F>>(
+        &mut self,
+        label: &'static str,
+    ) -> Result<E> {
         let extension_elem_coeffs = self.get_challenges(label, E::N_COEFF)?;
         Ok(E::from_basis_elem_coeffs(&extension_elem_coeffs))
     }
 
     fn get_extension_field_challenges<E: P3StyleExtensionField<F>>(
-        &mut self, 
-        label: &'static str, 
+        &mut self,
+        label: &'static str,
         num_elements: usize,
     ) -> Result<Vec<E>> {
         (0..num_elements)

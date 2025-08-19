@@ -22,7 +22,10 @@ use crate::{
 };
 use itertools::Itertools;
 use remainder_shared_types::{
-    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy}, extension_field::ExtensionField, transcript::{ProverTranscript, VerifierTranscript}, Field
+    config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy},
+    extension_field::ExtensionField,
+    transcript::{ProverTranscript, VerifierTranscript},
+    Field,
 };
 use serde::{Deserialize, Serialize};
 
@@ -122,9 +125,8 @@ impl<E: ExtensionField> LayerDescription<E> for IdentityGateLayerDescription<E> 
                 assert_eq!(claims.len(), 1);
                 vec![E::ONE]
             }
-            ClaimAggregationStrategy::RLC => {
-                transcript_reader.get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len())?
-            }
+            ClaimAggregationStrategy::RLC => transcript_reader
+                .get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len())?,
         };
 
         // Represents `g_{i-1}(x)` of the previous round. This is initialized to
@@ -158,12 +160,14 @@ impl<E: ExtensionField> LayerDescription<E> for IdentityGateLayerDescription<E> 
             let mut g_cur_round: Vec<_> = [Ok(E::from(0))]
                 .into_iter()
                 .chain((0..degree).map(|_| {
-                    transcript_reader.consume_extension_field_element("Sumcheck round univariate evaluations")
+                    transcript_reader
+                        .consume_extension_field_element("Sumcheck round univariate evaluations")
                 }))
                 .collect::<Result<_, _>>()?;
 
             // Sample random challenge `r_i`.
-            let challenge = transcript_reader.get_extension_field_challenge("Sumcheck round challenge")?;
+            let challenge =
+                transcript_reader.get_extension_field_challenge("Sumcheck round challenge")?;
 
             // Compute:
             //       `g_i(0) = g_{i - 1}(r_{i-1}) - g_i(1)`
@@ -483,8 +487,8 @@ impl<E: ExtensionField> Layer<E> for IdentityGate<E> {
                 vec![E::ONE]
             }
             ClaimAggregationStrategy::RLC => {
-                let random_coefficients =
-                    transcript_writer.get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len());
+                let random_coefficients = transcript_writer
+                    .get_extension_field_challenges("RLC Claim Agg Coefficients", claims.len());
                 self.initialize_rlc(&random_coefficients, claims);
                 random_coefficients
             }
@@ -499,7 +503,8 @@ impl<E: ExtensionField> Layer<E> for IdentityGate<E> {
                 "Sumcheck round univariate evaluations",
                 &sumcheck_message[1..],
             );
-            let challenge = transcript_writer.get_extension_field_challenge("Sumcheck round challenge");
+            let challenge =
+                transcript_writer.get_extension_field_challenge("Sumcheck round challenge");
             self.bind_round_variable(*round_idx, challenge).unwrap();
         });
         self.append_leaf_mles_to_transcript(transcript_writer);
@@ -812,9 +817,13 @@ impl<E: ExtensionField> IdentityGate<E> {
         }
     }
 
-    fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<E::BaseField>) {
+    fn append_leaf_mles_to_transcript(
+        &self,
+        transcript_writer: &mut impl ProverTranscript<E::BaseField>,
+    ) {
         assert!(self.source_mle.is_fully_bounded());
-        transcript_writer.append_extension_field_element("Fully bound MLE evaluation", self.source_mle.first());
+        transcript_writer
+            .append_extension_field_element("Fully bound MLE evaluation", self.source_mle.first());
     }
 
     /// Initialize the bookkeeping table necessary for phase 1, which is the

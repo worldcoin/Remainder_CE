@@ -17,7 +17,9 @@ use crate::{
 use ark_std::log2;
 use itertools::Itertools;
 
-use remainder_shared_types::{extension_field::ExtensionField, transcript::VerifierTranscript, Field};
+use remainder_shared_types::{
+    extension_field::ExtensionField, transcript::VerifierTranscript, Field,
+};
 
 use super::generic_expr::{Expression, ExpressionNode};
 
@@ -165,7 +167,9 @@ impl<E: ExtensionField> ExpressionNode<E> {
                         .collect_vec(),
                 ))
             }
-            ExpressionNode::Constant(value) => Some(MultilinearExtension::new(vec![(*value).into()])),
+            ExpressionNode::Constant(value) => {
+                Some(MultilinearExtension::new(vec![(*value).into()]))
+            }
         };
 
         output_data
