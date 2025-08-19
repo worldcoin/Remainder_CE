@@ -525,7 +525,7 @@ pub struct GKRCircuitDescription<E: ExtensionField> {
     /// The circuit descriptions of the intermediate layers.
     pub intermediate_layers: Vec<LayerDescriptionEnum<E>>,
     /// The circuit desriptions of the output layers.
-    pub output_layers: Vec<OutputLayerDescription<E>>,
+    pub output_layers: Vec<OutputLayerDescription>,
 }
 
 impl<E: ExtensionField> GKRCircuitDescription<E> {

@@ -269,7 +269,7 @@ impl OutputLayerDescription {
         debug_assert_eq!(mle.num_free_vars(), 0);
 
         let verifier_output_layer =
-            VerifierOutputLayer::new_zero(self.mle.layer_id(), mle.mle_indices(), E::ZERO, bind_list);
+            VerifierOutputLayer::new_zero(self.mle.layer_id(), mle.mle_indices(), bind_list);
 
         Ok(verifier_output_layer)
     }
@@ -330,16 +330,6 @@ impl<E: ExtensionField> VerifierOutputLayer<E> {
         // We do not support non-zero MLEs on Output Layers at this point!
         assert!(self.is_zero());
 
-        let layer_id = self.layer_id();
-
-        let prefix_bits: Vec<MleIndex> = self
-            .mle
-            .mle_indices()
-            .iter()
-            .filter(|index| matches!(index, MleIndex::Fixed(_bit)))
-            .cloned()
-            .collect();
-
         let claim_point: Vec<E> = self
             .mle
             .mle_indices()
@@ -351,30 +341,13 @@ impl<E: ExtensionField> VerifierOutputLayer<E> {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let num_vars = self.num_vars();
-        let num_prefix_bits = prefix_bits.len();
-        let num_free_vars = num_vars - num_prefix_bits;
-
         let claim_value = self.mle.value();
-
-        // The verifier is expecting to receive a fully-bound [MleRef]. Start
-        // with an unindexed MLE, index it, and then bound its variables.
-        let mut claim_mle = MleEnum::Zero(ZeroMle::new(num_free_vars, Some(prefix_bits), layer_id));
-        claim_mle.index_mle_indices(0);
-        let mut claim_mle_bind_list = claim_mle.init_bind_list();
-
-        for mle_index in self.mle.mle_indices().iter() {
-            if let MleIndex::Bound(idx) = mle_index {
-                let val = self.bind_list[*idx].unwrap();
-                claim_mle.fix_variable(*idx, val, &mut claim_mle_bind_list);
-            }
-        }
 
         Ok(Claim::new(
             claim_point,
             claim_value,
-            self.mle.layer_id(),
-            self.mle.layer_id(),
+            self.layer_id(),
+            self.layer_id(),
         ))
     }
 }
