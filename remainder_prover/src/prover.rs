@@ -410,7 +410,7 @@ pub fn prove_circuit<E: ExtensionField>(
         // ...Otherwise, we simply lift the whole thing to an extension field
         // output layer (there are zero variables)
         else {
-            output.lift()
+            output
         };
 
         ext_field_output_layer.fix_layer(&challenges)?;
@@ -773,7 +773,7 @@ impl<E: ExtensionField> GKRCircuitDescription<E> {
                     ));
 
                     // Performs the actual sumcheck verification step.
-                    let verifier_layer: VerifierLayerEnum<F> =
+                    let verifier_layer: VerifierLayerEnum<E> =
                         layer.verify_rounds(&[&prev_claim], transcript_reader)?;
 
                     end_timer!(sumcheck_msg_timer);
