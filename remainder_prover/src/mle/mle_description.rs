@@ -16,31 +16,30 @@ use anyhow::{anyhow, Result};
 /// Descrption.  A [MleDescription] is stored in the leaves of an `Expression<F,
 /// ExprDescription>` tree.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
-#[serde(bound = "F: Field")]
-pub struct MleDescription<F: Field> {
+pub struct MleDescription {
     /// Layer whose data this MLE's is a subset of.
     layer_id: LayerId,
 
     /// A list of indices where the free variables have been assigned an index.
-    var_indices: Vec<MleIndex<F>>,
+    var_indices: Vec<MleIndex>,
 }
 
-impl<F: Field> AbstractMle<F> for MleDescription<F> {
+impl AbstractMle for MleDescription {
     /// Returns the [LayerId] of this MleDescription.
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 
     /// Returns the MLE indices of this MleDescription.
-    fn mle_indices(&self) -> &[MleIndex<F>] {
+    fn mle_indices(&self) -> &[MleIndex] {
         &self.var_indices
     }
 }
 
-impl<F: Field> MleDescription<F> {
+impl MleDescription {
     /// Create a new [MleDescription] given its layer id and the [MleIndex]s that it holds.
     /// This is effectively the "shape" of a [DenseMle].
-    pub fn new(layer_id: LayerId, var_indices: &[MleIndex<F>]) -> Self {
+    pub fn new(layer_id: LayerId, var_indices: &[MleIndex]) -> Self {
         Self {
             layer_id,
             var_indices: var_indices.to_vec(),
@@ -49,7 +48,7 @@ impl<F: Field> MleDescription<F> {
 
     /// Replace the current MLE indices stored with custom MLE indices. Most
     /// useful in [crate::layer::matmult::MatMult], where we do index manipulation.
-    pub fn set_mle_indices(&mut self, new_mle_indices: Vec<MleIndex<F>>) {
+    pub fn set_mle_indices(&mut self, new_mle_indices: Vec<MleIndex>) {
         self.var_indices = new_mle_indices;
     }
 
@@ -95,7 +94,7 @@ impl<F: Field> MleDescription<F> {
     /// Convert this MLE into a [DenseMle] using the [CircuitMap],
     /// which holds information using the prefix bits and layer id
     /// on the data that should be stored in this MLE.
-    pub fn into_dense_mle(&self, circuit_map: &CircuitEvalMap<F>) -> DenseMle<F> {
+    pub fn into_dense_mle<F: Field>(&self, circuit_map: &CircuitEvalMap<F>) -> DenseMle<F> {
         let data = circuit_map.get_data_from_circuit_mle(self).unwrap();
         // DenseMle::new_with_prefix_bits((*data).clone(), self.layer_id(), self.prefix_bits())
         DenseMle::new_with_indices((*data).clone(), self.layer_id(), self.mle_indices())
@@ -104,45 +103,47 @@ impl<F: Field> MleDescription<F> {
     /// Bind the variable with index `var_index` to `value`. Note that since
     /// [MleDescription] is the representation of a multilinear extension function
     /// sans data, it need not alter its internal MLE evaluations in any way.
-    pub fn fix_variable(&mut self, var_index: usize, value: F) {
+    pub fn fix_variable<F: Field>(&mut self, var_index: usize, value: F, bind_list: &mut Vec<Option<F>>) {
         for mle_index in self.var_indices.iter_mut() {
             if *mle_index == MleIndex::Indexed(var_index) {
-                mle_index.bind_index(value);
+                mle_index.bind_index(value, bind_list);
             }
         }
     }
 
     /// Gets the values of the bound and fixed MLE indices of this MLE,
     /// panicking if the MLE is not fully bound.
-    pub fn get_claim_point(&self, challenges: &[F]) -> Vec<F> {
+    pub fn get_claim_point<F: Field>(&self, challenges: &[F], bind_list: &Vec<Option<F>>) -> Vec<F> {
         self.var_indices
             .iter()
             .map(|index| match index {
-                MleIndex::Bound(chal, _idx) => *chal,
+                MleIndex::Bound(idx) => bind_list[*idx].unwrap(),
                 MleIndex::Fixed(chal) => F::from(*chal as u64),
                 MleIndex::Indexed(i) => challenges[*i],
                 _ => panic!("DenseMleRefDesc contained free variables!"),
             })
             .collect()
     }
-}
 
-impl<E: ExtensionField> MleDescription<E> {
     /// Convert this MLE into a [VerifierMle], which represents a fully-bound MLE.
-    pub fn into_verifier_mle(
+    pub fn into_verifier_mle<E: ExtensionField>(
         &self,
-        point: &[E],
+        bind_list: &Vec<Option<E>>,
         transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
     ) -> Result<VerifierMle<E>> {
         let verifier_indices = self
             .var_indices
             .iter()
             .map(|mle_index| match mle_index {
-                MleIndex::Indexed(idx) => Ok(MleIndex::Bound(point[*idx], *idx)),
+                MleIndex::Indexed(idx) => {
+                    // assert that the bind value exists
+                    assert!(bind_list[*idx].is_some());
+                    Ok(MleIndex::Bound(*idx))
+                },
                 MleIndex::Fixed(val) => Ok(MleIndex::Fixed(*val)),
                 _ => Err(anyhow!(ExpressionError::EvaluateNotFullyIndexedError)),
             })
-            .collect::<Result<Vec<MleIndex<E>>>>()?;
+            .collect::<Result<Vec<MleIndex>>>()?;
 
         let eval =
             transcript_reader.consume_extension_field_element("Fully bound MLE evaluation")?;

@@ -224,12 +224,12 @@ pub trait LayerDescription<E: ExtensionField> {
     /// that populates these bookkeeping tables and mutate the circuit map to reflect this.
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &HashSet<&MleDescription<E>>,
+        mle_outputs_necessary: &HashSet<&MleDescription>,
         circuit_map: &mut CircuitEvalMap<E>,
     );
 
     /// The [MleDescription]s that make up the leaves of the expression in this layer.
-    fn get_circuit_mles(&self) -> Vec<&MleDescription<E>>;
+    fn get_circuit_mles(&self) -> Vec<&MleDescription>;
 
     /// Given a [CircuitMap], turn this [LayerDescription] into a ProverLayer.
     fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<E>) -> LayerEnum<E>;

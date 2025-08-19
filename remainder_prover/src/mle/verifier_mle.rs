@@ -15,16 +15,16 @@ pub struct VerifierMle<F: Field> {
     layer_id: LayerId,
 
     /// A list of bound indices.
-    var_indices: Vec<MleIndex<F>>,
+    var_indices: Vec<MleIndex>,
 
     /// The evaluation of this MLE when variables are bound according
     /// `var_indices`.
     eval: F,
 }
 
-impl<F: Field> AbstractMle<F> for VerifierMle<F> {
+impl<F: Field> AbstractMle for VerifierMle<F> {
     /// Returns the MLE indices of this MLE.
-    fn mle_indices(&self) -> &[MleIndex<F>] {
+    fn mle_indices(&self) -> &[MleIndex] {
         &self.var_indices
     }
 
@@ -38,7 +38,7 @@ impl<F: Field> VerifierMle<F> {
     /// Constructor for the [VerifierMle] using layer_id and the
     /// MLE indices that will go into this MLE. Additionally includes
     /// the eval, which is the evaluation of the fully bound MLE.
-    pub fn new(layer_id: LayerId, var_indices: Vec<MleIndex<F>>, eval: F) -> Self {
+    pub fn new(layer_id: LayerId, var_indices: Vec<MleIndex>, eval: F) -> Self {
         Self {
             layer_id,
             var_indices,

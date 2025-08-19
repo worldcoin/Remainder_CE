@@ -4,12 +4,12 @@
 
 use crate::mle::{AbstractMle, MleIndex};
 use itertools::Itertools;
-use remainder_shared_types::{extension_field::ExtensionField, Field};
+use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::max,
     hash::Hash,
-    ops::{Add, Neg, Sub},
+    ops::{Add, Mul, Neg, Sub},
 };
 
 use anyhow::{Ok, Result};
@@ -40,12 +40,12 @@ impl MleVecIndex {
     }
 
     /// return the actual mle in the vec within the prover expression
-    pub fn get_mle<'a, F: Field, M: AbstractMle<F>>(&self, mle_vec: &'a [M]) -> &'a M {
+    pub fn get_mle<'a, M: AbstractMle>(&self, mle_vec: &'a [M]) -> &'a M {
         &mle_vec[self.0]
     }
 
     /// return the actual mle in the vec within the prover expression
-    pub fn get_mle_mut<'a, F: Field, M: AbstractMle<F>>(&self, mle_vec: &'a mut [M]) -> &'a mut M {
+    pub fn get_mle_mut<'a, M: AbstractMle>(&self, mle_vec: &'a mut [M]) -> &'a mut M {
         &mut mle_vec[self.0]
     }
 }
@@ -58,46 +58,46 @@ impl MleVecIndex {
 /// * [ExpressionNode::Sum], i.e. \widetilde{V}_{j_1 > i}(b_1, ..., b_{m_1 \leq n}) + \widetilde{V}_{j_2 > i}(b_1, ..., b_{m_2 \leq n})
 /// * [ExpressionNode::Scaled], i.e. c * Expr(b_1, ..., b_{m \leq n}) for c \in mathbb{F}
 #[derive(Serialize, Deserialize, Clone, PartialEq, Hash, Eq)]
-#[serde(bound = "E: ExtensionField")]
-pub enum ExpressionNode<E: ExtensionField> {
+#[serde(bound = "F: Field")]
+pub enum ExpressionNode<F: Field> {
     /// See documentation for [ExpressionNode]. Note that
     /// [ExpressionNode::Constant] can be an expression tree's leaf.
     /// Constants are always in base field
-    Constant(E::BaseField),
+    Constant(F),
     /// See documentation for [ExpressionNode].
     /// Mle indices are always in extension field
-    Selector(MleIndex<E>, Box<ExpressionNode<E>>, Box<ExpressionNode<E>>),
+    Selector(MleIndex, Box<ExpressionNode<F>>, Box<ExpressionNode<F>>),
     /// An [ExpressionNode] representing the leaf of an expression tree which
     /// points to a multilinear extension.
     Mle(MleVecIndex),
     /// See documentation for [ExpressionNode].
-    Sum(Box<ExpressionNode<E>>, Box<ExpressionNode<E>>),
+    Sum(Box<ExpressionNode<F>>, Box<ExpressionNode<F>>),
     /// The product of several multilinear extension functions. This is also
     /// an expression tree's leaf.
     Product(Vec<MleVecIndex>),
     /// See documentation for [ExpressionNode].
     /// Scales are always in base field
-    Scaled(Box<ExpressionNode<E>>, E::BaseField),
+    Scaled(Box<ExpressionNode<F>>, F),
 }
 
 /// The high-level idea is that an [Expression] is generic over an MLE type
 /// , and contains within it a single parent [ExpressionNode] as well as an
-/// [Vec<AbstractMle<F>>] containing the unique leaf representations for the
+/// [Vec<AbstractMle>] containing the unique leaf representations for the
 /// leaves of the [ExpressionNode] tree.
 #[derive(Serialize, Deserialize, Clone, Hash)]
-#[serde(bound = "E: ExtensionField")]
-pub struct Expression<E: ExtensionField, M: AbstractMle<E>> {
+#[serde(bound = "F: Field")]
+pub struct Expression<F: Field, M: AbstractMle> {
     /// The root of the expression "tree".
-    pub expression_node: ExpressionNode<E>,
+    pub expression_node: ExpressionNode<F>,
     /// The unique owned copies of all MLEs which are "leaves" within the
     /// expression "tree".
     pub mle_vec: Vec<M>,
 }
 
 /// generic methods shared across all types of expressions
-impl<E: ExtensionField, M: AbstractMle<E>> Expression<E, M> {
+impl<F: Field, M: AbstractMle> Expression<F, M> {
     /// Create a new expression
-    pub fn new(expression_node: ExpressionNode<E>, mle_vec: Vec<M>) -> Self {
+    pub fn new(expression_node: ExpressionNode<F>, mle_vec: Vec<M>) -> Self {
         Self {
             expression_node,
             mle_vec,
@@ -105,19 +105,19 @@ impl<E: ExtensionField, M: AbstractMle<E>> Expression<E, M> {
     }
 
     /// Returns a reference to the internal `expression_node` and `mle_vec` fields.
-    pub fn deconstruct_ref(&self) -> (&ExpressionNode<E>, &[M]) {
+    pub fn deconstruct_ref(&self) -> (&ExpressionNode<F>, &[M]) {
         (&self.expression_node, &self.mle_vec)
     }
 
     /// Returns a mutable reference to the `expression_node` and `mle_vec`
     /// present within the given [Expression].
-    pub fn deconstruct_mut(&mut self) -> (&mut ExpressionNode<E>, &mut [M]) {
+    pub fn deconstruct_mut(&mut self) -> (&mut ExpressionNode<F>, &mut [M]) {
         (&mut self.expression_node, &mut self.mle_vec)
     }
 
     /// Takes ownership of the [Expression] and returns the owned values to its
     /// internal `expression_node` and `mle_vec`.
-    pub fn deconstruct(self) -> (ExpressionNode<E>, Vec<M>) {
+    pub fn deconstruct(self) -> (ExpressionNode<F>, Vec<M>) {
         (self.expression_node, self.mle_vec)
     }
 
@@ -126,7 +126,7 @@ impl<E: ExtensionField, M: AbstractMle<E>> Expression<E, M> {
     /// helper function is implemented on it, with the mle_vec reference passed in
     pub fn traverse(
         &self,
-        observer_fn: &mut impl FnMut(&ExpressionNode<E>, &[M]) -> Result<()>,
+        observer_fn: &mut impl FnMut(&ExpressionNode<F>, &[M]) -> Result<()>,
     ) -> Result<()> {
         self.expression_node
             .traverse_node(observer_fn, &self.mle_vec)
@@ -135,7 +135,7 @@ impl<E: ExtensionField, M: AbstractMle<E>> Expression<E, M> {
     /// similar to traverse, but allows mutation of self (expression node and mle_vec)
     pub fn traverse_mut(
         &mut self,
-        observer_fn: &mut impl FnMut(&mut ExpressionNode<E>) -> Result<()>,
+        observer_fn: &mut impl FnMut(&mut ExpressionNode<F>) -> Result<()>,
     ) -> Result<()> {
         self.expression_node.traverse_node_mut(observer_fn)
     }
@@ -149,7 +149,7 @@ impl<E: ExtensionField, M: AbstractMle<E>> Expression<E, M> {
     pub fn increment_mle_vec_indices(&mut self, offset: usize) {
         // define a closure that increments the MleVecIndex by the given amount
         // use traverse_mut
-        let mut increment_closure = |expr: &mut ExpressionNode<E>| -> Result<()> {
+        let mut increment_closure = |expr: &mut ExpressionNode<F>| -> Result<()> {
             match expr {
                 ExpressionNode::Mle(mle_vec_index) => {
                     mle_vec_index.increment(offset);
@@ -225,11 +225,11 @@ impl<E: ExtensionField, M: AbstractMle<E>> Expression<E, M> {
 }
 
 /// Generic helper methods shared across all types of [ExpressionNode]s.
-impl<E: ExtensionField> ExpressionNode<E> {
+impl<F: Field> ExpressionNode<F> {
     /// traverse the expression tree, and applies the observer_fn to all child node / the mle_vec reference
-    pub fn traverse_node<M: AbstractMle<E>>(
+    pub fn traverse_node<M: AbstractMle>(
         &self,
-        observer_fn: &mut impl FnMut(&ExpressionNode<E>, &[M]) -> Result<()>,
+        observer_fn: &mut impl FnMut(&ExpressionNode<F>, &[M]) -> Result<()>,
         mle_vec: &[M],
     ) -> Result<()> {
         observer_fn(self, mle_vec)?;
@@ -252,7 +252,7 @@ impl<E: ExtensionField> ExpressionNode<E> {
     /// similar to traverse, but allows mutation of self (expression node and mle_vec)
     pub fn traverse_node_mut(
         &mut self,
-        observer_fn: &mut impl FnMut(&mut ExpressionNode<E>) -> Result<()>,
+        observer_fn: &mut impl FnMut(&mut ExpressionNode<F>) -> Result<()>,
     ) -> Result<()> {
         observer_fn(self)?;
         match self {
@@ -273,15 +273,15 @@ impl<E: ExtensionField> ExpressionNode<E> {
 
     /// Evaluate the polynomial using the provided closures to perform the operations.
     #[allow(clippy::too_many_arguments)]
-    pub fn reduce<M: AbstractMle<E>, T>(
+    pub fn reduce<M: AbstractMle, T>(
         &self,
         mle_vec: &[M],
-        constant: &impl Fn(E::BaseField) -> T,
-        selector_column: &impl Fn(&MleIndex<E>, T, T) -> T,
+        constant: &impl Fn(F) -> T,
+        selector_column: &impl Fn(&MleIndex, T, T) -> T,
         mle_eval: &impl Fn(&M) -> T,
         sum: &impl Fn(T, T) -> T,
         product: &impl Fn(&[&M]) -> T,
-        scaled: &impl Fn(T, E::BaseField) -> T,
+        scaled: &impl Fn(T, F) -> T,
     ) -> T {
         match self {
             ExpressionNode::Constant(scalar) => constant(*scalar),
@@ -351,7 +351,7 @@ impl<E: ExtensionField> ExpressionNode<E> {
 
     /// this traverses the expression to get all of the rounds, in total. requires going through each of the nodes
     /// and collecting the leaf node indices.
-    pub(crate) fn get_all_rounds<M: AbstractMle<E>>(&self, mle_vec: &[M]) -> Vec<usize> {
+    pub(crate) fn get_all_rounds<M: AbstractMle>(&self, mle_vec: &[M]) -> Vec<usize> {
         let degree_per_index = self.get_rounds_helper(mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] > 0)
@@ -359,7 +359,7 @@ impl<E: ExtensionField> ExpressionNode<E> {
     }
 
     /// traverse an expression tree in order to get all of the nonlinear rounds in an expression.
-    pub fn get_all_nonlinear_rounds<M: AbstractMle<E>>(&self, mle_vec: &[M]) -> Vec<usize> {
+    pub fn get_all_nonlinear_rounds<M: AbstractMle>(&self, mle_vec: &[M]) -> Vec<usize> {
         let degree_per_index = self.get_rounds_helper(mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] > 1)
@@ -367,7 +367,7 @@ impl<E: ExtensionField> ExpressionNode<E> {
     }
 
     /// get all of the linear rounds from an expression tree
-    pub fn get_all_linear_rounds<M: AbstractMle<E>>(&self, mle_vec: &[M]) -> Vec<usize> {
+    pub fn get_all_linear_rounds<M: AbstractMle>(&self, mle_vec: &[M]) -> Vec<usize> {
         let degree_per_index = self.get_rounds_helper(mle_vec);
         (0..degree_per_index.len())
             .filter(|&i| degree_per_index[i] == 1)
@@ -375,12 +375,12 @@ impl<E: ExtensionField> ExpressionNode<E> {
     }
 
     /// Get the maximum degree of an ExpressionNode, recursively.
-    pub fn get_max_degree<M: AbstractMle<E>>(&self, mle_vec: &[M]) -> usize {
+    pub fn get_max_degree<M: AbstractMle>(&self, mle_vec: &[M]) -> usize {
         self.get_rounds_helper(mle_vec).into_iter().max().unwrap()
     }
 
     // a recursive helper for get_all_rounds, get_all_nonlinear_rounds, and get_all_linear_rounds
-    fn get_rounds_helper<M: AbstractMle<E>>(&self, mle_vec: &[M]) -> Vec<usize> {
+    fn get_rounds_helper<M: AbstractMle>(&self, mle_vec: &[M]) -> Vec<usize> {
         // degree of each index
         let mut degree_per_index = Vec::new();
         // set the degree of the corresponding index to max(OLD_DEGREE, NEW_DEGREE)
@@ -472,7 +472,7 @@ impl<E: ExtensionField> ExpressionNode<E> {
     /// Note that unlike within the `AbstractExpression` case, we don't need to return
     /// a `Result` since all MLEs extentiating `AbstractMle` are instantiated with their
     /// appropriate number of variables.
-    pub fn get_num_vars<M: AbstractMle<E>>(&self, mle_vec: &[M]) -> usize {
+    pub fn get_num_vars<M: AbstractMle>(&self, mle_vec: &[M]) -> usize {
         match self {
             ExpressionNode::Constant(_) => 0,
             ExpressionNode::Selector(_, lhs, rhs) => {
@@ -493,8 +493,8 @@ impl<E: ExtensionField> ExpressionNode<E> {
 }
 
 // defines how the Expressions are printed and displayed
-impl<E: std::fmt::Debug + ExtensionField, M: std::fmt::Debug + AbstractMle<E>> std::fmt::Debug
-    for Expression<E, M>
+impl<F: std::fmt::Debug + Field, M: std::fmt::Debug + AbstractMle> std::fmt::Debug
+    for Expression<F, M>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Expression")
@@ -505,7 +505,7 @@ impl<E: std::fmt::Debug + ExtensionField, M: std::fmt::Debug + AbstractMle<E>> s
 }
 
 // defines how the ExpressionNodes are printed and displayed
-impl<E: std::fmt::Debug + ExtensionField> std::fmt::Debug for ExpressionNode<E> {
+impl<F: std::fmt::Debug + Field> std::fmt::Debug for ExpressionNode<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExpressionNode::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
@@ -527,9 +527,9 @@ impl<E: std::fmt::Debug + ExtensionField> std::fmt::Debug for ExpressionNode<E> 
 }
 
 // constructors and operators on generic MLEs
-impl<E: ExtensionField, M: AbstractMle<E>> Expression<E, M> {
+impl<F: Field, M: AbstractMle> Expression<F, M> {
     /// create a constant Expression that contains one field element
-    pub fn constant(constant: E::BaseField) -> Self {
+    pub fn constant(constant: F) -> Self {
         let mle_node = ExpressionNode::Constant(constant);
         Expression::new(mle_node, [].to_vec())
     }
@@ -544,13 +544,13 @@ impl<E: ExtensionField, M: AbstractMle<E>> Expression<E, M> {
     pub fn negated(expression: Self) -> Self {
         let (node, mle_vec) = expression.deconstruct();
 
-        let mle_node = ExpressionNode::Scaled(Box::new(node), E::BaseField::from(1).neg());
+        let mle_node = ExpressionNode::Scaled(Box::new(node), F::from(1).neg());
 
         Expression::new(mle_node, mle_vec)
     }
 
     /// scales an expression by a field element
-    pub fn scaled(expression: Self, scale: E::BaseField) -> Self {
+    pub fn scaled(expression: Self, scale: F) -> Self {
         let (node, mle_vec) = expression.deconstruct();
 
         Expression::new(ExpressionNode::Scaled(Box::new(node), scale), mle_vec)
@@ -652,7 +652,7 @@ impl<E: ExtensionField, M: AbstractMle<E>> Expression<E, M> {
     }
 
     /// create a select expression without reason about index changes
-    pub fn select_with_index(index: MleIndex<E>, lhs: Self, mut rhs: Self) -> Self {
+    pub fn select_with_index(index: MleIndex, lhs: Self, mut rhs: Self) -> Self {
         let offset = lhs.num_mle();
         rhs.increment_mle_vec_indices(offset);
 
@@ -704,24 +704,51 @@ impl<E: ExtensionField, M: AbstractMle<E>> Expression<E, M> {
     }
 }
 
-impl<E: ExtensionField, M: AbstractMle<E>> Neg for Expression<E, M> {
-    type Output = Expression<E, M>;
+impl<F: Field, M: AbstractMle> From<F> for Expression<F, M> {
+    fn from(f: F) -> Self {
+        Expression::<F, M>::constant(f)
+    }
+}
+
+impl<F: Field, M: AbstractMle> Neg for Expression<F, M> {
+    type Output = Expression<F, M>;
     fn neg(self) -> Self::Output {
-        Expression::<E, M>::negated(self)
+        Expression::<F, M>::negated(self)
     }
 }
 
 /// implement the Add, Sub, and Mul traits for the Expression
-impl<E: ExtensionField, M: AbstractMle<E>> Add for Expression<E, M> {
-    type Output = Expression<E, M>;
-    fn add(self, rhs: Expression<E, M>) -> Expression<E, M> {
-        Expression::<E, M>::sum(self, rhs)
+impl<F: Field, M: AbstractMle> Add for Expression<F, M> {
+    type Output = Expression<F, M>;
+    fn add(self, rhs: Expression<F, M>) -> Expression<F, M> {
+        Expression::<F, M>::sum(self, rhs)
+    }
+}
+impl<F: Field, M: AbstractMle> Add<F> for Expression<F, M> {
+    type Output = Expression<F, M>;
+    fn add(self, rhs: F) -> Expression<F, M> {
+        let rhs_expr = Expression::<F, M>::constant(rhs);
+        Expression::<F, M>::sum(self, rhs_expr)
     }
 }
 
-impl<E: ExtensionField, M: AbstractMle<E>> Sub for Expression<E, M> {
-    type Output = Expression<E, M>;
-    fn sub(self, rhs: Expression<E, M>) -> Expression<E, M> {
+impl<F: Field, M: AbstractMle> Sub for Expression<F, M> {
+    type Output = Expression<F, M>;
+    fn sub(self, rhs: Expression<F, M>) -> Expression<F, M> {
         self.add(rhs.neg())
+    }
+}
+impl<F: Field, M: AbstractMle> Sub<F> for Expression<F, M> {
+    type Output = Expression<F, M>;
+    fn sub(self, rhs: F) -> Expression<F, M> {
+        let rhs_expr = Expression::<F, M>::constant(rhs);
+        Expression::<F, M>::sum(self, rhs_expr.neg())
+    }
+}
+
+impl<F: Field, M: AbstractMle> Mul<F> for Expression<F, M> {
+    type Output = Expression<F, M>;
+    fn mul(self, rhs: F) -> Self::Output {
+        Expression::<F, M>::scaled(self, rhs)
     }
 }

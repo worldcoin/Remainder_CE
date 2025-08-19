@@ -703,11 +703,12 @@ impl<F: Field> MultilinearExtension<F> {
             })
             .collect_vec()
     }
-}
 
-impl<E: ExtensionField> MultilinearExtension<E> {
     /// Evaluate an MLE in basefield at a point in extension field
-    pub fn evaluate_at_point_in_ext_field(mle: &MultilinearExtension<E::BaseField>, point: &[E]) -> E {
+    pub fn evaluate_at_point_in_ext_field<E>(mle: &MultilinearExtension<F>, point: &[E]) -> E 
+    where 
+        E: ExtensionField<BaseField = F>,
+    {
         let n = mle.num_vars();
         assert_eq!(n, point.len());
 
@@ -733,7 +734,10 @@ impl<E: ExtensionField> MultilinearExtension<E> {
 
 /// Lift from [Evaluations<F>] to [Evaluations<E>] in the trivial way.
 /// TODO (Benny): we need to avoid cloning here!!!
-impl<E: ExtensionField> LiftTo<Evaluations<E>> for Evaluations<E::BaseField> {
+impl<F: Field, E> LiftTo<Evaluations<E>> for Evaluations<F>
+where
+    E: ExtensionField<BaseField = F>,
+{
     fn lift(self) -> Evaluations<E> {
         let raw_evals: Vec<E> = self.iter().map(|eval| eval.into()).collect();
         let converted_evals: BitPackedVector<E> = BitPackedVector::new(&raw_evals);
@@ -747,7 +751,10 @@ impl<E: ExtensionField> LiftTo<Evaluations<E>> for Evaluations<E::BaseField> {
 }
 
 /// Lift from [Vec<F>] to [Vec<E>] in the trivial way.
-impl<E: ExtensionField> LiftTo<Vec<E>> for Vec<E::BaseField> {
+impl<F: Field, E> LiftTo<Vec<E>> for Vec<F>
+where
+    E: ExtensionField<BaseField = F>,
+{
     fn lift(self) -> Vec<E> {
         self.iter().map(|val| (*val).into()).collect()
     }

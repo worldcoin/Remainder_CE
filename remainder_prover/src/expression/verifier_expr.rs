@@ -20,20 +20,24 @@
 
 use crate::mle::{verifier_mle::VerifierMle, MleIndex};
 
-use remainder_shared_types::extension_field::ExtensionField;
+use remainder_shared_types::{extension_field::ExtensionField, Field};
 
 use super::{expr_errors::ExpressionError, generic_expr::Expression};
 
 use anyhow::{anyhow, Ok, Result};
 
-impl<E: ExtensionField> Expression<E, VerifierMle<E>> {
+impl<F: Field, E> Expression<F, VerifierMle<E>> 
+where
+    E: ExtensionField<BaseField = F>,
+{
     /// Evaluate this fully bound expression.
-    pub fn evaluate(&self) -> Result<E> {
+    pub fn evaluate(&self, bind_list: &Vec<Option<E>>,) -> Result<E> {
         let constant = |c| Ok(E::from(c));
-        let selector_column = |idx: &MleIndex<E>, lhs: Result<E>, rhs: Result<E>| -> Result<E> {
+        let selector_column = |idx: &MleIndex, lhs: Result<E>, rhs: Result<E>| -> Result<E> {
             // Selector bit must be bound
-            if let MleIndex::Bound(val, _) = idx {
-                return Ok(*val * rhs? + (E::ONE - val) * lhs?);
+            if let MleIndex::Bound(idx) = idx {
+                let val = bind_list[*idx].unwrap();
+                return Ok(val * rhs? + (E::ONE - val) * lhs?);
             }
             Err(anyhow!(ExpressionError::SelectorBitNotBoundError))
         };
