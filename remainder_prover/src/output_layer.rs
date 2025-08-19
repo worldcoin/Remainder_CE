@@ -7,7 +7,6 @@ use itertools::Itertools;
 use remainder_shared_types::{
     extension_field::ExtensionField,
     transcript::{TranscriptReaderError, VerifierTranscript},
-    Field,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -16,7 +15,6 @@ use crate::{
     claims::Claim,
     layer::{LayerError, LayerId},
     mle::AbstractMle,
-    mle::mle_enum::LiftTo,
 };
 
 use crate::{
@@ -39,36 +37,36 @@ pub mod tests;
 /// intermediate/input layer on which they generate claims for.
 /// Contains an [MleEnum] which can be either a [DenseMle] or a [ZeroMle].
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(bound = "F: Field")]
-pub struct OutputLayer<F: Field> {
-    mle: MleEnum<F>,
+#[serde(bound = "E: ExtensionField")]
+pub struct OutputLayer<E: ExtensionField> {
+    mle: MleEnum<E>,
 }
 
 /// Required for output layer shenanigans within `layout`
-impl<F: Field> From<DenseMle<F>> for OutputLayer<F> {
-    fn from(value: DenseMle<F>) -> Self {
+impl<E: ExtensionField> From<DenseMle<E>> for OutputLayer<E> {
+    fn from(value: DenseMle<E>) -> Self {
         Self {
             mle: MleEnum::Dense(value),
         }
     }
 }
 
-impl<F: Field> From<ZeroMle<F>> for OutputLayer<F> {
-    fn from(value: ZeroMle<F>) -> Self {
+impl<E: ExtensionField> From<ZeroMle<E>> for OutputLayer<E> {
+    fn from(value: ZeroMle<E>) -> Self {
         Self {
             mle: MleEnum::Zero(value),
         }
     }
 }
 
-impl<F: Field> OutputLayer<F> {
+impl<E: ExtensionField> OutputLayer<E> {
     /// Returns the MLE contained within.
-    pub fn get_mle(&self) -> &MleEnum<F> {
+    pub fn get_mle(&self) -> &MleEnum<E> {
         &self.mle
     }
 
     /// Generate a new [OutputLayer] from a [ZeroMle].
-    pub fn new_zero(zero_mle: ZeroMle<F>) -> Self {
+    pub fn new_zero(zero_mle: ZeroMle<E>) -> Self {
         Self {
             mle: MleEnum::Zero(zero_mle),
         }
@@ -76,7 +74,7 @@ impl<F: Field> OutputLayer<F> {
 
     /// If the MLE is fully-bound, returns its evaluation.
     /// Otherwise, it returns an [OutputLayerError].
-    pub fn value(&self) -> Result<F> {
+    pub fn value(&self) -> Result<E> {
         match &self.mle {
             MleEnum::Dense(_) => unimplemented!(),
             MleEnum::Zero(zero_mle) => {
@@ -84,7 +82,7 @@ impl<F: Field> OutputLayer<F> {
                     return Err(anyhow!(OutputLayerError::MleNotFullyBound));
                 }
 
-                Ok(F::ZERO)
+                Ok(E::ZERO)
             }
         }
     }
@@ -108,7 +106,7 @@ impl<F: Field> OutputLayer<F> {
     /// Fix the variables of this output layer to random challenges sampled
     /// from the transcript.
     /// Expects `self.num_free_vars()` challenges.
-    pub fn fix_layer(&mut self, challenges: &[F]) -> Result<()> {
+    pub fn fix_layer(&mut self, challenges: &[E]) -> Result<()> {
         let bits = self.mle.index_mle_indices(0);
         if bits != challenges.len() {
             return Err(anyhow!(LayerError::NumVarsMismatch(
@@ -127,12 +125,12 @@ impl<F: Field> OutputLayer<F> {
     }
 
     /// Extract a claim on this output layer by extracting the bindings from the fixed variables.
-    pub fn get_claim(&mut self) -> Result<Claim<F>> {
+    pub fn get_claim(&mut self) -> Result<Claim<E>> {
         if !self.mle.is_fully_bounded() {
             return Err(anyhow!(LayerError::ClaimError(ClaimError::MleRefMleError)));
         }
 
-        let mle_indices: Result<Vec<F>> = self
+        let mle_indices: Result<Vec<E>> = self
             .mle
             .mle_indices()
             .iter()
@@ -154,37 +152,29 @@ impl<F: Field> OutputLayer<F> {
     }
 }
 
-/// Trivial implementation of "lifting" an [OutputLayer<F>] to [OutputLayer<E>].
-impl<E: ExtensionField> LiftTo<OutputLayer<E>> for OutputLayer<E::BaseField> {
-    fn lift(self) -> OutputLayer<E> {
-        let converted_mle = self.mle.lift();
-        OutputLayer { mle: converted_mle }
-    }
-}
-
 /// The circuit description type for the defaul Output Layer consisting of an
 /// MLE.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
-#[serde(bound = "F: Field")]
-pub struct OutputLayerDescription<F: Field> {
+#[serde(bound = "E: ExtensionField")]
+pub struct OutputLayerDescription<E: ExtensionField> {
     /// The metadata of this MLE: indices and associated layer.
-    pub mle: MleDescription<F>,
+    pub mle: MleDescription<E>,
 
     /// Whether this is an MLE that is supposed to evaluate to zero.
     is_zero: bool,
 }
 
-impl<F: Field> OutputLayerDescription<F> {
+impl<E: ExtensionField> OutputLayerDescription<E> {
     /// Generate an output layer containing a verifier equivalent of a
     /// [DenseMle], with a given `layer_id` and `mle_indices`.
-    pub fn new_dense(_layer_id: LayerId, _mle_indices: &[MleIndex<F>]) -> Self {
+    pub fn new_dense(_layer_id: LayerId, _mle_indices: &[MleIndex<E>]) -> Self {
         // We do not allow `DenseMle`s at this point.
         unimplemented!()
     }
 
     /// Generate an output layer containing a verifier equivalent of a
     /// [ZeroMle], with a given `layer_id` and `mle_indices`.
-    pub fn new_zero(layer_id: LayerId, mle_indices: &[MleIndex<F>]) -> Self {
+    pub fn new_zero(layer_id: LayerId, mle_indices: &[MleIndex<E>]) -> Self {
         Self {
             mle: MleDescription::new(layer_id, mle_indices),
             is_zero: true,
@@ -203,7 +193,7 @@ impl<F: Field> OutputLayerDescription<F> {
     }
 
     /// Convert this into the prover view of an output layer, using the [CircuitMap].
-    pub fn into_prover_output_layer(&self, circuit_map: &CircuitEvalMap<F>) -> OutputLayer<F> {
+    pub fn into_prover_output_layer(&self, circuit_map: &CircuitEvalMap<E>) -> OutputLayer<E> {
         let output_mle = circuit_map.get_data_from_circuit_mle(&self.mle).unwrap();
         let prefix_bits = self.mle.prefix_bits();
         let prefix_bits_mle_index = prefix_bits
@@ -213,7 +203,7 @@ impl<F: Field> OutputLayerDescription<F> {
 
         if self.is_zero {
             // Ensure that the calculated output MLE is all zeroes.
-            if !(output_mle.iter().all(|val| val == F::ZERO)) {
+            if !(output_mle.iter().all(|val| val == E::ZERO)) {
                 println!(
                     "WARNING: MLE for output layer {} is not zero",
                     self.mle.layer_id()
@@ -232,7 +222,7 @@ impl<F: Field> OutputLayerDescription<F> {
     }
 }
 
-impl<F: Field> OutputLayerDescription<F> {
+impl<E: ExtensionField> OutputLayerDescription<E> {
     /// Returns the [LayerId] of the intermediate/input layer that his output
     /// layer is associated with.
     pub fn layer_id(&self) -> LayerId {
@@ -244,16 +234,16 @@ impl<F: Field> OutputLayerDescription<F> {
     /// Returns a description of the layer ready to be used by the verifier.
     pub fn retrieve_mle_from_transcript_and_fix_layer(
         &self,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<VerifierOutputLayer<F>> {
+        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
+    ) -> Result<VerifierOutputLayer<E>> {
         // We do not yet handle DenseMle.
         assert!(self.is_zero());
 
         let num_evals = 1;
 
-        let evals = transcript_reader.consume_elements("Output layer MLE evals", num_evals)?;
+        let evals: Vec<E> = transcript_reader.consume_extension_field_elements("Output layer MLE evals", num_evals)?;
 
-        if evals != vec![F::ZERO] {
+        if evals != vec![E::ZERO] {
             return Err(anyhow!(VerifierOutputLayerError::NonZeroEvalForZeroMle));
         }
 
@@ -263,14 +253,14 @@ impl<F: Field> OutputLayerDescription<F> {
 
         // Evaluate each output MLE at a random challenge point.
         for bit in 0..bits {
-            let challenge = transcript_reader.get_challenge("Challenge on the output layer")?;
+            let challenge = transcript_reader.get_extension_field_challenge("Challenge on the output layer")?;
             mle.fix_variable(bit, challenge);
         }
 
         debug_assert_eq!(mle.num_free_vars(), 0);
 
         let verifier_output_layer =
-            VerifierOutputLayer::new_zero(self.mle.layer_id(), mle.mle_indices(), F::ZERO);
+            VerifierOutputLayer::new_zero(self.mle.layer_id(), mle.mle_indices(), E::ZERO);
 
         Ok(verifier_output_layer)
     }
@@ -279,26 +269,26 @@ impl<F: Field> OutputLayerDescription<F> {
 /// The verifier counterpart type for the defaul Output Layer consisting of an
 /// MLE.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(bound = "F: Field")]
-pub struct VerifierOutputLayer<F: Field> {
+#[serde(bound = "E: ExtensionField")]
+pub struct VerifierOutputLayer<E: ExtensionField> {
     /// A description of this layer's fully-bound MLE.
-    mle: VerifierMle<F>,
+    mle: VerifierMle<E>,
 
     /// Whether this layer's MLE is supposed to evaluate to zero.
     is_zero: bool,
 }
 
-impl<F: Field> VerifierOutputLayer<F> {
+impl<E: ExtensionField> VerifierOutputLayer<E> {
     /// Generate an output layer containing a verifier equivalent of a
     /// [DenseMle], with a given `layer_id` and `mle_indices`.
-    pub fn new_dense(_layer_id: LayerId, _mle_indices: &[MleIndex<F>]) -> Self {
+    pub fn new_dense(_layer_id: LayerId, _mle_indices: &[MleIndex<E>]) -> Self {
         // We do not allow `DenseMle`s at this point.
         unimplemented!()
     }
 
     /// Generate an output layer containing a verifier equivalent of a
     /// [ZeroMle], with a given `layer_id`, `mle_indices` and `value`.
-    pub fn new_zero(layer_id: LayerId, mle_indices: &[MleIndex<F>], value: F) -> Self {
+    pub fn new_zero(layer_id: LayerId, mle_indices: &[MleIndex<E>], value: E) -> Self {
         Self {
             mle: VerifierMle::new(layer_id, mle_indices.to_vec(), value),
             is_zero: true,
@@ -317,7 +307,7 @@ impl<F: Field> VerifierOutputLayer<F> {
     }
 }
 
-impl<F: Field> VerifierOutputLayer<F> {
+impl<E: ExtensionField> VerifierOutputLayer<E> {
     /// Returns the [LayerId] of the intermediate/input layer that this output
     /// layer is associated with.
     pub fn layer_id(&self) -> LayerId {
@@ -325,13 +315,13 @@ impl<F: Field> VerifierOutputLayer<F> {
     }
 
     /// Extract a claim on this output layer by extracting the bindings from the fixed variables.
-    pub fn get_claim(&self) -> Result<Claim<F>> {
+    pub fn get_claim(&self) -> Result<Claim<E>> {
         // We do not support non-zero MLEs on Output Layers at this point!
         assert!(self.is_zero());
 
         let layer_id = self.layer_id();
 
-        let prefix_bits: Vec<MleIndex<F>> = self
+        let prefix_bits: Vec<MleIndex<E>> = self
             .mle
             .mle_indices()
             .iter()
@@ -339,7 +329,7 @@ impl<F: Field> VerifierOutputLayer<F> {
             .cloned()
             .collect();
 
-        let claim_point: Vec<F> = self
+        let claim_point: Vec<E> = self
             .mle
             .mle_indices()
             .iter()
