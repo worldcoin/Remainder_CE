@@ -7,6 +7,7 @@
 use crate::binary_operations::{logical_shift::ShiftNode, rotate_bits::RotateNode};
 use crate::expression::abstract_expr::ExprBuilder;
 use crate::layouter::builder::{CircuitBuilder, NodeRef};
+use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
 
 use remainder_shared_types::Field;
 
@@ -17,6 +18,26 @@ const fn sha_words_2_num_vars(value: usize) -> usize {
         6
     } else {
         panic!("Invalid SHA wordsize")
+    }
+}
+
+/// rotate right by count if count is +ve or by left if its -ne. Count
+/// must be less than the number of bits in the size of T
+#[inline]
+fn rot<T>(value: T, count: i32) -> T
+where
+    T: Shr<i32, Output = T> + Shl<i32, Output = T> + BitOr<Output = T> + Copy,
+{
+    let bits = 8 * std::mem::size_of::<T>() as i32;
+
+    debug_assert!(8 * std::mem::size_of::<T>() > count.abs().try_into().unwrap());
+    if count > 0 {
+        let delta = bits - count;
+        (value >> count) | (value << delta)
+    } else {
+        let count: i32 = (-count).try_into().unwrap_or_default();
+        let delta = bits - count;
+        (value << count) | (value >> delta)
     }
 }
 
@@ -45,7 +66,7 @@ impl ChGate {
         // Compute NOT x = 1 - x
         let NOT_x = builder_ref.add_sector(ExprBuilder::constant(F::ONE) - x_vars.expr());
 
-        // Compute (x `and` y) + (NOT x `and` Z) Note that x only
+        // Compute (x `and` y) `xor` (NOT x `and` Z) Note that x only
         // selects one bit from either x or z, so the output is
         // guaranteed to be in {0,1}
         let ch_sector = builder_ref.add_sector(x_AND_y + (z_vars.expr() * NOT_x.expr()));
@@ -55,6 +76,13 @@ impl ChGate {
 
     pub fn get_output(&self) -> NodeRef {
         self.ch_sector.clone()
+    }
+
+    pub fn evaluate<T>(x: T, y: T, z: T) -> T
+    where
+        T: BitAnd<Output = T> + BitXor<Output = T> + Not<Output = T> + Copy,
+    {
+        (x & y) ^ (!x & z)
     }
 }
 
@@ -101,6 +129,13 @@ impl MajGate {
     pub fn get_output(&self) -> NodeRef {
         self.maj_sector.clone()
     }
+
+    pub fn evaluate<T>(x: T, y: T, z: T) -> T
+    where
+        T: BitAnd<Output = T> + BitXor<Output = T> + Copy,
+    {
+        (x & y) ^ (y & z) ^ (x & z)
+    }
 }
 
 /// The Capital Sigma function described on Printed Page Number 10 in
@@ -140,6 +175,18 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i3
 
     pub fn get_output(&self) -> NodeRef {
         self.sigma_sector.clone()
+    }
+
+    pub fn evaluate<T>(x: T) -> T
+    where
+        T: BitAnd<Output = T>
+            + BitOr<Output = T>
+            + BitXor<Output = T>
+            + Shr<i32, Output = T>
+            + Shl<i32, Output = T>
+            + Copy,
+    {
+        rot(x, ROTR1) ^ rot(x, ROTR2) ^ rot(x, ROTR3)
     }
 }
 
@@ -182,5 +229,17 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32
 
     pub fn get_output(&self) -> NodeRef {
         self.sigma_sector.clone()
+    }
+
+    pub fn evaluate<T>(x: T) -> T
+    where
+        T: BitAnd<Output = T>
+            + BitOr<Output = T>
+            + BitXor<Output = T>
+            + Shr<i32, Output = T>
+            + Shl<i32, Output = T>
+            + Copy,
+    {
+        rot(x, ROTR1) ^ rot(x, ROTR2) ^ (x >> SHR3)
     }
 }
