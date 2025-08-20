@@ -79,7 +79,7 @@ fn test_output_layer_get_claims() {
     let mut transcript_reader = TranscriptReader::<Fr, TestSponge<Fr>>::new(transcript);
 
     let verifier_output_layer = circuit_output_layer
-        .retrieve_mle_from_transcript_and_fix_layer(&mut transcript_reader)
+        .into_veriier_output_layer(&mut transcript_reader)
         .unwrap();
 
     let claim = verifier_output_layer.get_claim().unwrap();
@@ -135,7 +135,7 @@ fn test_output_layer_get_claims_with_prefix_bits() {
     let mut transcript_reader = TranscriptReader::<Fr, TestSponge<Fr>>::new(transcript);
 
     let verifier_output_layer = circuit_output_layer
-        .retrieve_mle_from_transcript_and_fix_layer(&mut transcript_reader)
+        .into_veriier_output_layer(&mut transcript_reader)
         .unwrap();
 
     let claim = verifier_output_layer.get_claim().unwrap();
