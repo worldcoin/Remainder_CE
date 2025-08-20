@@ -239,7 +239,7 @@ impl OutputLayerDescription {
     /// Retrieve the MLE evaluations from the transcript and fix the variables
     /// of this output layer to random challenges sampled from the transcript.
     /// Returns a description of the layer ready to be used by the verifier.
-    pub fn retrieve_mle_from_transcript_and_fix_layer<E: ExtensionField>(
+    pub fn into_veriier_output_layer<E: ExtensionField>(
         &self,
         transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
     ) -> Result<VerifierOutputLayer<E>> {

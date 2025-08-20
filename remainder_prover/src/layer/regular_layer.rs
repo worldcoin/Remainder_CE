@@ -428,7 +428,7 @@ pub struct RegularLayerDescription<E: ExtensionField> {
     /// A structural description of the polynomial expression defining this
     /// layer. The leaves of the expression describe the MLE characteristics
     /// without storing any values.
-    expression: Expression<E, MleDescription<E>>,
+    expression: Expression<E, MleDescription>,
 }
 
 impl<E: ExtensionField> RegularLayerDescription<E> {

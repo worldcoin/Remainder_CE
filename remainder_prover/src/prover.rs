@@ -523,7 +523,7 @@ pub struct GKRCircuitDescription<E: ExtensionField> {
     /// The circuit descriptions of the verifier challengs
     pub fiat_shamir_challenges: Vec<FiatShamirChallengeDescription>,
     /// The circuit descriptions of the intermediate layers.
-    pub intermediate_layers: Vec<LayerDescriptionEnum<E>>,
+    pub intermediate_layers: Vec<LayerDescriptionEnum>,
     /// The circuit desriptions of the output layers.
     pub output_layers: Vec<OutputLayerDescription>,
 }
@@ -732,7 +732,7 @@ impl<E: ExtensionField> GKRCircuitDescription<E> {
             info!("Verifying Output Layer: {layer_id:?}");
 
             let verifier_output_layer = circuit_output_layer
-                .retrieve_mle_from_transcript_and_fix_layer(transcript_reader)?;
+                .into_veriier_output_layer(transcript_reader)?;
 
             let claim = verifier_output_layer.get_claim()?;
             claim_tracker.insert(claim.get_to_layer_id(), claim);

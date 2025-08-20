@@ -11,6 +11,7 @@ pub mod regular_layer;
 use std::{collections::HashSet, fmt::Debug};
 
 use layer_enum::{LayerEnum, VerifierLayerEnum};
+use parking_lot::WaitTimeoutResult;
 use product::PostSumcheckLayer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -25,7 +26,7 @@ use crate::{
 };
 use remainder_shared_types::{
     extension_field::ExtensionField,
-    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
+    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript}, Field,
 };
 
 use anyhow::Result;
@@ -168,28 +169,13 @@ pub trait Layer<E: ExtensionField> {
 }
 
 /// A circuit-description counterpart of the GKR [Layer] trait.
-pub trait LayerDescription<E: ExtensionField> {
+pub trait LayerDescription<F: Field> {
     /// The associated type that the verifier uses to work with a layer of this
     /// kind.
-    type VerifierLayer: VerifierLayer<E> + Debug + Serialize + for<'a> Deserialize<'a>;
+    // type VerifierLayer: VerifierLayer<E: ExtensionField<BaseField = F>> + Debug + Serialize + for<'a> Deserialize<'a>;
 
     /// Returns this layer's ID.
     fn layer_id(&self) -> LayerId;
-
-    /// Tries to verify `claims` for this layer and returns a [VerifierLayer]
-    /// with a fully bound and evaluated expression.
-    ///
-    /// There is only a single aggregated claim if our
-    /// [remainder_shared_types::config::ClaimAggregationStrategy]
-    /// is Interpolative, otherwise we have several claims we take the random linear
-    /// combination over.
-    ///
-    /// The proof is implicitly included in the `transcript`.
-    fn verify_rounds(
-        &self,
-        claims: &[&RawClaim<E>],
-        transcript: &mut impl VerifierTranscript<E::BaseField>,
-    ) -> Result<VerifierLayerEnum<E>>;
 
     /// The list of sumcheck rounds this layer will prove, by index.
     fn sumcheck_round_indices(&self) -> Vec<usize>;
@@ -197,21 +183,16 @@ pub trait LayerDescription<E: ExtensionField> {
     /// Turns this [LayerDescription] into a [VerifierLayer] by taking the
     /// `sumcheck_bindings` and `claim_points` and inserting them into the
     /// expression to become a verifier expression.
-    fn convert_into_verifier_layer(
+    fn convert_into_verifier_layer<E, VL>
+    (
         &self,
         sumcheck_bindings: &[E],
         claim_points: &[&[E]],
         transcript: &mut impl VerifierTranscript<E::BaseField>,
-    ) -> Result<Self::VerifierLayer>;
-
-    /// Gets the [PostSumcheckLayer] for this layer.
-    /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
-    fn get_post_sumcheck_layer(
-        &self,
-        round_challenges: &[E],
-        claim_challenges: &[&[E]],
-        random_coefficients: &[E],
-    ) -> PostSumcheckLayer<E, Option<E>>;
+    ) -> Result<VL>
+    where
+        E: ExtensionField<BaseField = F>,
+        VL: VerifierLayer<E>;
 
     /// The maximum degree for any univariate in the sumcheck protocol.
     fn max_degree(&self) -> usize;
@@ -232,7 +213,9 @@ pub trait LayerDescription<E: ExtensionField> {
     fn get_circuit_mles(&self) -> Vec<&MleDescription>;
 
     /// Given a [CircuitMap], turn this [LayerDescription] into a ProverLayer.
-    fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<E>) -> LayerEnum<E>;
+    fn convert_into_prover_layer<E>(&self, circuit_map: &CircuitEvalMap<E>) -> LayerEnum<E>
+    where
+        E: ExtensionField<BaseField = F>;
 }
 
 /// A verifier counterpart of a GKR [Layer] trait.
@@ -242,6 +225,30 @@ pub trait VerifierLayer<E: ExtensionField> {
 
     /// Get the claims that this layer makes on other layers.
     fn get_claims(&self) -> Result<Vec<Claim<E>>>;
+
+    /// Tries to verify `claims` for this layer and returns a [VerifierLayer]
+    /// with a fully bound and evaluated expression.
+    ///
+    /// There is only a single aggregated claim if our
+    /// [remainder_shared_types::config::ClaimAggregationStrategy]
+    /// is Interpolative, otherwise we have several claims we take the random linear
+    /// combination over.
+    ///
+    /// The proof is implicitly included in the `transcript`.
+    fn verify_rounds(
+        &self,
+        claims: &[&RawClaim<E>],
+        transcript: &mut impl VerifierTranscript<E::BaseField>,
+    ) -> Result<VerifierLayerEnum<E>>;
+
+        /// Gets the [PostSumcheckLayer] for this layer.
+    /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
+    fn get_post_sumcheck_layer(
+        &self,
+        round_challenges: &[E],
+        claim_challenges: &[&[E]],
+        random_coefficients: &[E],
+    ) -> PostSumcheckLayer<E, Option<E>>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Ord, Serialize, Deserialize, Copy, PartialOrd)]
