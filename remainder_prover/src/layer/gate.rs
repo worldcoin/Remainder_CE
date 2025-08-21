@@ -3,7 +3,7 @@
 
 /// Helper functions used in the gate sumcheck algorithms.
 pub mod gate_helpers;
-use std::{cmp::max, collections::HashSet};
+use std::{cmp::max, collections::HashSet, marker::PhantomData};
 
 use gate_helpers::{
     compute_fully_bound_binary_gate_function, fold_binary_gate_wiring_into_mles_phase_1,
@@ -90,6 +90,10 @@ pub struct GateLayer<E: ExtensionField> {
     pub phase_1_mles: Option<Vec<Vec<DenseMle<E>>>>,
     /// The mles that are constructed when initializing phase 2 (binding the y variables).
     pub phase_2_mles: Option<Vec<Vec<DenseMle<E>>>>,
+    /// Bind value for `lhs` and `phase_1_mles`
+    pub x_bind_list: Vec<Option<E>>,
+    /// Bind value for `rhs` and `phase_2_mles`
+    pub y_bind_list: Vec<Option<E>>,
     /// The gate operation representing the fan-in-two relationship.
     pub gate_operation: BinaryOperation,
     /// the beta table which enumerates the incoming claim's challenge points on the
@@ -171,7 +175,7 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
                 .mle_indices()
                 .iter()
                 .filter_map(|mle_index| match mle_index {
-                    MleIndex::Bound(value, _idx) => Some(*value),
+                    MleIndex::Bound(idx) => Some(self.x_bind_list[*idx].unwrap()),
                     MleIndex::Fixed(_) => None,
                     _ => panic!("Should not have any unbound values"),
                 })
@@ -225,6 +229,8 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
         self.g_vec = Some(vec![claim_point.to_vec()]);
         self.lhs.index_mle_indices(0);
         self.rhs.index_mle_indices(0);
+        self.x_bind_list = self.lhs.init_bind_list();
+        self.y_bind_list = self.rhs.init_bind_list();
 
         Ok(())
     }
@@ -232,6 +238,8 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
     fn initialize_rlc(&mut self, _random_coefficients: &[E], claims: &[&RawClaim<E>]) {
         self.lhs.index_mle_indices(0);
         self.rhs.index_mle_indices(0);
+        self.x_bind_list = self.lhs.init_bind_list();
+        self.y_bind_list = self.rhs.init_bind_list();
         let (g_vec, beta_g2_vec): (Vec<Vec<E>>, Vec<BetaValues<E>>) = claims
             .iter()
             .map(|claim| {
@@ -348,7 +356,7 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
                     .mle_indices()
                     .iter()
                     .filter_map(|mle_index| match mle_index {
-                        MleIndex::Bound(value, _idx) => Some(*value),
+                        MleIndex::Bound(idx) => Some(self.x_bind_list[*idx].unwrap()),
                         MleIndex::Fixed(_) => None,
                         _ => panic!("Should not have any unbound values"),
                     })
@@ -428,15 +436,15 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
                 .unwrap()
                 .iter_mut()
                 .for_each(|beta| beta.beta_update(round_index, challenge));
-            self.lhs.fix_variable(round_index, challenge);
-            self.rhs.fix_variable(round_index, challenge);
+            self.lhs.fix_variable(round_index, challenge, &mut self.x_bind_list);
+            self.rhs.fix_variable(round_index, challenge, &mut self.y_bind_list);
 
             Ok(())
         } else if round_index < self.num_rounds_phase1 + self.num_dataparallel_vars {
             let mles = self.phase_1_mles.as_mut().unwrap();
             mles.iter_mut().for_each(|mle_vec| {
                 mle_vec.iter_mut().for_each(|mle| {
-                    mle.fix_variable(round_index, challenge);
+                    mle.fix_variable(round_index, challenge, &mut self.x_bind_list);
                 })
             });
             Ok(())
@@ -445,7 +453,7 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
             let mles = self.phase_2_mles.as_mut().unwrap();
             mles.iter_mut().for_each(|mle_vec| {
                 mle_vec.iter_mut().for_each(|mle| {
-                    mle.fix_variable(round_index, challenge);
+                    mle.fix_variable(round_index, challenge, &mut self.y_bind_list);
                 })
             });
             Ok(())
@@ -534,11 +542,12 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
 
         match self.gate_operation {
             BinaryOperation::Add => PostSumcheckLayer(vec![
-                Product::<E, E>::new(&[lhs_mle.clone()], f_1_uv),
-                Product::<E, E>::new(&[rhs_mle.clone()], f_1_uv),
+                Product::<E, E>::new(&[lhs_mle.clone()], &[self.x_bind_list.clone()], f_1_uv),
+                Product::<E, E>::new(&[rhs_mle.clone()], &[self.y_bind_list.clone()], f_1_uv),
             ]),
             BinaryOperation::Mul => PostSumcheckLayer(vec![Product::<E, E>::new(
                 &[lhs_mle.clone(), rhs_mle.clone()],
+                &[self.x_bind_list.clone(), self.y_bind_list.clone()],
                 f_1_uv,
             )]),
         }
@@ -555,7 +564,7 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
         for index in lhs_reduced.mle_indices() {
             fixed_mle_indices_u.push(
                 index
-                    .val()
+                    .val(&self.x_bind_list)
                     .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
             );
         }
@@ -573,7 +582,7 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
         for index in rhs_reduced.mle_indices() {
             fixed_mle_indices_v.push(
                 index
-                    .val()
+                    .val(&self.y_bind_list)
                     .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
             );
         }
@@ -592,8 +601,7 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
 
 /// The circuit-description counterpart of a Gate layer description.
 #[derive(Serialize, Deserialize, Clone, Debug, Hash)]
-#[serde(bound = "E: ExtensionField")]
-pub struct GateLayerDescription<E: ExtensionField> {
+pub struct GateLayerDescription<F: Field> {
     /// The layer id associated with this gate layer.
     id: LayerId,
 
@@ -607,24 +615,27 @@ pub struct GateLayerDescription<E: ExtensionField> {
 
     /// The left side of the expression, i.e. the mle that makes up the "x"
     /// variables.
-    lhs_mle: MleDescription<E>,
+    lhs_mle: MleDescription,
 
     /// The mles that are constructed when initializing phase 2 (binding the y
     /// variables).
-    rhs_mle: MleDescription<E>,
+    rhs_mle: MleDescription,
 
     /// The number of bits representing the number of "dataparallel" copies of
     /// the circuit.
     num_dataparallel_vars: usize,
+
+    /// Phantom data to align the signature with other layer types
+    _phantom: PhantomData<F>,
 }
 
-impl<E: ExtensionField> GateLayerDescription<E> {
+impl<F: Field> GateLayerDescription<F> {
     /// Constructor for a [GateLayerDescription].
     pub fn new(
         num_dataparallel_vars: Option<usize>,
         wiring: Vec<(u32, u32, u32)>,
-        lhs_circuit_mle: MleDescription<E>,
-        rhs_circuit_mle: MleDescription<E>,
+        lhs_circuit_mle: MleDescription,
+        rhs_circuit_mle: MleDescription,
         gate_layer_id: LayerId,
         gate_operation: BinaryOperation,
     ) -> Self {
@@ -635,6 +646,7 @@ impl<E: ExtensionField> GateLayerDescription<E> {
             lhs_mle: lhs_circuit_mle,
             rhs_mle: rhs_circuit_mle,
             num_dataparallel_vars: num_dataparallel_vars.unwrap_or(0),
+            _phantom: PhantomData,
         }
     }
 }
@@ -648,19 +660,99 @@ const DATAPARALLEL_ROUND_ADD_NUM_EVALS: usize = 3;
 const NON_DATAPARALLEL_ROUND_MUL_NUM_EVALS: usize = 3;
 const NON_DATAPARALLEL_ROUND_ADD_NUM_EVALS: usize = 3;
 
-impl<E: ExtensionField> LayerDescription<E> for GateLayerDescription<E> {
-    type VerifierLayer = VerifierGateLayer<E>;
+impl<F: Field> GateLayerDescription<F> {
+    fn convert_into_verifier_layer<E>(
+        &self,
+        sumcheck_bindings: &[E],
+        claim_points: &[&[E]],
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<VerifierGateLayer<E>>
+    where
+        E: ExtensionField<BaseField = F>
+    {
+        // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
+        // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED
+        // BITS
+        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+            acc + match idx {
+                MleIndex::Fixed(_) => 0,
+                _ => 1,
+            }
+        }) - self.num_dataparallel_vars;
+        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+            acc + match idx {
+                MleIndex::Fixed(_) => 0,
+                _ => 1,
+            }
+        }) - self.num_dataparallel_vars;
 
+        // We want to separate the challenges into which ones are from the dataparallel bits, which ones
+        // are for binding x (phase 1), and which are for binding y (phase 2).
+        let mut sumcheck_bindings_vec = sumcheck_bindings.to_vec();
+        let last_v_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_vars + num_u);
+        let first_u_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_vars);
+        let dataparallel_challenges = sumcheck_bindings_vec;
+
+        assert_eq!(last_v_challenges.len(), num_v);
+
+        // Since the original mles are dataparallel, the challenges are the concat of the copy bits and the variable bound bits.
+        let lhs_challenges = dataparallel_challenges
+            .iter()
+            .chain(first_u_challenges.iter())
+            .copied()
+            .collect_vec();
+        let rhs_challenges = dataparallel_challenges
+            .iter()
+            .chain(last_v_challenges.iter())
+            .copied()
+            .collect_vec();
+
+        let lhs_verifier_mle = self
+            .lhs_mle
+            .into_verifier_mle(&lhs_challenges, transcript_reader)
+            .unwrap();
+        let rhs_verifier_mle = self
+            .rhs_mle
+            .into_verifier_mle(&rhs_challenges, transcript_reader)
+            .unwrap();
+
+        // Create the resulting verifier layer for claim tracking
+        // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
+        let verifier_gate_layer = VerifierGateLayer {
+            layer_id: self.layer_id(),
+            gate_operation: self.gate_operation,
+            wiring: self.nonzero_gates.clone(),
+            lhs_mle: lhs_verifier_mle,
+            rhs_mle: rhs_verifier_mle,
+            num_dataparallel_rounds: self.num_dataparallel_vars,
+            claim_challenge_points: claim_points
+                .iter()
+                .cloned()
+                .map(|claim| claim.to_vec())
+                .collect_vec(),
+            dataparallel_sumcheck_challenges: dataparallel_challenges,
+            first_u_challenges,
+            last_v_challenges,
+        };
+
+        Ok(verifier_gate_layer)
+    }
+}
+
+impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
     /// Gets this layer's id.
     fn layer_id(&self) -> LayerId {
         self.id
     }
 
-    fn verify_rounds(
+    fn verify_rounds<E>(
         &self,
         claims: &[&RawClaim<E>],
-        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
-    ) -> Result<VerifierLayerEnum<E>> {
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<VerifierLayerEnum<E>> 
+    where
+        E: ExtensionField<BaseField = F>
+    {
         // Storing challenges for the sake of claim generation later
         let mut challenges = vec![];
 
@@ -822,86 +914,15 @@ impl<E: ExtensionField> LayerDescription<E> for GateLayerDescription<E> {
         (0..num_u + num_v + self.num_dataparallel_vars).collect_vec()
     }
 
-    fn convert_into_verifier_layer(
-        &self,
-        sumcheck_bindings: &[E],
-        claim_points: &[&[E]],
-        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
-    ) -> Result<Self::VerifierLayer> {
-        // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
-        // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED
-        // BITS
-        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
-            acc + match idx {
-                MleIndex::Fixed(_) => 0,
-                _ => 1,
-            }
-        }) - self.num_dataparallel_vars;
-        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
-            acc + match idx {
-                MleIndex::Fixed(_) => 0,
-                _ => 1,
-            }
-        }) - self.num_dataparallel_vars;
-
-        // We want to separate the challenges into which ones are from the dataparallel bits, which ones
-        // are for binding x (phase 1), and which are for binding y (phase 2).
-        let mut sumcheck_bindings_vec = sumcheck_bindings.to_vec();
-        let last_v_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_vars + num_u);
-        let first_u_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_vars);
-        let dataparallel_challenges = sumcheck_bindings_vec;
-
-        assert_eq!(last_v_challenges.len(), num_v);
-
-        // Since the original mles are dataparallel, the challenges are the concat of the copy bits and the variable bound bits.
-        let lhs_challenges = dataparallel_challenges
-            .iter()
-            .chain(first_u_challenges.iter())
-            .copied()
-            .collect_vec();
-        let rhs_challenges = dataparallel_challenges
-            .iter()
-            .chain(last_v_challenges.iter())
-            .copied()
-            .collect_vec();
-
-        let lhs_verifier_mle = self
-            .lhs_mle
-            .into_verifier_mle(&lhs_challenges, transcript_reader)
-            .unwrap();
-        let rhs_verifier_mle = self
-            .rhs_mle
-            .into_verifier_mle(&rhs_challenges, transcript_reader)
-            .unwrap();
-
-        // Create the resulting verifier layer for claim tracking
-        // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
-        let verifier_gate_layer = VerifierGateLayer {
-            layer_id: self.layer_id(),
-            gate_operation: self.gate_operation,
-            wiring: self.nonzero_gates.clone(),
-            lhs_mle: lhs_verifier_mle,
-            rhs_mle: rhs_verifier_mle,
-            num_dataparallel_rounds: self.num_dataparallel_vars,
-            claim_challenge_points: claim_points
-                .iter()
-                .cloned()
-                .map(|claim| claim.to_vec())
-                .collect_vec(),
-            dataparallel_sumcheck_challenges: dataparallel_challenges,
-            first_u_challenges,
-            last_v_challenges,
-        };
-
-        Ok(verifier_gate_layer)
-    }
-
-    fn get_post_sumcheck_layer(
+    fn get_post_sumcheck_layer<E>(
         &self,
         round_challenges: &[E],
         claim_challenges: &[&[E]],
         random_coefficients: &[E],
-    ) -> super::product::PostSumcheckLayer<E, Option<E>> {
+    ) -> super::product::PostSumcheckLayer<E, Option<E>> 
+    where
+        E: ExtensionField<BaseField = F>
+    {
         let num_rounds_phase1 = self.lhs_mle.num_free_vars() - self.num_dataparallel_vars;
 
         let g2_challenges_vec = claim_challenges
@@ -978,11 +999,17 @@ impl<E: ExtensionField> LayerDescription<E> for GateLayerDescription<E> {
         }
     }
 
-    fn get_circuit_mles(&self) -> Vec<&MleDescription<E>> {
+    fn get_circuit_mles(&self) -> Vec<&MleDescription> {
         vec![&self.lhs_mle, &self.rhs_mle]
     }
 
-    fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<E>) -> LayerEnum<E> {
+    fn convert_into_prover_layer<E>(
+        &self, 
+        circuit_map: &CircuitEvalMap<E>
+    ) -> LayerEnum<E>
+    where
+        E: ExtensionField<BaseField = F>
+    {
         let lhs_mle = self.lhs_mle.into_dense_mle(circuit_map);
         let rhs_mle = self.rhs_mle.into_dense_mle(circuit_map);
         let num_dataparallel_vars = if self.num_dataparallel_vars == 0 {
@@ -1006,11 +1033,14 @@ impl<E: ExtensionField> LayerDescription<E> for GateLayerDescription<E> {
         self.rhs_mle.index_mle_indices(start_index);
     }
 
-    fn compute_data_outputs(
+    fn compute_data_outputs<E>(
         &self,
-        mle_outputs_necessary: &HashSet<&MleDescription<E>>,
+        mle_outputs_necessary: &HashSet<&MleDescription>,
         circuit_map: &mut CircuitEvalMap<E>,
-    ) {
+    )
+    where
+        E: ExtensionField<BaseField = F>
+    {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
 
@@ -1152,7 +1182,7 @@ impl<E: ExtensionField> VerifierLayer<E> for VerifierGateLayer<E> {
         let lhs_point = lhs_vars
             .iter()
             .map(|idx| match idx {
-                MleIndex::Bound(chal, _bit_idx) => *chal,
+                MleIndex::Bound(bit_idx) => self.first_u_challenges[*bit_idx],
                 MleIndex::Fixed(val) => {
                     if *val {
                         E::ONE
@@ -1170,11 +1200,11 @@ impl<E: ExtensionField> VerifierLayer<E> for VerifierGateLayer<E> {
 
         // Grab the claim on the right side.
         // TODO!(ryancao): Do error handling here!
-        let rhs_vars: &[MleIndex<E>] = self.rhs_mle.mle_indices();
+        let rhs_vars: &[MleIndex] = self.rhs_mle.mle_indices();
         let rhs_point = rhs_vars
             .iter()
             .map(|idx| match idx {
-                MleIndex::Bound(chal, _bit_idx) => *chal,
+                MleIndex::Bound(bit_idx) => self.last_v_challenges[*bit_idx],
                 MleIndex::Fixed(val) => {
                     if *val {
                         E::ONE
@@ -1230,6 +1260,9 @@ impl<E: ExtensionField> GateLayer<E> {
             layer_id,
             phase_1_mles: None,
             phase_2_mles: None,
+            // Construct bind_list in `initialize` instead
+            x_bind_list: Vec::new(),
+            y_bind_list: Vec::new(),
             gate_operation,
             beta_g2_vec: None,
             g_vec: None,

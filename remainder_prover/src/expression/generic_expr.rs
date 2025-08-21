@@ -4,7 +4,7 @@
 
 use crate::mle::{AbstractMle, MleIndex};
 use itertools::Itertools;
-use remainder_shared_types::Field;
+use remainder_shared_types::{extension_field::ExtensionField, Field};
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::max,
@@ -221,6 +221,18 @@ impl<F: Field, M: AbstractMle> Expression<F, M> {
             .get(curr_round)
             .unwrap_or(&1);
         max_var_degree + 1 // for eq
+    }
+
+    /// Returns an empty bind list
+    pub fn init_bind_list<E>(&self) -> Vec<Option<E>> 
+    where
+        E: ExtensionField<BaseField = F>,
+    {
+        // Assert that all MLEs are unbounded
+        for m in &self.mle_vec {
+            assert!(m.is_unbounded());
+        }
+        vec![None; self.get_all_rounds().iter().max().unwrap() + 1]
     }
 }
 

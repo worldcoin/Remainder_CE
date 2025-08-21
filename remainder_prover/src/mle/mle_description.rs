@@ -113,33 +113,34 @@ impl MleDescription {
 
     /// Gets the values of the bound and fixed MLE indices of this MLE,
     /// panicking if the MLE is not fully bound.
-    pub fn get_claim_point<F: Field>(&self, challenges: &[F], bind_list: &Vec<Option<F>>) -> Vec<F> {
+    /// The claim is consisted of two parts:
+    /// - `challenges`: values that are yet to be binded to the MLE
+    /// - `bind_list`: values that are already binded ot the MLE
+    pub fn get_claim_point<F: Field>(&self, challenges: &[F], bind_list: &[Option<F>]) -> Vec<F> {
         self.var_indices
             .iter()
             .map(|index| match index {
-                MleIndex::Bound(idx) => bind_list[*idx].unwrap(),
                 MleIndex::Fixed(chal) => F::from(*chal as u64),
                 MleIndex::Indexed(i) => challenges[*i],
-                _ => panic!("DenseMleRefDesc contained free variables!"),
+                MleIndex::Bound(idx) => bind_list[*idx].unwrap(),
+                MleIndex::Free => panic!("DenseMleRefDesc contained free variables!"),
             })
             .collect()
     }
 
     /// Convert this MLE into a [VerifierMle], which represents a fully-bound MLE.
+    /// Assumes that the bound value is obtained somewhere else
+    /// Bound every index and update evaluation
     pub fn into_verifier_mle<E: ExtensionField>(
         &self,
-        bind_list: &Vec<Option<E>>,
+        _point: &[E],
         transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
     ) -> Result<VerifierMle<E>> {
         let verifier_indices = self
             .var_indices
             .iter()
             .map(|mle_index| match mle_index {
-                MleIndex::Indexed(idx) => {
-                    // assert that the bind value exists
-                    assert!(bind_list[*idx].is_some());
-                    Ok(MleIndex::Bound(*idx))
-                },
+                MleIndex::Indexed(idx) => Ok(MleIndex::Bound(*idx)),
                 MleIndex::Fixed(val) => Ok(MleIndex::Fixed(*val)),
                 _ => Err(anyhow!(ExpressionError::EvaluateNotFullyIndexedError)),
             })

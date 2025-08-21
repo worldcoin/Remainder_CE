@@ -1,6 +1,6 @@
 //! This module contains the implementation of the matrix multiplication layer
 
-use std::collections::HashSet;
+use std::{collections::HashSet, marker::PhantomData};
 
 use ::serde::{Deserialize, Serialize};
 use itertools::Itertools;
@@ -82,6 +82,8 @@ pub struct MatMult<E: ExtensionField> {
     layer_id: LayerId,
     matrix_a: Matrix<E>,
     matrix_b: Matrix<E>,
+    a_bind_list: Vec<Option<E>>,
+    b_bind_list: Vec<Option<E>>,
     num_vars_middle_ab: usize,
 }
 
@@ -98,6 +100,9 @@ impl<E: ExtensionField> MatMult<E> {
             layer_id,
             matrix_a: matrix_a,
             matrix_b: matrix_b,
+            // initialized in [Self::pre_processing_step]
+            a_bind_list: Vec::new(),
+            b_bind_list: Vec::new(),
             num_vars_middle_ab,
         }
     }
@@ -133,15 +138,17 @@ impl<E: ExtensionField> MatMult<E> {
 
         matrix_a_mle.index_mle_indices(0);
         matrix_b_mle.index_mle_indices(0);
+        self.a_bind_list = matrix_a_mle.init_bind_list();
+        self.b_bind_list = matrix_b_mle.init_bind_list();
 
         // Bind the row indices of matrix A to the relevant claim point.
         claim_a.into_iter().enumerate().for_each(|(idx, chal)| {
-            matrix_a_mle.fix_variable(idx, chal);
+            matrix_a_mle.fix_variable(idx, chal, &mut self.a_bind_list);
         });
 
         // Bind the column indices of matrix B to the relevant claim point.
         claim_b.into_iter().enumerate().for_each(|(idx, chal)| {
-            matrix_b_mle.fix_variable_at_index(idx + self.matrix_b.rows_num_vars, chal);
+            matrix_b_mle.fix_variable_at_index(idx + self.matrix_b.rows_num_vars, chal, &mut self.b_bind_list);
         });
         // We want to re-index the MLE indices in matrix A such that it
         // starts from 0 after the pre-processing, so we do that by first
@@ -160,6 +167,7 @@ impl<E: ExtensionField> MatMult<E> {
             .collect_vec();
         matrix_a_mle.mle_indices = new_a_indices;
         matrix_a_mle.index_mle_indices(0);
+        self.a_bind_list = matrix_a_mle.init_bind_list();
     }
 
     fn append_leaf_mles_to_transcript(
@@ -218,8 +226,8 @@ impl<E: ExtensionField> Layer<E> for MatMult<E> {
         }
 
         // Assert that the MLEs have been fully bound.
-        assert!(self.matrix_a.mle.is_fully_bounded());
-        assert!(self.matrix_b.mle.is_fully_bounded());
+        assert!(self.matrix_a.mle.is_fully_bounded(&self.a_bind_list));
+        assert!(self.matrix_b.mle.is_fully_bounded(&self.b_bind_list));
 
         self.append_leaf_mles_to_transcript(transcript_writer);
         Ok(())
@@ -263,8 +271,8 @@ impl<E: ExtensionField> Layer<E> for MatMult<E> {
     }
 
     fn bind_round_variable(&mut self, round_index: usize, challenge: E) -> Result<()> {
-        self.matrix_a.mle.fix_variable(round_index, challenge);
-        self.matrix_b.mle.fix_variable(round_index, challenge);
+        self.matrix_a.mle.fix_variable(round_index, challenge, &mut self.a_bind_list);
+        self.matrix_b.mle.fix_variable(round_index, challenge, &mut self.b_bind_list);
 
         Ok(())
     }
@@ -285,20 +293,24 @@ impl<E: ExtensionField> Layer<E> for MatMult<E> {
         _claim_challenges: &[&[E]],
         _random_coefficients: &[E],
     ) -> PostSumcheckLayer<E, E> {
-        let mles = vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()];
-        PostSumcheckLayer(vec![Product::<E, E>::new(&mles, E::ONE)])
+        PostSumcheckLayer(vec![Product::<E, E>::new(
+            &vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()], 
+            &vec![self.a_bind_list.clone(), self.b_bind_list.clone()],
+            E::ONE
+        )])
     }
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<Claim<E>>> {
         let claims = vec![&self.matrix_a.mle, &self.matrix_b.mle]
             .into_iter()
-            .map(|matrix_mle| {
+            .zip(vec![&self.a_bind_list, &self.b_bind_list])
+            .map(|(matrix_mle, bind_list)| {
                 let matrix_fixed_indices = matrix_mle
                     .mle_indices()
                     .iter()
                     .map(|index| {
                         index
-                            .val()
+                            .val(bind_list)
                             .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))
                             .unwrap()
                     })
@@ -323,9 +335,10 @@ impl<E: ExtensionField> Layer<E> for MatMult<E> {
 #[derive(Serialize, Deserialize, Clone, Debug, Hash)]
 #[serde(bound = "F: Field")]
 pub struct MatrixDescription<F: Field> {
-    mle: MleDescription<F>,
+    mle: MleDescription,
     rows_num_vars: usize,
     cols_num_vars: usize,
+    _phantom: PhantomData<F>,
 }
 
 impl<F: Field> MatrixDescription<F> {
@@ -333,11 +346,12 @@ impl<F: Field> MatrixDescription<F> {
     /// description of matrix, only containing shape information
     /// which is the number of variables in the rows and the number
     /// of variables in the columns.
-    pub fn new(mle: MleDescription<F>, rows_num_vars: usize, cols_num_vars: usize) -> Self {
+    pub fn new(mle: MleDescription, rows_num_vars: usize, cols_num_vars: usize) -> Self {
         Self {
             mle,
             rows_num_vars,
             cols_num_vars,
+            _phantom: PhantomData,
         }
     }
 
@@ -380,21 +394,89 @@ impl<F: Field> MatMultLayerDescription<F> {
             matrix_b,
         }
     }
+
+    fn convert_into_verifier_layer<E>(
+        &self,
+        sumcheck_bindings: &[E],
+        claim_points: &[&[E]],
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<VerifierMatMultLayer<E>>
+    where
+        E: ExtensionField<BaseField = F>
+    {
+        // For matmult, we only use interpolative claim aggregation.
+        assert_eq!(claim_points.len(), 1);
+        let claim_point = claim_points[0];
+
+        // Split the claim into the claims made on matrix A rows and matrix B cols.
+        let mut claim_a = claim_point.to_vec();
+        let claim_b = claim_a.split_off(self.matrix_a.rows_num_vars);
+
+        // Construct the full claim made on A using the claim made on the layer and the sumcheck bindings.
+        let full_claim_chals_a = claim_a
+            .into_iter()
+            .chain(sumcheck_bindings.to_vec())
+            .collect_vec();
+
+        // Construct the full claim made on B using the claim made on the layer and the sumcheck bindings.
+        let full_claim_chals_b = sumcheck_bindings
+            .iter()
+            .copied()
+            .chain(claim_b)
+            .collect_vec();
+
+        // Shape checks.
+        assert_eq!(
+            full_claim_chals_a.len(),
+            self.matrix_a.rows_num_vars + self.matrix_a.cols_num_vars
+        );
+        assert_eq!(
+            full_claim_chals_b.len(),
+            self.matrix_b.rows_num_vars + self.matrix_b.cols_num_vars
+        );
+
+        // Construct the verifier matrices given these fully bound points.
+        let matrix_a = VerifierMatrix {
+            mle: self
+                .matrix_a
+                .mle
+                .into_verifier_mle(&full_claim_chals_a, transcript_reader)
+                .unwrap(),
+            rows_num_vars: self.matrix_a.rows_num_vars,
+            cols_num_vars: self.matrix_a.cols_num_vars,
+        };
+        let matrix_b = VerifierMatrix {
+            mle: self
+                .matrix_b
+                .mle
+                .into_verifier_mle(&full_claim_chals_b, transcript_reader)
+                .unwrap(),
+            rows_num_vars: self.matrix_b.rows_num_vars,
+            cols_num_vars: self.matrix_b.cols_num_vars,
+        };
+
+        Ok(VerifierMatMultLayer {
+            layer_id: self.layer_id,
+            matrix_a,
+            matrix_b,
+        })
+    }
 }
 
-impl<E: ExtensionField> LayerDescription<E> for MatMultLayerDescription<E> {
-    type VerifierLayer = VerifierMatMultLayer<E>;
-
+impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
     /// Gets this layer's id.
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 
-    fn verify_rounds(
+    fn verify_rounds<E>(
         &self,
         claims: &[&RawClaim<E>],
-        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
-    ) -> Result<VerifierLayerEnum<E>> {
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<VerifierLayerEnum<E>> 
+    where
+        E: ExtensionField<BaseField = F>
+    {
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
 
@@ -469,11 +551,14 @@ impl<E: ExtensionField> LayerDescription<E> for MatMultLayerDescription<E> {
     /// Compute the evaluations of the MLE that represents the
     /// product of the two matrices over the boolean hypercube.
     /// Panics if the MLEs for the two matrices provided by the circuit map are of the wrong size.
-    fn compute_data_outputs(
+    fn compute_data_outputs<E>(
         &self,
-        mle_outputs_necessary: &HashSet<&MleDescription<E>>,
+        mle_outputs_necessary: &HashSet<&MleDescription>,
         circuit_map: &mut CircuitEvalMap<E>,
-    ) {
+    )
+    where
+        E: ExtensionField<BaseField = F>
+    {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
 
@@ -511,77 +596,16 @@ impl<E: ExtensionField> LayerDescription<E> for MatMultLayerDescription<E> {
         circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
     }
 
-    fn convert_into_verifier_layer(
-        &self,
-        sumcheck_bindings: &[E],
-        claim_points: &[&[E]],
-        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
-    ) -> Result<Self::VerifierLayer> {
-        // For matmult, we only use interpolative claim aggregation.
-        assert_eq!(claim_points.len(), 1);
-        let claim_point = claim_points[0];
-
-        // Split the claim into the claims made on matrix A rows and matrix B cols.
-        let mut claim_a = claim_point.to_vec();
-        let claim_b = claim_a.split_off(self.matrix_a.rows_num_vars);
-
-        // Construct the full claim made on A using the claim made on the layer and the sumcheck bindings.
-        let full_claim_chals_a = claim_a
-            .into_iter()
-            .chain(sumcheck_bindings.to_vec())
-            .collect_vec();
-
-        // Construct the full claim made on B using the claim made on the layer and the sumcheck bindings.
-        let full_claim_chals_b = sumcheck_bindings
-            .iter()
-            .copied()
-            .chain(claim_b)
-            .collect_vec();
-
-        // Shape checks.
-        assert_eq!(
-            full_claim_chals_a.len(),
-            self.matrix_a.rows_num_vars + self.matrix_a.cols_num_vars
-        );
-        assert_eq!(
-            full_claim_chals_b.len(),
-            self.matrix_b.rows_num_vars + self.matrix_b.cols_num_vars
-        );
-
-        // Construct the verifier matrices given these fully bound points.
-        let matrix_a = VerifierMatrix {
-            mle: self
-                .matrix_a
-                .mle
-                .into_verifier_mle(&full_claim_chals_a, transcript_reader)
-                .unwrap(),
-            rows_num_vars: self.matrix_a.rows_num_vars,
-            cols_num_vars: self.matrix_a.cols_num_vars,
-        };
-        let matrix_b = VerifierMatrix {
-            mle: self
-                .matrix_b
-                .mle
-                .into_verifier_mle(&full_claim_chals_b, transcript_reader)
-                .unwrap(),
-            rows_num_vars: self.matrix_b.rows_num_vars,
-            cols_num_vars: self.matrix_b.cols_num_vars,
-        };
-
-        Ok(VerifierMatMultLayer {
-            layer_id: self.layer_id,
-            matrix_a,
-            matrix_b,
-        })
-    }
-
     /// Return the [PostSumcheckLayer], given challenges that fully bind the expression.
-    fn get_post_sumcheck_layer(
+    fn get_post_sumcheck_layer<E>(
         &self,
         round_challenges: &[E],
         claim_challenges: &[&[E]],
         _random_coefficients: &[E],
-    ) -> PostSumcheckLayer<E, Option<E>> {
+    ) -> PostSumcheckLayer<E, Option<E>>
+    where
+        E: ExtensionField<BaseField = F>
+    {
         // We are always using interpolative claim aggregation for MatMult layers.
         assert_eq!(claim_challenges.len(), 1);
         let claim_challenge = claim_challenges[0];
@@ -596,6 +620,7 @@ impl<E: ExtensionField> LayerDescription<E> for MatMultLayerDescription<E> {
         // I.e, we keep the first variables representing the columns of matrix
         // A as Indexed for sumcheck, and keep the rest as bound to their
         // respective claim point in pre-processing.
+        let mut new_a_bind_list = pre_bound_matrix_a_mle.init_bind_list();
         let matrix_a_new_indices = self
             .matrix_a
             .mle
@@ -604,10 +629,8 @@ impl<E: ExtensionField> LayerDescription<E> for MatMultLayerDescription<E> {
             .map(|mle_idx| match mle_idx {
                 &MleIndex::Indexed(_) => {
                     if bound_index_counter < self.matrix_a.rows_num_vars {
-                        let ret = MleIndex::Bound(
-                            claim_chals_matrix_a[bound_index_counter],
-                            bound_index_counter,
-                        );
+                        let ret = MleIndex::Bound(bound_index_counter);
+                        new_a_bind_list[bound_index_counter] = Some(claim_chals_matrix_a[bound_index_counter]);
                         bound_index_counter += 1;
                         ret
                     } else {
@@ -618,7 +641,7 @@ impl<E: ExtensionField> LayerDescription<E> for MatMultLayerDescription<E> {
                 }
                 MleIndex::Fixed(_) => mle_idx.clone(),
                 MleIndex::Free => panic!("should not have any free indices"),
-                MleIndex::Bound(_, _) => panic!("should not have any bound indices"),
+                MleIndex::Bound(_) => panic!("should not have any bound indices"),
             })
             .collect_vec();
         pre_bound_matrix_a_mle.set_mle_indices(matrix_a_new_indices);
@@ -630,6 +653,7 @@ impl<E: ExtensionField> LayerDescription<E> for MatMultLayerDescription<E> {
         let claim_chals_matrix_b = claim_challenge[self.matrix_a.rows_num_vars..].to_vec();
         let mut bound_index_counter = 0;
         let mut indexed_index_counter = 0;
+        let mut new_b_bind_list = pre_bound_matrix_b_mle.init_bind_list();
         let matrix_b_new_indices = self
             .matrix_b
             .mle
@@ -642,24 +666,22 @@ impl<E: ExtensionField> LayerDescription<E> for MatMultLayerDescription<E> {
                         indexed_index_counter += 1;
                         ret
                     } else {
-                        let ret = MleIndex::Bound(
-                            claim_chals_matrix_b[bound_index_counter],
-                            bound_index_counter,
-                        );
+                        let ret = MleIndex::Bound(bound_index_counter);
+                        new_b_bind_list[bound_index_counter] = Some(claim_chals_matrix_b[bound_index_counter]);
                         bound_index_counter += 1;
                         ret
                     }
                 }
                 MleIndex::Fixed(_) => mle_idx.clone(),
                 MleIndex::Free => panic!("should not have any free indices"),
-                MleIndex::Bound(_, _) => panic!("should not have any bound indices"),
+                MleIndex::Bound(_) => panic!("should not have any bound indices"),
             })
             .collect_vec();
         pre_bound_matrix_b_mle.set_mle_indices(matrix_b_new_indices);
-        let mles = vec![pre_bound_matrix_a_mle, pre_bound_matrix_b_mle];
 
         PostSumcheckLayer(vec![Product::<E, Option<E>>::new(
-            &mles,
+            &vec![pre_bound_matrix_a_mle, pre_bound_matrix_b_mle],
+            &vec![new_a_bind_list, new_b_bind_list],
             E::ONE,
             round_challenges,
         )])
@@ -669,11 +691,17 @@ impl<E: ExtensionField> LayerDescription<E> for MatMultLayerDescription<E> {
         2
     }
 
-    fn get_circuit_mles(&self) -> Vec<&MleDescription<E>> {
+    fn get_circuit_mles(&self) -> Vec<&MleDescription> {
         vec![&self.matrix_a.mle, &self.matrix_b.mle]
     }
 
-    fn convert_into_prover_layer<'a>(&self, circuit_map: &CircuitEvalMap<E>) -> LayerEnum<E> {
+    fn convert_into_prover_layer<'a, E>(
+        &self, 
+        circuit_map: &CircuitEvalMap<E>
+    ) -> LayerEnum<E> 
+    where
+        E: ExtensionField<BaseField = F>
+    {
         let prover_matrix_a = self.matrix_a.into_matrix(circuit_map);
         let prover_matrix_b = self.matrix_b.into_matrix(circuit_map);
         let matmult_layer = MatMult::new(self.layer_id, prover_matrix_a, prover_matrix_b);
