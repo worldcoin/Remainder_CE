@@ -97,7 +97,7 @@ pub fn get_dummy_random_mle_vec<F: Field>(
 
 /// Returns the specific bit decomp for a given index, using `num_bits` bits.
 /// Note that this returns the decomposition in BIG ENDIAN!
-pub fn get_mle_idx_decomp_for_idx<F: Field>(idx: usize, num_bits: usize) -> Vec<MleIndex<F>> {
+pub fn get_mle_idx_decomp_for_idx(idx: usize, num_bits: usize) -> Vec<MleIndex> {
     (0..(num_bits))
         .rev()
         .map(|cur_num_bits| {
@@ -110,10 +110,10 @@ pub fn get_mle_idx_decomp_for_idx<F: Field>(idx: usize, num_bits: usize) -> Vec<
 
 /// Returns the total MLE indices given a `Vec<bool>`. for the prefix bits and
 /// then the number of free bits after.
-pub fn get_total_mle_indices<F: Field>(
+pub fn get_total_mle_indices(
     prefix_bits: &[bool],
     num_free_bits: usize,
-) -> Vec<MleIndex<F>> {
+) -> Vec<MleIndex> {
     prefix_bits
         .iter()
         .map(|bit| MleIndex::Fixed(*bit))

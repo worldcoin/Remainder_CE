@@ -15,7 +15,7 @@ use remainder_shared_types::extension_field::ExtensionField;
 use remainder_shared_types::field::Halo2FFTFriendlyField;
 use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
 use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
-use remainder_shared_types::perform_function_under_expected_configs;
+use remainder_shared_types::{perform_function_under_expected_configs, Field};
 use serde_json;
 use sha3::Digest;
 use sha3::Sha3_256;
@@ -51,16 +51,16 @@ pub fn write_circuit_description_to_file<E: ExtensionField>(
 ///   added to transcript.
 /// * `circuit_description_hash_type` - The type of hash function to be
 ///   used.
-pub fn get_circuit_description_hash_as_field_elems<E: ExtensionField>(
-    circuit_description: &GKRCircuitDescription<E>,
+pub fn get_circuit_description_hash_as_field_elems<F: Field>(
+    circuit_description: &GKRCircuitDescription<F>,
     circuit_description_hash_type: CircuitHashType,
-) -> Vec<E> {
+) -> Vec<F> {
     match circuit_description_hash_type {
         CircuitHashType::DefaultRustHash => {
             let mut hasher = DefaultHasher::new();
             circuit_description.hash(&mut hasher);
             let hash_value = hasher.finish();
-            vec![E::from(hash_value)]
+            vec![F::from(hash_value)]
         }
         CircuitHashType::Sha3_256 => {
             // First, serialize the circuit description to be hashed
@@ -82,8 +82,8 @@ pub fn get_circuit_description_hash_as_field_elems<E: ExtensionField>(
                 .copy_from_slice(&circuit_description_hash_bytes.to_vec()[16..]);
 
             vec![
-                E::from_bytes_le(circuit_description_hash_bytes_first_half.as_ref()),
-                E::from_bytes_le(circuit_description_hash_bytes_second_half.as_ref()),
+                F::from_bytes_le(circuit_description_hash_bytes_first_half.as_ref()),
+                F::from_bytes_le(circuit_description_hash_bytes_second_half.as_ref()),
             ]
         }
         CircuitHashType::Poseidon => {
@@ -93,9 +93,9 @@ pub fn get_circuit_description_hash_as_field_elems<E: ExtensionField>(
             // TODO(ryancao): Update this by using `REPR_NUM_BYTES` after merging with the testing branch
             let circuit_field_elem_desc = serialized
                 .chunks(16)
-                .map(|byte_chunk| E::from_bytes_le(byte_chunk))
+                .map(|byte_chunk| F::from_bytes_le(byte_chunk))
                 .collect_vec();
-            let mut poseidon_sponge: PoseidonSponge<E> = PoseidonSponge::default();
+            let mut poseidon_sponge: PoseidonSponge<F> = PoseidonSponge::default();
             poseidon_sponge.absorb_elements(&circuit_field_elem_desc);
             vec![poseidon_sponge.squeeze()]
         }

@@ -11,7 +11,7 @@ use super::identity_gate::{IdentityGate, IdentityGateLayerDescription, VerifierI
 use super::matmult::{MatMult, MatMultLayerDescription, VerifierMatMultLayer};
 use super::regular_layer::{RegularLayer, RegularLayerDescription, VerifierRegularLayer};
 
-layer_enum!(Layer, (Regular: RegularLayer<F>), (Gate: GateLayer<F>), (IdentityGate: IdentityGate<F>), (MatMult: MatMult<F>));
+layer_enum!(Layer, (Regular: RegularLayer<E>), (Gate: GateLayer<E>), (IdentityGate: IdentityGate<E>), (MatMult: MatMult<E>));
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone)]
 #[serde(bound = "F: Field")]
