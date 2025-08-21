@@ -4,7 +4,7 @@
 use std::{
     cmp::Ordering,
     collections::HashSet,
-    fmt::{Debug, Formatter},
+    fmt::{Debug, Formatter}, marker::PhantomData,
 };
 
 use crate::{
@@ -45,8 +45,8 @@ use anyhow::{anyhow, Ok, Result};
 
 /// The circuit Description for an [IdentityGate].
 #[derive(Serialize, Deserialize, Clone, Hash)]
-#[serde(bound = "E: ExtensionField")]
-pub struct IdentityGateLayerDescription<E: ExtensionField> {
+#[serde(bound = "F: Field")]
+pub struct IdentityGateLayerDescription<F: Field> {
     /// The layer id associated with this gate layer.
     id: LayerId,
 
@@ -57,7 +57,7 @@ pub struct IdentityGateLayerDescription<E: ExtensionField> {
 
     /// The source MLE of the expression, i.e. the mle that makes up the "x"
     /// variables.
-    source_mle: MleDescription<E>,
+    source_mle: MleDescription,
 
     /// The total number of variables in the layer.
     total_num_vars: usize,
@@ -65,9 +65,11 @@ pub struct IdentityGateLayerDescription<E: ExtensionField> {
     /// The number of vars representing the number of "dataparallel" copies of
     /// the circuit.
     num_dataparallel_vars: usize,
+
+    _phantom: PhantomData<F>,
 }
 
-impl<E: ExtensionField> std::fmt::Debug for IdentityGateLayerDescription<E> {
+impl<F: Field> std::fmt::Debug for IdentityGateLayerDescription<F> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("IdentityGateLayerDescription")
             .field("id", &self.id)
@@ -78,7 +80,7 @@ impl<E: ExtensionField> std::fmt::Debug for IdentityGateLayerDescription<E> {
     }
 }
 
-impl<E: ExtensionField> IdentityGateLayerDescription<E> {
+impl<F: Field> IdentityGateLayerDescription<F> {
     /// Constructor for [IdentityGateLayerDescription]. Arguments:
     /// * `id`: The layer id associated with this layer.
     /// * `source_mle`: The Mle that is being routed to this layer.
@@ -90,7 +92,7 @@ impl<E: ExtensionField> IdentityGateLayerDescription<E> {
     pub fn new(
         id: LayerId,
         wiring: Vec<(u32, u32)>,
-        source_mle: MleDescription<E>,
+        source_mle: MleDescription,
         total_num_vars: usize,
         num_dataparallel_vars: Option<usize>,
     ) -> Self {
@@ -100,22 +102,78 @@ impl<E: ExtensionField> IdentityGateLayerDescription<E> {
             source_mle,
             total_num_vars,
             num_dataparallel_vars: num_dataparallel_vars.unwrap_or(0),
+            _phantom: PhantomData,
         }
+    }
+
+    fn convert_into_verifier_layer<E>(
+        &self,
+        sumcheck_challenges: &[E],
+        _claim_points: &[&[E]],
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<VerifierIdentityGateLayer<E>> 
+    where
+        E: ExtensionField<BaseField = F>
+    {
+        // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
+        // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR
+        // FREE/INDEXED vars
+        let num_u = self
+            .source_mle
+            .mle_indices()
+            .iter()
+            .fold(0_usize, |acc, idx| {
+                acc + match idx {
+                    MleIndex::Fixed(_) => 0,
+                    _ => 1,
+                }
+            })
+            - self.num_dataparallel_vars;
+
+        // We want to separate the challenges into which ones are from the
+        // dataparallel vars, which ones and are for binding x (phase 1)
+        let mut sumcheck_bindings_vec = sumcheck_challenges.to_vec();
+        let first_u_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_vars);
+        let dataparallel_sumcheck_challenges = sumcheck_bindings_vec;
+
+        assert_eq!(first_u_challenges.len(), num_u);
+
+        // Since the original mles are dataparallel, the challenges are the
+        // concat of the copy vars and the variable bound vars.
+        let src_verifier_mle = self
+            .source_mle
+            .into_verifier_mle(sumcheck_challenges, transcript_reader)
+            .unwrap();
+
+        // Create the resulting verifier layer for claim tracking TODO(ryancao):
+        // This is not necessary; we only need to pass back the actual claims
+        let verifier_id_gate_layer = VerifierIdentityGateLayer {
+            layer_id: self.layer_id(),
+            wiring: self.wiring.clone(),
+            source_mle: src_verifier_mle,
+            first_u_challenges,
+            total_num_vars: self.total_num_vars,
+            num_dataparallel_rounds: self.num_dataparallel_vars,
+            dataparallel_sumcheck_challenges,
+        };
+
+        Ok(verifier_id_gate_layer)
     }
 }
 
-impl<E: ExtensionField> LayerDescription<E> for IdentityGateLayerDescription<E> {
-    type VerifierLayer = VerifierIdentityGateLayer<E>;
-
+impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
     fn layer_id(&self) -> LayerId {
         self.id
     }
 
-    fn verify_rounds(
+    fn verify_rounds<E>(
         &self,
         claims: &[&RawClaim<E>],
-        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
-    ) -> Result<VerifierLayerEnum<E>> {
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<VerifierLayerEnum<E>> 
+    where
+        E: ExtensionField<BaseField = F>
+    {
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
 
@@ -219,63 +277,15 @@ impl<E: ExtensionField> LayerDescription<E> for IdentityGateLayerDescription<E> 
         (0..num_vars).collect_vec()
     }
 
-    fn convert_into_verifier_layer(
-        &self,
-        sumcheck_challenges: &[E],
-        _claim_points: &[&[E]],
-        transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
-    ) -> Result<Self::VerifierLayer> {
-        // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
-        // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR
-        // FREE/INDEXED vars
-        let num_u = self
-            .source_mle
-            .mle_indices()
-            .iter()
-            .fold(0_usize, |acc, idx| {
-                acc + match idx {
-                    MleIndex::Fixed(_) => 0,
-                    _ => 1,
-                }
-            })
-            - self.num_dataparallel_vars;
-
-        // We want to separate the challenges into which ones are from the
-        // dataparallel vars, which ones and are for binding x (phase 1)
-        let mut sumcheck_bindings_vec = sumcheck_challenges.to_vec();
-        let first_u_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_vars);
-        let dataparallel_sumcheck_challenges = sumcheck_bindings_vec;
-
-        assert_eq!(first_u_challenges.len(), num_u);
-
-        // Since the original mles are dataparallel, the challenges are the
-        // concat of the copy vars and the variable bound vars.
-        let src_verifier_mle = self
-            .source_mle
-            .into_verifier_mle(sumcheck_challenges, transcript_reader)
-            .unwrap();
-
-        // Create the resulting verifier layer for claim tracking TODO(ryancao):
-        // This is not necessary; we only need to pass back the actual claims
-        let verifier_id_gate_layer = VerifierIdentityGateLayer {
-            layer_id: self.layer_id(),
-            wiring: self.wiring.clone(),
-            source_mle: src_verifier_mle,
-            first_u_challenges,
-            total_num_vars: self.total_num_vars,
-            num_dataparallel_rounds: self.num_dataparallel_vars,
-            dataparallel_sumcheck_challenges,
-        };
-
-        Ok(verifier_id_gate_layer)
-    }
-
-    fn get_post_sumcheck_layer(
+    fn get_post_sumcheck_layer<E>(
         &self,
         round_challenges: &[E],
         claim_challenges: &[&[E]],
         random_coefficients: &[E],
-    ) -> PostSumcheckLayer<E, Option<E>> {
+    ) -> PostSumcheckLayer<E, Option<E>>
+    where
+        E: ExtensionField<BaseField = F>
+    {
         assert_eq!(claim_challenges.len(), random_coefficients.len());
         let random_coefficients_scaled_by_beta_bound = claim_challenges
             .iter()
@@ -317,11 +327,17 @@ impl<E: ExtensionField> LayerDescription<E> for IdentityGateLayerDescription<E> 
         2
     }
 
-    fn get_circuit_mles(&self) -> Vec<&MleDescription<E>> {
+    fn get_circuit_mles(&self) -> Vec<&MleDescription> {
         vec![&self.source_mle]
     }
 
-    fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<E>) -> LayerEnum<E> {
+    fn convert_into_prover_layer<E>(
+        &self, 
+        circuit_map: &CircuitEvalMap<E>
+    ) -> LayerEnum<E>
+    where
+        E: ExtensionField<BaseField = F>
+    {
         let source_mle = self.source_mle.into_dense_mle(circuit_map);
         let id_gate_layer = IdentityGate::new(
             self.layer_id(),
@@ -337,11 +353,14 @@ impl<E: ExtensionField> LayerDescription<E> for IdentityGateLayerDescription<E> 
         self.source_mle.index_mle_indices(start_index);
     }
 
-    fn compute_data_outputs(
+    fn compute_data_outputs<E>(
         &self,
-        mle_outputs_necessary: &HashSet<&MleDescription<E>>,
+        mle_outputs_necessary: &HashSet<&MleDescription>,
         circuit_map: &mut CircuitEvalMap<E>,
-    ) {
+    )
+    where
+        E: ExtensionField<BaseField = F>
+    {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
         let source_mle_data = circuit_map
@@ -448,7 +467,7 @@ impl<E: ExtensionField> VerifierLayer<E> for VerifierIdentityGateLayer<E> {
         let source_point = source_vars
             .iter()
             .map(|idx| match idx {
-                MleIndex::Bound(chal, _bit_idx) => *chal,
+                MleIndex::Bound(bit_idx) => self.first_u_challenges[*bit_idx],
                 MleIndex::Fixed(val) => {
                     if *val {
                         E::ONE
@@ -527,6 +546,7 @@ impl<E: ExtensionField> Layer<E> for IdentityGate<E> {
         }
 
         self.source_mle.index_mle_indices(0);
+        self.bind_list = self.source_mle.init_bind_list();
         Ok(())
     }
 
@@ -562,6 +582,7 @@ impl<E: ExtensionField> Layer<E> for IdentityGate<E> {
             self.beta_g2_vec = Some(beta_g2_vec);
         }
         self.source_mle.index_mle_indices(0);
+        self.bind_list = self.source_mle.init_bind_list();
     }
 
     fn compute_round_sumcheck_message(
@@ -672,7 +693,7 @@ impl<E: ExtensionField> Layer<E> for IdentityGate<E> {
                 .for_each(|beta| {
                     beta.beta_update(round_index, challenge);
                 });
-            self.source_mle.fix_variable(round_index, challenge);
+            self.source_mle.fix_variable(round_index, challenge, &mut self.bind_list);
 
             Ok(())
         } else {
@@ -684,7 +705,7 @@ impl<E: ExtensionField> Layer<E> for IdentityGate<E> {
             let a_hg_mle = self.a_hg_mle_phase_1.as_mut().unwrap();
 
             [a_hg_mle, &mut self.source_mle].iter_mut().for_each(|mle| {
-                mle.fix_variable(round_index, challenge);
+                mle.fix_variable(round_index, challenge, &mut self.bind_list);
             });
             Ok(())
         }
@@ -736,6 +757,7 @@ impl<E: ExtensionField> Layer<E> for IdentityGate<E> {
 
         PostSumcheckLayer(vec![Product::<E, E>::new(
             &[self.source_mle.clone()],
+            &[self.bind_list.clone()],
             f_1_gu,
         )])
     }
@@ -747,7 +769,7 @@ impl<E: ExtensionField> Layer<E> for IdentityGate<E> {
         for index in self.source_mle.mle_indices() {
             fixed_mle_indices_u.push(
                 index
-                    .val()
+                    .val(&self.bind_list)
                     .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
             );
         }
@@ -777,6 +799,8 @@ pub struct IdentityGate<E: ExtensionField> {
     wiring: Vec<(u32, u32)>,
     /// The MLE from which we are selecting the indices.
     source_mle: DenseMle<E>,
+    /// Bind values for `source_mle`
+    bind_list: Vec<Option<E>>,
     /// The [BetaValues] struct which enumerates the incoming claim's challenge
     /// points on the dataparallel vars of the MLE.
     beta_g2_vec: Option<Vec<BetaValues<E>>>,
@@ -808,6 +832,8 @@ impl<E: ExtensionField> IdentityGate<E> {
             layer_id,
             wiring,
             source_mle: mle,
+            // construct in `initialize`
+            bind_list: Vec::new(),
             beta_g2_vec: None,
             a_hg_mle_phase_1: None,
             total_num_vars,
@@ -821,7 +847,7 @@ impl<E: ExtensionField> IdentityGate<E> {
         &self,
         transcript_writer: &mut impl ProverTranscript<E::BaseField>,
     ) {
-        assert!(self.source_mle.is_fully_bounded());
+        assert!(self.source_mle.is_fully_bounded(&self.bind_list));
         transcript_writer
             .append_extension_field_element("Fully bound MLE evaluation", self.source_mle.first());
     }

@@ -1,7 +1,7 @@
 //! Helper struct that combines multiple `Layer` implementations into
 //! a single struct that can represent many types of `Layer`
 
-use remainder_shared_types::extension_field::ExtensionField;
+use remainder_shared_types::{Field, extension_field::ExtensionField};
 use serde::{Deserialize, Serialize};
 
 use crate::layer_enum;
@@ -11,21 +11,21 @@ use super::identity_gate::{IdentityGate, IdentityGateLayerDescription, VerifierI
 use super::matmult::{MatMult, MatMultLayerDescription, VerifierMatMultLayer};
 use super::regular_layer::{RegularLayer, RegularLayerDescription, VerifierRegularLayer};
 
-layer_enum!(Layer, (Regular: RegularLayer<E>), (Gate: GateLayer<E>), (IdentityGate: IdentityGate<E>), (MatMult: MatMult<E>));
+layer_enum!(Layer, (Regular: RegularLayer<F>), (Gate: GateLayer<F>), (IdentityGate: IdentityGate<F>), (MatMult: MatMult<F>));
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone)]
-#[serde(bound = "E: ExtensionField")]
+#[serde(bound = "F: Field")]
 /// An enum representing the different types of descriptions for each layer,
 /// each description containing the shape information of the corresponding layer.
-pub enum LayerDescriptionEnum<E: ExtensionField> {
+pub enum LayerDescriptionEnum<F: Field> {
     /// The circuit description for a regular layer variant.
-    Regular(RegularLayerDescription<E>),
+    Regular(RegularLayerDescription<F>),
     /// The circuit description for a gate layer variant.
-    Gate(GateLayerDescription<E>),
+    Gate(GateLayerDescription<F>),
     /// The circuit description for a identity gate layer variant.
-    IdentityGate(IdentityGateLayerDescription<E>),
+    IdentityGate(IdentityGateLayerDescription<F>),
     /// The circuit description for a matmult layer variant.
-    MatMult(MatMultLayerDescription<E>),
+    MatMult(MatMultLayerDescription<F>),
 }
 
 #[derive(Serialize, Deserialize, Debug)]

@@ -306,7 +306,7 @@ impl<F: Field> DenseMle<F> {
     ///
     /// Note that this function panics if a particular challenge is neither
     /// fixed nor bound!
-    pub fn get_bound_point(&self, bind_list: &mut Vec<Option<F>>) -> Vec<F> {
+    pub fn get_bound_point(&self, bind_list: &Vec<Option<F>>) -> Vec<F> {
         self.mle_indices()
             .iter()
             .map(|index| match index {

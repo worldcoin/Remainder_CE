@@ -38,7 +38,12 @@ pub struct Product<F: Field, T> {
 
 impl<F: Field> Product<F, Option<F>> {
     /// Creates a new Product from a vector of [`MleDescription<F>`].
-    pub fn new(mles: &[MleDescription<F>], coefficient: F, bindings: &[F]) -> Self {
+    pub fn new(
+        mles: &[MleDescription],
+        bind_list: &[Vec<Option<F>>],
+        coefficient: F, 
+        challenges: &[F],
+    ) -> Self {
         if mles.is_empty() {
             return Product {
                 intermediates: vec![Intermediate::Composite {
@@ -47,9 +52,9 @@ impl<F: Field> Product<F, Option<F>> {
                 coefficient,
             };
         }
-        let mut intermediates = vec![Self::build_atom(&mles[0], bindings)];
-        mles.iter().skip(1).for_each(|mle| {
-            intermediates.push(Self::build_atom(mle, bindings));
+        let mut intermediates = vec![Self::build_atom(&mles[0], &bind_list[0], challenges)];
+        mles.iter().zip(bind_list).skip(1).for_each(|(mle, bind_list)| {
+            intermediates.push(Self::build_atom(mle, bind_list, challenges));
             intermediates.push(Intermediate::Composite { value: None });
         });
         Product {
@@ -60,7 +65,7 @@ impl<F: Field> Product<F, Option<F>> {
 
     /// Creates a new Product from a vector of [`MleDescription<F>`].
     pub fn new_from_mul_gate(
-        mles: &[MleDescription<F>],
+        mles: &[MleDescription],
         coefficient: F,
         bindings: &[&[F]],
     ) -> Self {
@@ -72,9 +77,9 @@ impl<F: Field> Product<F, Option<F>> {
                 coefficient,
             };
         }
-        let mut intermediates = vec![Self::build_atom(&mles[0], bindings[0])];
+        let mut intermediates = vec![Self::build_atom(&mles[0], &Vec::new(), bindings[0])];
         mles.iter().enumerate().skip(1).for_each(|(idx, mle_ref)| {
-            intermediates.push(Self::build_atom(mle_ref, bindings[idx]));
+            intermediates.push(Self::build_atom(mle_ref, &Vec::new(), bindings[idx]));
             intermediates.push(Intermediate::Composite { value: None });
         });
         Product {
@@ -84,10 +89,13 @@ impl<F: Field> Product<F, Option<F>> {
     }
 
     // Helper function for new
-    fn build_atom(mle: &MleDescription<F>, bindings: &[F]) -> Intermediate<F, Option<F>> {
+    /// The point is consisted of two parts:
+    /// - `challenges`: values that are yet to be binded to the MLE
+    /// - `bind_list`: values that are already binded ot the MLE
+    fn build_atom(mle: &MleDescription, bind_list: &[Option<F>], challenges: &[F]) -> Intermediate<F, Option<F>> {
         Intermediate::Atom {
             layer_id: mle.layer_id(),
-            point: mle.get_claim_point(bindings),
+            point: mle.get_claim_point(challenges, bind_list),
             value: None,
         }
     }
@@ -96,19 +104,20 @@ impl<F: Field> Product<F, Option<F>> {
 impl<F: Field> Product<F, F> {
     /// Creates a new Product from a vector of fully bound MleRefs.
     /// Panics if any are not fully bound.
-    pub fn new(mles: &[DenseMle<F>], coefficient: F) -> Self {
+    pub fn new(mles: &[DenseMle<F>], bind_lists: &[Vec<Option<F>>], coefficient: F) -> Self {
         // ensure all MLEs are fully bound
-        assert!(mles.iter().all(|mle| mle.is_fully_bounded()));
+        assert_eq!(mles.len(), bind_lists.len());
+        assert!(mles.iter().zip(bind_lists).all(|(mle, bind_list)| mle.is_fully_bounded(bind_list)));
         if mles.is_empty() {
             return Product {
                 intermediates: vec![Intermediate::Composite { value: F::ONE }],
                 coefficient,
             };
         }
-        let mut intermediates = vec![Self::build_atom(&mles[0])];
-        let _ = mles.iter().skip(1).fold(mles[0].value(), |acc, mle| {
+        let mut intermediates = vec![Self::build_atom(&mles[0], &bind_lists[0])];
+        let _ = mles.iter().zip(bind_lists).skip(1).fold(mles[0].value(), |acc, (mle, bind_list)| {
             let prod_val = acc * mle.value();
-            intermediates.push(Self::build_atom(mle));
+            intermediates.push(Self::build_atom(mle, bind_list));
             intermediates.push(Intermediate::Composite { value: prod_val });
             prod_val
         });
@@ -119,10 +128,10 @@ impl<F: Field> Product<F, F> {
     }
 
     // Helper function for new
-    fn build_atom(mle: &DenseMle<F>) -> Intermediate<F, F> {
+    fn build_atom(mle: &DenseMle<F>, bind_list: &Vec<Option<F>>) -> Intermediate<F, F> {
         Intermediate::Atom {
             layer_id: mle.layer_id,
-            point: mle.get_bound_point(),
+            point: mle.get_bound_point(bind_list),
             value: mle.value(),
         }
     }
