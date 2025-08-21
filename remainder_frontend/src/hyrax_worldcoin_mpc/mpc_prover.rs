@@ -3,18 +3,18 @@ use std::collections::HashMap;
 use crate::{
     hyrax_worldcoin::{
         orb::PUBLIC_STRING,
-        v3::{CircuitAndAuxMles, V3Proof, V3ProofError, V3Prover},
+        v3::{V3Proof, V3ProofError, V3Prover},
     },
+    layouter::builder::Circuit,
     worldcoin_mpc::{
-        circuits::{
-            build_circuit, mpc_attach_data, MPCCircuitDescription, MPCInputBuilderMetadata,
-        },
+        circuits::{build_circuit, mpc_attach_data, MPCCircuitDescription},
         data::{create_ss_circuit_inputs, generate_trivial_test_data},
         parameters::{GR4_MODULUS, MPC_NUM_IRIS_4_CHUNKS, NUM_PARTIES},
     },
     zk_iriscode_ss::parameters::{IRISCODE_LEN, SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS},
 };
 use remainder_hyrax::{
+    circuit_layout::HyraxProvableCircuit,
     hyrax_gkr::{
         hyrax_input_layer::{
             commit_to_input_values, HyraxInputLayerDescription, HyraxProverInputCommitment,
@@ -87,7 +87,7 @@ pub fn print_features_status() {
     );
     println!(
         "Parallel feature for remainder_hyrax: {}",
-        STATUS_STR[crate::utils::is_parallel_feature_on() as usize]
+        STATUS_STR[remainder_hyrax::utils::is_parallel_feature_on() as usize]
     );
     println!(
         "Lazy beta evaluation: {}",
@@ -165,10 +165,10 @@ impl<C: PrimeOrderCurve> V3MPCCommitments<C> {
     }
 }
 
+/*
 #[allow(clippy::too_many_arguments)]
 pub fn prove_mpc_with_precommits(
-    mpc_circuit_desc: &MPCCircuitDescription<Fr>,
-    inputs: HashMap<LayerId, MultilinearExtension<Fr>>,
+    circuit: &Circuit<Fr>,
     iris_precommit: &HyraxProverInputCommitment<Bn256Point>,
     mask_precommit: &HyraxProverInputCommitment<Bn256Point>,
     slope_precommit: &HyraxProverInputCommitment<Bn256Point>,
@@ -225,6 +225,7 @@ pub fn prove_mpc_with_precommits(
 
     proof
 }
+*/
 
 #[derive(Serialize, Deserialize)]
 pub struct MPCProver {
@@ -239,7 +240,7 @@ pub struct MPCProver {
     slope_commitments: [HyraxProverInputCommitment<Bn256Point>; 2],
 
     prover_config: GKRCircuitProverConfig,
-    mpc_circuit_and_aux_mles_all_3_parties: Vec<MPCCircuitAndAuxMles<Fr>>,
+    mpc_circuit_and_aux_mles_all_3_parties: Vec<Circuit<Fr>>,
 
     left_eye_proofs_all_3_parties: Option<Vec<HyraxProof<Bn256Point>>>,
     right_eye_proofs_all_3_parties: Option<Vec<HyraxProof<Bn256Point>>>,
@@ -322,7 +323,7 @@ impl MPCProver {
 
     #[allow(clippy::too_many_arguments)]
     pub fn prove_mpc_with_precommits(
-        mpc_circuit_desc: &MPCCircuitDescription<Fr>,
+        mpc_circuit_desc: &Circuit<Fr>,
         inputs: HashMap<LayerId, MultilinearExtension<Fr>>,
         iris_precommit: &HyraxProverInputCommitment<Bn256Point>,
         mask_precommit: &HyraxProverInputCommitment<Bn256Point>,

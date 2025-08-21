@@ -434,8 +434,8 @@ macro_rules! const_expr {
 #[macro_export]
 macro_rules! sel_expr {
     ($($expr:expr),+ $(,)?) => {{
-        use remainder_frontend::abstract_expr::{AbstractExpression, IntoExpr};
-        let v = vec![$($expr.into_expr()),+];
+        use remainder_frontend::abstract_expr::{AbstractExpression};
+        let v = vec![$(Into::<AbstractExpression<F>>::into($expr)),+];
         AbstractExpression::<F>::select_seq(v)
     }};
 }
