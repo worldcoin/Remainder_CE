@@ -38,9 +38,7 @@ mod tests {
         zk_iriscode_ss::{
             circuits::iriscode_ss_attach_data,
             test_helpers::{
-                small_circuit_description_and_private_inputs,
-                small_circuit_description_and_public_inputs,
-                small_circuit_description_and_public_inputs_hyrax,
+                small_hyrax_circuit_with_private_inputs, small_hyrax_circuit_with_public_inputs,
             },
             v3::{circuit_description, load_worldcoin_data},
         },
@@ -71,15 +69,15 @@ mod tests {
 
     #[test]
     fn test_small_circuit_both_layers_public() {
-        let provable_circuit = small_circuit_description_and_public_inputs_hyrax().unwrap();
+        let provable_circuit = small_hyrax_circuit_with_public_inputs().unwrap();
         test_iriscode_circuit_with_public_layers_helper(provable_circuit);
     }
 
     #[test]
     /// Test a small version of the iriscode circuit with a Hyrax input layer.
     fn test_small_circuit_with_hyrax_layer() {
-        let ic_circuit = small_circuit_description_and_private_inputs().unwrap();
-        test_iriscode_circuit_with_hyrax_helper(ic_circuit);
+        let provable_circuit = small_hyrax_circuit_with_private_inputs().unwrap();
+        test_iriscode_circuit_with_hyrax_helper(provable_circuit);
     }
 
     #[ignore] // Takes a long time to run

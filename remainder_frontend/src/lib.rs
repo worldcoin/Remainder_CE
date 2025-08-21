@@ -20,4 +20,3 @@ pub mod utils;
 
 pub mod hyrax_worldcoin;
 pub mod hyrax_worldcoin_mpc;
-pub mod tfh_circuits;

@@ -1242,7 +1242,7 @@ impl<F: Field> Circuit<F> {
 
                 // Aim for square matrix.
                 // TODO: Allow for custom parameters.
-                let log_num_cols = log2(total_num_vars) as usize / 2;
+                let log_num_cols = total_num_vars / 2;
 
                 // let layer_label = self.circuit_map.get_label_from_layer_id(layer_id)?;
                 // let commitment = pre_commitments.get(&layer_label).cloned();

@@ -14,11 +14,13 @@ use crate::{
 use clap::error;
 use rand::rngs::ThreadRng;
 use rand::{CryptoRng, Rng, RngCore};
-use remainder::circuit_building_context::CircuitBuildingContext;
 use remainder::layer::LayerId;
 use remainder::mle::evals::MultilinearExtension;
 use remainder::prover::GKRCircuitDescription;
 use remainder::utils::mle::pad_with;
+use remainder::{
+    circuit_building_context::CircuitBuildingContext, circuit_layout::VerifiableCircuit,
+};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::halo2curves::{bn256::G1 as Bn256Point, group::Group};
 use remainder_shared_types::pedersen::PedersenCommitter;
@@ -332,18 +334,20 @@ impl V3Prover {
         }
     }
 
+    /*
     pub fn remove_auxiliary_input_layer(&mut self, is_mask: bool, is_left_eye: bool) {
         let auxiliary_input_layer_id = self.circuit.circuit.auxiliary_input_layer.layer_id;
 
         self.get_as_mut(is_mask, is_left_eye)
             .remove_public_input_layer_by_id(auxiliary_input_layer_id);
     }
+    */
 
     /// Generate a v3 prover with the given configuration, initialized
     /// with optional proofs.
     pub fn new_from_proofs(
         prover_config: GKRCircuitProverConfig,
-        circuit: CircuitAndAuxMles<Fr>,
+        circuit: Circuit<Fr>,
         left_image_proof: HyraxProof<Bn256Point>,
         left_mask_proof: HyraxProof<Bn256Point>,
         right_image_proof: HyraxProof<Bn256Point>,
@@ -372,13 +376,17 @@ impl V3Prover {
         // Load the inputs to the circuit (these are all MLEs, i.e. in the clear).
         let data = load_worldcoin_data::<Fr>(image_bytes, is_mask);
 
-        let inputs =
-            iriscode_ss_attach_data(self.circuit.get_input_builder_metadata(), data).unwrap();
+        let inputs = iriscode_ss_attach_data::<_, { crate::zk_iriscode_ss::parameters::BASE }>(
+            self.circuit.clone(),
+            data,
+        )
+        .unwrap();
+
+        let provable_circuit = self.circuit.finalize_hyrax().unwrap();
 
         // Prove the iriscode circuit with the image precommit.
         let (proof, _, code_commit) = prove_with_image_precommit(
-            self.circuit.get_circuit(),
-            inputs,
+            provable_circuit,
             image_precommit,
             &mut self.committer,
             rng,
@@ -621,8 +629,7 @@ impl V3Proof {
         &self,
         is_mask: bool,
         is_left_eye: bool,
-        circuit: &IriscodeCircuitDescription<Fr>,
-        aux_mle: &MultilinearExtension<Fr>,
+        circuit: &HyraxVerifiableCircuit<Bn256Point>,
         commitment_hash: &str,
     ) -> Result<()> {
         let proof = self.get(is_mask, is_left_eye);
@@ -630,61 +637,11 @@ impl V3Proof {
         let (code, _commitment) = verify_v3_iriscode_proof_and_hash(
             proof,
             circuit,
-            aux_mle,
             commitment_hash,
             &self.committer,
             &self.proof_config,
         )?;
 
         Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(bound = "F: Field")]
-pub struct CircuitAndAuxMles<F: Field> {
-    circuit: IriscodeCircuitDescription<F>,
-    input_builder_metadata: InputBuilderMetadata,
-    iris_aux_mle: MultilinearExtension<F>,
-    mask_aux_mle: MultilinearExtension<F>,
-}
-
-impl<F: Field> CircuitAndAuxMles<F> {
-    pub fn new(
-        circuit: IriscodeCircuitDescription<F>,
-        input_builder_metadata: InputBuilderMetadata,
-        iris_aux_mle: MultilinearExtension<F>,
-        mask_aux_mle: MultilinearExtension<F>,
-    ) -> Self {
-        Self {
-            circuit,
-            input_builder_metadata,
-            iris_aux_mle,
-            mask_aux_mle,
-        }
-    }
-
-    pub fn get_circuit(&self) -> &IriscodeCircuitDescription<F> {
-        &self.circuit
-    }
-
-    pub fn get_input_builder_metadata(&self) -> &InputBuilderMetadata {
-        &self.input_builder_metadata
-    }
-
-    pub fn get_iris_aux_mle(&self) -> &MultilinearExtension<F> {
-        &self.iris_aux_mle
-    }
-
-    pub fn get_mask_aux_mle(&self) -> &MultilinearExtension<F> {
-        &self.mask_aux_mle
-    }
-
-    pub fn serialize(&self) -> Vec<u8> {
-        bincode::serialize(&self).expect("Failed to serialize CircuitAndAuxMles")
-    }
-
-    pub fn deserialize(bytes: &[u8]) -> Self {
-        bincode::deserialize(bytes).expect("Failed to deserialize CircuitAndAuxMles")
     }
 }

@@ -61,39 +61,38 @@ pub fn build_small_circuit_and_data<F: Field, const BASE: u64>(
     Ok((circuit, data))
 }
 
-/// Return a provable circuit description with public inputs for a trivial 2x2 identity matrix
-/// circuit.
-pub fn small_circuit_description_and_public_inputs() -> Result<ProvableCircuit<Fr>> {
+fn small_circuit_with_inputs<F: Field>(use_private_layers: bool) -> Result<Circuit<F>> {
     const BASE: u64 = 16;
 
-    let (circuit, data) = build_small_circuit_and_data::<_, BASE>(false)?;
+    let (circuit, data) = build_small_circuit_and_data::<_, BASE>(use_private_layers)?;
 
-    let circuit = iriscode_ss_attach_data::<Fr, BASE>(circuit, data)?;
+    iriscode_ss_attach_data::<_, BASE>(circuit, data)
+}
 
+/// Return a provable circuit description with public inputs for a trivial 2x2 identity matrix
+/// circuit.
+pub fn small_circuit_with_public_inputs() -> Result<ProvableCircuit<Fr>> {
+    let circuit = small_circuit_with_inputs(false)?;
     circuit.finalize()
 }
 
 /// Return a provable circuit description with public inputs for a trivial 2x2 identity matrix
 /// circuit.
-pub fn small_circuit_description_and_public_inputs_hyrax(
-) -> Result<HyraxProvableCircuit<Bn256Point>> {
-    const BASE: u64 = 16;
+pub fn small_circuit_with_private_inputs() -> Result<ProvableCircuit<Fr>> {
+    let circuit = small_circuit_with_inputs(true)?;
+    circuit.finalize()
+}
 
-    let (circuit, data) = build_small_circuit_and_data::<_, BASE>(false)?;
-
-    let circuit = iriscode_ss_attach_data::<_, BASE>(circuit, data)?;
-
+/// Return a hyrax provable circuit description with public inputs for a trivial 2x2 identity matrix
+/// circuit.
+pub fn small_hyrax_circuit_with_public_inputs() -> Result<HyraxProvableCircuit<Bn256Point>> {
+    let circuit = small_circuit_with_inputs(false)?;
     circuit.finalize_hyrax()
 }
 
-/// Return a provable circuit description with hyrax private inputs for a trivial 2x2 identity matrix
-/// circuit.
-pub fn small_circuit_description_and_private_inputs() -> Result<HyraxProvableCircuit<Bn256Point>> {
-    const BASE: u64 = 16;
-
-    let (circuit, data) = build_small_circuit_and_data::<Fr, BASE>(false)?;
-
-    let circuit = iriscode_ss_attach_data::<Fr, BASE>(circuit, data)?;
-
-    circuit.finalize_hyrax::<Bn256Point>()
+/// Return a hyrax provable circuit description with hyrax private inputs for a trivial 2x2 identity
+/// matrix circuit.
+pub fn small_hyrax_circuit_with_private_inputs() -> Result<HyraxProvableCircuit<Bn256Point>> {
+    let circuit = small_circuit_with_inputs(true)?;
+    circuit.finalize_hyrax()
 }
