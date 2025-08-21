@@ -40,7 +40,7 @@ impl<F: Field> Product<F, Option<F>> {
     /// Creates a new Product from a vector of [`MleDescription<F>`].
     pub fn new(
         mles: &[MleDescription],
-        bind_list: &[Vec<Option<F>>],
+        pre_bind: &[Vec<Option<F>>],
         coefficient: F, 
         challenges: &[F],
     ) -> Self {
@@ -52,8 +52,8 @@ impl<F: Field> Product<F, Option<F>> {
                 coefficient,
             };
         }
-        let mut intermediates = vec![Self::build_atom(&mles[0], &bind_list[0], challenges)];
-        mles.iter().zip(bind_list).skip(1).for_each(|(mle, bind_list)| {
+        let mut intermediates = vec![Self::build_atom(&mles[0], &pre_bind[0], challenges)];
+        mles.iter().zip(pre_bind).skip(1).for_each(|(mle, bind_list)| {
             intermediates.push(Self::build_atom(mle, bind_list, challenges));
             intermediates.push(Intermediate::Composite { value: None });
         });

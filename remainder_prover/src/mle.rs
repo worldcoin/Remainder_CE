@@ -69,13 +69,16 @@ pub trait AbstractMle:
     /// Returns an empty bind list
     fn init_bind_list<F: Field>(&self) -> Vec<Option<F>> {
         assert!(self.is_unbounded());
-        let len = self.mle_indices().iter().filter_map(|idx| {
+        if let Some(i) = self.mle_indices().iter().filter_map(|idx| {
             match idx {
                 MleIndex::Indexed(i) => Some(*i),
                 _ => None,
             }
-        }).max().unwrap();
-        vec![None; len]
+        }).max() {
+            vec![None; i + 1]
+        } else {
+            Vec::new()
+        }
     }
 
     /// An MLE is fully bounded if it has no more free variables
@@ -153,6 +156,10 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync + AbstractMle {
     /// `MleIndex::Indexed(indexed_bit_index)` in `mle_indices`.
     fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F, bind_list: &mut Vec<Option<F>>) -> Option<RawClaim<F>>;
 
+    /// Similar to `fix_variable_at_index`, but do not keep track of the bound point
+    /// Useful for only obtaining the final evaluation value
+    fn fix_variable_at_index_no_bind_list(&mut self, indexed_bit_index: usize, point: F);
+
     /// Mutates the [MleIndex]es stored in `self` that are [MleIndex::Free] and
     /// turns them into [MleIndex::Indexed] with the bit index being determined
     /// from `curr_index`.
@@ -201,6 +208,13 @@ impl MleIndex {
                 }
             }
             bind_list[*bit] = Some(chal);
+            *self = Self::Bound(*bit);
+        }
+    }
+
+    /// Similar to `bind_index`, but do not keep track of bind_list
+    pub fn bind_index_no_check(&mut self) {
+        if let MleIndex::Indexed(bit) = self {
             *self = Self::Bound(*bit);
         }
     }

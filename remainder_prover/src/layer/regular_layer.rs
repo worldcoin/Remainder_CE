@@ -115,6 +115,11 @@ impl<E: ExtensionField> RegularLayer<E> {
     pub fn get_expression(&self) -> &Expression<E::BaseField, ProverMle<E>> {
         &self.expression
     }
+
+    /// Returns the bind_list
+    pub fn get_bind_list(&self) -> &Vec<Option<E>> {
+        &self.bind_list
+    }
 }
 
 impl<E: ExtensionField> Layer<E> for RegularLayer<E> {

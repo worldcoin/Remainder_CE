@@ -107,6 +107,17 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         }
     }
 
+    fn fix_variable_at_index_no_bind_list(
+        &mut self,
+        indexed_bit_index: usize,
+        point: F,
+    ) {
+        match self {
+            MleEnum::Dense(item) => item.fix_variable_at_index_no_bind_list(indexed_bit_index, point),
+            MleEnum::Zero(item) => item.fix_variable_at_index_no_bind_list(indexed_bit_index, point),
+        }
+    }
+
     fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         match self {
             MleEnum::Dense(item) => item.index_mle_indices(curr_index),

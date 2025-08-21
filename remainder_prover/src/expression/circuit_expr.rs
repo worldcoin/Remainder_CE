@@ -270,6 +270,7 @@ impl<F: Field> ExpressionNode<F> {
             ExpressionNode::Mle(mle) => {
                 products.push(Product::<E, Option<E>>::new(
                     &[mle.get_mle(mle_vec).clone()],
+                    &Vec::new(),
                     multiplier,
                     challenges,
                 ));
@@ -280,6 +281,7 @@ impl<F: Field> ExpressionNode<F> {
                         .iter()
                         .map(|m| m.get_mle(mle_vec).clone())
                         .collect::<Vec<_>>(),
+                    &Vec::new(),
                     multiplier,
                     challenges,
                 );
@@ -295,6 +297,7 @@ impl<F: Field> ExpressionNode<F> {
             ExpressionNode::Constant(constant) => {
                 products.push(Product::<E, Option<E>>::new(
                     &[],
+                    &Vec::new(),
                     multiplier * *constant,
                     challenges,
                 ));

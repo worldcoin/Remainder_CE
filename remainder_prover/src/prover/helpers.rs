@@ -104,16 +104,17 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
 
 /// Function which calls [test_circuit_internal] with the appropriate expected
 /// prover/verifier config.
-pub fn test_circuit_with_config<E: ExtensionField>(
-    provable_circuit: &ProvableCircuit<E>,
+pub fn test_circuit_with_config<F, E>(
+    provable_circuit: &ProvableCircuit<F>,
     expected_prover_config: &GKRCircuitProverConfig,
     expected_verifier_config: &GKRCircuitVerifierConfig,
 )
 where
-    E::BaseField: Halo2FFTFriendlyField,
+    F: Halo2FFTFriendlyField,
+    E: ExtensionField<BaseField = F>,
 {
     perform_function_under_expected_configs!(
-        test_circuit_internal,
+        test_circuit_internal::<F, E>,
         expected_prover_config,
         expected_verifier_config,
         provable_circuit
@@ -122,17 +123,18 @@ where
 
 /// Function which calls [test_circuit_internal] with the appropriate expected
 /// prover/verifier config.
-pub fn test_circuit_with_runtime_optimized_config<E: ExtensionField>(
-    provable_circuit: &ProvableCircuit<E>,
+pub fn test_circuit_with_runtime_optimized_config<F, E>(
+    provable_circuit: &ProvableCircuit<F>,
 )
 where
-    E::BaseField: Halo2FFTFriendlyField,
+    F: Halo2FFTFriendlyField,
+    E: ExtensionField<BaseField = F>,
 {
     let expected_prover_config = GKRCircuitProverConfig::runtime_optimized_default();
     let expected_verifier_config =
         GKRCircuitVerifierConfig::new_from_prover_config(&expected_prover_config, false);
     perform_function_under_expected_configs!(
-        test_circuit_internal,
+        test_circuit_internal::<F, E>,
         &expected_prover_config,
         &expected_verifier_config,
         provable_circuit
@@ -140,17 +142,18 @@ where
 }
 
 /// Function which calls [test_circuit_internal] with a memory-optimized default.
-pub fn test_circuit_with_memory_optimized_config<E: ExtensionField>(
-    provable_circuit: &ProvableCircuit<E>,
+pub fn test_circuit_with_memory_optimized_config<F, E>(
+    provable_circuit: &ProvableCircuit<F>,
 )
 where
-    E::BaseField: Halo2FFTFriendlyField,
+    F: Halo2FFTFriendlyField,
+    E: ExtensionField<BaseField = F>,
 {
     let expected_prover_config = GKRCircuitProverConfig::memory_optimized_default();
     let expected_verifier_config =
         GKRCircuitVerifierConfig::new_from_prover_config(&expected_prover_config, true);
     perform_function_under_expected_configs!(
-        test_circuit_internal,
+        test_circuit_internal::<F, E>,
         &expected_prover_config,
         &expected_verifier_config,
         provable_circuit
@@ -159,15 +162,16 @@ where
 
 /// Function which instantiates a circuit description with the given inputs
 /// and precommits and both attempts to both prove and verify said circuit.
-fn test_circuit_internal<E: ExtensionField>(provable_circuit: &ProvableCircuit<E>)
+fn test_circuit_internal<F, E>(provable_circuit: &ProvableCircuit<F>)
 where
-    E::BaseField: Halo2FFTFriendlyField,
+    F: Halo2FFTFriendlyField,
+    E: ExtensionField<BaseField = F>,
 {
     let mut transcript_writer =
-        TranscriptWriter::<E::BaseField, PoseidonSponge<E::BaseField>>::new("GKR Prover Transcript");
+        TranscriptWriter::<F, PoseidonSponge<F>>::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
 
-    match prove(
+    match prove::<F, E>(
         provable_circuit,
         global_prover_circuit_description_hash_type(),
         &mut transcript_writer,
@@ -175,12 +179,12 @@ where
         Ok(proof_config) => {
             end_timer!(prover_timer);
             let transcript = transcript_writer.get_transcript();
-            let mut transcript_reader = TranscriptReader::<E::BaseField, PoseidonSponge<E::BaseField>>::new(transcript);
+            let mut transcript_reader = TranscriptReader::<F, PoseidonSponge<F>>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
             let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
 
-            match verify(
+            match verify::<F, E>(
                 &verifiable_circuit,
                 global_verifier_circuit_description_hash_type(),
                 &mut transcript_reader,
