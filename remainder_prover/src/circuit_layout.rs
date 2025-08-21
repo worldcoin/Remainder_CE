@@ -5,7 +5,6 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use itertools::Itertools;
-use remainder_shared_types::extension_field::ExtensionField;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
@@ -41,7 +40,7 @@ impl<F: Field> CircuitEvalMap<F> {
     /// get the data that exists here.
     pub fn get_data_from_circuit_mle(
         &self,
-        circuit_mle: &MleDescription<F>,
+        circuit_mle: &MleDescription,
     ) -> Result<&MultilinearExtension<F>> {
         let circuit_location =
             CircuitLocation::new(circuit_mle.layer_id(), circuit_mle.prefix_bits());
@@ -115,18 +114,18 @@ impl CircuitLocation {
 /// system which uses Ligero as a PCS for private input layers, and provides no zero-knowledge
 /// guarantees.
 #[derive(Clone, Debug)]
-pub struct ProvableCircuit<E: ExtensionField> {
-    circuit_description: GKRCircuitDescription<E>,
-    inputs: HashMap<LayerId, MultilinearExtension<E::BaseField>>,
-    private_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithPrecommit<E::BaseField>>,
+pub struct ProvableCircuit<F: Field> {
+    circuit_description: GKRCircuitDescription<F>,
+    inputs: HashMap<LayerId, MultilinearExtension<F>>,
+    private_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithPrecommit<F>>,
 }
 
-impl<E: ExtensionField> ProvableCircuit<E> {
+impl<F: Field> ProvableCircuit<F> {
     /// Constructor
     pub fn new(
-        circuit_description: GKRCircuitDescription<E>,
-        inputs: HashMap<LayerId, MultilinearExtension<E::BaseField>>,
-        private_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithPrecommit<E::BaseField>>,
+        circuit_description: GKRCircuitDescription<F>,
+        inputs: HashMap<LayerId, MultilinearExtension<F>>,
+        private_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithPrecommit<F>>,
     ) -> Self {
         Self {
             circuit_description,
@@ -141,14 +140,14 @@ impl<E: ExtensionField> ProvableCircuit<E> {
     /// Constructs a form of this circuit that can be verified when a proof is provided.
     /// This is done by erasing all input data associated with private input layers, along with any
     /// commitments (the latter can be found in the proof).
-    pub fn _gen_verifiable_circuit(&self) -> VerifiableCircuit<E> {
-        let public_inputs: HashMap<LayerId, MultilinearExtension<E::BaseField>> = self
+    pub fn _gen_verifiable_circuit(&self) -> VerifiableCircuit<F> {
+        let public_inputs: HashMap<LayerId, MultilinearExtension<F>> = self
             .inputs
             .clone()
             .into_iter()
             .filter(|(layer_id, _)| !self.private_inputs.contains_key(layer_id))
             .collect();
-        let private_inputs: HashMap<LayerId, LigeroInputLayerDescription<E::BaseField>> = self
+        let private_inputs: HashMap<LayerId, LigeroInputLayerDescription<F>> = self
             .private_inputs
             .clone()
             .into_iter()
@@ -177,7 +176,7 @@ impl<E: ExtensionField> ProvableCircuit<E> {
     /// Returns a reference to the [GKRCircuitDescription] of this circuit.
     ///
     /// TODO: This is only used by the back end. Do _not_ expose it to the circuit developer.
-    pub fn get_gkr_circuit_description_ref(&self) -> &GKRCircuitDescription<E> {
+    pub fn get_gkr_circuit_description_ref(&self) -> &GKRCircuitDescription<F> {
         &self.circuit_description
     }
 
@@ -201,7 +200,7 @@ impl<E: ExtensionField> ProvableCircuit<E> {
 
     /// Returns the data associated with the input layer with ID `layer_id`, or an error if there is
     /// no input layer with this ID.
-    pub fn get_input_mle(&self, layer_id: LayerId) -> Result<MultilinearExtension<E::BaseField>> {
+    pub fn get_input_mle(&self, layer_id: LayerId) -> Result<MultilinearExtension<F>> {
         self.inputs
             .get(&layer_id)
             .ok_or(anyhow!("Unrecognized Layer ID '{layer_id}'"))
@@ -213,7 +212,7 @@ impl<E: ExtensionField> ProvableCircuit<E> {
     pub fn get_private_input_layer(
         &self,
         layer_id: LayerId,
-    ) -> Result<LigeroInputLayerDescriptionWithPrecommit<E::BaseField>> {
+    ) -> Result<LigeroInputLayerDescriptionWithPrecommit<F>> {
         self.private_inputs
             .get(&layer_id)
             .ok_or(anyhow!("Unrecognized Layer ID '{layer_id}'"))
@@ -225,7 +224,7 @@ impl<E: ExtensionField> ProvableCircuit<E> {
     ///
     /// TODO: This is too transparent. Replace this with methods that answer the queries of the
     /// prover directly, and do _not_ expose it to the circuit developer.
-    pub fn get_inputs_ref(&self) -> &HashMap<LayerId, MultilinearExtension<E::BaseField>> {
+    pub fn get_inputs_ref(&self) -> &HashMap<LayerId, MultilinearExtension<F>> {
         &self.inputs
     }
 }
@@ -233,19 +232,19 @@ impl<E: ExtensionField> ProvableCircuit<E> {
 /// A circuit that contains a [GKRCircuitDescription], a description of the private input layers,
 /// and the data for all the public input layers, ready to be verified against a proof.
 #[derive(Clone, Debug)]
-pub struct VerifiableCircuit<E: ExtensionField> {
-    circuit_description: GKRCircuitDescription<E>,
-    public_inputs: HashMap<LayerId, MultilinearExtension<E::BaseField>>,
-    private_inputs: HashMap<LayerId, LigeroInputLayerDescription<E::BaseField>>,
+pub struct VerifiableCircuit<F: Field> {
+    circuit_description: GKRCircuitDescription<F>,
+    public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
+    private_inputs: HashMap<LayerId, LigeroInputLayerDescription<F>>,
 }
 
-impl<E: ExtensionField> VerifiableCircuit<E> {
+impl<F: Field> VerifiableCircuit<F> {
     /// Returns a reference to the mapping which maps a [LayerId] of a public input layer to the
     /// data its associated with.
     ///
     /// TODO: This is too transparent. Replace this with methods that answer the queries of the
     /// prover directly, and do _not_ expose it to the circuit developer.
-    pub fn get_public_inputs_ref(&self) -> &HashMap<LayerId, MultilinearExtension<E::BaseField>> {
+    pub fn get_public_inputs_ref(&self) -> &HashMap<LayerId, MultilinearExtension<F>> {
         &self.public_inputs
     }
 
@@ -256,14 +255,14 @@ impl<E: ExtensionField> VerifiableCircuit<E> {
     /// prover directly, and do _not_ expose it to the circuit developer.
     pub fn get_private_inputs_ref(
         &self,
-    ) -> &HashMap<LayerId, LigeroInputLayerDescription<E::BaseField>> {
+    ) -> &HashMap<LayerId, LigeroInputLayerDescription<F>> {
         &self.private_inputs
     }
 
     /// Returns a reference to the circuit description.
     ///
     /// TODO: This is only used by the back end. Do _not_ expose it to the circuit developer.
-    pub fn get_gkr_circuit_description_ref(&self) -> &GKRCircuitDescription<E> {
+    pub fn get_gkr_circuit_description_ref(&self) -> &GKRCircuitDescription<F> {
         &self.circuit_description
     }
 
@@ -282,7 +281,7 @@ impl<E: ExtensionField> VerifiableCircuit<E> {
     pub fn get_public_input_mle(
         &self,
         layer_id: LayerId,
-    ) -> Result<MultilinearExtension<E::BaseField>> {
+    ) -> Result<MultilinearExtension<F>> {
         self.public_inputs
             .get(&layer_id)
             .ok_or(anyhow!("Unrecognized Layer ID '{layer_id}'"))

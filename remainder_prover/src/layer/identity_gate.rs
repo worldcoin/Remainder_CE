@@ -318,6 +318,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
         PostSumcheckLayer(vec![Product::<E, Option<E>>::new(
             &[self.source_mle.clone()],
+            &Vec::new(), 
             f_1_gu,
             round_challenges,
         )])

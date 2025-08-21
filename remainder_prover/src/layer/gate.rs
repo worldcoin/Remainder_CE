@@ -973,8 +973,8 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
         match self.gate_operation {
             BinaryOperation::Add => PostSumcheckLayer(vec![
-                Product::<E, Option<E>>::new(&[self.lhs_mle.clone()], f_1_uv, lhs_challenges),
-                Product::<E, Option<E>>::new(&[self.rhs_mle.clone()], f_1_uv, rhs_challenges),
+                Product::<E, Option<E>>::new(&[self.lhs_mle.clone()], &Vec::new(), f_1_uv, lhs_challenges),
+                Product::<E, Option<E>>::new(&[self.rhs_mle.clone()], &Vec::new(), f_1_uv, rhs_challenges),
             ]),
             BinaryOperation::Mul => {
                 PostSumcheckLayer(vec![Product::<E, Option<E>>::new_from_mul_gate(

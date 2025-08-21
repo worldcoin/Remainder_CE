@@ -357,7 +357,10 @@ impl<F: Field> MatrixDescription<F> {
 
     /// Convert the circuit description of a matrix into the prover
     /// view of a matrix, using the [CircuitMap].
-    pub fn into_matrix(&self, circuit_map: &CircuitEvalMap<F>) -> Matrix<F> {
+    pub fn into_matrix<E>(&self, circuit_map: &CircuitEvalMap<E>) -> Matrix<E>
+    where
+        E: ExtensionField<BaseField = F>,
+    {
         let dense_mle = self.mle.into_dense_mle(circuit_map);
         Matrix {
             mle: dense_mle,
@@ -459,6 +462,8 @@ impl<F: Field> MatMultLayerDescription<F> {
             layer_id: self.layer_id,
             matrix_a,
             matrix_b,
+            a_bind_list: full_claim_chals_a.iter().map(|c| Some(*c)).collect(),
+            b_bind_list: full_claim_chals_b.iter().map(|c| Some(*c)).collect(),
         })
     }
 }
@@ -729,12 +734,12 @@ pub struct VerifierMatrix<F: Field> {
 pub struct VerifierMatMultLayer<E: ExtensionField> {
     /// The layer id associated with this gate layer.
     layer_id: LayerId,
-
     /// The LHS Matrix to be multiplied.
     matrix_a: VerifierMatrix<E>,
-
     /// The RHS Matrix to be multiplied.
     matrix_b: VerifierMatrix<E>,
+    a_bind_list: Vec<Option<E>>,
+    b_bind_list: Vec<Option<E>>,
 }
 
 impl<E: ExtensionField> VerifierLayer<E> for VerifierMatMultLayer<E> {
@@ -745,14 +750,15 @@ impl<E: ExtensionField> VerifierLayer<E> for VerifierMatMultLayer<E> {
     fn get_claims(&self) -> Result<Vec<Claim<E>>> {
         let claims = vec![&self.matrix_a, &self.matrix_b]
             .into_iter()
-            .map(|matrix| {
+            .zip(vec![&self.a_bind_list, &self.b_bind_list])
+            .map(|(matrix, bind_list)| {
                 let matrix_fixed_indices = matrix
                     .mle
                     .mle_indices()
                     .iter()
                     .map(|index| {
                         index
-                            .val()
+                            .val(bind_list)
                             .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))
                             .unwrap()
                     })
