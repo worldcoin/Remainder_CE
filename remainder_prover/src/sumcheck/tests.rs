@@ -17,10 +17,11 @@ use anyhow::Result;
 
 /// Does a dummy version of sumcheck with a testing RNG.
 pub(crate) fn dummy_sumcheck<E: ExtensionField>(
-    expr: &mut Expression<E, ProverMle<E>>,
+    expr: &mut Expression<E::BaseField, ProverMle<E>>,
     rng: &mut impl Rng,
     layer_claim: RawClaim<E>,
 ) -> Vec<(Vec<E>, Option<E>)> {
+    let mut bind_list = expr.init_bind_list();
     let claim_point = layer_claim.get_point();
     let expression_nonlinear_indices = expr.get_all_nonlinear_rounds();
     let expression_linear_indices = expr.get_all_linear_rounds();
@@ -28,7 +29,7 @@ pub(crate) fn dummy_sumcheck<E: ExtensionField>(
         .iter()
         .sorted()
         .for_each(|round_idx| {
-            expr.fix_variable_at_index(*round_idx, claim_point[*round_idx]);
+            expr.fix_variable_at_index(*round_idx, claim_point[*round_idx], &mut bind_list);
         });
     let betavec = expression_nonlinear_indices
         .iter()
@@ -44,7 +45,7 @@ pub(crate) fn dummy_sumcheck<E: ExtensionField>(
         // First fix the variable representing the challenge from the last round
         // (This doesn't happen for the first round)
         if let Some(challenge) = challenge {
-            expr.fix_variable(round_index - 1, challenge);
+            expr.fix_variable(round_index - 1, challenge, &mut bind_list);
             newbeta.beta_update(round_index - 1, challenge);
         }
 
@@ -53,7 +54,7 @@ pub(crate) fn dummy_sumcheck<E: ExtensionField>(
 
         // Gives back the evaluations g(0), g(1), ..., g(d - 1)
         let eval =
-            expr.evaluate_sumcheck_beta_cascade(&vec![&newbeta], &[E::ONE], round_index, degree);
+            expr.evaluate_sumcheck_beta_cascade(&vec![&newbeta], &[E::ONE], round_index, degree, &bind_list);
 
         messages.push((eval.0, challenge));
 
@@ -66,7 +67,7 @@ pub(crate) fn dummy_sumcheck<E: ExtensionField>(
 /// can change this to take prev round random challenge, and then compute the new random challenge
 pub fn verify_sumcheck_messages<E: ExtensionField>(
     messages: Vec<(Vec<E>, Option<E>)>,
-    mut expression: Expression<E, ProverMle<E>>,
+    mut expression: Expression<E::BaseField, ProverMle<E>>,
     layer_claim: RawClaim<E>,
     rng: &mut impl Rng,
 ) -> Result<E> {
@@ -127,7 +128,7 @@ pub fn verify_sumcheck_messages<E: ExtensionField>(
         });
 
     // uses the expression to make one single oracle query
-    let mle_bound = expression.evaluate_expr(challenges.clone()).unwrap();
+    let mle_bound = expression.evaluate_expr(challenges.clone(), &mut Vec::new()).unwrap();
     let oracle_query = mle_bound * beta_bound;
 
     let prev_at_r =
@@ -146,6 +147,7 @@ pub(crate) fn get_dummy_claim<E: ExtensionField>(
 ) -> RawClaim<E> {
     let mut expression = mle.expression();
     let num_vars = expression.index_mle_indices(0);
+    let mut bind_list = expression.init_bind_list();
     let challenges = if let Some(challenges) = challenges {
         assert_eq!(challenges.len(), num_vars);
         challenges
@@ -154,7 +156,7 @@ pub(crate) fn get_dummy_claim<E: ExtensionField>(
             .map(|_| E::from(rng.gen::<u64>()))
             .collect_vec()
     };
-    let eval = expression.evaluate_expr(challenges).unwrap();
+    let eval = expression.evaluate_expr(challenges, &mut bind_list).unwrap();
 
     let (expression_node, mle_vec) = expression.deconstruct_mut();
 
@@ -163,7 +165,7 @@ pub(crate) fn get_dummy_claim<E: ExtensionField>(
             .get_mle(mle_vec)
             .mle_indices
             .iter()
-            .map(|index: &MleIndex<E>| index.val().unwrap())
+            .map(|index: &MleIndex| index.val(&bind_list).unwrap())
             .collect_vec(),
         _ => panic!(),
     };
@@ -171,11 +173,12 @@ pub(crate) fn get_dummy_claim<E: ExtensionField>(
 }
 
 pub(crate) fn get_dummy_expression_eval<E: ExtensionField>(
-    expression: &Expression<E, ProverMle<E>>,
+    expression: &Expression<E::BaseField, ProverMle<E>>,
     rng: &mut impl Rng,
 ) -> RawClaim<E> {
     let mut expression = expression.clone();
     let num_vars = expression.index_mle_indices(0);
+    let mut bind_list = expression.init_bind_list();
 
     let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
     let expression_linear_indices = expression.get_all_linear_rounds();
@@ -189,10 +192,10 @@ pub(crate) fn get_dummy_expression_eval<E: ExtensionField>(
         .collect_vec();
     expression_linear_indices
         .iter()
-        .for_each(|round| expression.fix_variable_at_index(*round, challenges[*round]));
+        .for_each(|round| expression.fix_variable_at_index(*round, challenges[*round], &mut bind_list));
 
     let beta = BetaValues::new(challenges_enumerate);
-    let eval = expression.evaluate_sumcheck_node_beta_cascade_sum(&beta, 0, 0);
+    let eval = expression.evaluate_sumcheck_node_beta_cascade_sum(&beta, 0, 0, &bind_list);
 
     let SumcheckEvals(evals) = eval;
     let result = evals[0];
@@ -204,9 +207,10 @@ pub(crate) fn get_dummy_expression_eval<E: ExtensionField>(
 #[test]
 fn eval_expr_nums() {
     let new_beta = BetaValues::new(vec![(0, Fr::one())]);
-    let expression1: Expression<Fr, ProverMle<Fr>> =
+    let expression: Expression<Fr, ProverMle<Fr>> =
         Expression::<Fr, ProverMle<Fr>>::constant(Fr::from(6));
-    let res = expression1.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 0, 1);
+    let bind_list = expression.init_bind_list();
+    let res = expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 0, 1, &bind_list);
     let exp = SumcheckEvals(vec![Fr::from(0), Fr::from(6)]);
     assert_eq!(res, exp);
 }
@@ -261,7 +265,8 @@ fn test_quadratic_sum() {
 
     let mut expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle1, mle2]);
     expression.index_mle_indices(0);
-    let res = expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 0, 3);
+    let bind_list = expression.init_bind_list();
+    let res = expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 0, 3, &bind_list);
     let exp = SumcheckEvals(vec![
         Fr::from(2).neg(),
         Fr::from(120),
@@ -294,8 +299,9 @@ fn test_quadratic_sum_differently_sized_mles2() {
 
     let mut expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle1, mle2]);
     expression.index_mle_indices(0);
-    expression.fix_variable_at_index(2, Fr::from(3));
-    let res = expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 1, 3);
+    let mut bind_list = expression.init_bind_list();
+    expression.fix_variable_at_index(2, Fr::from(3), &mut bind_list);
+    let res = expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 1, 3, &bind_list);
     let exp = SumcheckEvals(vec![
         Fr::from(12).neg(),
         Fr::from(230),

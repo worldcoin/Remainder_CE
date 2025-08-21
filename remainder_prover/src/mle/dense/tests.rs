@@ -112,7 +112,7 @@ fn smart_fix_variable_two_vars_forward() {
     let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
     let mut mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
     mle.index_mle_indices(0);
-    let mut bind_list = vec![None; mle.max_index()];
+    let mut bind_list = mle.init_bind_list();
 
     // Fix 1st variable to 1.
     mle.fix_variable_at_index(0, Fr::from(1), &mut bind_list);
@@ -142,7 +142,7 @@ fn smart_fix_variable_two_vars_backwards() {
     let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
     let mut mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
     mle.index_mle_indices(0);
-    let mut bind_list = vec![None; mle.max_index()];
+    let mut bind_list = mle.init_bind_list();
 
     // Fix 2nd variable to 1.
     mle.fix_variable_at_index(1, Fr::from(1), &mut bind_list);
@@ -182,7 +182,7 @@ fn smart_fix_variable_three_vars_123() {
     ];
     let mut mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
     mle.index_mle_indices(0);
-    let mut bind_list = vec![None; mle.max_index()];
+    let mut bind_list = mle.init_bind_list();
 
     // Fix 1st variable to 3.
     mle.fix_variable_at_index(0, Fr::from(3), &mut bind_list);
@@ -233,7 +233,7 @@ fn smart_fix_variable_three_vars_132() {
     ];
     let mut mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
     mle.index_mle_indices(0);
-    let mut bind_list = vec![None; mle.max_index()];
+    let mut bind_list = mle.init_bind_list();
 
     // Fix 1st variable to 3.
     mle.fix_variable_at_index(0, Fr::from(3), &mut bind_list);
@@ -284,7 +284,7 @@ fn smart_fix_variable_three_vars_213() {
     ];
     let mut mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
     mle.index_mle_indices(0);
-    let mut bind_list = vec![None; mle.max_index()];
+    let mut bind_list = mle.init_bind_list();
 
     // Fix 2nd variable to 4.
     mle.fix_variable_at_index(1, Fr::from(4), &mut bind_list);
@@ -335,7 +335,7 @@ fn smart_fix_variable_three_vars_231() {
     ];
     let mut mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
     mle.index_mle_indices(0);
-    let mut bind_list = vec![None; mle.max_index()];
+    let mut bind_list = mle.init_bind_list();
 
     // Fix 2nd variable to 4.
     mle.fix_variable_at_index(1, Fr::from(4), &mut bind_list);
@@ -386,7 +386,7 @@ fn smart_fix_variable_three_vars_312() {
     ];
     let mut mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
     mle.index_mle_indices(0);
-    let mut bind_list = vec![None; mle.max_index()];
+    let mut bind_list = mle.init_bind_list();
 
     // Fix 3rd variable to 5.
     mle.fix_variable_at_index(2, Fr::from(5), &mut bind_list);
@@ -437,7 +437,7 @@ fn smart_fix_variable_three_vars_321() {
     ];
     let mut mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
     mle.index_mle_indices(0);
-    let mut bind_list = vec![None; mle.max_index()];
+    let mut bind_list = mle.init_bind_list();
 
     // Fix 3rd variable to 5.
     mle.fix_variable_at_index(2, Fr::from(5), &mut bind_list);

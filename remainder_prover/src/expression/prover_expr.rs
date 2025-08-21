@@ -979,14 +979,14 @@ impl<F: Field> ExpressionNode<F> {
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
                 assert!(mle.is_fully_bounded(bind_list));
-                products.push(Product::<E, E>::new(&[mle.clone()], multiplier));
+                products.push(Product::<E, E>::new(&[mle.clone()], &Vec::new(), multiplier));
             }
             ExpressionNode::Product(mle_vec_indices) => {
                 let mles = mle_vec_indices
                     .iter()
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec).clone())
                     .collect_vec();
-                let product = Product::<E, E>::new(&mles, multiplier);
+                let product = Product::<E, E>::new(&mles, &Vec::new(), multiplier);
                 products.push(product);
             }
             ExpressionNode::Scaled(a, scale_factor) => {
@@ -994,7 +994,7 @@ impl<F: Field> ExpressionNode<F> {
                 products.extend(a.get_post_sumcheck_layer_prover(acc, mle_vec, bind_list).0);
             }
             ExpressionNode::Constant(constant) => {
-                products.push(Product::<E, E>::new(&[], multiplier * *constant));
+                products.push(Product::<E, E>::new(&[], &Vec::new(), multiplier * *constant));
             }
         }
         PostSumcheckLayer(products)

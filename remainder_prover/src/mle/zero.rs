@@ -89,6 +89,17 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         self.fix_variable(indexed_bit_index, point, bind_list)
     }
 
+    fn fix_variable_at_index_no_bind_list(&mut self, indexed_bit_index: usize, _point: F) {
+        for mle_index in self.mle_indices.iter_mut() {
+            if *mle_index == MleIndex::Indexed(indexed_bit_index) {
+                mle_index.bind_index_no_check();
+            }
+        }
+
+        // One fewer free variable to sumcheck through
+        self.num_vars -= 1;
+    }
+
     fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         let mut new_indices = 0;
         for mle_index in self.mle_indices.iter_mut() {

@@ -121,6 +121,49 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         }
     }
 
+    fn fix_variable_at_index_no_bind_list(&mut self, indexed_bit_index: usize, point: F) {
+        // Bind the `MleIndex::IndexedBit(index)` to the challenge `point`.
+
+        // First, find the bit corresponding to `index` and compute its absolute
+        // index. For example, if `mle_indices` is equal to
+        // `[MleIndex::Fixed(0), MleIndex::Bound(42, 0), MleIndex::IndexedBit(1),
+        // MleIndex::Bound(17, 2) MleIndex::IndexedBit(3))]`
+        // then `fix_variable_at_index(3, r)` will fix `IndexedBit(3)`, which is
+        // the 2nd indexed bit, to `r`
+
+        // Count of the bit we're fixing. In the above example
+        // `bit_count == 2`.
+        let (index_found, bit_count) =
+            self.mle_indices
+                .iter_mut()
+                .fold((false, 0), |state, mle_index| {
+                    if state.0 {
+                        // Index already found; do nothing.
+                        state
+                    } else if let MleIndex::Indexed(current_bit_index) = *mle_index {
+                        if current_bit_index == indexed_bit_index {
+                            // Found the indexed bit in the current index;
+                            // bind it and increment the bit count.
+                            mle_index.bind_index_no_check();
+                            (true, state.1 + 1)
+                        } else {
+                            // Index not yet found but this is an indexed
+                            // bit; increasing bit count.
+                            (false, state.1 + 1)
+                        }
+                    } else {
+                        // Index not yet found but the current bit is not an
+                        // indexed bit; do nothing.
+                        state
+                    }
+                });
+
+        assert!(index_found);
+        debug_assert!(1 <= bit_count && bit_count <= self.num_free_vars());
+
+        self.mle.fix_variable_at_index(bit_count - 1, point);
+    }
+
     /// Bind the bit `index` to the value `binding`.
     /// If this was the last unbound variable, then return a Claim object giving the fully specified
     /// evaluation point and the (single) value of the bookkeeping table.  Otherwise, return None.
@@ -320,8 +363,8 @@ impl<F: Field> DenseMle<F> {
 
 impl<E: ExtensionField> DenseMle<E> {
     /// Creates an expression from the current MLE.
-    pub fn expression(self) -> Expression<E, DenseMle<E>> {
-        Expression::<E, DenseMle<E>>::mle(self)
+    pub fn expression(self) -> Expression<E::BaseField, DenseMle<E>> {
+        Expression::<E::BaseField, DenseMle<E>>::mle(self)
     }
 }
 

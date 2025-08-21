@@ -23,12 +23,13 @@ fn test_constants_eval() {
 
     let mut expression = Expression::scaled(expression1 - expression2, Fr::from(2));
     let mut expression_another = expression.clone() + expression3;
+    let mut bind_list = expression.init_bind_list();
 
     let challenge = vec![Fr::one()];
-    let eval = expression.evaluate_expr(challenge.clone());
+    let eval = expression.evaluate_expr(challenge.clone(), &mut bind_list);
     assert_eq!(eval.unwrap(), Fr::from(2).neg());
 
-    let eval_another = expression_another.evaluate_expr(challenge);
+    let eval_another = expression_another.evaluate_expr(challenge, &mut bind_list);
     assert_eq!(eval_another.unwrap(), Fr::from(1));
 }
 
@@ -41,10 +42,11 @@ fn test_mle_eval_two_variable() {
 
     let mut expression = Expression::<Fr, DenseMle<Fr>>::mle(mle);
     let num_indices = expression.index_mle_indices(0);
+    let mut bind_list = expression.init_bind_list();
     assert_eq!(num_indices, 2);
 
     let challenge = vec![Fr::from(2).neg(), Fr::from(9)];
-    let eval = expression.evaluate_expr(challenge);
+    let eval = expression.evaluate_expr(challenge, &mut bind_list);
     assert_eq!(eval.unwrap(), Fr::from(55).neg());
 }
 
@@ -66,10 +68,11 @@ fn test_mle_eval_three_variable() {
 
     let mut expression = Expression::<Fr, DenseMle<Fr>>::mle(mle);
     let num_indices = expression.index_mle_indices(0);
+    let mut bind_list = expression.init_bind_list();
     assert_eq!(num_indices, 3);
 
     let challenge = vec![Fr::from(2).neg(), Fr::from(3), Fr::from(5)];
-    let eval = expression.evaluate_expr(challenge);
+    let eval = expression.evaluate_expr(challenge, &mut bind_list);
     assert_eq!(eval.unwrap(), Fr::from(297));
 }
 
@@ -84,10 +87,11 @@ fn test_mle_eval_sum_w_constant_then_scale() {
     let mut expression =
         Expression::scaled(expression + Expression::constant(Fr::from(5)), Fr::from(2));
     let num_indices = expression.index_mle_indices(0);
+    let mut bind_list = expression.init_bind_list();
     assert_eq!(num_indices, 2);
 
     let challenge = vec![Fr::from(1).neg(), Fr::from(7)];
-    let eval = expression.evaluate_expr(challenge);
+    let eval = expression.evaluate_expr(challenge, &mut bind_list);
     assert_eq!(eval.unwrap(), Fr::from(132).neg());
 }
 
@@ -110,10 +114,11 @@ fn test_mle_eval_selector() {
     let mut expression = expression_1.select(expression_2);
 
     let num_indices = expression.index_mle_indices(0);
+    let mut bind_list = expression.init_bind_list();
     assert_eq!(num_indices, 3);
 
     let challenge = vec![Fr::from(2), Fr::from(7), Fr::from(3)];
-    let eval = expression.evaluate_expr(challenge);
+    let eval = expression.evaluate_expr(challenge, &mut bind_list);
 
     let mle_concat = DenseMle::new_from_raw(
         vec![
@@ -134,9 +139,10 @@ fn test_mle_eval_selector() {
     let mut expression_concat = Expression::<Fr, DenseMle<Fr>>::mle(mle_concat);
 
     let num_indices_concat = expression_concat.index_mle_indices(0);
+    let mut bind_list = expression_concat.init_bind_list();
     assert_eq!(num_indices_concat, 3);
 
-    let eval_concat = expression_concat.evaluate_expr(challenge_concat);
+    let eval_concat = expression_concat.evaluate_expr(challenge_concat, &mut bind_list);
 
     assert_eq!(eval.unwrap(), eval_concat.unwrap());
 }
@@ -154,10 +160,11 @@ fn test_mle_eval_selector_w_constant() {
     let mut expression = constant_expr.select(expression_1);
 
     let num_indices = expression.index_mle_indices(0);
+    let mut bind_list = expression.init_bind_list();
     assert_eq!(num_indices, 3);
 
     let challenge = vec![Fr::from(1).neg(), Fr::from(7), Fr::from(3)];
-    let eval = expression.evaluate_expr(challenge);
+    let eval = expression.evaluate_expr(challenge, &mut bind_list);
 
     // -149 + (1 - (-1)) * 5
     assert_eq!(eval.unwrap(), Fr::from(139).neg());
@@ -174,7 +181,8 @@ fn test_mle_eval() {
 
     let mut expression_1 = Expression::<Fr, DenseMle<Fr>>::mle(mle_1.clone());
     let _ = expression_1.index_mle_indices(0);
-    let eval_1 = expression_1.evaluate_expr(challenge.clone()).unwrap();
+    let mut bind_list = expression_1.init_bind_list();
+    let eval_1 = expression_1.evaluate_expr(challenge.clone(), &mut bind_list).unwrap();
 
     let mle_2 = DenseMle::new_from_raw(
         vec![Fr::from(1), Fr::from(5), Fr::from(4), Fr::from(2)],
@@ -183,13 +191,13 @@ fn test_mle_eval() {
 
     let mut expression_2 = Expression::<Fr, DenseMle<Fr>>::mle(mle_2.clone());
     let _ = expression_2.index_mle_indices(0);
-    let eval_2 = expression_2.evaluate_expr(challenge.clone()).unwrap();
+    let eval_2 = expression_2.evaluate_expr(challenge.clone(), &mut bind_list).unwrap();
 
     let mut expression_product = Expression::<Fr, DenseMle<Fr>>::products(vec![mle_1, mle_2]);
     let num_indices = expression_product.index_mle_indices(0);
     assert_eq!(num_indices, 2);
 
-    let eval_prod = expression_product.evaluate_expr(challenge).unwrap();
+    let eval_prod = expression_product.evaluate_expr(challenge, &mut bind_list).unwrap();
 
     assert_eq!(eval_prod, (eval_1 * eval_2));
     // 11 * -17
@@ -240,11 +248,12 @@ fn test_mle_different_length_eval() {
     let mut expression = expression_1 + expression_2;
     let mut expression_expect = Expression::<Fr, DenseMle<Fr>>::mle(sum_mle);
     let num_indices = expression.index_mle_indices(0);
+    let mut bind_list = expression.init_bind_list();
     assert_eq!(num_indices, 3);
     expression_expect.index_mle_indices(0);
 
-    let eval_sum = expression.evaluate_expr(challenge.clone()).unwrap();
-    let expect_sum = expression_expect.evaluate_expr(challenge).unwrap();
+    let eval_sum = expression.evaluate_expr(challenge.clone(), &mut bind_list).unwrap();
+    let expect_sum = expression_expect.evaluate_expr(challenge, &mut bind_list).unwrap();
 
     assert_eq!(eval_sum, expect_sum);
 }
@@ -447,10 +456,11 @@ fn big_test_eval() {
 
     let mut expression = expression.select(expression3);
     let num_indices = expression.index_mle_indices(0);
+    let mut bind_list = expression.init_bind_list();
     assert_eq!(num_indices, 3);
 
     let challenge = vec![Fr::from(2), Fr::from(3), Fr::from(4)];
-    let eval = expression.evaluate_expr(challenge).unwrap();
+    let eval = expression.evaluate_expr(challenge, &mut bind_list).unwrap();
 
     // -((1 - (24 * 24 - 23)) * 2) - 24 * 2
     assert_eq!(eval, Fr::from(1056));

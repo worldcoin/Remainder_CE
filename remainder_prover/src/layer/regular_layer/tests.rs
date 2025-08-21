@@ -29,7 +29,7 @@ fn regular_layer_test_prove_verify_product() {
     let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_1.mle_indices());
     let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_2.mle_indices());
     let mut circuit_expression =
-        Expression::<Fr, MleDescription<Fr>>::products(vec![circuit_mle_1, circuit_mle_2]);
+        Expression::<Fr, MleDescription>::products(vec![circuit_mle_1, circuit_mle_2]);
     circuit_expression.index_mle_vars(0);
 
     let mut expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle_1, mle_2]);
@@ -67,7 +67,7 @@ fn regular_layer_test_prove_verify_sum() {
 
     let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_1.mle_indices());
     let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_2.mle_indices());
-    let mut circuit_expression = Expression::<Fr, MleDescription<Fr>>::sum(
+    let mut circuit_expression = Expression::<Fr, MleDescription>::sum(
         Expression::mle(circuit_mle_1),
         Expression::mle(circuit_mle_2),
     );
@@ -109,7 +109,7 @@ fn regular_layer_test_prove_verify_selector() {
 
     let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_1.mle_indices());
     let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_2.mle_indices());
-    let mut circuit_expression = Expression::<Fr, MleDescription<Fr>>::binary_tree_selector(vec![
+    let mut circuit_expression = Expression::<Fr, MleDescription>::binary_tree_selector(vec![
         Expression::mle(circuit_mle_1),
         Expression::mle(circuit_mle_2),
     ]);
@@ -154,8 +154,8 @@ fn regular_layer_test_prove_verify_complex() {
 
     let circuit_mle_1 = MleDescription::new(LayerId::Input(0), mle_1.mle_indices());
     let circuit_mle_2 = MleDescription::new(LayerId::Input(0), mle_2.mle_indices());
-    let mut circuit_expression = Expression::<Fr, MleDescription<Fr>>::binary_tree_selector(vec![
-        Expression::<Fr, MleDescription<Fr>>::products(vec![
+    let mut circuit_expression = Expression::<Fr, MleDescription>::binary_tree_selector(vec![
+        Expression::<Fr, MleDescription>::products(vec![
             circuit_mle_1.clone(),
             circuit_mle_2.clone(),
         ]),

@@ -232,7 +232,11 @@ impl<F: Field, M: AbstractMle> Expression<F, M> {
         for m in &self.mle_vec {
             assert!(m.is_unbounded());
         }
-        vec![None; self.get_all_rounds().iter().max().unwrap() + 1]
+        if let Some(i) = self.get_all_rounds().iter().max() {
+            vec![None; i + 1]
+        } else {
+            Vec::new()
+        }
     }
 }
 
