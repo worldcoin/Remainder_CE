@@ -263,7 +263,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         let public_inputs = provable_circuit
             .get_inputs_ref()
             .keys()
-            .filter(|layer_id| provable_circuit.is_private_input_layer(**layer_id))
+            .filter(|layer_id| !provable_circuit.is_private_input_layer(**layer_id))
             .map(|layer_id| {
                 let mle = provable_circuit.get_input_mle(*layer_id).unwrap();
                 (*layer_id, Some(mle.clone()))
