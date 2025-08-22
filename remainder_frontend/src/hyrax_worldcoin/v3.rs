@@ -88,10 +88,11 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
     ic_circuit_desc: &IriscodeCircuitDescription<Fr>,
     auxiliary_mle: &MultilinearExtension<Fr>,
     */
+    image_commitment: HyraxProverInputCommitment<Bn256Point>,
     expected_commitment_hash: &str,
     committer: &PedersenCommitter<Bn256Point>,
     proof_config: &ProofConfig,
-) -> Result<(Vec<Bn256Point>, Vec<Bn256Point>)> {
+) -> Result<()> {
     /*
     let mut hyrax_input_layers = HashMap::new();
 
@@ -155,13 +156,14 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
         .unwrap()
         .input_commitment
         .clone();
-    */
     let code_commitment = todo!();
     let image_commitment: Vec<Bn256Point> = todo!();
+    */
 
     // Check that the image commitment matches the expected hash.
     let commitment_hash = sha256_digest(
         &image_commitment
+            .commitment
             .iter()
             .flat_map(|p| p.to_bytes_compressed())
             .collect::<Vec<u8>>(),
@@ -172,7 +174,7 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
     }
 
     // Return the commitments to the code and the image.
-    Ok((code_commitment, image_commitment))
+    Ok(())
 }
 
 /// Prove a single instance of the iriscode circuit using the Hyrax proof system and the provided image precommit.
@@ -183,11 +185,13 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
 /// ///
 /// This function is assumed to be called *with the prover config set*!
 pub fn prove_with_image_precommit(
-    provable_circuit: HyraxProvableCircuit<Bn256Point>,
+    mut provable_circuit: HyraxProvableCircuit<Bn256Point>,
     /*
     ic_circuit_desc: &IriscodeCircuitDescription<Fr>,
     inputs: HashMap<LayerId, MultilinearExtension<Fr>>,
     */
+    image_layer_label: &str,
+    code_layer_label: &str,
     image_precommit: HyraxProverInputCommitment<Bn256Point>,
     committer: &PedersenCommitter<Bn256Point>,
     blinding_rng: &mut (impl CryptoRng + RngCore),
@@ -206,6 +210,9 @@ pub fn prove_with_image_precommit(
         ),
     > = HashMap::new();
 
+    provable_circuit
+        .set_pre_commitment(image_layer_label, image_precommit)
+        .unwrap();
     /*
     // The image, with the precommit (must use the same number of columns as were used at the time of committing!)
     let image_hyrax_input_layer_desc = HyraxInputLayerDescription {
@@ -252,12 +259,17 @@ pub fn prove_with_image_precommit(
 
     // Prove the relationship between iris/mask code and image.
     let (proof, proof_config) = HyraxProof::prove(
-        provable_circuit,
+        &mut provable_circuit,
         &committer,
         blinding_rng,
         converter,
         &mut transcript,
     );
+
+    let code_commit = provable_circuit
+        .get_commitment_ref_by_label(code_layer_label)
+        .unwrap()
+        .clone();
 
     /*
     // Zeroize each value in the HashMap
@@ -273,7 +285,7 @@ pub fn prove_with_image_precommit(
     image_precommit.as_mut().unwrap().zeroize();
     */
 
-    (proof, proof_config, todo!() /* code_commit */)
+    (proof, proof_config, code_commit)
 }
 
 #[derive(Error, Debug)]
@@ -387,6 +399,8 @@ impl V3Prover {
         // Prove the iriscode circuit with the image precommit.
         let (proof, _, code_commit) = prove_with_image_precommit(
             provable_circuit,
+            "To-Reroute",
+            "Sign Bits",
             image_precommit,
             &mut self.committer,
             rng,
@@ -634,13 +648,15 @@ impl V3Proof {
     ) -> Result<()> {
         let proof = self.get(is_mask, is_left_eye);
 
-        let (code, _commitment) = verify_v3_iriscode_proof_and_hash(
+        /*
+        verify_v3_iriscode_proof_and_hash(
             proof,
             circuit,
             commitment_hash,
             &self.committer,
             &self.proof_config,
         )?;
+        */
 
         Ok(())
     }

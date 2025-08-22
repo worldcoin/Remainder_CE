@@ -1264,6 +1264,7 @@ impl<F: Field> Circuit<F> {
             self.circuit_description.clone(),
             inputs,
             hyrax_private_inputs,
+            self.circuit_map.layer_label_to_layer_id.clone(),
         ))
     }
 }
