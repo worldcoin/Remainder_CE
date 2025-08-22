@@ -713,6 +713,8 @@ impl<F: Field> GateLayerDescription<F> {
             .rhs_mle
             .into_verifier_mle(&rhs_challenges, transcript_reader)
             .unwrap();
+        let x_bind_list = [dataparallel_challenges.clone(), first_u_challenges.clone()].concat();
+        let y_bind_list = [dataparallel_challenges.clone(), last_v_challenges.clone()].concat();
 
         // Create the resulting verifier layer for claim tracking
         // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
@@ -731,6 +733,8 @@ impl<F: Field> GateLayerDescription<F> {
             dataparallel_sumcheck_challenges: dataparallel_challenges,
             first_u_challenges,
             last_v_challenges,
+            x_bind_list,
+            y_bind_list,
         };
 
         Ok(verifier_gate_layer)
@@ -1172,6 +1176,11 @@ pub struct VerifierGateLayer<E: ExtensionField> {
 
     /// The challenges for `y`, as derived from sumcheck.
     last_v_challenges: Vec<E>,
+
+    /// Bind value for `lhs` and `phase_1_mles`
+    pub x_bind_list: Vec<E>,
+    /// Bind value for `rhs` and `phase_2_mles`
+    pub y_bind_list: Vec<E>,
 }
 
 impl<E: ExtensionField> VerifierLayer<E> for VerifierGateLayer<E> {
@@ -1186,7 +1195,7 @@ impl<E: ExtensionField> VerifierLayer<E> for VerifierGateLayer<E> {
         let lhs_point = lhs_vars
             .iter()
             .map(|idx| match idx {
-                MleIndex::Bound(bit_idx) => self.first_u_challenges[*bit_idx],
+                MleIndex::Bound(bit_idx) => self.x_bind_list[*bit_idx],
                 MleIndex::Fixed(val) => {
                     if *val {
                         E::ONE
@@ -1208,7 +1217,7 @@ impl<E: ExtensionField> VerifierLayer<E> for VerifierGateLayer<E> {
         let rhs_point = rhs_vars
             .iter()
             .map(|idx| match idx {
-                MleIndex::Bound(bit_idx) => self.last_v_challenges[*bit_idx],
+                MleIndex::Bound(bit_idx) => self.y_bind_list[*bit_idx],
                 MleIndex::Fixed(val) => {
                     if *val {
                         E::ONE
