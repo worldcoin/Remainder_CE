@@ -6,10 +6,90 @@
 
 use crate::binary_operations::{logical_shift::ShiftNode, rotate_bits::RotateNode};
 use crate::expression::abstract_expr::ExprBuilder;
-use crate::layouter::builder::{CircuitBuilder, NodeRef};
+use crate::layouter::builder::{Circuit, CircuitBuilder, LayerKind, NodeRef};
+use crate::mle::evals::MultilinearExtension;
+use itertools::Itertools;
+use remainder_shared_types::Field;
 use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
 
-use remainder_shared_types::Field;
+pub trait IsBitDecomposable:
+    Shl<usize, Output = Self> + Shr<usize, Output = Self> + BitOr<Output = Self> + Sized + Copy
+{
+    /// Get's `index`-th bit from data
+    fn get_bit(&self, index: usize) -> Self;
+
+    /// Rotate bits right
+    fn rotr(&self, index: usize) -> Self {
+        let bit_count = 8 * std::mem::size_of::<Self>();
+        let rotation = index % bit_count;
+        let delta = bit_count - index;
+        (*self >> rotation) | (*self << delta)
+    }
+
+    /// Rotate bits left
+    fn rotl(&self, index: usize) -> Self {
+        let bit_count = 8 * std::mem::size_of::<Self>();
+        let rotation = index % bit_count;
+        let delta = bit_count - index;
+        (*self << rotation) | (*self >> delta)
+    }
+}
+
+impl IsBitDecomposable for i8 {
+    fn get_bit(&self, index: usize) -> Self {
+        assert!((0..8).contains(&index));
+        (*self >> index) & 0x1
+    }
+}
+
+impl IsBitDecomposable for u8 {
+    fn get_bit(&self, index: usize) -> Self {
+        assert!((0..8).contains(&index));
+        (*self >> index) & 0x1
+    }
+}
+
+impl IsBitDecomposable for i16 {
+    fn get_bit(&self, index: usize) -> Self {
+        assert!((0..16).contains(&index));
+        (*self >> index) & 0x1
+    }
+}
+
+impl IsBitDecomposable for u16 {
+    fn get_bit(&self, index: usize) -> Self {
+        assert!((0..16).contains(&index));
+        (*self >> index) & 0x1
+    }
+}
+
+impl IsBitDecomposable for i32 {
+    fn get_bit(&self, index: usize) -> Self {
+        assert!((0..32).contains(&index));
+        (*self >> index) & 0x1
+    }
+}
+
+impl IsBitDecomposable for u32 {
+    fn get_bit(&self, index: usize) -> Self {
+        assert!((0..32).contains(&index));
+        (*self >> index) & 0x1
+    }
+}
+
+impl IsBitDecomposable for i64 {
+    fn get_bit(&self, index: usize) -> Self {
+        assert!((0..64).contains(&index));
+        (*self >> index) & 0x1
+    }
+}
+
+impl IsBitDecomposable for u64 {
+    fn get_bit(&self, index: usize) -> Self {
+        assert!((0..64).contains(&index));
+        (*self >> index) & 0x1
+    }
+}
 
 const fn sha_words_2_num_vars(value: usize) -> usize {
     if value == 32 {
@@ -21,23 +101,94 @@ const fn sha_words_2_num_vars(value: usize) -> usize {
     }
 }
 
-/// rotate right by count if count is +ve or by left if its -ne. Count
-/// must be less than the number of bits in the size of T
 #[inline]
-fn rot<T>(value: T, count: i32) -> T
+pub fn bit_decompose_msb_first<T>(input: T) -> Vec<T>
 where
-    T: Shr<i32, Output = T> + Shl<i32, Output = T> + BitOr<Output = T> + Copy,
+    T: IsBitDecomposable,
 {
-    let bits = 8 * std::mem::size_of::<T>() as i32;
+    let bit_count = 8 * std::mem::size_of::<T>();
+    let mut result = Vec::<T>::with_capacity(bit_count);
 
-    debug_assert!(8 * std::mem::size_of::<T>() > count.abs().try_into().unwrap());
-    if count > 0 {
-        let delta = bits - count;
-        (value >> count) | (value << delta)
-    } else {
-        let count: i32 = (-count).try_into().unwrap_or_default();
-        let delta = bits - count;
-        (value << count) | (value >> delta)
+    for i in 0..bit_count {
+        let v = input.get_bit(bit_count - 1 - i);
+        result.push(v);
+    }
+
+    result
+}
+
+#[inline]
+pub fn bit_decompose_lsb_first<T>(input: T) -> Vec<T>
+where
+    T: IsBitDecomposable,
+{
+    let bit_count = 8 * std::mem::size_of::<T>();
+    let mut result = Vec::<T>::with_capacity(bit_count);
+
+    for i in 0..bit_count {
+        let v = input.get_bit(i);
+        result.push(v);
+    }
+
+    result
+}
+
+#[derive(Clone, Debug)]
+pub struct ConstInputGate<F: Field> {
+    data_node: NodeRef,
+    bits_mle: MultilinearExtension<F>,
+    constant_name: String,
+}
+
+impl<F: Field> ConstInputGate<F> {
+    /// Creates a constant input gate, with name `constant_name` with value `constant_value`.
+    pub fn new<T>(
+        builder_ref: &mut CircuitBuilder<F>,
+        constant_name: &str,
+        constant_value: T,
+    ) -> Self
+    where
+        T: IsBitDecomposable,
+        u64: From<T>,
+    {
+        let input_layer = builder_ref.add_input_layer(LayerKind::Public);
+
+        let bits = bit_decompose_msb_first(constant_value);
+        let num_vars = bits.len().ilog2() as usize;
+
+        let bits_mle =
+            MultilinearExtension::new(bits.into_iter().map(u64::from).map(F::from).collect_vec());
+
+        let data_node = builder_ref.add_input_shred(constant_name, num_vars, &input_layer);
+
+        // Make sure inputs are all 1s or zero 0s.
+        let b = &data_node;
+        let b_sq = ExprBuilder::products(vec![b.id(), b.id()]);
+        let b = b.expr();
+
+        // Check that all input bits are binary.
+        let binary_sector = builder_ref.add_sector(b - b_sq);
+
+        // Make sure all inputs are either `0` or `1`
+        builder_ref.set_output(&binary_sector);
+
+        Self {
+            data_node,
+            bits_mle,
+            constant_name: constant_name.into(),
+        }
+    }
+
+    pub fn add_to_circuit(&self, circuit: &mut Circuit<F>) {
+        circuit.set_input(&self.constant_name, self.bits_mle.clone());
+    }
+
+    pub fn input_mle(&self) -> &MultilinearExtension<F> {
+        &self.bits_mle
+    }
+
+    pub fn get_output(&self) -> NodeRef {
+        self.data_node.clone()
     }
 }
 
@@ -176,18 +327,6 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i3
     pub fn get_output(&self) -> NodeRef {
         self.sigma_sector.clone()
     }
-
-    pub fn evaluate<T>(x: T) -> T
-    where
-        T: BitAnd<Output = T>
-            + BitOr<Output = T>
-            + BitXor<Output = T>
-            + Shr<i32, Output = T>
-            + Shl<i32, Output = T>
-            + Copy,
-    {
-        rot(x, ROTR1) ^ rot(x, ROTR2) ^ rot(x, ROTR3)
-    }
 }
 
 /// The Small Sigma function described on Printed Page Number 10
@@ -229,17 +368,5 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32
 
     pub fn get_output(&self) -> NodeRef {
         self.sigma_sector.clone()
-    }
-
-    pub fn evaluate<T>(x: T) -> T
-    where
-        T: BitAnd<Output = T>
-            + BitOr<Output = T>
-            + BitXor<Output = T>
-            + Shr<i32, Output = T>
-            + Shl<i32, Output = T>
-            + Copy,
-    {
-        rot(x, ROTR1) ^ rot(x, ROTR2) ^ (x >> SHR3)
     }
 }

@@ -2,6 +2,7 @@ use itertools::Itertools;
 use rand::{thread_rng, RngCore};
 use remainder::{
     components::sha2::nonlinear_gates as sha2,
+    components::sha2::nonlinear_gates::IsBitDecomposable,
     components::sha2::ripple_carry_adder as rca,
     components::sha2::sha256_bit_decomp as sha256,
     expression::abstract_expr::ExprBuilder,
@@ -15,41 +16,6 @@ use std::ops::{BitAnd, BitOr, BitXor, Shl, Shr};
 // use tracing::Level;
 // use tracing_subscriber::fmt;
 // use tracing_subscriber::{self};
-
-fn bit_decompose_msb_first<T>(input: T) -> Vec<u64>
-where
-    T: Shr<usize, Output = T> + BitAnd<T, Output = T> + Copy + From<u32> + TryInto<u64>,
-{
-    let bit_count = 8 * std::mem::size_of::<T>();
-    let mut result = Vec::<u64>::with_capacity(bit_count);
-
-    for i in 0..bit_count {
-        let v = ((input >> (bit_count - 1 - i)) & From::from(0x1))
-            .try_into()
-            .unwrap_or_default();
-        result.push(v);
-    }
-
-    result
-}
-
-#[allow(unused)]
-fn bit_decompose_lsb_first<T>(input: T) -> Vec<u64>
-where
-    T: Shr<usize, Output = T> + BitAnd<T, Output = T> + Copy + From<u32> + TryInto<u64>,
-{
-    let bit_count = 8 * std::mem::size_of::<T>();
-    let mut result = Vec::<u64>::with_capacity(bit_count);
-
-    for i in 0..bit_count {
-        let v = ((input >> i) & From::from(0x1))
-            .try_into()
-            .unwrap_or_default();
-        result.push(v);
-    }
-
-    result
-}
 
 fn rotate_right<T>(val: T, bits: usize) -> T
 where
@@ -103,10 +69,10 @@ fn attach_ch_gate_data<const POSITIVE: bool>(mut circuit: Circuit<Fr>) -> Provab
         trng.next_u32()
     };
 
-    let x_bits = bit_decompose_msb_first(x);
-    let y_bits = bit_decompose_msb_first(y);
-    let z_bits = bit_decompose_msb_first(z);
-    let expected_bits = bit_decompose_msb_first(expected_value);
+    let x_bits = sha2::bit_decompose_msb_first(x);
+    let y_bits = sha2::bit_decompose_msb_first(y);
+    let z_bits = sha2::bit_decompose_msb_first(z);
+    let expected_bits = sha2::bit_decompose_msb_first(expected_value);
 
     let input_mle = MultilinearExtension::new(
         x_bits
@@ -114,6 +80,7 @@ fn attach_ch_gate_data<const POSITIVE: bool>(mut circuit: Circuit<Fr>) -> Provab
             .chain(y_bits.into_iter())
             .chain(z_bits.into_iter())
             .chain(expected_bits.into_iter())
+            .map(u64::from)
             .map(Fr::from)
             .collect_vec(),
     );
@@ -168,10 +135,10 @@ fn attach_maj_gate_data<const POSITIVE: bool>(mut circuit: Circuit<Fr>) -> Prova
         trng.next_u32()
     };
 
-    let x_bits = bit_decompose_msb_first(x);
-    let y_bits = bit_decompose_msb_first(y);
-    let z_bits = bit_decompose_msb_first(z);
-    let expected_bits = bit_decompose_msb_first(expected_value);
+    let x_bits = sha2::bit_decompose_msb_first(x);
+    let y_bits = sha2::bit_decompose_msb_first(y);
+    let z_bits = sha2::bit_decompose_msb_first(z);
+    let expected_bits = sha2::bit_decompose_msb_first(expected_value);
 
     let input_mle = MultilinearExtension::new(
         x_bits
@@ -179,6 +146,7 @@ fn attach_maj_gate_data<const POSITIVE: bool>(mut circuit: Circuit<Fr>) -> Prova
             .chain(y_bits.into_iter())
             .chain(z_bits.into_iter())
             .chain(expected_bits.into_iter())
+            .map(u64::from)
             .map(Fr::from)
             .collect_vec(),
     );
@@ -244,14 +212,12 @@ fn attach_sigma_gate_data<
     is_big_sigma_gate: bool,
 ) -> ProvableCircuit<Fr>
 where
-    T: Shr<usize, Output = T>
-        + Shl<usize, Output = T>
+    T: IsBitDecomposable
         + BitOr<T, Output = T>
         + BitXor<T, Output = T>
-        + BitAnd<T, Output = T>
-        + From<u32>
+        + BitAnd<u32, Output = T>
         + Copy,
-    u64: TryFrom<T>,
+    u64: From<T>,
 {
     // 2. Attach random data
     let expected_value = if POSITIVE {
@@ -268,13 +234,14 @@ where
         random_data
     };
 
-    let x_bits = bit_decompose_msb_first(random_data);
-    let expected_bits = bit_decompose_msb_first(expected_value);
+    let x_bits = sha2::bit_decompose_msb_first(random_data);
+    let expected_bits = sha2::bit_decompose_msb_first(expected_value);
 
     let input_mle = MultilinearExtension::new(
         x_bits
             .into_iter()
             .chain(expected_bits.into_iter())
+            .map(u64::from)
             .map(Fr::from)
             .collect_vec(),
     );
@@ -342,6 +309,49 @@ fn attach_full_adder_gate_data(mut circuit: Circuit<Fr>) -> ProvableCircuit<Fr> 
     circuit.finalize().unwrap()
 }
 
+fn constant_gate_circuit<T>(gate_data: T) -> Circuit<Fr>
+where
+    T: IsBitDecomposable,
+    u64: From<T>,
+{
+    let mut builder = CircuitBuilder::new();
+
+    let input_layer = builder.add_input_layer(LayerKind::Public);
+
+    let num_vars = 3 + std::mem::size_of::<T>().ilog2() as usize;
+
+    let const_msb_gate = sha2::ConstInputGate::new(&mut builder, "random_data", gate_data);
+
+    // Inputs for expected values
+    let expected_output = builder.add_input_shred("Expected output", num_vars, &input_layer);
+
+    // Check the outputs are correct
+    let const_is_valid =
+        builder.add_sector(const_msb_gate.get_output().expr() - expected_output.expr());
+
+    builder.set_output(&const_is_valid);
+    let mut circuit = builder.build().unwrap();
+    const_msb_gate.add_to_circuit(&mut circuit);
+    circuit
+}
+
+fn attach_constant_gate_data<T>(mut circuit: Circuit<Fr>, x: T) -> ProvableCircuit<Fr>
+where
+    T: IsBitDecomposable,
+    u64: From<T>,
+{
+    let x_bits = sha2::bit_decompose_msb_first(x);
+    let expected_mle = MultilinearExtension::new(
+        x_bits
+            .into_iter()
+            .map(u64::from)
+            .map(Fr::from)
+            .collect_vec(),
+    );
+    circuit.set_input("Expected output", expected_mle);
+    circuit.finalize().unwrap()
+}
+
 fn sha256_adder_gate_circuit() -> Circuit<Fr> {
     let mut builder = CircuitBuilder::new();
 
@@ -390,9 +400,9 @@ fn attach_sha256_adder_gate_data<const POSITIVE: bool>(
         trng.next_u32()
     };
 
-    let x_bits = bit_decompose_msb_first(x);
-    let y_bits = bit_decompose_msb_first(y);
-    let expected_bits = bit_decompose_msb_first(expected_sum);
+    let x_bits = sha2::bit_decompose_msb_first(x);
+    let y_bits = sha2::bit_decompose_msb_first(y);
+    let expected_bits = sha2::bit_decompose_msb_first(expected_sum);
 
     let input_mle = MultilinearExtension::new(
         x_bits
@@ -400,6 +410,7 @@ fn attach_sha256_adder_gate_data<const POSITIVE: bool>(
             .chain(y_bits.into_iter())
             .chain(expected_bits.into_iter())
             .chain(std::iter::repeat(0).take(32))
+            .map(u64::from)
             .map(Fr::from)
             .collect_vec(),
     );
@@ -416,6 +427,26 @@ fn sha256_adder_gate_positive_test() {
 
     for _ in 0..10 {
         let provable_circuit = attach_sha256_adder_gate_data::<true>(circuit.clone());
+        test_circuit_with_memory_optimized_config(&provable_circuit);
+    }
+}
+
+#[test]
+fn attach_constant_gate_data_test() {
+    // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
+    let mut trng = rand::thread_rng();
+
+    for _ in 0..10 {
+        let data = trng.next_u32();
+        let circuit = constant_gate_circuit(data);
+        let provable_circuit = attach_constant_gate_data(circuit, data);
+        test_circuit_with_memory_optimized_config(&provable_circuit);
+    }
+
+    for _ in 0..10 {
+        let data = trng.next_u64();
+        let circuit = constant_gate_circuit(data);
+        let provable_circuit = attach_constant_gate_data(circuit, data);
         test_circuit_with_memory_optimized_config(&provable_circuit);
     }
 }
