@@ -32,6 +32,13 @@ impl<F: Field> AbstractMle for MleEnum<F> {
         }
     }
 
+    fn set_mle_indices(&mut self, new_indices: Vec<MleIndex>) {
+        match self {
+            MleEnum::Dense(item) => item.set_mle_indices(new_indices),
+            MleEnum::Zero(item) => item.set_mle_indices(new_indices),
+        }
+    }
+
     fn num_free_vars(&self) -> usize {
         match self {
             MleEnum::Dense(item) => item.num_free_vars(),

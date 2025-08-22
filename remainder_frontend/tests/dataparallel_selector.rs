@@ -174,5 +174,5 @@ fn test_dataparallel_selector_alt_newmainder() {
     let provable_circuit = circuit.finalize().unwrap();
 
     // Prove/verify the circuit
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
 }

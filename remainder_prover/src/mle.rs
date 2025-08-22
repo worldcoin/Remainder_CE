@@ -102,6 +102,10 @@ pub trait AbstractMle: Clone + Debug + Send + Sync + Serialize + for<'de> Deseri
     /// Get the indicies of the `Mle` that this `MleRef` represents.
     fn mle_indices(&self) -> &[MleIndex];
 
+    /// Replace the current MLE indices stored with custom MLE indices. Most
+    /// useful in [crate::layer::matmult::MatMult], where we do index manipulation.
+    fn set_mle_indices(&mut self, new_indices: Vec<MleIndex>);
+
     /// Get the layer ID of the associated MLE.
     fn layer_id(&self) -> LayerId;
 }

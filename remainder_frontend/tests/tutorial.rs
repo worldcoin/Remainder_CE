@@ -62,5 +62,5 @@ fn tutorial_test() {
 
     dbg!(&provable_circuit);
 
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
 }

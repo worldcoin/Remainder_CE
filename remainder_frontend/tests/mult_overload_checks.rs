@@ -67,7 +67,7 @@ fn build_circuit() -> Circuit<Fr> {
 fn prove_circuit(provable_circuit: &ProvableCircuit<Fr>) -> (Transcript<Fr>, ProofConfig) {
     let mut transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("dummy label");
 
-    let proof_config = prove(
+    let proof_config = prove::<Fr, Fr>(
         provable_circuit,
         remainder_shared_types::circuit_hash::CircuitHashType::Poseidon,
         &mut transcript_writer,
@@ -87,7 +87,7 @@ fn verify_circuit(
 ) {
     let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(proof);
 
-    verify(
+    verify::<Fr, Fr>(
         verifiable_circuit,
         remainder_shared_types::circuit_hash::CircuitHashType::Poseidon,
         &mut transcript_reader,

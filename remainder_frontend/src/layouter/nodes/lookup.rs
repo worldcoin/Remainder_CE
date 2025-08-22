@@ -70,7 +70,7 @@ impl CircuitNode for LookupConstraint {
     }
 }
 
-type LookupCircuitDescription<F> = (Vec<LayerDescriptionEnum<F>>, OutputLayerDescription<F>);
+type LookupCircuitDescription<F> = (Vec<LayerDescriptionEnum<F>>, OutputLayerDescription);
 /// Represents a table of data that can be looked up into, e.g. for a range check.
 /// Implements "Improving logarithmic derivative lookups using GKR" (2023) by Papini & Haböck. Note
 /// that (as is usual e.g. in permutation checks) we do not check that the product of the
@@ -123,7 +123,7 @@ impl LookupTable {
         circuit_map: &mut CircuitMap,
     ) -> Result<LookupCircuitDescription<F>> {
         type AE<F> = AbstractExpression<F>;
-        type CE<F> = Expression<F, MleDescription<F>>;
+        type CE<F> = Expression<F, MleDescription>;
         // Ensure that number of LookupConstraints is a power of two (otherwise when we concat the
         // constrained nodes, there will be padding, and the padding value is potentially not in the
         // table
@@ -322,7 +322,7 @@ impl CircuitNode for LookupTable {
 }
 
 /// Extract the prefix bits from a DenseMle.
-fn extract_prefix_num_free_bits<F: Field>(mle: &MleDescription<F>) -> (Vec<MleIndex<F>>, usize) {
+fn extract_prefix_num_free_bits(mle: &MleDescription) -> (Vec<MleIndex>, usize) {
     let mut num_free_bits = 0;
     let prefix_bits = mle
         .mle_indices()
@@ -341,9 +341,7 @@ fn extract_prefix_num_free_bits<F: Field>(mle: &MleDescription<F>) -> (Vec<MleIn
 
 /// Split an MLE into two MLEs, with the left half containing the even-indexed elements and
 /// the right half containing the odd-indexed elements, setting the prefix bits accordingly.
-fn split_circuit_mle<F: Field>(
-    mle_desc: &MleDescription<F>,
-) -> (MleDescription<F>, MleDescription<F>) {
+fn split_circuit_mle(mle_desc: &MleDescription) -> (MleDescription, MleDescription) {
     let (prefix_bits, num_free_bits) = extract_prefix_num_free_bits(mle_desc);
 
     let left_mle_desc = MleDescription::new(
@@ -374,11 +372,11 @@ fn split_circuit_mle<F: Field>(
 /// Setting `maybe_numerator_desc` to `None` indicates that the numerator has the same length as
 /// `denominator_desc` and takes the constant value 1.
 fn build_fractional_sum<F: Field>(
-    maybe_numerator_desc: Option<MleDescription<F>>,
-    denominator_desc: MleDescription<F>,
+    maybe_numerator_desc: Option<MleDescription>,
+    denominator_desc: MleDescription,
     layers: &mut Vec<LayerDescriptionEnum<F>>,
-) -> (Option<MleDescription<F>>, MleDescription<F>) {
-    type CE<F> = Expression<F, MleDescription<F>>;
+) -> (Option<MleDescription>, MleDescription) {
+    type CE<F> = Expression<F, MleDescription>;
 
     // Sanitycheck number of vars in numerator == number of vars in denominator
     // EXCEPT when we're working with the fraction with constant 1 in the numerator

@@ -108,7 +108,7 @@ mod tests {
         let provable_circuit = circuit.finalize().unwrap();
 
         // Prove/verify the circuit
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 
     /// Creates the [GKRCircuitDescription] and an associated helper input
@@ -165,7 +165,7 @@ mod tests {
         let provable_circuit = circuit.finalize().unwrap();
 
         // Prove/verify the circuit
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 
     /// Creates the [GKRCircuitDescription] and an associated helper input
@@ -261,7 +261,7 @@ mod tests {
         let provable_circuit = circuit.finalize().unwrap();
 
         // Prove/verify the circuit
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 
     /// Performs a dataparallel version of [test_identity_gate_circuit_newmainder()].
@@ -316,7 +316,7 @@ mod tests {
         let provable_circuit = circuit.finalize().unwrap();
 
         // Prove/verify the circuit
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 
     /// Creates the [GKRCircuitDescription] and an associated helper input
@@ -399,7 +399,7 @@ mod tests {
         let provable_circuit = circuit.finalize().unwrap();
 
         // Prove/verify the circuit
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 
     /// A circuit which takes in two MLEs of the same size and adds
@@ -454,7 +454,7 @@ mod tests {
 
         let provable_circuit = circuit.finalize().unwrap();
 
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 
     /// A circuit which takes in two MLEs of the same size, and performs a
@@ -520,7 +520,7 @@ mod tests {
 
         let provable_circuit = circuit.finalize().unwrap();
 
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 
     /// A circuit which takes in two MLEs of the same size and adds
@@ -567,7 +567,7 @@ mod tests {
 
         let provable_circuit = circuit.finalize().unwrap();
 
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 
     #[test]
@@ -634,7 +634,7 @@ mod tests {
 
         let provable_circuit = circuit.finalize().unwrap();
 
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 
     /// A circuit which takes in two MLEs of the same size, and performs a
@@ -695,7 +695,7 @@ mod tests {
 
         let provable_circuit = circuit.finalize().unwrap();
 
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 
     #[test]
@@ -775,6 +775,6 @@ mod tests {
 
         let provable_circuit = circuit.finalize().unwrap();
 
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 }

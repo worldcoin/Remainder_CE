@@ -40,6 +40,10 @@ impl<F: Field> AbstractMle for DenseMle<F> {
         &self.mle_indices
     }
 
+    fn set_mle_indices(&mut self, new_indices: Vec<MleIndex>) {
+        self.mle_indices = new_indices
+    }
+
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }

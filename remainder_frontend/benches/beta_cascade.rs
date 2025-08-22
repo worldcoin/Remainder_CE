@@ -37,7 +37,7 @@ fn bench_beta_cascade(c: &mut Criterion) {
                                     );
                                     let mut mle =
                                         DenseMle::new_from_raw(random_mle_vec, LayerId::Input(0));
-                                    mle.index_mle_indices(0);
+                                    mle.index_mle_indices_no_bind_list(0);
                                     mle
                                 })
                                 .collect_vec();

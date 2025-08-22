@@ -1,7 +1,6 @@
 //! The nodes that represent circuit outputs in the circuit DAG
 
 use itertools::{repeat_n, Itertools};
-use remainder_shared_types::Field;
 
 use crate::layouter::builder::CircuitMap;
 use remainder::{
@@ -55,10 +54,10 @@ impl OutputNode {
 
     /// Using the [CircuitDescriptionMap], create a [OutputLayerDescription] which
     /// represents the circuit description of an [OutputNode].
-    pub fn generate_circuit_description<F: Field>(
+    pub fn generate_circuit_description(
         &self,
         circuit_map: &mut CircuitMap,
-    ) -> Result<OutputLayerDescription<F>> {
+    ) -> Result<OutputLayerDescription> {
         let (circuit_location, num_vars) =
             circuit_map.get_location_num_vars_from_node_id(&self.source)?;
 

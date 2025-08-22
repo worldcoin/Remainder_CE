@@ -34,6 +34,12 @@ impl AbstractMle for MleDescription {
     fn mle_indices(&self) -> &[MleIndex] {
         &self.var_indices
     }
+
+    /// Replace the current MLE indices stored with custom MLE indices. Most
+    /// useful in [crate::layer::matmult::MatMult], where we do index manipulation.
+    fn set_mle_indices(&mut self, new_indices: Vec<MleIndex>) {
+        self.var_indices = new_indices
+    }
 }
 
 impl MleDescription {
@@ -44,12 +50,6 @@ impl MleDescription {
             layer_id,
             var_indices: var_indices.to_vec(),
         }
-    }
-
-    /// Replace the current MLE indices stored with custom MLE indices. Most
-    /// useful in [crate::layer::matmult::MatMult], where we do index manipulation.
-    pub fn set_mle_indices(&mut self, new_mle_indices: Vec<MleIndex>) {
-        self.var_indices = new_mle_indices;
     }
 
     /// Convert [MleIndex::Free] into [MleIndex::Indexed] with the correct

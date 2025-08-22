@@ -28,6 +28,10 @@ impl<F: Field> AbstractMle for VerifierMle<F> {
         &self.var_indices
     }
 
+    fn set_mle_indices(&mut self, new_indices: Vec<MleIndex>) {
+        self.var_indices = new_indices
+    }
+
     /// Returns the [LayerId] of this MLE.
     fn layer_id(&self) -> LayerId {
         self.layer_id
