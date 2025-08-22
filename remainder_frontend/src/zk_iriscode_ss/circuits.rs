@@ -101,7 +101,7 @@ pub fn build_iriscode_circuit_description<
     );
 
     // Sign bits (iris/mask code)
-    let sign_bits_input_layer = builder.add_input_layer("Sign bits", LayerVisibility::Public);
+    let sign_bits_input_layer = builder.add_input_layer("Sign bits", LayerVisibility::Private);
     let sign_bits = builder.add_input_shred(
         "Sign Bits",
         log_num_strips + MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS,

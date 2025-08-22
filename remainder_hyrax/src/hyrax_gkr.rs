@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit};
 use crate::utils::vandermonde::VandermondeInverse;
+use anyhow::bail;
 use ark_std::{end_timer, start_timer};
 use hyrax_input_layer::{
     commit_to_input_values, HyraxInputLayerDescription, HyraxInputLayerProof,
@@ -137,7 +138,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
     /// # Requires:
     ///   * `circuit_description.index_mle_indices(0)` has been called
     pub fn prove(
-        provable_circuit: HyraxProvableCircuit<C>,
+        provable_circuit: &mut HyraxProvableCircuit<C>,
         /*
         inputs: &HashMap<LayerId, MultilinearExtension<C::Scalar>>,
         hyrax_input_layers: &HashMap<
@@ -189,43 +190,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
                 end_timer!(public_il_to_transcript_timer);
             });
 
-        // For each hyrax input layer, calculate commitments if not already
-        // provided, and then append each commitment to the transcript.
-        let mut hyrax_input_commitments = HashMap::<LayerId, HyraxProverInputCommitment<C>>::new();
-        provable_circuit
-            .get_private_input_layer_ids()
-            .into_iter()
-            .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
-            .for_each(|layer_id| {
-                // Commit to the Hyrax input layer, if it is not already
-                // committed to.
-                let (desc, maybe_precommitment) =
-                    provable_circuit.get_private_input_layer(layer_id).unwrap();
-                let prover_commitment: HyraxProverInputCommitment<C> =
-                    if let Some(prover_commitment) = maybe_precommitment {
-                        // Use the commitment provided by the calling context
-                        prover_commitment.clone()
-                    } else {
-                        // Commit to the values of the input layer
-                        let input_mle = provable_circuit.get_input_mle(layer_id).unwrap();
-                        let hyrax_il_commit_timer =
-                            start_timer!(|| format!("commit to hyrax input layer {layer_id}"));
-                        let commitment =
-                            commit_to_input_values(&desc, &input_mle, committer, &mut rng);
-                        end_timer!(hyrax_il_commit_timer);
-                        commitment
-                    };
-
-                // Add the verifier's view of the commitment to transcript
-                transcript.append_input_ec_points(
-                    "Hyrax input layer commitment",
-                    prover_commitment.commitment.clone(),
-                );
-
-                // Store the prover's view for later use in the evaluation
-                // proofs.
-                hyrax_input_commitments.insert(layer_id, prover_commitment);
-            });
+        provable_circuit.commit(committer, rng, transcript);
 
         // Get the verifier challenges from the transcript.
         let mut challenge_sampler =
@@ -311,25 +276,31 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
             .iter()
             .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
             .map(|layer_id| {
-                let (desc, _) = provable_circuit.get_private_input_layer(*layer_id).unwrap();
-                let commitment = hyrax_input_commitments.get_mut(layer_id).unwrap();
-                let committed_claims = claims_on_hyrax_input_layers.remove(layer_id).unwrap();
+                if let (desc, Some(commitment)) = provable_circuit
+                    .get_private_input_layer_mut_ref(*layer_id)
+                    .unwrap()
+                {
+                    // let commitment = provable_circuit.get_commitment_mut_ref(layer_id).unwrap();
+                    let committed_claims = claims_on_hyrax_input_layers.remove(layer_id).unwrap();
 
-                let hyrax_il_verification_timer = start_timer!(|| format!(
-                    "HyraxInputLayer::prove for {0} with {1} claims",
-                    layer_id,
-                    committed_claims.len()
-                ));
-                let il_proof = HyraxInputLayerProof::prove(
-                    &desc,
-                    commitment,
-                    &committed_claims,
-                    committer,
-                    &mut rng,
-                    transcript,
-                );
-                end_timer!(hyrax_il_verification_timer);
-                il_proof
+                    let hyrax_il_verification_timer = start_timer!(|| format!(
+                        "HyraxInputLayer::prove for {0} with {1} claims",
+                        layer_id,
+                        committed_claims.len()
+                    ));
+                    let il_proof = HyraxInputLayerProof::prove(
+                        &desc,
+                        commitment,
+                        &committed_claims,
+                        committer,
+                        &mut rng,
+                        transcript,
+                    );
+                    end_timer!(hyrax_il_verification_timer);
+                    il_proof
+                } else {
+                    panic!("Input layer with ID {layer_id} missing committment!")
+                }
             })
             .collect_vec();
 

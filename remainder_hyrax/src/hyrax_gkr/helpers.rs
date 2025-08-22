@@ -20,7 +20,7 @@ use super::hyrax_input_layer::HyraxInputLayerDescriptionWithPrecommit;
 /// Helper function for testing an iriscode circuit (of any version, with any
 /// data) with a Hyrax input layer.
 pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
-    provable_circuit: HyraxProvableCircuit<C>,
+    mut provable_circuit: HyraxProvableCircuit<C>,
     /*
     circuit_desc: GKRCircuitDescription<C::Scalar>,
     private_layer_descriptions: HyraxInputLayerDescriptionWithPrecommit<C>,
@@ -51,7 +51,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
         HyraxProof::prove,
         &gkr_circuit_prover_config,
         &gkr_circuit_verifier_config,
-        provable_circuit,
+        &mut provable_circuit,
         &committer,
         &mut blinding_rng,
         converter,
