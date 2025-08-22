@@ -227,19 +227,15 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
                 .collect(),
         )]);
         self.g_vec = Some(vec![claim_point.to_vec()]);
-        self.lhs.index_mle_indices(0);
-        self.rhs.index_mle_indices(0);
-        self.x_bind_list = self.lhs.init_bind_list();
-        self.y_bind_list = self.rhs.init_bind_list();
+        self.lhs.index_mle_indices(0, &mut self.x_bind_list);
+        self.rhs.index_mle_indices(0, &mut self.y_bind_list);
 
         Ok(())
     }
 
     fn initialize_rlc(&mut self, _random_coefficients: &[E], claims: &[&RawClaim<E>]) {
-        self.lhs.index_mle_indices(0);
-        self.rhs.index_mle_indices(0);
-        self.x_bind_list = self.lhs.init_bind_list();
-        self.y_bind_list = self.rhs.init_bind_list();
+        self.lhs.index_mle_indices(0, &mut self.x_bind_list);
+        self.rhs.index_mle_indices(0, &mut self.y_bind_list);
         let (g_vec, beta_g2_vec): (Vec<Vec<E>>, Vec<BetaValues<E>>) = claims
             .iter()
             .map(|claim| {
@@ -436,8 +432,10 @@ impl<E: ExtensionField> Layer<E> for GateLayer<E> {
                 .unwrap()
                 .iter_mut()
                 .for_each(|beta| beta.beta_update(round_index, challenge));
-            self.lhs.fix_variable(round_index, challenge, &mut self.x_bind_list);
-            self.rhs.fix_variable(round_index, challenge, &mut self.y_bind_list);
+            self.lhs
+                .fix_variable(round_index, challenge, &mut self.x_bind_list);
+            self.rhs
+                .fix_variable(round_index, challenge, &mut self.y_bind_list);
 
             Ok(())
         } else if round_index < self.num_rounds_phase1 + self.num_dataparallel_vars {
@@ -668,7 +666,7 @@ impl<F: Field> GateLayerDescription<F> {
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierGateLayer<E>>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
         // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR FREE/INDEXED
@@ -749,9 +747,9 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         &self,
         claims: &[&RawClaim<E>],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<VerifierLayerEnum<E>> 
+    ) -> Result<VerifierLayerEnum<E>>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         // Storing challenges for the sake of claim generation later
         let mut challenges = vec![];
@@ -919,9 +917,9 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         round_challenges: &[E],
         claim_challenges: &[&[E]],
         random_coefficients: &[E],
-    ) -> super::product::PostSumcheckLayer<E, Option<E>> 
+    ) -> super::product::PostSumcheckLayer<E, Option<E>>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         let num_rounds_phase1 = self.lhs_mle.num_free_vars() - self.num_dataparallel_vars;
 
@@ -973,8 +971,18 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
 
         match self.gate_operation {
             BinaryOperation::Add => PostSumcheckLayer(vec![
-                Product::<E, Option<E>>::new(&[self.lhs_mle.clone()], &Vec::new(), f_1_uv, lhs_challenges),
-                Product::<E, Option<E>>::new(&[self.rhs_mle.clone()], &Vec::new(), f_1_uv, rhs_challenges),
+                Product::<E, Option<E>>::new(
+                    &[self.lhs_mle.clone()],
+                    &Vec::new(),
+                    f_1_uv,
+                    lhs_challenges,
+                ),
+                Product::<E, Option<E>>::new(
+                    &[self.rhs_mle.clone()],
+                    &Vec::new(),
+                    f_1_uv,
+                    rhs_challenges,
+                ),
             ]),
             BinaryOperation::Mul => {
                 PostSumcheckLayer(vec![Product::<E, Option<E>>::new_from_mul_gate(
@@ -1003,12 +1011,9 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         vec![&self.lhs_mle, &self.rhs_mle]
     }
 
-    fn convert_into_prover_layer<E>(
-        &self, 
-        circuit_map: &CircuitEvalMap<E>
-    ) -> LayerEnum<E>
+    fn convert_into_prover_layer<E>(&self, circuit_map: &CircuitEvalMap<E>) -> LayerEnum<E>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         let lhs_mle = self.lhs_mle.into_dense_mle(circuit_map);
         let rhs_mle = self.rhs_mle.into_dense_mle(circuit_map);
@@ -1037,9 +1042,8 @@ impl<F: Field> LayerDescription<F> for GateLayerDescription<F> {
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription>,
         circuit_map: &mut CircuitEvalMap<E>,
-    )
-    where
-        E: ExtensionField<BaseField = F>
+    ) where
+        E: ExtensionField<BaseField = F>,
     {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();

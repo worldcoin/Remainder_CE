@@ -39,9 +39,7 @@ pub mod verifier_mle;
 
 /// Abstract structure of an Mle
 /// Including its number of variables, indices,layer_id, but not evaluations
-pub trait AbstractMle:
-    Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize<'de>
-{
+pub trait AbstractMle: Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
     /// Returns the number of free variables this Mle is defined on.
     /// Equivalently, this is the log_2 of the size of the unpruned bookkeeping
     /// table.
@@ -60,25 +58,33 @@ pub trait AbstractMle:
     fn is_unbounded(&self) -> bool {
         self.mle_indices().iter().fold(true, |acc, idx| {
             acc && match idx {
-                MleIndex::Fixed(_) | MleIndex::Indexed(_) => true,
+                MleIndex::Free | MleIndex::Fixed(_) | MleIndex::Indexed(_) => true,
                 _ => false,
             }
         })
     }
 
+    /// obtain the length of the bind list
+    fn get_bind_list_len(&self) -> usize {
+        if let Some(i) = self
+            .mle_indices()
+            .iter()
+            .filter_map(|idx| match idx {
+                MleIndex::Indexed(i) => Some(*i),
+                _ => None,
+            })
+            .max()
+        {
+            i + 1
+        } else {
+            0
+        }
+    }
+
     /// Returns an empty bind list
     fn init_bind_list<F: Field>(&self) -> Vec<Option<F>> {
         assert!(self.is_unbounded());
-        if let Some(i) = self.mle_indices().iter().filter_map(|idx| {
-            match idx {
-                MleIndex::Indexed(i) => Some(*i),
-                _ => None,
-            }
-        }).max() {
-            vec![None; i + 1]
-        } else {
-            Vec::new()
-        }
+        vec![None; self.get_bind_list_len()]
     }
 
     /// An MLE is fully bounded if it has no more free variables
@@ -86,9 +92,8 @@ pub trait AbstractMle:
     fn is_fully_bounded<T>(&self, bind_list: &Vec<Option<T>>) -> bool {
         self.mle_indices().iter().fold(true, |acc, idx| {
             acc && match idx {
-                MleIndex::Bound(idx) => {
-                    bind_list[*idx].is_some()
-                }
+                MleIndex::Fixed(_) => true,
+                MleIndex::Bound(idx) => bind_list[*idx].is_some(),
                 _ => false,
             }
         })
@@ -144,7 +149,12 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync + AbstractMle {
     ///
     /// If the new MLE becomes fully bound, returns the evaluation of the fully
     /// bound Mle.
-    fn fix_variable(&mut self, round_index: usize, challenge: F, bind_list: &mut Vec<Option<F>>) -> Option<RawClaim<F>>;
+    fn fix_variable(
+        &mut self,
+        round_index: usize,
+        challenge: F,
+        bind_list: &mut Vec<Option<F>>,
+    ) -> Option<RawClaim<F>>;
 
     /// Fix the (indexed) free variable at `indexed_bit_index` with a given
     /// challenge `point`. Mutates `self`` to be the bookeeping table for the
@@ -154,7 +164,12 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync + AbstractMle {
     /// # Panics
     /// If `indexed_bit_index` does not correspond to a
     /// `MleIndex::Indexed(indexed_bit_index)` in `mle_indices`.
-    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F, bind_list: &mut Vec<Option<F>>) -> Option<RawClaim<F>>;
+    fn fix_variable_at_index(
+        &mut self,
+        indexed_bit_index: usize,
+        point: F,
+        bind_list: &mut Vec<Option<F>>,
+    ) -> Option<RawClaim<F>>;
 
     /// Similar to `fix_variable_at_index`, but do not keep track of the bound point
     /// Useful for only obtaining the final evaluation value
@@ -164,7 +179,10 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync + AbstractMle {
     /// turns them into [MleIndex::Indexed] with the bit index being determined
     /// from `curr_index`.
     /// Returns the `(curr_index + number of IndexedBits now in the MleIndices)`.
-    fn index_mle_indices(&mut self, curr_index: usize) -> usize;
+    fn index_mle_indices(&mut self, curr_index: usize, bind_list: &mut Vec<Option<F>>) -> usize;
+
+    /// Similar to `index_mle_indices``, but without modifying a bind list
+    fn index_mle_indices_no_bind_list(&mut self, curr_index: usize) -> usize;
 
     /// Get the associated enum that this MLE is a part of ([MleEnum::Dense] or [MleEnum::Zero]).
     fn get_enum(self) -> MleEnum<F>;
@@ -258,10 +276,7 @@ mod test {
 
         // Bound index.
         bind_list[0] = Some(Fr::from(42));
-        assert_eq!(
-            MleIndex::Bound(0).val(&bind_list),
-            Some(Fr::from(42))
-        );
+        assert_eq!(MleIndex::Bound(0).val(&bind_list), Some(Fr::from(42)));
     }
 
     #[test]

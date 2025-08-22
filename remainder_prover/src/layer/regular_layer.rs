@@ -9,7 +9,8 @@ use itertools::Itertools;
 use remainder_shared_types::{
     config::{global_config::global_claim_agg_strategy, ClaimAggregationStrategy},
     extension_field::ExtensionField,
-    transcript::{ProverTranscript, VerifierTranscript}, Field,
+    transcript::{ProverTranscript, VerifierTranscript},
+    Field,
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -76,10 +77,13 @@ impl<E: ExtensionField> RegularLayer<E> {
     ///
     /// The `Expression` is the relationship this `Layer` proves
     /// and the `LayerId` is the location of this `Layer` in the overall circuit
-    pub fn new_raw(id: LayerId, mut expression: Expression<E::BaseField, ProverMle<E>>) -> Self {
+    pub fn new_raw(
+        id: LayerId,
+        mut expression: Expression<E::BaseField, ProverMle<E>>,
+        mut init_bind_list: Vec<Option<E>>,
+    ) -> Self {
         // Compute nonlinear rounds from `expression`
-        expression.index_mle_indices(0);
-        let bind_list = expression.init_bind_list();
+        expression.index_mle_indices(0, &mut init_bind_list);
         let sumcheck_rounds = match global_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => expression.get_all_nonlinear_rounds(),
             ClaimAggregationStrategy::RLC => expression.get_all_rounds(),
@@ -89,13 +93,16 @@ impl<E: ExtensionField> RegularLayer<E> {
             expression,
             sumcheck_rounds,
             beta_vals_vec: None,
-            bind_list,
+            bind_list: init_bind_list,
         }
     }
 
     /// Creates a new `RegularLayer` from an `Expression` and a `LayerId`
     /// assumes that the expression is already indexed
-    pub fn new_from_indexed_expr(id: LayerId, expression: Expression<E::BaseField, ProverMle<E>>) -> Self {
+    pub fn new_from_indexed_expr(
+        id: LayerId,
+        expression: Expression<E::BaseField, ProverMle<E>>,
+    ) -> Self {
         let bind_list = expression.init_bind_list();
         // Compute nonlinear rounds from `expression`
         let sumcheck_rounds = match global_claim_agg_strategy() {
@@ -213,7 +220,11 @@ impl<E: ExtensionField> Layer<E> for RegularLayer<E> {
             .iter()
             .sorted()
             .for_each(|round_idx| {
-                expression.fix_variable_at_index(*round_idx, claim_point[*round_idx], &mut self.bind_list);
+                expression.fix_variable_at_index(
+                    *round_idx,
+                    claim_point[*round_idx],
+                    &mut self.bind_list,
+                );
             });
 
         // We need the beta values over the nonlinear indices of the expression,
@@ -343,7 +354,8 @@ impl<E: ExtensionField> Layer<E> for RegularLayer<E> {
                 acc + fully_bound_beta * random_coeff
             });
 
-        self.expression.get_post_sumcheck_layer(rlc_beta, &self.bind_list)
+        self.expression
+            .get_post_sumcheck_layer(rlc_beta, &self.bind_list)
     }
 
     fn get_claims(&self) -> Result<Vec<Claim<E>>> {
@@ -358,44 +370,20 @@ impl<E: ExtensionField> Layer<E> for RegularLayer<E> {
         // Basically we just want to go down it and pass up claims.
         // We can only add a new claim if we see an MLE with all its indices
         // bound.
-        let mut observer_fn = |expr: &ExpressionNode<E::BaseField>, mle_vec: &[ProverMle<E>]| -> Result<()> {
-            match expr {
-                ExpressionNode::Mle(mle_vec_idx) => {
-                    let mle = mle_vec_idx.get_mle(mle_vec);
+        let mut observer_fn =
+            |expr: &ExpressionNode<E::BaseField>, mle_vec: &[ProverMle<E>]| -> Result<()> {
+                match expr {
+                    ExpressionNode::Mle(mle_vec_idx) => {
+                        let mle = mle_vec_idx.get_mle(mle_vec);
 
-                    let fixed_mle_indices = mle
-                        .mle_indices
-                        .iter()
-                        .map(|index| index.val(&self.bind_list).ok_or(anyhow!(ClaimError::MleRefMleError)))
-                        .collect::<Result<Vec<_>>>()?;
-
-                    // Grab the layer ID (i.e. MLE index) which this mle refers to
-                    let mle_layer_id = mle.layer_id();
-
-                    let claimed_value = mle.value();
-
-                    // Note: No need to append claim values here.
-                    // We already appended them when evaluating the
-                    // expression for sumcheck.
-
-                    // Construct the claim
-                    let claim = Claim::new(
-                        fixed_mle_indices,
-                        claimed_value,
-                        self.layer_id(),
-                        mle_layer_id,
-                    );
-
-                    // Push it into the list of claims
-                    claims.push(claim);
-                }
-                ExpressionNode::Product(mle_vec_indices) => {
-                    for mle_vec_index in mle_vec_indices {
-                        let mle = mle_vec_index.get_mle(mle_vec);
                         let fixed_mle_indices = mle
                             .mle_indices
                             .iter()
-                            .map(|index| index.val(&self.bind_list).ok_or(anyhow!(ClaimError::MleRefMleError)))
+                            .map(|index| {
+                                index
+                                    .val(&self.bind_list)
+                                    .ok_or(anyhow!(ClaimError::MleRefMleError))
+                            })
                             .collect::<Result<Vec<_>>>()?;
 
                         // Grab the layer ID (i.e. MLE index) which this mle refers to
@@ -403,11 +391,11 @@ impl<E: ExtensionField> Layer<E> for RegularLayer<E> {
 
                         let claimed_value = mle.value();
 
-                        // Note: No need to append the claim value to the transcript here. We
-                        // already appended when evaluating the expression for sumcheck.
+                        // Note: No need to append claim values here.
+                        // We already appended them when evaluating the
+                        // expression for sumcheck.
 
                         // Construct the claim
-                        // need to populate the claim with the mle ref we are grabbing the claim from
                         let claim = Claim::new(
                             fixed_mle_indices,
                             claimed_value,
@@ -418,11 +406,44 @@ impl<E: ExtensionField> Layer<E> for RegularLayer<E> {
                         // Push it into the list of claims
                         claims.push(claim);
                     }
+                    ExpressionNode::Product(mle_vec_indices) => {
+                        for mle_vec_index in mle_vec_indices {
+                            let mle = mle_vec_index.get_mle(mle_vec);
+                            let fixed_mle_indices = mle
+                                .mle_indices
+                                .iter()
+                                .map(|index| {
+                                    index
+                                        .val(&self.bind_list)
+                                        .ok_or(anyhow!(ClaimError::MleRefMleError))
+                                })
+                                .collect::<Result<Vec<_>>>()?;
+
+                            // Grab the layer ID (i.e. MLE index) which this mle refers to
+                            let mle_layer_id = mle.layer_id();
+
+                            let claimed_value = mle.value();
+
+                            // Note: No need to append the claim value to the transcript here. We
+                            // already appended when evaluating the expression for sumcheck.
+
+                            // Construct the claim
+                            // need to populate the claim with the mle ref we are grabbing the claim from
+                            let claim = Claim::new(
+                                fixed_mle_indices,
+                                claimed_value,
+                                self.layer_id(),
+                                mle_layer_id,
+                            );
+
+                            // Push it into the list of claims
+                            claims.push(claim);
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
-            }
-            Ok(())
-        };
+                Ok(())
+            };
 
         // Apply the observer function from above onto the expression
         layerwise_expr.traverse(&mut observer_fn)?;
@@ -467,9 +488,16 @@ pub struct VerifierRegularLayer<E: ExtensionField> {
 
 impl<E: ExtensionField> VerifierRegularLayer<E> {
     /// Generates a new [VerifierRegularLayer] given raw data.
-    pub(crate) fn new_raw(id: LayerId, expression: Expression<E::BaseField, VerifierMle<E>>) -> Self {
-        let bind_list = expression.init_bind_list();
-        Self { id, expression, bind_list }
+    pub(crate) fn new_raw(
+        id: LayerId,
+        expression: Expression<E::BaseField, VerifierMle<E>>,
+        bind_list: Vec<Option<E>>,
+    ) -> Self {
+        Self {
+            id,
+            expression,
+            bind_list,
+        }
     }
 }
 
@@ -483,11 +511,15 @@ impl<F: Field> RegularLayerDescription<F> {
     where
         E: ExtensionField<BaseField = F>,
     {
-        let verifier_expr = self
+        let (verifier_expr, verifier_bind_list) = self
             .expression
             .bind(sumcheck_challenges, transcript_reader)?;
 
-        Ok(VerifierRegularLayer::new_raw(self.layer_id(), verifier_expr))
+        Ok(VerifierRegularLayer::new_raw(
+            self.layer_id(),
+            verifier_expr,
+            verifier_bind_list,
+        ))
     }
 }
 
@@ -500,8 +532,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription>,
         circuit_map: &mut CircuitEvalMap<E>,
-    )
-    where 
+    ) where
         E: ExtensionField<BaseField = F>,
     {
         let mut expression_nodes_to_compile =
@@ -699,7 +730,9 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         // Compute `P(r_1, ..., r_n)` over all challenge points (linear and
         // non-linear).
         // The MLE values are retrieved from the transcript.
-        let expr_value_at_challenge_point = verifier_layer.expression.evaluate(&verifier_layer.bind_list)?;
+        let expr_value_at_challenge_point = verifier_layer
+            .expression
+            .evaluate(&verifier_layer.bind_list)?;
 
         let beta_fn_evaluated_at_challenge_point = match global_claim_agg_strategy() {
             ClaimAggregationStrategy::Interpolative => {
@@ -844,14 +877,20 @@ impl<E: ExtensionField> VerifierLayer<E> for VerifierRegularLayer<E> {
 
         let mut claims: Vec<Claim<E>> = Vec::new();
 
-        let mut observer_fn = |exp: &ExpressionNode<E::BaseField>, mle_vec: &[VerifierMle<E>]| -> Result<()> {
+        let mut observer_fn = |exp: &ExpressionNode<E::BaseField>,
+                               mle_vec: &[VerifierMle<E>]|
+         -> Result<()> {
             match exp {
                 ExpressionNode::Mle(verifier_index) => {
                     let verifier_mle = verifier_index.get_mle(mle_vec);
                     let fixed_mle_indices = verifier_mle
                         .mle_indices()
                         .iter()
-                        .map(|index| index.val(&self.bind_list).ok_or(anyhow!(ClaimError::MleRefMleError)))
+                        .map(|index| {
+                            index
+                                .val(&self.bind_list)
+                                .ok_or(anyhow!(ClaimError::MleRefMleError))
+                        })
                         .collect::<Result<Vec<_>>>()?;
 
                     // Grab the layer ID (i.e. MLE index) which this mle refers to
@@ -877,7 +916,11 @@ impl<E: ExtensionField> VerifierLayer<E> for VerifierRegularLayer<E> {
                         let fixed_mle_indices = verifier_mle
                             .mle_indices()
                             .iter()
-                            .map(|index| index.val(&self.bind_list).ok_or(anyhow!(ClaimError::MleRefMleError)))
+                            .map(|index| {
+                                index
+                                    .val(&self.bind_list)
+                                    .ok_or(anyhow!(ClaimError::MleRefMleError))
+                            })
                             .collect::<Result<Vec<_>>>()?;
 
                         // Grab the layer ID (i.e. MLE index) which this mle refers to

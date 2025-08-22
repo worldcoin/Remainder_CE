@@ -182,7 +182,7 @@ pub(crate) fn evaluate_mle_product_no_beta_table<F: Field>(
 /// Index mle indices for an array of mles.
 pub fn index_mle_indices_gate<F: Field>(mles: &mut [impl Mle<F>], index: usize) {
     mles.iter_mut().for_each(|mle| {
-        mle.index_mle_indices(index);
+        mle.index_mle_indices_no_bind_list(index);
     })
 }
 

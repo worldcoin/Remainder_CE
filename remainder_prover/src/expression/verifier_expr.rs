@@ -26,12 +26,12 @@ use super::{expr_errors::ExpressionError, generic_expr::Expression};
 
 use anyhow::{anyhow, Ok, Result};
 
-impl<F: Field, E> Expression<F, VerifierMle<E>> 
+impl<F: Field, E> Expression<F, VerifierMle<E>>
 where
     E: ExtensionField<BaseField = F>,
 {
     /// Evaluate this fully bound expression.
-    pub fn evaluate(&self, bind_list: &Vec<Option<E>>,) -> Result<E> {
+    pub fn evaluate(&self, bind_list: &Vec<Option<E>>) -> Result<E> {
         let constant = |c| Ok(E::from(c));
         let selector_column = |idx: &MleIndex, lhs: Result<E>, rhs: Result<E>| -> Result<E> {
             // Selector bit must be bound

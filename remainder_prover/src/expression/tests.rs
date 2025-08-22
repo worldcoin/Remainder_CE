@@ -41,8 +41,8 @@ fn test_mle_eval_two_variable() {
     );
 
     let mut expression = Expression::<Fr, DenseMle<Fr>>::mle(mle);
-    let num_indices = expression.index_mle_indices(0);
-    let mut bind_list = expression.init_bind_list();
+    let mut bind_list = Vec::new();
+    let num_indices = expression.index_mle_indices(0, &mut bind_list);
     assert_eq!(num_indices, 2);
 
     let challenge = vec![Fr::from(2).neg(), Fr::from(9)];
@@ -67,8 +67,8 @@ fn test_mle_eval_three_variable() {
     );
 
     let mut expression = Expression::<Fr, DenseMle<Fr>>::mle(mle);
-    let num_indices = expression.index_mle_indices(0);
-    let mut bind_list = expression.init_bind_list();
+    let mut bind_list = Vec::new();
+    let num_indices = expression.index_mle_indices(0, &mut bind_list);
     assert_eq!(num_indices, 3);
 
     let challenge = vec![Fr::from(2).neg(), Fr::from(3), Fr::from(5)];
@@ -86,8 +86,8 @@ fn test_mle_eval_sum_w_constant_then_scale() {
     let expression = Expression::<Fr, DenseMle<Fr>>::mle(mle);
     let mut expression =
         Expression::scaled(expression + Expression::constant(Fr::from(5)), Fr::from(2));
-    let num_indices = expression.index_mle_indices(0);
-    let mut bind_list = expression.init_bind_list();
+    let mut bind_list = Vec::new();
+    let num_indices = expression.index_mle_indices(0, &mut bind_list);
     assert_eq!(num_indices, 2);
 
     let challenge = vec![Fr::from(1).neg(), Fr::from(7)];
@@ -113,8 +113,8 @@ fn test_mle_eval_selector() {
 
     let mut expression = expression_1.select(expression_2);
 
-    let num_indices = expression.index_mle_indices(0);
-    let mut bind_list = expression.init_bind_list();
+    let mut bind_list = Vec::new();
+    let num_indices = expression.index_mle_indices(0, &mut bind_list);
     assert_eq!(num_indices, 3);
 
     let challenge = vec![Fr::from(2), Fr::from(7), Fr::from(3)];
@@ -138,8 +138,8 @@ fn test_mle_eval_selector() {
 
     let mut expression_concat = Expression::<Fr, DenseMle<Fr>>::mle(mle_concat);
 
-    let num_indices_concat = expression_concat.index_mle_indices(0);
-    let mut bind_list = expression_concat.init_bind_list();
+    let mut bind_list = Vec::new();
+    let num_indices_concat = expression_concat.index_mle_indices(0, &mut bind_list);
     assert_eq!(num_indices_concat, 3);
 
     let eval_concat = expression_concat.evaluate_expr(challenge_concat, &mut bind_list);
@@ -159,8 +159,8 @@ fn test_mle_eval_selector_w_constant() {
     let constant_expr = Expression::<Fr, DenseMle<Fr>>::constant(Fr::from(5));
     let mut expression = constant_expr.select(expression_1);
 
-    let num_indices = expression.index_mle_indices(0);
-    let mut bind_list = expression.init_bind_list();
+    let mut bind_list = Vec::new();
+    let num_indices = expression.index_mle_indices(0, &mut bind_list);
     assert_eq!(num_indices, 3);
 
     let challenge = vec![Fr::from(1).neg(), Fr::from(7), Fr::from(3)];
@@ -180,9 +180,11 @@ fn test_mle_eval() {
     );
 
     let mut expression_1 = Expression::<Fr, DenseMle<Fr>>::mle(mle_1.clone());
-    let _ = expression_1.index_mle_indices(0);
-    let mut bind_list = expression_1.init_bind_list();
-    let eval_1 = expression_1.evaluate_expr(challenge.clone(), &mut bind_list).unwrap();
+    let mut bind_list = Vec::new();
+    let _ = expression_1.index_mle_indices(0, &mut bind_list);
+    let eval_1 = expression_1
+        .evaluate_expr(challenge.clone(), &mut bind_list)
+        .unwrap();
 
     let mle_2 = DenseMle::new_from_raw(
         vec![Fr::from(1), Fr::from(5), Fr::from(4), Fr::from(2)],
@@ -190,14 +192,18 @@ fn test_mle_eval() {
     );
 
     let mut expression_2 = Expression::<Fr, DenseMle<Fr>>::mle(mle_2.clone());
-    let _ = expression_2.index_mle_indices(0);
-    let eval_2 = expression_2.evaluate_expr(challenge.clone(), &mut bind_list).unwrap();
+    let _ = expression_2.index_mle_indices(0, &mut bind_list);
+    let eval_2 = expression_2
+        .evaluate_expr(challenge.clone(), &mut bind_list)
+        .unwrap();
 
     let mut expression_product = Expression::<Fr, DenseMle<Fr>>::products(vec![mle_1, mle_2]);
-    let num_indices = expression_product.index_mle_indices(0);
+    let num_indices = expression_product.index_mle_indices(0, &mut bind_list);
     assert_eq!(num_indices, 2);
 
-    let eval_prod = expression_product.evaluate_expr(challenge, &mut bind_list).unwrap();
+    let eval_prod = expression_product
+        .evaluate_expr(challenge, &mut bind_list)
+        .unwrap();
 
     assert_eq!(eval_prod, (eval_1 * eval_2));
     // 11 * -17
@@ -247,13 +253,17 @@ fn test_mle_different_length_eval() {
 
     let mut expression = expression_1 + expression_2;
     let mut expression_expect = Expression::<Fr, DenseMle<Fr>>::mle(sum_mle);
-    let num_indices = expression.index_mle_indices(0);
-    let mut bind_list = expression.init_bind_list();
+    let mut bind_list = Vec::new();
+    let num_indices = expression.index_mle_indices(0, &mut bind_list);
     assert_eq!(num_indices, 3);
-    expression_expect.index_mle_indices(0);
+    expression_expect.index_mle_indices_no_bind_list(0);
 
-    let eval_sum = expression.evaluate_expr(challenge.clone(), &mut bind_list).unwrap();
-    let expect_sum = expression_expect.evaluate_expr(challenge, &mut bind_list).unwrap();
+    let eval_sum = expression
+        .evaluate_expr(challenge.clone(), &mut bind_list)
+        .unwrap();
+    let expect_sum = expression_expect
+        .evaluate_expr(challenge, &mut bind_list)
+        .unwrap();
 
     assert_eq!(eval_sum, expect_sum);
 }
@@ -289,7 +299,7 @@ fn test_all_mle_indices() {
         *expression_product,
         expression_product_2.select(expression_mle),
     );
-    expression_full.index_mle_indices(0);
+    expression_full.index_mle_indices_no_bind_list(0);
     let all_indices = expression_full
         .expression_node
         .get_all_rounds(&expression_full.mle_vec);
@@ -330,7 +340,7 @@ fn test_nonlinear_mle_indices() {
         *expression_product,
         expression_product_2.select(expression_mle),
     );
-    expression_full.index_mle_indices(0);
+    expression_full.index_mle_indices_no_bind_list(0);
     let all_nonlinear_indices = expression_full
         .expression_node
         .get_all_nonlinear_rounds(&expression_full.mle_vec);
@@ -373,7 +383,7 @@ fn test_linear_mle_indices() {
         *expression_product,
         expression_product_2.select(expression_mle),
     );
-    expression_full.index_mle_indices(0);
+    expression_full.index_mle_indices_no_bind_list(0);
     let all_linear_indices = expression_full
         .expression_node
         .get_all_linear_rounds(&expression_full.mle_vec);
@@ -420,7 +430,7 @@ fn test_linear_mle_indices_2() {
         Expression::<Fr, DenseMle<Fr>>::negated(*expression_product),
     );
     let mut expression_full = expression_half.select(expression_other_half);
-    expression_full.index_mle_indices(0);
+    expression_full.index_mle_indices_no_bind_list(0);
 
     let all_linear_indices = expression_full
         .expression_node
@@ -455,8 +465,8 @@ fn big_test_eval() {
     let expression = Expression::scaled(expression, Fr::from(2));
 
     let mut expression = expression.select(expression3);
-    let num_indices = expression.index_mle_indices(0);
-    let mut bind_list = expression.init_bind_list();
+    let mut bind_list = Vec::new();
+    let num_indices = expression.index_mle_indices(0, &mut bind_list);
     assert_eq!(num_indices, 3);
 
     let challenge = vec![Fr::from(2), Fr::from(3), Fr::from(4)];

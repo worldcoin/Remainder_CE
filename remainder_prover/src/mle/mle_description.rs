@@ -103,7 +103,12 @@ impl MleDescription {
     /// Bind the variable with index `var_index` to `value`. Note that since
     /// [MleDescription] is the representation of a multilinear extension function
     /// sans data, it need not alter its internal MLE evaluations in any way.
-    pub fn fix_variable<F: Field>(&mut self, var_index: usize, value: F, bind_list: &mut Vec<Option<F>>) {
+    pub fn fix_variable<F: Field>(
+        &mut self,
+        var_index: usize,
+        value: F,
+        bind_list: &mut Vec<Option<F>>,
+    ) {
         for mle_index in self.var_indices.iter_mut() {
             if *mle_index == MleIndex::Indexed(var_index) {
                 mle_index.bind_index(value, bind_list);

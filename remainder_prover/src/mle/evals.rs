@@ -705,8 +705,8 @@ impl<F: Field> MultilinearExtension<F> {
     }
 
     /// Evaluate an MLE in basefield at a point in extension field
-    pub fn evaluate_at_point_in_ext_field<E>(mle: &MultilinearExtension<F>, point: &[E]) -> E 
-    where 
+    pub fn evaluate_at_point_in_ext_field<E>(mle: &MultilinearExtension<F>, point: &[E]) -> E
+    where
         E: ExtensionField<BaseField = F>,
     {
         let n = mle.num_vars();

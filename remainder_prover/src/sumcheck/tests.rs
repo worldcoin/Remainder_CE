@@ -18,10 +18,10 @@ use anyhow::Result;
 /// Does a dummy version of sumcheck with a testing RNG.
 pub(crate) fn dummy_sumcheck<E: ExtensionField>(
     expr: &mut Expression<E::BaseField, ProverMle<E>>,
+    bind_list: &mut Vec<Option<E>>,
     rng: &mut impl Rng,
     layer_claim: RawClaim<E>,
 ) -> Vec<(Vec<E>, Option<E>)> {
-    let mut bind_list = expr.init_bind_list();
     let claim_point = layer_claim.get_point();
     let expression_nonlinear_indices = expr.get_all_nonlinear_rounds();
     let expression_linear_indices = expr.get_all_linear_rounds();
@@ -29,7 +29,7 @@ pub(crate) fn dummy_sumcheck<E: ExtensionField>(
         .iter()
         .sorted()
         .for_each(|round_idx| {
-            expr.fix_variable_at_index(*round_idx, claim_point[*round_idx], &mut bind_list);
+            expr.fix_variable_at_index(*round_idx, claim_point[*round_idx], bind_list);
         });
     let betavec = expression_nonlinear_indices
         .iter()
@@ -45,7 +45,7 @@ pub(crate) fn dummy_sumcheck<E: ExtensionField>(
         // First fix the variable representing the challenge from the last round
         // (This doesn't happen for the first round)
         if let Some(challenge) = challenge {
-            expr.fix_variable(round_index - 1, challenge, &mut bind_list);
+            expr.fix_variable(round_index - 1, challenge, bind_list);
             newbeta.beta_update(round_index - 1, challenge);
         }
 
@@ -53,8 +53,13 @@ pub(crate) fn dummy_sumcheck<E: ExtensionField>(
         let degree = expr.get_round_degree(round_index);
 
         // Gives back the evaluations g(0), g(1), ..., g(d - 1)
-        let eval =
-            expr.evaluate_sumcheck_beta_cascade(&vec![&newbeta], &[E::ONE], round_index, degree, &bind_list);
+        let eval = expr.evaluate_sumcheck_beta_cascade(
+            &vec![&newbeta],
+            &[E::ONE],
+            round_index,
+            degree,
+            bind_list,
+        );
 
         messages.push((eval.0, challenge));
 
@@ -128,7 +133,10 @@ pub fn verify_sumcheck_messages<E: ExtensionField>(
         });
 
     // uses the expression to make one single oracle query
-    let mle_bound = expression.evaluate_expr(challenges.clone(), &mut Vec::new()).unwrap();
+    let mut bind_list = expression.init_bind_list();
+    let mle_bound = expression
+        .evaluate_expr(challenges.clone(), &mut bind_list)
+        .unwrap();
     let oracle_query = mle_bound * beta_bound;
 
     let prev_at_r =
@@ -146,8 +154,8 @@ pub(crate) fn get_dummy_claim<E: ExtensionField>(
     challenges: Option<Vec<E>>,
 ) -> RawClaim<E> {
     let mut expression = mle.expression();
-    let num_vars = expression.index_mle_indices(0);
-    let mut bind_list = expression.init_bind_list();
+    let mut bind_list = Vec::new();
+    let num_vars = expression.index_mle_indices(0, &mut bind_list);
     let challenges = if let Some(challenges) = challenges {
         assert_eq!(challenges.len(), num_vars);
         challenges
@@ -156,7 +164,9 @@ pub(crate) fn get_dummy_claim<E: ExtensionField>(
             .map(|_| E::from(rng.gen::<u64>()))
             .collect_vec()
     };
-    let eval = expression.evaluate_expr(challenges, &mut bind_list).unwrap();
+    let eval = expression
+        .evaluate_expr(challenges, &mut bind_list)
+        .unwrap();
 
     let (expression_node, mle_vec) = expression.deconstruct_mut();
 
@@ -177,8 +187,8 @@ pub(crate) fn get_dummy_expression_eval<E: ExtensionField>(
     rng: &mut impl Rng,
 ) -> RawClaim<E> {
     let mut expression = expression.clone();
-    let num_vars = expression.index_mle_indices(0);
-    let mut bind_list = expression.init_bind_list();
+    let mut bind_list = Vec::new();
+    let num_vars = expression.index_mle_indices(0, &mut bind_list);
 
     let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
     let expression_linear_indices = expression.get_all_linear_rounds();
@@ -190,9 +200,9 @@ pub(crate) fn get_dummy_expression_eval<E: ExtensionField>(
         .iter()
         .map(|index| (*index, challenges[*index]))
         .collect_vec();
-    expression_linear_indices
-        .iter()
-        .for_each(|round| expression.fix_variable_at_index(*round, challenges[*round], &mut bind_list));
+    expression_linear_indices.iter().for_each(|round| {
+        expression.fix_variable_at_index(*round, challenges[*round], &mut bind_list)
+    });
 
     let beta = BetaValues::new(challenges_enumerate);
     let eval = expression.evaluate_sumcheck_node_beta_cascade_sum(&beta, 0, 0, &bind_list);
@@ -210,7 +220,8 @@ fn eval_expr_nums() {
     let expression: Expression<Fr, ProverMle<Fr>> =
         Expression::<Fr, ProverMle<Fr>>::constant(Fr::from(6));
     let bind_list = expression.init_bind_list();
-    let res = expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 0, 1, &bind_list);
+    let res =
+        expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 0, 1, &bind_list);
     let exp = SumcheckEvals(vec![Fr::from(0), Fr::from(6)]);
     assert_eq!(res, exp);
 }
@@ -264,9 +275,10 @@ fn test_quadratic_sum() {
     let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
     let mut expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle1, mle2]);
-    expression.index_mle_indices(0);
-    let bind_list = expression.init_bind_list();
-    let res = expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 0, 3, &bind_list);
+    let mut bind_list = Vec::new();
+    expression.index_mle_indices(0, &mut bind_list);
+    let res =
+        expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 0, 3, &bind_list);
     let exp = SumcheckEvals(vec![
         Fr::from(2).neg(),
         Fr::from(120),
@@ -298,10 +310,11 @@ fn test_quadratic_sum_differently_sized_mles2() {
     let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
     let mut expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle1, mle2]);
-    expression.index_mle_indices(0);
-    let mut bind_list = expression.init_bind_list();
+    let mut bind_list = Vec::new();
+    expression.index_mle_indices(0, &mut bind_list);
     expression.fix_variable_at_index(2, Fr::from(3), &mut bind_list);
-    let res = expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 1, 3, &bind_list);
+    let res =
+        expression.evaluate_sumcheck_beta_cascade(&vec![&new_beta], &[Fr::one()], 1, 3, &bind_list);
     let exp = SumcheckEvals(vec![
         Fr::from(12).neg(),
         Fr::from(230),
@@ -335,10 +348,16 @@ fn test_dummy_sumcheck_1() {
     let mle_2 = mle_2;
 
     let mut expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle_1, mle_2]);
-    expression.index_mle_indices(0);
+    let mut bind_list = Vec::new();
+    expression.index_mle_indices(0, &mut bind_list);
 
     let verifier_expr = expression.clone();
-    let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
+    let res_messages = dummy_sumcheck(
+        &mut expression,
+        &mut bind_list,
+        &mut rng,
+        layer_claims.clone(),
+    );
     let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
@@ -366,9 +385,15 @@ fn test_dummy_sumcheck_2() {
     let mle_2 = mle2;
 
     let mut expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle_1, mle_2]);
-    expression.index_mle_indices(0);
+    let mut bind_list = Vec::new();
+    expression.index_mle_indices(0, &mut bind_list);
     let verifier_expr = expression.clone();
-    let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
+    let res_messages = dummy_sumcheck(
+        &mut expression,
+        &mut bind_list,
+        &mut rng,
+        layer_claims.clone(),
+    );
     let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
@@ -405,9 +430,15 @@ fn test_dummy_sumcheck_3() {
     let mle_2 = mle2;
 
     let mut expression = Expression::<Fr, ProverMle<Fr>>::products(vec![mle_1, mle_2]);
-    expression.index_mle_indices(0);
+    let mut bind_list = Vec::new();
+    expression.index_mle_indices(0, &mut bind_list);
     let verifier_expr = expression.clone();
-    let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
+    let res_messages = dummy_sumcheck(
+        &mut expression,
+        &mut bind_list,
+        &mut rng,
+        layer_claims.clone(),
+    );
     let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
@@ -418,11 +449,12 @@ fn test_dummy_sumcheck_sum_small() {
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(1), Fr::from(2)];
     let mut mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
-    mle1.index_mle_indices(0);
+    let mut bind_list = Vec::new();
+    mle1.index_mle_indices(0, &mut bind_list);
 
     let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
     let mut mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
-    mle2.index_mle_indices(0);
+    mle2.index_mle_indices_no_bind_list(0);
 
     let mle_output = DenseMle::new_from_iter(
         mle1.clone()
@@ -438,7 +470,12 @@ fn test_dummy_sumcheck_sum_small() {
 
     let mut expression = mle_1.expression() + mle_2.expression();
 
-    let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
+    let res_messages = dummy_sumcheck(
+        &mut expression,
+        &mut bind_list,
+        &mut rng,
+        layer_claims.clone(),
+    );
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
@@ -464,13 +501,20 @@ fn test_dummy_sumcheck_concat() {
     let mle_2 = mle2;
 
     let mut expression = Expression::<Fr, ProverMle<Fr>>::mle(mle_1);
-    expression.index_mle_indices(0);
+    let mut bind_list = Vec::new();
+    expression.index_mle_indices(0, &mut bind_list);
     let mut expr2 = Expression::<Fr, ProverMle<Fr>>::mle(mle_2);
-    expr2.index_mle_indices(0);
+    expr2.index_mle_indices_no_bind_list(0);
 
     let mut expression = expr2.select(expression);
-    expression.index_mle_indices(0);
-    let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
+    let mut bind_list = Vec::new();
+    expression.index_mle_indices(0, &mut bind_list);
+    let res_messages = dummy_sumcheck(
+        &mut expression,
+        &mut bind_list,
+        &mut rng,
+        layer_claims.clone(),
+    );
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
@@ -503,14 +547,17 @@ fn test_dummy_sumcheck_concat_2() {
     let mle_1 = mle1;
     let mle_2 = mle2;
 
-    let mut expression = Expression::<Fr, ProverMle<Fr>>::mle(mle_1);
-    expression.index_mle_indices(0);
-    let mut expr2 = Expression::<Fr, ProverMle<Fr>>::mle(mle_2);
-    expr2.index_mle_indices(0);
-
-    let mut expression = expr2.select(expression);
-    expression.index_mle_indices(0);
-    let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
+    let expr1 = Expression::<Fr, ProverMle<Fr>>::mle(mle_1);
+    let expr2 = Expression::<Fr, ProverMle<Fr>>::mle(mle_2);
+    let mut expression = expr2.select(expr1);
+    let mut bind_list = Vec::new();
+    expression.index_mle_indices(0, &mut bind_list);
+    let res_messages = dummy_sumcheck(
+        &mut expression,
+        &mut bind_list,
+        &mut rng,
+        layer_claims.clone(),
+    );
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
@@ -549,9 +596,15 @@ fn test_dummy_sumcheck_concat_aggro() {
     let expr2 = expression.clone();
 
     let mut expression = expr2.select(expression);
-    expression.index_mle_indices(0);
+    let mut bind_list = Vec::new();
+    expression.index_mle_indices(0, &mut bind_list);
     let verifier_expr = expression.clone();
-    let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
+    let res_messages = dummy_sumcheck(
+        &mut expression,
+        &mut bind_list,
+        &mut rng,
+        layer_claims.clone(),
+    );
 
     let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -574,9 +627,15 @@ fn test_dummy_sumcheck_concat_aggro_aggro() {
 
     let expression = expr2.clone().select(expression);
     let mut expression_aggro = expression.select(expr2);
+    let mut bind_list = expression_aggro.init_bind_list();
     let layer_claims = get_dummy_expression_eval(&expression_aggro, &mut rng);
     let verifier_expr = expression_aggro.clone();
-    let res_messages = dummy_sumcheck(&mut expression_aggro, &mut rng, layer_claims.clone());
+    let res_messages = dummy_sumcheck(
+        &mut expression_aggro,
+        &mut bind_list,
+        &mut rng,
+        layer_claims.clone(),
+    );
     let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
@@ -600,9 +659,15 @@ fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
     let expression = expr2.clone().select(expression);
     let expression_aggro = expression.select(expr2.clone());
     let mut expression_aggro_aggro = expression_aggro.select(expr2);
+    let mut bind_list = expression_aggro_aggro.init_bind_list();
     let layer_claims = get_dummy_expression_eval(&expression_aggro_aggro, &mut rng);
     let verifier_expr = expression_aggro_aggro.clone();
-    let res_messages = dummy_sumcheck(&mut expression_aggro_aggro, &mut rng, layer_claims.clone());
+    let res_messages = dummy_sumcheck(
+        &mut expression_aggro_aggro,
+        &mut bind_list,
+        &mut rng,
+        layer_claims.clone(),
+    );
     let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
@@ -624,9 +689,15 @@ fn test_dummy_sumcheck_sum() {
 
     let expression = expr2.clone().select(expression);
     let mut expression_aggro = expression.select(expr2);
+    let mut bind_list = expression_aggro.init_bind_list();
     let layer_claims = get_dummy_expression_eval(&expression_aggro, &mut rng);
     let verifier_expr = expression_aggro.clone();
-    let res_messages = dummy_sumcheck(&mut expression_aggro, &mut rng, layer_claims.clone());
+    let res_messages = dummy_sumcheck(
+        &mut expression_aggro,
+        &mut bind_list,
+        &mut rng,
+        layer_claims.clone(),
+    );
     let verifyres = verify_sumcheck_messages(res_messages, verifier_expr, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
@@ -635,7 +706,7 @@ fn test_dummy_sumcheck_sum() {
 fn test_beta_cascade_1() {
     let mle_1_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
     let mut mle_1: DenseMle<Fr> = DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0));
-    mle_1.index_mle_indices(0);
+    mle_1.index_mle_indices_no_bind_list(0);
     let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
     let betacascade_evals =
         beta_cascade(&[&mle_1], 2, 0, &vec![beta_vals], &[vec![]], &[Fr::one()]);
@@ -649,8 +720,8 @@ fn test_beta_cascade_2() {
     let mle_2_vec = vec![Fr::from(4_u64), Fr::from(3_u64), Fr::from(2_u64), Fr::one()];
     let mut mle_1: DenseMle<Fr> = DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0));
     let mut mle_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0));
-    mle_1.index_mle_indices(0);
-    mle_2.index_mle_indices(0);
+    mle_1.index_mle_indices_no_bind_list(0);
+    mle_2.index_mle_indices_no_bind_list(0);
     let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
     let betacascade_evals = beta_cascade(
         &[&mle_1, &mle_2],
@@ -677,9 +748,9 @@ fn test_beta_cascade_3() {
     let mut mle_1: DenseMle<Fr> = DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0));
     let mut mle_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0));
     let mut mle_3: DenseMle<Fr> = DenseMle::new_from_raw(mle_3_vec, LayerId::Input(0));
-    mle_1.index_mle_indices(0);
-    mle_2.index_mle_indices(0);
-    mle_3.index_mle_indices(0);
+    mle_1.index_mle_indices_no_bind_list(0);
+    mle_2.index_mle_indices_no_bind_list(0);
+    mle_3.index_mle_indices_no_bind_list(0);
 
     let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
     let betacascade_evals = beta_cascade(
@@ -708,9 +779,9 @@ fn test_successors_from_mle_product() {
     let mut mle_1: DenseMle<Fr> = DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0));
     let mut mle_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0));
     let mut mle_3: DenseMle<Fr> = DenseMle::new_from_raw(mle_3_vec, LayerId::Input(0));
-    mle_1.index_mle_indices(0);
-    mle_2.index_mle_indices(0);
-    mle_3.index_mle_indices(0);
+    mle_1.index_mle_indices_no_bind_list(0);
+    mle_2.index_mle_indices_no_bind_list(0);
+    mle_3.index_mle_indices_no_bind_list(0);
 
     let successors_vec = successors_from_mle_product(&[&mle_1, &mle_2, &mle_3], 4, 0).unwrap();
     let opened_successors = successors_vec
@@ -740,9 +811,9 @@ fn test_beta_cascade_step() {
     let mut mle_1: DenseMle<Fr> = DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0));
     let mut mle_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0));
     let mut mle_3: DenseMle<Fr> = DenseMle::new_from_raw(mle_3_vec, LayerId::Input(0));
-    mle_1.index_mle_indices(0);
-    mle_2.index_mle_indices(0);
-    mle_3.index_mle_indices(0);
+    mle_1.index_mle_indices_no_bind_list(0);
+    mle_2.index_mle_indices_no_bind_list(0);
+    mle_3.index_mle_indices_no_bind_list(0);
 
     let successors_vec = successors_from_mle_product(&[&mle_1, &mle_2, &mle_3], 4, 0).unwrap();
 

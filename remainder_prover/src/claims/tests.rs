@@ -42,11 +42,11 @@ fn claims_from_expr_and_points(
         .iter()
         .flat_map(|point| {
             let mut exp = expr.clone();
-            exp.index_mle_indices(0);
-            let mut bind_list = exp.init_bind_list();
+            let mut bind_list = Vec::new();
+            exp.index_mle_indices(0, &mut bind_list);
             exp.evaluate_expr(point.clone(), &mut bind_list).unwrap();
             // ClaimMle::new_raw(point.clone(), result)
-            RegularLayer::new_raw(LayerId::Layer(0), exp)
+            RegularLayer::new_raw(LayerId::Layer(0), exp, bind_list)
                 .get_claims()
                 .unwrap()
         })
@@ -57,7 +57,7 @@ fn claims_from_expr_and_points(
 /// on the boolean hypercube are given by `mle_evals`.
 fn layer_from_evals(mle_evals: Vec<Fr>) -> RegularLayer<Fr> {
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_evals, LayerId::Input(0));
-    RegularLayer::new_raw(LayerId::Input(0), mle.expression())
+    RegularLayer::new_raw(LayerId::Input(0), mle.expression(), Vec::new())
 }
 
 /// Returns a random MLE expression with an associated GKR layer, along with the
@@ -95,8 +95,8 @@ fn compute_l_star(claims: &[Claim<Fr>], r_star: Fr) -> Vec<Fr> {
 // Returns expected aggregated claim of `expr` on l(r_star) = `l_star`.
 fn compute_expected_claim(layer: &RegularLayer<Fr>, l_star: &Vec<Fr>) -> RawClaim<Fr> {
     let mut expr = layer.get_expression().clone();
-    expr.index_mle_indices(0);
-    let mut bind_list = expr.init_bind_list();
+    let mut bind_list = Vec::new();
+    expr.index_mle_indices(0, &mut bind_list);
     let result = expr.evaluate_expr(l_star.clone(), &mut bind_list).unwrap();
     RawClaim::new(l_star.clone(), result)
 }
@@ -208,7 +208,7 @@ fn test_aggro_claim_4() {
     let expr = Expression::<Fr, ProverMle<Fr>>::products(vec![mle, mle2]);
     let mut expr_copy = expr.clone();
 
-    let layer = RegularLayer::new_raw(LayerId::Input(0), expr);
+    let layer = RegularLayer::new_raw(LayerId::Input(0), expr, Vec::new());
 
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -231,10 +231,12 @@ fn test_aggro_claim_4() {
         .map(|evals| evaluate_at_a_point(&evals, rchal).unwrap())
         .collect();
 
-    expr_copy.index_mle_indices(0);
-    let mut expr_bind_list = expr_copy.init_bind_list();
+    let mut expr_bind_list = Vec::new();
+    expr_copy.index_mle_indices(0, &mut expr_bind_list);
 
-    let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone(), &mut expr_bind_list).unwrap();
+    let eval_fixed_vars = expr_copy
+        .evaluate_expr(fix_vars.clone(), &mut expr_bind_list)
+        .unwrap();
     let claim_fixed_vars: RawClaim<Fr> = RawClaim::new(fix_vars, eval_fixed_vars);
     assert_ne!(res.get_eval(), claim_fixed_vars.get_eval());
 }
@@ -259,7 +261,7 @@ fn test_aggro_claim_negative_1() {
     let mle = mle1.clone();
     let mut expr = Expression::<Fr, ProverMle<Fr>>::mle(mle);
 
-    let layer = RegularLayer::new_raw(LayerId::Input(0), expr.clone());
+    let layer = RegularLayer::new_raw(LayerId::Input(0), expr.clone(), Vec::new());
 
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -287,10 +289,12 @@ fn test_aggro_claim_negative_1() {
         .map(|evals| evaluate_at_a_point(&evals, rchal).unwrap())
         .collect();
 
-    expr.index_mle_indices(0);
-    let mut expr_bind_list = expr.init_bind_list();
+    let mut expr_bind_list = Vec::new();
+    expr.index_mle_indices(0, &mut expr_bind_list);
 
-    let eval_fixed_vars = expr.evaluate_expr(fix_vars.clone(), &mut expr_bind_list).unwrap();
+    let eval_fixed_vars = expr
+        .evaluate_expr(fix_vars.clone(), &mut expr_bind_list)
+        .unwrap();
     let claim_fixed_vars: RawClaim<Fr> = RawClaim::new(fix_vars, eval_fixed_vars);
     assert_ne!(res.get_eval(), claim_fixed_vars.get_eval());
 }
@@ -316,7 +320,7 @@ fn test_aggro_claim_negative_2() {
     let mut expr_copy = expr.clone();
     let output_mles_from_layer = vec![mle1.clone()];
 
-    let layer = RegularLayer::new_raw(LayerId::Input(0), expr);
+    let layer = RegularLayer::new_raw(LayerId::Input(0), expr, Vec::new());
 
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -344,10 +348,12 @@ fn test_aggro_claim_negative_2() {
         .map(|evals| evaluate_at_a_point(&evals, rchal).unwrap())
         .collect();
 
-    expr_copy.index_mle_indices(0);
-    let mut expr_bind_list = expr_copy.init_bind_list();
+    let mut expr_bind_list = Vec::new();
+    expr_copy.index_mle_indices(0, &mut expr_bind_list);
 
-    let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone(), &mut expr_bind_list).unwrap();
+    let eval_fixed_vars = expr_copy
+        .evaluate_expr(fix_vars.clone(), &mut expr_bind_list)
+        .unwrap();
 
     let claim_fixed_vars: RawClaim<Fr> = RawClaim::new(fix_vars, eval_fixed_vars);
     assert_ne!(res.get_eval(), claim_fixed_vars.get_eval());
