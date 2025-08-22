@@ -1,7 +1,7 @@
 //! Helper struct that combines multiple `Layer` implementations into
 //! a single struct that can represent many types of `Layer`
 
-use remainder_shared_types::{Field, extension_field::ExtensionField};
+use remainder_shared_types::{extension_field::ExtensionField, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::layer_enum;

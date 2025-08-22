@@ -136,8 +136,7 @@ where
         provable_circuit.get_gkr_circuit_description_ref(),
         circuit_description_hash_type,
     );
-    transcript_writer
-        .append_elements("Circuit description hash", &hash_value_as_field_elems);
+    transcript_writer.append_elements("Circuit description hash", &hash_value_as_field_elems);
 
     // Add the input values of any public (i.e. non-ligero) input layers to transcript.
     // Select the public input layers from the input layers, and sort them by layer id, and append
@@ -189,7 +188,8 @@ where
             let input_mle = provable_circuit
                 .get_input_mle(claim.get_to_layer_id())
                 .unwrap();
-            let evaluation = MultilinearExtension::evaluate_at_point_in_ext_field(&input_mle, claim.get_point());
+            let evaluation =
+                MultilinearExtension::evaluate_at_point_in_ext_field(&input_mle, claim.get_point());
             if evaluation != claim.get_eval() {
                 return Err(anyhow!(GKRError::EvaluationMismatch(
                     claim.get_to_layer_id(),
@@ -226,7 +226,7 @@ pub fn verify<F, E>(
     circuit_description_hash_type: CircuitHashType,
     transcript: &mut impl VerifierTranscript<F>,
     proof_config: &ProofConfig,
-) -> Result<()> 
+) -> Result<()>
 where
     F: Halo2FFTFriendlyField,
     E: ExtensionField<BaseField = F>,
@@ -326,7 +326,10 @@ where
             .get_public_inputs_ref()
             .get(&claim.get_to_layer_id())
             .unwrap();
-        let evaluation = MultilinearExtension::evaluate_at_point_in_ext_field::<E>(&input_mle, claim.get_point());
+        let evaluation = MultilinearExtension::evaluate_at_point_in_ext_field::<E>(
+            &input_mle,
+            claim.get_point(),
+        );
         if evaluation != claim.get_eval() {
             return Err(anyhow!(GKRError::EvaluationMismatch(
                 claim.get_to_layer_id(),
@@ -362,7 +365,7 @@ where
 pub fn prove_circuit<F: Field, E>(
     provable_circuit: &ProvableCircuit<F>,
     transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
-) -> Result<Vec<Claim<E>>> 
+) -> Result<Vec<Claim<E>>>
 where
     E: ExtensionField<BaseField = F>,
 {
@@ -564,7 +567,7 @@ impl<F: Field> GKRCircuitDescription<F> {
         &self,
         input_data: &HashMap<LayerId, MultilinearExtension<F>>,
         challenge_sampler: &mut impl FnMut(usize) -> Vec<E>,
-    ) -> InstantiatedCircuit<E> 
+    ) -> InstantiatedCircuit<E>
     where
         E: ExtensionField<BaseField = F>,
     {
@@ -742,8 +745,8 @@ impl<F: Field> GKRCircuitDescription<F> {
             let layer_id = circuit_output_layer.layer_id();
             info!("Verifying Output Layer: {layer_id:?}");
 
-            let verifier_output_layer = circuit_output_layer
-                .into_veriier_output_layer(transcript_reader)?;
+            let verifier_output_layer =
+                circuit_output_layer.into_verifier_output_layer(transcript_reader)?;
 
             let claim = verifier_output_layer.get_claim()?;
             claim_tracker.insert(claim.get_to_layer_id(), claim);

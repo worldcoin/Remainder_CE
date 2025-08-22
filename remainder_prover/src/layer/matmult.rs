@@ -136,10 +136,8 @@ impl<E: ExtensionField> MatMult<E> {
             matrix_b_mle.len()
         );
 
-        matrix_a_mle.index_mle_indices(0);
-        matrix_b_mle.index_mle_indices(0);
-        self.a_bind_list = matrix_a_mle.init_bind_list();
-        self.b_bind_list = matrix_b_mle.init_bind_list();
+        matrix_a_mle.index_mle_indices(0, &mut self.a_bind_list);
+        matrix_b_mle.index_mle_indices(0, &mut self.b_bind_list);
 
         // Bind the row indices of matrix A to the relevant claim point.
         claim_a.into_iter().enumerate().for_each(|(idx, chal)| {
@@ -148,7 +146,11 @@ impl<E: ExtensionField> MatMult<E> {
 
         // Bind the column indices of matrix B to the relevant claim point.
         claim_b.into_iter().enumerate().for_each(|(idx, chal)| {
-            matrix_b_mle.fix_variable_at_index(idx + self.matrix_b.rows_num_vars, chal, &mut self.b_bind_list);
+            matrix_b_mle.fix_variable_at_index(
+                idx + self.matrix_b.rows_num_vars,
+                chal,
+                &mut self.b_bind_list,
+            );
         });
         // We want to re-index the MLE indices in matrix A such that it
         // starts from 0 after the pre-processing, so we do that by first
@@ -166,8 +168,7 @@ impl<E: ExtensionField> MatMult<E> {
             })
             .collect_vec();
         matrix_a_mle.mle_indices = new_a_indices;
-        matrix_a_mle.index_mle_indices(0);
-        self.a_bind_list = matrix_a_mle.init_bind_list();
+        matrix_a_mle.index_mle_indices(0, &mut self.a_bind_list);
     }
 
     fn append_leaf_mles_to_transcript(
@@ -271,8 +272,12 @@ impl<E: ExtensionField> Layer<E> for MatMult<E> {
     }
 
     fn bind_round_variable(&mut self, round_index: usize, challenge: E) -> Result<()> {
-        self.matrix_a.mle.fix_variable(round_index, challenge, &mut self.a_bind_list);
-        self.matrix_b.mle.fix_variable(round_index, challenge, &mut self.b_bind_list);
+        self.matrix_a
+            .mle
+            .fix_variable(round_index, challenge, &mut self.a_bind_list);
+        self.matrix_b
+            .mle
+            .fix_variable(round_index, challenge, &mut self.b_bind_list);
 
         Ok(())
     }
@@ -294,9 +299,9 @@ impl<E: ExtensionField> Layer<E> for MatMult<E> {
         _random_coefficients: &[E],
     ) -> PostSumcheckLayer<E, E> {
         PostSumcheckLayer(vec![Product::<E, E>::new(
-            &vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()], 
+            &vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()],
             &vec![self.a_bind_list.clone(), self.b_bind_list.clone()],
-            E::ONE
+            E::ONE,
         )])
     }
     /// Get the claims that this layer makes on other layers
@@ -405,7 +410,7 @@ impl<F: Field> MatMultLayerDescription<F> {
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierMatMultLayer<E>>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         // For matmult, we only use interpolative claim aggregation.
         assert_eq!(claim_points.len(), 1);
@@ -478,9 +483,9 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         &self,
         claims: &[&RawClaim<E>],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<VerifierLayerEnum<E>> 
+    ) -> Result<VerifierLayerEnum<E>>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
@@ -560,9 +565,8 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription>,
         circuit_map: &mut CircuitEvalMap<E>,
-    )
-    where
-        E: ExtensionField<BaseField = F>
+    ) where
+        E: ExtensionField<BaseField = F>,
     {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
@@ -609,7 +613,7 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         _random_coefficients: &[E],
     ) -> PostSumcheckLayer<E, Option<E>>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         // We are always using interpolative claim aggregation for MatMult layers.
         assert_eq!(claim_challenges.len(), 1);
@@ -635,7 +639,8 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
                 &MleIndex::Indexed(_) => {
                     if bound_index_counter < self.matrix_a.rows_num_vars {
                         let ret = MleIndex::Bound(bound_index_counter);
-                        new_a_bind_list[bound_index_counter] = Some(claim_chals_matrix_a[bound_index_counter]);
+                        new_a_bind_list[bound_index_counter] =
+                            Some(claim_chals_matrix_a[bound_index_counter]);
                         bound_index_counter += 1;
                         ret
                     } else {
@@ -672,7 +677,8 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
                         ret
                     } else {
                         let ret = MleIndex::Bound(bound_index_counter);
-                        new_b_bind_list[bound_index_counter] = Some(claim_chals_matrix_b[bound_index_counter]);
+                        new_b_bind_list[bound_index_counter] =
+                            Some(claim_chals_matrix_b[bound_index_counter]);
                         bound_index_counter += 1;
                         ret
                     }
@@ -700,12 +706,9 @@ impl<F: Field> LayerDescription<F> for MatMultLayerDescription<F> {
         vec![&self.matrix_a.mle, &self.matrix_b.mle]
     }
 
-    fn convert_into_prover_layer<'a, E>(
-        &self, 
-        circuit_map: &CircuitEvalMap<E>
-    ) -> LayerEnum<E> 
+    fn convert_into_prover_layer<'a, E>(&self, circuit_map: &CircuitEvalMap<E>) -> LayerEnum<E>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         let prover_matrix_a = self.matrix_a.into_matrix(circuit_map);
         let prover_matrix_b = self.matrix_b.into_matrix(circuit_map);

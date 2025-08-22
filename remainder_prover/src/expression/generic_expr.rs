@@ -224,7 +224,7 @@ impl<F: Field, M: AbstractMle> Expression<F, M> {
     }
 
     /// Returns an empty bind list
-    pub fn init_bind_list<E>(&self) -> Vec<Option<E>> 
+    pub fn init_bind_list<E>(&self) -> Vec<Option<E>>
     where
         E: ExtensionField<BaseField = F>,
     {

@@ -33,7 +33,7 @@ impl<F: Field> Expression<F, MleDescription> {
         &self,
         point: &[E],
         transcript_reader: &mut impl VerifierTranscript<E::BaseField>,
-    ) -> Result<Expression<F, VerifierMle<E>>>
+    ) -> Result<(Expression<F, VerifierMle<E>>, Vec<Option<E>>)>
     where
         E: ExtensionField<BaseField = F>,
     {
@@ -45,7 +45,8 @@ impl<F: Field> Expression<F, MleDescription> {
             .into_iter()
             .map(|m| m.into_verifier_mle(point, transcript_reader))
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Expression::new(expression_node, verifier_mles))
+        let bind_list = point.iter().map(|p| Some(*p)).collect();
+        Ok((Expression::new(expression_node, verifier_mles), bind_list))
     }
 
     /// Get the [MleDescription]s for this expression.
@@ -82,7 +83,7 @@ impl<F: Field> Expression<F, MleDescription> {
         &self,
         multiplier: E,
         challenges: &[E],
-    ) -> PostSumcheckLayer<E, Option<E>> 
+    ) -> PostSumcheckLayer<E, Option<E>>
     where
         E: ExtensionField<BaseField = F>,
     {
@@ -93,10 +94,7 @@ impl<F: Field> Expression<F, MleDescription> {
 
 impl<F: Field> ExpressionNode<F> {
     /// Convert all selector to `Bound`
-    pub fn bind_selector<E>(
-        &mut self,
-        _point: &[E],
-    )
+    pub fn bind_selector<E>(&mut self, _point: &[E])
     where
         E: ExtensionField<BaseField = F>,
     {
@@ -233,7 +231,7 @@ impl<F: Field> ExpressionNode<F> {
         multiplier: E,
         challenges: &[E],
         mle_vec: &[MleDescription],
-    ) -> PostSumcheckLayer<E, Option<E>> 
+    ) -> PostSumcheckLayer<E, Option<E>>
     where
         E: ExtensionField<BaseField = F>,
     {

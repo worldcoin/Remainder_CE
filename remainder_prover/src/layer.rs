@@ -25,7 +25,8 @@ use crate::{
 };
 use remainder_shared_types::{
     extension_field::ExtensionField,
-    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript}, Field,
+    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
+    Field,
 };
 
 use anyhow::Result;
@@ -220,8 +221,7 @@ pub trait LayerDescription<F: Field> {
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription>,
         circuit_map: &mut CircuitEvalMap<E>,
-    )
-    where
+    ) where
         E: ExtensionField<BaseField = F>;
 
     /// The [MleDescription]s that make up the leaves of the expression in this layer.

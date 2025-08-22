@@ -108,8 +108,7 @@ pub fn test_circuit_with_config<F, E>(
     provable_circuit: &ProvableCircuit<F>,
     expected_prover_config: &GKRCircuitProverConfig,
     expected_verifier_config: &GKRCircuitVerifierConfig,
-)
-where
+) where
     F: Halo2FFTFriendlyField,
     E: ExtensionField<BaseField = F>,
 {
@@ -123,9 +122,7 @@ where
 
 /// Function which calls [test_circuit_internal] with the appropriate expected
 /// prover/verifier config.
-pub fn test_circuit_with_runtime_optimized_config<F, E>(
-    provable_circuit: &ProvableCircuit<F>,
-)
+pub fn test_circuit_with_runtime_optimized_config<F, E>(provable_circuit: &ProvableCircuit<F>)
 where
     F: Halo2FFTFriendlyField,
     E: ExtensionField<BaseField = F>,
@@ -142,9 +139,7 @@ where
 }
 
 /// Function which calls [test_circuit_internal] with a memory-optimized default.
-pub fn test_circuit_with_memory_optimized_config<F, E>(
-    provable_circuit: &ProvableCircuit<F>,
-)
+pub fn test_circuit_with_memory_optimized_config<F, E>(provable_circuit: &ProvableCircuit<F>)
 where
     F: Halo2FFTFriendlyField,
     E: ExtensionField<BaseField = F>,

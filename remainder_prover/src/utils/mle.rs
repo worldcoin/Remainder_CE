@@ -110,10 +110,7 @@ pub fn get_mle_idx_decomp_for_idx(idx: usize, num_bits: usize) -> Vec<MleIndex> 
 
 /// Returns the total MLE indices given a `Vec<bool>`. for the prefix bits and
 /// then the number of free bits after.
-pub fn get_total_mle_indices(
-    prefix_bits: &[bool],
-    num_free_bits: usize,
-) -> Vec<MleIndex> {
+pub fn get_total_mle_indices(prefix_bits: &[bool], num_free_bits: usize) -> Vec<MleIndex> {
     prefix_bits
         .iter()
         .map(|bit| MleIndex::Fixed(*bit))

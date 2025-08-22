@@ -65,7 +65,12 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         self.mle.iter()
     }
 
-    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F, bind_list: &mut Vec<Option<F>>) -> Option<RawClaim<F>> {
+    fn fix_variable_at_index(
+        &mut self,
+        indexed_bit_index: usize,
+        point: F,
+        bind_list: &mut Vec<Option<F>>,
+    ) -> Option<RawClaim<F>> {
         // Bind the `MleIndex::IndexedBit(index)` to the challenge `point`.
 
         // First, find the bit corresponding to `index` and compute its absolute
@@ -167,7 +172,12 @@ impl<F: Field> Mle<F> for DenseMle<F> {
     /// Bind the bit `index` to the value `binding`.
     /// If this was the last unbound variable, then return a Claim object giving the fully specified
     /// evaluation point and the (single) value of the bookkeeping table.  Otherwise, return None.
-    fn fix_variable(&mut self, index: usize, binding: F, bind_list: &mut Vec<Option<F>>) -> Option<RawClaim<F>> {
+    fn fix_variable(
+        &mut self,
+        index: usize,
+        binding: F,
+        bind_list: &mut Vec<Option<F>>,
+    ) -> Option<RawClaim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::Indexed(index) {
                 mle_index.bind_index(binding, bind_list);
@@ -190,7 +200,23 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         }
     }
 
-    fn index_mle_indices(&mut self, curr_index: usize) -> usize {
+    fn index_mle_indices(&mut self, curr_index: usize, bind_list: &mut Vec<Option<F>>) -> usize {
+        let mut new_indices = 0;
+        for mle_index in self.mle_indices.iter_mut() {
+            if *mle_index == MleIndex::Free {
+                *mle_index = MleIndex::Indexed(curr_index + new_indices);
+                new_indices += 1;
+            }
+        }
+
+        let new_index_size = self.get_bind_list_len();
+        if bind_list.len() < new_index_size {
+            bind_list.extend(vec![None; new_index_size - bind_list.len()]);
+        }
+        curr_index + new_indices
+    }
+
+    fn index_mle_indices_no_bind_list(&mut self, curr_index: usize) -> usize {
         let mut new_indices = 0;
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::Free {
@@ -309,12 +335,13 @@ impl<F: Field> DenseMle<F> {
     /// being able to specify the prefix vars and layer ID.
     ///
     /// Optionally gives back an indexed [DenseMle].
+    /// Returns the MLE and its initial binding table
     pub fn new_from_multilinear_extension(
         mle: MultilinearExtension<F>,
         layer_id: LayerId,
         prefix_vars: Option<Vec<bool>>,
         maybe_starting_var_index: Option<usize>,
-    ) -> Self {
+    ) -> (Self, Vec<Option<F>>) {
         let mle_indices: Vec<MleIndex> = prefix_vars
             .unwrap_or_default()
             .into_iter()
@@ -326,10 +353,12 @@ impl<F: Field> DenseMle<F> {
             mle,
             mle_indices,
         };
+        let mut bind_list = Vec::new();
         if let Some(starting_var_index) = maybe_starting_var_index {
-            ret.index_mle_indices(starting_var_index);
+            ret.index_mle_indices(starting_var_index, &mut bind_list);
         }
-        ret
+
+        (ret, bind_list)
     }
 
     /// Merges the MLEs into a single MLE by simply concatenating them.

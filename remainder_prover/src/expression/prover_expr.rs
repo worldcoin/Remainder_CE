@@ -55,9 +55,12 @@ where
     ///
     /// If the bookkeeping table has more than 1 element, it
     /// throws an ExpressionError::EvaluateNotFullyBoundError
-    /// 
+    ///
     /// Might be over-cautious here, but make sure the bind_list is fully assigned
-    pub fn transform_to_verifier_expression(self, bind_list: &mut Vec<Option<E>>) -> Result<Expression<F, VerifierMle<E>>> {
+    pub fn transform_to_verifier_expression(
+        self,
+        bind_list: &mut Vec<Option<E>>,
+    ) -> Result<Expression<F, VerifierMle<E>>> {
         let (expression_node, mle_vec) = self.deconstruct();
         // Check that every MLE is fully bounded
         let verifier_mles = mle_vec
@@ -78,14 +81,24 @@ where
     }
 
     /// fix the variable at a certain round index, always MSB index
-    pub fn fix_variable(&mut self, round_index: usize, challenge: E, bind_list: &mut Vec<Option<E>>) {
+    pub fn fix_variable(
+        &mut self,
+        round_index: usize,
+        challenge: E,
+        bind_list: &mut Vec<Option<E>>,
+    ) {
         let (expression_node, mle_vec) = self.deconstruct_mut();
 
         expression_node.fix_variable_node(round_index, challenge, mle_vec, bind_list)
     }
 
     /// fix the variable at a certain round index, arbitrary index
-    pub fn fix_variable_at_index(&mut self, round_index: usize, challenge: E, bind_list: &mut Vec<Option<E>>) {
+    pub fn fix_variable_at_index(
+        &mut self,
+        round_index: usize,
+        challenge: E,
+        bind_list: &mut Vec<Option<E>>,
+    ) {
         let (expression_node, mle_vec) = self.deconstruct_mut();
 
         expression_node.fix_variable_at_index_node(round_index, challenge, mle_vec, bind_list)
@@ -93,7 +106,7 @@ where
 
     /// evaluates an expression on the given challenges points, by fixing the variables
     pub fn evaluate_expr(
-        &mut self, 
+        &mut self,
         challenges: Vec<E>,
         bind_list: &mut Vec<Option<E>>,
     ) -> Result<E> {
@@ -142,7 +155,9 @@ where
                                 .mle_indices()
                                 .iter()
                                 .filter_map(|index| match index {
-                                    MleIndex::Bound(index) => Some((bind_list[*index].unwrap(), index)),
+                                    MleIndex::Bound(index) => {
+                                        Some((bind_list[*index].unwrap(), index))
+                                    }
                                     _ => None,
                                 })
                                 .collect_vec();
@@ -219,9 +234,20 @@ where
     /// Mutate the MLE indices that are [MleIndex::Free] in the expression and
     /// turn them into [MleIndex::Indexed]. Returns the max number of bits
     /// that are indexed.
-    pub fn index_mle_indices(&mut self, curr_index: usize) -> usize {
+    pub fn index_mle_indices(
+        &mut self,
+        curr_index: usize,
+        bind_list: &mut Vec<Option<E>>,
+    ) -> usize {
         let (expression_node, mle_vec) = self.deconstruct_mut();
-        expression_node.index_mle_indices_node(curr_index, mle_vec)
+        expression_node.index_mle_indices_node(curr_index, mle_vec, bind_list)
+    }
+
+    /// Similar to [Self::index_mle_indices_no_bind_index], but without the bind_list
+    /// Used during sumcheck testing
+    pub fn index_mle_indices_no_bind_list(&mut self, curr_index: usize) -> usize {
+        let (expression_node, mle_vec) = self.deconstruct_mut();
+        expression_node.index_mle_indices_node(curr_index, mle_vec, &mut Vec::new())
     }
 
     /// Gets the number of free variables in an expression.
@@ -232,7 +258,11 @@ where
 
     /// Get the [PostSumcheckLayer] for this expression, which represents the fully bound values of the expression.
     /// Relevant for the Hyrax IP, where we need commitments to fully bound MLEs as well as their intermediate products.
-    pub fn get_post_sumcheck_layer(&self, multiplier: E, bind_list: &Vec<Option<E>>) -> PostSumcheckLayer<E, E> {
+    pub fn get_post_sumcheck_layer(
+        &self,
+        multiplier: E,
+        bind_list: &Vec<Option<E>>,
+    ) -> PostSumcheckLayer<E, E> {
         self.expression_node
             .get_post_sumcheck_layer_prover(multiplier, &self.mle_vec, bind_list)
     }
@@ -246,9 +276,8 @@ impl<F: Field> ExpressionNode<F> {
         challenge: E,
         mle_vec: &mut [ProverMle<E>], // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
         bind_list: &mut Vec<Option<E>>,
-    )
-    where
-        E: ExtensionField<BaseField = F>
+    ) where
+        E: ExtensionField<BaseField = F>,
     {
         match self {
             ExpressionNode::Selector(index, a, b) => {
@@ -296,9 +325,8 @@ impl<F: Field> ExpressionNode<F> {
         challenge: E,
         mle_vec: &mut [ProverMle<E>], // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
         bind_list: &mut Vec<Option<E>>,
-    )
-    where
-        E: ExtensionField<BaseField = F>
+    ) where
+        E: ExtensionField<BaseField = F>,
     {
         match self {
             ExpressionNode::Selector(index, a, b) => {
@@ -348,7 +376,7 @@ impl<F: Field> ExpressionNode<F> {
         bind_list: &Vec<Option<E>>,
     ) -> SumcheckEvals<E>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         match self {
             ExpressionNode::Constant(constant) => {
@@ -522,7 +550,7 @@ impl<F: Field> ExpressionNode<F> {
         bind_list: &Vec<Option<E>>,
     ) -> SumcheckEvals<E>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         match self {
             // Each different type of expression node (constant, selector, product, sum,
@@ -845,9 +873,10 @@ impl<F: Field> ExpressionNode<F> {
         &mut self,
         curr_index: usize,
         mle_vec: &mut [ProverMle<E>],
+        bind_list: &mut Vec<Option<E>>,
     ) -> usize
-    where 
-        E: ExtensionField<BaseField = F>
+    where
+        E: ExtensionField<BaseField = F>,
     {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
@@ -860,29 +889,31 @@ impl<F: Field> ExpressionNode<F> {
                     MleIndex::Fixed(_bit) => {}
                     _ => panic!("should not have indexed or bound bits at this point!"),
                 };
-                let a_bits = a.index_mle_indices_node(new_index, mle_vec);
-                let b_bits = b.index_mle_indices_node(new_index, mle_vec);
+                let a_bits = a.index_mle_indices_node(new_index, mle_vec, bind_list);
+                let b_bits = b.index_mle_indices_node(new_index, mle_vec, bind_list);
 
                 max(a_bits, b_bits)
             }
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle_mut(mle_vec);
-                mle.index_mle_indices(curr_index)
+                mle.index_mle_indices(curr_index, bind_list)
             }
             ExpressionNode::Sum(a, b) => {
-                let a_bits = a.index_mle_indices_node(curr_index, mle_vec);
-                let b_bits = b.index_mle_indices_node(curr_index, mle_vec);
+                let a_bits = a.index_mle_indices_node(curr_index, mle_vec, bind_list);
+                let b_bits = b.index_mle_indices_node(curr_index, mle_vec, bind_list);
                 max(a_bits, b_bits)
             }
             ExpressionNode::Product(mle_vec_indices) => mle_vec_indices
                 .iter_mut()
                 .map(|mle_vec_index| {
                     let mle = mle_vec_index.get_mle_mut(mle_vec);
-                    mle.index_mle_indices(curr_index)
+                    mle.index_mle_indices(curr_index, bind_list)
                 })
                 .reduce(max)
                 .unwrap_or(curr_index),
-            ExpressionNode::Scaled(a, _) => a.index_mle_indices_node(curr_index, mle_vec),
+            ExpressionNode::Scaled(a, _) => {
+                a.index_mle_indices_node(curr_index, mle_vec, bind_list)
+            }
             ExpressionNode::Constant(_) => curr_index,
         }
     }
@@ -893,8 +924,8 @@ impl<F: Field> ExpressionNode<F> {
         curr_size: usize,
         mle_vec: &[ProverMle<E>],
     ) -> usize
-    where 
-        E: ExtensionField<BaseField = F>
+    where
+        E: ExtensionField<BaseField = F>,
     {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
@@ -960,26 +991,42 @@ impl<F: Field> ExpressionNode<F> {
         multiplier: E,
         mle_vec: &[ProverMle<E>],
         bind_list: &Vec<Option<E>>,
-    ) -> PostSumcheckLayer<E, E> 
-    where 
-        E: ExtensionField<BaseField = F>
+    ) -> PostSumcheckLayer<E, E>
+    where
+        E: ExtensionField<BaseField = F>,
     {
         let mut products: Vec<Product<E, E>> = vec![];
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
                 let left_side_acc = multiplier * (E::ONE - mle_index.val(bind_list).unwrap());
                 let right_side_acc = multiplier * (mle_index.val(bind_list).unwrap());
-                products.extend(a.get_post_sumcheck_layer_prover(left_side_acc, mle_vec, bind_list).0);
-                products.extend(b.get_post_sumcheck_layer_prover(right_side_acc, mle_vec, bind_list).0);
+                products.extend(
+                    a.get_post_sumcheck_layer_prover(left_side_acc, mle_vec, bind_list)
+                        .0,
+                );
+                products.extend(
+                    b.get_post_sumcheck_layer_prover(right_side_acc, mle_vec, bind_list)
+                        .0,
+                );
             }
             ExpressionNode::Sum(a, b) => {
-                products.extend(a.get_post_sumcheck_layer_prover(multiplier, mle_vec, bind_list).0);
-                products.extend(b.get_post_sumcheck_layer_prover(multiplier, mle_vec, bind_list).0);
+                products.extend(
+                    a.get_post_sumcheck_layer_prover(multiplier, mle_vec, bind_list)
+                        .0,
+                );
+                products.extend(
+                    b.get_post_sumcheck_layer_prover(multiplier, mle_vec, bind_list)
+                        .0,
+                );
             }
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
                 assert!(mle.is_fully_bounded(bind_list));
-                products.push(Product::<E, E>::new(&[mle.clone()], &Vec::new(), multiplier));
+                products.push(Product::<E, E>::new(
+                    &[mle.clone()],
+                    &Vec::new(),
+                    multiplier,
+                ));
             }
             ExpressionNode::Product(mle_vec_indices) => {
                 let mles = mle_vec_indices
@@ -994,7 +1041,11 @@ impl<F: Field> ExpressionNode<F> {
                 products.extend(a.get_post_sumcheck_layer_prover(acc, mle_vec, bind_list).0);
             }
             ExpressionNode::Constant(constant) => {
-                products.push(Product::<E, E>::new(&[], &Vec::new(), multiplier * *constant));
+                products.push(Product::<E, E>::new(
+                    &[],
+                    &Vec::new(),
+                    multiplier * *constant,
+                ));
             }
         }
         PostSumcheckLayer(products)

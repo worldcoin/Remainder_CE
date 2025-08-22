@@ -4,7 +4,8 @@
 use std::{
     cmp::Ordering,
     collections::HashSet,
-    fmt::{Debug, Formatter}, marker::PhantomData,
+    fmt::{Debug, Formatter},
+    marker::PhantomData,
 };
 
 use crate::{
@@ -111,9 +112,9 @@ impl<F: Field> IdentityGateLayerDescription<F> {
         sumcheck_challenges: &[E],
         _claim_points: &[&[E]],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<VerifierIdentityGateLayer<E>> 
+    ) -> Result<VerifierIdentityGateLayer<E>>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         // WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL
         // INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR
@@ -170,9 +171,9 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         &self,
         claims: &[&RawClaim<E>],
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<VerifierLayerEnum<E>> 
+    ) -> Result<VerifierLayerEnum<E>>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
@@ -284,7 +285,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         random_coefficients: &[E],
     ) -> PostSumcheckLayer<E, Option<E>>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         assert_eq!(claim_challenges.len(), random_coefficients.len());
         let random_coefficients_scaled_by_beta_bound = claim_challenges
@@ -318,7 +319,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
         PostSumcheckLayer(vec![Product::<E, Option<E>>::new(
             &[self.source_mle.clone()],
-            &Vec::new(), 
+            &Vec::new(),
             f_1_gu,
             round_challenges,
         )])
@@ -332,12 +333,9 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         vec![&self.source_mle]
     }
 
-    fn convert_into_prover_layer<E>(
-        &self, 
-        circuit_map: &CircuitEvalMap<E>
-    ) -> LayerEnum<E>
+    fn convert_into_prover_layer<E>(&self, circuit_map: &CircuitEvalMap<E>) -> LayerEnum<E>
     where
-        E: ExtensionField<BaseField = F>
+        E: ExtensionField<BaseField = F>,
     {
         let source_mle = self.source_mle.into_dense_mle(circuit_map);
         let id_gate_layer = IdentityGate::new(
@@ -358,9 +356,8 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription>,
         circuit_map: &mut CircuitEvalMap<E>,
-    )
-    where
-        E: ExtensionField<BaseField = F>
+    ) where
+        E: ExtensionField<BaseField = F>,
     {
         assert_eq!(mle_outputs_necessary.len(), 1);
         let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
@@ -546,8 +543,7 @@ impl<E: ExtensionField> Layer<E> for IdentityGate<E> {
             self.beta_g2_vec = Some(vec![beta_g2]);
         }
 
-        self.source_mle.index_mle_indices(0);
-        self.bind_list = self.source_mle.init_bind_list();
+        self.source_mle.index_mle_indices(0, &mut self.bind_list);
         Ok(())
     }
 
@@ -582,7 +578,7 @@ impl<E: ExtensionField> Layer<E> for IdentityGate<E> {
                 .collect();
             self.beta_g2_vec = Some(beta_g2_vec);
         }
-        self.source_mle.index_mle_indices(0);
+        self.source_mle.index_mle_indices(0, &mut self.bind_list);
         self.bind_list = self.source_mle.init_bind_list();
     }
 
@@ -694,7 +690,8 @@ impl<E: ExtensionField> Layer<E> for IdentityGate<E> {
                 .for_each(|beta| {
                     beta.beta_update(round_index, challenge);
                 });
-            self.source_mle.fix_variable(round_index, challenge, &mut self.bind_list);
+            self.source_mle
+                .fix_variable(round_index, challenge, &mut self.bind_list);
 
             Ok(())
         } else {
@@ -869,7 +866,7 @@ impl<E: ExtensionField> IdentityGate<E> {
             &[fully_bound_beta_g2],
         );
         let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
-        a_hg_mle.index_mle_indices(self.num_dataparallel_vars);
+        a_hg_mle.index_mle_indices(self.num_dataparallel_vars, &mut self.bind_list);
 
         self.a_hg_mle_phase_1 = Some(a_hg_mle);
     }
@@ -886,7 +883,7 @@ impl<E: ExtensionField> IdentityGate<E> {
             random_coefficients,
         );
         let mut a_hg_mle = DenseMle::new_from_raw(a_hg_mle_vec, self.layer_id());
-        a_hg_mle.index_mle_indices(self.num_dataparallel_vars);
+        a_hg_mle.index_mle_indices(self.num_dataparallel_vars, &mut self.bind_list);
         self.a_hg_mle_phase_1 = Some(a_hg_mle);
     }
 }
