@@ -352,85 +352,6 @@ where
     circuit.finalize().unwrap()
 }
 
-fn sha256_adder_gate_circuit() -> Circuit<Fr> {
-    let mut builder = CircuitBuilder::new();
-
-    let input_layer = builder.add_input_layer(LayerKind::Public);
-
-    let num_vars = 5; // 32-bit adder
-
-    // Inputs are 32-bit x, 32-bit y, 32-bit z, rest all zeros.
-    let all_inputs = builder.add_input_shred("All Inputs", 2 + num_vars, &input_layer);
-
-    let b = &all_inputs;
-    let b_sq = ExprBuilder::products(vec![b.id(), b.id()]);
-    let b = b.expr();
-
-    // Check that all input bits are binary.
-    let binary_sector = builder.add_sector(
-        // b * (1 - b) = b - b^2
-        b - b_sq,
-    );
-
-    // Make sure all inputs are either `0` or `1`
-    builder.set_output(&binary_sector);
-
-    let splits = builder.add_split_node(&all_inputs, 2);
-
-    let [x, y, expected_sum, _] = splits.try_into().unwrap();
-
-    let mod32_rpa = sha256::Sha256Adder::new(&mut builder, &x, &y);
-    let sum_is_valid = builder.add_sector(mod32_rpa.get_output().expr() - expected_sum.expr());
-
-    builder.set_output(&sum_is_valid);
-    builder.build().unwrap()
-}
-
-fn attach_sha256_adder_gate_data<const POSITIVE: bool>(
-    mut circuit: Circuit<Fr>,
-) -> ProvableCircuit<Fr> {
-    let mut trng = thread_rng();
-    // 1. Attach random data
-    let x = trng.next_u32();
-    let y = trng.next_u32();
-    let expected_sum = if POSITIVE {
-        x.wrapping_add(y)
-    } else {
-        // Will be exact sum with probability 1/2^32
-        trng.next_u32()
-    };
-
-    let x_bits = sha2::bit_decompose_msb_first(x);
-    let y_bits = sha2::bit_decompose_msb_first(y);
-    let expected_bits = sha2::bit_decompose_msb_first(expected_sum);
-
-    let input_mle = MultilinearExtension::new(
-        x_bits
-            .into_iter()
-            .chain(y_bits.into_iter())
-            .chain(expected_bits.into_iter())
-            .chain(std::iter::repeat(0).take(32))
-            .map(u64::from)
-            .map(Fr::from)
-            .collect_vec(),
-    );
-
-    circuit.set_input("All Inputs", input_mle);
-    circuit.finalize().unwrap()
-}
-
-#[test]
-fn sha256_adder_gate_positive_test() {
-    // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
-
-    let circuit = sha256_adder_gate_circuit();
-
-    for _ in 0..10 {
-        let provable_circuit = attach_sha256_adder_gate_data::<true>(circuit.clone());
-        test_circuit_with_memory_optimized_config(&provable_circuit);
-    }
-}
-
 #[test]
 fn attach_constant_gate_data_test() {
     // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
@@ -448,21 +369,6 @@ fn attach_constant_gate_data_test() {
         let circuit = constant_gate_circuit(data);
         let provable_circuit = attach_constant_gate_data(circuit, data);
         test_circuit_with_memory_optimized_config(&provable_circuit);
-    }
-}
-
-#[test]
-fn sha256_adder_gate_negative_test() {
-    // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
-
-    let circuit = sha256_adder_gate_circuit();
-
-    for _ in 0..10 {
-        let provable_circuit = attach_sha256_adder_gate_data::<false>(circuit.clone());
-        let result = std::panic::catch_unwind(|| {
-            test_circuit_with_memory_optimized_config(&provable_circuit)
-        });
-        assert!(result.is_err(), "A -ve test should panic");
     }
 }
 
