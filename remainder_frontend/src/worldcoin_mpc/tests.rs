@@ -12,11 +12,13 @@ fn test_mpc_circuit_with_mock_data() {
     const PARTY_IDX: usize = 0;
 
     // Create circuit description + input helper function
-    let circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
+    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
 
     let test_trivial_data = generate_trivial_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>();
     // Convert input data into circuit inputs which are assignable by prover
-    let provable_circuit = mpc_attach_data(circuit, test_trivial_data).unwrap();
+    mpc_attach_data(&mut circuit, test_trivial_data);
+
+    let provable_circuit = circuit.finalize().unwrap();
 
     test_circuit_with_memory_optimized_config(&provable_circuit);
 }
@@ -31,10 +33,14 @@ fn test_mpc_circuit_with_inverse_data() {
     let circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
 
     for test_idx in 10..12 {
+        let mut circuit = circuit.clone();
+
         let test_inversed_data =
             fetch_inversed_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>(test_idx);
 
-        let provable_circuit = mpc_attach_data(circuit.clone(), test_inversed_data).unwrap();
+        mpc_attach_data(&mut circuit, test_inversed_data);
+
+        let provable_circuit = circuit.finalize().unwrap();
 
         test_circuit_with_memory_optimized_config(&provable_circuit);
     }
@@ -47,11 +53,13 @@ fn test_mpc_circuit_batched_with_mock_data() {
     const PARTY_IDX: usize = 0;
 
     // Create circuit description + input helper function
-    let circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
+    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
 
     let test_trivial_data = generate_trivial_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>();
 
-    let provable_circuit = mpc_attach_data(circuit, test_trivial_data).unwrap();
+    mpc_attach_data(&mut circuit, test_trivial_data);
+
+    let provable_circuit = circuit.finalize().unwrap();
 
     test_circuit_with_memory_optimized_config(&provable_circuit);
 }
@@ -64,12 +72,14 @@ fn test_mpc_circuit_batched_with_inverse_data() {
     const TEST_IDX_START: usize = 2;
 
     // Create circuit description + input helper function
-    let circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
+    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
 
     let test_inversed_data =
         fetch_inversed_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>(TEST_IDX_START);
 
-    let provable_circuit = mpc_attach_data(circuit, test_inversed_data).unwrap();
+    mpc_attach_data(&mut circuit, test_inversed_data);
+
+    let provable_circuit = circuit.finalize().unwrap();
 
     test_circuit_with_memory_optimized_config(&provable_circuit);
 }
@@ -81,11 +91,13 @@ fn test_mpc_circuit_batched_non_power_of_2_with_mock_data() {
     const PARTY_IDX: usize = 0;
 
     // Create circuit description + input helper function
-    let circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
+    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
 
     let test_trivial_data = generate_trivial_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>();
 
-    let provable_circuit = mpc_attach_data(circuit, test_trivial_data).unwrap();
+    mpc_attach_data(&mut circuit, test_trivial_data);
+
+    let provable_circuit = circuit.finalize().unwrap();
 
     test_circuit_with_memory_optimized_config(&provable_circuit);
 }
@@ -98,12 +110,14 @@ fn test_mpc_circuit_batched_non_power_of_2_with_inverse_data() {
     const TEST_IDX_START: usize = 2;
 
     // Create circuit description + input helper function
-    let circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
+    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
 
     let test_inversed_data =
         fetch_inversed_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>(TEST_IDX_START);
 
-    let provable_circuit = mpc_attach_data(circuit, test_inversed_data).unwrap();
+    mpc_attach_data(&mut circuit, test_inversed_data);
+
+    let provable_circuit = circuit.finalize().unwrap();
 
     test_circuit_with_memory_optimized_config(&provable_circuit);
 }

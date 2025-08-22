@@ -166,9 +166,9 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>() -> Circuit<F> {
 /// by attaching the `MPCInputBuilderMetadata` onto a circuit that is
 /// described through the `input_builder_metadata` of an MPC secret share circuit.
 pub fn mpc_attach_data<F: Field>(
-    mut circuit: Circuit<F>,
+    circuit: &mut Circuit<F>,
     secret_share_circuit_data: SecretShareCircuitInputs<F>,
-) -> Result<ProvableCircuit<F>> {
+) {
     circuit.set_input("Iriscode", secret_share_circuit_data.iris_codes);
     circuit.set_input("Maskcode", secret_share_circuit_data.masks);
     circuit.set_input("Slopes", secret_share_circuit_data.slopes);
@@ -194,6 +194,4 @@ pub fn mpc_attach_data<F: Field>(
         "Lookup Table Values",
         secret_share_circuit_data.lookup_table_values,
     );
-
-    circuit.finalize()
 }

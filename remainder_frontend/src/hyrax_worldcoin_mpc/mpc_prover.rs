@@ -282,7 +282,7 @@ impl MPCProver {
 
     pub fn new(
         prover_config: GKRCircuitProverConfig,
-        mpc_circuit_and_aux_mles_all_3_parties: Vec<MPCCircuitAndAuxMles<Fr>>,
+        mpc_circuit_and_aux_mles_all_3_parties: Vec<Circuit<Fr>>,
         rng: &mut (impl CryptoRng + RngCore),
     ) -> Self {
         let committer = Self::default_committer();
@@ -290,8 +290,7 @@ impl MPCProver {
         let slope_input_layer_description = &mpc_circuit_and_aux_mles_all_3_parties
             .first()
             .unwrap()
-            .get_circuit()
-            .slope_input_layer
+            .get_input_layer_description_ref("Slope")
             .clone();
 
         let slope_precommit_left_eye = Self::generate_secure_shamir_secret_share_slopes_commitment(
@@ -324,7 +323,6 @@ impl MPCProver {
     #[allow(clippy::too_many_arguments)]
     pub fn prove_mpc_with_precommits(
         mpc_circuit_desc: &Circuit<Fr>,
-        inputs: HashMap<LayerId, MultilinearExtension<Fr>>,
         iris_precommit: &HyraxProverInputCommitment<Bn256Point>,
         mask_precommit: &HyraxProverInputCommitment<Bn256Point>,
         slope_precommit: &HyraxProverInputCommitment<Bn256Point>,
@@ -332,37 +330,11 @@ impl MPCProver {
         blinding_rng: &mut (impl CryptoRng + RngCore),
         converter: &mut VandermondeInverse<Scalar>,
     ) -> HyraxProof<Bn256Point> {
-        // Set up Hyrax input layer specification.
-        let mut hyrax_input_layers = HashMap::new();
+        let mut provable_circuit = mpc_circuit_desc.finalize_hyrax().unwrap();
 
-        hyrax_input_layers.insert(
-            mpc_circuit_desc.iris_code_input_layer.layer_id,
-            (
-                mpc_circuit_desc.iris_code_input_layer.clone().into(),
-                Some(iris_precommit.clone()),
-            ),
-        );
-
-        hyrax_input_layers.insert(
-            mpc_circuit_desc.mask_code_input_layer.layer_id,
-            (
-                mpc_circuit_desc.mask_code_input_layer.clone().into(),
-                Some(mask_precommit.clone()),
-            ),
-        );
-
-        hyrax_input_layers.insert(
-            mpc_circuit_desc.slope_input_layer.layer_id,
-            (
-                mpc_circuit_desc.slope_input_layer.clone().into(),
-                Some(slope_precommit.clone()),
-            ),
-        );
-
-        hyrax_input_layers.insert(
-            mpc_circuit_desc.auxilary_input_layer.layer_id,
-            (mpc_circuit_desc.auxilary_input_layer.clone().into(), None),
-        );
+        provable_circuit.set_pre_commitment("Iris Code Input", iris_precommit.clone());
+        provable_circuit.set_pre_commitment("Mask Code Input", mask_precommit.clone());
+        provable_circuit.set_pre_commitment("Slope", slope_precommit.clone());
 
         // Create a fresh transcript.
         let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -370,9 +342,7 @@ impl MPCProver {
 
         // Prove the relationship between iris/mask code and image.
         let (proof, _proof_config) = HyraxProof::prove(
-            &inputs,
-            &hyrax_input_layers,
-            &mpc_circuit_desc.circuit_description,
+            &mut provable_circuit,
             committer,
             blinding_rng,
             converter,
@@ -382,6 +352,7 @@ impl MPCProver {
         proof
     }
 
+    /*
     pub fn remove_auxiliary_input_layer(&mut self, is_left_eye: bool) {
         let three_proofs = if is_left_eye {
             &mut self.left_eye_proofs_all_3_parties
@@ -400,6 +371,7 @@ impl MPCProver {
                 .remove_public_input_layer_by_id(auxiliary_invariant_public_input_layer_id)
         });
     }
+    */
 
     pub fn prove(
         &mut self,
@@ -430,23 +402,19 @@ impl MPCProver {
             ),
         ];
 
-        let circuit_inputs_all_3_parties = mpc_data_all_3_parties
-            .into_iter()
-            .zip(self.mpc_circuit_and_aux_mles_all_3_parties.iter())
-            .map(|(mpc_circuit_input, mpc_circuit_and_aux_mles)| {
-                mpc_attach_data(
-                    mpc_circuit_and_aux_mles.get_input_builder_metadata(),
-                    mpc_circuit_input,
-                )
-            })
-            .collect_vec();
-        let proofs_all_3_parties = circuit_inputs_all_3_parties
-            .into_iter()
-            .zip(self.mpc_circuit_and_aux_mles_all_3_parties.iter())
-            .map(|(circuit_inputs, mpc_circuit_and_aux_mles)| {
+        self.mpc_circuit_and_aux_mles_all_3_parties
+            .iter_mut()
+            .zip(mpc_data_all_3_parties.into_iter())
+            .for_each(|(mpc_circuit, mpc_circuit_input)| {
+                mpc_attach_data(mpc_circuit, mpc_circuit_input);
+            });
+
+        let proofs_all_3_parties = self
+            .mpc_circuit_and_aux_mles_all_3_parties
+            .iter()
+            .map(|mpc_circuit_and_aux_mles| {
                 Self::prove_mpc_with_precommits(
-                    mpc_circuit_and_aux_mles.get_circuit(),
-                    circuit_inputs,
+                    mpc_circuit_and_aux_mles,
                     &iris_code_precommit,
                     &mask_code_precommit,
                     &self.slope_commitments[!is_left_eye as usize],
@@ -973,8 +941,8 @@ impl<F: Field> MPCCircuitAndAuxMles<F> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub struct V3MPCCircuitAndAuxMles<F: Field> {
-    pub v3_circuit_and_aux_mles: CircuitAndAuxMles<F>,
-    pub mpc_circuit_and_aux_mles_all_3_parties: Vec<MPCCircuitAndAuxMles<F>>,
+    pub v3_circuit_and_aux_mles: Circuit<F>,
+    pub mpc_circuit_and_aux_mles_all_3_parties: Vec<Circuit<F>>,
 }
 
 impl<F: Field> V3MPCCircuitAndAuxMles<F> {
@@ -988,8 +956,8 @@ impl<F: Field> V3MPCCircuitAndAuxMles<F> {
 }
 
 // Generate the circuit description and input builder used to generate the auxiliary MLEs.
-pub fn generate_mpc_circuit_and_aux_mles_all_3_parties<F: Field>() -> Vec<MPCCircuitAndAuxMles<F>> {
-    let (circuit_description, input_builder_metadata) = build_circuit::<F, MPC_NUM_IRIS_4_CHUNKS>();
+pub fn generate_mpc_circuit_and_aux_mles_all_3_parties<F: Field>() -> Vec<Circuit<F>> {
+    let circuit = build_circuit::<F, MPC_NUM_IRIS_4_CHUNKS>();
 
     // Load the inputs to the circuit (these are all MLEs, i.e. in the clear).
     let iris_data_all_3_parties = [
