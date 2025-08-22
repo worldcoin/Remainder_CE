@@ -14,7 +14,7 @@ use remainder_frontend::layouter::{
 use remainder::mle::dense::DenseMle;
 use remainder::mle::MleIndex;
 use remainder_frontend::sel_expr;
-use remainder_shared_types::{Field, Fr, IntoVecF};
+use remainder_shared_types::{field::IntoVecF, Field, Fr};
 
 /// Returns an MLE with all Fr::one() for testing according to the number of variables.
 pub fn get_dummy_one_mle(num_vars: usize) -> DenseMle<Fr> {
@@ -65,7 +65,7 @@ pub fn get_input_shred_and_data_from_vec(
 pub fn get_total_mle_indices<F: Field>(
     prefix_bits: &[bool],
     num_free_bits: usize,
-) -> Vec<MleIndex<F>> {
+) -> Vec<MleIndex> {
     prefix_bits
         .iter()
         .map(|bit| MleIndex::Fixed(*bit))

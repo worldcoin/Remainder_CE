@@ -59,7 +59,7 @@ impl FiatShamirChallengeNode {
     pub fn generate_circuit_description<F: Field>(
         &self,
         circuit_map: &mut CircuitMap,
-    ) -> FiatShamirChallengeDescription<F> {
+    ) -> FiatShamirChallengeDescription {
         let layer_id = LayerId::next_fiat_shamir_challenge_layer_id();
         let fsc_layer = FiatShamirChallengeDescription::new(layer_id, self.get_num_vars());
         circuit_map.add_node_id_and_location_num_vars(
@@ -110,6 +110,6 @@ mod test {
 
         let provable_circuit = circuit.finalize().unwrap();
 
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 }

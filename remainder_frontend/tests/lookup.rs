@@ -71,7 +71,7 @@ pub fn single_shred_test() {
     let provable_circuit = circuit.finalize().unwrap();
 
     // Prove/verify the circuit
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
 }
 
 /// Test the case where there is only one LookupConstraint for the LookupTable i.e. just one constrained
@@ -97,7 +97,7 @@ pub fn single_shred_test_non_power_of_2() {
     let provable_circuit = circuit.finalize().unwrap();
 
     // Prove/verify the circuit
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
 }
 
 /// Creates the [GKRCircuitDescription] and an associated helper input
@@ -254,7 +254,7 @@ pub fn multi_shred_test() {
     let provable_circuit = circuit.finalize().unwrap();
 
     // Prove/verify the circuit
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
 }
 
 /// Test that a panic occurs when the constrained MLE contains values not in the lookup table.
@@ -284,5 +284,5 @@ pub fn test_not_satisfied() {
     let provable_circuit = circuit.finalize().unwrap();
 
     // Prove/verify the circuit
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
 }

@@ -50,5 +50,5 @@ fn test_fs_challenge_sub_circuit() {
     let provable_circuit = circuit.finalize().unwrap();
 
     // Prove/verify the circuit
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
 }

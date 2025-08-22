@@ -153,7 +153,7 @@ mod test {
         let mut circuit = build_basic_split_circuit::<Fr>();
         circuit.set_input("Input", mle);
         let provable_circuit = circuit.finalize().unwrap();
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 
     #[test]
@@ -164,7 +164,7 @@ mod test {
         let mut circuit = build_basic_split_circuit::<Fr>();
         circuit.set_input("Input", mle);
         let provable_circuit = circuit.finalize().unwrap();
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 
     // Build a circuit that takes 4 MLEs, joins them using selectors, splits them into 4 MLEs using
@@ -219,6 +219,6 @@ mod test {
         );
 
         let provable_circuit = circuit.finalize().unwrap();
-        test_circuit_with_runtime_optimized_config(&provable_circuit);
+        test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 }

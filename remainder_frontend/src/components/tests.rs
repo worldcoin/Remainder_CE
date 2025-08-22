@@ -62,7 +62,7 @@ fn test_complementary_recomposition_vertical() {
 
     let provable_circuit = circuit.finalize().unwrap();
 
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
 }
 
 #[test]
@@ -104,7 +104,7 @@ fn test_unsigned_recomposition() {
 
     let provable_circuit = circuit.finalize().unwrap();
 
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
 }
 
 #[test]
@@ -158,7 +158,7 @@ fn test_complementary_recomposition() {
 
     let provable_circuit = circuit.finalize().unwrap();
 
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
 }
 
 #[test]
@@ -178,7 +178,7 @@ fn test_bits_are_binary_soundness() {
 
     let provable_circuit = circuit.finalize().unwrap();
 
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
 }
 
 #[test]
@@ -197,5 +197,5 @@ fn test_bits_are_binary() {
 
     let provable_circuit = circuit.finalize().unwrap();
 
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
 }

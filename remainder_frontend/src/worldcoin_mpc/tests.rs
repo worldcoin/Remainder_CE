@@ -18,7 +18,7 @@ fn test_mpc_circuit_with_mock_data() {
     // Convert input data into circuit inputs which are assignable by prover
     let provable_circuit = mpc_attach_data(circuit, test_trivial_data).unwrap();
 
-    test_circuit_with_memory_optimized_config(&provable_circuit);
+    test_circuit_with_memory_optimized_config::<Fr, Fr>(&provable_circuit);
 }
 
 #[ignore] // takes a long time to run!
@@ -36,7 +36,7 @@ fn test_mpc_circuit_with_inverse_data() {
 
         let provable_circuit = mpc_attach_data(circuit.clone(), test_inversed_data).unwrap();
 
-        test_circuit_with_memory_optimized_config(&provable_circuit);
+        test_circuit_with_memory_optimized_config::<Fr, Fr>(&provable_circuit);
     }
 }
 
@@ -53,7 +53,7 @@ fn test_mpc_circuit_batched_with_mock_data() {
 
     let provable_circuit = mpc_attach_data(circuit, test_trivial_data).unwrap();
 
-    test_circuit_with_memory_optimized_config(&provable_circuit);
+    test_circuit_with_memory_optimized_config::<Fr, Fr>(&provable_circuit);
 }
 
 #[ignore] // takes a long time to run!
@@ -71,7 +71,7 @@ fn test_mpc_circuit_batched_with_inverse_data() {
 
     let provable_circuit = mpc_attach_data(circuit, test_inversed_data).unwrap();
 
-    test_circuit_with_memory_optimized_config(&provable_circuit);
+    test_circuit_with_memory_optimized_config::<Fr, Fr>(&provable_circuit);
 }
 
 #[ignore] // takes a long time to run!
@@ -87,7 +87,7 @@ fn test_mpc_circuit_batched_non_power_of_2_with_mock_data() {
 
     let provable_circuit = mpc_attach_data(circuit, test_trivial_data).unwrap();
 
-    test_circuit_with_memory_optimized_config(&provable_circuit);
+    test_circuit_with_memory_optimized_config::<Fr, Fr>(&provable_circuit);
 }
 
 #[ignore] // takes a long time to run!
@@ -105,5 +105,5 @@ fn test_mpc_circuit_batched_non_power_of_2_with_inverse_data() {
 
     let provable_circuit = mpc_attach_data(circuit, test_inversed_data).unwrap();
 
-    test_circuit_with_memory_optimized_config(&provable_circuit);
+    test_circuit_with_memory_optimized_config::<Fr, Fr>(&provable_circuit);
 }

@@ -2,7 +2,7 @@ use ark_std::test_rng;
 
 use remainder::prover::helpers::test_circuit_with_runtime_optimized_config;
 use remainder_frontend::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, NodeRef};
-use remainder_shared_types::Field;
+use remainder_shared_types::{Field, Fr};
 
 use utils::{get_dummy_random_mle, TestUtilComponents};
 
@@ -167,5 +167,5 @@ fn test_combined_nondataparallel_circuit_newmainder() {
     let provable_circuit = circuit.finalize().unwrap();
 
     // Prove/verify the circuit
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    test_circuit_with_runtime_optimized_config::<Fr, Fr>(&provable_circuit);
 }

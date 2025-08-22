@@ -289,7 +289,7 @@ impl<F: Field> CircuitBuilder<F> {
         .unwrap();
 
         let mut intermediate_layers = Vec::<LayerDescriptionEnum<F>>::new();
-        let mut output_layers = Vec::<OutputLayerDescription<F>>::new();
+        let mut output_layers = Vec::<OutputLayerDescription>::new();
 
         let input_layers = input_layer_nodes
             .iter()

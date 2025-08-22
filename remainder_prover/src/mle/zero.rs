@@ -52,6 +52,10 @@ impl<F: Field> AbstractMle for ZeroMle<F> {
         &self.mle_indices
     }
 
+    fn set_mle_indices(&mut self, new_indices: Vec<MleIndex>) {
+        self.mle_indices = new_indices
+    }
+
     fn num_free_vars(&self) -> usize {
         self.num_vars
     }

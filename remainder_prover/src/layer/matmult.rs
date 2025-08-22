@@ -136,8 +136,12 @@ impl<E: ExtensionField> MatMult<E> {
             matrix_b_mle.len()
         );
 
+        // Re-index A and B so that their indices are consistent with each other
+        // In particular, the column variables of A share the same indices as the row variables of B
+        clear_matrix_mle_index(matrix_a_mle);
         matrix_a_mle.index_mle_indices(0, &mut self.a_bind_list);
-        matrix_b_mle.index_mle_indices(0, &mut self.b_bind_list);
+        clear_matrix_mle_index(matrix_b_mle);
+        matrix_b_mle.index_mle_indices(self.matrix_a.rows_num_vars, &mut self.b_bind_list);
 
         // Bind the row indices of matrix A to the relevant claim point.
         claim_a.into_iter().enumerate().for_each(|(idx, chal)| {
@@ -147,28 +151,11 @@ impl<E: ExtensionField> MatMult<E> {
         // Bind the column indices of matrix B to the relevant claim point.
         claim_b.into_iter().enumerate().for_each(|(idx, chal)| {
             matrix_b_mle.fix_variable_at_index(
-                idx + self.matrix_b.rows_num_vars,
+                idx + self.matrix_a.rows_num_vars + self.matrix_b.rows_num_vars,
                 chal,
                 &mut self.b_bind_list,
             );
         });
-        // We want to re-index the MLE indices in matrix A such that it
-        // starts from 0 after the pre-processing, so we do that by first
-        // setting them to be free and then re-indexing them.
-        let new_a_indices = matrix_a_mle
-            .clone()
-            .mle_indices
-            .into_iter()
-            .map(|index| {
-                if let MleIndex::Indexed(_) = index {
-                    MleIndex::Free
-                } else {
-                    index
-                }
-            })
-            .collect_vec();
-        matrix_a_mle.mle_indices = new_a_indices;
-        matrix_a_mle.index_mle_indices(0, &mut self.a_bind_list);
     }
 
     fn append_leaf_mles_to_transcript(
@@ -210,7 +197,7 @@ impl<E: ExtensionField> Layer<E> for MatMult<E> {
 
         let num_vars_middle = self.num_vars_middle_ab;
 
-        for round in 0..num_vars_middle {
+        for round in self.matrix_a.rows_num_vars..self.matrix_a.rows_num_vars + num_vars_middle {
             // Compute the round's sumcheck message.
             let message = self.compute_round_sumcheck_message(round, &[E::ONE])?;
             // Add to transcript.
@@ -443,32 +430,45 @@ impl<F: Field> MatMultLayerDescription<F> {
             self.matrix_b.rows_num_vars + self.matrix_b.cols_num_vars
         );
 
+        // Re-index A and B so that their indices are consistent with each other
+        // In particular, the column variables of A share the same indices as the row variables of B
+        let mut matrix_a_mle = self.matrix_a.mle.clone();
+        let mut matrix_b_mle = self.matrix_b.mle.clone();
+        clear_matrix_mle_index(&mut matrix_a_mle);
+        matrix_a_mle.index_mle_indices(0);
+        clear_matrix_mle_index(&mut matrix_b_mle);
+        matrix_b_mle.index_mle_indices(self.matrix_a.rows_num_vars);
+
         // Construct the verifier matrices given these fully bound points.
         let matrix_a = VerifierMatrix {
-            mle: self
-                .matrix_a
-                .mle
+            mle: matrix_a_mle
                 .into_verifier_mle(&full_claim_chals_a, transcript_reader)
                 .unwrap(),
             rows_num_vars: self.matrix_a.rows_num_vars,
             cols_num_vars: self.matrix_a.cols_num_vars,
         };
         let matrix_b = VerifierMatrix {
-            mle: self
-                .matrix_b
-                .mle
+            mle: matrix_b_mle
                 .into_verifier_mle(&full_claim_chals_b, transcript_reader)
                 .unwrap(),
             rows_num_vars: self.matrix_b.rows_num_vars,
             cols_num_vars: self.matrix_b.cols_num_vars,
         };
 
+        // a_bind_list is just the challenges
+        let a_bind_list = full_claim_chals_a.iter().map(|c| Some(*c)).collect();
+        // b_bind_list is the challenges, but starting at index `self.matrix_a.rows_num_vars`
+        let b_bind_list = vec![None; self.matrix_a.rows_num_vars]
+            .into_iter()
+            .chain(full_claim_chals_b.iter().map(|c| Some(*c)))
+            .collect();
+
         Ok(VerifierMatMultLayer {
             layer_id: self.layer_id,
             matrix_a,
             matrix_b,
-            a_bind_list: full_claim_chals_a.iter().map(|c| Some(*c)).collect(),
-            b_bind_list: full_claim_chals_b.iter().map(|c| Some(*c)).collect(),
+            a_bind_list,
+            b_bind_list,
         })
     }
 }
@@ -787,6 +787,23 @@ impl<E: ExtensionField> VerifierMatMultLayer<E> {
     fn evaluate(&self) -> E {
         self.matrix_a.mle.value() * self.matrix_b.mle.value()
     }
+}
+
+/// Convert all `Indexed` indices back to `Free` for reindexing
+pub fn clear_matrix_mle_index<M: AbstractMle>(matrix_mle: &mut M) {
+    let new_indices = matrix_mle
+        .clone()
+        .mle_indices()
+        .into_iter()
+        .map(|index| {
+            if let MleIndex::Indexed(_) = index {
+                MleIndex::Free
+            } else {
+                index.clone()
+            }
+        })
+        .collect_vec();
+    matrix_mle.set_mle_indices(new_indices);
 }
 
 /// Compute the product of two matrices given flattened vectors rather than

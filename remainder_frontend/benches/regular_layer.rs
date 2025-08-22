@@ -49,7 +49,8 @@ fn get_dummy_expression_eval(
     rng: &mut impl Rng,
 ) -> RawClaim<Fr> {
     let mut expression = expression.clone();
-    let num_vars = expression.index_mle_indices(0);
+    let mut bind_list = Vec::new();
+    let num_vars = expression.index_mle_indices(0, &mut bind_list);
 
     let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
     let expression_linear_indices = expression.get_all_linear_rounds();
@@ -61,9 +62,9 @@ fn get_dummy_expression_eval(
         .iter()
         .map(|index| (*index, challenges[*index]))
         .collect_vec();
-    expression_linear_indices
-        .iter()
-        .for_each(|round| expression.fix_variable_at_index(*round, challenges[*round]));
+    expression_linear_indices.iter().for_each(|round| {
+        expression.fix_variable_at_index(*round, challenges[*round], &mut bind_list)
+    });
 
     let beta = BetaValues::new(challenges_enumerate);
     let eval = expression.evaluate_sumcheck_beta_cascade(
@@ -71,6 +72,7 @@ fn get_dummy_expression_eval(
         &[Fr::one()],
         expression_linear_indices.len(),
         2,
+        &bind_list,
     );
     let SumcheckEvals(evals) = eval;
 
@@ -164,7 +166,7 @@ fn create_dummy_regular_layer(config: BenchLayerConfig) -> (RegularLayer<Fr>, Ra
             let layer_expression = leaf_expression.clone() + leaf_expression.clone();
 
             let claim = get_dummy_expression_eval(&layer_expression, &mut rng);
-            let layer = RegularLayer::new_raw(LayerId::Layer(0), layer_expression);
+            let layer = RegularLayer::new_raw(LayerId::Layer(0), layer_expression, Vec::new());
 
             (layer, claim)
         }
@@ -173,7 +175,7 @@ fn create_dummy_regular_layer(config: BenchLayerConfig) -> (RegularLayer<Fr>, Ra
                 Expression::<Fr, DenseMle<Fr>>::products(vec![leaf_mle; config.degree]);
 
             let claim = get_dummy_expression_eval(&layer_expression, &mut rng);
-            let layer = RegularLayer::new_raw(LayerId::Layer(0), layer_expression);
+            let layer = RegularLayer::new_raw(LayerId::Layer(0), layer_expression, Vec::new());
 
             (layer, claim)
         }
@@ -188,7 +190,7 @@ fn create_dummy_regular_layer(config: BenchLayerConfig) -> (RegularLayer<Fr>, Ra
                 Expression::<Fr, DenseMle<Fr>>::select(level1_expression, level1_expression_copy);
 
             let claim = get_dummy_expression_eval(&level0_expression, &mut rng);
-            let layer = RegularLayer::new_raw(LayerId::Layer(0), level0_expression);
+            let layer = RegularLayer::new_raw(LayerId::Layer(0), level0_expression, Vec::new());
 
             (layer, claim)
         }
@@ -212,7 +214,7 @@ fn create_dummy_regular_layer(config: BenchLayerConfig) -> (RegularLayer<Fr>, Ra
                 Expression::<Fr, DenseMle<Fr>>::select(level1_expression, mle_n_expression);
 
             let claim = get_dummy_expression_eval(&level0_expression, &mut rng);
-            let layer = RegularLayer::new_raw(LayerId::Layer(0), level0_expression);
+            let layer = RegularLayer::new_raw(LayerId::Layer(0), level0_expression, Vec::new());
 
             (layer, claim)
         }

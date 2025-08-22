@@ -51,7 +51,7 @@ use anyhow::{Ok, Result};
 pub enum AbstractExpression<F: Field> {
     Constant(F),
     Selector(
-        MleIndex<F>,
+        MleIndex,
         Box<AbstractExpression<F>>,
         Box<AbstractExpression<F>>,
     ),
@@ -151,7 +151,7 @@ impl<F: Field> AbstractExpression<F> {
     pub fn build_circuit_expr(
         self,
         circuit_map: &CircuitMap,
-    ) -> Result<Expression<F, MleDescription<F>>> {
+    ) -> Result<Expression<F, MleDescription>> {
         // First we get all the mles that this expression will need to store
         let mut nodes = self.get_node_ids(vec![]);
         nodes.sort();
