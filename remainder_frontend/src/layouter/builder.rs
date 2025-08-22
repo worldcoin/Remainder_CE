@@ -39,7 +39,7 @@ use crate::{
 };
 use remainder::{
     circuit_layout::{CircuitLocation, ProvableCircuit},
-    input_layer::ligero_input_layer::LigeroInputLayerDescription,
+    input_layer::{ligero_input_layer::LigeroInputLayerDescription, InputLayerDescription},
     layer::{gate::BinaryOperation, layer_enum::LayerDescriptionEnum, LayerId},
     mle::evals::MultilinearExtension,
     output_layer::OutputLayerDescription,
@@ -1059,6 +1059,15 @@ impl CircuitMap {
             .cloned()
             .collect_vec()
     }
+
+    /// Returns the layer ID of the input layer with label `layer_label`, or error if no such layer
+    /// exists.
+    pub fn get_layer_id_from_label(&self, layer_label: &str) -> Result<LayerId> {
+        self.layer_label_to_layer_id
+            .get(layer_label)
+            .cloned()
+            .ok_or(anyhow!("No Input Layer with label {layer_label}."))
+    }
 }
 
 /// A circuit whose structure is fixed, but is not yet ready to be proven or verified because its
@@ -1115,6 +1124,28 @@ impl<F: Field> Circuit<F> {
         } else {
             self.partial_inputs.insert(node_id, data);
         }
+    }
+
+    /// Returns the Input Layer Description of the Input Layer with label `layer_label`.
+    ///
+    /// # Panics
+    /// If no such layer exists, or if `self` is in an inconsistent state.
+    pub fn get_input_layer_description_ref(&self, layer_label: &str) -> &InputLayerDescription {
+        let layer_id = self
+            .circuit_map
+            .get_layer_id_from_label(&layer_label)
+            .unwrap();
+
+        let x: Vec<&InputLayerDescription> = self
+            .circuit_description
+            .input_layers
+            .iter()
+            .filter(|input_layer| input_layer.layer_id == layer_id)
+            .collect();
+
+        assert_eq!(x.len(), 1);
+
+        x[0]
     }
 
     fn build_input_layer_data(&self) -> Result<HashMap<LayerId, MultilinearExtension<F>>> {
