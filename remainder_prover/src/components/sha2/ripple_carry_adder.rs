@@ -4,6 +4,7 @@ use itertools::Itertools;
 
 use remainder_shared_types::Field;
 
+/// A single bit full adder
 #[derive(Clone, Debug)]
 pub struct FullAdder {
     s: NodeRef,
@@ -11,6 +12,8 @@ pub struct FullAdder {
 }
 
 impl FullAdder {
+    /// Build a full adder circuit where `x` is the first input wire,
+    /// `y` is the second input wire and `carry` is the input carry.
     pub fn new<F: Field>(
         builder_ref: &mut CircuitBuilder<F>,
         x: &NodeRef,
@@ -24,7 +27,12 @@ impl FullAdder {
         // ab = a `and` b
         let ab = x.clone().expr() * y.clone().expr();
 
-        // xor_ab1 = a `xor` b
+        // xor_ab1 = a `xor` b. `xor` output is normalized, i.e., its
+        // output is guaranteed to be in {0,1} if the input is in {0,1}.
+        // In the multiplicative basis where 0 -> 1, and 1 -> -1 (i.e.,
+        // the homomorphism x --> (-1)^x ), xor becomes a single
+        // multiplication, but such optimizations are outside the scope
+        // of this code.
         let xor_ab1 = x.clone().expr() + y.clone().expr()
             - ExprBuilder::constant(F::from(2)) * x.clone().expr() * y.clone().expr();
 
@@ -34,10 +42,10 @@ impl FullAdder {
                 - ExprBuilder::constant(F::from(2)) * xor_ab1.clone() * carry.clone().expr(),
         );
 
-        // cin_x_xor1  = carry & xor_ab1
+        // cin_x_xor1  = carry & xor_ab1. Output is naturally normalized
         let cin_x_xor1 = carry.expr() * xor_ab1.clone();
 
-        // Carry out = cin_x_xor1 | ab
+        // Carry out = cin_x_xor1 | ab. Output is normalized.
         let carry_out = builder_ref.add_sector(ab.clone() + cin_x_xor1.clone() - ab * cin_x_xor1);
 
         Self {
@@ -46,19 +54,22 @@ impl FullAdder {
         }
     }
 
-    pub fn get_output(&self) -> (/* Sum */ NodeRef, /* carry */ NodeRef) {
+    /// Return the output and carry of full adder
+    pub fn get_output(&self) -> (/* sum */ NodeRef, /* carry */ NodeRef) {
         (self.s.clone(), self.c.clone())
     }
 }
 
-// mode 2^BITWIDTH adder with no input carry and not output carry
+/// mod 2^BITWIDTH adder with no input carry and no output carry
 pub struct AdderNoCarry<const BITWIDTH: usize> {
     sum_node: NodeRef,
 }
 
 impl<const BITWIDTH: usize> AdderNoCarry<BITWIDTH> {
-    // x_word and y_word are assumed to be MSB-first decomposition of
-    // of the input data.
+    /// Creates a BITWIDTH word Integer adder. For SHA-256/224 BITWIDTH is 32, for SHA-512/384, BITWIDTH is 64
+    ///
+    /// [x_word] and [y_word] are assumed to be MSB-first decomposition of
+    /// of the data.
     pub fn new<F: Field>(
         builder_ref: &mut CircuitBuilder<F>,
         x_word: &NodeRef,
@@ -90,6 +101,7 @@ impl<const BITWIDTH: usize> AdderNoCarry<BITWIDTH> {
         Self { sum_node }
     }
 
+    /// Returns the output of AdderNoCarry
     pub fn get_output(&self) -> NodeRef {
         self.sum_node.clone()
     }

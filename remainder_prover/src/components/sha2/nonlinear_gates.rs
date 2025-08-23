@@ -12,13 +12,15 @@ use itertools::Itertools;
 use remainder_shared_types::Field;
 use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
 
+/// A trait to deal with bit decomposition and bit rotation as needed by
+/// SHA-2 family of hash functions.
 pub trait IsBitDecomposable:
     Shl<usize, Output = Self> + Shr<usize, Output = Self> + BitOr<Output = Self> + Sized + Copy
 {
-    /// Get's `index`-th bit from data
+    /// Gets `index`-th bit from data
     fn get_bit(&self, index: usize) -> Self;
 
-    /// Rotate bits right
+    /// Rotate bits right by `index` amount.
     fn rotr(&self, index: usize) -> Self {
         let bit_count = 8 * std::mem::size_of::<Self>();
         let rotation = index % bit_count;
@@ -101,6 +103,7 @@ const fn sha_words_2_num_vars(value: usize) -> usize {
     }
 }
 
+/// Decompose a numerical type in bits: MSB first
 #[inline]
 pub fn bit_decompose_msb_first<T>(input: T) -> Vec<T>
 where
@@ -117,6 +120,7 @@ where
     result
 }
 
+/// Decompose a numerical type in bits: LSB first
 #[inline]
 pub fn bit_decompose_lsb_first<T>(input: T) -> Vec<T>
 where
@@ -133,6 +137,10 @@ where
     result
 }
 
+/// Represents a constant input to the circuit. Unlike other gates, the
+/// ConstInputGate takes as input  a name for the constant and its value
+/// and creates an input shred as well the MLE of input data that can be
+/// bound to the circuit at a later time.
 #[derive(Clone, Debug)]
 pub struct ConstInputGate<F: Field> {
     data_node: NodeRef,
@@ -141,7 +149,9 @@ pub struct ConstInputGate<F: Field> {
 }
 
 impl<F: Field> ConstInputGate<F> {
-    /// Creates a constant input gate, with name `constant_name` with value `constant_value`.
+    /// Creates a constant input gate, with name `constant_name` with
+    /// value `constant_value`. When binding to the Circuit, the same
+    /// `constant_name` should be used in call to Circuit::set_input()
     pub fn new<T>(
         builder_ref: &mut CircuitBuilder<F>,
         constant_name: &str,
@@ -161,15 +171,12 @@ impl<F: Field> ConstInputGate<F> {
 
         let data_node = builder_ref.add_input_shred(constant_name, num_vars, &input_layer);
 
-        // Make sure inputs are all 1s or zero 0s.
+        // Make sure inputs are all 1s or zero 0s by creating an assert0
+        // check over x*(1-x).
         let b = &data_node;
         let b_sq = ExprBuilder::products(vec![b.id(), b.id()]);
         let b = b.expr();
-
-        // Check that all input bits are binary.
         let binary_sector = builder_ref.add_sector(b - b_sq);
-
-        // Make sure all inputs are either `0` or `1`
         builder_ref.set_output(&binary_sector);
 
         Self {
@@ -179,25 +186,35 @@ impl<F: Field> ConstInputGate<F> {
         }
     }
 
+    /// Given an instantiated circuit, adds the constant gate to the
+    /// circuit as input with correct input label name.
     pub fn add_to_circuit(&self, circuit: &mut Circuit<F>) {
         circuit.set_input(&self.constant_name, self.bits_mle.clone());
     }
 
+    /// Returns the MLE of bit-decomposition of the constant data
     pub fn input_mle(&self) -> &MultilinearExtension<F> {
         &self.bits_mle
     }
 
+    /// Returns the node that represents this constant. If the same
+    /// constant is used in multiple places, this allows re-using the
+    /// same constant input gate.
     pub fn get_output(&self) -> NodeRef {
         self.data_node.clone()
     }
 }
 
+/// Multiplexer gate as defined by SHA-2 family of circuits.
 #[derive(Clone, Debug)]
 pub struct ChGate {
     ch_sector: NodeRef,
 }
 
 impl ChGate {
+    /// Computes bit_wise selection of y_vars or x_vars as defined in
+    /// SHA-2 spec. Assumes inputs to the gate is normalized (i.e. in
+    /// {0,1}).
     pub fn new<F: Field>(
         builder_ref: &mut CircuitBuilder<F>,
         x_vars: &NodeRef,
@@ -217,32 +234,32 @@ impl ChGate {
         // Compute NOT x = 1 - x
         let NOT_x = builder_ref.add_sector(ExprBuilder::constant(F::ONE) - x_vars.expr());
 
-        // Compute (x `and` y) `xor` (NOT x `and` Z) Note that x only
+        // Compute (x `and` y) `xor` (NOT x `and` Z). Note that x only
         // selects one bit from either x or z, so the output is
-        // guaranteed to be in {0,1}
+        // guaranteed to be in {0,1}. Therefore safe to not do the full
+        // xor normalization which will require 32 or 64
+        // multiplications.
         let ch_sector = builder_ref.add_sector(x_AND_y + (z_vars.expr() * NOT_x.expr()));
 
         Self { ch_sector }
     }
 
+    /// Returns the output values of the ChGate in MSB first
+    /// bit-decomposed form
     pub fn get_output(&self) -> NodeRef {
         self.ch_sector.clone()
     }
-
-    pub fn evaluate<T>(x: T, y: T, z: T) -> T
-    where
-        T: BitAnd<Output = T> + BitXor<Output = T> + Not<Output = T> + Copy,
-    {
-        (x & y) ^ (!x & z)
-    }
 }
 
+/// Bitwise majority selector gate as defined by SHA-2 family of Hash
+/// functions.
 #[derive(Clone, Debug)]
 pub struct MajGate {
     maj_sector: NodeRef,
 }
 
 impl MajGate {
+    /// Compute bit-wise majority of `x_vars`, `y_vars`, and `z_vars`.
     pub fn new<F: Field>(
         builder_ref: &mut CircuitBuilder<F>,
         x_vars: &NodeRef,
@@ -257,12 +274,10 @@ impl MajGate {
         assert!(x_vars.get_num_vars() == z_vars.get_num_vars());
 
         // We need the gates to produce normalize output (i.e., output
-        // in {0,1} basis) therefore the arithmetization of
+        // in {0,1} basis) therefore the arithmetization is
         //
         // maj(x,y,z) = x*y + y*z + x*z - 2*x*y*z*(x + y + z - 2*x*y*z)
         //
-        // As long as inputs to this function are in {0,1} the output
-        // will be in {0,1}
 
         let const_2 = ExprBuilder::constant(F::from(2));
         let xy = x_vars.expr() * y_vars.expr();
@@ -277,25 +292,17 @@ impl MajGate {
         Self { maj_sector }
     }
 
+    /// Returns the output values of MajGate in MSB first bit-decomposed
+    /// form
     pub fn get_output(&self) -> NodeRef {
         self.maj_sector.clone()
     }
-
-    pub fn evaluate<T>(x: T, y: T, z: T) -> T
-    where
-        T: BitAnd<Output = T> + BitXor<Output = T> + Copy,
-    {
-        (x & y) ^ (y & z) ^ (x & z)
-    }
 }
 
-/// The Capital Sigma function described on Printed Page Number 10 in
-/// NIST SP-180.4. The const parameters have following meaning ROTR1 :
-///  Value of rotation in first ROTR ROTR2 : Value of rotation in second
-///  ROTR ROTR3 : Value of rotation in third ROTR
-///
-/// NOTE: In this code the wires are assumed to be numbers in MSB first
-/// (i.e., most significant bit is treated as wire 0.
+/// The capital Sigma function described on Printed Page Number 10 in
+/// NIST SP-180.4. The const parameters ROTR1, ROTR2, ROTR3 denote the
+/// rotations defined in NIST spec. Bits are assumed to be in MSB first
+/// decomposition form.
 #[derive(Clone, Debug)]
 pub struct Sigma<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i32> {
     sigma_sector: NodeRef,
@@ -304,6 +311,7 @@ pub struct Sigma<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, con
 impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i32>
     Sigma<WORD_SIZE, ROTR1, ROTR2, ROTR3>
 {
+    /// Compute capital Sigma of `x_vars`
     pub fn new<F: Field>(builder_ref: &mut CircuitBuilder<F>, x_vars: &NodeRef) -> Self {
         let num_vars: usize = sha_words_2_num_vars(WORD_SIZE);
         let rotr1 = RotateNode::new(builder_ref, num_vars, ROTR1, x_vars);
@@ -324,6 +332,7 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i3
         Self { sigma_sector }
     }
 
+    /// Get output of capital Sigma gate in MSB-first bit decomposed form
     pub fn get_output(&self) -> NodeRef {
         self.sigma_sector.clone()
     }
@@ -334,9 +343,7 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i3
 ///  ROTR1 : Value of rotation in first ROTR
 ///  ROTR2 : Value of rotation in second ROTR
 ///  SHR3 : Value of rotation in third SHR
-///
-/// NOTE: In this code the wires are assumed to be numbers in MSB first
-/// (i.e., most significant bit is represented with wire 0)
+/// MSB-first bit decomposition required.
 #[derive(Clone, Debug)]
 pub struct SmallSigma<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32> {
     sigma_sector: NodeRef,
@@ -345,6 +352,7 @@ pub struct SmallSigma<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32
 impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32>
     SmallSigma<WORD_SIZE, ROTR1, ROTR2, SHR3>
 {
+    /// Compute small Sigma of `x_vars`
     pub fn new<F: Field>(builder_ref: &mut CircuitBuilder<F>, x_vars: &NodeRef) -> Self {
         let num_vars: usize = sha_words_2_num_vars(WORD_SIZE);
         let rotr1 = RotateNode::new(builder_ref, num_vars, ROTR1, x_vars);
@@ -366,6 +374,7 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32
         Self { sigma_sector }
     }
 
+    /// Return output of Small Sigma
     pub fn get_output(&self) -> NodeRef {
         self.sigma_sector.clone()
     }
