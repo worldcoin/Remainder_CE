@@ -4,6 +4,7 @@
 
 use super::nonlinear_gates::*;
 use super::ripple_carry_adder::AdderNoCarry;
+use crate::expression::abstract_expr::ExprBuilder;
 use crate::layouter::builder::{CircuitBuilder, NodeRef};
 use remainder_shared_types::Field;
 
@@ -33,8 +34,8 @@ const IV: [u32; 8] = [
 
 /// Represents the 64 rounds of message schedule. Each Round consists of
 /// 32 Wires where the first 16 rounds are identity gates, and the rest are computed as per the
-struct MessageSchedule {
-    state: Vec<NodeRef>,
+pub struct MessageSchedule {
+    msg_schedule: Vec<NodeRef>,
 }
 
 impl MessageSchedule {
@@ -42,17 +43,37 @@ impl MessageSchedule {
         let mut state: Vec<NodeRef> = Vec::with_capacity(64);
 
         debug_assert!(msg_vars.len() == 16);
+        (0..16).for_each(|i| debug_assert!(msg_vars[i].get_num_vars() == 5));
 
-        (0..16).for_each(|t| state.push(msg_vars[t].clone()));
+        state.extend_from_slice(msg_vars);
 
         for t in 16..64 {
             assert!(state.len() >= t - 16);
-            let small_sigma_1_val = SmallSigma1::new(ckt_builder, &state[t - 1]);
-            let small_sigma_0_val = SmallSigma0::new(ckt_builder, &state[t - 15]);
+            let small_sigma_1_val = SmallSigma1::new(ckt_builder, &state[t - 2]);
             let w_first = state[t - 7].clone();
+
+            let small_sigma_0_val = SmallSigma0::new(ckt_builder, &state[t - 15]);
             let w_second = state[t - 16].clone();
+
+            let add1 = Sha256Adder::new(ckt_builder, &small_sigma_1_val.get_output(), &w_first);
+
+            let add2 = Sha256Adder::new(ckt_builder, &small_sigma_0_val.get_output(), &w_second);
+
+            state.push(
+                Sha256Adder::new(ckt_builder, &add1.get_output(), &add2.get_output()).get_output(),
+            );
         }
 
-        Self { state }
+        Self {
+            msg_schedule: state,
+        }
+    }
+
+    pub fn get_output_nodes(&self) -> Vec<NodeRef> {
+        self.msg_schedule.clone()
+    }
+
+    pub fn get_output_expr<F: Field>(&self) -> ExprBuilder<F> {
+        ExprBuilder::<F>::selectors(self.msg_schedule.iter().map(|n| n.expr()).collect())
     }
 }
