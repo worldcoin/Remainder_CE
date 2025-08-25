@@ -93,6 +93,12 @@ impl<const BITWIDTH: usize> AdderNoCarry<BITWIDTH> {
             sum_expr.push(s);
         }
 
+        // Make sure that c_out of the last round is either 0 or 1
+        let c_out_expr = c_in.expr();
+        let one_or_zero = c_out_expr.clone() * (ExprBuilder::constant(F::from(1)) - c_out_expr);
+        let carry_sector = builder_ref.add_sector(one_or_zero);
+        builder_ref.set_output(&carry_sector);
+
         // Swap to MSB first hence the rev()
         let sum_rewired = sum_expr.iter().rev().map(|n| n.expr()).collect_vec();
 

@@ -33,12 +33,16 @@ const IV: [u32; 8] = [
 ];
 
 /// Represents the 64 rounds of message schedule. Each Round consists of
-/// 32 Wires where the first 16 rounds are identity gates, and the rest are computed as per the
+/// 32 Wires where the first 16 rounds are identity gates, and the rest
+/// are computed as per the spec
 pub struct MessageSchedule {
     msg_schedule: Vec<NodeRef>,
 }
 
 impl MessageSchedule {
+    /// Given the 16, 32-bit inputs in MBS format, computes the 64
+    /// rounds of message schedule corresponding to the input. The
+    /// `msg_vars` must be the 16 32-bit words decomposed in MBS format.
     pub fn new<F: Field>(ckt_builder: &mut CircuitBuilder<F>, msg_vars: &[NodeRef]) -> Self {
         let mut state: Vec<NodeRef> = Vec::with_capacity(64);
 
@@ -75,5 +79,60 @@ impl MessageSchedule {
 
     pub fn get_output_expr<F: Field>(&self) -> ExprBuilder<F> {
         ExprBuilder::<F>::selectors(self.msg_schedule.iter().map(|n| n.expr()).collect())
+    }
+}
+
+/// Computes the single round of compression function
+pub struct CompressionFn {
+    state: NodeRef,
+}
+
+impl CompressionFn {
+    pub fn new<F: Field>(
+        ckt_builder: &mut CircuitBuilder<F>,
+        msg_schedule: &MessageSchedule,
+        key_schedule: &[NodeRef],
+    ) {
+        let msg_schedule = msg_schedule.get_output_nodes();
+        debug_assert_eq!(msg_schedule.len(), 64);
+        debug_assert_eq!(key_schedule.len(), 8);
+        (0..64).for_each(|i| debug_assert_eq!(msg_schedule[i].get_num_vars(), 5));
+        (0..8).for_each(|i| debug_assert_eq!(key_schedule[i].get_num_vars(), 5));
+    }
+
+    fn compute_t1<F: Field>(
+        ckt_builder: &mut CircuitBuilder<F>,
+        e: NodeRef,
+        f: NodeRef,
+        g: NodeRef,
+        h: NodeRef,
+        w: NodeRef,
+        msg_schedule: &NodeRef,
+        key_schedule: &NodeRef,
+    ) -> NodeRef {
+        debug_assert!(e.get_num_vars() == 5);
+        debug_assert!(f.get_num_vars() == 5);
+        debug_assert!(g.get_num_vars() == 5);
+        debug_assert!(h.get_num_vars() == 5);
+        debug_assert!(w.get_num_vars() == 5);
+        debug_assert!(msg_schedule.get_num_vars() == 5);
+        debug_assert!(key_schedule.get_num_vars() == 5);
+
+        let t1_sigma_1 = Sigma1::new(ckt_builder, &e);
+        let t1_ch = ChGate::new(ckt_builder, &e, &f, &g);
+
+        // h1 + Sigma1(e)
+        let sum1 = Sha256Adder::new(ckt_builder, &h, &t1_sigma_1.get_output());
+
+        // ch(e,f,g) + K_t
+        let sum2 = Sha256Adder::new(ckt_builder, &t1_ch.get_output(), key_schedule);
+
+        // h1 + Sigma1(e) + ch(e,f,g) + K_t
+        let sum3 = Sha256Adder::new(ckt_builder, &sum1.get_output(), &sum2.get_output());
+
+        // h1 + Sigma1(e) + ch(e,f,g) + K_t + W_t
+        let sum4 = Sha256Adder::new(ckt_builder, &sum3.get_output(), msg_schedule);
+
+        sum4.get_output()
     }
 }
