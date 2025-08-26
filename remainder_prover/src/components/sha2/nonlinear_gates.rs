@@ -203,6 +203,10 @@ impl<F: Field> ConstInputGate<F> {
     pub fn get_output(&self) -> NodeRef {
         self.data_node.clone()
     }
+
+    pub fn get_output_ref(&self) -> &NodeRef {
+        &self.data_node
+    }
 }
 
 /// Multiplexer gate as defined by SHA-2 family of circuits.
