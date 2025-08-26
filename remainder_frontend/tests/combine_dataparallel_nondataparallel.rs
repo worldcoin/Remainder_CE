@@ -135,7 +135,8 @@ fn build_combined_dataparallel_nondataparallel_test_circuit<F: Field>(
     let mut builder = CircuitBuilder::new();
 
     // All inputs are public
-    let public_input_layer_node = builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
+    let public_input_layer_node =
+        builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
 
     // "Semantic" circuit inputs
     let dataparallel_mle_1_shred = builder.add_input_shred(
