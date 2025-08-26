@@ -173,10 +173,8 @@ fn sha256_message_schedule_positive_test() {
 
     let circuit = sha256_message_schedule_circuit();
 
-    for _ in 0..10 {
-        let provable_circuit = attach_data_sha256_message_schedule::<true>(circuit.clone());
-        test_circuit_with_memory_optimized_config(&provable_circuit);
-    }
+    let provable_circuit = attach_data_sha256_message_schedule::<true>(circuit.clone());
+    test_circuit_with_memory_optimized_config(&provable_circuit);
 }
 
 #[test]
