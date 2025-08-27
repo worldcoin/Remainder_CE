@@ -25,7 +25,8 @@ fn build_fs_challenge_sub_test_circuit<F: Field>(num_free_vars: usize) -> Circui
     let mut builder = CircuitBuilder::<F>::new();
 
     // The input mle is public...
-    let public_input_layer_node = builder.add_input_layer(LayerVisibility::Public);
+    let public_input_layer_node =
+        builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
     let mle_shred = builder.add_input_shred("MLE", num_free_vars, &public_input_layer_node);
     let fs_challenge_mle_shred = builder.add_fiat_shamir_challenge_node(1);
 

@@ -22,7 +22,7 @@ use tracing_subscriber::{self};
 fn build_circuit() -> Circuit<Fr> {
     let mut builder = CircuitBuilder::<Fr>::new();
 
-    let input_layer = builder.add_input_layer(LayerVisibility::Public);
+    let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
 
     let lhs = builder.add_input_shred("LHS MLE", 0, &input_layer);
     let rhs = builder.add_input_shred("RHS MLE", 0, &input_layer);

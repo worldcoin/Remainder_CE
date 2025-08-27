@@ -16,10 +16,10 @@ fn build_signed_bit_decomp_circuit() -> Circuit<Fr> {
     let n = 4; // Total number of bits, which decomposes x into (b_s, b_0, b_1, ..., b_{n-2})
 
     // 1. Build circuit
-    let int_layer = builder.add_input_layer(LayerVisibility::Public); // for x
+    let int_layer = builder.add_input_layer("Int", LayerVisibility::Public); // for x
     let x = builder.add_input_shred("x", k, &int_layer);
 
-    let bit_layer = builder.add_input_layer(LayerVisibility::Private); // for bits
+    let bit_layer = builder.add_input_layer("Bit", LayerVisibility::Private); // for bits
     let bs = builder.add_input_shred("bs", k, &bit_layer);
     let bi = (0..n - 1)
         .map(|i| builder.add_input_shred(&format!("b{i}"), k, &bit_layer))

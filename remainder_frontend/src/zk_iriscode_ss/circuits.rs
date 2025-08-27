@@ -60,12 +60,12 @@ pub fn build_iriscode_circuit_description<
     let log_num_strips = log2_ceil(num_strips) as usize;
 
     // Image input layer
-    let to_reroute_input_layer = builder.add_input_layer(layer_visibility);
+    let to_reroute_input_layer = builder.add_input_layer("To-Reroute", layer_visibility);
     let to_reroute =
         builder.add_input_shred("Image to reroute", IM_NUM_VARS, &to_reroute_input_layer);
 
     // Digits and multiplicities input layer
-    let digits_input_layer = builder.add_input_layer(layer_visibility);
+    let digits_input_layer = builder.add_input_layer("Digits", layer_visibility);
     let digits_input_shreds: Vec<_> = (0..NUM_DIGITS)
         .map(|i| {
             builder.add_input_shred(
@@ -80,7 +80,7 @@ pub fn build_iriscode_circuit_description<
         builder.add_input_shred("Digit Multiplicities", log_base, &digits_input_layer);
 
     // Auxiliary inputs
-    let auxiliary_input_layer = builder.add_input_layer(LayerVisibility::Public);
+    let auxiliary_input_layer = builder.add_input_layer("Aux", LayerVisibility::Public);
 
     let to_sub_from_matmult = builder.add_input_shred(
         "Input to subtract from MatMult",
@@ -101,7 +101,7 @@ pub fn build_iriscode_circuit_description<
     );
 
     // Sign bits (iris/mask code)
-    let sign_bits_input_layer = builder.add_input_layer(LayerVisibility::Public);
+    let sign_bits_input_layer = builder.add_input_layer("Sign bits", LayerVisibility::Private);
     let sign_bits = builder.add_input_shred(
         "Sign Bits",
         log_num_strips + MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS,
@@ -242,7 +242,7 @@ pub fn build_iriscode_circuit_description<
 pub fn iriscode_ss_attach_data<F: Field, const BASE: u64>(
     mut circuit: Circuit<F>,
     iriscode_data: IriscodeCircuitData<F>,
-) -> Result<ProvableCircuit<F>> {
+) -> Result<Circuit<F>> {
     circuit.set_input("Image to reroute", iriscode_data.to_reroute);
     circuit.set_input(
         "RH Multiplicand of MatMult",
@@ -268,5 +268,5 @@ pub fn iriscode_ss_attach_data<F: Field, const BASE: u64>(
         MultilinearExtension::new((0..BASE).map(F::from).collect()),
     );
 
-    circuit.finalize()
+    Ok(circuit)
 }

@@ -11,12 +11,16 @@ use std::{
 
 use ark_std::log2;
 use itertools::Itertools;
+use remainder_hyrax::{
+    circuit_layout::HyraxProvableCircuit,
+    hyrax_gkr::hyrax_input_layer::{HyraxInputLayerDescription, HyraxProverInputCommitment},
+};
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
-use remainder_shared_types::Field;
+use remainder_shared_types::{curves::PrimeOrderCurve, Bn256Point, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    abstract_expr::{AbstractExpression, IntoExpr},
+    abstract_expr::AbstractExpression,
     layouter::{
         layouting::LayoutingError,
         nodes::{
@@ -77,13 +81,13 @@ impl<F: Field> NodeRef<F> {
     }
 }
 
-impl<F: Field> IntoExpr<F> for NodeRef<F> {
-    fn into_expr(self) -> AbstractExpression<F> {
+impl<F: Field> Into<AbstractExpression<F>> for NodeRef<F> {
+    fn into(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
-impl<F: Field> IntoExpr<F> for &NodeRef<F> {
-    fn into_expr(self) -> AbstractExpression<F> {
+impl<F: Field> Into<AbstractExpression<F>> for &NodeRef<F> {
+    fn into(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
@@ -111,13 +115,13 @@ impl<F: Field> InputLayerNodeRef<F> {
     }
 }
 
-impl<F: Field> IntoExpr<F> for InputLayerNodeRef<F> {
-    fn into_expr(self) -> AbstractExpression<F> {
+impl<F: Field> Into<AbstractExpression<F>> for InputLayerNodeRef<F> {
+    fn into(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
-impl<F: Field> IntoExpr<F> for &InputLayerNodeRef<F> {
-    fn into_expr(self) -> AbstractExpression<F> {
+impl<F: Field> Into<AbstractExpression<F>> for &InputLayerNodeRef<F> {
+    fn into(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
@@ -151,13 +155,13 @@ impl<F: Field> Into<NodeRef<F>> for FSNodeRef<F> {
     }
 }
 
-impl<F: Field> IntoExpr<F> for FSNodeRef<F> {
-    fn into_expr(self) -> AbstractExpression<F> {
+impl<F: Field> Into<AbstractExpression<F>> for FSNodeRef<F> {
+    fn into(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
-impl<F: Field> IntoExpr<F> for &FSNodeRef<F> {
-    fn into_expr(self) -> AbstractExpression<F> {
+impl<F: Field> Into<AbstractExpression<F>> for &FSNodeRef<F> {
+    fn into(self) -> AbstractExpression<F> {
         self.expr()
     }
 }
@@ -382,15 +386,29 @@ impl<F: Field> CircuitBuilder<F> {
 }
 
 impl<F: Field> CircuitBuilder<F> {
-    /// Adds an [InputLayerNode] to the builder's node collection, intented to become a `layer_visibility`
-    /// input later during circuit instantiation.
+    /// Adds an [InputLayerNode] labeled `layer_label` to the builder's node collection, intented to
+    /// become a `layer_kind` input later during circuit instantiation.
+    ///
     /// Returns a weak pointer to the newly created layer node.
-    pub fn add_input_layer(&mut self, layer_visibility: LayerVisibility) -> InputLayerNodeRef<F> {
+    ///
+    /// Note that Input Layers and Input Shred have disjoint label scopes. A label has to be unique
+    /// only in its respective scope, regardless of the inclusive relation between shreds and input
+    /// layers.
+    ///
+    /// # Panics
+    /// If `layer_label` has already been used for an existing Input Layer.
+    pub fn add_input_layer(
+        &mut self,
+        layer_label: &str,
+        layer_visibility: LayerVisibility,
+    ) -> InputLayerNodeRef<F> {
         let node = Rc::new(InputLayerNode::new(None));
         let node_weak_ref = Rc::downgrade(&node);
 
+        let layer_id = node.input_layer_id();
+
         self.circuit_map
-            .add_input_layer(node.input_layer_id(), layer_visibility);
+            .add_input_layer(layer_id, layer_label, layer_visibility);
 
         self.node_to_ptr
             .insert(node.id(), NodeRef::new(node_weak_ref.clone()));
@@ -690,10 +708,28 @@ mod test {
 
     #[test]
     #[should_panic]
+    pub fn test_unique_input_layer_label() {
+        let mut builder = CircuitBuilder::<Fr>::new();
+
+        let _input_layer1 = builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
+        let _input_layer2 = builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
+    }
+
+    #[test]
+    pub fn test_scope_mixing() {
+        let mut builder = CircuitBuilder::<Fr>::new();
+
+        let input_layer = builder.add_input_layer("label", LayerVisibility::Public);
+
+        builder.add_input_shred("label", 1, &input_layer);
+    }
+
+    #[test]
+    #[should_panic]
     pub fn test_unique_input_shred_label() {
         let mut builder = CircuitBuilder::<Fr>::new();
 
-        let input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let input_layer = builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
         builder.add_input_shred("shred1", 1, &input_layer);
         builder.add_input_shred("shred1", 1, &input_layer);
     }
@@ -703,8 +739,8 @@ mod test {
     pub fn test_unique_input_shred_label2() {
         let mut builder = CircuitBuilder::<Fr>::new();
 
-        let input_layer1 = builder.add_input_layer(LayerVisibility::Public);
-        let input_layer2 = builder.add_input_layer(LayerVisibility::Private);
+        let input_layer1 = builder.add_input_layer("Input Layer 1", LayerVisibility::Public);
+        let input_layer2 = builder.add_input_layer("Input Layer 2", LayerVisibility::Private);
 
         builder.add_input_shred("shred1", 1, &input_layer1);
         builder.add_input_shred("shred1", 1, &input_layer2);
@@ -743,6 +779,7 @@ pub struct CircuitMap {
     state: CircuitMapState,
     shreds_in_layer: HashMap<LayerId, Vec<NodeId>>,
     label_to_shred_id: HashMap<String, NodeId>,
+    layer_label_to_layer_id: HashMap<String, LayerId>,
     layer_visibility: HashMap<LayerId, LayerVisibility>,
     node_location: HashMap<NodeId, (CircuitLocation, usize)>,
 }
@@ -756,6 +793,7 @@ impl CircuitMap {
             state: CircuitMapState::UnderConstruction,
             shreds_in_layer: HashMap::new(),
             label_to_shred_id: HashMap::new(),
+            layer_label_to_layer_id: HashMap::new(),
             layer_visibility: HashMap::new(),
             node_location: HashMap::new(),
         }
@@ -800,15 +838,24 @@ impl CircuitMap {
             .ok_or(anyhow!(LayoutingError::DanglingNodeId(*node_id)))
     }
 
-    /// Adds a new Input Layer with ID `layer_id`, and visibility defined by `layer_visibility`.
+    /// Adds a new Input Layer with ID `layer_id`, label `layer_label`, and visibility defined by
+    /// `layer_kind`.
     ///
     /// # Panics
-    /// If [self] is _not_ in state [CircuitMapState::UnderConstruction], or if a layer with ID
-    /// `layer_id` already exists.
-    pub fn add_input_layer(&mut self, layer_id: LayerId, layer_visibility: LayerVisibility) {
+    /// If [self] is _not_ in state [CircuitMapState::UnderConstruction], or if a layer already
+    /// exists with either an ID equal to `layer_id` or a label equal to `layer_label`.
+    pub fn add_input_layer(
+        &mut self,
+        layer_id: LayerId,
+        layer_label: &str,
+        layer_kind: LayerVisibility,
+    ) {
         assert_eq!(self.state, CircuitMapState::UnderConstruction);
         assert!(!self.layer_visibility.contains_key(&layer_id));
-        self.layer_visibility.insert(layer_id, layer_visibility);
+        assert!(!self.layer_label_to_layer_id.contains_key(layer_label));
+        self.layer_label_to_layer_id
+            .insert(String::from(layer_label), layer_id);
+        self.layer_visibility.insert(layer_id, layer_kind);
     }
 
     /// Adds a new Input Shred labeled `label` with node ID `shred_id`.
@@ -1018,7 +1065,8 @@ impl CircuitMap {
 /// missing all or some of its input data. This structs provides an API for attaching inputs and
 /// generating a form of the circuit that can be proven or verified respectively, for various
 /// proving systems (vanilla GKR with Ligero, or Hyrax).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "F: Field")]
 pub struct Circuit<F: Field> {
     circuit_description: GKRCircuitDescription<F>,
     circuit_map: CircuitMap,
@@ -1069,13 +1117,7 @@ impl<F: Field> Circuit<F> {
         }
     }
 
-    /// Produces a provable form of this circuit for the vanilla GKR proving system which uses
-    /// Ligero as a commitment scheme for private input layers, and does not offer any
-    /// zero-knowledge guarantees.
-    ///
-    /// # Returns
-    /// The generated provable circuit, or an error if the [self] is missing input data.
-    pub fn finalize(&self) -> Result<ProvableCircuit<F>> {
+    fn build_input_layer_data(&self) -> Result<HashMap<LayerId, MultilinearExtension<F>>> {
         // Ensure all Input Shreds have been assigned input data.
         if let Some(shred_id) = self
             .circuit_map
@@ -1117,6 +1159,18 @@ impl<F: Field> Circuit<F> {
             inputs.insert(input_layer_id, combined_mle);
         }
 
+        Ok(inputs)
+    }
+
+    /// Produces a provable form of this circuit for the vanilla GKR proving system which uses
+    /// Ligero as a commitment scheme for private input layers, and does not offer any
+    /// zero-knowledge guarantees.
+    ///
+    /// # Returns
+    /// The generated provable circuit, or an error if the [self] is missing input data.
+    pub fn finalize(&self) -> Result<ProvableCircuit<F>> {
+        let inputs = self.build_input_layer_data()?;
+
         let ligero_private_inputs = self
             .circuit_map
             .get_all_private_layers()
@@ -1154,16 +1208,75 @@ impl<F: Field> Circuit<F> {
             ligero_private_inputs,
         ))
     }
+
+    /// Produces a provable form of this circuit for the Hyrax GKR proving system which uses Hyrax
+    /// as a commitment scheme for private input layers, and offers zero-knowledge guarantees.
+    ///
+    /// # Returns
+    /// The generated provable circuit, or an error if the [self] is missing input data.
+    pub fn finalize_hyrax<C: PrimeOrderCurve>(
+        &self,
+        // pre_commitments: HashMap<String, HyraxProverInputCommitment<C>>,
+    ) -> Result<HyraxProvableCircuit<C>>
+    where
+        C: PrimeOrderCurve<Scalar = F>,
+    {
+        let inputs = self.build_input_layer_data()?;
+
+        let hyrax_private_inputs = self
+            .circuit_map
+            .get_all_private_layers()
+            .into_iter()
+            .map(|layer_id| {
+                let raw_needed_capacity = self
+                    .circuit_map
+                    .get_input_shreds_from_layer_id(layer_id)
+                    .unwrap()
+                    .into_iter()
+                    .fold(0, |acc, shred_id| {
+                        let (_, num_vars) = self.circuit_map.get_shred_location(shred_id).unwrap();
+                        acc + (1_usize << num_vars)
+                    });
+                let padded_needed_capacity = (1 << log2(raw_needed_capacity)) as usize;
+                let total_num_vars = log2(padded_needed_capacity) as usize;
+
+                // Aim for square matrix.
+                // TODO: Allow for custom parameters.
+                let log_num_cols = total_num_vars / 2;
+
+                // let layer_label = self.circuit_map.get_label_from_layer_id(layer_id)?;
+                // let commitment = pre_commitments.get(&layer_label).cloned();
+                Ok((
+                    layer_id,
+                    (
+                        HyraxInputLayerDescription {
+                            layer_id,
+                            num_vars: total_num_vars,
+                            log_num_cols,
+                        },
+                        None,
+                    ),
+                ))
+            })
+            .collect::<Result<HashMap<_, _>>>()?;
+
+        Ok(HyraxProvableCircuit::new(
+            self.circuit_description.clone(),
+            inputs,
+            hyrax_private_inputs,
+            self.circuit_map.layer_label_to_layer_id.clone(),
+        ))
+    }
 }
 
 /// implement the Add, Sub, and Mul traits for NodeRef and FSNodeRef
 macro_rules! impl_add {
     ($Lhs:ty) => {
-        impl<F: Field, Rhs: IntoExpr<F>> Add<Rhs> for $Lhs {
+        impl<F: Field, Rhs: Into<AbstractExpression<F>>> Add<Rhs> for $Lhs {
             type Output = AbstractExpression<F>;
 
             fn add(self, rhs: Rhs) -> Self::Output {
-                self.expr() + rhs.into_expr()
+                self.expr() + rhs.into()
             }
         }
     };
@@ -1177,11 +1290,11 @@ impl_add!(&FSNodeRef<F>);
 
 macro_rules! impl_sub {
     ($Lhs:ty) => {
-        impl<F: Field, Rhs: IntoExpr<F>> Sub<Rhs> for $Lhs {
+        impl<F: Field, Rhs: Into<AbstractExpression<F>>> Sub<Rhs> for $Lhs {
             type Output = AbstractExpression<F>;
 
             fn sub(self, rhs: Rhs) -> Self::Output {
-                self.expr() - rhs.into_expr()
+                self.expr() - rhs.into()
             }
         }
     };
@@ -1195,11 +1308,11 @@ impl_sub!(&FSNodeRef<F>);
 
 macro_rules! impl_mul {
     ($Lhs:ty) => {
-        impl<F: Field, Rhs: IntoExpr<F>> Mul<Rhs> for $Lhs {
+        impl<F: Field, Rhs: Into<AbstractExpression<F>>> Mul<Rhs> for $Lhs {
             type Output = AbstractExpression<F>;
 
             fn mul(self, rhs: Rhs) -> Self::Output {
-                self.expr() * rhs.into_expr()
+                self.expr() * rhs.into()
             }
         }
     };

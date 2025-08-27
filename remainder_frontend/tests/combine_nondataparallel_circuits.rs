@@ -135,7 +135,8 @@ fn build_combined_nondataparallel_circuit<F: Field>(mle_1_2_vars: usize) -> Circ
     let mut builder = CircuitBuilder::<F>::new();
 
     // All inputs are public
-    let public_input_layer_node = builder.add_input_layer(LayerVisibility::Public);
+    let public_input_layer_node =
+        builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
 
     // "Semantic" circuit inputs
     let mle_1_shred = builder.add_input_shred("MLE 1", mle_1_2_vars, &public_input_layer_node);

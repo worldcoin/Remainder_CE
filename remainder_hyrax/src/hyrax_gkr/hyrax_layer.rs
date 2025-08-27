@@ -111,6 +111,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
                 transcript.get_scalar_field_challenges("RLC Claim Agg Coefficients", claims.len())
             }
         };
+
         let (maybe_proof_of_claim_agg, claim_points, claimed_eval) =
             if let &mut LayerEnum::MatMult(_) = layer {
                 let interpolant_coeffs = if claims.len() > 1 {

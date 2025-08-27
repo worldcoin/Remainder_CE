@@ -41,7 +41,8 @@ fn build_nonlinear_selector_test_circuit<F: Field>(
     let mut builder = CircuitBuilder::<F>::new();
 
     // All inputs are public
-    let public_input_layer_node = builder.add_input_layer(LayerVisibility::Public);
+    let public_input_layer_node =
+        builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
 
     // Inputs to the circuit are the MLEs at the leaves of the selector + product
     let left_sel_mle_shred = builder.add_input_shred(
