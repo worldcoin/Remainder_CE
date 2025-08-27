@@ -1,7 +1,7 @@
 use crate::hyrax_gkr::ECTranscriptTrait;
 use itertools::Itertools;
 use rand::Rng;
-use remainder::mle::{Mle, MleIndex};
+use remainder::mle::{AbstractMle, Mle, MleIndex};
 use remainder::output_layer::{OutputLayer, OutputLayerDescription};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::ff_field;
@@ -35,6 +35,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
             .collect_vec();
         output_layer.fix_layer(&bindings).unwrap();
         let claim = output_layer.get_claim().unwrap();
+
         // Convert to a CommittedScalar claim
         let blinding_factor = &C::Scalar::random(blinding_rng);
         let claim_commit = scalar_committer.committed_scalar(&claim.get_eval(), blinding_factor);
@@ -70,7 +71,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         // Get the first set of challenges needed for the output layer.
         let bindings = layer_desc
             .mle
-            .var_indices()
+            .mle_indices()
             .iter()
             .map(|idx| match idx {
                 MleIndex::Fixed(bit) => C::Scalar::from(*bit as u64),

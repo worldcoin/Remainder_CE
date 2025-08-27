@@ -97,7 +97,7 @@ mod test {
 
         let verifier_challenge_node = builder.add_fiat_shamir_challenge_node(8);
 
-        let input_layer = builder.add_input_layer(LayerVisibility::Public);
+        let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
         let input_a = builder.add_input_shred("input a", input_a_data.num_vars(), &input_layer);
 
         let product_sector = builder.add_sector(input_a - verifier_challenge_node);

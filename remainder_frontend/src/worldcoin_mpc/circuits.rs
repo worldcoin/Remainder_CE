@@ -69,13 +69,15 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>() -> Circuit<F> {
     // are combined into a single GR4 elements)
     let num_vars = num_vars_dataparallel + 2;
 
-    let auxilary_input_layer_node = builder.add_input_layer(LayerVisibility::Public);
-    let shares_input_layer_node = builder.add_input_layer(LayerVisibility::Public);
+    let auxilary_input_layer_node = builder.add_input_layer("Aux", LayerVisibility::Public);
+    let shares_input_layer_node = builder.add_input_layer("Shares", LayerVisibility::Public);
     let auxiliary_invariant_public_input_layer_node =
-        builder.add_input_layer(LayerVisibility::Public);
-    let slope_input_layer_node = builder.add_input_layer(LayerVisibility::Private);
-    let iris_code_input_layer_node = builder.add_input_layer(LayerVisibility::Private);
-    let mask_code_input_layer_node = builder.add_input_layer(LayerVisibility::Private);
+        builder.add_input_layer("Auxiliary Invariant", LayerVisibility::Public);
+    let slope_input_layer_node = builder.add_input_layer("Slope", LayerVisibility::Private);
+    let iris_code_input_layer_node =
+        builder.add_input_layer("Irir Code Input", LayerVisibility::Private);
+    let mask_code_input_layer_node =
+        builder.add_input_layer("Mask Code Input", LayerVisibility::Private);
 
     let iris_code = builder.add_input_shred("Iriscode", num_vars, &iris_code_input_layer_node);
     let mask_code = builder.add_input_shred("Maskcode", num_vars, &mask_code_input_layer_node);

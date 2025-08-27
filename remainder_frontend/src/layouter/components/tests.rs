@@ -19,7 +19,7 @@ fn test_complementary_recomposition_vertical() {
 
     let digits = to_slice_of_mles(digits_raw.iter().map(digits_to_field).collect_vec());
 
-    let input_layer = builder.add_input_layer(LayerVisibility::Public);
+    let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
     let digits_input_shreds = digits
         .iter()
         .enumerate()
@@ -78,7 +78,7 @@ fn test_unsigned_recomposition() {
     assert_eq!(digits.len(), num_digits);
     let expected = vec![19, 2, 33, 48].into();
 
-    let input_layer = builder.add_input_layer(LayerVisibility::Public);
+    let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
     let digits_input_shreds = digits
         .iter()
         .enumerate()
@@ -122,7 +122,7 @@ fn test_complementary_recomposition() {
     let bits: MultilinearExtension<Fr> = vec![1, 0, 1, 0].into(); // 1 iff strictly positive
     let expected: MultilinearExtension<Fr> = vec![base_pow - 19, -2, base_pow - 33, -48].into();
 
-    let input_layer = builder.add_input_layer(LayerVisibility::Public);
+    let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
     let digits_input_shreds = digits
         .iter()
         .enumerate()
@@ -167,7 +167,7 @@ fn test_bits_are_binary_soundness() {
     let mut builder = CircuitBuilder::<Fr>::new();
 
     let bits = vec![3].into();
-    let input_layer = builder.add_input_layer(LayerVisibility::Public);
+    let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
     let bits_input_shred = builder.add_input_shred("Bits Input Shred", 0, &input_layer);
     let component = DigitComponents::bits_are_binary(&mut builder, &bits_input_shred);
     let _output = builder.set_output(&component);
@@ -186,7 +186,7 @@ fn test_bits_are_binary() {
     let mut builder = CircuitBuilder::<Fr>::new();
 
     let bits = vec![1, 1, 1, 0].into();
-    let input_layer = builder.add_input_layer(LayerVisibility::Public);
+    let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
     let bits_input_shred = builder.add_input_shred("Bits Input Shred", 2, &input_layer);
     let component = DigitComponents::bits_are_binary(&mut builder, &bits_input_shred);
     let _output = builder.set_output(&component);

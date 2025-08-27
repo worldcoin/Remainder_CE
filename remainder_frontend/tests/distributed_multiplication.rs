@@ -39,7 +39,8 @@ fn build_dataparallel_wraparound_multiplication_test_circuit<F: Field>(
     let mut builder = CircuitBuilder::<F>::new();
 
     // All inputs are public
-    let public_input_layer_node = builder.add_input_layer(LayerVisibility::Public);
+    let public_input_layer_node =
+        builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
 
     // "Semantic" circuit inputs
     let dataparallel_mle_smaller_shred = builder.add_input_shred(
