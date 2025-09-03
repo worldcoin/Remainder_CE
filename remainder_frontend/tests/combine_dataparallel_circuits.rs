@@ -135,7 +135,8 @@ fn build_combined_dataparallel_test_circuit<F: Field>(
     let mut builder = CircuitBuilder::<F>::new();
 
     // All inputs are public inputs
-    let public_input_layer_node = builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
+    let public_input_layer_node =
+        builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
 
     // Inputs to the circuit include the "dataparallel MLE 1" and the "dataparallel MLE 2"
     let dataparallel_mle_1_shred = builder.add_input_shred(

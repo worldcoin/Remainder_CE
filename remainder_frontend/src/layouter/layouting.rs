@@ -282,11 +282,13 @@ pub fn layout<F: Field>(
     // their sources.
     let circuit_node_graph =
         Graph::<NodeId>::new_from_circuit_nodes(&intermediate_nodes, &input_shred_ids);
+
     let mut id_to_node_mapping: HashMap<NodeId, Box<dyn CompilableNode<F>>> = intermediate_nodes
         .into_iter()
         .map(|node| (node.id(), node))
         .collect();
     let topo_sorted_intermediate_node_ids = &circuit_node_graph.topo_sort()?;
+
     // We topologically sort via NodeId and map them back to their respective
     // node.
     let mut topo_sorted_nodes = topo_sorted_intermediate_node_ids
