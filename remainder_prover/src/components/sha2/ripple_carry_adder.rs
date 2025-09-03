@@ -61,11 +61,11 @@ impl FullAdder {
 }
 
 /// mod 2^BITWIDTH adder with no input carry and no output carry
-pub struct AdderNoCarry<const BITWIDTH: usize> {
+pub struct RippleCarryAdderMod2w<const BITWIDTH: usize> {
     sum_node: NodeRef,
 }
 
-impl<const BITWIDTH: usize> AdderNoCarry<BITWIDTH> {
+impl<const BITWIDTH: usize> RippleCarryAdderMod2w<BITWIDTH> {
     /// Creates a BITWIDTH word Integer adder. For SHA-256/224 BITWIDTH is 32, for SHA-512/384, BITWIDTH is 64
     ///
     /// [x_word] and [y_word] are assumed to be MSB-first decomposition of

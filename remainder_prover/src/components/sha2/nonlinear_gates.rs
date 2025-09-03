@@ -340,6 +340,17 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i3
     pub fn get_output(&self) -> NodeRef {
         self.sigma_sector.clone()
     }
+
+    /// Evaluate the capital Sigma gate for given x_data
+    pub fn evaluate<T>(x_data: T) -> T
+    where
+        T: IsBitDecomposable + BitXor<Output = T>,
+    {
+        let rotr1 = x_data.rotr(ROTR1 as usize);
+        let rotr2 = x_data.rotr(ROTR2 as usize);
+        let rotr3 = x_data.rotr(ROTR3 as usize);
+        rotr1 ^ rotr2 ^ rotr3
+    }
 }
 
 /// The Small Sigma function described on Printed Page Number 10
@@ -381,5 +392,15 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32
     /// Return output of Small Sigma
     pub fn get_output(&self) -> NodeRef {
         self.sigma_sector.clone()
+    }
+
+    pub fn evaluate<T>(x_data: T) -> T
+    where
+        T: IsBitDecomposable + BitXor<Output = T>,
+    {
+        let rotr1 = x_data.rotr(ROTR1 as usize);
+        let rotr2 = x_data.rotr(ROTR2 as usize);
+        let shr3 = x_data.shr(SHR3 as usize);
+        rotr1 ^ rotr2 ^ shr3
     }
 }
