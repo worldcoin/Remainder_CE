@@ -17,12 +17,14 @@ fn build_single_shred_lookup_test_circuit<F: Field>(
     let mut builder = CircuitBuilder::<F>::new();
 
     // Lookup table is public
-    let public_input_layer_node = builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
+    let public_input_layer_node =
+        builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
     let table_mle_shred =
         builder.add_input_shred("Table MLE", table_mle_num_vars, &public_input_layer_node);
 
     // Witness values are private, as are multiplicities
-    let ligero_input_layer_node = builder.add_input_layer("Ligero Input Layer", LayerVisibility::Private);
+    let ligero_input_layer_node =
+        builder.add_input_layer("Ligero Input Layer", LayerVisibility::Private);
     let witness_mle_shred = builder.add_input_shred(
         "Witness MLE",
         witness_mle_num_vars,
@@ -114,12 +116,14 @@ fn build_multi_shred_lookup_test_circuit<F: Field>(
     let mut builder = CircuitBuilder::<F>::new();
 
     // Lookup table is public
-    let public_input_layer_node = builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
+    let public_input_layer_node =
+        builder.add_input_layer("Public Input Layer", LayerVisibility::Public);
     let table_mle_shred =
         builder.add_input_shred("Table MLE", table_mle_num_vars, &public_input_layer_node);
 
     // Witness values are private, as are multiplicities
-    let ligero_input_layer_node = builder.add_input_layer("Ligero Input Layer", LayerVisibility::Private);
+    let ligero_input_layer_node =
+        builder.add_input_layer("Ligero Input Layer", LayerVisibility::Private);
 
     let witness_mle_1_shred = builder.add_input_shred(
         "Witness MLE 1",
