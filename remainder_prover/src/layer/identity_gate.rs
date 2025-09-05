@@ -340,8 +340,10 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
         circuit_map: &mut CircuitMap<F>,
     ) {
-        assert_eq!(mle_outputs_necessary.len(), 1);
-        let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
+        // This may not be true, specifically because of e.g. `SplitNode`.
+        // assert_eq!(mle_outputs_necessary.len(), 1);
+        // let mle_output_necessary = mle_outputs_necessary.iter().next().unwrap();
+
         let source_mle_data = circuit_map
             .get_data_from_circuit_mle(&self.source_mle)
             .unwrap();
@@ -365,13 +367,44 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
                     + (*dest_idx as usize)] = id_val;
             });
         });
-        let output_data = MultilinearExtension::new(remap_table);
-        assert_eq!(
-            output_data.num_vars(),
-            mle_output_necessary.var_indices().len()
-        );
 
-        circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
+        // Now that we have populated the entire bookkeeping table for the
+        // current layer, we can split it into what we are looking for.
+        // Because all "selector" variables occur before all "dataparallel"
+        // variables, we can always assume a split against the `prefix_vars`
+        // of the `mle_outputs_necessary`.
+        //
+        // Note that this is wasteful because we are cloning, but the
+        // interaction between dataparallel copies and splitting along
+        // dataparallel + non-dataparallel variables is too complicated
+        // to handle here. We should handle it at a higher level.
+        mle_outputs_necessary
+            .iter()
+            .for_each(|mle_output_necessary| {
+                let prefix_vars = mle_output_necessary.prefix_bits();
+                let bookkeeping_table_len = 1 << (self.total_num_vars - prefix_vars.len());
+                let start_idx =
+                    prefix_vars
+                        .iter()
+                        .enumerate()
+                        .fold(0, |acc, (var_idx, prefix_var)| {
+                            // Big-endian indexing means the following:
+                            // 0th variable adds 1/2 the bookkeeping table length
+                            // 1st variable adds 1/4 the bookkeeping table length
+                            // ...
+                            acc + if *prefix_var {
+                                1 << (self.total_num_vars - var_idx - 1)
+                            } else {
+                                0
+                            }
+                        });
+                let data_slice = &remap_table[start_idx..start_idx + bookkeeping_table_len];
+                let mle_output = MultilinearExtension::new(data_slice.to_vec());
+                circuit_map.add_node(
+                    CircuitLocation::new(self.layer_id(), prefix_vars),
+                    mle_output,
+                );
+            });
     }
 }
 
