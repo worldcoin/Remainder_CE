@@ -52,8 +52,16 @@ fn build_circuit() -> Circuit<Fr> {
     let [lhs, rhs, carries, results] = splits.try_into().unwrap();
 
     let adder = BinaryAdder::new(&mut builder, &lhs, &rhs, &carries);
-    let compare_sector = builder.add_sector(results.expr() - adder.get_output().expr());
-    builder.set_output(&compare_sector);
+
+    let split_adder = builder.add_split_node(&adder.get_output(), 1);
+    let split_result = builder.add_split_node(&results, 1);
+
+    // let compare_sector = builder.add_sector(results.expr() - adder.get_output().expr());
+    let compare_sector1 = builder.add_sector(split_result[0].expr() - split_adder[0].expr());
+    let compare_sector2 = builder.add_sector(split_result[1].expr() - split_adder[1].expr());
+
+    builder.set_output(&compare_sector1);
+    builder.set_output(&compare_sector2);
 
     builder.build().unwrap()
 }
