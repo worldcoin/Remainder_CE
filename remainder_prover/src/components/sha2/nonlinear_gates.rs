@@ -217,7 +217,7 @@ pub struct ChGate {
 
 impl ChGate {
     /// Computes bit_wise selection of y_vars or x_vars as defined in
-    /// SHA-2 spec. Assumes inputs to the gate is normalized (i.e. in
+    /// SHA-2 spec. Assumes inputs to the gate are normalized (i.e. in
     /// {0,1}).
     pub fn new<F: Field>(
         builder_ref: &mut CircuitBuilder<F>,
@@ -252,6 +252,11 @@ impl ChGate {
     /// bit-decomposed form
     pub fn get_output(&self) -> NodeRef {
         self.ch_sector.clone()
+    }
+
+    /// Computes ch(x,y,z) natively
+    pub const fn evaluate(x: u32, y: u32, z: u32) -> u32 {
+        (x & y) ^ (!x & z)
     }
 }
 
@@ -300,6 +305,11 @@ impl MajGate {
     /// form
     pub fn get_output(&self) -> NodeRef {
         self.maj_sector.clone()
+    }
+
+    /// Computes maj(x,y,z) natively
+    pub const fn evaluate(x: u32, y: u32, z: u32) -> u32 {
+        (x & y) ^ (y & z) ^ (x & x)
     }
 }
 
@@ -394,6 +404,7 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32
         self.sigma_sector.clone()
     }
 
+    /// Evaluation with actual input data
     pub fn evaluate<T>(x_data: T) -> T
     where
         T: IsBitDecomposable + BitXor<Output = T>,
