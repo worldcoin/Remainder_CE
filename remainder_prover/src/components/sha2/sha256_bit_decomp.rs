@@ -8,39 +8,32 @@ use crate::expression::abstract_expr::ExprBuilder;
 use crate::layouter::builder::{Circuit, CircuitBuilder, InputLayerNodeRef, LayerKind, NodeRef};
 use crate::mle::evals::MultilinearExtension;
 use itertools::Itertools;
-use rand::RngCore;
 use remainder_shared_types::Field;
 use std::ops::Index;
+use std::sync::atomic::{AtomicU64, Ordering};
 
+/// SHA256 Works with word size 32
 pub const WORD_SIZE: usize = 32;
 
-// See https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf for details about constants
+/// See https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf for details about constants
+/// Sigma0 of SHA-256
 pub type Sigma0 = Sigma<WORD_SIZE, 2, 13, 22>;
+
+/// Sigma0 of SHA-256
 pub type Sigma1 = Sigma<WORD_SIZE, 6, 11, 25>;
+
+/// Little Sigma0
 pub type SmallSigma0 = SmallSigma<WORD_SIZE, 7, 18, 3>;
+
+/// Little Sigma1
 pub type SmallSigma1 = SmallSigma<WORD_SIZE, 17, 19, 10>;
+
+/// Specific adder for SHA256
 pub type Sha256Adder = CommittedCarryAdder;
 
-fn random256bit_string() -> String {
-    let mut rng = rand::thread_rng();
-    [
-        rng.next_u64(),
-        rng.next_u64(),
-        rng.next_u64(),
-        rng.next_u64(),
-    ]
-    .into_iter()
-    .map(|v| format!("{:08x}", v))
-    .collect::<Vec<_>>()
-    .join("-")
-}
-
-const fn ch_gate_eval(x: u32, y: u32, z: u32) -> u32 {
-    (x & y) ^ (!x & z)
-}
-
-const fn maj_eval(x: u32, y: u32, z: u32) -> u32 {
-    (x & y) ^ (y & z) ^ (x & x)
+fn carry_name_counter() -> String {
+    static CARRY_NAME_COUNTER: AtomicU64 = AtomicU64::new(!0);
+    format!("{:016x}", CARRY_NAME_COUNTER.fetch_add(1, Ordering::SeqCst))
 }
 
 fn add_get_carry_bits_lsb(x: u32, y: u32, mut c_in: u32) -> (u32, Vec<u32>) {
@@ -75,8 +68,8 @@ pub struct CommittedCarryAdder {
 }
 
 impl CommittedCarryAdder {
-    /// Adder that internally generates an input node for carry bits and
-    /// only checks that the sums are correct instead of computing it.
+    /// Adder that adds a carry shred for carry bits and only checks
+    /// that the sums are correct instead of computing it.
     pub fn new<F: Field>(
         ckt_builder: &mut CircuitBuilder<F>,
         carry_layer: &InputLayerNodeRef,
@@ -87,7 +80,7 @@ impl CommittedCarryAdder {
         debug_assert_eq!(y_node.get_num_vars(), 5);
 
         // Probability of collision is 2^{-128}
-        let carry_shred_name = random256bit_string();
+        let carry_shred_name = carry_name_counter();
         let carry_shred =
             ckt_builder.add_input_shred(&carry_shred_name, x_node.get_num_vars(), carry_layer);
 
@@ -111,6 +104,7 @@ impl CommittedCarryAdder {
         }
     }
 
+    /// Node representing the output value
     pub fn get_output(&self) -> NodeRef {
         self.sum_node.clone()
     }
@@ -140,8 +134,8 @@ impl CommittedCarryAdder {
 
 #[derive(Debug, Clone)]
 struct MessageScheduleAdderTree {
-    sum_a_leaf: Sha256Adder, // A = Sum of SmallSigma1(state[t-2]) + state[t - 7]
-    sum_b_leaf: Sha256Adder, // B = Sum of SmallSigma0(state[t-15]) + state[t - 16]
+    sum_a_leaf: Sha256Adder, // A = SmallSigma1(state[t-2]) + state[t - 7]
+    sum_b_leaf: Sha256Adder, // B = SmallSigma0(state[t-15]) + state[t - 16]
     sum_a_b: Sha256Adder,    // C = A + B
 }
 
@@ -207,6 +201,7 @@ impl MessageSchedule {
                 &sum_a_leaf.sum_node,
                 &sum_b_leaf.sum_node,
             );
+
             let current_state = MessageScheduleState {
                 state_node: sum_a_b.get_output(),
                 state_adders: Some(MessageScheduleAdderTree {
@@ -233,7 +228,7 @@ impl MessageSchedule {
     }
 
     /// Attaches a message schedule to the SHA Circuit. Note that this
-    /// needs to match with the way adder is implemented
+    /// needs to match the way adder is implemented
     pub fn populate_message_schedule<F: Field>(
         &mut self,
         circuit: &mut Circuit<F>,
@@ -293,10 +288,12 @@ impl MessageSchedule {
     }
 }
 
+/// The Constant KeySchedule
 pub struct KeySchedule<F: Field> {
     keys: Vec<ConstInputGate<F>>,
 }
 
+/// The Initial IV of SHA
 pub struct HConstants<F: Field> {
     ivs: Vec<ConstInputGate<F>>,
 }
@@ -311,6 +308,7 @@ impl<F: Field> HConstants<F> {
         format!("sha256-iv-{index:x}")
     }
 
+    /// Create the input gate to SHA entire message
     pub fn new(ckt_builder: &mut CircuitBuilder<F>) -> Self {
         Self {
             ivs: Self::H
@@ -321,7 +319,8 @@ impl<F: Field> HConstants<F> {
         }
     }
 
-    pub fn add_iv_to_circuit(&self, circuit: &mut Circuit<F>) {
+    /// Populate the circuit with the IV values
+    pub fn populate_iv(&self, circuit: &mut Circuit<F>) {
         for (ndx, const_iv) in self.ivs.iter().enumerate() {
             circuit.set_input(&Self::iv_name(ndx), const_iv.input_mle().clone());
         }
@@ -346,6 +345,7 @@ impl<F: Field> KeySchedule<F> {
         format!("sha256-key-schedule-{index}")
     }
 
+    /// Create the SHA-256 key schedule
     pub fn new(ckt_builder: &mut CircuitBuilder<F>) -> Self {
         Self {
             keys: Self::ROUND_KEYS
@@ -356,7 +356,8 @@ impl<F: Field> KeySchedule<F> {
         }
     }
 
-    pub fn add_key_schedule_to_circuit(&self, circuit: &mut Circuit<F>) {
+    /// the Key schedule to circuit
+    pub fn populate_key_schedule(&self, circuit: &mut Circuit<F>) {
         for (i, key_const) in self.keys.iter().enumerate() {
             circuit.set_input(&Self::key_name(i), key_const.input_mle().clone());
         }
@@ -368,14 +369,6 @@ impl<F: Field> Index<usize> for KeySchedule<F> {
 
     fn index(&self, index: usize) -> &Self::Output {
         self.keys[index].get_output_ref()
-    }
-}
-
-impl<F: Field> Index<usize> for HConstants<F> {
-    type Output = NodeRef;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        self.ivs[index].get_output_ref()
     }
 }
 
@@ -395,18 +388,18 @@ pub struct CompressionFn {
 impl CompressionFn {
     /// A Single Round of SHA-256 compression function. The
     /// `msg_schedule` is the 64 rounds of expanded message schedule.
-    /// The `input_schedule` is the 256-bits of Input values and
-    /// `round_keys`
+    /// The `input_schedule` is the 256-bits of Input values
+    /// `round_keys` are
     pub fn new<F: Field>(
         ckt_builder: &mut CircuitBuilder<F>,
         carry_layer: &InputLayerNodeRef,
-        msg_schedule: &MessageSchedule,
-        input_schedule: &[NodeRef],
-        round_keys: KeySchedule<F>,
+        msg_schedule: &MessageSchedule, // Expanded message schedule
+        input_schedule: &[NodeRef],     // IV for fist message
+        round_keys: &KeySchedule<F>,    // Key Schedule
     ) -> Self {
         let msg_schedule = msg_schedule.get_output_nodes();
         debug_assert_eq!(msg_schedule.len(), 64);
-        debug_assert_eq!(input_schedule.len(), 64);
+        debug_assert_eq!(input_schedule.len(), 8);
         (0..64).for_each(|i| debug_assert_eq!(msg_schedule[i].get_num_vars(), 5));
         (0..8).for_each(|i| debug_assert_eq!(input_schedule[i].get_num_vars(), 5));
 
@@ -422,9 +415,9 @@ impl CompressionFn {
         let mut h = input_schedule[7].clone();
 
         for t in 0..64 {
-            let w_t = msg_schedule[t].clone();
-            let k_t = round_keys[t].clone();
-            let t1 = Self::compute_t1(ckt_builder, carry_layer, &e, &f, &g, &h, &w_t, &k_t);
+            let w_t = &msg_schedule[t];
+            let k_t = &round_keys[t];
+            let t1 = Self::compute_t1(ckt_builder, carry_layer, &e, &f, &g, &h, w_t, k_t);
             let t2 = Self::compute_t2(ckt_builder, carry_layer, &a, &b, &c);
             h = ckt_builder.add_sector(g.expr());
             g = ckt_builder.add_sector(f.expr());
@@ -518,6 +511,98 @@ impl CompressionFn {
         let s1 = Sigma0::new(ckt_builder, a);
         let m1 = MajGate::new(ckt_builder, a, b, c);
         Sha256Adder::new(ckt_builder, carry_layer, &s1.get_output(), &m1.get_output())
+    }
+
+    /// Populated the carry bits of the adder. This function must match
+    /// the addition operations exactly as during the circuit building.
+    pub fn populate_compression_fn<F: Field>(
+        &self,
+        circuit: &mut Circuit<F>,
+        message_words: Vec<u32>,
+        input_words: Vec<u32>,
+    ) -> Vec<u32> {
+        let mut a = input_words[0];
+        let mut b = input_words[1];
+        let mut c = input_words[2];
+        let mut d = input_words[3];
+        let mut e = input_words[4];
+        let mut f = input_words[5];
+        let mut g = input_words[6];
+        let mut h = input_words[7];
+
+        for t in 0..64 {
+            let w_t = message_words[t];
+            let k_t = KeySchedule::<F>::ROUND_KEYS[t];
+            let [sum1, sum2, sum3, sum4] = &self.round_carries[t].t1_carries;
+            let t1 = Self::populate_t1(circuit, sum1, sum2, sum3, sum4, e, f, g, h, w_t, k_t);
+            let t2 = Self::populate_t2(circuit, &self.round_carries[t].t2_carries, a, b, c);
+            h = g;
+            g = f;
+            f = e;
+            e = self.round_carries[t]
+                .e_carries
+                .populate_carry(circuit, d, t1);
+            d = c;
+            c = b;
+            b = a;
+            a = self.round_carries[t]
+                .a_carries
+                .populate_carry(circuit, d, t2);
+        }
+
+        let intermediates = [a, b, c, d, e, f, g, h];
+
+        let output = input_words
+            .iter()
+            .zip(intermediates.iter())
+            .zip(&self.output)
+            .map(|((h, hprime), gate)| gate.populate_carry(circuit, *h, *hprime))
+            .collect();
+
+        output
+    }
+
+    fn populate_t1<F: Field>(
+        circuit: &mut Circuit<F>,
+        sum1: &Sha256Adder,
+        sum2: &Sha256Adder,
+        sum3: &Sha256Adder,
+        sum4: &Sha256Adder,
+        e: u32,
+        f: u32,
+        g: u32,
+        h: u32,
+        w_t: u32,
+        k_t: u32,
+    ) -> u32 {
+        let t1_sigma_1 = Sigma1::evaluate(e);
+        let t1_ch = ChGate::evaluate(e, f, g);
+
+        // h1 + Sigma1(e)
+        let sum1 = sum1.populate_carry(circuit, h, t1_sigma_1);
+
+        // ch(e,f,g) + K_t
+        let sum2 = sum2.populate_carry(circuit, t1_ch, k_t);
+
+        // h1 + Sigma1(e) + ch(e,f,g) + K_t
+        let sum3 = sum3.populate_carry(circuit, sum1, sum2);
+
+        // h1 + Sigma1(e) + ch(e,f,g) + K_t + W_t
+        let sum4 = sum4.populate_carry(circuit, sum3, w_t);
+
+        sum4
+    }
+
+    fn populate_t2<F: Field>(
+        circuit: &mut Circuit<F>,
+        sum1: &Sha256Adder,
+        a: u32,
+        b: u32,
+        c: u32,
+    ) -> u32 {
+        let s1 = Sigma0::evaluate(a);
+        let m1 = MajGate::evaluate(a, b, c);
+        sum1.populate_carry(circuit, s1, m1)
     }
 }
 
