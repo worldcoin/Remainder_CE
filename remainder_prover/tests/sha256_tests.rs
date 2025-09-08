@@ -12,7 +12,6 @@ use remainder::{
     },
 };
 use remainder_shared_types::{Field, Fr};
-use std::ops::{BitAnd, BitOr, BitXor, Shl, Shr};
 
 fn sha256_ripple_adder_gate_circuit() -> Circuit<Fr> {
     let mut builder = CircuitBuilder::new();
@@ -261,6 +260,15 @@ fn attach_data_sha256_message_schedule<const POSITIVE: bool>(
 }
 
 #[test]
+fn sha256_compression_function_test() {
+    // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
+
+    let (circuit, mut sched) = sha256_message_schedule_circuit(LayerKind::Public);
+    let provable_circuit = attach_data_sha256_message_schedule::<true>(circuit.clone(), &mut sched);
+    test_circuit_with_runtime_optimized_config(&provable_circuit);
+}
+
+#[test]
 fn sha256_message_schedule_positive_test() {
     // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
 
@@ -334,6 +342,27 @@ fn sha256_committed_carry_adder_gate_negative_test() {
         });
         assert!(result.is_err(), "A -ve test should panic");
     }
+}
+
+#[test]
+fn sha256_test_padding() {
+    // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
+
+    let mut builder = CircuitBuilder::<Fr>::new();
+    let input_layer = builder.add_input_layer(LayerKind::Public);
+    let carry_layer = builder.add_input_layer(LayerKind::Public);
+    let input_data = ['a', 'b', 'c']
+        .into_iter()
+        .map(|x| x.try_into().unwrap())
+        .collect_vec();
+    let padded_data = [
+        0x61626380, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+        0x00000000, 0x00000018,
+    ];
+
+    let sha256 = sha256::Sha256::new(&mut builder, &input_layer, &carry_layer, input_data);
+    assert_eq!(sha256.padded_data_chunks(), padded_data.to_vec());
 }
 
 ///

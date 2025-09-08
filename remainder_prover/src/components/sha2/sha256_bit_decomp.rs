@@ -325,6 +325,10 @@ impl<F: Field> HConstants<F> {
             circuit.set_input(&Self::iv_name(ndx), const_iv.input_mle().clone());
         }
     }
+
+    pub fn get_output_nodes(&self) -> Vec<NodeRef> {
+        self.ivs.iter().map(|v| v.get_output()).collect()
+    }
 }
 
 impl<F: Field> KeySchedule<F> {
@@ -603,6 +607,94 @@ impl CompressionFn {
         let s1 = Sigma0::evaluate(a);
         let m1 = MajGate::evaluate(a, b, c);
         sum1.populate_carry(circuit, s1, m1)
+    }
+
+    pub fn get_output_nodes(&self) -> Vec<NodeRef> {
+        self.output.iter().map(|n| n.get_output()).collect()
+    }
+}
+
+fn sha256_padded_input(mut input_data: Vec<u8>) -> Vec<u32> {
+    let input_len_bits = input_data.len() * 8;
+    let pad_bits = 448 - ((input_len_bits + 1) % 512);
+    let zero_bytes = pad_bits / 8;
+    input_data.push(0x80);
+    input_data.extend(std::iter::repeat(0_u8).take(zero_bytes));
+    input_data.extend_from_slice(input_len_bits.to_be_bytes().as_slice());
+    assert!(input_data.len() % 64 == 0);
+
+    input_data
+        .as_slice()
+        .chunks_exact(4)
+        .map(|chunk| chunk.iter().fold(0u32, |acc, v| (acc << 8) + (*v as u32)))
+        .collect()
+}
+
+struct Sha256State {
+    message_schedule: MessageSchedule, // Expanded message schedule
+    input_chunks: Vec<u32>,            // Input data chunked into 32-bit words
+    compression_fn: CompressionFn,
+}
+
+pub struct Sha256<F: Field> {
+    key_schedule: KeySchedule<F>,
+    round_states: Vec<Sha256State>,
+}
+
+impl<F: Field> Sha256<F> {
+    pub fn new(
+        ckt_builder: &mut CircuitBuilder<F>,
+        data_input_layer: &InputLayerNodeRef,
+        carry_layer: &InputLayerNodeRef,
+        input_data: Vec<u8>,
+    ) -> Self {
+        let key_schedule = KeySchedule::<F>::new(ckt_builder);
+        let input_data = sha256_padded_input(input_data);
+        let num_vars = input_data.len().ilog2() as usize + 5; // = log(32-bits * input_data.len())
+        let all_input = ckt_builder.add_input_shred("SHA256_input", num_vars, data_input_layer);
+
+        let input_iv = HConstants::new(ckt_builder);
+        let mut input_schedule = input_iv.get_output_nodes();
+
+        let input_word_splits =
+            ckt_builder.add_split_node(&all_input, input_data.len().ilog2() as usize);
+
+        debug_assert_eq!(input_word_splits.len(), input_data.len());
+
+        let round_states = input_word_splits
+            .as_slice()
+            .chunks_exact(16)
+            .zip(input_data.as_slice().chunks_exact(16))
+            .map(|(msg_vars, data)| {
+                let message_schedule = MessageSchedule::new(ckt_builder, carry_layer, msg_vars);
+                let ckt = CompressionFn::new(
+                    ckt_builder,
+                    carry_layer,
+                    &message_schedule,
+                    &input_schedule,
+                    &key_schedule,
+                );
+                input_schedule = ckt.get_output_nodes();
+
+                Sha256State {
+                    message_schedule,
+                    input_chunks: data.to_vec(),
+                    compression_fn: ckt,
+                }
+            })
+            .collect_vec();
+        Self {
+            key_schedule,
+            round_states,
+        }
+    }
+
+    pub fn padded_data_chunks(&self) -> Vec<u32> {
+        self.round_states
+            .iter()
+            .map(|st| st.input_chunks.clone())
+            .flatten()
+            .collect()
     }
 }
 
