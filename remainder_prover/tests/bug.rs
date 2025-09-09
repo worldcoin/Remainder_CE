@@ -1,7 +1,6 @@
 use itertools::Itertools;
 use remainder::{
-    binary_operations::{binary_adder::BinaryAdder, logical_shift::ShiftNode},
-    expression::abstract_expr::ExprBuilder,
+    binary_operations::logical_shift::ShiftNode,
     layouter::builder::{Circuit, CircuitBuilder, LayerKind, ProvableCircuit},
     mle::evals::MultilinearExtension,
     prover::helpers::test_circuit_with_memory_optimized_config,

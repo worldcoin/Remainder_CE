@@ -259,12 +259,67 @@ fn attach_data_sha256_message_schedule<const POSITIVE: bool>(
     circuit.finalize().unwrap()
 }
 
+fn sha256_test_circuit<F: Field>(input_data: Vec<u8>) -> Circuit<F> {
+    let mut builder = CircuitBuilder::<F>::new();
+    let mut hasher = sha256_simple::Sha256::default();
+    hasher.update(&input_data);
+    let expected_hash = hasher.finish();
+
+    let hash_value_mle = MultilinearExtension::<F>::new(
+        expected_hash
+            .iter()
+            .map(|v| sha2::bit_decompose_msb_first(*v))
+            .flatten()
+            .map(u64::from)
+            .map(F::from)
+            .collect(),
+    );
+
+    let input_layer = builder.add_input_layer(LayerKind::Public);
+    let carry_layer = builder.add_input_layer(LayerKind::Public);
+    let hash_size_bits = 256u32.ilog2() as usize;
+
+    let expected_output = builder.add_input_shred("expected_output", hash_size_bits, &input_layer);
+
+    let output_words = builder.add_split_node(&expected_output, 3);
+
+    let sha256_ckt = sha256::Sha256::new(&mut builder, &input_layer, &carry_layer, input_data);
+
+    let output_nodes = sha256_ckt.get_output_node();
+
+    let m = output_words
+        .into_iter()
+        .zip(output_nodes.into_iter())
+        .map(|(expected, computed)| builder.add_sector(expected.expr() - computed.expr()))
+        .collect_vec();
+
+    m.into_iter().for_each(|v| builder.set_output(&v));
+
+    let mut ckt = builder.build().unwrap();
+
+    let computed_hash = sha256_ckt
+        .populate_circuit(&mut ckt)
+        .into_iter()
+        .map(u32::to_be_bytes)
+        .flatten()
+        .collect_vec();
+
+    assert_eq!(computed_hash, expected_hash);
+
+    ckt.set_input("expected_output", hash_value_mle);
+    ckt
+}
+
 #[test]
-fn sha256_compression_function_test() {
+fn sha256_single_round_test() {
     // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
 
-    let (circuit, mut sched) = sha256_message_schedule_circuit(LayerKind::Public);
-    let provable_circuit = attach_data_sha256_message_schedule::<true>(circuit.clone(), &mut sched);
+    let data: Vec<u8> = vec!['a', 'b', 'c']
+        .into_iter()
+        .map(|x| x.try_into().unwrap())
+        .collect_vec();
+    let sha_circuit = sha256_test_circuit::<Fr>(data);
+    let provable_circuit = sha_circuit.finalize().unwrap();
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }
 
@@ -395,6 +450,7 @@ fn sha256_full_round_test() {
 /// This is an independent pure Rust implementation of SHA256 taken from
 /// https://github.com/nanpuyue/sha256/ Licensed under Apache
 ///
+#[allow(dead_code)]
 pub(crate) mod sha256_simple {
     #![allow(clippy::unreadable_literal)]
 
@@ -464,27 +520,27 @@ pub(crate) mod sha256_simple {
         }
 
         pub fn update_state(state: &mut [u32; 8], data: &[u8; 64]) {
-            let mut w = Self::update_message_schedule(data);
+            let w = Self::update_message_schedule(data);
 
-            println!(
-                "Input message schedule: \n{}",
-                w.iter()
-                    .map(|v| format!("  0x{:08x}", v))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            );
+            // println!(
+            //     "Input message schedule: \n{}",
+            //     w.iter()
+            //         .map(|v| format!("  0x{:08x}", v))
+            //         .collect::<Vec<_>>()
+            //         .join("\n")
+            // );
 
             let mut h = *state;
 
-            println!("=============");
+            // println!("=============");
 
-            println!(
-                "Input state: \n{}",
-                h.iter()
-                    .map(|v| format!("  0x{:08x}", v))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            );
+            // println!(
+            //     "Input state: \n{}",
+            //     h.iter()
+            //         .map(|v| format!("  0x{:08x}", v))
+            //         .collect::<Vec<_>>()
+            //         .join("\n")
+            // );
 
             for i in 0..64 {
                 let ch = (h[4] & h[5]) ^ (!h[4] & h[6]);
@@ -507,31 +563,31 @@ pub(crate) mod sha256_simple {
                 h[1] = h[0];
                 h[0] = t0.wrapping_add(t1);
 
-                println!("------> {i} <-------");
+                //     println!("------> {i} <-------");
 
-                println!(
-                    "\t{}",
-                    h.iter()
-                        .map(|v| format!("0x{:08x}", v))
-                        .collect::<Vec<_>>()
-                        .join("\n\t")
-                );
+                //     println!(
+                //         "\t{}",
+                //         h.iter()
+                //             .map(|v| format!("0x{:08x}", v))
+                //             .collect::<Vec<_>>()
+                //             .join("\n\t")
+                //     );
             }
 
             for (i, v) in state.iter_mut().enumerate() {
                 *v = v.wrapping_add(h[i]);
             }
 
-            println!("=============");
+            // println!("=============");
 
-            println!(
-                "\nFinal state: {}",
-                state
-                    .iter()
-                    .map(|v| format!("0x{:08x}", v))
-                    .collect::<Vec<_>>()
-                    .join("\n\t")
-            );
+            // println!(
+            //     "\nFinal state: {}",
+            //     state
+            //         .iter()
+            //         .map(|v| format!("0x{:08x}", v))
+            //         .collect::<Vec<_>>()
+            //         .join("\n\t")
+            // );
         }
 
         pub fn update(&mut self, data: &[u8]) {
@@ -595,20 +651,20 @@ pub(crate) mod sha256_simple {
         }
     }
 
-    #[cfg(test)]
-    mod test {
-        use super::Sha256;
-        use itertools::Itertools;
-        #[test]
-        fn sample_sha256_evaluation() {
-            let msg: Vec<u8> = ['a', 'b', 'c']
-                .into_iter()
-                .map(|x| x.try_into().unwrap())
-                .collect_vec();
-            let mut sha = Sha256::default();
-            sha.update(&msg);
-            let result = sha.finish();
-            println!("{:?}", result);
-        }
-    }
+    // #[cfg(test)]
+    // mod test {
+    //     use super::Sha256;
+    //     use itertools::Itertools;
+    //     #[test]
+    //     fn sample_sha256_evaluation() {
+    //         let msg: Vec<u8> = ['a', 'b', 'c']
+    //             .into_iter()
+    //             .map(|x| x.try_into().unwrap())
+    //             .collect_vec();
+    //         let mut sha = Sha256::default();
+    //         sha.update(&msg);
+    //         let result = sha.finish();
+    //         println!("{:?}", result);
+    //     }
+    // }
 }
