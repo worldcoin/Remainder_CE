@@ -665,6 +665,7 @@ struct Sha256State {
     input_chunks: Vec<u32>, // Input data chunked into 32-bit words
 }
 
+/// Sha256 State for multi word computation
 pub struct Sha256<F: Field> {
     key_schedule: KeySchedule<F>,
     init_iv: HConstants<F>,
@@ -684,6 +685,19 @@ impl<F: Field> Sha256<F> {
         let input_data = sha256_padded_input(input_data);
         let num_vars = input_data.len().ilog2() as usize + 5; // = log(32-bits * input_data.len())
         let all_input = ckt_builder.add_input_shred("SHA256_input", num_vars, data_input_layer);
+
+        let b = &all_input;
+        let b_sq = ExprBuilder::products(vec![b.id(), b.id()]);
+        let b = b.expr();
+
+        // Check that all input bits are binary.
+        let binary_sector = ckt_builder.add_sector(
+            // b * (1 - b) = b - b^2
+            b - b_sq,
+        );
+
+        // Make sure all inputs are either `0` or `1`
+        ckt_builder.set_output(&binary_sector);
 
         let mut input_schedule = init_iv.get_output_nodes();
 
