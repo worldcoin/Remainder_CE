@@ -368,6 +368,17 @@ fn sha256_test_padding() {
 #[test]
 fn sha256_full_round_test() {
     let mut builder = CircuitBuilder::<Fr>::new();
+    let expected_hash = vec![
+        0xba7816bf_u32,
+        0x8f01cfea,
+        0x414140de,
+        0x5dae2223,
+        0xb00361a3,
+        0x96177a9c,
+        0xb410ff61,
+        0xf20015ad,
+    ];
+
     let input_layer = builder.add_input_layer(LayerKind::Public);
     let carry_layer = builder.add_input_layer(LayerKind::Public);
     let input_data = ['a', 'b', 'c']
@@ -376,7 +387,8 @@ fn sha256_full_round_test() {
         .collect_vec();
     let sha = sha256::Sha256::new(&mut builder, &input_layer, &carry_layer, input_data);
     let mut ckt = builder.build().unwrap();
-    let _ = sha.populate_circuit(&mut ckt);
+    let hash_values = sha.populate_circuit(&mut ckt);
+    assert_eq!(hash_values, expected_hash);
 }
 
 ///
@@ -454,7 +466,26 @@ pub(crate) mod sha256_simple {
         pub fn update_state(state: &mut [u32; 8], data: &[u8; 64]) {
             let mut w = Self::update_message_schedule(data);
 
+            println!(
+                "Input message schedule: \n{}",
+                w.iter()
+                    .map(|v| format!("  0x{:08x}", v))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+
             let mut h = *state;
+
+            println!("=============");
+
+            println!(
+                "Input state: \n{}",
+                h.iter()
+                    .map(|v| format!("  0x{:08x}", v))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+
             for i in 0..64 {
                 let ch = (h[4] & h[5]) ^ (!h[4] & h[6]);
                 let ma = (h[0] & h[1]) ^ (h[0] & h[2]) ^ (h[1] & h[2]);
@@ -475,11 +506,32 @@ pub(crate) mod sha256_simple {
                 h[2] = h[1];
                 h[1] = h[0];
                 h[0] = t0.wrapping_add(t1);
+
+                println!("------> {i} <-------");
+
+                println!(
+                    "\t{}",
+                    h.iter()
+                        .map(|v| format!("0x{:08x}", v))
+                        .collect::<Vec<_>>()
+                        .join("\n\t")
+                );
             }
 
             for (i, v) in state.iter_mut().enumerate() {
                 *v = v.wrapping_add(h[i]);
             }
+
+            println!("=============");
+
+            println!(
+                "\nFinal state: {}",
+                state
+                    .iter()
+                    .map(|v| format!("0x{:08x}", v))
+                    .collect::<Vec<_>>()
+                    .join("\n\t")
+            );
         }
 
         pub fn update(&mut self, data: &[u8]) {
@@ -540,6 +592,23 @@ pub(crate) mod sha256_simple {
 
         pub fn state(&self) -> [u32; 8] {
             self.state
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::Sha256;
+        use itertools::Itertools;
+        #[test]
+        fn sample_sha256_evaluation() {
+            let msg: Vec<u8> = ['a', 'b', 'c']
+                .into_iter()
+                .map(|x| x.try_into().unwrap())
+                .collect_vec();
+            let mut sha = Sha256::default();
+            sha.update(&msg);
+            let result = sha.finish();
+            println!("{:?}", result);
         }
     }
 }
