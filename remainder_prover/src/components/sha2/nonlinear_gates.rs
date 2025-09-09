@@ -309,7 +309,7 @@ impl MajGate {
 
     /// Computes maj(x,y,z) natively
     pub const fn evaluate(x: u32, y: u32, z: u32) -> u32 {
-        (x & y) ^ (y & z) ^ (x & x)
+        (x & y) ^ (y & z) ^ (x & z)
     }
 }
 

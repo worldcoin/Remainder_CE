@@ -517,6 +517,19 @@ impl CompressionFn {
         Sha256Adder::new(ckt_builder, carry_layer, &s1.get_output(), &m1.get_output())
     }
 
+    // #[cfg(debug_assertions)]
+    // fn print_state(msg: String, state: &[u32]) {
+    //     println!("{}", msg);
+    //     println!(
+    //         "{}",
+    //         state
+    //             .iter()
+    //             .map(|v| format!("  0x{:08x}", v))
+    //             .collect::<Vec<_>>()
+    //             .join("\n")
+    //     );
+    // }
+
     /// Populated the carry bits of the adder. This function must match
     /// the addition operations exactly as during the circuit building.
     pub fn populate_compression_fn<F: Field>(
@@ -533,6 +546,18 @@ impl CompressionFn {
         let mut f = input_words[5];
         let mut g = input_words[6];
         let mut h = input_words[7];
+
+        // #[cfg(debug_assertions)]
+        // Self::print_state(
+        //     "========= Message Schedule =========".to_string(),
+        //     &message_words,
+        // );
+
+        // #[cfg(debug_assertions)]
+        // Self::print_state(
+        //     "========= Initial State =========".to_string(),
+        //     &input_words,
+        // );
 
         for t in 0..64 {
             let w_t = message_words[t];
@@ -551,19 +576,23 @@ impl CompressionFn {
             b = a;
             a = self.round_carries[t]
                 .a_carries
-                .populate_carry(circuit, d, t2);
+                .populate_carry(circuit, t1, t2);
+
+            // #[cfg(debug_assertions)]
+            // Self::print_state(
+            //     format!("--------> {t} <---------"),
+            //     &[a, b, c, d, e, f, g, h],
+            // );
         }
 
         let intermediates = [a, b, c, d, e, f, g, h];
 
-        let output = input_words
+        input_words
             .iter()
             .zip(intermediates.iter())
             .zip(&self.output)
             .map(|((h, hprime), gate)| gate.populate_carry(circuit, *h, *hprime))
-            .collect();
-
-        output
+            .collect()
     }
 
     fn populate_t1<F: Field>(
