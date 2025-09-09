@@ -230,7 +230,7 @@ impl MessageSchedule {
     /// Attaches a message schedule to the SHA Circuit. Note that this
     /// needs to match the way adder is implemented
     pub fn populate_message_schedule<F: Field>(
-        &mut self,
+        &self,
         circuit: &mut Circuit<F>,
         input_data: &[u32],
     ) -> Vec<u32> {
@@ -632,16 +632,18 @@ fn sha256_padded_input(mut input_data: Vec<u8>) -> Vec<u32> {
 
 struct Sha256State {
     message_schedule: MessageSchedule, // Expanded message schedule
-    input_chunks: Vec<u32>,            // Input data chunked into 32-bit words
     compression_fn: CompressionFn,
+    input_chunks: Vec<u32>, // Input data chunked into 32-bit words
 }
 
 pub struct Sha256<F: Field> {
     key_schedule: KeySchedule<F>,
+    init_iv: HConstants<F>,
     round_states: Vec<Sha256State>,
 }
 
 impl<F: Field> Sha256<F> {
+    /// Creates a new SHA256 circuit given arbitrary length data input_data
     pub fn new(
         ckt_builder: &mut CircuitBuilder<F>,
         data_input_layer: &InputLayerNodeRef,
@@ -649,12 +651,12 @@ impl<F: Field> Sha256<F> {
         input_data: Vec<u8>,
     ) -> Self {
         let key_schedule = KeySchedule::<F>::new(ckt_builder);
+        let init_iv = HConstants::<F>::new(ckt_builder);
         let input_data = sha256_padded_input(input_data);
         let num_vars = input_data.len().ilog2() as usize + 5; // = log(32-bits * input_data.len())
         let all_input = ckt_builder.add_input_shred("SHA256_input", num_vars, data_input_layer);
 
-        let input_iv = HConstants::new(ckt_builder);
-        let mut input_schedule = input_iv.get_output_nodes();
+        let mut input_schedule = init_iv.get_output_nodes();
 
         let input_word_splits =
             ckt_builder.add_split_node(&all_input, input_data.len().ilog2() as usize);
@@ -686,15 +688,68 @@ impl<F: Field> Sha256<F> {
         Self {
             key_schedule,
             round_states,
+            init_iv,
         }
     }
 
+    /// Returns the input message padded according to SHA256 spec
     pub fn padded_data_chunks(&self) -> Vec<u32> {
         self.round_states
             .iter()
             .map(|st| st.input_chunks.clone())
             .flatten()
             .collect()
+    }
+
+    /// Returns the output node for the last Round of SHA256
+    pub fn get_output_node(&self) -> Vec<NodeRef> {
+        self.round_states
+            .last()
+            .map(|v| v.compression_fn.get_output_nodes())
+            .unwrap()
+    }
+
+    /// Populates the state of each SHA Round
+    fn populate_state(
+        &self,
+        circuit: &mut Circuit<F>,
+        state: &Sha256State,
+        input_words: Vec<u32>,
+    ) -> Vec<u32> {
+        let message_words = state
+            .message_schedule
+            .populate_message_schedule(circuit, &state.input_chunks);
+        state
+            .compression_fn
+            .populate_compression_fn(circuit, message_words, input_words)
+    }
+
+    /// Populates the circuit with the required data that was passed
+    /// during `new`. Returns the output of SHA256 hash
+    pub fn populate_circuit(&self, circuit: &mut Circuit<F>) -> Vec<u32> {
+        let all_bits = self
+            .round_states
+            .iter()
+            .map(|st| st.input_chunks.iter().map(|v| bit_decompose_msb_first(*v)))
+            .flatten()
+            .flatten()
+            .map(u64::from)
+            .map(F::from)
+            .collect_vec();
+
+        self.key_schedule.populate_key_schedule(circuit);
+        self.init_iv.populate_iv(circuit);
+
+        let final_result = self
+            .round_states
+            .iter()
+            .fold(HConstants::<F>::H.to_vec(), |hash_val, st| {
+                self.populate_state(circuit, st, hash_val)
+            });
+
+        let input_mle = MultilinearExtension::new(all_bits);
+        circuit.set_input("SHA256_input", input_mle);
+        final_result
     }
 }
 

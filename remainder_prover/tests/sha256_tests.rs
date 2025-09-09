@@ -365,6 +365,20 @@ fn sha256_test_padding() {
     assert_eq!(sha256.padded_data_chunks(), padded_data.to_vec());
 }
 
+#[test]
+fn sha256_full_round_test() {
+    let mut builder = CircuitBuilder::<Fr>::new();
+    let input_layer = builder.add_input_layer(LayerKind::Public);
+    let carry_layer = builder.add_input_layer(LayerKind::Public);
+    let input_data = ['a', 'b', 'c']
+        .into_iter()
+        .map(|x| x.try_into().unwrap())
+        .collect_vec();
+    let sha = sha256::Sha256::new(&mut builder, &input_layer, &carry_layer, input_data);
+    let mut ckt = builder.build().unwrap();
+    let _ = sha.populate_circuit(&mut ckt);
+}
+
 ///
 /// This is an independent pure Rust implementation of SHA256 taken from
 /// https://github.com/nanpuyue/sha256/ Licensed under Apache
