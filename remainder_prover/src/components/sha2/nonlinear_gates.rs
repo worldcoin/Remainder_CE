@@ -10,7 +10,7 @@ use crate::layouter::builder::{Circuit, CircuitBuilder, LayerKind, NodeRef};
 use crate::mle::evals::MultilinearExtension;
 use itertools::Itertools;
 use remainder_shared_types::Field;
-use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
+use std::ops::{BitOr, BitXor, Shl, Shr};
 
 /// A trait to deal with bit decomposition and bit rotation as needed by
 /// SHA-2 family of hash functions.
@@ -204,6 +204,7 @@ impl<F: Field> ConstInputGate<F> {
         self.data_node.clone()
     }
 
+    /// Returns the constant gate nodes
     pub fn get_output_ref(&self) -> &NodeRef {
         &self.data_node
     }

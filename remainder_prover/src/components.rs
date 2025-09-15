@@ -2,7 +2,9 @@
 
 use remainder_shared_types::Field;
 
+/// Utilities for SHA2 hash family
 pub mod sha2;
+
 use crate::layouter::builder::{CircuitBuilder, NodeRef};
 /// Components relating to digital range checking, decomposition and recomposition
 pub mod digits;
