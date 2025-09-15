@@ -1,6 +1,5 @@
 //! Implements bit shifting gates.
 
-use itertools::Itertools;
 use remainder_shared_types::Field;
 
 use crate::layouter::builder::{CircuitBuilder, NodeRef};
@@ -80,6 +79,7 @@ fn generate_rot_wirings(arity: usize, rot_amount: i32) -> Vec<(u32, u32)> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use itertools::Itertools;
 
     #[test]
     fn test_8bit_right_rotate_by_one() {

@@ -5,7 +5,7 @@
 use super::nonlinear_gates::*;
 use crate::binary_operations::binary_adder::BinaryAdder;
 use crate::expression::abstract_expr::ExprBuilder;
-use crate::layouter::builder::{Circuit, CircuitBuilder, InputLayerNodeRef, LayerKind, NodeRef};
+use crate::layouter::builder::{Circuit, CircuitBuilder, InputLayerNodeRef, NodeRef};
 use crate::mle::evals::MultilinearExtension;
 use itertools::Itertools;
 use remainder_shared_types::Field;
@@ -326,6 +326,7 @@ impl<F: Field> HConstants<F> {
         }
     }
 
+    /// Returns the list of H constants as wires in the circuit
     pub fn get_output_nodes(&self) -> Vec<NodeRef> {
         self.ivs.iter().map(|v| v.get_output()).collect()
     }
@@ -638,6 +639,8 @@ impl CompressionFn {
         sum1.populate_carry(circuit, s1, m1)
     }
 
+    /// Returns 8 32-bit words (256-bits) output of the compression
+    /// function
     pub fn get_output_nodes(&self) -> Vec<NodeRef> {
         self.output.iter().map(|n| n.get_output()).collect()
     }
@@ -680,8 +683,8 @@ impl<F: Field> Sha256<F> {
         carry_layer: &InputLayerNodeRef,
         input_data: Vec<u8>,
     ) -> Self {
-        let key_schedule = KeySchedule::<F>::new(ckt_builder);
-        let init_iv = HConstants::<F>::new(ckt_builder);
+        let key_schedule = KeySchedule::<F>::new(ckt_builder); // 32*64-bit
+        let init_iv = HConstants::<F>::new(ckt_builder); // 256-bit en
         let input_data = sha256_padded_input(input_data);
         let num_vars = input_data.len().ilog2() as usize + 5; // = log(32-bits * input_data.len())
         let all_input = ckt_builder.add_input_shred("SHA256_input", num_vars, data_input_layer);
