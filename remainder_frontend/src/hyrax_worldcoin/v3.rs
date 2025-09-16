@@ -326,6 +326,8 @@ pub struct V3Prover {
     #[serde(default = "VandermondeInverse::new")]
     converter: VandermondeInverse<Scalar>,
 
+    /// The Iriscode computation circuit description, along with auxiliary inputs (parameters which
+    /// are constant for both iris and mask computation), but no image/mask inputs.
     circuit: Circuit<Fr>,
 
     prover_config: GKRCircuitProverConfig,
@@ -397,13 +399,13 @@ impl V3Prover {
         // Load the inputs to the circuit (these are all MLEs, i.e. in the clear).
         let data = load_worldcoin_data::<Fr>(image_bytes, is_mask);
 
-        let inputs = iriscode_ss_attach_data::<_, { crate::zk_iriscode_ss::parameters::BASE }>(
-            self.circuit.clone(),
-            data,
-        )
+        let circuit_with_inputs = iriscode_ss_attach_data::<
+            _,
+            { crate::zk_iriscode_ss::parameters::BASE },
+        >(self.circuit.clone(), data)
         .unwrap();
 
-        let provable_circuit = self.circuit.finalize_hyrax().unwrap();
+        let provable_circuit = circuit_with_inputs.finalize_hyrax().unwrap();
 
         // Prove the iriscode circuit with the image precommit.
         let (proof, _, code_commit) = prove_with_image_precommit(

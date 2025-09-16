@@ -6,7 +6,6 @@ use crate::{
     layouter::builder::{Circuit, LayerVisibility},
     zk_iriscode_ss::data::build_iriscode_circuit_data,
 };
-use remainder::circuit_layout::ProvableCircuit;
 
 use super::{
     circuits::{build_iriscode_circuit_description, iriscode_ss_attach_data},
@@ -79,7 +78,6 @@ pub fn load_worldcoin_data<F: Field>(
 }
 
 /// Return the [Circuit] for the v3 iris code circuit.
-#[allow(clippy::type_complexity)]
 pub fn circuit_description() -> Result<Circuit<Fr>> {
     let image_strip_reroutings = IMAGE_STRIP_WIRINGS
         .iter()

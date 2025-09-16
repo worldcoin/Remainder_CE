@@ -1,12 +1,5 @@
-use std::collections::HashMap;
-
-use crate::zk_iriscode_ss::{
-    circuits::IriscodeCircuitDescription, v3::circuit_description_and_inputs,
-};
+use crate::zk_iriscode_ss::v3::circuit_description_and_inputs;
 use ark_std::{end_timer, start_timer};
-use remainder::{
-    circuit_layout::ProvableCircuit, layer::LayerId, mle::evals::MultilinearExtension,
-};
 
 use remainder_shared_types::{
     config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
@@ -25,13 +18,10 @@ use remainder_hyrax::{
 
 #[cfg(test)]
 mod tests {
-    use std::{env, path::Path};
+    use std::path::Path;
 
     use super::{
-        super::{
-            orb::{load_image_commitment, IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING},
-            v3::prove_with_image_precommit,
-        },
+        super::orb::{load_image_commitment, IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING},
         test_iriscode_v3_with_hyrax_helper,
     };
     use crate::{
@@ -52,19 +42,15 @@ mod tests {
         },
     };
     use rand::rngs::ThreadRng;
-    use remainder::circuit_layout::VerifiableCircuit;
     use remainder_hyrax::{
         circuit_layout::HyraxVerifiableCircuit,
         hyrax_gkr::{hyrax_input_layer::HyraxProverInputCommitment, HyraxProof},
         utils::vandermonde::VandermondeInverse,
     };
     use remainder_shared_types::{
-        config::{
-            global_config::global_prover_enable_bit_packing, GKRCircuitProverConfig,
-            GKRCircuitVerifierConfig, ProofConfig,
-        },
+        config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig, ProofConfig},
         curves::PrimeOrderCurve,
-        halo2curves::bn256::{Bn256, G1 as Bn256Point},
+        halo2curves::bn256::G1 as Bn256Point,
         pedersen::PedersenCommitter,
         perform_function_under_prover_config, perform_function_under_verifier_config,
         transcript::{ec_transcript::ECTranscript, poseidon_sponge::PoseidonSponge},
@@ -209,7 +195,7 @@ mod tests {
                     proof_config,
                     expected_commitment_hash,
                     image_commit,
-                    code_commit,
+                    _code_commit,
                 ) = perform_function_under_prover_config!(
                     v3_masked_iriscode_prove,
                     &gkr_circuit_prover_config,

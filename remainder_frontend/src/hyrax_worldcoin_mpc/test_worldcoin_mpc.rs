@@ -1,10 +1,4 @@
-use std::collections::HashMap;
-
-use crate::worldcoin_mpc::circuits::MPCCircuitDescription;
 use ark_std::{end_timer, start_timer};
-use remainder::{
-    circuit_layout::ProvableCircuit, layer::LayerId, mle::evals::MultilinearExtension,
-};
 use remainder_shared_types::{
     config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
     pedersen::PedersenCommitter,
@@ -15,7 +9,7 @@ use remainder_shared_types::{
 
 use remainder_hyrax::{
     circuit_layout::HyraxProvableCircuit,
-    hyrax_gkr::{hyrax_input_layer::commit_to_input_values, verify_hyrax_proof, HyraxProof},
+    hyrax_gkr::{verify_hyrax_proof, HyraxProof},
     utils::vandermonde::VandermondeInverse,
 };
 
@@ -34,11 +28,8 @@ mod tests {
         config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
         perform_function_under_expected_configs, Bn256Point,
     };
-    use tracing_subscriber::fmt::Layer;
 
-    use crate::hyrax_worldcoin_mpc::test_worldcoin_mpc::{
-        test_mpc_circuit_with_precommits_hyrax_helper, test_mpc_circuit_with_public_layers_helper,
-    };
+    use crate::hyrax_worldcoin_mpc::test_worldcoin_mpc::test_mpc_circuit_with_public_layers_helper;
 
     use super::test_mpc_circuit_with_hyrax_helper;
 
