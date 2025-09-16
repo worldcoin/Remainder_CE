@@ -11,16 +11,13 @@ use crate::{
     },
 };
 use remainder::{
-    circuit_layout::ProvableCircuit, input_layer::InputLayerDescription,
-    layer::gate::BinaryOperation, prover::GKRCircuitDescription,
+    input_layer::InputLayerDescription, layer::gate::BinaryOperation, prover::GKRCircuitDescription,
 };
 
 use super::{
     data::SecretShareCircuitInputs,
     parameters::{ENCODING_MATRIX_NUM_VARS_COLS, ENCODING_MATRIX_NUM_VARS_ROWS},
 };
-
-use anyhow::Result;
 
 /// Description of a `HyraxProof` for the mpc circuit.
 #[derive(Clone, Debug, Serialize, Deserialize)]

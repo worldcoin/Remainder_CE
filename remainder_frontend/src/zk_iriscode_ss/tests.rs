@@ -1,5 +1,4 @@
 use remainder::prover::helpers::test_circuit_with_runtime_optimized_config;
-use remainder_shared_types::Bn256Point;
 
 use crate::zk_iriscode_ss::test_helpers::{
     small_circuit_with_private_inputs, small_circuit_with_public_inputs,

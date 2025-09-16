@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     hyrax_worldcoin::{
         orb::PUBLIC_STRING,
@@ -7,14 +5,14 @@ use crate::{
     },
     layouter::builder::{Circuit, LayerVisibility},
     worldcoin_mpc::{
-        circuits::{build_circuit, mpc_attach_data, MPCCircuitDescription},
+        circuits::{build_circuit, mpc_attach_data},
         data::{create_ss_circuit_inputs, generate_trivial_test_data},
-        parameters::{GR4_MODULUS, MPC_NUM_IRIS_4_CHUNKS, NUM_PARTIES},
+        parameters::{GR4_MODULUS, MPC_NUM_IRIS_4_CHUNKS},
     },
     zk_iriscode_ss::parameters::{IRISCODE_LEN, SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS},
 };
 use remainder_hyrax::{
-    circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit},
+    circuit_layout::HyraxVerifiableCircuit,
     hyrax_gkr::{
         hyrax_input_layer::{
             commit_to_input_values, HyraxInputLayerDescription, HyraxProverInputCommitment,
@@ -38,7 +36,6 @@ use remainder_shared_types::{
         GKRCircuitProverConfig, ProofConfig,
     },
     curves::PrimeOrderCurve,
-    halo2curves::bn256::Bn256,
     pedersen::PedersenCommitter,
     transcript::{ec_transcript::ECTranscript, poseidon_sponge::PoseidonSponge},
     Base, Bn256Point, Field, Fr, Scalar,
@@ -333,9 +330,15 @@ impl MPCProver {
     ) -> HyraxProof<Bn256Point> {
         let mut provable_circuit = mpc_circuit_desc.finalize_hyrax().unwrap();
 
-        provable_circuit.set_pre_commitment("Iris Code Input", iris_precommit.clone());
-        provable_circuit.set_pre_commitment("Mask Code Input", mask_precommit.clone());
-        provable_circuit.set_pre_commitment("Slope", slope_precommit.clone());
+        provable_circuit
+            .set_pre_commitment("Iris Code Input", iris_precommit.clone())
+            .unwrap();
+        provable_circuit
+            .set_pre_commitment("Mask Code Input", mask_precommit.clone())
+            .unwrap();
+        provable_circuit
+            .set_pre_commitment("Slope", slope_precommit.clone())
+            .unwrap();
 
         // Create a fresh transcript.
         let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =

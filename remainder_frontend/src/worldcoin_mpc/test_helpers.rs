@@ -7,7 +7,6 @@ use crate::{
         data::{fetch_inversed_test_data, generate_trivial_test_data},
     },
 };
-use remainder::{circuit_layout::ProvableCircuit, layer::Layer};
 
 use super::circuits::mpc_attach_data;
 

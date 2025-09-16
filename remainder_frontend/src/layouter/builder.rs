@@ -12,11 +12,10 @@ use std::{
 use ark_std::log2;
 use itertools::Itertools;
 use remainder_hyrax::{
-    circuit_layout::HyraxProvableCircuit,
-    hyrax_gkr::hyrax_input_layer::{HyraxInputLayerDescription, HyraxProverInputCommitment},
+    circuit_layout::HyraxProvableCircuit, hyrax_gkr::hyrax_input_layer::HyraxInputLayerDescription,
 };
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
-use remainder_shared_types::{curves::PrimeOrderCurve, Bn256Point, Field};
+use remainder_shared_types::{curves::PrimeOrderCurve, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::{

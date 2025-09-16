@@ -1,16 +1,11 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
-use std::arch::aarch64::vreinterpret_f32_p16;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit};
+use crate::hyrax_gkr::hyrax_input_layer::HyraxInputLayerProof;
 use crate::utils::vandermonde::VandermondeInverse;
-use anyhow::bail;
 use ark_std::{end_timer, start_timer};
-use hyrax_input_layer::{
-    commit_to_input_values, HyraxInputLayerDescription, HyraxInputLayerProof,
-    HyraxProverInputCommitment,
-};
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
@@ -21,7 +16,6 @@ use remainder::layer::LayerId;
 use remainder::layer::{Layer, LayerDescription};
 use remainder::mle::evals::MultilinearExtension;
 use remainder::mle::{Mle, MleIndex};
-use remainder::output_layer;
 use remainder::prover::helpers::get_circuit_description_hash_as_field_elems;
 use remainder::prover::{GKRCircuitDescription, InstantiatedCircuit};
 

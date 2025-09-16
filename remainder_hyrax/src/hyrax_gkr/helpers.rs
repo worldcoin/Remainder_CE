@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-
-use remainder::{layer::LayerId, mle::evals::MultilinearExtension, prover::GKRCircuitDescription};
 use remainder_shared_types::{
     config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
     curves::PrimeOrderCurve,
@@ -14,8 +11,6 @@ use crate::{
     hyrax_gkr::{verify_hyrax_proof, HyraxProof},
     utils::{get_crypto_chacha20_prng, vandermonde::VandermondeInverse},
 };
-
-use super::hyrax_input_layer::HyraxInputLayerDescriptionWithPrecommit;
 
 /// Helper function for testing an iriscode circuit (of any version, with any
 /// data) with a Hyrax input layer.
