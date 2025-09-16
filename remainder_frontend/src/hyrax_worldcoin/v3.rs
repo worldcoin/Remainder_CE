@@ -92,7 +92,7 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
     expected_commitment_hash: &str,
     committer: &PedersenCommitter<Bn256Point>,
     proof_config: &ProofConfig,
-) -> Result<()> {
+) -> Result<(Vec<Bn256Point>, Vec<Bn256Point>)> {
     /*
     let mut hyrax_input_layers = HashMap::new();
 
@@ -138,6 +138,16 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
         proof_config,
     );
 
+    let image_layer_id = verifiable_circuit
+        .get_private_input_layer_id("To-Reroute")
+        .unwrap();
+    let code_layer_id = verifiable_circuit
+        .get_private_input_layer_id("Sign bits")
+        .unwrap();
+
+    let image_commitment = proof.get_commitment_ref(image_layer_id).cloned().unwrap();
+    // dbg!(&image_commitment);
+    let code_commitment = proof.get_commitment_ref(code_layer_id).cloned().unwrap();
     /*
     // Extract the iris/mask code commitment from the proof.
     let code_commitment = proof
@@ -163,7 +173,6 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
     // Check that the image commitment matches the expected hash.
     let commitment_hash = sha256_digest(
         &image_commitment
-            .commitment
             .iter()
             .flat_map(|p| p.to_bytes_compressed())
             .collect::<Vec<u8>>(),
@@ -174,7 +183,7 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
     }
 
     // Return the commitments to the code and the image.
-    Ok(())
+    Ok((code_commitment, image_commitment))
 }
 
 /// Prove a single instance of the iriscode circuit using the Hyrax proof system and the provided image precommit.
@@ -643,20 +652,19 @@ impl V3Proof {
         &self,
         is_mask: bool,
         is_left_eye: bool,
-        circuit: &HyraxVerifiableCircuit<Bn256Point>,
+        verifiable_circuit: &HyraxVerifiableCircuit<Bn256Point>,
         commitment_hash: &str,
     ) -> Result<()> {
         let proof = self.get(is_mask, is_left_eye);
 
-        /*
         verify_v3_iriscode_proof_and_hash(
             proof,
-            circuit,
+            verifiable_circuit,
+            todo!(),
             commitment_hash,
             &self.committer,
             &self.proof_config,
         )?;
-        */
 
         Ok(())
     }

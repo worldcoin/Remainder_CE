@@ -5,7 +5,7 @@ use crate::{
         orb::PUBLIC_STRING,
         v3::{V3Proof, V3ProofError, V3Prover},
     },
-    layouter::builder::Circuit,
+    layouter::builder::{Circuit, LayerVisibility},
     worldcoin_mpc::{
         circuits::{build_circuit, mpc_attach_data, MPCCircuitDescription},
         data::{create_ss_circuit_inputs, generate_trivial_test_data},
@@ -14,7 +14,7 @@ use crate::{
     zk_iriscode_ss::parameters::{IRISCODE_LEN, SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS},
 };
 use remainder_hyrax::{
-    circuit_layout::HyraxProvableCircuit,
+    circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit},
     hyrax_gkr::{
         hyrax_input_layer::{
             commit_to_input_values, HyraxInputLayerDescription, HyraxProverInputCommitment,
@@ -38,6 +38,7 @@ use remainder_shared_types::{
         GKRCircuitProverConfig, ProofConfig,
     },
     curves::PrimeOrderCurve,
+    halo2curves::bn256::Bn256,
     pedersen::PedersenCommitter,
     transcript::{ec_transcript::ECTranscript, poseidon_sponge::PoseidonSponge},
     Base, Bn256Point, Field, Fr, Scalar,
@@ -524,6 +525,7 @@ impl V3MPCProver {
         }
     }
 
+    /*
     fn remove_mpc_auxiliary_input_layer(&mut self, is_left_eye: bool) {
         self.mpc_prover.remove_auxiliary_input_layer(is_left_eye);
     }
@@ -532,6 +534,7 @@ impl V3MPCProver {
         self.v3_prover
             .remove_auxiliary_input_layer(is_mask, is_left_eye);
     }
+    */
 
     pub fn prove_v3(
         &mut self,
@@ -549,7 +552,7 @@ impl V3MPCProver {
 
         // Remove the public `auxiliary_input_layer` from the proofs, as these are already
         // incorporated in the `CircuitAndAuxMles` as `iris_aux_mle` and `mask_aux_mle`.
-        self.remove_v3_auxiliary_input_layer(is_mask, is_left_eye);
+        // self.remove_v3_auxiliary_input_layer(is_mask, is_left_eye);
     }
 
     pub fn prove_mpc(&mut self, is_left_eye: bool, rng: &mut (impl CryptoRng + RngCore)) {
@@ -561,7 +564,7 @@ impl V3MPCProver {
 
         // Remove the invariant public `auxiliary_input_layer` from the proofs, as these are already
         // incorporated in the `MPCCircuitAndAuxMles` as `aux_mle`.
-        self.remove_mpc_auxiliary_input_layer(is_left_eye);
+        // self.remove_mpc_auxiliary_input_layer(is_left_eye);
     }
 
     pub fn finalize(&self) -> Result<V3MPCProof, V3MPCProofError> {
@@ -712,8 +715,11 @@ impl MPCPartyProof {
     pub fn verify_mpc_proof(
         &self,
         is_left_eye: bool,
-        mpc_circuit_desc: &MPCCircuitDescription<Fr>,
+        // mpc_circuit_desc: &MPCCircuitDescription<Fr>,
+        mpc_circuit: &HyraxVerifiableCircuit<Bn256Point>,
+        secret_share_mle_layer_id: LayerId,
     ) -> Result<MultilinearExtension<Fr>, MPCError> {
+        /*
         let mut verifier_hyrax_input_layers = HashMap::new();
 
         verifier_hyrax_input_layers.insert(
@@ -732,6 +738,7 @@ impl MPCPartyProof {
             mpc_circuit_desc.auxilary_input_layer.layer_id,
             mpc_circuit_desc.auxilary_input_layer.clone().into(),
         );
+        */
 
         // Create a fresh transcript.
         let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -746,15 +753,13 @@ impl MPCPartyProof {
         // Verify the relationship between iris/mask code and image.
         verify_hyrax_proof(
             proof,
-            &verifier_hyrax_input_layers,
-            &mpc_circuit_desc.circuit_description,
+            mpc_circuit,
             &self.committer,
             &mut transcript,
             &self.proof_config,
         );
 
         // Here we need to grab the actual secret share MLE and return it.
-        let secret_share_mle_layer_id = mpc_circuit_desc.shares_input_layer.layer_id;
         let secret_share_mle_should_be_singleton = proof
             .public_inputs
             .iter()
@@ -908,6 +913,7 @@ impl V3MPCProof {
     }
 }
 
+/*
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub struct MPCCircuitAndAuxMles<F: Field> {
@@ -937,6 +943,7 @@ impl<F: Field> MPCCircuitAndAuxMles<F> {
         bincode::deserialize(bytes).expect("Failed to deserialize MPCCircuitAndAuxMles")
     }
 }
+*/
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
@@ -957,7 +964,7 @@ impl<F: Field> V3MPCCircuitAndAuxMles<F> {
 
 // Generate the circuit description and input builder used to generate the auxiliary MLEs.
 pub fn generate_mpc_circuit_and_aux_mles_all_3_parties<F: Field>() -> Vec<Circuit<F>> {
-    let circuit = build_circuit::<F, MPC_NUM_IRIS_4_CHUNKS>();
+    let mut circuit = build_circuit::<F, MPC_NUM_IRIS_4_CHUNKS>(LayerVisibility::Private);
 
     // Load the inputs to the circuit (these are all MLEs, i.e. in the clear).
     let iris_data_all_3_parties = [
@@ -966,12 +973,12 @@ pub fn generate_mpc_circuit_and_aux_mles_all_3_parties<F: Field>() -> Vec<Circui
         generate_trivial_test_data::<F, MPC_NUM_IRIS_4_CHUNKS, 2>(),
     ];
 
-    let iris_inputs_all_3_parties = iris_data_all_3_parties
+    iris_data_all_3_parties
         .into_iter()
-        .map(|iris_data| mpc_attach_data(&input_builder_metadata, iris_data))
-        .collect_vec();
+        .for_each(|iris_data| mpc_attach_data(&mut circuit, iris_data));
 
     // Extract the auxiliary public inputs for later use by the verifier.
+    /*
     let iris_aux_mle_all_3_parties = iris_inputs_all_3_parties
         .iter()
         .map(|iris_inputs| {
@@ -994,4 +1001,7 @@ pub fn generate_mpc_circuit_and_aux_mles_all_3_parties<F: Field>() -> Vec<Circui
             aux_mle,
         })
         .collect_vec()
+    */
+
+    vec![circuit.clone(), circuit.clone(), circuit]
 }

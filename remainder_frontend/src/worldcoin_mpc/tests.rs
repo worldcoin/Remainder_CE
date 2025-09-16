@@ -1,5 +1,6 @@
 use remainder_shared_types::Fr;
 
+use crate::layouter::builder::LayerVisibility;
 use crate::worldcoin_mpc::circuits::build_circuit;
 use crate::worldcoin_mpc::circuits::mpc_attach_data;
 use crate::worldcoin_mpc::data::fetch_inversed_test_data;
@@ -12,7 +13,7 @@ fn test_mpc_circuit_with_mock_data() {
     const PARTY_IDX: usize = 0;
 
     // Create circuit description + input helper function
-    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
+    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>(LayerVisibility::Private);
 
     let test_trivial_data = generate_trivial_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>();
     // Convert input data into circuit inputs which are assignable by prover
@@ -30,7 +31,7 @@ fn test_mpc_circuit_with_inverse_data() {
     const PARTY_IDX: usize = 0;
 
     // Create circuit description + input helper function
-    let circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
+    let circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>(LayerVisibility::Private);
 
     for test_idx in 10..12 {
         let mut circuit = circuit.clone();
@@ -53,7 +54,7 @@ fn test_mpc_circuit_batched_with_mock_data() {
     const PARTY_IDX: usize = 0;
 
     // Create circuit description + input helper function
-    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
+    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>(LayerVisibility::Private);
 
     let test_trivial_data = generate_trivial_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>();
 
@@ -72,7 +73,7 @@ fn test_mpc_circuit_batched_with_inverse_data() {
     const TEST_IDX_START: usize = 2;
 
     // Create circuit description + input helper function
-    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
+    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>(LayerVisibility::Private);
 
     let test_inversed_data =
         fetch_inversed_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>(TEST_IDX_START);
@@ -91,7 +92,7 @@ fn test_mpc_circuit_batched_non_power_of_2_with_mock_data() {
     const PARTY_IDX: usize = 0;
 
     // Create circuit description + input helper function
-    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
+    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>(LayerVisibility::Private);
 
     let test_trivial_data = generate_trivial_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>();
 
@@ -110,7 +111,7 @@ fn test_mpc_circuit_batched_non_power_of_2_with_inverse_data() {
     const TEST_IDX_START: usize = 2;
 
     // Create circuit description + input helper function
-    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>();
+    let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>(LayerVisibility::Private);
 
     let test_inversed_data =
         fetch_inversed_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>(TEST_IDX_START);

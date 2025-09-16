@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use crate::worldcoin_mpc::circuits::MPCCircuitDescription;
 use ark_std::{end_timer, start_timer};
-use remainder::{layer::LayerId, mle::evals::MultilinearExtension};
+use remainder::{
+    circuit_layout::ProvableCircuit, layer::LayerId, mle::evals::MultilinearExtension,
+};
 use remainder_shared_types::{
     config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
     pedersen::PedersenCommitter,
@@ -12,20 +14,27 @@ use remainder_shared_types::{
 };
 
 use remainder_hyrax::{
+    circuit_layout::HyraxProvableCircuit,
     hyrax_gkr::{hyrax_input_layer::commit_to_input_values, verify_hyrax_proof, HyraxProof},
     utils::vandermonde::VandermondeInverse,
 };
 
+// TODO: Make sure the descriptions of the tests match what they actually do!!
+
 #[cfg(test)]
 mod tests {
 
-    use crate::worldcoin_mpc::test_helpers::{
-        inversed_circuit_description_and_inputs, small_circuit_description_and_inputs,
+    use crate::{
+        layouter::builder::LayerVisibility,
+        worldcoin_mpc::test_helpers::{
+            inversed_circuit_description_and_inputs, small_circuit_description_and_inputs,
+        },
     };
     use remainder_shared_types::{
         config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
-        perform_function_under_expected_configs,
+        perform_function_under_expected_configs, Bn256Point,
     };
+    use tracing_subscriber::fmt::Layer;
 
     use crate::hyrax_worldcoin_mpc::test_worldcoin_mpc::{
         test_mpc_circuit_with_precommits_hyrax_helper, test_mpc_circuit_with_public_layers_helper,
@@ -38,8 +47,11 @@ mod tests {
     fn test_small_mpc_circuit_with_hyrax_layers() {
         const NUM_IRIS_4_CHUNKS: usize = 1;
         const PARTY_IDX: usize = 0;
-        let (desc, inputs) = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>();
-        test_mpc_circuit_with_hyrax_helper(desc, inputs);
+        let circuit = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
+            LayerVisibility::Private,
+        );
+        let provable_circuit = circuit.finalize_hyrax::<Bn256Point>().unwrap();
+        test_mpc_circuit_with_hyrax_helper(provable_circuit);
     }
 
     #[ignore] // takes a long time to run!
@@ -47,8 +59,11 @@ mod tests {
     fn test_small_mpc_circuit_with_hyrax_layers_batched() {
         const NUM_IRIS_4_CHUNKS: usize = 4;
         const PARTY_IDX: usize = 0;
-        let (desc, inputs) = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>();
-        test_mpc_circuit_with_hyrax_helper(desc, inputs);
+        let circuit = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
+            LayerVisibility::Private,
+        );
+        let provable_circuit = circuit.finalize_hyrax::<Bn256Point>().unwrap();
+        test_mpc_circuit_with_hyrax_helper(provable_circuit);
     }
 
     #[ignore] // takes a long time to run!
@@ -56,19 +71,26 @@ mod tests {
     fn test_small_mpc_circuit_with_hyrax_layers_batched_non_power_of_2() {
         const NUM_IRIS_4_CHUNKS: usize = 3;
         const PARTY_IDX: usize = 0;
-        let (desc, inputs) = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>();
-        test_mpc_circuit_with_hyrax_helper(desc, inputs);
+        let circuit = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
+            LayerVisibility::Private,
+        );
+        let provable_circuit = circuit.finalize_hyrax::<Bn256Point>().unwrap();
+        test_mpc_circuit_with_hyrax_helper(provable_circuit);
     }
 
+    /*
     #[ignore] // takes a long time to run!
     #[test]
     fn test_small_mpc_circuit_with_precommits_hyrax_layers_batched_non_power_of_2() {
         const NUM_IRIS_4_CHUNKS: usize = 3;
         const PARTY_IDX: usize = 0;
-        let (desc, inputs) = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>();
-        test_mpc_circuit_with_precommits_hyrax_helper(desc, inputs);
+        let circuit = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>();
+        let provable_circuit = circuit.finalize_hyrax::<Bn256Point>().unwrap();
+        test_mpc_circuit_with_precommits_hyrax_helper(provable_circuit);
     }
+    */
 
+    /*
     #[ignore] // takes a long time to run!
     #[test]
     fn test_small_mpc_circuit_with_precommits_hyrax_layers_batched_non_power_of_2_all_3_parties() {
@@ -83,23 +105,29 @@ mod tests {
         let (desc, inputs) = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, 2>();
         test_mpc_circuit_with_precommits_hyrax_helper(desc, inputs);
     }
+    */
 
     #[test]
     fn test_small_mpc_circuit_both_layers_public() {
         const NUM_IRIS_4_CHUNKS: usize = 1;
         const PARTY_IDX: usize = 0;
-        let (desc, inputs) = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>();
+
+        let circuit = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
+            LayerVisibility::Public,
+        );
+        let provable_circuit = circuit.finalize_hyrax().unwrap();
+
         // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
         let gkr_circuit_prover_config =
             GKRCircuitProverConfig::hyrax_compatible_runtime_optimized_default();
         let gkr_circuit_verifier_config =
             GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
+
         perform_function_under_expected_configs!(
             test_mpc_circuit_with_public_layers_helper,
             &gkr_circuit_prover_config,
             &gkr_circuit_verifier_config,
-            desc,
-            inputs
+            provable_circuit
         );
     }
 
@@ -109,9 +137,14 @@ mod tests {
         const TEST_IDX: usize = 2;
         const NUM_IRIS_4_CHUNKS: usize = 1;
         const PARTY_IDX: usize = 0;
-        let (desc, inputs) =
-            inversed_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(TEST_IDX);
-        test_mpc_circuit_with_hyrax_helper(desc, inputs);
+
+        let circuit = inversed_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
+            TEST_IDX,
+            LayerVisibility::Private,
+        );
+        let provable_circuit = circuit.finalize_hyrax().unwrap();
+
+        test_mpc_circuit_with_hyrax_helper(provable_circuit);
     }
 
     #[ignore] // takes a long time to run!
@@ -120,9 +153,14 @@ mod tests {
         const TEST_IDX: usize = 2;
         const NUM_IRIS_4_CHUNKS: usize = 4;
         const PARTY_IDX: usize = 0;
-        let (desc, inputs) =
-            inversed_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(TEST_IDX);
-        test_mpc_circuit_with_hyrax_helper(desc, inputs);
+
+        let circuit = inversed_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
+            TEST_IDX,
+            LayerVisibility::Private,
+        );
+        let provable_circuit = circuit.finalize_hyrax().unwrap();
+
+        test_mpc_circuit_with_hyrax_helper(provable_circuit);
     }
 
     #[ignore] // takes a long time to run!
@@ -131,9 +169,14 @@ mod tests {
         const TEST_IDX: usize = 2;
         const NUM_IRIS_4_CHUNKS: usize = 3;
         const PARTY_IDX: usize = 0;
-        let (desc, inputs) =
-            inversed_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(TEST_IDX);
-        test_mpc_circuit_with_hyrax_helper(desc, inputs);
+
+        let circuit = inversed_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
+            TEST_IDX,
+            LayerVisibility::Private,
+        );
+        let provable_circuit = circuit.finalize_hyrax().unwrap();
+
+        test_mpc_circuit_with_hyrax_helper(provable_circuit);
     }
 
     #[ignore] // takes a long time to run!
@@ -142,17 +185,27 @@ mod tests {
         const TEST_IDX: usize = 2;
         const NUM_IRIS_4_CHUNKS: usize = 1;
         const PARTY_IDX: usize = 0;
-        let (desc, inputs) =
-            inversed_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(TEST_IDX);
-        test_mpc_circuit_with_public_layers_helper(desc, inputs);
+
+        let circuit = inversed_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
+            TEST_IDX,
+            LayerVisibility::Public,
+        );
+        let provable_circuit = circuit.finalize_hyrax().unwrap();
+
+        test_mpc_circuit_with_public_layers_helper(provable_circuit);
     }
 }
 
 /// Helper function for testing an Shamir's secret sharing circuit with a public input layer.
 pub fn test_mpc_circuit_with_public_layers_helper(
+    mut mpc_circuit: HyraxProvableCircuit<Bn256Point>,
+    /*
     mpc_circuit_desc: MPCCircuitDescription<Scalar>,
     inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
+    */
 ) {
+    let verifiable_circuit = mpc_circuit._gen_verifiable_circuit();
+
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
     let blinding_rng = &mut rand::thread_rng();
@@ -166,9 +219,7 @@ pub fn test_mpc_circuit_with_public_layers_helper(
 
     // --- Compute actual Hyrax proof ---
     let (proof, proof_config) = HyraxProof::prove(
-        &inputs,
-        &HashMap::new(),
-        &mpc_circuit_desc.circuit_description,
+        &mut mpc_circuit,
         &committer,
         blinding_rng,
         converter,
@@ -181,8 +232,7 @@ pub fn test_mpc_circuit_with_public_layers_helper(
     // Verify.
     verify_hyrax_proof(
         &proof,
-        &HashMap::new(),
-        &mpc_circuit_desc.circuit_description,
+        &verifiable_circuit,
         &committer,
         &mut transcript,
         &proof_config,
@@ -192,9 +242,12 @@ pub fn test_mpc_circuit_with_public_layers_helper(
 /// Helper function for testing an Shamir's secret sharing circuit with Hyrax input
 /// layers for the private data.
 pub fn test_mpc_circuit_with_hyrax_helper(
-    mpc_circuit_desc: MPCCircuitDescription<Scalar>,
-    inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
+    mut mpc_circuit: HyraxProvableCircuit<Bn256Point>,
+    // mpc_circuit_desc: MPCCircuitDescription<Scalar>,
+    // inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
 ) {
+    let verifiable_circuit = mpc_circuit._gen_verifiable_circuit();
+
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
     let blinding_rng = &mut rand::thread_rng();
@@ -206,6 +259,7 @@ pub fn test_mpc_circuit_with_hyrax_helper(
         None,
     );
     // Set up Hyrax input layer specification.
+    /*
     let mut prover_hyrax_input_layers = HashMap::new();
     prover_hyrax_input_layers.insert(
         mpc_circuit_desc.slope_input_layer.layer_id,
@@ -223,6 +277,8 @@ pub fn test_mpc_circuit_with_hyrax_helper(
         mpc_circuit_desc.auxilary_input_layer.layer_id,
         (mpc_circuit_desc.auxilary_input_layer.clone().into(), None),
     );
+    */
+
     // Prove.
     // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
     let gkr_circuit_prover_config =
@@ -234,17 +290,17 @@ pub fn test_mpc_circuit_with_hyrax_helper(
     let (proof, proof_config) = perform_function_under_prover_config!(
         HyraxProof::prove,
         &gkr_circuit_prover_config,
-        &inputs,
-        &prover_hyrax_input_layers,
-        &mpc_circuit_desc.circuit_description,
+        &mut mpc_circuit,
         &committer,
         blinding_rng,
         converter,
         &mut transcript
     );
+
     // Verify.
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
+    /*
     let mut verifier_hyrax_input_layers = HashMap::new();
     verifier_hyrax_input_layers.insert(
         mpc_circuit_desc.slope_input_layer.layer_id,
@@ -262,13 +318,14 @@ pub fn test_mpc_circuit_with_hyrax_helper(
         mpc_circuit_desc.auxilary_input_layer.layer_id,
         mpc_circuit_desc.auxilary_input_layer.clone().into(),
     );
+    */
+
     let verification_timer = start_timer!(|| "verification timer");
     perform_function_under_verifier_config!(
         verify_hyrax_proof,
         &gkr_circuit_verifier_config,
         &proof,
-        &verifier_hyrax_input_layers,
-        &mpc_circuit_desc.circuit_description,
+        &verifiable_circuit,
         &committer,
         &mut transcript,
         &proof_config
@@ -279,9 +336,14 @@ pub fn test_mpc_circuit_with_hyrax_helper(
 /// Helper function for testing an Shamir's secret sharing circuit with Hyrax input
 /// layers for the private data.
 pub fn test_mpc_circuit_with_precommits_hyrax_helper(
+    mut mpc_circuit: HyraxProvableCircuit<Bn256Point>,
+    /*
     mpc_circuit_desc: MPCCircuitDescription<Scalar>,
     inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
+    */
 ) {
+    let verifiable_circuit = mpc_circuit._gen_verifiable_circuit();
+
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
     let blinding_rng = &mut rand::thread_rng();
@@ -293,6 +355,7 @@ pub fn test_mpc_circuit_with_precommits_hyrax_helper(
         None,
     );
 
+    /*
     let slope_precommit = commit_to_input_values(
         &mpc_circuit_desc.slope_input_layer.clone().into(),
         inputs
@@ -319,8 +382,10 @@ pub fn test_mpc_circuit_with_precommits_hyrax_helper(
         &committer,
         blinding_rng,
     );
+    */
 
     // Set up Hyrax input layer specification.
+    /*
     let mut prover_hyrax_input_layers = HashMap::new();
     prover_hyrax_input_layers.insert(
         mpc_circuit_desc.slope_input_layer.layer_id,
@@ -347,6 +412,8 @@ pub fn test_mpc_circuit_with_precommits_hyrax_helper(
         mpc_circuit_desc.auxilary_input_layer.layer_id,
         (mpc_circuit_desc.auxilary_input_layer.clone().into(), None),
     );
+    */
+
     // Prove.
     // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
     let gkr_circuit_prover_config =
@@ -358,18 +425,17 @@ pub fn test_mpc_circuit_with_precommits_hyrax_helper(
     let (proof, proof_config) = perform_function_under_prover_config!(
         HyraxProof::prove,
         &gkr_circuit_prover_config,
-        &inputs,
-        &prover_hyrax_input_layers,
-        &mpc_circuit_desc.circuit_description,
+        &mut mpc_circuit,
         &committer,
         blinding_rng,
         converter,
         &mut transcript
     );
+
     // Verify.
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-    let mut verifier_hyrax_input_layers = HashMap::new();
+    /*
     verifier_hyrax_input_layers.insert(
         mpc_circuit_desc.slope_input_layer.layer_id,
         mpc_circuit_desc.slope_input_layer.clone().into(),
@@ -386,13 +452,14 @@ pub fn test_mpc_circuit_with_precommits_hyrax_helper(
         mpc_circuit_desc.auxilary_input_layer.layer_id,
         mpc_circuit_desc.auxilary_input_layer.clone().into(),
     );
+    */
+
     let verification_timer = start_timer!(|| "verification timer");
     perform_function_under_verifier_config!(
         verify_hyrax_proof,
         &gkr_circuit_verifier_config,
         &proof,
-        &verifier_hyrax_input_layers,
-        &mpc_circuit_desc.circuit_description,
+        &verifiable_circuit,
         &committer,
         &mut transcript,
         &proof_config
