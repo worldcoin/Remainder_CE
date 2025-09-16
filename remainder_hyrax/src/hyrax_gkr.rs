@@ -38,6 +38,8 @@ use serde::{Deserialize, Serialize};
 
 use self::hyrax_layer::HyraxLayerProof;
 
+use anyhow::Result;
+
 pub mod helpers;
 /// The module that contains all functions necessary to do operations on a Hyrax
 /// input layer using the Hyrax PCS.
@@ -317,6 +319,22 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
             },
             proof_config,
         )
+    }
+
+    pub fn get_commitment_ref(&self, layer_id: LayerId) -> Result<&Vec<C>> {
+        let input_layer_proofs = self
+            .hyrax_input_proofs
+            .iter()
+            .filter(|proof| proof.layer_id == layer_id)
+            .collect_vec();
+
+        if input_layer_proofs.len() > 1 {
+            panic!("Multiple input layer proofs found for Input Layer with ID '{layer_id}'");
+        } else if input_layer_proofs.is_empty() {
+            panic!("No private input layer found with id '{layer_id}'");
+        }
+
+        Ok(&input_layer_proofs[0].input_commitment)
     }
 }
 

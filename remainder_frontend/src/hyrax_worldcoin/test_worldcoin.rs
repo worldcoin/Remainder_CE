@@ -110,6 +110,7 @@ mod tests {
         );
         let image_commitment: HyraxProverInputCommitment<Bn256Point> =
             serialized_image_commitment.clone().into();
+        // dbg!(&image_commitment.commitment);
         // Derive the hash of the image commitment.  In production, this has been calculated by the Orb and sent over in a signed file.
         let expected_commitment_hash = digest(
             &image_commitment
@@ -139,11 +140,9 @@ mod tests {
         let mut provable_circuit = circuit.finalize_hyrax().unwrap();
         let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
 
-        /*
         provable_circuit
             .set_pre_commitment("To-Reroute", image_commitment.into())
             .unwrap();
-        */
 
         // Create a fresh transcript.
         let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =

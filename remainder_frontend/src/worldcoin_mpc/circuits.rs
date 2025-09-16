@@ -61,7 +61,9 @@ pub struct MPCCircuitDescription<F: Field> {
 /// Then, the circuit does a GR4 multiplication between the evaluation points and the slopes.
 /// The result is then summed with the masked iris code to get the computed shares.
 /// The quotients, shares_reduced_modulo_gr4_modulus are to count for congruency (modulo 2^16).
-pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>() -> Circuit<F> {
+pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
+    layer_visibility: LayerVisibility,
+) -> Circuit<F> {
     let mut builder = CircuitBuilder::<F>::new();
 
     let num_vars_dataparallel = log2(NUM_IRIS_4_CHUNKS) as usize;
@@ -73,11 +75,9 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>() -> Circuit<F> {
     let shares_input_layer_node = builder.add_input_layer("Shares", LayerVisibility::Public);
     let auxiliary_invariant_public_input_layer_node =
         builder.add_input_layer("Auxiliary Invariant", LayerVisibility::Public);
-    let slope_input_layer_node = builder.add_input_layer("Slope", LayerVisibility::Private);
-    let iris_code_input_layer_node =
-        builder.add_input_layer("Irir Code Input", LayerVisibility::Private);
-    let mask_code_input_layer_node =
-        builder.add_input_layer("Mask Code Input", LayerVisibility::Private);
+    let slope_input_layer_node = builder.add_input_layer("Slope", layer_visibility);
+    let iris_code_input_layer_node = builder.add_input_layer("Irir Code Input", layer_visibility);
+    let mask_code_input_layer_node = builder.add_input_layer("Mask Code Input", layer_visibility);
 
     let iris_code = builder.add_input_shred("Iriscode", num_vars, &iris_code_input_layer_node);
     let mask_code = builder.add_input_shred("Maskcode", num_vars, &mask_code_input_layer_node);
