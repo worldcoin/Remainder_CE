@@ -1,8 +1,9 @@
+use super::AdderGateTrait;
 use crate::expression::abstract_expr::ExprBuilder;
-use crate::layouter::builder::{CircuitBuilder, NodeRef};
+use crate::layouter::builder::{CircuitBuilder, InputLayerNodeRef, NodeRef};
 use itertools::Itertools;
-
 use remainder_shared_types::Field;
+use std::marker::PhantomData;
 
 /// A single bit full adder
 #[derive(Clone, Debug)]
@@ -61,20 +62,38 @@ impl FullAdder {
 }
 
 /// mod 2^BITWIDTH adder with no input carry and no output carry
-pub struct RippleCarryAdderMod2w<const BITWIDTH: usize> {
+pub struct RippleCarryAdderMod2w<const BITWIDTH: usize, F> {
     sum_node: NodeRef,
+    _phantom: PhantomData<F>,
 }
 
-impl<const BITWIDTH: usize> RippleCarryAdderMod2w<BITWIDTH> {
+impl<F: Field> AdderGateTrait<F> for RippleCarryAdderMod2w<32, F> {
+    type IntegralType = u32;
+
+    fn layout_adder_circuit(
+        circuit_builder: &mut CircuitBuilder<F>, // Circuit builder
+        x_node: &NodeRef,                        // reference to x in x + y
+        y_node: &NodeRef,                        // reference to y in x + y
+        _: Option<InputLayerNodeRef>,            // Carry Layer information
+    ) -> Self {
+        Self::new(circuit_builder, x_node, y_node)
+    }
+
+    /// Returns the output of AdderNoCarry
+    fn get_output(&self) -> NodeRef {
+        self.sum_node.clone()
+    }
+}
+
+impl<const BITWIDTH: usize, F> RippleCarryAdderMod2w<BITWIDTH, F>
+where
+    F: Field,
+{
     /// Creates a BITWIDTH word Integer adder. For SHA-256/224 BITWIDTH is 32, for SHA-512/384, BITWIDTH is 64
     ///
     /// [x_word] and [y_word] are assumed to be MSB-first decomposition of
     /// of the data.
-    pub fn new<F: Field>(
-        builder_ref: &mut CircuitBuilder<F>,
-        x_word: &NodeRef,
-        y_word: &NodeRef,
-    ) -> Self {
+    pub fn new(builder_ref: &mut CircuitBuilder<F>, x_word: &NodeRef, y_word: &NodeRef) -> Self {
         debug_assert!(BITWIDTH.is_power_of_two());
         debug_assert!(x_word.get_num_vars() == BITWIDTH.ilog2() as usize);
         debug_assert!(y_word.get_num_vars() == BITWIDTH.ilog2() as usize);
@@ -104,11 +123,9 @@ impl<const BITWIDTH: usize> RippleCarryAdderMod2w<BITWIDTH> {
 
         let sum_node = builder_ref.add_sector(ExprBuilder::<F>::selectors(sum_rewired));
 
-        Self { sum_node }
-    }
-
-    /// Returns the output of AdderNoCarry
-    pub fn get_output(&self) -> NodeRef {
-        self.sum_node.clone()
+        Self {
+            sum_node,
+            _phantom: Default::default(),
+        }
     }
 }

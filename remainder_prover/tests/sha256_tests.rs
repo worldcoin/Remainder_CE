@@ -4,8 +4,9 @@ use remainder::{
     components::sha2::nonlinear_gates as sha2,
     components::sha2::ripple_carry_adder as rca,
     components::sha2::sha256_bit_decomp as sha256,
+    components::sha2::AdderGateTrait,
     expression::abstract_expr::ExprBuilder,
-    layouter::builder::{Circuit, CircuitBuilder, LayerKind, ProvableCircuit},
+    layouter::builder::{Circuit, CircuitBuilder, InputLayerNodeRef, LayerKind, ProvableCircuit},
     mle::evals::MultilinearExtension,
     prover::helpers::{
         test_circuit_with_memory_optimized_config, test_circuit_with_runtime_optimized_config,
@@ -13,7 +14,7 @@ use remainder::{
 };
 use remainder_shared_types::{Field, Fr};
 
-fn sha256_ripple_adder_gate_circuit() -> Circuit<Fr> {
+fn sha256_ripple_adder_gate_circuit<F: Field>() -> Circuit<F> {
     let mut builder = CircuitBuilder::new();
 
     let input_layer = builder.add_input_layer(LayerKind::Public);
@@ -40,16 +41,19 @@ fn sha256_ripple_adder_gate_circuit() -> Circuit<Fr> {
 
     let [x, y, expected_sum, _] = splits.try_into().unwrap();
 
-    let mod32_rca = rca::RippleCarryAdderMod2w::<32>::new(&mut builder, &x, &y);
+    let mod32_rca = rca::RippleCarryAdderMod2w::<32, F>::new(&mut builder, &x, &y);
     let sum_is_valid = builder.add_sector(mod32_rca.get_output().expr() - expected_sum.expr());
 
     builder.set_output(&sum_is_valid);
     builder.build().unwrap()
 }
 
-fn attach_sha256_ripple_adder_gate_data<const POSITIVE: bool>(
-    mut circuit: Circuit<Fr>,
-) -> ProvableCircuit<Fr> {
+fn attach_sha256_ripple_adder_gate_data<const POSITIVE: bool, F>(
+    mut circuit: Circuit<F>,
+) -> ProvableCircuit<F>
+where
+    F: Field + From<u64>,
+{
     let mut trng = thread_rng();
     // 1. Attach random data
     let x = trng.next_u32();
@@ -72,7 +76,7 @@ fn attach_sha256_ripple_adder_gate_data<const POSITIVE: bool>(
             .chain(expected_bits.into_iter())
             .chain(std::iter::repeat(0).take(32))
             .map(u64::from)
-            .map(Fr::from)
+            .map(F::from)
             .collect_vec(),
     );
 
@@ -82,7 +86,7 @@ fn attach_sha256_ripple_adder_gate_data<const POSITIVE: bool>(
 
 fn sha256_committed_carry_adder_gate_circuit(
     carry_layer_kind: LayerKind,
-) -> (Circuit<Fr>, sha256::CommittedCarryAdder) {
+) -> (Circuit<Fr>, sha256::CommittedCarryAdder<Fr>) {
     let mut builder = CircuitBuilder::new();
 
     let input_layer = builder.add_input_layer(LayerKind::Public);
@@ -110,17 +114,21 @@ fn sha256_committed_carry_adder_gate_circuit(
 
     let [x, y, expected_sum, _] = splits.try_into().unwrap();
 
-    let mod32_cca = sha256::CommittedCarryAdder::new(&mut builder, &carry_layer, &x, &y);
+    let mod32_cca =
+        sha256::CommittedCarryAdder::layout_adder_circuit(&mut builder, &x, &y, Some(carry_layer));
     let sum_is_valid = builder.add_sector(mod32_cca.get_output().expr() - expected_sum.expr());
 
     builder.set_output(&sum_is_valid);
     (builder.build().unwrap(), mod32_cca)
 }
 
-fn attach_sha256_committed_carry_adder_gate_data<const POSITIVE: bool>(
-    mut circuit: Circuit<Fr>,
-    cca: sha256::CommittedCarryAdder,
-) -> ProvableCircuit<Fr> {
+fn attach_sha256_committed_carry_adder_gate_data<const POSITIVE: bool, F: Field>(
+    mut circuit: Circuit<F>,
+    cca: sha256::CommittedCarryAdder<F>,
+) -> ProvableCircuit<F>
+where
+    F: Field + From<u64>,
+{
     let mut trng = thread_rng();
     // 1. Attach random data
     let x = trng.next_u32();
@@ -143,7 +151,7 @@ fn attach_sha256_committed_carry_adder_gate_data<const POSITIVE: bool>(
             .chain(expected_bits.into_iter())
             .chain(std::iter::repeat(0).take(32))
             .map(u64::from)
-            .map(Fr::from)
+            .map(F::from)
             .collect_vec(),
     );
 
@@ -152,14 +160,17 @@ fn attach_sha256_committed_carry_adder_gate_data<const POSITIVE: bool>(
     circuit.finalize().unwrap()
 }
 
-fn sha256_message_schedule_circuit(
-    carry_layer_kind: LayerKind,
-) -> (Circuit<Fr>, sha256::MessageSchedule) {
+fn sha256_message_schedule_circuit<F, Adder>(
+    with_layer_kind: Option<LayerKind>,
+) -> (Circuit<F>, sha256::MessageSchedule<F, Adder>)
+where
+    F: Field + From<u64>,
+    Adder: AdderGateTrait<F, IntegralType = u32> + Clone,
+{
     let mut builder = CircuitBuilder::new();
 
     let input_layer = builder.add_input_layer(LayerKind::Public);
-    let carry_layer = builder.add_input_layer(carry_layer_kind);
-
+    let carry_layer = with_layer_kind.map(|layer_kind| builder.add_input_layer(layer_kind));
     // Each word is 32-bit input
     let word_size = 32_usize;
 
@@ -191,18 +202,23 @@ fn sha256_message_schedule_circuit(
 
     let word_splits = builder.add_split_node(&message_inputs, input_word_count.ilog2() as usize);
 
-    let msg_schedule = sha256::MessageSchedule::new(&mut builder, &carry_layer, &word_splits);
+    let msg_schedule =
+        sha256::MessageSchedule::<F, Adder>::new(&mut builder, carry_layer.as_ref(), &word_splits);
     let schedule_is_valid =
-        builder.add_sector(msg_schedule.get_output_expr::<Fr>() - expected_output.expr());
+        builder.add_sector(msg_schedule.get_output_expr() - expected_output.expr());
 
     builder.set_output(&schedule_is_valid);
     (builder.build().unwrap(), msg_schedule)
 }
 
-fn attach_data_sha256_message_schedule<const POSITIVE: bool>(
-    mut circuit: Circuit<Fr>,
-    msg_sched: &mut sha256::MessageSchedule,
-) -> ProvableCircuit<Fr> {
+fn attach_data_sha256_message_schedule<const POSITIVE: bool, F, Adder>(
+    mut circuit: Circuit<F>,
+    msg_sched: &mut sha256::MessageSchedule<F, Adder>,
+) -> ProvableCircuit<F>
+where
+    F: Field + From<u64>,
+    Adder: AdderGateTrait<F, IntegralType = u32> + Clone,
+{
     let mut rng = rand::thread_rng();
     let mut input_message = [0u8; 16 * 4];
     rng.try_fill_bytes(&mut input_message).unwrap();
@@ -240,7 +256,7 @@ fn attach_data_sha256_message_schedule<const POSITIVE: bool>(
             .map(sha2::bit_decompose_msb_first)
             .flatten()
             .map(u64::from)
-            .map(Fr::from)
+            .map(F::from)
             .collect(),
     );
 
@@ -250,7 +266,7 @@ fn attach_data_sha256_message_schedule<const POSITIVE: bool>(
             .map(sha2::bit_decompose_msb_first)
             .flatten()
             .map(u64::from)
-            .map(Fr::from)
+            .map(F::from)
             .collect(),
     );
 
@@ -259,7 +275,14 @@ fn attach_data_sha256_message_schedule<const POSITIVE: bool>(
     circuit.finalize().unwrap()
 }
 
-fn sha256_test_circuit<F: Field>(input_data: Vec<u8>) -> Circuit<F> {
+fn sha256_test_circuit<F, Adder>(
+    input_data: Vec<u8>,
+    with_carry_layer: Option<LayerKind>,
+) -> Circuit<F>
+where
+    F: Field + From<u64>,
+    Adder: AdderGateTrait<F, IntegralType = u32> + Clone,
+{
     let mut builder = CircuitBuilder::<F>::new();
     let mut hasher = sha256_simple::Sha256::default();
     hasher.update(&input_data);
@@ -276,14 +299,21 @@ fn sha256_test_circuit<F: Field>(input_data: Vec<u8>) -> Circuit<F> {
     );
 
     let input_layer = builder.add_input_layer(LayerKind::Public);
-    let carry_layer = builder.add_input_layer(LayerKind::Public);
+    let committed_carry_layer =
+        with_carry_layer.map(|layer_kind| builder.add_input_layer(layer_kind));
+
     let hash_size_bits = 256u32.ilog2() as usize;
 
     let expected_output = builder.add_input_shred("expected_output", hash_size_bits, &input_layer);
 
     let output_words = builder.add_split_node(&expected_output, 3);
 
-    let sha256_ckt = sha256::Sha256::new(&mut builder, &input_layer, &carry_layer, input_data);
+    let sha256_ckt = sha256::Sha256::<F, Adder>::new(
+        &mut builder,
+        &input_layer,
+        committed_carry_layer.as_ref(),
+        input_data,
+    );
 
     let output_nodes = sha256_ckt.get_output_node();
 
@@ -318,7 +348,9 @@ fn sha256_single_round_test() {
         .into_iter()
         .map(|x| x.try_into().unwrap())
         .collect_vec();
-    let sha_circuit = sha256_test_circuit::<Fr>(data);
+    let sha_circuit =
+        sha256_test_circuit::<Fr, sha256::CommittedCarryAdder<Fr>>(data, Some(LayerKind::Private));
+
     let provable_circuit = sha_circuit.finalize().unwrap();
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }
@@ -327,8 +359,12 @@ fn sha256_single_round_test() {
 fn sha256_message_schedule_positive_test() {
     // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
 
-    let (circuit, mut sched) = sha256_message_schedule_circuit(LayerKind::Public);
-    let provable_circuit = attach_data_sha256_message_schedule::<true>(circuit.clone(), &mut sched);
+    let (circuit, mut sched) = sha256_message_schedule_circuit(Some(LayerKind::Public));
+    let provable_circuit = attach_data_sha256_message_schedule::<
+        true,
+        Fr,
+        sha256::CommittedCarryAdder<Fr>,
+    >(circuit.clone(), &mut sched);
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }
 
@@ -339,7 +375,7 @@ fn sha256_ripple_adder_gate_positive_test() {
     let circuit = sha256_ripple_adder_gate_circuit();
 
     for _ in 0..10 {
-        let provable_circuit = attach_sha256_ripple_adder_gate_data::<true>(circuit.clone());
+        let provable_circuit = attach_sha256_ripple_adder_gate_data::<true, Fr>(circuit.clone());
         test_circuit_with_memory_optimized_config(&provable_circuit);
     }
 }
@@ -351,7 +387,7 @@ fn sha256_ripple_adder_gate_negative_test() {
     let circuit = sha256_ripple_adder_gate_circuit();
 
     for _ in 0..10 {
-        let provable_circuit = attach_sha256_ripple_adder_gate_data::<false>(circuit.clone());
+        let provable_circuit = attach_sha256_ripple_adder_gate_data::<false, Fr>(circuit.clone());
         let result = std::panic::catch_unwind(|| {
             test_circuit_with_memory_optimized_config(&provable_circuit)
         });
@@ -366,8 +402,10 @@ fn sha256_committed_carry_adder_priv_positive_test() {
     let (circuit, adder) = sha256_committed_carry_adder_gate_circuit(LayerKind::Private);
 
     for _ in 0..10 {
-        let provable_circuit =
-            attach_sha256_committed_carry_adder_gate_data::<true>(circuit.clone(), adder.clone());
+        let provable_circuit = attach_sha256_committed_carry_adder_gate_data::<true, Fr>(
+            circuit.clone(),
+            adder.clone(),
+        );
         test_circuit_with_memory_optimized_config(&provable_circuit);
     }
 }
@@ -379,8 +417,10 @@ fn sha256_committed_carry_adder_pub_positive_test() {
     let (circuit, adder) = sha256_committed_carry_adder_gate_circuit(LayerKind::Public);
 
     for _ in 0..10 {
-        let provable_circuit =
-            attach_sha256_committed_carry_adder_gate_data::<true>(circuit.clone(), adder.clone());
+        let provable_circuit = attach_sha256_committed_carry_adder_gate_data::<true, Fr>(
+            circuit.clone(),
+            adder.clone(),
+        );
         test_circuit_with_memory_optimized_config(&provable_circuit);
     }
 }
@@ -390,8 +430,10 @@ fn sha256_committed_carry_adder_gate_negative_test() {
     let (circuit, adder) = sha256_committed_carry_adder_gate_circuit(LayerKind::Public);
 
     for _ in 0..10 {
-        let provable_circuit =
-            attach_sha256_committed_carry_adder_gate_data::<false>(circuit.clone(), adder.clone());
+        let provable_circuit = attach_sha256_committed_carry_adder_gate_data::<false, Fr>(
+            circuit.clone(),
+            adder.clone(),
+        );
         let result = std::panic::catch_unwind(|| {
             test_circuit_with_memory_optimized_config(&provable_circuit)
         });
@@ -416,7 +458,12 @@ fn sha256_test_padding() {
         0x00000000, 0x00000018,
     ];
 
-    let sha256 = sha256::Sha256::new(&mut builder, &input_layer, &carry_layer, input_data);
+    let sha256 = sha256::Sha256::<Fr, sha256::CommittedCarryAdder<Fr>>::new(
+        &mut builder,
+        &input_layer,
+        Some(&carry_layer),
+        input_data,
+    );
     assert_eq!(sha256.padded_data_chunks(), padded_data.to_vec());
 }
 
@@ -440,7 +487,12 @@ fn sha256_full_round_test() {
         .into_iter()
         .map(|x| x.try_into().unwrap())
         .collect_vec();
-    let sha = sha256::Sha256::new(&mut builder, &input_layer, &carry_layer, input_data);
+    let sha = sha256::Sha256::<Fr, sha256::CommittedCarryAdder<Fr>>::new(
+        &mut builder,
+        &input_layer,
+        Some(&carry_layer),
+        input_data,
+    );
     let mut ckt = builder.build().unwrap();
     let hash_values = sha.populate_circuit(&mut ckt);
     assert_eq!(hash_values, expected_hash);
