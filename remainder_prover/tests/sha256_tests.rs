@@ -349,7 +349,7 @@ fn sha256_single_round_test() {
         .map(|x| x.try_into().unwrap())
         .collect_vec();
     let sha_circuit =
-        sha256_test_circuit::<Fr, sha256::CommittedCarryAdder<Fr>>(data, Some(LayerKind::Private));
+        sha256_test_circuit::<Fr, sha256::CommittedCarryAdder<Fr>>(data, Some(LayerKind::Public));
 
     let provable_circuit = sha_circuit.finalize().unwrap();
     test_circuit_with_runtime_optimized_config(&provable_circuit);
