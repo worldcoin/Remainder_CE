@@ -3,12 +3,14 @@
 //!
 
 use super::nonlinear_gates::*;
+use super::AdderGateTrait;
 use crate::binary_operations::binary_adder::BinaryAdder;
 use crate::expression::abstract_expr::ExprBuilder;
 use crate::layouter::builder::{Circuit, CircuitBuilder, InputLayerNodeRef, NodeRef};
 use crate::mle::evals::MultilinearExtension;
 use itertools::Itertools;
 use remainder_shared_types::Field;
+use std::marker::PhantomData;
 use std::ops::Index;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -29,7 +31,7 @@ pub type SmallSigma0 = SmallSigma<WORD_SIZE, 7, 18, 3>;
 pub type SmallSigma1 = SmallSigma<WORD_SIZE, 17, 19, 10>;
 
 /// Specific adder for SHA256
-pub type Sha256Adder = CommittedCarryAdder;
+pub type Sha256Adder<F> = CommittedCarryAdder<F>;
 
 fn carry_name_counter() -> String {
     static CARRY_NAME_COUNTER: AtomicU64 = AtomicU64::new(!0);
@@ -60,17 +62,54 @@ fn add_get_carry_bits_msb(x: u32, y: u32, c_in: u32) -> (u32, Vec<u32>) {
 /// An adder that just checks the carry bits instead of explicitly
 /// computing it through Ripple Carry Adder.
 #[derive(Debug, Clone)]
-pub struct CommittedCarryAdder {
+pub struct CommittedCarryAdder<F> {
     // Automatically generated carry shred name
     carry_shred_name: String,
     /// Node representing the sum
     sum_node: NodeRef,
+    _phantom: PhantomData<F>,
 }
 
-impl CommittedCarryAdder {
+impl<F: Field> AdderGateTrait<F> for CommittedCarryAdder<F> {
+    type IntegralType = u32;
+
+    fn layout_adder_circuit(
+        circuit_builder: &mut CircuitBuilder<F>, // Circuit builder
+        x_node: &NodeRef,                        // reference to x in x + y
+        y_node: &NodeRef,                        // reference to y in x + y
+        carry_layer: Option<InputLayerNodeRef>,  // Carry Layer information
+    ) -> Self {
+        assert!(
+            carry_layer.is_some(),
+            " Committed carry requires a carry layer"
+        );
+        CommittedCarryAdder::new(
+            circuit_builder,
+            carry_layer.as_ref().unwrap(),
+            x_node,
+            y_node,
+        )
+    }
+
+    /// Node representing the output value
+    fn get_output(&self) -> NodeRef {
+        self.sum_node.clone()
+    }
+
+    fn perform_addition(
+        &self,
+        circuit: &mut Circuit<F>,
+        x: Self::IntegralType,
+        y: Self::IntegralType,
+    ) -> Self::IntegralType {
+        self.populate_carry(circuit, x, y)
+    }
+}
+
+impl<F: Field> CommittedCarryAdder<F> {
     /// Adder that adds a carry shred for carry bits and only checks
     /// that the sums are correct instead of computing it.
-    pub fn new<F: Field>(
+    pub fn new(
         ckt_builder: &mut CircuitBuilder<F>,
         carry_layer: &InputLayerNodeRef,
         x_node: &NodeRef,
@@ -101,22 +140,13 @@ impl CommittedCarryAdder {
         Self {
             carry_shred_name,
             sum_node: binary_adder.get_output(),
+            _phantom: Default::default(),
         }
-    }
-
-    /// Node representing the output value
-    pub fn get_output(&self) -> NodeRef {
-        self.sum_node.clone()
     }
 
     /// Given an instantiated circuit, adds gate to the circuit as input
     /// with correct input label name.
-    pub fn populate_carry<F: Field>(
-        &self,
-        circuit: &mut Circuit<F>,
-        x_val: u32,
-        y_val: u32,
-    ) -> u32 {
+    pub fn populate_carry(&self, circuit: &mut Circuit<F>, x_val: u32, y_val: u32) -> u32 {
         let (s, carries) = add_get_carry_bits_msb(x_val, y_val, 0);
         debug_assert_eq!(s, x_val.wrapping_add(y_val));
 
@@ -133,37 +163,42 @@ impl CommittedCarryAdder {
 }
 
 #[derive(Debug, Clone)]
-struct MessageScheduleAdderTree {
-    sum_a_leaf: Sha256Adder, // A = SmallSigma1(state[t-2]) + state[t - 7]
-    sum_b_leaf: Sha256Adder, // B = SmallSigma0(state[t-15]) + state[t - 16]
-    sum_a_b: Sha256Adder,    // C = A + B
+struct MessageScheduleAdderTree<Adder> {
+    sum_a_leaf: Adder, // A = SmallSigma1(state[t-2]) + state[t - 7]
+    sum_b_leaf: Adder, // B = SmallSigma0(state[t-15]) + state[t - 16]
+    sum_a_b: Adder,    // C = A + B
 }
 
 #[derive(Debug, Clone)]
-struct MessageScheduleState {
+struct MessageScheduleState<Adder> {
     state_node: NodeRef,
-    state_adders: Option<MessageScheduleAdderTree>,
+    state_adders: Option<MessageScheduleAdderTree<Adder>>,
 }
 
 /// Represents the 64 rounds of message schedule. Each Round consists of
 /// 32 Wires where the first 16 rounds are identity gates, and the rest
 /// are computed as per the spec
-pub struct MessageSchedule {
-    msg_schedule: Vec<MessageScheduleState>,
+pub struct MessageSchedule<F, Adder> {
+    msg_schedule: Vec<MessageScheduleState<Adder>>,
+    _phantom: PhantomData<F>,
 }
 
-impl MessageSchedule {
+impl<F, Adder> MessageSchedule<F, Adder>
+where
+    F: Field,
+    Adder: AdderGateTrait<F, IntegralType = u32> + Clone,
+{
     /// Given the 16, 32-bit inputs in MBS format, computes the 64
     /// rounds of message schedule corresponding to the input. The
     /// `msg_vars` must be the 16 32-bit words decomposed in MBS format.
-    pub fn new<F: Field>(
+    pub fn new(
         ckt_builder: &mut CircuitBuilder<F>,
-        carry_layer: &InputLayerNodeRef,
+        carry_layer: Option<&InputLayerNodeRef>,
         msg_vars: &[NodeRef],
     ) -> Self {
         debug_assert_eq!(msg_vars.len(), 16);
 
-        let mut state: Vec<MessageScheduleState> = Vec::with_capacity(64);
+        let mut state: Vec<MessageScheduleState<Adder>> = Vec::with_capacity(64);
 
         (0..16).for_each(|i| {
             debug_assert!(msg_vars[i].get_num_vars() == 5);
@@ -181,25 +216,25 @@ impl MessageSchedule {
             let small_sigma_0_val = SmallSigma0::new(ckt_builder, &state[t - 15].state_node);
             let w_second = state[t - 16].state_node.clone();
 
-            let sum_a_leaf = Sha256Adder::new(
+            let sum_a_leaf = Adder::layout_adder_circuit(
                 ckt_builder,
-                carry_layer,
                 &small_sigma_1_val.get_output(),
                 &w_first,
+                carry_layer.map(InputLayerNodeRef::clone),
             );
 
-            let sum_b_leaf = Sha256Adder::new(
+            let sum_b_leaf = Adder::layout_adder_circuit(
                 ckt_builder,
-                carry_layer,
                 &small_sigma_0_val.get_output(),
                 &w_second,
+                carry_layer.map(InputLayerNodeRef::clone),
             );
 
-            let sum_a_b = Sha256Adder::new(
+            let sum_a_b = Adder::layout_adder_circuit(
                 ckt_builder,
-                carry_layer,
-                &sum_a_leaf.sum_node,
-                &sum_b_leaf.sum_node,
+                &sum_a_leaf.get_output(),
+                &sum_b_leaf.get_output(),
+                carry_layer.map(InputLayerNodeRef::clone),
             );
 
             let current_state = MessageScheduleState {
@@ -216,6 +251,7 @@ impl MessageSchedule {
 
         Self {
             msg_schedule: state,
+            _phantom: Default::default(),
         }
     }
 
@@ -229,7 +265,7 @@ impl MessageSchedule {
 
     /// Attaches a message schedule to the SHA Circuit. Note that this
     /// needs to match the way adder is implemented
-    pub fn populate_message_schedule<F: Field>(
+    pub fn populate_message_schedule(
         &self,
         circuit: &mut Circuit<F>,
         input_data: &[u32],
@@ -252,16 +288,17 @@ impl MessageSchedule {
             let sum_a_value =
                 add_tree
                     .sum_a_leaf
-                    .populate_carry(circuit, small_sigma_1_val, w_first);
+                    .perform_addition(circuit, small_sigma_1_val, w_first);
 
             let sum_b_value =
                 add_tree
                     .sum_b_leaf
-                    .populate_carry(circuit, small_sigma_0_val, w_second);
+                    .perform_addition(circuit, small_sigma_0_val, w_second);
 
-            let sum_a_b_value = add_tree
-                .sum_a_b
-                .populate_carry(circuit, sum_a_value, sum_b_value);
+            let sum_a_b_value =
+                add_tree
+                    .sum_a_b
+                    .perform_addition(circuit, sum_a_value, sum_b_value);
 
             debug_assert_eq!(
                 sum_a_b_value,
@@ -278,7 +315,7 @@ impl MessageSchedule {
 
     /// Creates the output expression that can be tested with other
     /// output expressions
-    pub fn get_output_expr<F: Field>(&self) -> ExprBuilder<F> {
+    pub fn get_output_expr(&self) -> ExprBuilder<F> {
         ExprBuilder::<F>::selectors(
             self.msg_schedule
                 .iter()
@@ -377,30 +414,35 @@ impl<F: Field> Index<usize> for KeySchedule<F> {
     }
 }
 
-struct CompressionFnRoundCarries {
-    t1_carries: [Sha256Adder; 4], // Four '+' operations: T1 := h + Sigma1(e) + ch(e,f,g) + K_t + W_t
-    t2_carries: Sha256Adder,      // One '+' operation: T2 := Sigma0(a) + Maj(a,b,c)
-    e_carries: Sha256Adder,       // One '+' operation: e := e + T1
-    a_carries: Sha256Adder,       // One '+' operation: a := T1 + T2
+struct CompressionFnRoundCarries<Adder> {
+    t1_carries: [Adder; 4], // Four '+' operations: T1 := h + Sigma1(e) + ch(e,f,g) + K_t + W_t
+    t2_carries: Adder,      // One '+' operation: T2 := Sigma0(a) + Maj(a,b,c)
+    e_carries: Adder,       // One '+' operation: e := e + T1
+    a_carries: Adder,       // One '+' operation: a := T1 + T2
 }
 
 /// Computes the single round of compression function
-pub struct CompressionFn {
-    output: Vec<Sha256Adder>,
-    round_carries: Vec<CompressionFnRoundCarries>,
+pub struct CompressionFn<F, Adder> {
+    output: Vec<Adder>,
+    round_carries: Vec<CompressionFnRoundCarries<Adder>>,
+    _phantom: PhantomData<F>,
 }
 
-impl CompressionFn {
+impl<F, Adder> CompressionFn<F, Adder>
+where
+    F: Field,
+    Adder: AdderGateTrait<F, IntegralType = u32> + Clone,
+{
     /// A Single Round of SHA-256 compression function. The
     /// `msg_schedule` is the 64 rounds of expanded message schedule.
     /// The `input_schedule` is the 256-bits of Input values
     /// `round_keys` are
-    pub fn new<F: Field>(
+    pub fn new(
         ckt_builder: &mut CircuitBuilder<F>,
-        carry_layer: &InputLayerNodeRef,
-        msg_schedule: &MessageSchedule, // Expanded message schedule
-        input_schedule: &[NodeRef],     // IV for fist message
-        round_keys: &KeySchedule<F>,    // Key Schedule
+        carry_layer: Option<&InputLayerNodeRef>,
+        msg_schedule: &MessageSchedule<F, Adder>, // Expanded message schedule
+        input_schedule: &[NodeRef],               // IV for fist message
+        round_keys: &KeySchedule<F>,              // Key Schedule
     ) -> Self {
         let msg_schedule = msg_schedule.get_output_nodes();
         debug_assert_eq!(msg_schedule.len(), 64);
@@ -408,7 +450,7 @@ impl CompressionFn {
         (0..64).for_each(|i| debug_assert_eq!(msg_schedule[i].get_num_vars(), 5));
         (0..8).for_each(|i| debug_assert_eq!(input_schedule[i].get_num_vars(), 5));
 
-        let mut round_carries: Vec<CompressionFnRoundCarries> = Vec::with_capacity(64);
+        let mut round_carries: Vec<CompressionFnRoundCarries<Adder>> = Vec::with_capacity(64);
 
         let mut a = input_schedule[0].clone();
         let mut b = input_schedule[1].clone();
@@ -427,21 +469,21 @@ impl CompressionFn {
             h = ckt_builder.add_sector(g.expr());
             g = ckt_builder.add_sector(f.expr());
             f = ckt_builder.add_sector(e.expr());
-            let e_sum = Sha256Adder::new(
+            let e_sum = Adder::layout_adder_circuit(
                 ckt_builder,
-                carry_layer,
                 &d,
                 &t1.last().unwrap().get_output(),
+                carry_layer.map(InputLayerNodeRef::clone),
             );
             e = e_sum.get_output();
             d = ckt_builder.add_sector(c.expr());
             c = ckt_builder.add_sector(b.expr());
             b = ckt_builder.add_sector(a.expr());
-            let a_sum = Sha256Adder::new(
+            let a_sum = Adder::layout_adder_circuit(
                 ckt_builder,
-                carry_layer,
                 &t1.last().unwrap().get_output(),
                 &t2.get_output(),
+                carry_layer.map(InputLayerNodeRef::clone),
             );
             a = a_sum.get_output();
             round_carries.push(CompressionFnRoundCarries {
@@ -457,25 +499,33 @@ impl CompressionFn {
         let output = input_schedule
             .iter()
             .zip(intermediates.iter())
-            .map(|(h, x)| Sha256Adder::new(ckt_builder, carry_layer, h, x))
+            .map(|(h, x)| {
+                Adder::layout_adder_circuit(
+                    ckt_builder,
+                    h,
+                    x,
+                    carry_layer.map(InputLayerNodeRef::clone),
+                )
+            })
             .collect();
 
         Self {
             output,
             round_carries,
+            _phantom: Default::default(),
         }
     }
 
-    fn compute_t1<F: Field>(
+    fn compute_t1(
         ckt_builder: &mut CircuitBuilder<F>,
-        carry_layer: &InputLayerNodeRef,
+        carry_layer: Option<&InputLayerNodeRef>,
         e: &NodeRef,
         f: &NodeRef,
         g: &NodeRef,
         h: &NodeRef,
         w_t: &NodeRef,
         k_t: &NodeRef,
-    ) -> [Sha256Adder; 4] {
+    ) -> [Adder; 4] {
         debug_assert!(e.get_num_vars() == 5);
         debug_assert!(f.get_num_vars() == 5);
         debug_assert!(g.get_num_vars() == 5);
@@ -487,35 +537,55 @@ impl CompressionFn {
         let t1_ch = ChGate::new(ckt_builder, e, f, g);
 
         // h1 + Sigma1(e)
-        let sum1 = Sha256Adder::new(ckt_builder, carry_layer, h, &t1_sigma_1.get_output());
+        let sum1 = Adder::layout_adder_circuit(
+            ckt_builder,
+            h,
+            &t1_sigma_1.get_output(),
+            carry_layer.map(InputLayerNodeRef::clone),
+        );
 
         // ch(e,f,g) + K_t
-        let sum2 = Sha256Adder::new(ckt_builder, carry_layer, &t1_ch.get_output(), k_t);
+        let sum2 = Adder::layout_adder_circuit(
+            ckt_builder,
+            &t1_ch.get_output(),
+            k_t,
+            carry_layer.map(InputLayerNodeRef::clone),
+        );
 
         // h1 + Sigma1(e) + ch(e,f,g) + K_t
-        let sum3 = Sha256Adder::new(
+        let sum3 = Adder::layout_adder_circuit(
             ckt_builder,
-            carry_layer,
             &sum1.get_output(),
             &sum2.get_output(),
+            carry_layer.map(InputLayerNodeRef::clone),
         );
 
         // h1 + Sigma1(e) + ch(e,f,g) + K_t + W_t
-        let sum4 = Sha256Adder::new(ckt_builder, carry_layer, &sum3.get_output(), w_t);
+        let sum4 = Adder::layout_adder_circuit(
+            ckt_builder,
+            &sum3.get_output(),
+            w_t,
+            carry_layer.map(InputLayerNodeRef::clone),
+        );
 
         [sum1, sum2, sum3, sum4]
     }
 
-    fn compute_t2<F: Field>(
+    fn compute_t2(
         ckt_builder: &mut CircuitBuilder<F>,
-        carry_layer: &InputLayerNodeRef,
+        carry_layer: Option<&InputLayerNodeRef>,
         a: &NodeRef,
         b: &NodeRef,
         c: &NodeRef,
-    ) -> Sha256Adder {
+    ) -> Adder {
         let s1 = Sigma0::new(ckt_builder, a);
         let m1 = MajGate::new(ckt_builder, a, b, c);
-        Sha256Adder::new(ckt_builder, carry_layer, &s1.get_output(), &m1.get_output())
+        Adder::layout_adder_circuit(
+            ckt_builder,
+            &s1.get_output(),
+            &m1.get_output(),
+            carry_layer.map(InputLayerNodeRef::clone),
+        )
     }
 
     // #[cfg(debug_assertions)]
@@ -533,7 +603,7 @@ impl CompressionFn {
 
     /// Populated the carry bits of the adder. This function must match
     /// the addition operations exactly as during the circuit building.
-    pub fn populate_compression_fn<F: Field>(
+    pub fn populate_compression_fn(
         &self,
         circuit: &mut Circuit<F>,
         message_words: Vec<u32>,
@@ -571,13 +641,13 @@ impl CompressionFn {
             f = e;
             e = self.round_carries[t]
                 .e_carries
-                .populate_carry(circuit, d, t1);
+                .perform_addition(circuit, d, t1);
             d = c;
             c = b;
             b = a;
             a = self.round_carries[t]
                 .a_carries
-                .populate_carry(circuit, t1, t2);
+                .perform_addition(circuit, t1, t2);
 
             // #[cfg(debug_assertions)]
             // Self::print_state(
@@ -592,16 +662,16 @@ impl CompressionFn {
             .iter()
             .zip(intermediates.iter())
             .zip(&self.output)
-            .map(|((h, hprime), gate)| gate.populate_carry(circuit, *h, *hprime))
+            .map(|((h, hprime), gate)| gate.perform_addition(circuit, *h, *hprime))
             .collect()
     }
 
-    fn populate_t1<F: Field>(
+    fn populate_t1(
         circuit: &mut Circuit<F>,
-        sum1: &Sha256Adder,
-        sum2: &Sha256Adder,
-        sum3: &Sha256Adder,
-        sum4: &Sha256Adder,
+        sum1: &Adder,
+        sum2: &Adder,
+        sum3: &Adder,
+        sum4: &Adder,
         e: u32,
         f: u32,
         g: u32,
@@ -613,30 +683,24 @@ impl CompressionFn {
         let t1_ch = ChGate::evaluate(e, f, g);
 
         // h1 + Sigma1(e)
-        let sum1 = sum1.populate_carry(circuit, h, t1_sigma_1);
+        let sum1 = sum1.perform_addition(circuit, h, t1_sigma_1);
 
         // ch(e,f,g) + K_t
-        let sum2 = sum2.populate_carry(circuit, t1_ch, k_t);
+        let sum2 = sum2.perform_addition(circuit, t1_ch, k_t);
 
         // h1 + Sigma1(e) + ch(e,f,g) + K_t
-        let sum3 = sum3.populate_carry(circuit, sum1, sum2);
+        let sum3 = sum3.perform_addition(circuit, sum1, sum2);
 
         // h1 + Sigma1(e) + ch(e,f,g) + K_t + W_t
-        let sum4 = sum4.populate_carry(circuit, sum3, w_t);
+        let sum4 = sum4.perform_addition(circuit, sum3, w_t);
 
         sum4
     }
 
-    fn populate_t2<F: Field>(
-        circuit: &mut Circuit<F>,
-        sum1: &Sha256Adder,
-        a: u32,
-        b: u32,
-        c: u32,
-    ) -> u32 {
+    fn populate_t2(circuit: &mut Circuit<F>, sum1: &Adder, a: u32, b: u32, c: u32) -> u32 {
         let s1 = Sigma0::evaluate(a);
         let m1 = MajGate::evaluate(a, b, c);
-        sum1.populate_carry(circuit, s1, m1)
+        sum1.perform_addition(circuit, s1, m1)
     }
 
     /// Returns 8 32-bit words (256-bits) output of the compression
@@ -662,25 +726,29 @@ fn sha256_padded_input(mut input_data: Vec<u8>) -> Vec<u32> {
         .collect()
 }
 
-struct Sha256State {
-    message_schedule: MessageSchedule, // Expanded message schedule
-    compression_fn: CompressionFn,
+struct Sha256State<F, Adder> {
+    message_schedule: MessageSchedule<F, Adder>, // Expanded message schedule
+    compression_fn: CompressionFn<F, Adder>,
     input_chunks: Vec<u32>, // Input data chunked into 32-bit words
 }
 
 /// Sha256 State for multi word computation
-pub struct Sha256<F: Field> {
+pub struct Sha256<F: Field, Adder> {
     key_schedule: KeySchedule<F>,
     init_iv: HConstants<F>,
-    round_states: Vec<Sha256State>,
+    round_states: Vec<Sha256State<F, Adder>>,
 }
 
-impl<F: Field> Sha256<F> {
+impl<F, Adder> Sha256<F, Adder>
+where
+    F: Field,
+    Adder: AdderGateTrait<F, IntegralType = u32> + Clone,
+{
     /// Creates a new SHA256 circuit given arbitrary length data input_data
     pub fn new(
         ckt_builder: &mut CircuitBuilder<F>,
         data_input_layer: &InputLayerNodeRef,
-        carry_layer: &InputLayerNodeRef,
+        carry_layer: Option<&InputLayerNodeRef>,
         input_data: Vec<u8>,
     ) -> Self {
         let key_schedule = KeySchedule::<F>::new(ckt_builder); // 32*64-bit
@@ -759,7 +827,7 @@ impl<F: Field> Sha256<F> {
     fn populate_state(
         &self,
         circuit: &mut Circuit<F>,
-        state: &Sha256State,
+        state: &Sha256State<F, Adder>,
         input_words: Vec<u32>,
     ) -> Vec<u32> {
         let message_words = state
