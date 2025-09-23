@@ -62,6 +62,7 @@ impl FullAdder {
 }
 
 /// mod 2^BITWIDTH adder with no input carry and no output carry
+#[derive(Clone)]
 pub struct RippleCarryAdderMod2w<const BITWIDTH: usize, F> {
     sum_node: NodeRef,
     _phantom: PhantomData<F>,
@@ -82,6 +83,15 @@ impl<F: Field> AdderGateTrait<F> for RippleCarryAdderMod2w<32, F> {
     /// Returns the output of AdderNoCarry
     fn get_output(&self) -> NodeRef {
         self.sum_node.clone()
+    }
+
+    fn perform_addition(
+        &self,
+        _circuit: &mut crate::layouter::builder::Circuit<F>,
+        x: u32,
+        y: u32,
+    ) -> u32 {
+        x.wrapping_add(y)
     }
 }
 

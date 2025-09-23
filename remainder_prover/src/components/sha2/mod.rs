@@ -33,7 +33,5 @@ pub trait AdderGateTrait<F: Field> {
         _circuit: &mut Circuit<F>,
         x: Self::IntegralType,
         y: Self::IntegralType,
-    ) -> Self::IntegralType {
-        x + y
-    }
+    ) -> Self::IntegralType;
 }
