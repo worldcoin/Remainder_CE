@@ -13,7 +13,7 @@ use remainder::{
         test_circuit_with_memory_optimized_config, test_circuit_with_runtime_optimized_config,
     },
 };
-use remainder_shared_types::{Field, Fr};
+use remainder_shared_types::{Field, Fr, Halo2FFTFriendlyField};
 
 fn create_adder_test_circuit<F: Field, Adder: AdderGateTrait<F>>(
     carry_layer_kind: Option<LayerKind>,
@@ -272,19 +272,49 @@ where
     ckt
 }
 
+fn sha256_test_with_data<F, Adder>(data: Vec<u8>)
+where
+    F: Halo2FFTFriendlyField,
+    Adder: AdderGateTrait<F, IntegralType = u32> + Clone,
+{
+    // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
+    let sha_circuit = sha256_test_circuit::<F, Adder>(data, Some(LayerKind::Public));
+
+    let provable_circuit = sha_circuit.finalize().unwrap();
+    test_circuit_with_runtime_optimized_config(&provable_circuit);
+}
+
 #[test]
-fn sha256_single_round_test() {
+fn sha256_single_round_committed_carry() {
     // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
 
     let data: Vec<u8> = vec!['a', 'b', 'c']
         .into_iter()
         .map(|x| x.try_into().unwrap())
         .collect_vec();
-    let sha_circuit =
-        sha256_test_circuit::<Fr, sha256::CommittedCarryAdder<Fr>>(data, Some(LayerKind::Public));
+    sha256_test_with_data::<Fr, sha256::CommittedCarryAdder<_>>(data);
+}
 
-    let provable_circuit = sha_circuit.finalize().unwrap();
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+#[test]
+fn sha256_single_round_pp_adder() {
+    // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
+
+    let data: Vec<u8> = vec!['a', 'b', 'c']
+        .into_iter()
+        .map(|x| x.try_into().unwrap())
+        .collect_vec();
+    sha256_test_with_data::<Fr, bka::BKAdder<32, _>>(data);
+}
+
+#[test]
+fn sha256_single_round_rc_adder() {
+    // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
+
+    let data: Vec<u8> = vec!['a', 'b', 'c']
+        .into_iter()
+        .map(|x| x.try_into().unwrap())
+        .collect_vec();
+    sha256_test_with_data::<Fr, rca::RippleCarryAdderMod2w<32, _>>(data);
 }
 
 #[test]
@@ -429,9 +459,12 @@ fn sha256_test_padding() {
     assert_eq!(sha256.padded_data_chunks(), padded_data.to_vec());
 }
 
-#[test]
-fn sha256_full_round_test() {
-    let mut builder = CircuitBuilder::<Fr>::new();
+fn test_sha_value_evaluation<F, Adder>()
+where
+    F: Field,
+    Adder: AdderGateTrait<F, IntegralType = u32> + Clone,
+{
+    let mut builder = CircuitBuilder::<F>::new();
     let expected_hash = vec![
         0xba7816bf_u32,
         0x8f01cfea,
@@ -449,15 +482,26 @@ fn sha256_full_round_test() {
         .into_iter()
         .map(|x| x.try_into().unwrap())
         .collect_vec();
-    let sha = sha256::Sha256::<Fr, sha256::CommittedCarryAdder<Fr>>::new(
-        &mut builder,
-        &input_layer,
-        Some(&carry_layer),
-        input_data,
-    );
+    let sha =
+        sha256::Sha256::<F, Adder>::new(&mut builder, &input_layer, Some(&carry_layer), input_data);
     let mut ckt = builder.build().unwrap();
     let hash_values = sha.populate_circuit(&mut ckt);
     assert_eq!(hash_values, expected_hash);
+}
+
+#[test]
+fn sha256_ripple_carry_test_evaluation() {
+    test_sha_value_evaluation::<Fr, rca::RippleCarryAdderMod2w<32, _>>();
+}
+
+#[test]
+fn sha256_pp_adder_full_round_test() {
+    test_sha_value_evaluation::<Fr, bka::BKAdder<32, _>>();
+}
+
+#[test]
+fn sha256_committed_carry_adder_full_round_test() {
+    test_sha_value_evaluation::<Fr, sha256::CommittedCarryAdder<Fr>>();
 }
 
 ///
