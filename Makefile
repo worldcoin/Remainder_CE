@@ -34,8 +34,8 @@ test-dev-par:
 	cargo test --profile=dev-opt --features parallel
 
 test-ignored:  ## GitHub Action #2b - Run some slow tests that are normally ignored.
-	cargo test --profile=dev-opt --features parallel --package remainder-hyrax --lib -- --ignored hyrax_worldcoin::test_worldcoin
-	cargo test --profile=dev-opt --features parallel --package remainder --lib -- --ignored worldcoin::tests
+	cargo test --profile=dev-opt --features parallel --package remainder-frontend --lib -- --ignored hyrax_worldcoin::test_worldcoin
+	cargo test --profile=dev-opt --features parallel --package remainder-frontend --lib -- --ignored worldcoin::tests
 
 test: test-dev test-ignored  ## Comprehensive testing. Equivalent to `test-dev` followed by `test-ignored`.
 

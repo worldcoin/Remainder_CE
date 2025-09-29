@@ -6,7 +6,11 @@ use std::hash::Hash;
 use crate::{
     layouter::builder::Circuit,
     zk_iriscode_ss::{
-        circuits::IriscodeCircuitDescription,
+        circuits::{
+            V3_AUXILIARY_LAYER, V3_DIGITS_LAYER, V3_INPUT_IMAGE_LAYER, V3_RH_MATMULT_SHRED,
+            V3_SIGN_BITS_LAYER, V3_TO_SUB_MATMULT_SHRED,
+        },
+        data::IriscodeCircuitAuxData,
         parameters::IRISCODE_COMMIT_LOG_NUM_COLS,
         v3::{circuit_description_and_inputs, load_worldcoin_data},
     },
@@ -54,7 +58,7 @@ use remainder_hyrax::{
 use sha256::digest as sha256_digest;
 use thiserror::Error;
 
-use crate::zk_iriscode_ss::circuits::iriscode_ss_attach_data;
+use crate::zk_iriscode_ss::circuits::iriscode_ss_attach_input_data;
 use anyhow::{anyhow, Result};
 
 type Scalar = Fr;
@@ -88,11 +92,10 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
     ic_circuit_desc: &IriscodeCircuitDescription<Fr>,
     auxiliary_mle: &MultilinearExtension<Fr>,
     */
-    image_commitment: HyraxProverInputCommitment<Bn256Point>,
     expected_commitment_hash: &str,
     committer: &PedersenCommitter<Bn256Point>,
     proof_config: &ProofConfig,
-) -> Result<(Vec<Bn256Point>, Vec<Bn256Point>)> {
+) -> Result<Vec<Bn256Point>> {
     /*
     let mut hyrax_input_layers = HashMap::new();
 
@@ -139,10 +142,10 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
     );
 
     let image_layer_id = verifiable_circuit
-        .get_private_input_layer_id("To-Reroute")
+        .get_private_input_layer_id(V3_INPUT_IMAGE_LAYER)
         .unwrap();
     let code_layer_id = verifiable_circuit
-        .get_private_input_layer_id("Sign bits")
+        .get_private_input_layer_id(V3_SIGN_BITS_LAYER)
         .unwrap();
 
     let image_commitment = proof.get_commitment_ref(image_layer_id).cloned().unwrap();
@@ -183,7 +186,7 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
     }
 
     // Return the commitments to the code and the image.
-    Ok((code_commitment, image_commitment))
+    Ok(code_commitment)
 }
 
 /// Prove a single instance of the iriscode circuit using the Hyrax proof system and the provided image precommit.
@@ -220,7 +223,11 @@ pub fn prove_with_image_precommit(
     > = HashMap::new();
 
     provable_circuit
-        .set_pre_commitment(image_layer_label, image_precommit)
+        .set_pre_commitment(
+            image_layer_label,
+            image_precommit,
+            Some(IMAGE_COMMIT_LOG_NUM_COLS),
+        )
         .unwrap();
     /*
     // The image, with the precommit (must use the same number of columns as were used at the time of committing!)
@@ -328,7 +335,7 @@ pub struct V3Prover {
 
     /// The Iriscode computation circuit description, along with auxiliary inputs (parameters which
     /// are constant for both iris and mask computation), but no image/mask inputs.
-    circuit: Circuit<Fr>,
+    v3_circuit: V3CircuitAndAuxData<Fr>,
 
     prover_config: GKRCircuitProverConfig,
 
@@ -344,11 +351,11 @@ impl V3Prover {
     }
 
     /// Generate an empty v3 prover with the given configuration.
-    pub fn new(prover_config: GKRCircuitProverConfig, circuit: Circuit<Fr>) -> Self {
+    pub fn new(prover_config: GKRCircuitProverConfig, circuit: V3CircuitAndAuxData<Fr>) -> Self {
         Self {
             committer: Self::default_committer(),
             converter: VandermondeInverse::new(),
-            circuit,
+            v3_circuit: circuit,
             prover_config,
             left_iris_proof: None,
             left_mask_proof: None,
@@ -370,7 +377,7 @@ impl V3Prover {
     /// with optional proofs.
     pub fn new_from_proofs(
         prover_config: GKRCircuitProverConfig,
-        circuit: Circuit<Fr>,
+        circuit: V3CircuitAndAuxData<Fr>,
         left_image_proof: HyraxProof<Bn256Point>,
         left_mask_proof: HyraxProof<Bn256Point>,
         right_image_proof: HyraxProof<Bn256Point>,
@@ -379,7 +386,7 @@ impl V3Prover {
         Self {
             committer: Self::default_committer(),
             converter: VandermondeInverse::new(),
-            circuit,
+            v3_circuit: circuit,
             prover_config,
             left_iris_proof: Some(left_image_proof),
             left_mask_proof: Some(left_mask_proof),
@@ -397,12 +404,21 @@ impl V3Prover {
         rng: &mut (impl CryptoRng + RngCore),
     ) -> HyraxProverInputCommitment<Bn256Point> {
         // Load the inputs to the circuit (these are all MLEs, i.e. in the clear).
-        let data = load_worldcoin_data::<Fr>(image_bytes, is_mask);
+        let input_data = load_worldcoin_data::<Fr>(image_bytes, is_mask);
 
-        let circuit_with_inputs = iriscode_ss_attach_data::<
+        // Clone the circuit to start attaching data.
+        let mut circuit = self.v3_circuit.get_circuit().clone();
+
+        let aux_data = if is_mask {
+            self.v3_circuit.get_mask_aux_data_ref().clone()
+        } else {
+            self.v3_circuit.get_iris_aux_data_ref().clone()
+        };
+
+        let circuit_with_inputs = iriscode_ss_attach_input_data::<
             _,
             { crate::zk_iriscode_ss::parameters::BASE },
-        >(self.circuit.clone(), data)
+        >(circuit, input_data, aux_data)
         .unwrap();
 
         let provable_circuit = circuit_with_inputs.finalize_hyrax().unwrap();
@@ -410,8 +426,8 @@ impl V3Prover {
         // Prove the iriscode circuit with the image precommit.
         let (proof, _, code_commit) = prove_with_image_precommit(
             provable_circuit,
-            "To-Reroute",
-            "Sign Bits",
+            V3_INPUT_IMAGE_LAYER,
+            V3_SIGN_BITS_LAYER,
             image_precommit,
             &mut self.committer,
             rng,
@@ -589,10 +605,10 @@ impl V3Proof {
         aux_mle: &MultilinearExtension<Fr>,
         is_mask: bool,
         is_left_eye: bool,
-        circuit: &IriscodeCircuitDescription<Fr>,
+        aux_layer_id: LayerId,
     ) {
         let proof = self.get_as_mut(is_mask, is_left_eye);
-        proof.insert_aux_public_data_by_id(aux_mle, circuit.auxiliary_input_layer.layer_id);
+        proof.insert_aux_public_data_by_id(aux_mle, aux_layer_id);
     }
 
     /// Get the proof indicated by `is_mask` and `is_left_eye`.
@@ -662,12 +678,74 @@ impl V3Proof {
         verify_v3_iriscode_proof_and_hash(
             proof,
             verifiable_circuit,
-            todo!(),
             commitment_hash,
             &self.committer,
             &self.proof_config,
         )?;
 
         Ok(())
+    }
+}
+
+/// A circuit computing the V3 iriscode from an iris image and a mask.
+/// The computation when the input is an iris image is essentially the same as the when the input is
+/// a mask, the only difference being the values of some parameters which are passed as inputs to
+/// the circuit, called auxiliary MLEs.
+/// This struct holds a [Circuit] which has _already_ been initialized with input parameters which
+/// are common between the cases of an iris image and a mask, and separatelly contains entries for
+/// the auxiliary MLEs encoding the parameters specific to the iris image computation and the mask
+/// computation.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "F: Field")]
+pub struct V3CircuitAndAuxData<F: Field> {
+    circuit: Circuit<F>,
+    iris_aux_data: IriscodeCircuitAuxData<F>,
+    mask_aux_data: IriscodeCircuitAuxData<F>,
+}
+
+impl<F: Field> V3CircuitAndAuxData<F> {
+    pub fn new(
+        circuit: Circuit<F>,
+        iris_aux_data: IriscodeCircuitAuxData<F>,
+        mask_aux_data: IriscodeCircuitAuxData<F>,
+    ) -> Self {
+        // Verify `circuit` contains the necessary input layers, which do _not_ contain any data
+        // yet.
+        assert!(!circuit
+            .input_layer_contains_data(V3_INPUT_IMAGE_LAYER)
+            .unwrap());
+        assert!(!circuit.input_layer_contains_data(V3_DIGITS_LAYER).unwrap());
+        assert!(!circuit
+            .input_layer_contains_data(V3_SIGN_BITS_LAYER)
+            .unwrap());
+        assert!(!circuit
+            .input_layer_contains_data(V3_AUXILIARY_LAYER)
+            .unwrap());
+
+        Self {
+            circuit,
+            iris_aux_data,
+            mask_aux_data,
+        }
+    }
+
+    pub fn get_circuit(&self) -> &Circuit<F> {
+        &self.circuit
+    }
+
+    pub fn get_iris_aux_data_ref(&self) -> &IriscodeCircuitAuxData<F> {
+        &self.iris_aux_data
+    }
+
+    pub fn get_mask_aux_data_ref(&self) -> &IriscodeCircuitAuxData<F> {
+        &self.mask_aux_data
+    }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        bincode::serialize(&self).expect("Failed to serialize V3CircuitAndAuxData")
+    }
+
+    pub fn deserialize(bytes: &[u8]) -> Self {
+        bincode::deserialize(bytes).expect("Failed to deserialize V3CircuitAndAuxData")
     }
 }

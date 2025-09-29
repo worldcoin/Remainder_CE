@@ -505,7 +505,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
         .iter()
         .for_each(|hyrax_input_proof| {
             let layer_id = &hyrax_input_proof.layer_id;
-            let desc = verifiable_circuit
+            let (desc, optional_commitment) = verifiable_circuit
                 .get_private_inputs_ref()
                 .get(layer_id)
                 .unwrap();
@@ -516,6 +516,9 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
                 layer_id
             ));
             hyrax_input_proof.verify(desc, &layer_claims_vec, committer, transcript);
+            if let Some(comm) = optional_commitment {
+                assert_eq!(hyrax_input_proof.input_commitment, comm.commitment);
+            }
             end_timer!(timer);
         });
 

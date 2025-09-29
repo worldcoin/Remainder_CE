@@ -3,15 +3,24 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
-    hyrax_worldcoin::v3::V3Proof,
-    hyrax_worldcoin_mpc::mpc_prover::{
-        print_features_status, V3MPCCircuitAndAuxMles, V3MPCCommitments,
+use clap::{command, Parser};
+use remainder_frontend::{
+    hyrax_worldcoin::{
+        orb::IMAGE_COMMIT_LOG_NUM_COLS,
+        v3::{V3CircuitAndAuxData, V3Proof},
+    },
+    hyrax_worldcoin_mpc::mpc_prover::print_features_status,
+    zk_iriscode_ss::{
+        circuits::{
+            iriscode_ss_attach_aux_data, iriscode_ss_attach_input_data, V3_INPUT_IMAGE_LAYER,
+        },
+        io::read_bytes_from_file,
     },
 };
-use crate::{tfh_circuits::tfh_config, zk_iriscode_ss::io::read_bytes_from_file};
-use clap::{command, Parser};
-use remainder_shared_types::{perform_function_under_expected_configs, Bn256Point, Fr};
+use remainder_shared_types::{
+    config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
+    perform_function_under_expected_configs, Bn256Point, Fr,
+};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -40,16 +49,16 @@ fn main() {
     // Sanitycheck by logging the current settings.
     perform_function_under_expected_configs!(
         print_features_status,
-        &tfh_config::EXPECTED_PROVER_CONFIG,
-        &tfh_config::EXPECTED_VERIFIER_CONFIG,
+        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
+        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
     );
 
     let cli = CliArguments::parse();
 
     perform_function_under_expected_configs!(
         verify_v3_iriscode_proof,
-        &tfh_config::EXPECTED_PROVER_CONFIG,
-        &tfh_config::EXPECTED_VERIFIER_CONFIG,
+        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
+        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
         &cli.circuit,
         &cli.hashes,
         &cli.v3_proof,
@@ -78,15 +87,17 @@ fn verify_v3_iriscode_proof(
 
     let serialized_circuit =
         read_bytes_from_file(path_to_circuit_description.as_os_str().to_str().unwrap());
-    let v3_mpc_circuit_and_aux_mle = V3MPCCircuitAndAuxMles::<Fr>::deserialize(&serialized_circuit);
+    let v3_circuit_and_aux_data = V3CircuitAndAuxData::<Fr>::deserialize(&serialized_circuit);
 
     let serialized_proof = read_bytes_from_file(path_to_v3_proof.as_os_str().to_str().unwrap());
     let mut v3_proof = V3Proof::deserialize(&serialized_proof);
 
+    /*
     let serialized_commitments =
         read_bytes_from_file(path_to_aux_commitments.as_os_str().to_str().unwrap());
     let v3_mpc_commitments: V3MPCCommitments<Bn256Point> =
         V3MPCCommitments::deserialize(&serialized_commitments);
+    */
 
     let hashes_file = File::open(path_to_hashes_json).expect("Could not open hashes.json file.");
     let parsed_hashes: serde_json::Value =
@@ -107,9 +118,8 @@ fn verify_v3_iriscode_proof(
                 .as_str()
                 .unwrap_or_else(|| panic!("Field {commitment_hash_entry} is not a string!"));
 
-            let circuit = v3_mpc_circuit_and_aux_mle
-                .v3_circuit_and_aux_mles
-                .get_circuit();
+            let circuit = v3_circuit_and_aux_data.get_circuit();
+            /*
             let aux_mle = if is_mask {
                 v3_mpc_circuit_and_aux_mle
                     .v3_circuit_and_aux_mles
@@ -119,8 +129,10 @@ fn verify_v3_iriscode_proof(
                     .v3_circuit_and_aux_mles
                     .get_iris_aux_mle()
             };
+            */
 
             // check that the commitments are the same for iris code
+            /*
             {
                 let code_commitment = v3_proof
                     .get(is_mask, is_left_eye)
@@ -136,11 +148,33 @@ fn verify_v3_iriscode_proof(
                     v3_mpc_commitments.get_code_commit_ref(is_mask, is_left_eye)
                 );
             }
+            */
 
-            v3_proof.insert_aux_public_data(aux_mle, is_mask, is_left_eye, circuit);
+            // v3_proof.insert_aux_public_data(aux_mle, is_mask, is_left_eye, circuit);
+            let aux_data = if is_mask {
+                v3_circuit_and_aux_data.get_mask_aux_data_ref().clone()
+            } else {
+                v3_circuit_and_aux_data.get_iris_aux_data_ref().clone()
+            };
+
+            let circuit_with_inputs = iriscode_ss_attach_aux_data::<
+                _,
+                { remainder_frontend::zk_iriscode_ss::parameters::BASE },
+            >(circuit.clone(), aux_data)
+            .unwrap();
+
+            // dbg!(&circuit.circuit_map);
+
+            let mut verifiable_circuit = circuit_with_inputs
+                .gen_hyrax_verifiable_circuit::<Bn256Point>()
+                .unwrap();
+
+            verifiable_circuit
+                .set_commitment_parameters(V3_INPUT_IMAGE_LAYER, IMAGE_COMMIT_LOG_NUM_COLS)
+                .expect("Could not modify the verifier circuit commitment parameters");
 
             if let Err(err) =
-                v3_proof.verify(is_mask, is_left_eye, circuit, aux_mle, commitment_hash)
+                v3_proof.verify(is_mask, is_left_eye, &verifiable_circuit, commitment_hash)
             {
                 println!("IC circuit verification failed with error: {err:#?}");
             } else {

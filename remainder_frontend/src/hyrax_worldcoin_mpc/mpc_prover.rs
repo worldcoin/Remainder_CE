@@ -1,7 +1,7 @@
 use crate::{
     hyrax_worldcoin::{
         orb::PUBLIC_STRING,
-        v3::{V3Proof, V3ProofError, V3Prover},
+        v3::{V3CircuitAndAuxData, V3Proof, V3ProofError, V3Prover},
     },
     layouter::builder::{Circuit, LayerVisibility},
     worldcoin_mpc::{
@@ -331,13 +331,13 @@ impl MPCProver {
         let mut provable_circuit = mpc_circuit_desc.finalize_hyrax().unwrap();
 
         provable_circuit
-            .set_pre_commitment("Iris Code Input", iris_precommit.clone())
+            .set_pre_commitment("Iris Code Input", iris_precommit.clone(), None)
             .unwrap();
         provable_circuit
-            .set_pre_commitment("Mask Code Input", mask_precommit.clone())
+            .set_pre_commitment("Mask Code Input", mask_precommit.clone(), None)
             .unwrap();
         provable_circuit
-            .set_pre_commitment("Slope", slope_precommit.clone())
+            .set_pre_commitment("Slope", slope_precommit.clone(), None)
             .unwrap();
 
         // Create a fresh transcript.
@@ -510,16 +510,13 @@ impl V3MPCProver {
     /// Generate an empty v3-mpc prover with the given configuration.
     pub fn new(
         prover_config: GKRCircuitProverConfig,
-        circuit: V3MPCCircuitAndAuxMles<Fr>,
+        iris_circuit: V3CircuitAndAuxData<Fr>,
+        mpc_circuits: Vec<Circuit<Fr>>,
         rng: &mut (impl CryptoRng + RngCore),
     ) -> Self {
         Self {
-            v3_prover: V3Prover::new(prover_config.clone(), circuit.v3_circuit_and_aux_mles),
-            mpc_prover: MPCProver::new(
-                prover_config,
-                circuit.mpc_circuit_and_aux_mles_all_3_parties,
-                rng,
-            ),
+            v3_prover: V3Prover::new(prover_config.clone(), iris_circuit),
+            mpc_prover: MPCProver::new(prover_config, mpc_circuits, rng),
 
             left_iris_commit: None,
             left_mask_commit: None,
@@ -951,7 +948,7 @@ impl<F: Field> MPCCircuitAndAuxMles<F> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub struct V3MPCCircuitAndAuxMles<F: Field> {
-    pub v3_circuit_and_aux_mles: Circuit<F>,
+    pub v3_circuit_and_aux_mles: V3CircuitAndAuxData<F>,
     pub mpc_circuit_and_aux_mles_all_3_parties: Vec<Circuit<F>>,
 }
 

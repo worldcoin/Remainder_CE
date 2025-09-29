@@ -4,12 +4,18 @@ use remainder_shared_types::{Field, Fr};
 
 use crate::{
     layouter::builder::{Circuit, LayerVisibility},
-    zk_iriscode_ss::data::build_iriscode_circuit_data,
+    zk_iriscode_ss::{
+        data::{
+            build_iriscode_circuit_auxiliary_data, build_iriscode_circuit_data,
+            IriscodeCircuitAuxData,
+        },
+        parameters::LOG_NUM_STRIPS,
+    },
 };
 
 use super::{
-    circuits::{build_iriscode_circuit_description, iriscode_ss_attach_data},
-    data::{wirings_to_reroutings, IriscodeCircuitData},
+    circuits::{build_iriscode_circuit_description, iriscode_ss_attach_input_data},
+    data::{wirings_to_reroutings, IriscodeCircuitInputData},
     decode::{decode_i32_array, decode_i64_array, decode_wirings},
     io::read_bytes_from_file,
     parameters::{
@@ -31,7 +37,7 @@ use anyhow::Result;
 pub fn load_worldcoin_data<F: Field>(
     image_bytes: Vec<u8>,
     is_mask: bool,
-) -> IriscodeCircuitData<F> {
+) -> IriscodeCircuitInputData<F> {
     let image: Array2<u8> =
         Array2::from_shape_vec((IM_NUM_ROWS, IM_NUM_COLS), image_bytes).unwrap();
     if is_mask {
@@ -73,6 +79,32 @@ pub fn load_worldcoin_data<F: Field>(
                 .map(|wirings| decode_wirings(wirings))
                 .collect_vec(),
             &decode_wirings(LH_MATRIX_WIRINGS),
+        )
+    }
+}
+
+pub fn build_worldcoin_aux_data<F: Field>(is_mask: bool) -> IriscodeCircuitAuxData<F> {
+    if is_mask {
+        build_iriscode_circuit_auxiliary_data::<
+            F,
+            MATMULT_COLS_NUM_VARS,
+            MATMULT_INTERNAL_DIM_NUM_VARS,
+            { 1 << (LOG_NUM_STRIPS) },
+            { 1 << MATMULT_ROWS_NUM_VARS },
+        >(
+            &decode_i32_array(MASK_RH_MULTIPLICAND),
+            &decode_i64_array(MASK_THRESHOLDS),
+        )
+    } else {
+        build_iriscode_circuit_auxiliary_data::<
+            F,
+            MATMULT_COLS_NUM_VARS,
+            MATMULT_INTERNAL_DIM_NUM_VARS,
+            { 1 << (LOG_NUM_STRIPS) },
+            { 1 << MATMULT_ROWS_NUM_VARS },
+        >(
+            &decode_i32_array(IRIS_RH_MULTIPLICAND),
+            &decode_i64_array(IRIS_THRESHOLDS),
         )
     }
 }
@@ -134,6 +166,7 @@ pub fn circuit_description_and_inputs(
         read_bytes_from_file(&image_path)
     };
     let circuit = circuit_description().unwrap();
-    let data = load_worldcoin_data::<Fr>(image_bytes, is_mask);
-    iriscode_ss_attach_data::<Fr, BASE>(circuit, data)
+    let aux_data = build_worldcoin_aux_data::<Fr>(is_mask);
+    let input_data = load_worldcoin_data::<Fr>(image_bytes, is_mask);
+    iriscode_ss_attach_input_data::<Fr, BASE>(circuit, input_data, aux_data)
 }

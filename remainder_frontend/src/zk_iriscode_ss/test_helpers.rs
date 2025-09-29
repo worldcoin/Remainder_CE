@@ -2,7 +2,8 @@
 use crate::layouter::builder::{Circuit, LayerVisibility};
 use crate::zk_iriscode_ss::circuits::build_iriscode_circuit_description;
 use crate::zk_iriscode_ss::data::{
-    build_iriscode_circuit_data, wirings_to_reroutings, IriscodeCircuitData,
+    build_iriscode_circuit_auxiliary_data, build_iriscode_circuit_data, wirings_to_reroutings,
+    IriscodeCircuitAuxData, IriscodeCircuitInputData,
 };
 use ndarray::Array2;
 use remainder::circuit_layout::ProvableCircuit;
@@ -13,7 +14,7 @@ use remainder_hyrax::circuit_layout::HyraxProvableCircuit;
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::{Bn256Point, Field, Fr};
 
-use super::circuits::iriscode_ss_attach_data;
+use super::circuits::iriscode_ss_attach_input_data;
 
 use anyhow::Result;
 
@@ -36,7 +37,11 @@ pub fn build_ligero_layer_spec(
 
 pub fn build_small_circuit_and_data<F: Field, const BASE: u64>(
     use_private_layers: bool,
-) -> Result<(Circuit<F>, IriscodeCircuitData<F>)> {
+) -> Result<(
+    Circuit<F>,
+    IriscodeCircuitAuxData<F>,
+    IriscodeCircuitInputData<F>,
+)> {
     // rewirings for the 2x2 identity matrix
     let wirings = &[(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
     let reroutings = wirings_to_reroutings(wirings, 2, 2);
@@ -50,23 +55,31 @@ pub fn build_small_circuit_and_data<F: Field, const BASE: u64>(
         reroutings,
     )?;
 
-    let data = build_iriscode_circuit_data::<F, 2, 2, 1, 1, 1, BASE, 2>(
+    let rh_multiplicand = [1, 0, 6, -1];
+    let thresholds_matrix = [1, 0, 1, 0];
+
+    let aux_data = build_iriscode_circuit_auxiliary_data::<F, 1, 1, 1, 2>(
+        &rh_multiplicand,
+        &thresholds_matrix,
+    );
+    let input_data = build_iriscode_circuit_data::<F, 2, 2, 1, 1, 1, BASE, 2>(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
-        &[1, 0, 6, -1],
-        &[1, 0, 1, 0],
+        &rh_multiplicand,
+        &thresholds_matrix,
         vec![wirings.clone().to_vec()],
         wirings,
     );
 
-    Ok((circuit, data))
+    Ok((circuit, aux_data, input_data))
 }
 
 fn small_circuit_with_inputs<F: Field>(use_private_layers: bool) -> Result<Circuit<F>> {
     const BASE: u64 = 16;
 
-    let (circuit, data) = build_small_circuit_and_data::<_, BASE>(use_private_layers)?;
+    let (circuit, aux_data, input_data) =
+        build_small_circuit_and_data::<_, BASE>(use_private_layers)?;
 
-    iriscode_ss_attach_data::<_, BASE>(circuit, data)
+    iriscode_ss_attach_input_data::<_, BASE>(circuit, input_data, aux_data)
 }
 
 /// Return a provable circuit description with public inputs for a trivial 2x2 identity matrix
