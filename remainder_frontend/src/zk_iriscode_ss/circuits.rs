@@ -3,6 +3,7 @@
 use crate::components::digits::DigitComponents;
 use crate::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility};
 use crate::zk_iriscode_ss::components::ZkIriscodeComponent;
+use crate::zk_iriscode_ss::data::IriscodeCircuitAuxData;
 use remainder::input_layer::InputLayerDescription;
 use remainder::mle::evals::MultilinearExtension;
 use remainder::prover::GKRCircuitDescription;
@@ -12,26 +13,26 @@ use itertools::Itertools;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
-use super::data::IriscodeCircuitData;
+use super::data::IriscodeCircuitInputData;
 
 use anyhow::Result;
 
-/// The [`crate::prover::GKRCircuitDescription`] and input layer information for the iriscode
-/// circuit.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(bound = "F: Field")]
-pub struct IriscodeCircuitDescription<F: Field> {
-    /// The circuit description.
-    pub circuit_description: GKRCircuitDescription<F>,
-    /// The input layer for the image (typically private).
-    pub image_input_layer: InputLayerDescription,
-    /// The input layer for the digit values and the digit multiplicities (typically private).
-    pub digits_input_layer: InputLayerDescription,
-    /// The input layer for the iris/mask code.
-    pub code_input_layer: InputLayerDescription,
-    /// All the other public inputs (lookup table values, to sub from matmult & RH multiplicand of matmult).
-    pub auxiliary_input_layer: InputLayerDescription,
-}
+/// The input layer for the image (typically private).
+pub const V3_INPUT_IMAGE_LAYER: &str = "Input image (to reroute)";
+/// The input layer for the digit values and the digit multiplicities (typically private).
+pub const V3_DIGITS_LAYER: &str = "Digit values and multiplicities";
+/// The input layer for the iris/mask code.
+pub const V3_SIGN_BITS_LAYER: &str = "Sign Bits";
+/// All the other public inputs (lookup table values, to sub from matmult & RH multiplicand of matmult).
+pub const V3_AUXILIARY_LAYER: &str = "Auxiliary Data";
+
+pub const V3_INPUT_IMAGE_SHRED: &str = "Image to reroute";
+pub const V3_DIGITS_SHRED_TEMPLATE: &str = "Digits Input Shred";
+pub const V3_DIGITS_MULTIPLICITIES_SHRED: &str = "Digits multiplicities";
+pub const V3_TO_SUB_MATMULT_SHRED: &str = "Input to subtract from MatMult";
+pub const V3_RH_MATMULT_SHRED: &str = "RH Multiplicand of MatMult";
+pub const V3_LOOKUP_SHRED: &str = "Lookup table values for digit range check";
+pub const V3_SIGN_BITS_SHRED: &str = "Sign Bits";
 
 /// Build the [IriscodeCircuitDescription], return the circuit description and
 /// the input builder metadata, for the v3 (RLC) iriscode circuit.
@@ -59,50 +60,51 @@ pub fn build_iriscode_circuit_description<
     let log_num_strips = log2_ceil(num_strips) as usize;
 
     // Image input layer
-    let to_reroute_input_layer = builder.add_input_layer("To-Reroute", layer_visibility);
+    let to_reroute_input_layer = builder.add_input_layer(V3_INPUT_IMAGE_LAYER, layer_visibility);
     let to_reroute =
-        builder.add_input_shred("Image to reroute", IM_NUM_VARS, &to_reroute_input_layer);
+        builder.add_input_shred(V3_INPUT_IMAGE_SHRED, IM_NUM_VARS, &to_reroute_input_layer);
 
     // Digits and multiplicities input layer
-    let digits_input_layer = builder.add_input_layer("Digits", layer_visibility);
+    let digits_input_layer = builder.add_input_layer(V3_DIGITS_LAYER, layer_visibility);
     let digits_input_shreds: Vec<_> = (0..NUM_DIGITS)
         .map(|i| {
             builder.add_input_shred(
-                &format!("Digits Input Shred {i}"),
+                &format!("{V3_DIGITS_SHRED_TEMPLATE} {i}"),
                 log_num_strips + MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS,
                 &digits_input_layer,
             )
         })
         .collect();
 
-    let digit_multiplicities =
-        builder.add_input_shred("Digit Multiplicities", log_base, &digits_input_layer);
+    let digit_multiplicities = builder.add_input_shred(
+        V3_DIGITS_MULTIPLICITIES_SHRED,
+        log_base,
+        &digits_input_layer,
+    );
 
     // Auxiliary inputs
-    let auxiliary_input_layer = builder.add_input_layer("Aux", LayerVisibility::Public);
+    let auxiliary_input_layer =
+        builder.add_input_layer(V3_AUXILIARY_LAYER, LayerVisibility::Public);
 
     let to_sub_from_matmult = builder.add_input_shred(
-        "Input to subtract from MatMult",
+        V3_TO_SUB_MATMULT_SHRED,
         log_num_strips + MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS,
         &auxiliary_input_layer,
     );
 
     let rh_matmult_multiplicand = builder.add_input_shred(
-        "RH Multiplicand of MatMult",
+        V3_RH_MATMULT_SHRED,
         MATMULT_INTERNAL_DIM_NUM_VARS + MATMULT_COLS_NUM_VARS,
         &auxiliary_input_layer,
     );
 
-    let lookup_table_values = builder.add_input_shred(
-        "Lookup table values for digit range check",
-        log_base,
-        &auxiliary_input_layer,
-    );
+    let lookup_table_values =
+        builder.add_input_shred(V3_LOOKUP_SHRED, log_base, &auxiliary_input_layer);
 
     // Sign bits (iris/mask code)
-    let sign_bits_input_layer = builder.add_input_layer("Sign bits", layer_visibility);
+    let sign_bits_input_layer = builder.add_input_layer(V3_SIGN_BITS_LAYER, layer_visibility);
     let sign_bits = builder.add_input_shred(
-        "Sign Bits",
+        V3_SIGN_BITS_SHRED,
         log_num_strips + MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS,
         &sign_bits_input_layer,
     );
@@ -235,35 +237,61 @@ pub fn build_iriscode_circuit_description<
     builder.build()
 }
 
+pub fn iriscode_ss_attach_aux_data<F: Field, const BASE: u64>(
+    mut circuit: Circuit<F>,
+    iriscode_aux_data: IriscodeCircuitAuxData<F>,
+) -> Result<Circuit<F>> {
+    circuit.set_input(
+        V3_RH_MATMULT_SHRED,
+        iriscode_aux_data.rh_matmult_multiplicand,
+    );
+
+    circuit.set_input(
+        V3_TO_SUB_MATMULT_SHRED,
+        iriscode_aux_data.to_sub_from_matmult,
+    );
+
+    circuit.set_input(
+        V3_LOOKUP_SHRED,
+        MultilinearExtension::new((0..BASE).map(F::from).collect()),
+    );
+
+    Ok(circuit)
+}
+
 /// Generates a mapping from Layer IDs to their respective MLEs,
 /// by attaching the `iriscode_data` onto a circuit that is
 /// described through the `input_builder_metadata`.
-pub fn iriscode_ss_attach_data<F: Field, const BASE: u64>(
+pub fn iriscode_ss_attach_input_data<F: Field, const BASE: u64>(
     mut circuit: Circuit<F>,
-    iriscode_data: IriscodeCircuitData<F>,
+    iriscode_input_data: IriscodeCircuitInputData<F>,
+    iriscode_aux_data: IriscodeCircuitAuxData<F>,
 ) -> Result<Circuit<F>> {
-    circuit.set_input("Image to reroute", iriscode_data.to_reroute);
+    circuit.set_input(V3_INPUT_IMAGE_SHRED, iriscode_input_data.to_reroute);
     circuit.set_input(
-        "RH Multiplicand of MatMult",
-        iriscode_data.rh_matmult_multiplicand,
+        V3_RH_MATMULT_SHRED,
+        iriscode_aux_data.rh_matmult_multiplicand,
     );
 
-    iriscode_data
+    iriscode_input_data
         .digits
         .into_iter()
         .enumerate()
         .for_each(|(i, mle)| {
-            circuit.set_input(&format!("Digits Input Shred {i}"), mle);
+            circuit.set_input(&format!("{V3_DIGITS_SHRED_TEMPLATE} {i}"), mle);
         });
 
-    circuit.set_input("Sign Bits", iriscode_data.sign_bits);
+    circuit.set_input(V3_SIGN_BITS_SHRED, iriscode_input_data.sign_bits);
     circuit.set_input(
-        "Input to subtract from MatMult",
-        iriscode_data.to_sub_from_matmult,
+        V3_TO_SUB_MATMULT_SHRED,
+        iriscode_aux_data.to_sub_from_matmult,
     );
-    circuit.set_input("Digit Multiplicities", iriscode_data.digit_multiplicities);
     circuit.set_input(
-        "Lookup table values for digit range check",
+        V3_DIGITS_MULTIPLICITIES_SHRED,
+        iriscode_input_data.digit_multiplicities,
+    );
+    circuit.set_input(
+        V3_LOOKUP_SHRED,
         MultilinearExtension::new((0..BASE).map(F::from).collect()),
     );
 

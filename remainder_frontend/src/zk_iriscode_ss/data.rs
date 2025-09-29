@@ -5,16 +5,14 @@ use remainder::mle::evals::MultilinearExtension;
 use remainder::utils::arithmetic::i64_to_field;
 use remainder::utils::mle::pad_with;
 use remainder_shared_types::Field;
+use serde::{Deserialize, Serialize};
 
 /// Input data for the Worldcoin iriscode circuit.
 #[derive(Debug, Clone)]
-pub struct IriscodeCircuitData<F: Field> {
+pub struct IriscodeCircuitInputData<F: Field> {
     /// The values to be re-routed to form the LH multiplicand of the matrix multiplication.
     /// Length is a power of two.
     pub to_reroute: MultilinearExtension<F>,
-    /// The MLE of the RH multiplicand of the matrix multiplication.
-    /// Length is `1 << (MATMULT_INTERNAL_DIM_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
-    pub rh_matmult_multiplicand: MultilinearExtension<F>,
     /// The digits of the complementary digital decompositions (base BASE) of matmult minus `to_sub_from_matmult`.
     /// Length of each MLE is `1 << (MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
     pub digits: Vec<MultilinearExtension<F>>,
@@ -27,6 +25,16 @@ pub struct IriscodeCircuitData<F: Field> {
     /// response - threshold.
     /// Length is `BASE`.
     pub digit_multiplicities: MultilinearExtension<F>,
+}
+
+/// Auxiliary input data for the Worldcoin iriscode circuit.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "F: Field")]
+pub struct IriscodeCircuitAuxData<F: Field> {
+    /// The MLE of the RH multiplicand of the matrix multiplication.
+    /// Length is `1 << (MATMULT_INTERNAL_DIM_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
+    pub rh_matmult_multiplicand: MultilinearExtension<F>,
+
     /// Values to be subtracted from the result of the matrix multiplication.
     /// Length is `1 << (MATMULT_ROWS_NUM_VARS + MATMULT_COLS_NUM_VARS)`.
     pub to_sub_from_matmult: MultilinearExtension<F>,
@@ -58,6 +66,52 @@ pub fn wirings_to_reroutings(
         .collect_vec()
 }
 
+pub fn build_iriscode_circuit_auxiliary_data<
+    F: Field,
+    const MATMULT_COLS_NUM_VARS: usize,
+    const MATMULT_INTERNAL_DIM_NUM_VARS: usize,
+    const NUM_STRIPS: usize,
+    const MAT_CHUNK_SIZE: usize,
+>(
+    rh_multiplicand: &[i32],
+    thresholds_matrix: &[i64],
+) -> IriscodeCircuitAuxData<F> {
+    // Build the RH multiplicand for the matmult.
+    let rh_multiplicand = Array2::from_shape_vec(
+        (
+            1 << MATMULT_INTERNAL_DIM_NUM_VARS,
+            1 << MATMULT_COLS_NUM_VARS,
+        ),
+        rh_multiplicand.iter().map(|&x| x as i64).collect_vec(),
+    )
+    .unwrap();
+
+    // Flatten the kernel values, convert to field.  (Already padded)
+    let rh_matmult_multiplicand: Vec<F> =
+        rh_multiplicand.into_iter().map(i64_to_field).collect_vec();
+
+    // Build the thresholds matrix from the 1d serialization.
+    let thresholds_matrix = Array2::from_shape_vec(
+        (NUM_STRIPS * MAT_CHUNK_SIZE, 1 << MATMULT_COLS_NUM_VARS),
+        thresholds_matrix.to_vec(),
+    )
+    .unwrap();
+
+    // Flatten the thresholds matrix, convert to field and pad.
+    let thresholds_matrix: Vec<F> = pad_with(
+        F::ZERO,
+        &thresholds_matrix
+            .into_iter()
+            .map(i64_to_field)
+            .collect_vec(),
+    );
+
+    IriscodeCircuitAuxData {
+        rh_matmult_multiplicand: MultilinearExtension::new(rh_matmult_multiplicand),
+        to_sub_from_matmult: MultilinearExtension::new(thresholds_matrix),
+    }
+}
+
 /// Build an instance of [IriscodeCircuitData] from the given image, RH multiplicand, thresholds and
 /// wiring data, by deriving the iris code.
 pub fn build_iriscode_circuit_data<
@@ -75,7 +129,7 @@ pub fn build_iriscode_circuit_data<
     thresholds_matrix: &[i64],
     image_strip_wirings: Vec<Vec<(u16, u16, u16, u16)>>,
     lh_matrix_wirings: &[(u16, u16, u16, u16)],
-) -> IriscodeCircuitData<F> {
+) -> IriscodeCircuitInputData<F> {
     assert!(BASE.is_power_of_two());
     assert!(NUM_DIGITS.is_power_of_two());
     let num_strips = image_strip_wirings.len();
@@ -171,19 +225,6 @@ pub fn build_iriscode_circuit_data<
         .map(|elem| F::from(elem as u64))
         .collect_vec();
 
-    // Flatten the kernel values, convert to field.  (Already padded)
-    let rh_matmult_multiplicand: Vec<F> =
-        rh_multiplicand.into_iter().map(i64_to_field).collect_vec();
-
-    // Flatten the thresholds matrix, convert to field and pad.
-    let thresholds_matrix: Vec<F> = pad_with(
-        F::ZERO,
-        &thresholds_matrix
-            .into_iter()
-            .map(i64_to_field)
-            .collect_vec(),
-    );
-
     // Convert the digit multiplicities to field elements.
     let digit_multiplicities = digit_multiplicities
         .into_iter()
@@ -191,12 +232,10 @@ pub fn build_iriscode_circuit_data<
         .collect_vec();
     let digits = to_slice_of_mles(digits.iter().map(digits_to_field).collect_vec()).to_vec();
 
-    IriscodeCircuitData {
+    IriscodeCircuitInputData {
         to_reroute: MultilinearExtension::new(image_matrix_mle),
-        rh_matmult_multiplicand: MultilinearExtension::new(rh_matmult_multiplicand),
         digits,
         sign_bits: MultilinearExtension::new(code),
         digit_multiplicities: MultilinearExtension::new(digit_multiplicities),
-        to_sub_from_matmult: MultilinearExtension::new(thresholds_matrix),
     }
 }

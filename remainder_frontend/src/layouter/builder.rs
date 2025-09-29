@@ -12,7 +12,8 @@ use std::{
 use ark_std::log2;
 use itertools::Itertools;
 use remainder_hyrax::{
-    circuit_layout::HyraxProvableCircuit, hyrax_gkr::hyrax_input_layer::HyraxInputLayerDescription,
+    circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit},
+    hyrax_gkr::hyrax_input_layer::HyraxInputLayerDescription,
 };
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::{curves::PrimeOrderCurve, Field};
@@ -37,7 +38,7 @@ use crate::{
     },
 };
 use remainder::{
-    circuit_layout::{CircuitLocation, ProvableCircuit},
+    circuit_layout::{CircuitLocation, ProvableCircuit, VerifiableCircuit},
     input_layer::{ligero_input_layer::LigeroInputLayerDescription, InputLayerDescription},
     layer::{gate::BinaryOperation, layer_enum::LayerDescriptionEnum, LayerId},
     mle::evals::MultilinearExtension,
@@ -1010,6 +1011,25 @@ impl CircuitMap {
         self.layer_visibility.keys().cloned().collect_vec()
     }
 
+    /// Returns a vector of all _public_ input layer IDs.
+    ///
+    /// TODO: Consider returning an iterator instead of `Vec`.
+    ///
+    /// # Panics
+    /// If [self] is _not_ in [CircuitMapState::Ready] state.
+    pub fn get_all_public_input_layer_ids(&self) -> Vec<LayerId> {
+        assert_eq!(self.state, CircuitMapState::Ready);
+
+        self.layer_visibility
+            .iter()
+            .filter_map(|(layer_id, visibility)| match *visibility {
+                LayerVisibility::Public => Some(layer_id),
+                LayerVisibility::Private => None,
+            })
+            .cloned()
+            .collect_vec()
+    }
+
     /// Returns a vector of all Input Shred IDs in the Input Layer with ID `layer_id`, or an error
     /// if there is no input layer with that ID.
     ///
@@ -1077,7 +1097,7 @@ impl CircuitMap {
 #[serde(bound = "F: Field")]
 pub struct Circuit<F: Field> {
     circuit_description: GKRCircuitDescription<F>,
-    circuit_map: CircuitMap,
+    pub circuit_map: CircuitMap,
 
     partial_inputs: HashMap<NodeId, MultilinearExtension<F>>,
 }
@@ -1125,6 +1145,27 @@ impl<F: Field> Circuit<F> {
         }
     }
 
+    /// Returns whether the circuit contains an Input Layer labeled `label`.
+    pub fn contains_layer(&self, label: &str) -> bool {
+        self.circuit_map.get_layer_id_from_label(label).is_ok()
+    }
+
+    fn input_shred_contains_data(&self, shred_id: NodeId) -> bool {
+        self.partial_inputs.contains_key(&shred_id)
+    }
+
+    /// Returns whether data has already been assigned to the Input Layer labeled `label`, or an
+    /// error if no such input layer exists.
+    pub fn input_layer_contains_data(&self, label: &str) -> Result<bool> {
+        let layer_id = self.circuit_map.get_layer_id_from_label(label)?;
+
+        Ok(self
+            .circuit_map
+            .get_input_shreds_from_layer_id(layer_id)?
+            .iter()
+            .all(|shred_id| self.input_shred_contains_data(*shred_id)))
+    }
+
     /// Returns the Input Layer Description of the Input Layer with label `layer_label`.
     ///
     /// # Panics
@@ -1147,8 +1188,48 @@ impl<F: Field> Circuit<F> {
         x[0]
     }
 
-    fn build_input_layer_data(&self) -> Result<HashMap<LayerId, MultilinearExtension<F>>> {
+    /// Builds the layer MLE for `layer_id` by combining the data in all the input shreds of that layer.
+    ///
+    /// Returns error if `layer_id` is an invalid input layer ID, or if any shred data is missing.
+    fn build_input_layer_data(&self, layer_id: LayerId) -> Result<MultilinearExtension<F>> {
+        let input_shred_ids = self.circuit_map.get_input_shreds_from_layer_id(layer_id)?;
+
+        let mut shred_mles_and_prefix_bits = vec![];
+        for input_shred_id in input_shred_ids {
+            let mle = self.partial_inputs.get(&input_shred_id).ok_or(anyhow!(
+                "Input shred {input_shred_id} does not contain any data!"
+            ))?;
+
+            let (circuit_location, num_vars) =
+                self.circuit_map.get_shred_location(input_shred_id).unwrap();
+
+            if num_vars != mle.num_vars() {
+                return Err(anyhow!(GKRError::InputShredLengthMismatch(
+                    input_shred_id.get_id(),
+                    num_vars,
+                    mle.num_vars(),
+                )));
+            }
+            shred_mles_and_prefix_bits.push((mle, circuit_location.prefix_bits))
+        }
+
+        Ok(build_composite_mle(&shred_mles_and_prefix_bits))
+    }
+
+    fn build_public_input_layer_data(&self) -> Result<HashMap<LayerId, MultilinearExtension<F>>> {
+        let mut public_inputs: HashMap<LayerId, MultilinearExtension<F>> = HashMap::new();
+
+        for input_layer_id in self.circuit_map.get_all_public_input_layer_ids() {
+            let layer_mle = self.build_input_layer_data(input_layer_id)?;
+            public_inputs.insert(input_layer_id, layer_mle);
+        }
+
+        Ok(public_inputs)
+    }
+
+    fn build_all_input_layer_data(&self) -> Result<HashMap<LayerId, MultilinearExtension<F>>> {
         // Ensure all Input Shreds have been assigned input data.
+        /*
         if let Some(shred_id) = self
             .circuit_map
             .get_all_input_shred_ids()
@@ -1162,34 +1243,82 @@ impl<F: Field> Circuit<F> {
                 bail!("Circuit Instantiation Failed: Input Shred ID '{shred_id}' has not been assigned any data.");
             }
         }
+        */
 
         // Build Input Layer data.
         let mut inputs: HashMap<LayerId, MultilinearExtension<F>> = HashMap::new();
 
         for input_layer_id in self.circuit_map.get_all_input_layer_ids() {
-            let input_shred_ids = self
-                .circuit_map
-                .get_input_shreds_from_layer_id(input_layer_id)?;
-
-            let mut shred_mles_and_prefix_bits = vec![];
-            for input_shred_id in input_shred_ids {
-                let mle = self.partial_inputs.get(&input_shred_id).unwrap();
-                let (circuit_location, num_vars) =
-                    self.circuit_map.get_shred_location(input_shred_id).unwrap();
-                if num_vars != mle.num_vars() {
-                    return Err(anyhow!(GKRError::InputShredLengthMismatch(
-                        input_shred_id.get_id(),
-                        num_vars,
-                        mle.num_vars(),
-                    )));
-                }
-                shred_mles_and_prefix_bits.push((mle, circuit_location.prefix_bits))
-            }
-            let combined_mle = build_composite_mle(&shred_mles_and_prefix_bits);
-            inputs.insert(input_layer_id, combined_mle);
+            let layer_mle = self.build_input_layer_data(input_layer_id)?;
+            inputs.insert(input_layer_id, layer_mle);
         }
 
         Ok(inputs)
+    }
+
+    /// Returns a [VerifiableCircuit] containing the public input layer data, but no commitments to
+    /// the private input layers yet.
+    pub fn gen_verifiable_circuit(&self) -> Result<VerifiableCircuit<F>> {
+        let public_inputs = self.build_public_input_layer_data()?;
+
+        Ok(VerifiableCircuit::new(
+            self.circuit_description.clone(),
+            public_inputs,
+            HashMap::new(),
+        ))
+    }
+
+    /// Returns a [HyraxVerifiableCircuit] containing the public input layer data, but no
+    /// commitments to the private input layers yet.
+    pub fn gen_hyrax_verifiable_circuit<C>(&self) -> Result<HyraxVerifiableCircuit<C>>
+    where
+        C: PrimeOrderCurve<Scalar = F>,
+    {
+        let public_inputs = self.build_public_input_layer_data()?;
+
+        let hyrax_private_inputs = self
+            .circuit_map
+            .get_all_private_layers()
+            .into_iter()
+            .map(|layer_id| {
+                let raw_needed_capacity = self
+                    .circuit_map
+                    .get_input_shreds_from_layer_id(layer_id)
+                    .unwrap()
+                    .into_iter()
+                    .fold(0, |acc, shred_id| {
+                        let (_, num_vars) = self.circuit_map.get_shred_location(shred_id).unwrap();
+                        acc + (1_usize << num_vars)
+                    });
+                let padded_needed_capacity = (1 << log2(raw_needed_capacity)) as usize;
+                let total_num_vars = log2(padded_needed_capacity) as usize;
+
+                // Aim for square matrix.
+                // TODO: Allow for custom parameters.
+                let log_num_cols = total_num_vars / 2;
+
+                // let layer_label = self.circuit_map.get_label_from_layer_id(layer_id)?;
+                // let commitment = pre_commitments.get(&layer_label).cloned();
+                Ok((
+                    layer_id,
+                    (
+                        HyraxInputLayerDescription {
+                            layer_id,
+                            num_vars: total_num_vars,
+                            log_num_cols,
+                        },
+                        None,
+                    ),
+                ))
+            })
+            .collect::<Result<HashMap<_, _>>>()?;
+
+        Ok(HyraxVerifiableCircuit::new(
+            self.circuit_description.clone(),
+            public_inputs,
+            hyrax_private_inputs,
+            self.circuit_map.layer_label_to_layer_id.clone(),
+        ))
     }
 
     /// Produces a provable form of this circuit for the vanilla GKR proving system which uses
@@ -1199,7 +1328,7 @@ impl<F: Field> Circuit<F> {
     /// # Returns
     /// The generated provable circuit, or an error if the [self] is missing input data.
     pub fn finalize(&self) -> Result<ProvableCircuit<F>> {
-        let inputs = self.build_input_layer_data()?;
+        let inputs = self.build_all_input_layer_data()?;
 
         let ligero_private_inputs = self
             .circuit_map
@@ -1251,7 +1380,7 @@ impl<F: Field> Circuit<F> {
     where
         C: PrimeOrderCurve<Scalar = F>,
     {
-        let inputs = self.build_input_layer_data()?;
+        let inputs = self.build_all_input_layer_data()?;
 
         let hyrax_private_inputs = self
             .circuit_map

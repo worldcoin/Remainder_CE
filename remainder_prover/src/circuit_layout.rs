@@ -8,6 +8,7 @@ use itertools::Itertools;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
+use crate::circuit_building_context;
 use crate::input_layer::ligero_input_layer::{
     LigeroInputLayerDescription, LigeroInputLayerDescriptionWithPrecommit,
 };
@@ -238,6 +239,19 @@ pub struct VerifiableCircuit<F: Field> {
 }
 
 impl<F: Field> VerifiableCircuit<F> {
+    /// Returns a [VerifiableCircuit] initialized with the given data.
+    pub fn new(
+        circuit_description: GKRCircuitDescription<F>,
+        public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
+        private_inputs: HashMap<LayerId, LigeroInputLayerDescription<F>>,
+    ) -> Self {
+        Self {
+            circuit_description,
+            public_inputs,
+            private_inputs,
+        }
+    }
+
     /// Returns a reference to the mapping which maps a [LayerId] of a public input layer to the
     /// data its associated with.
     ///

@@ -34,11 +34,11 @@ mod tests {
         },
         layouter::builder::Circuit,
         zk_iriscode_ss::{
-            circuits::iriscode_ss_attach_data,
+            circuits::{iriscode_ss_attach_input_data, V3_INPUT_IMAGE_LAYER, V3_SIGN_BITS_LAYER},
             test_helpers::{
                 small_hyrax_circuit_with_private_inputs, small_hyrax_circuit_with_public_inputs,
             },
-            v3::{circuit_description, load_worldcoin_data},
+            v3::{build_worldcoin_aux_data, circuit_description, load_worldcoin_data},
         },
     };
     use rand::rngs::ThreadRng;
@@ -107,12 +107,15 @@ mod tests {
         );
 
         // Load the inputs to the circuit (these are all MLEs, i.e. in the clear).
-        let data = load_worldcoin_data::<Fr>(serialized_image_commitment.image, is_mask);
-        let circuit = iriscode_ss_attach_data::<_, { crate::zk_iriscode_ss::parameters::BASE }>(
-            ic_circuit.clone(),
-            data,
-        )
-        .unwrap();
+        let input_data = load_worldcoin_data::<Fr>(serialized_image_commitment.image, is_mask);
+        let aux_data = build_worldcoin_aux_data::<Fr>(is_mask);
+        let circuit =
+            iriscode_ss_attach_input_data::<_, { crate::zk_iriscode_ss::parameters::BASE }>(
+                ic_circuit.clone(),
+                input_data,
+                aux_data,
+            )
+            .unwrap();
 
         /*
         // Extract the auxiliary public inputs for later use by the verifier.
@@ -124,11 +127,16 @@ mod tests {
         */
 
         let mut provable_circuit = circuit.finalize_hyrax().unwrap();
-        let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
 
         provable_circuit
-            .set_pre_commitment("To-Reroute", image_commitment.into())
+            .set_pre_commitment(
+                V3_INPUT_IMAGE_LAYER,
+                image_commitment.into(),
+                Some(IMAGE_COMMIT_LOG_NUM_COLS),
+            )
             .unwrap();
+
+        let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
 
         // Create a fresh transcript.
         let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -144,11 +152,11 @@ mod tests {
         );
 
         let code_commit = provable_circuit
-            .get_commitment_ref_by_label("Sign bits")
+            .get_commitment_ref_by_label(V3_SIGN_BITS_LAYER)
             .unwrap()
             .clone();
         let image_commit = provable_circuit
-            .get_commitment_ref_by_label("To-Reroute")
+            .get_commitment_ref_by_label(V3_INPUT_IMAGE_LAYER)
             .unwrap()
             .clone();
 
@@ -194,7 +202,7 @@ mod tests {
                     proof,
                     proof_config,
                     expected_commitment_hash,
-                    image_commit,
+                    _image_commit,
                     _code_commit,
                 ) = perform_function_under_prover_config!(
                     v3_masked_iriscode_prove,
@@ -213,7 +221,6 @@ mod tests {
                     &gkr_circuit_verifier_config,
                     &proof,
                     &verifiable_circuit,
-                    image_commit,
                     &expected_commitment_hash,
                     &committer,
                     &proof_config

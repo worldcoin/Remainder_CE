@@ -4,18 +4,22 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
-    hyrax_worldcoin::orb::load_image_commitment,
-    hyrax_worldcoin_mpc::mpc_prover::{print_features_status, V3MPCCircuitAndAuxMles, V3MPCProver},
-    tfh_circuits::tfh_config,
-    worldcoin_mpc::parameters::NUM_PARTIES,
-    zk_iriscode_ss::{io::read_bytes_from_file, v3::circuit_description},
-};
 use clap::{command, Parser};
 use rand::{rngs::OsRng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
+use remainder_frontend::{
+    hyrax_worldcoin::{
+        orb::load_image_commitment,
+        v3::{V3CircuitAndAuxData, V3Prover},
+    },
+    hyrax_worldcoin_mpc::mpc_prover::{print_features_status, V3MPCProver},
+    zk_iriscode_ss::{io::read_bytes_from_file, v3::circuit_description},
+};
 use remainder_hyrax::hyrax_gkr::hyrax_input_layer::HyraxProverInputCommitment;
-use remainder_shared_types::{perform_function_under_expected_configs, Bn256Point, Fr};
+use remainder_shared_types::{
+    config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
+    perform_function_under_expected_configs, Bn256Point, Fr,
+};
 use zeroize::Zeroize;
 
 #[derive(Parser)]
@@ -38,16 +42,16 @@ fn main() {
     // Sanitycheck by logging the current settings.
     perform_function_under_expected_configs!(
         print_features_status,
-        &tfh_config::EXPECTED_PROVER_CONFIG,
-        &tfh_config::EXPECTED_VERIFIER_CONFIG,
+        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
+        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
     );
 
     // Compute all proofs and serialize.
     let cli = CliArguments::parse();
     perform_function_under_expected_configs!(
         prove_all_proofs,
-        &tfh_config::EXPECTED_PROVER_CONFIG,
-        &tfh_config::EXPECTED_VERIFIER_CONFIG,
+        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
+        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
         &cli.circuit,
         &cli.input,
         &cli.output_dir
@@ -83,10 +87,11 @@ fn prove_all_proofs(
 
     let serialized_circuit =
         read_bytes_from_file(path_to_serialized_circuit.as_os_str().to_str().unwrap());
-    let v3_mpc_circuit_and_aux_mles =
-        V3MPCCircuitAndAuxMles::<Fr>::deserialize(&serialized_circuit);
+    let v3_circuit_and_aux_data = V3CircuitAndAuxData::<Fr>::deserialize(&serialized_circuit);
 
-    let (expected_circuit_description, _expected_input_builder_metadata) = circuit_description();
+    /*
+    let expected_circuit_description =
+        circuit_description().expect("Failed to create circuit description.");
 
     // Make sure that the circuit description we read is equal to the one we built.
     let circuit_hash = sha256::digest(bincode::serialize(&expected_circuit_description).unwrap());
@@ -94,18 +99,13 @@ fn prove_all_proofs(
 
     assert_eq!(
         bincode::serialize(&expected_circuit_description).unwrap(),
-        bincode::serialize(
-            v3_mpc_circuit_and_aux_mles
-                .v3_circuit_and_aux_mles
-                .get_circuit()
-        )
-        .unwrap()
+        serialized_circuit
     );
+    */
 
-    let mut v3_mpc_prover = V3MPCProver::new(
-        tfh_config::EXPECTED_PROVER_CONFIG,
-        v3_mpc_circuit_and_aux_mles,
-        &mut prng,
+    let mut v3_prover = V3Prover::new(
+        GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
+        v3_circuit_and_aux_data,
     );
 
     for is_mask in [false, true] {
@@ -122,7 +122,7 @@ fn prove_all_proofs(
             let image_commitment: HyraxProverInputCommitment<Bn256Point> =
                 serialized_image_commitment.clone().into();
 
-            v3_mpc_prover.prove_v3(
+            v3_prover.prove(
                 is_mask,
                 is_left_eye,
                 serialized_image_commitment.image,
@@ -135,6 +135,11 @@ fn prove_all_proofs(
         }
     }
 
+    let v3_proof = v3_prover
+        .finalize()
+        .expect("Proof is missing while trying to finalize");
+
+    /*
     for is_left_eye in [false, true] {
         println!("Proving 3 mpc secret shares for (is_left_eye) = ({is_left_eye}).");
         v3_mpc_prover.prove_mpc(is_left_eye, &mut prng);
@@ -158,10 +163,11 @@ fn prove_all_proofs(
             p.print_size();
         }
     }
+    */
 
     // Write the V3 proof to file
     {
-        let serialized_v3_proof = v3_mpc_proof.get_v3_proof_ref().serialize();
+        let serialized_v3_proof = v3_proof.serialize();
 
         let mut f_v3 = File::create(output_dir_for_proof.join("world_v3.zkp"))
             .expect("Failed to create/open proof file.");
@@ -171,6 +177,7 @@ fn prove_all_proofs(
     }
 
     // Write the MPC proof to file
+    /*
     {
         (0..NUM_PARTIES).for_each(|party_idx| {
             let serialized_mpc_proof = v3_mpc_proof.get_party_proof_ref(party_idx).serialize();
@@ -184,8 +191,10 @@ fn prove_all_proofs(
                 .expect("Failed to write serialized mpc proof to file.");
         });
     }
+    */
 
     // Write the commitments (left/right iris/mask code & slope)
+    /*
     {
         let serialized_commitments = v3_mpc_proof.get_commitments_ref().serialize();
 
@@ -195,4 +204,5 @@ fn prove_all_proofs(
         f.write_all(&serialized_commitments)
             .expect("Failed to write serialized commitments to file.");
     }
+    */
 }
