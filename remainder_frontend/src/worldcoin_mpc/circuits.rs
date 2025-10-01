@@ -19,35 +19,33 @@ use super::{
     parameters::{ENCODING_MATRIX_NUM_VARS_COLS, ENCODING_MATRIX_NUM_VARS_ROWS},
 };
 
-/// Description of a `HyraxProof` for the mpc circuit.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(bound = "F: Field")]
-pub struct MPCCircuitDescription<F: Field> {
-    /// The circuit description.
-    pub circuit_description: GKRCircuitDescription<F>,
+/// The input layer for quotients and multiplicities
+pub const MPC_AUXILIARY_LAYER: &str = "Auxiliary";
+/// all other public inputs, such as the evaluation points, the encoding matrix,
+/// the lookup_table_values. These should stay invariant for the same party, different
+/// iris/mask codes (i.e. left/right eye)
+pub const MPC_AUXILIARY_INVARIANT_LAYER: &str = "Auxiliary Invariant";
+/// The input layer for shares_reduced_modulo_gr4_modulus, public
+pub const MPC_SHARES_LAYER: &str = "Shares";
+/// The private input layer for the slope (private and generated randomly).
+pub const MPC_SLOPES_LAYER: &str = "Slopes";
+/// The private input layer for the iris code (private), obtained through
+/// running the iriscode circuit
+pub const MPC_IRISCODE_INPUT_LAYER: &str = "Iris Code Input";
+/// The private input layer for the mask code (private),  obtained through
+/// running the iriscode circuit
+pub const MPC_MASKCODE_INPUT_LAYER: &str = "Mask Code Input";
 
-    /// The private input layer for the slope (private and generated randomly).
-    pub slope_input_layer: InputLayerDescription,
-
-    /// The private input layer for the iris code (private), obtained through
-    /// running the iriscode circuit
-    pub iris_code_input_layer: InputLayerDescription,
-
-    /// The private input layer for the mask code (private),  obtained through
-    /// running the iriscode circuit
-    pub mask_code_input_layer: InputLayerDescription,
-
-    /// The input layer for quotients and multiplicities
-    pub auxilary_input_layer: InputLayerDescription,
-
-    /// The input layer for shares_reduced_modulo_gr4_modulus, public
-    pub shares_input_layer: InputLayerDescription,
-
-    /// all other public inputs, such as the evaluation points, the encoding matrix,
-    /// the lookup_table_values. These should stay invariant for the same party, different
-    /// iris/mask codes (i.e. left/right eye)
-    pub auxiliary_invariant_public_input_layer: InputLayerDescription,
-}
+pub const MPC_IRISCODE_SHRED: &str = "Iris Code Input";
+pub const MPC_MASKCODE_SHRED: &str = "Mask Code Input";
+pub const MPC_SLOPES_SHRED: &str = "Slopes";
+pub const MPC_QUOTIENTS_SHRED: &str = "Quotients";
+pub const MPC_SHARES_SHRED: &str = "Shares Reduced Modulo GR4 Modulus";
+pub const MPC_MULTIPLICITIES_SHARES_SHRED: &str = "Multiplicities Shares";
+pub const MPC_MULTIPLICITIES_SLOPES_SHRED: &str = "Multiplicities Slopes";
+pub const MPC_ENCODING_MATRIX_SHRED: &str = "Encoding Matrix";
+pub const MPC_EVALUATION_POINTS_SHRED: &str = "Evaluation Points";
+pub const MPC_LOOKUP_TABLE_VALUES_SHRED: &str = "Lookup Table Values";
 
 /// Builds the mpc circuit.
 /// The full circuit spec can be referenced here:
@@ -68,47 +66,51 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
     // are combined into a single GR4 elements)
     let num_vars = num_vars_dataparallel + 2;
 
-    let auxilary_input_layer_node = builder.add_input_layer("Aux", LayerVisibility::Public);
-    let shares_input_layer_node = builder.add_input_layer("Shares", LayerVisibility::Public);
+    let auxilary_input_layer_node =
+        builder.add_input_layer(MPC_AUXILIARY_LAYER, LayerVisibility::Public);
+    let shares_input_layer_node =
+        builder.add_input_layer(MPC_SHARES_LAYER, LayerVisibility::Public);
     let auxiliary_invariant_public_input_layer_node =
-        builder.add_input_layer("Auxiliary Invariant", LayerVisibility::Public);
-    let slope_input_layer_node = builder.add_input_layer("Slope", layer_visibility);
-    let iris_code_input_layer_node = builder.add_input_layer("Irir Code Input", layer_visibility);
-    let mask_code_input_layer_node = builder.add_input_layer("Mask Code Input", layer_visibility);
+        builder.add_input_layer(MPC_AUXILIARY_INVARIANT_LAYER, LayerVisibility::Public);
+    let slope_input_layer_node = builder.add_input_layer(MPC_SLOPES_LAYER, layer_visibility);
+    let iris_code_input_layer_node =
+        builder.add_input_layer(MPC_IRISCODE_INPUT_LAYER, layer_visibility);
+    let mask_code_input_layer_node =
+        builder.add_input_layer(MPC_MASKCODE_INPUT_LAYER, layer_visibility);
 
-    let iris_code = builder.add_input_shred("Iriscode", num_vars, &iris_code_input_layer_node);
-    let mask_code = builder.add_input_shred("Maskcode", num_vars, &mask_code_input_layer_node);
-    let slopes = builder.add_input_shred("Slopes", num_vars, &slope_input_layer_node);
-    let quotients = builder.add_input_shred("Quotients", num_vars, &auxilary_input_layer_node);
-    let shares_reduced_modulo_gr4_modulus = builder.add_input_shred(
-        "Shares Reduced Modulo GR4 Modulus",
-        num_vars,
-        &shares_input_layer_node,
-    );
+    let iris_code =
+        builder.add_input_shred(MPC_IRISCODE_SHRED, num_vars, &iris_code_input_layer_node);
+    let mask_code =
+        builder.add_input_shred(MPC_MASKCODE_SHRED, num_vars, &mask_code_input_layer_node);
+    let slopes = builder.add_input_shred(MPC_SLOPES_SHRED, num_vars, &slope_input_layer_node);
+    let quotients =
+        builder.add_input_shred(MPC_QUOTIENTS_SHRED, num_vars, &auxilary_input_layer_node);
+    let shares_reduced_modulo_gr4_modulus =
+        builder.add_input_shred(MPC_SHARES_SHRED, num_vars, &shares_input_layer_node);
     let multiplicities_shares = builder.add_input_shred(
-        "Multiplicities Shares",
+        MPC_MULTIPLICITIES_SHARES_SHRED,
         GR4_ELEM_BIT_LENGTH as usize,
         &auxilary_input_layer_node,
     );
     let multiplicities_slopes = builder.add_input_shred(
-        "Multiplicities Slopes",
+        MPC_MULTIPLICITIES_SLOPES_SHRED,
         GR4_ELEM_BIT_LENGTH as usize,
         &auxilary_input_layer_node,
     );
 
     let encoding_matrix = builder.add_input_shred(
-        "Encoding Matrix",
+        MPC_ENCODING_MATRIX_SHRED,
         ENCODING_MATRIX_NUM_VARS_ROWS + ENCODING_MATRIX_NUM_VARS_COLS,
         &auxiliary_invariant_public_input_layer_node,
     );
     let evaluation_points = builder.add_input_shred(
-        "Evaluation Points",
+        MPC_EVALUATION_POINTS_SHRED,
         num_vars,
         &auxiliary_invariant_public_input_layer_node,
     );
 
     let lookup_table_values = builder.add_input_shred(
-        "Lookup Table Values",
+        MPC_LOOKUP_TABLE_VALUES_SHRED,
         GR4_ELEM_BIT_LENGTH as usize,
         &auxiliary_invariant_public_input_layer_node,
     );
@@ -166,29 +168,32 @@ pub fn mpc_attach_data<F: Field>(
     circuit: &mut Circuit<F>,
     secret_share_circuit_data: SecretShareCircuitInputs<F>,
 ) {
-    circuit.set_input("Iriscode", secret_share_circuit_data.iris_codes);
-    circuit.set_input("Maskcode", secret_share_circuit_data.masks);
-    circuit.set_input("Slopes", secret_share_circuit_data.slopes);
-    circuit.set_input("Quotients", secret_share_circuit_data.quotients);
+    circuit.set_input(MPC_IRISCODE_SHRED, secret_share_circuit_data.iris_codes);
+    circuit.set_input(MPC_MASKCODE_SHRED, secret_share_circuit_data.masks);
+    circuit.set_input(MPC_SLOPES_SHRED, secret_share_circuit_data.slopes);
+    circuit.set_input(MPC_QUOTIENTS_SHRED, secret_share_circuit_data.quotients);
     circuit.set_input(
-        "Shares Reduced Modulo GR4 Modulus",
+        MPC_SHARES_SHRED,
         secret_share_circuit_data.shares_reduced_modulo_gr4_modulus,
     );
     circuit.set_input(
-        "Multiplicities Shares",
+        MPC_MULTIPLICITIES_SHARES_SHRED,
         secret_share_circuit_data.multiplicities_shares,
     );
     circuit.set_input(
-        "Multiplicities Slopes",
+        MPC_MULTIPLICITIES_SLOPES_SHRED,
         secret_share_circuit_data.multiplicities_slopes,
     );
-    circuit.set_input("Encoding Matrix", secret_share_circuit_data.encoding_matrix);
     circuit.set_input(
-        "Evaluation Points",
+        MPC_ENCODING_MATRIX_SHRED,
+        secret_share_circuit_data.encoding_matrix,
+    );
+    circuit.set_input(
+        MPC_EVALUATION_POINTS_SHRED,
         secret_share_circuit_data.evaluation_points,
     );
     circuit.set_input(
-        "Lookup Table Values",
+        MPC_LOOKUP_TABLE_VALUES_SHRED,
         secret_share_circuit_data.lookup_table_values,
     );
 }
