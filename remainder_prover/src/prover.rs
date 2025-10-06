@@ -31,10 +31,12 @@ use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
 use crate::mle::mle_enum::MleEnum;
 use crate::output_layer::{OutputLayer, OutputLayerDescription};
+use crate::utils::debug::sanitycheck_input_layers_and_claims;
 use crate::utils::mle::verify_claim;
 use ark_std::{end_timer, start_timer};
 use helpers::get_circuit_description_hash_as_field_elems;
 use itertools::Itertools;
+use num::Integer;
 use remainder_ligero::ligero_commit::{
     remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify,
 };
@@ -174,6 +176,15 @@ pub fn prove<F: Halo2FFTFriendlyField>(
     // Mutate the transcript to contain the proof of the intermediate layers of the circuit,
     // and return the claims on the input layer.
     let input_layer_claims = prove_circuit(provable_circuit, transcript_writer).unwrap();
+
+    // If in performance debugging mode, print the number of claims on input
+    // layers and input layer sizes.
+    if cfg!(feature = "performance-debug") {
+        sanitycheck_input_layers_and_claims(
+            &input_layer_claims,
+            provable_circuit.get_gkr_circuit_description_ref(),
+        );
+    }
 
     // If in debug mode, then check the claims on all input layers.
     if cfg!(debug_assertions) {

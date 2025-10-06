@@ -37,6 +37,8 @@ parallel = [
     "remainder-ligero/parallel",
 ]
 print-trace = ["remainder-shared-types/print-trace"]
+# For printing circuit stats and other performance-related things.
+performance-debug = ["remainder/performance-debug"]
 
 [[bench]]
 name = "fix_variable"
