@@ -16,13 +16,10 @@ pub fn sanitycheck_input_layers_and_claims<F: Field>(
 ) {
     let mut input_layer_claims_map: HashMap<LayerId, usize> = HashMap::new();
     input_layer_claims.iter().for_each(|claim| {
-        if !input_layer_claims_map.contains_key(&claim.get_to_layer_id()) {
-            input_layer_claims_map.insert(claim.get_to_layer_id(), 1);
-        } else {
-            input_layer_claims_map
-                .entry(claim.get_to_layer_id())
-                .and_modify(|x| x.inc());
-        }
+        input_layer_claims_map
+            .entry(claim.get_to_layer_id())
+            .and_modify(|x| x.inc())
+            .or_insert(1);
     });
     // Mapping between input layer IDs and the number of variables in that input
     // layer's representation.
@@ -35,9 +32,6 @@ pub fn sanitycheck_input_layers_and_claims<F: Field>(
         .iter()
         .for_each(|(layer_id, num_claims)| {
             let layer_num_vars = input_layers_map.get(layer_id).unwrap();
-            println!(
-                "Layer ID {} with {} claims and {} num vars",
-                layer_id, num_claims, layer_num_vars
-            );
+            println!("Layer ID {layer_id} with {num_claims} claims and {layer_num_vars} num vars");
         });
 }
