@@ -39,7 +39,10 @@ use crate::{
 };
 use remainder::{
     circuit_layout::{CircuitLocation, ProvableCircuit, VerifiableCircuit},
-    input_layer::{ligero_input_layer::LigeroInputLayerDescription, InputLayerDescription},
+    input_layer::{
+        ligero_input_layer::{LigeroInputLayerDescription, LigeroRoot},
+        InputLayerDescription,
+    },
     layer::{gate::BinaryOperation, layer_enum::LayerDescriptionEnum, LayerId},
     mle::evals::MultilinearExtension,
     output_layer::OutputLayerDescription,
@@ -1216,12 +1219,27 @@ impl<F: Field> Circuit<F> {
         Ok(build_composite_mle(&shred_mles_and_prefix_bits))
     }
 
-    fn build_public_input_layer_data(&self) -> Result<HashMap<LayerId, MultilinearExtension<F>>> {
+    fn build_public_input_layer_data(
+        &self,
+        verifier_optional_inputs: bool,
+    ) -> Result<HashMap<LayerId, MultilinearExtension<F>>> {
         let mut public_inputs: HashMap<LayerId, MultilinearExtension<F>> = HashMap::new();
 
         for input_layer_id in self.circuit_map.get_all_public_input_layer_ids() {
-            let layer_mle = self.build_input_layer_data(input_layer_id)?;
-            public_inputs.insert(input_layer_id, layer_mle);
+            // Attempt to build the input layer's MLE.
+            let maybe_layer_mle = self.build_input_layer_data(input_layer_id);
+            match maybe_layer_mle {
+                Ok(layer_mle) => {
+                    public_inputs.insert(input_layer_id, layer_mle);
+                }
+                Err(err) => {
+                    // In the verifier case, we skip adding input data to a
+                    // particular input layer if any of the inputs are missing.
+                    if !verifier_optional_inputs {
+                        return Result::Err(err);
+                    }
+                }
+            }
         }
 
         Ok(public_inputs)
@@ -1256,15 +1274,74 @@ impl<F: Field> Circuit<F> {
         Ok(inputs)
     }
 
-    /// Returns a [VerifiableCircuit] containing the public input layer data, but no commitments to
-    /// the private input layers yet.
-    pub fn gen_verifiable_circuit(&self) -> Result<VerifiableCircuit<F>> {
-        let public_inputs = self.build_public_input_layer_data()?;
+    /// Helper function for grabbing all of the private input layers + descriptions
+    /// from the circuit map.
+    ///
+    /// We do this by first filtering all input layers which are
+    /// [LayerVisibility::Private], getting all input "shreds" which correspond to
+    /// those input layers, and aggregating those to compute the number of variables
+    /// required to represent each input layer.
+    ///
+    /// Finally, we set a default configuration for the Ligero PCS used to commit to
+    /// each of the private input layers' MLEs. TODO(tfHARD team): add support for
+    /// custom settings for the PCS configurations.
+    fn get_all_private_input_layer_descriptions_to_ligero(
+        &self,
+    ) -> Vec<LigeroInputLayerDescription<F>> {
+        self.circuit_map
+            .get_all_private_layers()
+            .into_iter()
+            .map(|layer_id| {
+                let raw_needed_capacity = self
+                    .circuit_map
+                    .get_input_shreds_from_layer_id(layer_id)
+                    .unwrap()
+                    .into_iter()
+                    .fold(0, |acc, shred_id| {
+                        let (_, num_vars) = self.circuit_map.get_shred_location(shred_id).unwrap();
+                        acc + (1_usize << num_vars)
+                    });
+                let padded_needed_capacity = (1 << log2(raw_needed_capacity)) as usize;
+                let total_num_vars = log2(padded_needed_capacity) as usize;
 
-        Ok(VerifiableCircuit::new(
-            self.circuit_description.clone(),
-            public_inputs,
-            HashMap::new(),
+                LigeroInputLayerDescription {
+                    layer_id,
+                    num_vars: total_num_vars,
+                    aux: LigeroAuxInfo::<F>::new(1 << (total_num_vars), 4, 1.0, None),
+                }
+            })
+            .collect()
+    }
+
+    /// Returns a [VerifiableCircuit], alongside all input data which is already
+    /// known to the verifier, but no commitments to the private input layers
+    /// yet.
+    pub fn gen_verifiable_circuit(
+        &self,
+    ) -> Result<(
+        VerifiableCircuit<F>,
+        HashMap<LayerId, MultilinearExtension<F>>,
+    )> {
+        // Input data which is known to the verifier ahead of time -- note that
+        // this data was manually appended using the `circuit.set_input()`
+        // function.
+        let verifier_predetermined_public_inputs = self.build_public_input_layer_data(true)?;
+
+        // Sets default Ligero parameters for each of the private input layers.
+        let ligero_private_inputs = self
+            .get_all_private_input_layer_descriptions_to_ligero()
+            .into_iter()
+            .map(|ligero_input_layer_description| {
+                (
+                    ligero_input_layer_description.layer_id,
+                    ligero_input_layer_description,
+                )
+            })
+            .collect();
+
+        Ok((
+            VerifiableCircuit::new(self.circuit_description.clone(), ligero_private_inputs),
+            verifier_predetermined_public_inputs,
         ))
     }
 
@@ -1274,7 +1351,7 @@ impl<F: Field> Circuit<F> {
     where
         C: PrimeOrderCurve<Scalar = F>,
     {
-        let public_inputs = self.build_public_input_layer_data()?;
+        let public_inputs = self.build_public_input_layer_data(false)?;
 
         let hyrax_private_inputs = self
             .circuit_map
@@ -1331,32 +1408,12 @@ impl<F: Field> Circuit<F> {
         let inputs = self.build_all_input_layer_data()?;
 
         let ligero_private_inputs = self
-            .circuit_map
-            .get_all_private_layers()
+            .get_all_private_input_layer_descriptions_to_ligero()
             .into_iter()
-            .map(|layer_id| {
-                let raw_needed_capacity = self
-                    .circuit_map
-                    .get_input_shreds_from_layer_id(layer_id)
-                    .unwrap()
-                    .into_iter()
-                    .fold(0, |acc, shred_id| {
-                        let (_, num_vars) = self.circuit_map.get_shred_location(shred_id).unwrap();
-                        acc + (1_usize << num_vars)
-                    });
-                let padded_needed_capacity = (1 << log2(raw_needed_capacity)) as usize;
-                let total_num_vars = log2(padded_needed_capacity) as usize;
-
+            .map(|ligero_input_layer_description| {
                 (
-                    layer_id,
-                    (
-                        LigeroInputLayerDescription {
-                            layer_id,
-                            num_vars: total_num_vars,
-                            aux: LigeroAuxInfo::<F>::new(1 << (total_num_vars), 4, 1.0, None),
-                        },
-                        None,
-                    ),
+                    ligero_input_layer_description.layer_id,
+                    (ligero_input_layer_description, None),
                 )
             })
             .collect();

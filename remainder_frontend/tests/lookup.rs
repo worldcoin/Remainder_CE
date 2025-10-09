@@ -1,12 +1,16 @@
 use remainder::{
-    mle::evals::MultilinearExtension, prover::helpers::test_circuit_with_runtime_optimized_config,
+    mle::evals::MultilinearExtension,
+    prover::helpers::{
+        prove_circuit_with_runtime_optimized_config, test_circuit_with_runtime_optimized_config,
+        verify_circuit_with_proof_config,
+    },
 };
 use remainder_frontend::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility};
-use remainder_shared_types::{Field, Fr};
+use remainder_shared_types::{transcript::poseidon_sponge::PoseidonSponge, Field, Fr};
 
 pub mod utils;
 
-/// Creates the [GKRCircuitDescription] and an associated helper input
+/// Creates the [Circuit] and an associated helper input
 /// function allowing for ease of proving for the dataparallel selector test circuit.
 ///
 /// Note that this function also returns the layer ID of the Ligero input layer!
@@ -63,17 +67,31 @@ pub fn single_shred_test() {
     let multiplicities_mle = MultilinearExtension::new(vec![Fr::from(1u64), Fr::from(3u64)]);
 
     // Create circuit description + input helper function
-    let mut circuit =
+    let mut prover_circuit =
         build_single_shred_lookup_test_circuit(TABLE_MLE_NUM_VARS, WITNESS_MLE_NUM_VARS);
+    let mut verifier_circuit = prover_circuit.clone();
 
-    circuit.set_input("Table MLE", table_mle);
-    circuit.set_input("Witness MLE", witness_mle);
-    circuit.set_input("Multiplicities MLE", multiplicities_mle);
+    prover_circuit.set_input("Table MLE", table_mle.clone());
+    prover_circuit.set_input("Witness MLE", witness_mle);
+    prover_circuit.set_input("Multiplicities MLE", multiplicities_mle);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = prover_circuit.finalize().unwrap();
 
-    // Prove/verify the circuit
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    // Prove the circuit
+    let (proof_config, proof_as_transcript) =
+        prove_circuit_with_runtime_optimized_config::<Fr, PoseidonSponge<Fr>>(&provable_circuit);
+
+    // Create verifier circuit description and attach lookup table as public
+    // input to it.
+    verifier_circuit.set_input("Table MLE", table_mle);
+    let (verifiable_circuit, predetermined_public_inputs) =
+        verifier_circuit.gen_verifiable_circuit().unwrap();
+    verify_circuit_with_proof_config(
+        &verifiable_circuit,
+        predetermined_public_inputs,
+        &proof_config,
+        proof_as_transcript,
+    );
 }
 
 /// Test the case where there is only one LookupConstraint for the LookupTable i.e. just one constrained
@@ -90,16 +108,30 @@ pub fn single_shred_test_non_power_of_2() {
     let multiplicities_mle = MultilinearExtension::new(vec![Fr::from(2u64), Fr::from(2u64)]);
 
     // Create circuit description + input helper function
-    let mut circuit =
+    let mut prover_circuit =
         build_single_shred_lookup_test_circuit(TABLE_MLE_NUM_VARS, WITNESS_MLE_NUM_VARS);
+    let mut verifier_circuit = prover_circuit.clone();
 
-    circuit.set_input("Table MLE", table_mle);
-    circuit.set_input("Witness MLE", witness_mle);
-    circuit.set_input("Multiplicities MLE", multiplicities_mle);
-    let provable_circuit = circuit.finalize().unwrap();
+    prover_circuit.set_input("Table MLE", table_mle.clone());
+    prover_circuit.set_input("Witness MLE", witness_mle);
+    prover_circuit.set_input("Multiplicities MLE", multiplicities_mle);
+    let provable_circuit = prover_circuit.finalize().unwrap();
 
-    // Prove/verify the circuit
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    // Prove the circuit
+    let (proof_config, proof_as_transcript) =
+        prove_circuit_with_runtime_optimized_config::<Fr, PoseidonSponge<Fr>>(&provable_circuit);
+
+    // Create verifier circuit description and attach lookup table as public
+    // input to it.
+    verifier_circuit.set_input("Table MLE", table_mle);
+    let (verifiable_circuit, predetermined_public_inputs) =
+        verifier_circuit.gen_verifiable_circuit().unwrap();
+    verify_circuit_with_proof_config(
+        &verifiable_circuit,
+        predetermined_public_inputs,
+        &proof_config,
+        proof_as_transcript,
+    );
 }
 
 /// Creates the [GKRCircuitDescription] and an associated helper input
@@ -237,28 +269,42 @@ pub fn multi_shred_test() {
     let multiplicities_mle_4 = MultilinearExtension::new(vec![Fr::from(1u64), Fr::from(3u64)]);
 
     // Create circuit description + input helper function
-    let mut circuit = build_multi_shred_lookup_test_circuit(
+    let mut prover_circuit = build_multi_shred_lookup_test_circuit(
         TABLE_MLE_NUM_VARS,
         WITNESS_MLE_1_NUM_VARS,
         WITNESS_MLE_2_NUM_VARS,
         WITNESS_MLE_3_NUM_VARS,
         WITNESS_MLE_4_NUM_VARS,
     );
+    let mut verifier_circuit = prover_circuit.clone();
 
-    circuit.set_input("Table MLE", table_mle);
-    circuit.set_input("Witness MLE 1", witness_mle_1);
-    circuit.set_input("Multiplicities MLE 1", multiplicities_mle_1);
-    circuit.set_input("Witness MLE 2", witness_mle_2);
-    circuit.set_input("Multiplicities MLE 2", multiplicities_mle_2);
-    circuit.set_input("Witness MLE 3", witness_mle_3);
-    circuit.set_input("Multiplicities MLE 3", multiplicities_mle_3);
-    circuit.set_input("Witness MLE 4", witness_mle_4);
-    circuit.set_input("Multiplicities MLE 4", multiplicities_mle_4);
+    prover_circuit.set_input("Table MLE", table_mle.clone());
+    prover_circuit.set_input("Witness MLE 1", witness_mle_1);
+    prover_circuit.set_input("Multiplicities MLE 1", multiplicities_mle_1);
+    prover_circuit.set_input("Witness MLE 2", witness_mle_2);
+    prover_circuit.set_input("Multiplicities MLE 2", multiplicities_mle_2);
+    prover_circuit.set_input("Witness MLE 3", witness_mle_3);
+    prover_circuit.set_input("Multiplicities MLE 3", multiplicities_mle_3);
+    prover_circuit.set_input("Witness MLE 4", witness_mle_4);
+    prover_circuit.set_input("Multiplicities MLE 4", multiplicities_mle_4);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = prover_circuit.finalize().unwrap();
 
-    // Prove/verify the circuit
-    test_circuit_with_runtime_optimized_config(&provable_circuit);
+    // Prove the circuit
+    let (proof_config, proof_as_transcript) =
+        prove_circuit_with_runtime_optimized_config::<Fr, PoseidonSponge<Fr>>(&provable_circuit);
+
+    // Create verifier circuit description and attach lookup table as public
+    // input to it.
+    verifier_circuit.set_input("Table MLE", table_mle);
+    let (verifiable_circuit, predetermined_public_inputs) =
+        verifier_circuit.gen_verifiable_circuit().unwrap();
+    verify_circuit_with_proof_config(
+        &verifiable_circuit,
+        predetermined_public_inputs,
+        &proof_config,
+        proof_as_transcript,
+    );
 }
 
 /// Test that a panic occurs when the constrained MLE contains values not in the lookup table.

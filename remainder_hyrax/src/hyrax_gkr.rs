@@ -286,7 +286,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
                         committed_claims.len()
                     ));
                     let il_proof = HyraxInputLayerProof::prove(
-                        &desc,
+                        desc,
                         commitment,
                         &committed_claims,
                         committer,
