@@ -96,7 +96,7 @@ mod tests {
         );
         let image_commitment: HyraxProverInputCommitment<Bn256Point> =
             serialized_image_commitment.clone().into();
-        // dbg!(&image_commitment.commitment);
+
         // Derive the hash of the image commitment.  In production, this has been calculated by the Orb and sent over in a signed file.
         let expected_commitment_hash = digest(
             &image_commitment
@@ -116,15 +116,6 @@ mod tests {
                 aux_data,
             )
             .unwrap();
-
-        /*
-        // Extract the auxiliary public inputs for later use by the verifier.
-        // In production, the verifier will have these already.
-        let auxiliary_mle = inputs
-            .get(&ic_circuit_desc.auxiliary_input_layer.layer_id)
-            .unwrap()
-            .clone();
-        */
 
         let mut provable_circuit = circuit.finalize_hyrax().unwrap();
 
