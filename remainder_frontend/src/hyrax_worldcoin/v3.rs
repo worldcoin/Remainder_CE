@@ -5,6 +5,7 @@ use std::hash::Hash;
 
 use crate::{
     layouter::builder::Circuit,
+    worldcoin_mpc::circuits::MPC_IRISCODE_INPUT_LAYER,
     zk_iriscode_ss::{
         circuits::{
             V3_AUXILIARY_LAYER, V3_DIGITS_LAYER, V3_INPUT_IMAGE_LAYER, V3_RH_MATMULT_SHRED,
@@ -282,10 +283,29 @@ pub fn prove_with_image_precommit(
         &mut transcript,
     );
 
+    let code_layer_id = *provable_circuit
+        .layer_label_to_layer_id
+        .get(code_layer_label)
+        .unwrap();
+
+    let code_commit_in_proof = &proof
+        .hyrax_input_proofs
+        .iter()
+        .find(|hyrax_input_proof| hyrax_input_proof.layer_id == code_layer_id)
+        .unwrap()
+        .input_commitment;
     let code_commit = provable_circuit
         .get_commitment_ref_by_label(code_layer_label)
         .unwrap()
         .clone();
+    assert_eq!(*code_commit_in_proof, code_commit.commitment);
+
+    dbg!(
+        &provable_circuit
+            .get_private_input_layer_mut_ref(code_layer_id)
+            .unwrap()
+            .0
+    );
 
     /*
     // Zeroize each value in the HashMap

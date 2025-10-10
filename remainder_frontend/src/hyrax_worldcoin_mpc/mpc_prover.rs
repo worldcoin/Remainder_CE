@@ -1,3 +1,5 @@
+use std::ops::Mul;
+
 use crate::{
     hyrax_worldcoin::{
         orb::PUBLIC_STRING,
@@ -5,14 +7,21 @@ use crate::{
     },
     layouter::builder::{Circuit, LayerVisibility},
     worldcoin_mpc::{
-        circuits::{build_circuit, mpc_attach_data},
-        data::{create_ss_circuit_inputs, generate_trivial_test_data},
+        circuits::{
+            build_circuit, mpc_attach_data, MPC_ENCODING_MATRIX_SHRED, MPC_EVALUATION_POINTS_SHRED,
+            MPC_IRISCODE_INPUT_LAYER, MPC_MASKCODE_INPUT_LAYER, MPC_SLOPES_LAYER,
+        },
+        data::{
+            gen_mpc_common_aux_data, gen_mpc_encoding_matrix, gen_mpc_evaluation_points,
+            gen_mpc_input_data, generate_trivial_test_data,
+        },
         parameters::{GR4_MODULUS, MPC_NUM_IRIS_4_CHUNKS},
     },
     zk_iriscode_ss::parameters::{IRISCODE_LEN, SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS},
 };
+use rayon::str::EncodeUtf16;
 use remainder_hyrax::{
-    circuit_layout::HyraxVerifiableCircuit,
+    circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit},
     hyrax_gkr::{
         hyrax_input_layer::{
             commit_to_input_values, HyraxInputLayerDescription, HyraxProverInputCommitment,
@@ -102,7 +111,7 @@ pub fn print_features_status() {
     println!("================\n");
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(bound = "C: PrimeOrderCurve")]
 pub struct V3MPCCommitments<C: PrimeOrderCurve> {
     left_iris_code: Vec<C>,
@@ -225,6 +234,22 @@ pub fn prove_mpc_with_precommits(
 }
 */
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "F: Field")]
+pub struct MPCCircuitConstData<F: Field> {
+    pub encoding_matrix: MultilinearExtension<F>,
+    pub evaluation_points: MultilinearExtension<F>,
+    pub lookup_table_values: MultilinearExtension<F>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "F: Field")]
+pub struct MPCCircuitsAndConstData<F: Field> {
+    pub mpc_circuit: Circuit<F>,
+    pub encoding_matrix: MultilinearExtension<F>,
+    pub evaluation_points: [MultilinearExtension<F>; 3],
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct MPCProver {
     #[serde(skip)]
@@ -238,7 +263,7 @@ pub struct MPCProver {
     slope_commitments: [HyraxProverInputCommitment<Bn256Point>; 2],
 
     prover_config: GKRCircuitProverConfig,
-    mpc_circuit_and_aux_mles_all_3_parties: Vec<Circuit<Fr>>,
+    mpc_circuit_and_const_mles_all_3_parties: MPCCircuitsAndConstData<Fr>,
 
     left_eye_proofs_all_3_parties: Option<Vec<HyraxProof<Bn256Point>>>,
     right_eye_proofs_all_3_parties: Option<Vec<HyraxProof<Bn256Point>>>,
@@ -250,8 +275,9 @@ impl MPCProver {
     ///
     /// Note that `rng` should be a CSPRNG seeded with a strong source of
     /// device entropy! Recommended to call this with `OsRng` and `ChaCha20Rng`.
-    pub fn generate_secure_shamir_secret_share_slopes_commitment<C: PrimeOrderCurve>(
-        slope_input_layer_description: &InputLayerDescription,
+    fn generate_secure_shamir_secret_share_slopes_and_commitments<C: PrimeOrderCurve>(
+        num_vars: usize,
+        log_num_cols: usize,
         pedersen_committer: &PedersenCommitter<C>,
         rng: &mut impl Rng,
     ) -> HyraxProverInputCommitment<C> {
@@ -261,17 +287,8 @@ impl MPCProver {
                 .map(|_idx| C::Scalar::from(rng.gen_range(0..GR4_MODULUS)))
                 .collect_vec(),
         );
-        let slope_hyrax_input_layer_description = HyraxInputLayerDescription {
-            layer_id: slope_input_layer_description.layer_id,
-            num_vars: slope_input_layer_description.num_vars,
-            log_num_cols: SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS,
-        };
-        commit_to_input_values(
-            &slope_hyrax_input_layer_description,
-            &slopes_mle,
-            pedersen_committer,
-            rng,
-        )
+
+        commit_to_input_values(num_vars, log_num_cols, &slopes_mle, pedersen_committer, rng)
     }
 
     pub fn default_committer() -> PedersenCommitter<Bn256Point> {
@@ -280,35 +297,40 @@ impl MPCProver {
 
     pub fn new(
         prover_config: GKRCircuitProverConfig,
-        mpc_circuit_and_aux_mles_all_3_parties: Vec<Circuit<Fr>>,
+        mpc_circuit_and_aux_mles_all_3_parties: MPCCircuitsAndConstData<Fr>,
         rng: &mut (impl CryptoRng + RngCore),
     ) -> Self {
         let committer = Self::default_committer();
 
         let slope_input_layer_description = &mpc_circuit_and_aux_mles_all_3_parties
-            .first()
-            .unwrap()
-            .get_input_layer_description_ref("Slope")
+            .mpc_circuit
+            .get_input_layer_description_ref(MPC_SLOPES_LAYER)
             .clone();
 
-        let slope_precommit_left_eye = Self::generate_secure_shamir_secret_share_slopes_commitment(
-            slope_input_layer_description,
-            &committer,
-            rng,
-        );
-
-        let slope_precommit_right_eye = Self::generate_secure_shamir_secret_share_slopes_commitment(
-            slope_input_layer_description,
-            &committer,
-            rng,
-        );
+        let slopes_precommitment_left_eye =
+            Self::generate_secure_shamir_secret_share_slopes_and_commitments(
+                slope_input_layer_description.num_vars,
+                SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS,
+                &committer,
+                rng,
+            );
+        let slopes_precommitment_right_eye =
+            Self::generate_secure_shamir_secret_share_slopes_and_commitments(
+                slope_input_layer_description.num_vars,
+                SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS,
+                &committer,
+                rng,
+            );
 
         Self {
             committer,
             converter: VandermondeInverse::new(),
-            slope_commitments: [slope_precommit_left_eye, slope_precommit_right_eye],
+            slope_commitments: [
+                slopes_precommitment_left_eye,
+                slopes_precommitment_right_eye,
+            ],
             prover_config,
-            mpc_circuit_and_aux_mles_all_3_parties,
+            mpc_circuit_and_const_mles_all_3_parties: mpc_circuit_and_aux_mles_all_3_parties,
             left_eye_proofs_all_3_parties: None,
             right_eye_proofs_all_3_parties: None,
         }
@@ -320,7 +342,7 @@ impl MPCProver {
 
     #[allow(clippy::too_many_arguments)]
     pub fn prove_mpc_with_precommits(
-        mpc_circuit_desc: &Circuit<Fr>,
+        mut mpc_provable_circuit: HyraxProvableCircuit<Bn256Point>,
         iris_precommit: &HyraxProverInputCommitment<Bn256Point>,
         mask_precommit: &HyraxProverInputCommitment<Bn256Point>,
         slope_precommit: &HyraxProverInputCommitment<Bn256Point>,
@@ -328,25 +350,27 @@ impl MPCProver {
         blinding_rng: &mut (impl CryptoRng + RngCore),
         converter: &mut VandermondeInverse<Scalar>,
     ) -> HyraxProof<Bn256Point> {
-        let mut provable_circuit = mpc_circuit_desc.finalize_hyrax().unwrap();
-
-        provable_circuit
-            .set_pre_commitment("Iris Code Input", iris_precommit.clone(), None)
+        mpc_provable_circuit
+            .set_pre_commitment(MPC_IRISCODE_INPUT_LAYER, iris_precommit.clone(), None)
             .unwrap();
-        provable_circuit
-            .set_pre_commitment("Mask Code Input", mask_precommit.clone(), None)
+        mpc_provable_circuit
+            .set_pre_commitment(MPC_MASKCODE_INPUT_LAYER, mask_precommit.clone(), None)
             .unwrap();
-        provable_circuit
-            .set_pre_commitment("Slope", slope_precommit.clone(), None)
+        mpc_provable_circuit
+            .set_pre_commitment(
+                MPC_SLOPES_LAYER,
+                slope_precommit.clone(),
+                Some(SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS),
+            )
             .unwrap();
 
         // Create a fresh transcript.
         let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
-            ECTranscript::new("V3 Iriscode Circuit Pipeline");
+            ECTranscript::new("MPC Circuit Pipeline");
 
         // Prove the relationship between iris/mask code and image.
         let (proof, _proof_config) = HyraxProof::prove(
-            &mut provable_circuit,
+            &mut mpc_provable_circuit,
             committer,
             blinding_rng,
             converter,
@@ -384,12 +408,24 @@ impl MPCProver {
         mask_code_precommit: HyraxProverInputCommitment<Bn256Point>,
         rng: &mut (impl CryptoRng + RngCore),
     ) {
+        assert_eq!(
+            iris_code_precommit.blinding_factors_matrix.len(),
+            iris_code_precommit.commitment.len()
+        );
+        // Ryan suggests asserting:
+        //       iris_code_precommit.blinding_factors.len() ==
+        //       iris_code_precommit.commitments.len() ==
+        //       1 << LOG_NUM_COLS
+
         let iris_code_mle = &iris_code_precommit.mle;
         let mask_code_mle = &mask_code_precommit.mle;
-        let slope_mle = &self.slope_commitments[!is_left_eye as usize].mle; // &slope_precommit.mle;
+        let slope_commitment = &self.slope_commitments[!is_left_eye as usize];
+
+        /*
+        let common_mpc_data = gen_mpc_common_aux_data::<Fr, MPC_NUM_IRIS_4_CHUNKS, 0>(iris_codes, masks, slopes, encoding_matrix, evaluation_points)
 
         let mpc_data_all_3_parties = [
-            create_ss_circuit_inputs::<Fr, MPC_NUM_IRIS_4_CHUNKS, 0>(
+            gen_mpc_input_data::<Fr, MPC_NUM_IRIS_4_CHUNKS, 0>(
                 iris_code_mle,
                 mask_code_mle,
                 slope_mle,
@@ -405,29 +441,56 @@ impl MPCProver {
                 slope_mle,
             ),
         ];
+        */
 
-        self.mpc_circuit_and_aux_mles_all_3_parties
-            .iter_mut()
-            .zip(mpc_data_all_3_parties.into_iter())
-            .for_each(|(mpc_circuit, mpc_circuit_input)| {
-                mpc_attach_data(mpc_circuit, mpc_circuit_input);
-            });
+        let encoding_matrix = &self
+            .mpc_circuit_and_const_mles_all_3_parties
+            .encoding_matrix;
 
-        let proofs_all_3_parties = self
-            .mpc_circuit_and_aux_mles_all_3_parties
-            .iter()
-            .map(|mpc_circuit_and_aux_mles| {
+        let lookup_table_values =
+            MultilinearExtension::new((0..GR4_MODULUS).map(Fr::from).collect());
+
+        let proofs_all_3_parties: Vec<_> = (0..3)
+            .map(|party_idx| {
+                let mut circuit = self
+                    .mpc_circuit_and_const_mles_all_3_parties
+                    .mpc_circuit
+                    .clone();
+
+                let evaluation_points = &self
+                    .mpc_circuit_and_const_mles_all_3_parties
+                    .evaluation_points[party_idx];
+
+                let input_data = gen_mpc_input_data::<Fr, MPC_NUM_IRIS_4_CHUNKS>(
+                    &iris_code_mle,
+                    &mask_code_mle,
+                    &slope_commitment.mle,
+                    encoding_matrix,
+                    evaluation_points,
+                );
+                let const_data = MPCCircuitConstData {
+                    encoding_matrix: encoding_matrix.clone(),
+                    evaluation_points: evaluation_points.clone(),
+                    lookup_table_values: lookup_table_values.clone(),
+                };
+
+                mpc_attach_data(&mut circuit, const_data, input_data);
+
+                let provable_circuit = circuit
+                    .finalize_hyrax()
+                    .expect("Failed to finalize circuit");
+
                 Self::prove_mpc_with_precommits(
-                    mpc_circuit_and_aux_mles,
+                    provable_circuit,
                     &iris_code_precommit,
                     &mask_code_precommit,
-                    &self.slope_commitments[!is_left_eye as usize],
+                    &slope_commitment,
                     &self.committer,
                     rng,
                     &mut self.converter,
                 )
             })
-            .collect_vec();
+            .collect();
 
         self.set(is_left_eye, proofs_all_3_parties);
     }
@@ -511,7 +574,7 @@ impl V3MPCProver {
     pub fn new(
         prover_config: GKRCircuitProverConfig,
         iris_circuit: V3CircuitAndAuxData<Fr>,
-        mpc_circuits: Vec<Circuit<Fr>>,
+        mpc_circuits: MPCCircuitsAndConstData<Fr>,
         rng: &mut (impl CryptoRng + RngCore),
     ) -> Self {
         Self {
@@ -949,7 +1012,7 @@ impl<F: Field> MPCCircuitAndAuxMles<F> {
 #[serde(bound = "F: Field")]
 pub struct V3MPCCircuitAndAuxMles<F: Field> {
     pub v3_circuit_and_aux_mles: V3CircuitAndAuxData<F>,
-    pub mpc_circuit_and_aux_mles_all_3_parties: Vec<Circuit<F>>,
+    pub mpc_circuit_and_aux_mles_all_3_parties: MPCCircuitsAndConstData<F>,
 }
 
 impl<F: Field> V3MPCCircuitAndAuxMles<F> {
@@ -963,45 +1026,16 @@ impl<F: Field> V3MPCCircuitAndAuxMles<F> {
 }
 
 // Generate the circuit description and input builder used to generate the auxiliary MLEs.
-pub fn generate_mpc_circuit_and_aux_mles_all_3_parties<F: Field>() -> Vec<Circuit<F>> {
-    let mut circuit = build_circuit::<F, MPC_NUM_IRIS_4_CHUNKS>(LayerVisibility::Private);
+pub fn generate_mpc_circuit_and_aux_mles_all_3_parties<F: Field>() -> MPCCircuitsAndConstData<F> {
+    let mpc_circuit = build_circuit::<F, MPC_NUM_IRIS_4_CHUNKS>(LayerVisibility::Private);
 
-    // Load the inputs to the circuit (these are all MLEs, i.e. in the clear).
-    let iris_data_all_3_parties = [
-        generate_trivial_test_data::<F, MPC_NUM_IRIS_4_CHUNKS, 0>(),
-        generate_trivial_test_data::<F, MPC_NUM_IRIS_4_CHUNKS, 1>(),
-        generate_trivial_test_data::<F, MPC_NUM_IRIS_4_CHUNKS, 2>(),
-    ];
-
-    iris_data_all_3_parties
-        .into_iter()
-        .for_each(|iris_data| mpc_attach_data(&mut circuit, iris_data));
-
-    // Extract the auxiliary public inputs for later use by the verifier.
-    /*
-    let iris_aux_mle_all_3_parties = iris_inputs_all_3_parties
-        .iter()
-        .map(|iris_inputs| {
-            iris_inputs
-                .get(
-                    &circuit_description
-                        .auxiliary_invariant_public_input_layer
-                        .layer_id,
-                )
-                .unwrap()
-                .clone()
-        })
-        .collect_vec();
-
-    iris_aux_mle_all_3_parties
-        .into_iter()
-        .map(|aux_mle| MPCCircuitAndAuxMles {
-            circuit_description: circuit_description.clone(),
-            input_builder_metadata: input_builder_metadata.clone(),
-            aux_mle,
-        })
-        .collect_vec()
-    */
-
-    vec![circuit.clone(), circuit.clone(), circuit]
+    MPCCircuitsAndConstData {
+        mpc_circuit,
+        encoding_matrix: gen_mpc_encoding_matrix::<F, MPC_NUM_IRIS_4_CHUNKS>(),
+        evaluation_points: [
+            gen_mpc_evaluation_points::<F, MPC_NUM_IRIS_4_CHUNKS, 0>(),
+            gen_mpc_evaluation_points::<F, MPC_NUM_IRIS_4_CHUNKS, 1>(),
+            gen_mpc_evaluation_points::<F, MPC_NUM_IRIS_4_CHUNKS, 2>(),
+        ],
+    }
 }

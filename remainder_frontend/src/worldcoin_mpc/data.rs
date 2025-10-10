@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Mul};
 
 use ark_std::log2;
 use itertools::Itertools;
@@ -13,16 +13,19 @@ use remainder::{
     mle::evals::MultilinearExtension,
 };
 
-use crate::worldcoin_mpc::parameters::{
-    EVALUATION_POINTS_U64, GR4_MULTIPLICATION_WIRINGS, TEST_MASKED_IRIS_CODES, TEST_RANDOMNESSES,
-    TEST_SHARES,
+use crate::{
+    hyrax_worldcoin_mpc::mpc_prover::MPCCircuitConstData,
+    worldcoin_mpc::parameters::{
+        EVALUATION_POINTS_U64, GR4_MULTIPLICATION_WIRINGS, TEST_MASKED_IRIS_CODES,
+        TEST_RANDOMNESSES, TEST_SHARES,
+    },
 };
 
 use super::parameters::{ENCODING_MATRIX_U64_TRANSPOSE, GR4_MODULUS};
 
 /// Used for instantiating the mpc circuit.
 #[derive(Debug, Clone)]
-pub struct SecretShareCircuitInputs<F: Field> {
+pub struct MPCCircuitInputData<F: Field> {
     /// The iris codes, they are {0, 1} valued.
     /// Needed to calculate the masked code which we secret share
     /// between the three parties.
@@ -60,19 +63,44 @@ pub struct SecretShareCircuitInputs<F: Field> {
     /// The multiplicies is used for lookup (slope), we calculate the occurances of different
     /// numbers between [0..2^16]
     pub multiplicities_slopes: MultilinearExtension<F>,
+}
 
-    /// The encoding matrix is the matrix the encodes a `masked_iris_code` into
-    /// elements in GR4: GR(size_of(F), 4)
-    pub encoding_matrix: MultilinearExtension<F>,
+pub fn gen_mpc_evaluation_points<
+    F: Field,
+    const NUM_IRIS_4_CHUNKS: usize,
+    const PARTY_IDX: usize,
+>() -> MultilinearExtension<F> {
+    MultilinearExtension::new(
+        EVALUATION_POINTS_U64[PARTY_IDX]
+            .into_iter()
+            .map(|x| F::from(x))
+            .cycle()
+            .take(NUM_IRIS_4_CHUNKS * 4)
+            .collect(),
+    )
+}
 
-    /// The `evaluation_points` is public and associated uniquely with each of the
-    /// three parties that we are secrect sharing over
-    pub evaluation_points: MultilinearExtension<F>,
+pub fn gen_mpc_encoding_matrix<F: Field, const NUM_IRIS_4_CHUNKS: usize>() -> MultilinearExtension<F>
+{
+    MultilinearExtension::new(
+        ENCODING_MATRIX_U64_TRANSPOSE
+            .into_iter()
+            .map(|x| F::from(x))
+            .collect_vec(),
+    )
+}
 
-    /// The lookup table checks that the returned `shares_reduced_modulo_gr4_modulus`
-    /// are indeed are elemnts in GR4: GR(2^16, 4), a.k.a their coefficients are within
-    /// the range [0..2^16]
-    pub lookup_table_values: MultilinearExtension<F>,
+pub fn gen_mpc_common_aux_data<F: Field, const NUM_IRIS_4_CHUNKS: usize, const PARTY_IDX: usize>(
+) -> MPCCircuitConstData<F> {
+    let evaluation_points = gen_mpc_evaluation_points::<F, NUM_IRIS_4_CHUNKS, PARTY_IDX>();
+    let encoding_matrix = gen_mpc_encoding_matrix::<F, NUM_IRIS_4_CHUNKS>();
+    let lookup_table_values = MultilinearExtension::new((0..GR4_MODULUS).map(F::from).collect());
+
+    MPCCircuitConstData {
+        evaluation_points,
+        encoding_matrix,
+        lookup_table_values,
+    }
 }
 
 /// Selects the encoding matrix, and
@@ -80,31 +108,16 @@ pub struct SecretShareCircuitInputs<F: Field> {
 /// returns as a tuple, in the folllowing order:
 /// (encoding_matrix, quotients, expected_shares, multiplicities)
 #[allow(clippy::type_complexity)]
-pub fn calculate_aux_data<F: Field, const NUM_IRIS_4_CHUNKS: usize, const PARTY_IDX: usize>(
+pub fn gen_mpc_input_data<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
     iris_codes: &MultilinearExtension<F>,
     masks: &MultilinearExtension<F>,
     slopes: &MultilinearExtension<F>,
-) -> (
-    MultilinearExtension<F>,
-    MultilinearExtension<F>,
-    MultilinearExtension<F>,
-    MultilinearExtension<F>,
-    MultilinearExtension<F>,
-    MultilinearExtension<F>,
-    MultilinearExtension<F>,
-) {
+    encoding_matrix: &MultilinearExtension<F>,
+    evaluation_points: &MultilinearExtension<F>,
+) -> MPCCircuitInputData<F> {
     let num_copies = NUM_IRIS_4_CHUNKS;
 
-    let lookup_table_values = MultilinearExtension::new((0..GR4_MODULUS).map(F::from).collect());
-
-    let evaluation_points = MultilinearExtension::new(
-        EVALUATION_POINTS_U64[PARTY_IDX]
-            .into_iter()
-            .map(|x| F::from(x))
-            .cycle()
-            .take(num_copies * 4)
-            .collect(),
-    );
+    // let lookup_table_values = MultilinearExtension::new((0..GR4_MODULUS).map(F::from).collect());
 
     // masked_iris_codes dimension is: (NUM_IRIS_4_CHUNKS, 4)
     let mut masked_iris_codes = iris_codes
@@ -113,14 +126,10 @@ pub fn calculate_aux_data<F: Field, const NUM_IRIS_4_CHUNKS: usize, const PARTY_
         .map(|(iris_code, mask)| F::from(2).neg() * iris_code - mask + F::from(GR4_MODULUS))
         .collect_vec();
 
-    let encoding_matrix = ENCODING_MATRIX_U64_TRANSPOSE
-        .into_iter()
-        .map(|x| F::from(x))
-        .collect_vec();
     // encoding_matrix dimension is: (4, 4)
     let encoded_masked_iris_code = product_two_matrices_from_flattened_vectors(
         &masked_iris_codes,
-        &encoding_matrix,
+        &encoding_matrix.to_vec(),
         num_copies,
         4,
         4,
@@ -221,15 +230,21 @@ pub fn calculate_aux_data<F: Field, const NUM_IRIS_4_CHUNKS: usize, const PARTY_
         f.zeroize();
     }
 
-    (
-        MultilinearExtension::new(encoding_matrix),
-        MultilinearExtension::new(quotients),
-        MultilinearExtension::new(expected_shares),
-        MultilinearExtension::new(multiplicities_shares),
-        MultilinearExtension::new(multiplicities_slopes),
-        evaluation_points,
-        lookup_table_values,
-    )
+    let quotients = MultilinearExtension::new(quotients);
+    let shares_reduced_modulo_gr4_modulus = MultilinearExtension::new(expected_shares);
+    let multiplicities_shares = MultilinearExtension::new(multiplicities_shares);
+    let multiplicities_slopes = MultilinearExtension::new(multiplicities_slopes);
+
+    MPCCircuitInputData::<F> {
+        iris_codes: iris_codes.clone(),
+        masks: masks.clone(),
+        slopes: slopes.clone(),
+        quotients,
+        shares_reduced_modulo_gr4_modulus,
+        multiplicities_shares,
+        multiplicities_slopes,
+        // lookup_table_values,
+    }
 }
 
 /// create test data for mpc circuits, control the size of such
@@ -237,7 +252,7 @@ pub fn generate_trivial_test_data<
     F: Field,
     const NUM_IRIS_4_CHUNKS: usize,
     const PARTY_IDX: usize,
->() -> SecretShareCircuitInputs<F> {
+>() -> (MPCCircuitConstData<F>, MPCCircuitInputData<F>) {
     let num_copies = NUM_IRIS_4_CHUNKS;
     let mut rng = rand::thread_rng();
 
@@ -257,40 +272,39 @@ pub fn generate_trivial_test_data<
             .collect(),
     );
 
-    let (
-        encoding_matrix,
-        quotients,
-        shares_reduced_modulo_gr4_modulus,
-        multiplicities_shares,
-        multiplicities_slopes,
-        evaluation_points,
-        lookup_table_values,
-    ) = calculate_aux_data::<F, NUM_IRIS_4_CHUNKS, PARTY_IDX>(&iris_codes, &masks, &slopes);
+    let mpc_aux_data = gen_mpc_common_aux_data::<F, NUM_IRIS_4_CHUNKS, PARTY_IDX>();
 
-    assert_eq!(quotients.len(), num_copies * 4);
-    assert_eq!(shares_reduced_modulo_gr4_modulus.len(), num_copies * 4);
+    let mpc_input_data = gen_mpc_input_data::<F, NUM_IRIS_4_CHUNKS>(
+        &iris_codes,
+        &masks,
+        &slopes,
+        &mpc_aux_data.encoding_matrix,
+        &mpc_aux_data.evaluation_points,
+    );
+
+    assert_eq!(mpc_input_data.quotients.len(), num_copies * 4);
+    assert_eq!(
+        mpc_input_data.shares_reduced_modulo_gr4_modulus.len(),
+        num_copies * 4
+    );
     assert_eq!(slopes.len(), num_copies * 4);
-    assert_eq!(evaluation_points.len(), num_copies * 4);
-    assert_eq!(multiplicities_shares.len(), GR4_MODULUS as usize);
-    assert_eq!(multiplicities_slopes.len(), GR4_MODULUS as usize);
-    assert_eq!(lookup_table_values.len(), GR4_MODULUS as usize);
+    assert_eq!(mpc_aux_data.evaluation_points.len(), num_copies * 4);
+    assert_eq!(
+        mpc_input_data.multiplicities_shares.len(),
+        GR4_MODULUS as usize
+    );
+    assert_eq!(
+        mpc_input_data.multiplicities_slopes.len(),
+        GR4_MODULUS as usize
+    );
+    assert_eq!(mpc_aux_data.lookup_table_values.len(), GR4_MODULUS as usize);
 
-    SecretShareCircuitInputs {
-        iris_codes,
-        masks,
-        slopes,
-        quotients,
-        shares_reduced_modulo_gr4_modulus,
-        multiplicities_shares,
-        multiplicities_slopes,
-        encoding_matrix,
-        evaluation_points,
-        lookup_table_values,
-    }
+    (mpc_aux_data, mpc_input_data)
 }
 
 /// create a secret share circuit inputs from the mle of iris_codes,
 /// masks, and slopes
+/*
 pub fn create_ss_circuit_inputs<
     F: Field,
     const NUM_IRIS_4_CHUNKS: usize,
@@ -299,22 +313,20 @@ pub fn create_ss_circuit_inputs<
     iris_codes: &MultilinearExtension<F>,
     masks: &MultilinearExtension<F>,
     slopes: &MultilinearExtension<F>,
-) -> SecretShareCircuitInputs<F> {
+) -> MPCCircuitInputData<F> {
     assert_eq!(iris_codes.len(), NUM_IRIS_4_CHUNKS * 4);
     assert_eq!(masks.len(), NUM_IRIS_4_CHUNKS * 4);
     assert_eq!(slopes.len(), NUM_IRIS_4_CHUNKS * 4);
 
     let (
-        encoding_matrix,
         quotients,
         shares_reduced_modulo_gr4_modulus,
         multiplicities_shares,
         multiplicities_slopes,
-        evaluation_points,
         lookup_table_values,
     ) = calculate_aux_data::<F, NUM_IRIS_4_CHUNKS, PARTY_IDX>(iris_codes, masks, slopes);
 
-    SecretShareCircuitInputs {
+    MPCCircuitInputData {
         iris_codes: iris_codes.clone(),
         masks: masks.clone(),
         slopes: slopes.clone(),
@@ -322,11 +334,10 @@ pub fn create_ss_circuit_inputs<
         shares_reduced_modulo_gr4_modulus,
         multiplicities_shares,
         multiplicities_slopes,
-        encoding_matrix,
-        evaluation_points,
         lookup_table_values,
     }
 }
+*/
 
 /// Fetch one quadruplets from the test data given by Inversed,
 /// `test_idx` specifies which copy
@@ -336,7 +347,7 @@ pub fn fetch_inversed_test_data<
     const PARTY_IDX: usize,
 >(
     test_idx: usize,
-) -> SecretShareCircuitInputs<F> {
+) -> (MPCCircuitConstData<F>, MPCCircuitInputData<F>) {
     let num_copies = NUM_IRIS_4_CHUNKS;
     if test_idx + NUM_IRIS_4_CHUNKS >= TEST_MASKED_IRIS_CODES.len() {
         panic!("test_idx out of range");
@@ -377,25 +388,34 @@ pub fn fetch_inversed_test_data<
             .collect_vec(),
     );
 
-    let (
-        encoding_matrix,
-        quotients,
-        shares_reduced_modulo_gr4_modulus,
-        multiplicities_shares,
-        multiplicities_slopes,
-        evaluation_points,
-        lookup_table_values,
-    ) = calculate_aux_data::<F, NUM_IRIS_4_CHUNKS, PARTY_IDX>(&iris_codes, &masks, &slopes);
+    let mpc_aux_data = gen_mpc_common_aux_data::<F, NUM_IRIS_4_CHUNKS, PARTY_IDX>();
+    let mpc_input_data = gen_mpc_input_data::<F, NUM_IRIS_4_CHUNKS>(
+        &iris_codes,
+        &masks,
+        &slopes,
+        &mpc_aux_data.encoding_matrix,
+        &mpc_aux_data.evaluation_points,
+    );
 
-    assert_eq!(quotients.len(), num_copies * 4);
-    assert_eq!(shares_reduced_modulo_gr4_modulus.len(), num_copies * 4);
+    assert_eq!(mpc_input_data.quotients.len(), num_copies * 4);
+    assert_eq!(
+        mpc_input_data.shares_reduced_modulo_gr4_modulus.len(),
+        num_copies * 4
+    );
     assert_eq!(slopes.len(), num_copies * 4);
-    assert_eq!(evaluation_points.len(), num_copies * 4);
-    assert_eq!(multiplicities_shares.len(), GR4_MODULUS as usize);
-    assert_eq!(multiplicities_slopes.len(), GR4_MODULUS as usize);
-    assert_eq!(lookup_table_values.len(), GR4_MODULUS as usize);
+    assert_eq!(mpc_aux_data.evaluation_points.len(), num_copies * 4);
+    assert_eq!(
+        mpc_input_data.multiplicities_shares.len(),
+        GR4_MODULUS as usize
+    );
+    assert_eq!(
+        mpc_input_data.multiplicities_slopes.len(),
+        GR4_MODULUS as usize
+    );
+    assert_eq!(mpc_aux_data.lookup_table_values.len(), GR4_MODULUS as usize);
 
-    shares_reduced_modulo_gr4_modulus
+    mpc_input_data
+        .shares_reduced_modulo_gr4_modulus
         .iter()
         .zip(
             (0..num_copies)
@@ -407,16 +427,5 @@ pub fn fetch_inversed_test_data<
             assert_eq!(a, F::from(*b));
         });
 
-    SecretShareCircuitInputs {
-        iris_codes,
-        masks,
-        slopes,
-        quotients,
-        shares_reduced_modulo_gr4_modulus,
-        multiplicities_shares,
-        multiplicities_slopes,
-        encoding_matrix,
-        evaluation_points,
-        lookup_table_values,
-    }
+    (mpc_aux_data, mpc_input_data)
 }

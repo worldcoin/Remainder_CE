@@ -20,9 +20,9 @@ pub fn small_circuit_description_and_inputs<
 ) -> Circuit<Fr> {
     let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>(layer_visibility);
 
-    let test_trivial_data = generate_trivial_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>();
+    let (const_data, input_data) = generate_trivial_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>();
 
-    mpc_attach_data(&mut circuit, test_trivial_data);
+    mpc_attach_data(&mut circuit, const_data, input_data);
 
     circuit
 }
@@ -38,9 +38,10 @@ pub fn inversed_circuit_description_and_inputs<
 ) -> Circuit<Fr> {
     let mut circuit = build_circuit::<Fr, NUM_IRIS_4_CHUNKS>(layer_visibility);
 
-    let test_inversed_data = fetch_inversed_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>(test_idx);
+    let (const_data, input_data) =
+        fetch_inversed_test_data::<Fr, NUM_IRIS_4_CHUNKS, PARTY_IDX>(test_idx);
 
-    mpc_attach_data(&mut circuit, test_inversed_data);
+    mpc_attach_data(&mut circuit, const_data, input_data);
 
     circuit
 }

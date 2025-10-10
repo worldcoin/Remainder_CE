@@ -9,10 +9,11 @@ use remainder_frontend::{
         orb::IMAGE_COMMIT_LOG_NUM_COLS,
         v3::{V3CircuitAndAuxData, V3Proof},
     },
-    hyrax_worldcoin_mpc::mpc_prover::print_features_status,
+    hyrax_worldcoin_mpc::mpc_prover::{print_features_status, V3MPCCommitments},
     zk_iriscode_ss::{
         circuits::{
             iriscode_ss_attach_aux_data, iriscode_ss_attach_input_data, V3_INPUT_IMAGE_LAYER,
+            V3_SIGN_BITS_LAYER,
         },
         io::read_bytes_from_file,
     },
@@ -92,12 +93,10 @@ fn verify_v3_iriscode_proof(
     let serialized_proof = read_bytes_from_file(path_to_v3_proof.as_os_str().to_str().unwrap());
     let mut v3_proof = V3Proof::deserialize(&serialized_proof);
 
-    /*
     let serialized_commitments =
         read_bytes_from_file(path_to_aux_commitments.as_os_str().to_str().unwrap());
     let v3_mpc_commitments: V3MPCCommitments<Bn256Point> =
         V3MPCCommitments::deserialize(&serialized_commitments);
-    */
 
     let hashes_file = File::open(path_to_hashes_json).expect("Could not open hashes.json file.");
     let parsed_hashes: serde_json::Value =
@@ -132,13 +131,16 @@ fn verify_v3_iriscode_proof(
             */
 
             // check that the commitments are the same for iris code
-            /*
             {
+                let code_layer_id = v3_circuit_and_aux_data
+                    .get_circuit()
+                    .get_input_layer_description_ref(V3_SIGN_BITS_LAYER)
+                    .layer_id;
                 let code_commitment = v3_proof
                     .get(is_mask, is_left_eye)
                     .hyrax_input_proofs
                     .iter()
-                    .find(|proof| proof.layer_id == circuit.code_input_layer.layer_id)
+                    .find(|proof| proof.layer_id == code_layer_id)
                     .unwrap()
                     .input_commitment
                     .clone();
@@ -148,7 +150,6 @@ fn verify_v3_iriscode_proof(
                     v3_mpc_commitments.get_code_commit_ref(is_mask, is_left_eye)
                 );
             }
-            */
 
             // v3_proof.insert_aux_public_data(aux_mle, is_mask, is_left_eye, circuit);
             let aux_data = if is_mask {
@@ -162,8 +163,6 @@ fn verify_v3_iriscode_proof(
                 { remainder_frontend::zk_iriscode_ss::parameters::BASE },
             >(circuit.clone(), aux_data)
             .unwrap();
-
-            // dbg!(&circuit.circuit_map);
 
             let mut verifiable_circuit = circuit_with_inputs
                 .gen_hyrax_verifiable_circuit::<Bn256Point>()

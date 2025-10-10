@@ -8,7 +8,7 @@ use remainder_shared_types::{
 };
 
 use remainder_hyrax::{
-    circuit_layout::HyraxProvableCircuit,
+    circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit},
     hyrax_gkr::{verify_hyrax_proof, HyraxProof},
     utils::vandermonde::VandermondeInverse,
 };
@@ -19,6 +19,7 @@ use remainder_hyrax::{
 mod tests {
 
     use crate::{
+        hyrax_worldcoin_mpc::test_worldcoin_mpc::test_mpc_circuit_with_hyrax_helper_and_verifiable_circuit,
         layouter::builder::LayerVisibility,
         worldcoin_mpc::test_helpers::{
             inversed_circuit_description_and_inputs, small_circuit_description_and_inputs,
@@ -134,8 +135,14 @@ mod tests {
             LayerVisibility::Private,
         );
         let provable_circuit = circuit.finalize_hyrax().unwrap();
+        let verifiable_circuit = circuit
+            .gen_hyrax_verifiable_circuit::<Bn256Point>()
+            .unwrap();
 
-        test_mpc_circuit_with_hyrax_helper(provable_circuit);
+        test_mpc_circuit_with_hyrax_helper_and_verifiable_circuit(
+            provable_circuit,
+            verifiable_circuit,
+        );
     }
 
     #[ignore] // takes a long time to run!
@@ -239,6 +246,97 @@ pub fn test_mpc_circuit_with_hyrax_helper(
 ) {
     let verifiable_circuit = mpc_circuit._gen_verifiable_circuit();
 
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+    let blinding_rng = &mut rand::thread_rng();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    let num_generators = 512;
+    let committer = PedersenCommitter::<Bn256Point>::new(
+        num_generators + 1,
+        "modulus modulus modulus modulus modulus",
+        None,
+    );
+    // Set up Hyrax input layer specification.
+    /*
+    let mut prover_hyrax_input_layers = HashMap::new();
+    prover_hyrax_input_layers.insert(
+        mpc_circuit_desc.slope_input_layer.layer_id,
+        (mpc_circuit_desc.slope_input_layer.clone().into(), None),
+    );
+    prover_hyrax_input_layers.insert(
+        mpc_circuit_desc.iris_code_input_layer.layer_id,
+        (mpc_circuit_desc.iris_code_input_layer.clone().into(), None),
+    );
+    prover_hyrax_input_layers.insert(
+        mpc_circuit_desc.mask_code_input_layer.layer_id,
+        (mpc_circuit_desc.mask_code_input_layer.clone().into(), None),
+    );
+    prover_hyrax_input_layers.insert(
+        mpc_circuit_desc.auxilary_input_layer.layer_id,
+        (mpc_circuit_desc.auxilary_input_layer.clone().into(), None),
+    );
+    */
+
+    // Prove.
+    // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
+    let gkr_circuit_prover_config =
+        GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default();
+    let gkr_circuit_verifier_config =
+        GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
+
+    // --- Compute actual Hyrax proof ---
+    let (proof, proof_config) = perform_function_under_prover_config!(
+        HyraxProof::prove,
+        &gkr_circuit_prover_config,
+        &mut mpc_circuit,
+        &committer,
+        blinding_rng,
+        converter,
+        &mut transcript
+    );
+
+    // Verify.
+    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+    /*
+    let mut verifier_hyrax_input_layers = HashMap::new();
+    verifier_hyrax_input_layers.insert(
+        mpc_circuit_desc.slope_input_layer.layer_id,
+        mpc_circuit_desc.slope_input_layer.clone().into(),
+    );
+    verifier_hyrax_input_layers.insert(
+        mpc_circuit_desc.iris_code_input_layer.layer_id,
+        mpc_circuit_desc.iris_code_input_layer.clone().into(),
+    );
+    verifier_hyrax_input_layers.insert(
+        mpc_circuit_desc.mask_code_input_layer.layer_id,
+        mpc_circuit_desc.mask_code_input_layer.clone().into(),
+    );
+    verifier_hyrax_input_layers.insert(
+        mpc_circuit_desc.auxilary_input_layer.layer_id,
+        mpc_circuit_desc.auxilary_input_layer.clone().into(),
+    );
+    */
+
+    let verification_timer = start_timer!(|| "verification timer");
+    perform_function_under_verifier_config!(
+        verify_hyrax_proof,
+        &gkr_circuit_verifier_config,
+        &proof,
+        &verifiable_circuit,
+        &committer,
+        &mut transcript,
+        &proof_config
+    );
+    end_timer!(verification_timer);
+}
+
+pub fn test_mpc_circuit_with_hyrax_helper_and_verifiable_circuit(
+    mut mpc_circuit: HyraxProvableCircuit<Bn256Point>,
+    mut verifiable_circuit: HyraxVerifiableCircuit<Bn256Point>,
+    // mpc_circuit_desc: MPCCircuitDescription<Scalar>,
+    // inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
+) {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
     let blinding_rng = &mut rand::thread_rng();
