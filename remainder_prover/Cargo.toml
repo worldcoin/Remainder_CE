@@ -59,3 +59,5 @@ print-trace = [
   "remainder-ligero/print-trace",
   "remainder-shared-types/print-trace",
 ]
+# For printing circuit stats and other performance-related things.
+performance-debug = []

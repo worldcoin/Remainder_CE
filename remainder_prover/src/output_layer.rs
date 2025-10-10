@@ -3,7 +3,6 @@
 //! intermediate/input layer whose [LayerId] it inherits. The MLE it stores is a
 //! restriction of an MLE defining its associated layer.
 
-use itertools::Itertools;
 use remainder_shared_types::{
     transcript::{TranscriptReaderError, VerifierTranscript},
     Field,
@@ -207,7 +206,6 @@ impl<F: Field> OutputLayerDescription<F> {
                     "WARNING: MLE for output layer {} is not zero",
                     self.mle.layer_id()
                 );
-                dbg!(output_mle.iter().take(10).collect_vec());
             }
             ZeroMle::new(
                 output_mle.num_vars(),
