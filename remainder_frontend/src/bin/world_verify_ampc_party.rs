@@ -4,17 +4,31 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
+use clap::{command, Parser};
+use itertools::Itertools;
+use remainder::mle::evals::MultilinearExtension;
+use remainder_frontend::{
     hyrax_worldcoin_mpc::mpc_prover::{
         print_features_status, MPCPartyProof, V3MPCCircuitAndAuxMles, V3MPCCommitments,
     },
-    tfh_circuits::tfh_config,
-    zk_iriscode_ss::{io::read_bytes_from_file, parameters::IRISCODE_LEN},
+    worldcoin_mpc::{
+        circuits::{
+            MPC_ENCODING_MATRIX_SHRED, MPC_EVALUATION_POINTS_SHRED, MPC_IRISCODE_INPUT_LAYER,
+            MPC_LOOKUP_TABLE_VALUES_SHRED, MPC_MASKCODE_INPUT_LAYER, MPC_SHARES_LAYER,
+            MPC_SHARES_SHRED, MPC_SLOPES_LAYER,
+        },
+        parameters::GR4_MODULUS,
+    },
+    zk_iriscode_ss::{
+        io::read_bytes_from_file,
+        parameters::{IRISCODE_LEN, SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS},
+    },
 };
-use clap::{command, Parser};
-use itertools::Itertools;
 use remainder_hyrax::utils::convert_fr_into_u16;
-use remainder_shared_types::{perform_function_under_expected_configs, Bn256Point, Fr};
+use remainder_shared_types::{
+    config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
+    perform_function_under_expected_configs, Bn256Point, Fr,
+};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -53,16 +67,16 @@ fn main() {
     // Sanitycheck by logging the current settings.
     perform_function_under_expected_configs!(
         print_features_status,
-        &tfh_config::EXPECTED_PROVER_CONFIG,
-        &tfh_config::EXPECTED_VERIFIER_CONFIG,
+        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
+        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
     );
 
     // Parse arguments and verify secret share generation proofs.
     let cli = CliArguments::parse();
     perform_function_under_expected_configs!(
         verify_secret_share_proofs,
-        &tfh_config::EXPECTED_PROVER_CONFIG,
-        &tfh_config::EXPECTED_VERIFIER_CONFIG,
+        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
+        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
         &cli.circuit,
         &cli.hashes,
         &cli.secret_share_proof,
@@ -105,20 +119,29 @@ fn verify_secret_share_proofs(
 
     let serialized_commitments =
         read_bytes_from_file(path_to_aux_commitments.as_os_str().to_str().unwrap());
-    let v3_mpc_commitments: V3MPCCommitments<Bn256Point> =
-        V3MPCCommitments::deserialize(&serialized_commitments);
+
+    let v3_mpc_commitments = V3MPCCommitments::<Bn256Point>::deserialize(&serialized_commitments);
 
     let hashes_file = File::open(path_to_hashes_json).expect("Could not open hashes.json file.");
     let _parsed_hashes: serde_json::Value =
         serde_json::from_reader(hashes_file).expect("Could not parse hashes.json.");
 
-    let circuit = v3_mpc_circuit_and_aux_mles.mpc_circuit_and_aux_mles_all_3_parties
-        [ampc_party_index]
-        .get_circuit();
+    let mpc_circuit_ref = &v3_mpc_circuit_and_aux_mles.mpc_circuit_and_aux_mles_all_3_parties;
+    let mut circuit = mpc_circuit_ref.mpc_circuit.clone();
 
-    let aux_mle = v3_mpc_circuit_and_aux_mles.mpc_circuit_and_aux_mles_all_3_parties
-        [ampc_party_index]
-        .get_aux_mle();
+    println!("{:#?}", circuit.circuit_map);
+    circuit.set_input(
+        MPC_ENCODING_MATRIX_SHRED,
+        mpc_circuit_ref.encoding_matrix.clone(),
+    );
+    circuit.set_input(
+        MPC_EVALUATION_POINTS_SHRED,
+        mpc_circuit_ref.evaluation_points[ampc_party_index].clone(),
+    );
+    circuit.set_input(
+        MPC_LOOKUP_TABLE_VALUES_SHRED,
+        MultilinearExtension::new((0..GR4_MODULUS).map(Fr::from).collect()),
+    );
 
     for is_left_eye in [false, true] {
         println!("Verifying mpc secret share circuit, is_left_eye = {is_left_eye}");
@@ -129,13 +152,47 @@ fn verify_secret_share_proofs(
             mpc_party_proof.get_right_eye_proof_ref()
         };
 
+        let iris_code_layer_id = mpc_circuit_ref
+            .mpc_circuit
+            .get_input_layer_description_ref(MPC_IRISCODE_INPUT_LAYER)
+            .layer_id;
+        let shares_layer_id = mpc_circuit_ref
+            .mpc_circuit
+            .get_input_layer_description_ref(MPC_SHARES_LAYER)
+            .layer_id;
+
+        let shares_mle = proof
+            .public_inputs
+            .iter()
+            .find(|(layer_id, _)| *layer_id == shares_layer_id)
+            .unwrap()
+            .1
+            .as_ref()
+            .unwrap()
+            .clone();
+
+        circuit.set_input(MPC_SHARES_SHRED, shares_mle);
+
+        let mut verifiable_circuit = circuit
+            .gen_hyrax_verifiable_circuit()
+            .expect("Failed to generate verifiable circuit");
+
+        verifiable_circuit
+            .set_commitment_parameters(MPC_SLOPES_LAYER, SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS)
+            .unwrap();
+
         // check that the commitments are the same for iris code
         {
             println!("Checking that the iris code commitment with the proof matches that within the V3MPCCommitments struct...");
+            let iris_code_input_layer_id = mpc_circuit_ref
+                .mpc_circuit
+                .get_input_layer_description_ref(MPC_IRISCODE_INPUT_LAYER)
+                .layer_id;
+
             let iris_code_commitment = proof
                 .hyrax_input_proofs
                 .iter()
-                .find(|proof| proof.layer_id == circuit.iris_code_input_layer.layer_id)
+                .find(|proof| proof.layer_id == iris_code_input_layer_id)
                 .unwrap()
                 .input_commitment
                 .clone();
@@ -150,10 +207,16 @@ fn verify_secret_share_proofs(
         // check that the commitments are the same for mask code
         {
             println!("Checking that the mask code commitment with the proof matches that within the V3MPCCommitments struct...");
+
+            let mask_code_input_layer_id = mpc_circuit_ref
+                .mpc_circuit
+                .get_input_layer_description_ref(MPC_MASKCODE_INPUT_LAYER)
+                .layer_id;
+
             let mask_code_commitment = proof
                 .hyrax_input_proofs
                 .iter()
-                .find(|proof| proof.layer_id == circuit.mask_code_input_layer.layer_id)
+                .find(|proof| proof.layer_id == mask_code_input_layer_id)
                 .unwrap()
                 .input_commitment
                 .clone();
@@ -168,10 +231,15 @@ fn verify_secret_share_proofs(
         // check that the slope commitment is the same
         {
             println!("Checking that the Shamir SS polynomial's slope commitment with the proof matches that within the V3MPCCommitments struct...");
+            let slope_input_layer_id = mpc_circuit_ref
+                .mpc_circuit
+                .get_input_layer_description_ref(MPC_SLOPES_LAYER)
+                .layer_id;
+
             let slope_commitment = proof
                 .hyrax_input_proofs
                 .iter()
-                .find(|proof| proof.layer_id == circuit.slope_input_layer.layer_id)
+                .find(|proof| proof.layer_id == slope_input_layer_id)
                 .unwrap()
                 .input_commitment
                 .clone();
@@ -186,13 +254,20 @@ fn verify_secret_share_proofs(
         // The verifier forcibly inserts the correct public "auxiliary" MLEs
         // (e.g. lookup table, evaluation points, encoding matrix) into the
         // proof, since these are omitted by the prover by construction.
+        /*
         mpc_party_proof.insert_aux_public_data_by_id(
             is_left_eye,
             aux_mle,
             circuit.auxiliary_invariant_public_input_layer.layer_id,
         );
+        */
 
-        match mpc_party_proof.verify_mpc_proof(is_left_eye, circuit) {
+        let input_code_layer_id = mpc_circuit_ref
+            .mpc_circuit
+            .get_input_layer_description_ref(MPC_IRISCODE_INPUT_LAYER)
+            .layer_id;
+
+        match mpc_party_proof.verify_mpc_proof(is_left_eye, &verifiable_circuit, shares_layer_id) {
             Ok(secret_share_mle) => {
                 println!("MPC Verification succeeded!!");
 
