@@ -13,9 +13,8 @@ use remainder_frontend::{
     },
     worldcoin_mpc::{
         circuits::{
-            MPC_ENCODING_MATRIX_SHRED, MPC_EVALUATION_POINTS_SHRED, MPC_IRISCODE_INPUT_LAYER,
-            MPC_LOOKUP_TABLE_VALUES_SHRED, MPC_MASKCODE_INPUT_LAYER, MPC_SHARES_LAYER,
-            MPC_SHARES_SHRED, MPC_SLOPES_LAYER,
+            MPC_ENCODING_MATRIX_SHRED, MPC_EVALUATION_POINTS_SHRED, MPC_LOOKUP_TABLE_VALUES_SHRED,
+            MPC_SHARES_LAYER, MPC_SHARES_SHRED, MPC_SLOPES_LAYER,
         },
         parameters::GR4_MODULUS,
     },
@@ -115,12 +114,12 @@ fn verify_secret_share_proofs(
 
     let serialized_proof =
         read_bytes_from_file(path_to_secret_share_proof.as_os_str().to_str().unwrap());
-    let mut mpc_party_proof = MPCPartyProof::deserialize(&serialized_proof);
+    let mpc_party_proof = MPCPartyProof::deserialize(&serialized_proof);
 
     let serialized_commitments =
         read_bytes_from_file(path_to_aux_commitments.as_os_str().to_str().unwrap());
 
-    let v3_mpc_commitments = V3MPCCommitments::<Bn256Point>::deserialize(&serialized_commitments);
+    let _v3_mpc_commitments = V3MPCCommitments::<Bn256Point>::deserialize(&serialized_commitments);
 
     let hashes_file = File::open(path_to_hashes_json).expect("Could not open hashes.json file.");
     let _parsed_hashes: serde_json::Value =
@@ -154,10 +153,6 @@ fn verify_secret_share_proofs(
             mpc_party_proof.get_right_eye_proof_ref()
         };
 
-        let iris_code_layer_id = mpc_circuit_ref
-            .mpc_circuit
-            .get_input_layer_description_ref(MPC_IRISCODE_INPUT_LAYER)
-            .layer_id;
         let shares_layer_id = mpc_circuit_ref
             .mpc_circuit
             .get_input_layer_description_ref(MPC_SHARES_LAYER)
@@ -272,11 +267,6 @@ fn verify_secret_share_proofs(
             circuit.auxiliary_invariant_public_input_layer.layer_id,
         );
         */
-
-        let input_code_layer_id = mpc_circuit_ref
-            .mpc_circuit
-            .get_input_layer_description_ref(MPC_IRISCODE_INPUT_LAYER)
-            .layer_id;
 
         match mpc_party_proof.verify_mpc_proof(is_left_eye, &verifiable_circuit, shares_layer_id) {
             Ok(secret_share_mle) => {

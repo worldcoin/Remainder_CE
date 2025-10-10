@@ -76,7 +76,7 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     fn len(&self) -> usize;
 
     /// Returns an iterator over the evaluations of the current MLE.
-    fn iter(&self) -> EvaluationsIterator<F>;
+    fn iter(&'_ self) -> EvaluationsIterator<'_, F>;
 
     /// Returns the first element in the bookkeeping table corresponding to the
     /// value of this Dense MLE when all free variables are set to zero. This

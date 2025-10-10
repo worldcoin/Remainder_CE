@@ -209,7 +209,7 @@ impl<F: Field> Evaluations<F> {
 
     /// Returns an iterator that traverses the evaluations in "big-endian"
     /// order.
-    pub fn iter(&self) -> EvaluationsIterator<F> {
+    pub fn iter(&'_ self) -> EvaluationsIterator<'_, F> {
         EvaluationsIterator::<F> {
             evals: self,
             current_index: 0,
@@ -468,7 +468,7 @@ impl<F: Field> MultilinearExtension<F> {
 
     /// Returns an iterator accessing the evaluations defining this MLE in
     /// "big-endian" order.
-    pub fn iter(&self) -> EvaluationsIterator<F> {
+    pub fn iter(&'_ self) -> EvaluationsIterator<'_, F> {
         self.f.iter()
     }
 

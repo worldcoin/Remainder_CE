@@ -333,7 +333,7 @@ pub fn test_mpc_circuit_with_hyrax_helper(
 
 pub fn test_mpc_circuit_with_hyrax_helper_and_verifiable_circuit(
     mut mpc_circuit: HyraxProvableCircuit<Bn256Point>,
-    mut verifiable_circuit: HyraxVerifiableCircuit<Bn256Point>,
+    verifiable_circuit: HyraxVerifiableCircuit<Bn256Point>,
     // mpc_circuit_desc: MPCCircuitDescription<Scalar>,
     // inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
 ) {

@@ -1,5 +1,3 @@
-use std::ops::Mul;
-
 use crate::{
     hyrax_worldcoin::{
         orb::PUBLIC_STRING,
@@ -7,25 +5,16 @@ use crate::{
     },
     layouter::builder::{Circuit, LayerVisibility},
     worldcoin_mpc::{
-        circuits::{
-            build_circuit, mpc_attach_data, MPC_ENCODING_MATRIX_SHRED, MPC_EVALUATION_POINTS_SHRED,
-            MPC_IRISCODE_INPUT_LAYER, MPC_MASKCODE_INPUT_LAYER, MPC_SLOPES_LAYER,
-        },
-        data::{
-            gen_mpc_common_aux_data, gen_mpc_encoding_matrix, gen_mpc_evaluation_points,
-            gen_mpc_input_data, generate_trivial_test_data,
-        },
+        circuits::{build_circuit, mpc_attach_data, MPC_SLOPES_LAYER},
+        data::{gen_mpc_encoding_matrix, gen_mpc_evaluation_points, gen_mpc_input_data},
         parameters::{GR4_MODULUS, MPC_NUM_IRIS_4_CHUNKS},
     },
     zk_iriscode_ss::parameters::{IRISCODE_LEN, SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS},
 };
-use rayon::str::EncodeUtf16;
 use remainder_hyrax::{
     circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit},
     hyrax_gkr::{
-        hyrax_input_layer::{
-            commit_to_input_values, HyraxInputLayerDescription, HyraxProverInputCommitment,
-        },
+        hyrax_input_layer::{commit_to_input_values, HyraxProverInputCommitment},
         verify_hyrax_proof, HyraxProof,
     },
     utils::vandermonde::VandermondeInverse,
@@ -33,9 +22,7 @@ use remainder_hyrax::{
 
 use itertools::Itertools;
 use rand::{CryptoRng, Rng, RngCore};
-use remainder::{
-    input_layer::InputLayerDescription, layer::LayerId, mle::evals::MultilinearExtension,
-};
+use remainder::{layer::LayerId, mle::evals::MultilinearExtension};
 use remainder_shared_types::{
     config::{
         global_config::{
@@ -343,9 +330,9 @@ impl MPCProver {
     #[allow(clippy::too_many_arguments)]
     pub fn prove_mpc_with_precommits(
         mut mpc_provable_circuit: HyraxProvableCircuit<Bn256Point>,
-        iris_precommit: &HyraxProverInputCommitment<Bn256Point>,
-        mask_precommit: &HyraxProverInputCommitment<Bn256Point>,
-        slope_precommit: &HyraxProverInputCommitment<Bn256Point>,
+        _iris_precommit: &HyraxProverInputCommitment<Bn256Point>,
+        _mask_precommit: &HyraxProverInputCommitment<Bn256Point>,
+        _slope_precommit: &HyraxProverInputCommitment<Bn256Point>,
         committer: &PedersenCommitter<Bn256Point>,
         blinding_rng: &mut (impl CryptoRng + RngCore),
         converter: &mut VandermondeInverse<Scalar>,

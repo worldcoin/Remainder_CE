@@ -4,14 +4,11 @@ use crate::components::digits::DigitComponents;
 use crate::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility};
 use crate::zk_iriscode_ss::components::ZkIriscodeComponent;
 use crate::zk_iriscode_ss::data::IriscodeCircuitAuxData;
-use remainder::input_layer::InputLayerDescription;
 use remainder::mle::evals::MultilinearExtension;
-use remainder::prover::GKRCircuitDescription;
 use remainder::utils::arithmetic::log2_ceil;
 
 use itertools::Itertools;
 use remainder_shared_types::Field;
-use serde::{Deserialize, Serialize};
 
 use super::data::IriscodeCircuitInputData;
 

@@ -39,10 +39,7 @@ use crate::{
 };
 use remainder::{
     circuit_layout::{CircuitLocation, ProvableCircuit, VerifiableCircuit},
-    input_layer::{
-        ligero_input_layer::{LigeroInputLayerDescription, LigeroRoot},
-        InputLayerDescription,
-    },
+    input_layer::{ligero_input_layer::LigeroInputLayerDescription, InputLayerDescription},
     layer::{gate::BinaryOperation, layer_enum::LayerDescriptionEnum, LayerId},
     mle::evals::MultilinearExtension,
     output_layer::OutputLayerDescription,

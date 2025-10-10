@@ -303,7 +303,7 @@ impl<F: Field> BitPackedVector<F> {
         self.bits_per_element
     }
 
-    pub fn iter(&self) -> BitPackedIterator<F> {
+    pub fn iter(&'_ self) -> BitPackedIterator<'_, F> {
         BitPackedIterator {
             vec: self,
             current_index: 0,
