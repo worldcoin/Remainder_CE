@@ -339,7 +339,6 @@ impl<F: Field> CircuitBuilder<F> {
                 let sectors = layer
                     .iter()
                     .map(|sector| {
-                        dbg!(&sector.id());
                         assert!(id_to_sector_nodes_map.contains_key(&sector.id()));
                         id_to_sector_nodes_map.get(&sector.id()).unwrap()
                     })

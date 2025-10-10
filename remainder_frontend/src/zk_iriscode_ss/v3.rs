@@ -3,6 +3,7 @@ use ndarray::Array2;
 use remainder_shared_types::{Field, Fr};
 
 use crate::{
+    hyrax_worldcoin::v3::V3CircuitAndAuxData,
     layouter::builder::{Circuit, LayerVisibility},
     zk_iriscode_ss::{
         data::{
@@ -141,6 +142,15 @@ pub fn circuit_description() -> Result<Circuit<Fr>> {
         image_strip_reroutings,
         lh_matrix_reroutings,
     )
+}
+
+pub fn generate_iriscode_circuit_and_aux_data() -> V3CircuitAndAuxData<Fr> {
+    let iriscode_circuit = circuit_description().unwrap();
+
+    let iris_aux_data = build_worldcoin_aux_data(false);
+    let mask_aux_data = build_worldcoin_aux_data(true);
+
+    V3CircuitAndAuxData::new(iriscode_circuit, iris_aux_data, mask_aux_data)
 }
 
 /// Return the circuit description, and inputs for the iris code circuit, in either the mask (true)

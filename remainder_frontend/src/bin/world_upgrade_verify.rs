@@ -115,17 +115,6 @@ fn verify_v3_iriscode_proof(
                 .unwrap_or_else(|| panic!("Field {commitment_hash_entry} is not a string!"));
 
             let circuit = v3_circuit_and_aux_data.get_circuit();
-            /*
-            let aux_mle = if is_mask {
-                v3_mpc_circuit_and_aux_mle
-                    .v3_circuit_and_aux_mles
-                    .get_mask_aux_mle()
-            } else {
-                v3_mpc_circuit_and_aux_mle
-                    .v3_circuit_and_aux_mles
-                    .get_iris_aux_mle()
-            };
-            */
 
             // check that the commitments are the same for iris code
             {
@@ -148,7 +137,6 @@ fn verify_v3_iriscode_proof(
                 );
             }
 
-            // v3_proof.insert_aux_public_data(aux_mle, is_mask, is_left_eye, circuit);
             let aux_data = if is_mask {
                 v3_circuit_and_aux_data.get_mask_aux_data_ref().clone()
             } else {

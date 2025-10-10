@@ -744,6 +744,15 @@ impl MPCPartyProof {
         }
     }
 
+    #[cfg(feature = "print-trace")]
+    pub fn print_size(&self) {
+        println!("Left eye proof stats:");
+        self.left_eye_proof.print_size();
+
+        println!("Right eye proof stats:");
+        self.right_eye_proof.print_size();
+    }
+
     /*
     pub fn decompose(self) -> (ProofConfig, HyraxProof<Bn256Point>, HyraxProof<Bn256Point>) {
         (self.proof_config, self.left_eye_proof, self.right_eye_proof)
@@ -1001,7 +1010,7 @@ impl<F: Field> MPCCircuitAndAuxMles<F> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub struct V3MPCCircuitAndAuxMles<F: Field> {
-    pub v3_circuit_and_aux_mles: V3CircuitAndAuxData<F>,
+    pub v3_circuit_and_aux_data: V3CircuitAndAuxData<F>,
     pub mpc_circuit_and_aux_mles_all_3_parties: MPCCircuitsAndConstData<F>,
 }
 
