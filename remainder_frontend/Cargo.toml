@@ -60,7 +60,7 @@ harness = false
 name = "sanitycheck_secret_shares"
 
 [[bin]]
-name = "world_gen_iriscode_secret_share_circuit_descriptions"
+name = "world_gen"
 
 [[bin]]
 name = "world_prove"

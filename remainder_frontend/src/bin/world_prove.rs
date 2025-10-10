@@ -106,7 +106,7 @@ fn prove_all_proofs(
 
     let mut v3_mpc_prover = V3MPCProver::new(
         GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
-        v3_mpc_circuit_and_aux_data.v3_circuit_and_aux_mles,
+        v3_mpc_circuit_and_aux_data.v3_circuit_and_aux_data,
         v3_mpc_circuit_and_aux_data.mpc_circuit_and_aux_mles_all_3_parties,
         &mut prng,
     );
@@ -147,22 +147,28 @@ fn prove_all_proofs(
         .finalize()
         .expect("Proof is missing while trying to finalize");
 
-    /*
     #[cfg(feature = "print-trace")]
     {
-        v3_mpc_proof.v3_proof.get_left_iris_proof().print_size();
-        v3_mpc_proof.v3_proof.get_right_iris_proof().print_size();
-        v3_mpc_proof.v3_proof.get_left_mask_proof().print_size();
-        v3_mpc_proof.v3_proof.get_left_mask_proof().print_size();
+        v3_mpc_proof
+            .get_v3_proof_ref()
+            .get_left_iris_proof()
+            .print_size();
+        v3_mpc_proof
+            .get_v3_proof_ref()
+            .get_right_iris_proof()
+            .print_size();
+        v3_mpc_proof
+            .get_v3_proof_ref()
+            .get_left_mask_proof()
+            .print_size();
+        v3_mpc_proof
+            .get_v3_proof_ref()
+            .get_left_mask_proof()
+            .print_size();
 
-        for p in v3_mpc_proof.mpc_proof.get_left_proofs() {
-            p.print_size();
-        }
-        for p in v3_mpc_proof.mpc_proof.get_right_proofs() {
-            p.print_size();
-        }
+        (0..NUM_PARTIES)
+            .for_each(|party_idx| v3_mpc_proof.get_party_proof_ref(party_idx).print_size());
     }
-    */
 
     // Write the V3 proof to file
     {

@@ -300,13 +300,6 @@ pub fn prove_with_image_precommit(
         .clone();
     assert_eq!(*code_commit_in_proof, code_commit.commitment);
 
-    dbg!(
-        &provable_circuit
-            .get_private_input_layer_mut_ref(code_layer_id)
-            .unwrap()
-            .0
-    );
-
     /*
     // Zeroize each value in the HashMap
     for (_, mut mle) in inputs {

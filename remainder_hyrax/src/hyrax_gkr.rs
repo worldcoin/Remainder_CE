@@ -499,18 +499,15 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
             end_timer!(timer);
         });
 
-    println!("OK");
     hyrax_proof
         .hyrax_input_proofs
         .iter()
         .for_each(|hyrax_input_proof| {
             let layer_id = &hyrax_input_proof.layer_id;
-            let (desc, _) = verifiable_circuit
+            let (_desc, _) = verifiable_circuit
                 .get_private_inputs_ref()
                 .get(layer_id)
                 .unwrap();
-
-            dbg!(&desc);
         });
 
     // Verify the hyrax input layer proofs.

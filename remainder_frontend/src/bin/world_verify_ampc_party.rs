@@ -105,7 +105,6 @@ fn verify_secret_share_proofs(
     assert!(ampc_party_index == 0 || ampc_party_index == 1 || ampc_party_index == 2);
 
     println!("Verifying...");
-    // let committer = V3Prover::default_committer();
 
     let serialized_circuit_and_aux_mles =
         read_bytes_from_file(path_to_circuit_description.as_os_str().to_str().unwrap());
@@ -128,7 +127,6 @@ fn verify_secret_share_proofs(
     let mpc_circuit_ref = &v3_mpc_circuit_and_aux_mles.mpc_circuit_and_aux_mles_all_3_parties;
     let mut circuit = mpc_circuit_ref.mpc_circuit.clone();
 
-    println!("{:#?}", circuit.circuit_map);
     circuit.set_input(
         MPC_ENCODING_MATRIX_SHRED,
         mpc_circuit_ref.encoding_matrix.clone(),
