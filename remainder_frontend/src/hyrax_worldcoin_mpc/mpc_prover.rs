@@ -350,6 +350,8 @@ impl MPCProver {
         blinding_rng: &mut (impl CryptoRng + RngCore),
         converter: &mut VandermondeInverse<Scalar>,
     ) -> HyraxProof<Bn256Point> {
+        // TODO: Restore the precommits and fix the resulting bug!!
+        /*
         mpc_provable_circuit
             .set_pre_commitment(MPC_IRISCODE_INPUT_LAYER, iris_precommit.clone(), None)
             .unwrap();
@@ -363,6 +365,7 @@ impl MPCProver {
                 Some(SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS),
             )
             .unwrap();
+        */
 
         // Create a fresh transcript.
         let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
