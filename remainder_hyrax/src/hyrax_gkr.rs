@@ -505,7 +505,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
         .iter()
         .for_each(|hyrax_input_proof| {
             let layer_id = &hyrax_input_proof.layer_id;
-            let (desc, optional_commitment) = verifiable_circuit
+            let (desc, _) = verifiable_circuit
                 .get_private_inputs_ref()
                 .get(layer_id)
                 .unwrap();

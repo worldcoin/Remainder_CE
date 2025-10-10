@@ -119,7 +119,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         1
     }
 
-    fn iter(&self) -> EvaluationsIterator<F> {
+    fn iter(&'_ self) -> EvaluationsIterator<'_, F> {
         self.zero_eval.iter()
     }
 

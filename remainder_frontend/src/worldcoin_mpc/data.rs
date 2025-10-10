@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Mul};
+use std::collections::HashMap;
 
 use ark_std::log2;
 use itertools::Itertools;

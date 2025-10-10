@@ -674,7 +674,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
                 // Compute `\beta((r_1, ..., r_n), (u_1, ..., u_n))`.
                 let claim_nonlinear_vals: Vec<F> = rounds_sumchecked_over
                     .iter()
-                    .map(|idx| (claims[0].get_point()[*idx]))
+                    .map(|idx| claims[0].get_point()[*idx])
                     .collect();
                 debug_assert_eq!(claim_nonlinear_vals.len(), challenges.len());
                 BetaValues::compute_beta_over_two_challenges(&claim_nonlinear_vals, &challenges)

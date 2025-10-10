@@ -11,10 +11,7 @@ use remainder_frontend::{
     },
     hyrax_worldcoin_mpc::mpc_prover::{print_features_status, V3MPCCommitments},
     zk_iriscode_ss::{
-        circuits::{
-            iriscode_ss_attach_aux_data, iriscode_ss_attach_input_data, V3_INPUT_IMAGE_LAYER,
-            V3_SIGN_BITS_LAYER,
-        },
+        circuits::{iriscode_ss_attach_aux_data, V3_INPUT_IMAGE_LAYER, V3_SIGN_BITS_LAYER},
         io::read_bytes_from_file,
     },
 };
@@ -91,7 +88,7 @@ fn verify_v3_iriscode_proof(
     let v3_circuit_and_aux_data = V3CircuitAndAuxData::<Fr>::deserialize(&serialized_circuit);
 
     let serialized_proof = read_bytes_from_file(path_to_v3_proof.as_os_str().to_str().unwrap());
-    let mut v3_proof = V3Proof::deserialize(&serialized_proof);
+    let v3_proof = V3Proof::deserialize(&serialized_proof);
 
     let serialized_commitments =
         read_bytes_from_file(path_to_aux_commitments.as_os_str().to_str().unwrap());

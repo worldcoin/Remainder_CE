@@ -8,15 +8,10 @@ use clap::{command, Parser};
 use rand::{rngs::OsRng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use remainder_frontend::{
-    hyrax_worldcoin::{
-        orb::load_image_commitment,
-        v3::{V3CircuitAndAuxData, V3Prover},
-    },
-    hyrax_worldcoin_mpc::mpc_prover::{
-        print_features_status, V3MPCCircuitAndAuxMles, V3MPCCommitments, V3MPCProver,
-    },
+    hyrax_worldcoin::orb::load_image_commitment,
+    hyrax_worldcoin_mpc::mpc_prover::{print_features_status, V3MPCCircuitAndAuxMles, V3MPCProver},
     worldcoin_mpc::parameters::NUM_PARTIES,
-    zk_iriscode_ss::{io::read_bytes_from_file, v3::circuit_description},
+    zk_iriscode_ss::io::read_bytes_from_file,
 };
 use remainder_hyrax::hyrax_gkr::hyrax_input_layer::HyraxProverInputCommitment;
 use remainder_shared_types::{

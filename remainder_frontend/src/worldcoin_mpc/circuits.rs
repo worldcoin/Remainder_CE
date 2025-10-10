@@ -1,7 +1,6 @@
 #![allow(clippy::type_complexity)]
 use ark_std::log2;
 use remainder_shared_types::Field;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     hyrax_worldcoin_mpc::mpc_prover::MPCCircuitConstData,
@@ -11,9 +10,7 @@ use crate::{
         parameters::{GR4_ELEM_BIT_LENGTH, GR4_MULTIPLICATION_WIRINGS},
     },
 };
-use remainder::{
-    input_layer::InputLayerDescription, layer::gate::BinaryOperation, prover::GKRCircuitDescription,
-};
+use remainder::layer::gate::BinaryOperation;
 
 use super::{
     data::MPCCircuitInputData,
