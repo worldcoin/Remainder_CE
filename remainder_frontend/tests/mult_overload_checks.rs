@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use remainder::{
     circuit_layout::{ProvableCircuit, VerifiableCircuit},
+    layer::LayerId,
     mle::evals::MultilinearExtension,
     prover::{prove, verify},
 };
@@ -82,6 +85,7 @@ fn prove_circuit(provable_circuit: &ProvableCircuit<Fr>) -> (Transcript<Fr>, Pro
 
 fn verify_circuit(
     verifiable_circuit: &VerifiableCircuit<Fr>,
+    predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<Fr>>,
     proof: Transcript<Fr>,
     proof_config: &ProofConfig,
 ) {
@@ -89,12 +93,14 @@ fn verify_circuit(
 
     verify(
         verifiable_circuit,
+        predetermined_public_inputs,
         remainder_shared_types::circuit_hash::CircuitHashType::Poseidon,
         &mut transcript_reader,
         proof_config,
     )
     .expect("Verification Failed!");
 }
+
 #[test]
 fn mult_overload_checks() {
     let _subscriber = fmt().with_max_level(Level::DEBUG).init();
@@ -119,11 +125,13 @@ fn mult_overload_checks() {
     let verifier_config = GKRCircuitVerifierConfig::new_from_proof_config(&proof_config, true);
 
     let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
+    let predetermined_public_inputs = HashMap::new();
 
     perform_function_under_verifier_config!(
         verify_circuit,
         &verifier_config,
         &verifiable_circuit,
+        predetermined_public_inputs,
         proof,
         &proof_config
     );

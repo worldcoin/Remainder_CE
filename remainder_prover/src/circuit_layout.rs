@@ -8,7 +8,6 @@ use itertools::Itertools;
 use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
-use crate::circuit_building_context;
 use crate::input_layer::ligero_input_layer::{
     LigeroInputLayerDescription, LigeroInputLayerDescriptionWithPrecommit,
 };
@@ -141,12 +140,6 @@ impl<F: Field> ProvableCircuit<F> {
     /// This is done by erasing all input data associated with private input layers, along with any
     /// commitments (the latter can be found in the proof).
     pub fn _gen_verifiable_circuit(&self) -> VerifiableCircuit<F> {
-        let public_inputs: HashMap<LayerId, MultilinearExtension<F>> = self
-            .inputs
-            .clone()
-            .into_iter()
-            .filter(|(layer_id, _)| !self.private_inputs.contains_key(layer_id))
-            .collect();
         let private_inputs: HashMap<LayerId, LigeroInputLayerDescription<F>> = self
             .private_inputs
             .clone()
@@ -154,21 +147,8 @@ impl<F: Field> ProvableCircuit<F> {
             .map(|(layer_id, (desc, _))| (layer_id, desc))
             .collect();
 
-        // Ensure the union of public input Layer IDs with private input layer IDs equal
-        // the set of all input layer IDs.
-        debug_assert_eq!(
-            public_inputs
-                .keys()
-                .chain(private_inputs.keys())
-                .cloned()
-                .sorted()
-                .collect_vec(),
-            self.inputs.keys().cloned().sorted().collect_vec()
-        );
-
         VerifiableCircuit {
             circuit_description: self.circuit_description.clone(),
-            public_inputs,
             private_inputs,
         }
     }
@@ -229,12 +209,11 @@ impl<F: Field> ProvableCircuit<F> {
     }
 }
 
-/// A circuit that contains a [GKRCircuitDescription], a description of the private input layers,
-/// and the data for all the public input layers, ready to be verified against a proof.
+/// A circuit that contains a [GKRCircuitDescription] alongside a description of
+/// the private input layers.
 #[derive(Clone, Debug)]
 pub struct VerifiableCircuit<F: Field> {
     circuit_description: GKRCircuitDescription<F>,
-    public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
     private_inputs: HashMap<LayerId, LigeroInputLayerDescription<F>>,
 }
 
@@ -242,23 +221,12 @@ impl<F: Field> VerifiableCircuit<F> {
     /// Returns a [VerifiableCircuit] initialized with the given data.
     pub fn new(
         circuit_description: GKRCircuitDescription<F>,
-        public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
         private_inputs: HashMap<LayerId, LigeroInputLayerDescription<F>>,
     ) -> Self {
         Self {
             circuit_description,
-            public_inputs,
             private_inputs,
         }
-    }
-
-    /// Returns a reference to the mapping which maps a [LayerId] of a public input layer to the
-    /// data its associated with.
-    ///
-    /// TODO: This is too transparent. Replace this with methods that answer the queries of the
-    /// prover directly, and do _not_ expose it to the circuit developer.
-    pub fn get_public_inputs_ref(&self) -> &HashMap<LayerId, MultilinearExtension<F>> {
-        &self.public_inputs
     }
 
     /// Returns a reference to the mapping which maps a [LayerId] of a private input layer to its
@@ -277,22 +245,25 @@ impl<F: Field> VerifiableCircuit<F> {
         &self.circuit_description
     }
 
-    /// Returns a vector of the [LayerId]s of all input layers with visibility [LayerVisibility::Public].
+    /// Returns a vector of the [LayerId]s of all input layers with visibility
+    /// [LayerVisibility::Public].
     pub fn get_public_input_layer_ids(&self) -> Vec<LayerId> {
-        self.public_inputs.keys().cloned().collect_vec()
+        self.circuit_description
+            .input_layers
+            .iter()
+            .filter(|input_layer_description| {
+                // All input layers which are not private are public by default.
+                !self
+                    .private_inputs
+                    .contains_key(&input_layer_description.layer_id)
+            })
+            .map(|public_input_layer_description| public_input_layer_description.layer_id)
+            .collect()
     }
 
-    /// Returns a vector of the [LayerId]s of all input layers with visibility [LayerVisibility::Private].
+    /// Returns a vector of the [LayerId]s of all input layers with visibility
+    /// [LayerVisibility::Private].
     pub fn get_private_input_layer_ids(&self) -> Vec<LayerId> {
         self.private_inputs.keys().cloned().collect_vec()
-    }
-
-    /// Returns the data associated with the public input layer with ID `layer_id`, or an error if
-    /// no such public input layer exists.
-    pub fn get_public_input_mle(&self, layer_id: LayerId) -> Result<MultilinearExtension<F>> {
-        self.public_inputs
-            .get(&layer_id)
-            .ok_or(anyhow!("Unrecognized Layer ID '{layer_id}'"))
-            .cloned()
     }
 }
