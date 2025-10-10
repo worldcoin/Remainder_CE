@@ -1367,7 +1367,6 @@ impl<F: Field> Circuit<F> {
                 let total_num_vars = log2(padded_needed_capacity) as usize;
 
                 // Aim for square matrix.
-                // TODO: Allow for custom parameters.
                 let log_num_cols = total_num_vars / 2;
 
                 // let layer_label = self.circuit_map.get_label_from_layer_id(layer_id)?;

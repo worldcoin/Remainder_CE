@@ -370,27 +370,6 @@ impl MPCProver {
         proof
     }
 
-    /*
-    pub fn remove_auxiliary_input_layer(&mut self, is_left_eye: bool) {
-        let three_proofs = if is_left_eye {
-            &mut self.left_eye_proofs_all_3_parties
-        } else {
-            &mut self.right_eye_proofs_all_3_parties
-        };
-
-        (0..NUM_PARTIES).for_each(|party_idx| {
-            let auxiliary_invariant_public_input_layer_id = self
-                .mpc_circuit_and_aux_mles_all_3_parties[party_idx]
-                .circuit_description
-                .auxiliary_invariant_public_input_layer
-                .layer_id;
-
-            three_proofs.as_mut().unwrap()[party_idx]
-                .remove_public_input_layer_by_id(auxiliary_invariant_public_input_layer_id)
-        });
-    }
-    */
-
     pub fn prove(
         &mut self,
         is_left_eye: bool,
@@ -402,36 +381,10 @@ impl MPCProver {
             iris_code_precommit.blinding_factors_matrix.len(),
             iris_code_precommit.commitment.len()
         );
-        // Ryan suggests asserting:
-        //       iris_code_precommit.blinding_factors.len() ==
-        //       iris_code_precommit.commitments.len() ==
-        //       1 << LOG_NUM_COLS
 
         let iris_code_mle = &iris_code_precommit.mle;
         let mask_code_mle = &mask_code_precommit.mle;
         let slope_commitment = &self.slope_commitments[!is_left_eye as usize];
-
-        /*
-        let common_mpc_data = gen_mpc_common_aux_data::<Fr, MPC_NUM_IRIS_4_CHUNKS, 0>(iris_codes, masks, slopes, encoding_matrix, evaluation_points)
-
-        let mpc_data_all_3_parties = [
-            gen_mpc_input_data::<Fr, MPC_NUM_IRIS_4_CHUNKS, 0>(
-                iris_code_mle,
-                mask_code_mle,
-                slope_mle,
-            ),
-            create_ss_circuit_inputs::<Fr, MPC_NUM_IRIS_4_CHUNKS, 1>(
-                iris_code_mle,
-                mask_code_mle,
-                slope_mle,
-            ),
-            create_ss_circuit_inputs::<Fr, MPC_NUM_IRIS_4_CHUNKS, 2>(
-                iris_code_mle,
-                mask_code_mle,
-                slope_mle,
-            ),
-        ];
-        */
 
         let encoding_matrix = &self
             .mpc_circuit_and_const_mles_all_3_parties
@@ -578,17 +531,6 @@ impl V3MPCProver {
         }
     }
 
-    /*
-    fn remove_mpc_auxiliary_input_layer(&mut self, is_left_eye: bool) {
-        self.mpc_prover.remove_auxiliary_input_layer(is_left_eye);
-    }
-
-    fn remove_v3_auxiliary_input_layer(&mut self, is_mask: bool, is_left_eye: bool) {
-        self.v3_prover
-            .remove_auxiliary_input_layer(is_mask, is_left_eye);
-    }
-    */
-
     pub fn prove_v3(
         &mut self,
         is_mask: bool,
@@ -603,6 +545,7 @@ impl V3MPCProver {
 
         self.set_commit(is_mask, is_left_eye, code_commitment);
 
+        // TODO: Refactor into the new builder design:
         // Remove the public `auxiliary_input_layer` from the proofs, as these are already
         // incorporated in the `CircuitAndAuxMles` as `iris_aux_mle` and `mask_aux_mle`.
         // self.remove_v3_auxiliary_input_layer(is_mask, is_left_eye);
@@ -615,6 +558,7 @@ impl V3MPCProver {
         self.mpc_prover
             .prove(is_left_eye, iris_code_commitment, mask_code_commitment, rng);
 
+        // TODO: Refactor into the new builder design:
         // Remove the invariant public `auxiliary_input_layer` from the proofs, as these are already
         // incorporated in the `MPCCircuitAndAuxMles` as `aux_mle`.
         // self.remove_mpc_auxiliary_input_layer(is_left_eye);
@@ -753,12 +697,6 @@ impl MPCPartyProof {
         self.right_eye_proof.print_size();
     }
 
-    /*
-    pub fn decompose(self) -> (ProofConfig, HyraxProof<Bn256Point>, HyraxProof<Bn256Point>) {
-        (self.proof_config, self.left_eye_proof, self.right_eye_proof)
-    }
-    */
-
     pub fn insert_aux_public_data_by_id(
         &mut self,
         is_left_eye: bool,
@@ -777,31 +715,9 @@ impl MPCPartyProof {
     pub fn verify_mpc_proof(
         &self,
         is_left_eye: bool,
-        // mpc_circuit_desc: &MPCCircuitDescription<Fr>,
         mpc_circuit: &HyraxVerifiableCircuit<Bn256Point>,
         secret_share_mle_layer_id: LayerId,
     ) -> Result<MultilinearExtension<Fr>, MPCError> {
-        /*
-        let mut verifier_hyrax_input_layers = HashMap::new();
-
-        verifier_hyrax_input_layers.insert(
-            mpc_circuit_desc.slope_input_layer.layer_id,
-            mpc_circuit_desc.slope_input_layer.clone().into(),
-        );
-        verifier_hyrax_input_layers.insert(
-            mpc_circuit_desc.iris_code_input_layer.layer_id,
-            mpc_circuit_desc.iris_code_input_layer.clone().into(),
-        );
-        verifier_hyrax_input_layers.insert(
-            mpc_circuit_desc.mask_code_input_layer.layer_id,
-            mpc_circuit_desc.mask_code_input_layer.clone().into(),
-        );
-        verifier_hyrax_input_layers.insert(
-            mpc_circuit_desc.auxilary_input_layer.layer_id,
-            mpc_circuit_desc.auxilary_input_layer.clone().into(),
-        );
-        */
-
         // Create a fresh transcript.
         let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
             ECTranscript::new("V3 Iriscode Circuit Pipeline");
@@ -974,38 +890,6 @@ impl V3MPCProof {
         bincode::deserialize(serialized_proof).unwrap()
     }
 }
-
-/*
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(bound = "F: Field")]
-pub struct MPCCircuitAndAuxMles<F: Field> {
-    circuit_description: MPCCircuitDescription<F>,
-    input_builder_metadata: MPCInputBuilderMetadata,
-    aux_mle: MultilinearExtension<F>,
-}
-
-impl<F: Field> MPCCircuitAndAuxMles<F> {
-    pub fn get_input_builder_metadata(&self) -> &MPCInputBuilderMetadata {
-        &self.input_builder_metadata
-    }
-
-    pub fn get_circuit(&self) -> &MPCCircuitDescription<F> {
-        &self.circuit_description
-    }
-
-    pub fn get_aux_mle(&self) -> &MultilinearExtension<F> {
-        &self.aux_mle
-    }
-
-    pub fn serialize(&self) -> Vec<u8> {
-        bincode::serialize(&self).expect("Failed to serialize MPCCircuitAndAuxMles")
-    }
-
-    pub fn deserialize(bytes: &[u8]) -> Self {
-        bincode::deserialize(bytes).expect("Failed to deserialize MPCCircuitAndAuxMles")
-    }
-}
-*/
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]

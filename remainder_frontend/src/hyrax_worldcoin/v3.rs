@@ -89,46 +89,10 @@ pub enum IriscodeError {
 pub(crate) fn verify_v3_iriscode_proof_and_hash(
     proof: &HyraxProof<Bn256Point>,
     verifiable_circuit: &HyraxVerifiableCircuit<Bn256Point>,
-    /*
-    ic_circuit_desc: &IriscodeCircuitDescription<Fr>,
-    auxiliary_mle: &MultilinearExtension<Fr>,
-    */
     expected_commitment_hash: &str,
     committer: &PedersenCommitter<Bn256Point>,
     proof_config: &ProofConfig,
 ) -> Result<Vec<Bn256Point>> {
-    /*
-    let mut hyrax_input_layers = HashMap::new();
-
-    // The image, with the precommit (must use the same number of columns as were used at the time of committing!)
-    let image_hyrax_input_layer_desc = HyraxInputLayerDescription {
-        layer_id: ic_circuit_desc.image_input_layer.layer_id,
-        num_vars: ic_circuit_desc.image_input_layer.num_vars,
-        log_num_cols: IMAGE_COMMIT_LOG_NUM_COLS,
-    };
-    hyrax_input_layers.insert(
-        ic_circuit_desc.image_input_layer.layer_id,
-        image_hyrax_input_layer_desc,
-    );
-
-    // The iris code
-    let code_hyrax_input_layer_desc = HyraxInputLayerDescription {
-        layer_id: ic_circuit_desc.code_input_layer.layer_id,
-        num_vars: ic_circuit_desc.code_input_layer.num_vars,
-        log_num_cols: IRISCODE_COMMIT_LOG_NUM_COLS,
-    };
-    hyrax_input_layers.insert(
-        ic_circuit_desc.code_input_layer.layer_id,
-        code_hyrax_input_layer_desc,
-    );
-
-    // The digits layer
-    hyrax_input_layers.insert(
-        ic_circuit_desc.digits_input_layer.layer_id,
-        ic_circuit_desc.digits_input_layer.clone().into(),
-    );
-    */
-
     // Create a fresh transcript.
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("V3 Iriscode Circuit Pipeline");
@@ -150,29 +114,7 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
         .unwrap();
 
     let image_commitment = proof.get_commitment_ref(image_layer_id).cloned().unwrap();
-    // dbg!(&image_commitment);
     let code_commitment = proof.get_commitment_ref(code_layer_id).cloned().unwrap();
-    /*
-    // Extract the iris/mask code commitment from the proof.
-    let code_commitment = proof
-        .hyrax_input_proofs
-        .iter()
-        .find(|proof| proof.layer_id == ic_circuit_desc.code_input_layer.layer_id)
-        .unwrap()
-        .input_commitment
-        .clone();
-
-    // Extract the commitment to the image from the proof.
-    let image_commitment = proof
-        .hyrax_input_proofs
-        .iter()
-        .find(|proof| proof.layer_id == ic_circuit_desc.image_input_layer.layer_id)
-        .unwrap()
-        .input_commitment
-        .clone();
-    let code_commitment = todo!();
-    let image_commitment: Vec<Bn256Point> = todo!();
-    */
 
     // Check that the image commitment matches the expected hash.
     let commitment_hash = sha256_digest(
@@ -199,10 +141,6 @@ pub(crate) fn verify_v3_iriscode_proof_and_hash(
 /// This function is assumed to be called *with the prover config set*!
 pub fn prove_with_image_precommit(
     mut provable_circuit: HyraxProvableCircuit<Bn256Point>,
-    /*
-    ic_circuit_desc: &IriscodeCircuitDescription<Fr>,
-    inputs: HashMap<LayerId, MultilinearExtension<Fr>>,
-    */
     image_layer_label: &str,
     code_layer_label: &str,
     image_precommit: HyraxProverInputCommitment<Bn256Point>,
@@ -230,45 +168,6 @@ pub fn prove_with_image_precommit(
             Some(IMAGE_COMMIT_LOG_NUM_COLS),
         )
         .unwrap();
-    /*
-    // The image, with the precommit (must use the same number of columns as were used at the time of committing!)
-    let image_hyrax_input_layer_desc = HyraxInputLayerDescription {
-        layer_id: ic_circuit_desc.image_input_layer.layer_id,
-        num_vars: ic_circuit_desc.image_input_layer.num_vars,
-        log_num_cols: IMAGE_COMMIT_LOG_NUM_COLS,
-    };
-    hyrax_input_layers.insert(
-        ic_circuit_desc.image_input_layer.layer_id,
-        (image_hyrax_input_layer_desc, Some(image_precommit)),
-    );
-
-    // The iris code, with a precommit (that we compute here)
-    let code_hyrax_input_layer_desc = HyraxInputLayerDescription {
-        layer_id: ic_circuit_desc.code_input_layer.layer_id,
-        num_vars: ic_circuit_desc.code_input_layer.num_vars,
-        log_num_cols: IRISCODE_COMMIT_LOG_NUM_COLS,
-    };
-    // Build the commitment to the iris/mask code.
-    let code_mle = inputs
-        .get(&ic_circuit_desc.code_input_layer.layer_id)
-        .unwrap();
-    let code_commit = commit_to_input_values(
-        &code_hyrax_input_layer_desc,
-        &code_mle,
-        committer,
-        blinding_rng,
-    );
-    hyrax_input_layers.insert(
-        ic_circuit_desc.code_input_layer.layer_id,
-        (code_hyrax_input_layer_desc, Some(code_commit.clone())),
-    );
-
-    // The digit multiplicities, without the precommit
-    hyrax_input_layers.insert(
-        ic_circuit_desc.digits_input_layer.layer_id,
-        (ic_circuit_desc.digits_input_layer.clone().into(), None),
-    );
-    */
 
     // Create a fresh transcript.
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -300,6 +199,7 @@ pub fn prove_with_image_precommit(
         .clone();
     assert_eq!(*code_commit_in_proof, code_commit.commitment);
 
+    // TODO: Refactor into the new builder design.
     /*
     // Zeroize each value in the HashMap
     for (_, mut mle) in inputs {
@@ -376,15 +276,6 @@ impl V3Prover {
             right_mask_proof: None,
         }
     }
-
-    /*
-    pub fn remove_auxiliary_input_layer(&mut self, is_mask: bool, is_left_eye: bool) {
-        let auxiliary_input_layer_id = self.circuit.circuit.auxiliary_input_layer.layer_id;
-
-        self.get_as_mut(is_mask, is_left_eye)
-            .remove_public_input_layer_by_id(auxiliary_input_layer_id);
-    }
-    */
 
     /// Generate a v3 prover with the given configuration, initialized
     /// with optional proofs.
