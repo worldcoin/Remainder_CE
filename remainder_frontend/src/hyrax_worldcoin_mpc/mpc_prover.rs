@@ -405,8 +405,8 @@ impl MPCProver {
                     .evaluation_points[party_idx];
 
                 let input_data = gen_mpc_input_data::<Fr, MPC_NUM_IRIS_4_CHUNKS>(
-                    &iris_code_mle,
-                    &mask_code_mle,
+                    iris_code_mle,
+                    mask_code_mle,
                     &slope_commitment.mle,
                     encoding_matrix,
                     evaluation_points,
@@ -427,7 +427,7 @@ impl MPCProver {
                     provable_circuit,
                     &iris_code_precommit,
                     &mask_code_precommit,
-                    &slope_commitment,
+                    slope_commitment,
                     &self.committer,
                     rng,
                     &mut self.converter,

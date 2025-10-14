@@ -4,8 +4,8 @@
 /// (2d), first a flattened u16 array, then serialized as bytes, return the wirings as a Vec of
 /// tuples of 4 u16s.
 pub fn decode_wirings(wirings_bytes: &[u8]) -> Vec<(u16, u16, u16, u16)> {
-    assert!(wirings_bytes.len() % 8 == 0); // 4 u16s
-                                           // Process the data in chunks of 8 bytes (one row)
+    assert!(wirings_bytes.len().is_multiple_of(8)); // 4 u16s
+                                                    // Process the data in chunks of 8 bytes (one row)
     wirings_bytes
         .chunks_exact(8)
         .map(|row_bytes| {
@@ -21,7 +21,7 @@ pub fn decode_wirings(wirings_bytes: &[u8]) -> Vec<(u16, u16, u16, u16)> {
 
 /// Given a byte array representing a 1d i32 array, then serialized as bytes, return the i32 array.
 pub fn decode_i32_array(bytes: &[u8]) -> Vec<i32> {
-    assert!(bytes.len() % 4 == 0); // 4 bytes per i32
+    assert!(bytes.len().is_multiple_of(4)); // 4 bytes per i32
     bytes
         .chunks_exact(4)
         .map(|row_bytes| i32::from_le_bytes(row_bytes.try_into().unwrap()))
@@ -30,7 +30,7 @@ pub fn decode_i32_array(bytes: &[u8]) -> Vec<i32> {
 
 /// Given a byte array representing a 1d i64 array, then serialized as bytes, return the i64 array.
 pub fn decode_i64_array(bytes: &[u8]) -> Vec<i64> {
-    assert!(bytes.len() % 8 == 0); // 8 bytes per i64
+    assert!(bytes.len().is_multiple_of(8)); // 8 bytes per i64
     bytes
         .chunks_exact(8)
         .map(|row_bytes| i64::from_le_bytes(row_bytes.try_into().unwrap()))

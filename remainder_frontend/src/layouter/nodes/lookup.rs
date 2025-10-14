@@ -287,12 +287,11 @@ impl LookupTable {
         // Add a layer that calculates the difference between the fractions on the LHS and RHS
         assert!(rhs_numerator.is_some());
         let rhs_numerator = rhs_numerator.unwrap();
-        let expr = if lhs_numerator.is_none() {
-            CE::<F>::products(vec![rhs_denominator.clone()])
+        let expr = if let Some(lhs_numerator) = lhs_numerator {
+            CE::<F>::products(vec![lhs_numerator.clone(), rhs_denominator.clone()])
                 - CE::<F>::products(vec![rhs_numerator.clone(), lhs_denominator.clone()])
         } else {
-            let lhs_numerator = lhs_numerator.unwrap();
-            CE::<F>::products(vec![lhs_numerator.clone(), rhs_denominator.clone()])
+            CE::<F>::products(vec![rhs_denominator.clone()])
                 - CE::<F>::products(vec![rhs_numerator.clone(), lhs_denominator.clone()])
         };
 

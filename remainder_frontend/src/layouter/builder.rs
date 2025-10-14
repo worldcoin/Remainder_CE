@@ -81,14 +81,15 @@ impl<F: Field> NodeRef<F> {
     }
 }
 
-impl<F: Field> Into<AbstractExpression<F>> for NodeRef<F> {
-    fn into(self) -> AbstractExpression<F> {
-        self.expr()
+impl<F: Field> From<NodeRef<F>> for AbstractExpression<F> {
+    fn from(value: NodeRef<F>) -> Self {
+        value.expr()
     }
 }
-impl<F: Field> Into<AbstractExpression<F>> for &NodeRef<F> {
-    fn into(self) -> AbstractExpression<F> {
-        self.expr()
+
+impl<F: Field> From<&NodeRef<F>> for AbstractExpression<F> {
+    fn from(value: &NodeRef<F>) -> Self {
+        value.expr()
     }
 }
 
@@ -115,14 +116,15 @@ impl<F: Field> InputLayerNodeRef<F> {
     }
 }
 
-impl<F: Field> Into<AbstractExpression<F>> for InputLayerNodeRef<F> {
-    fn into(self) -> AbstractExpression<F> {
-        self.expr()
+impl<F: Field> From<InputLayerNodeRef<F>> for AbstractExpression<F> {
+    fn from(value: InputLayerNodeRef<F>) -> Self {
+        value.expr()
     }
 }
-impl<F: Field> Into<AbstractExpression<F>> for &InputLayerNodeRef<F> {
-    fn into(self) -> AbstractExpression<F> {
-        self.expr()
+
+impl<F: Field> From<&InputLayerNodeRef<F>> for AbstractExpression<F> {
+    fn from(value: &InputLayerNodeRef<F>) -> Self {
+        value.expr()
     }
 }
 
@@ -149,20 +151,21 @@ impl<F: Field> FSNodeRef<F> {
     }
 }
 
-impl<F: Field> Into<NodeRef<F>> for FSNodeRef<F> {
-    fn into(self) -> NodeRef<F> {
-        NodeRef::new(self.ptr)
+impl<F: Field> From<FSNodeRef<F>> for NodeRef<F> {
+    fn from(value: FSNodeRef<F>) -> Self {
+        NodeRef::new(value.ptr)
     }
 }
 
-impl<F: Field> Into<AbstractExpression<F>> for FSNodeRef<F> {
-    fn into(self) -> AbstractExpression<F> {
-        self.expr()
+impl<F: Field> From<FSNodeRef<F>> for AbstractExpression<F> {
+    fn from(value: FSNodeRef<F>) -> Self {
+        value.expr()
     }
 }
-impl<F: Field> Into<AbstractExpression<F>> for &FSNodeRef<F> {
-    fn into(self) -> AbstractExpression<F> {
-        self.expr()
+
+impl<F: Field> From<&FSNodeRef<F>> for AbstractExpression<F> {
+    fn from(value: &FSNodeRef<F>) -> Self {
+        value.expr()
     }
 }
 
@@ -903,7 +906,6 @@ impl CircuitMap {
         assert_eq!(
             self.shreds_in_layer
                 .values()
-                .into_iter()
                 .flatten()
                 .sorted()
                 .collect_vec(),
@@ -927,7 +929,7 @@ impl CircuitMap {
 
     /// Returns the [LayerVisibility] of the Input Layer that the shred with label `shred_label` is in,
     /// or an error if the `shred_label` does not correspond to any input shred.
-    pub fn get_node_kind(&self, shred_label: &String) -> Result<LayerVisibility> {
+    pub fn get_node_kind(&self, shred_label: &str) -> Result<LayerVisibility> {
         // The call to `self.get_node_id` will check ensure the state is `Ready`.
 
         // This lookup may fail because the caller provided an invalid label.
@@ -987,7 +989,7 @@ impl CircuitMap {
             })
             .collect_vec();
 
-        if labels.len() < 1 {
+        if labels.is_empty() {
             bail!("Unrecognized Input Shred ID '{shred_id}'");
         } else {
             // Panic if more than one label maps to this input shred ID as this indicates an
@@ -1088,6 +1090,12 @@ impl CircuitMap {
     }
 }
 
+impl Default for CircuitMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// A circuit whose structure is fixed, but is not yet ready to be proven or verified because its
 /// missing all or some of its input data. This structs provides an API for attaching inputs and
 /// generating a form of the circuit that can be proven or verified respectively, for various
@@ -1135,13 +1143,7 @@ impl<F: Field> Circuit<F> {
     /// If `shred_label` does not correspond to any Input Shred.
     pub fn update_input(&mut self, shred_label: &str, data: MultilinearExtension<F>) {
         let node_id = self.circuit_map.get_node_id(shred_label).unwrap();
-
-        if self.partial_inputs.contains_key(&node_id) {
-            let entry = self.partial_inputs.get_mut(&node_id).unwrap();
-            *entry = data;
-        } else {
-            self.partial_inputs.insert(node_id, data);
-        }
+        self.partial_inputs.insert(node_id, data);
     }
 
     /// Returns whether the circuit contains an Input Layer labeled `label`.
@@ -1172,7 +1174,7 @@ impl<F: Field> Circuit<F> {
     pub fn get_input_layer_description_ref(&self, layer_label: &str) -> &InputLayerDescription {
         let layer_id = self
             .circuit_map
-            .get_layer_id_from_label(&layer_label)
+            .get_layer_id_from_label(layer_label)
             .unwrap();
 
         let x: Vec<&InputLayerDescription> = self
@@ -1312,6 +1314,7 @@ impl<F: Field> Circuit<F> {
     /// Returns a [VerifiableCircuit], alongside all input data which is already
     /// known to the verifier, but no commitments to the private input layers
     /// yet.
+    #[allow(clippy::type_complexity)]
     pub fn gen_verifiable_circuit(
         &self,
     ) -> Result<(
@@ -1425,7 +1428,7 @@ impl<F: Field> Circuit<F> {
     ///
     /// # Returns
     /// The generated provable circuit, or an error if the [self] is missing input data.
-    pub fn finalize_hyrax<C: PrimeOrderCurve>(
+    pub fn finalize_hyrax<C>(
         &self,
         // pre_commitments: HashMap<String, HyraxProverInputCommitment<C>>,
     ) -> Result<HyraxProvableCircuit<C>>

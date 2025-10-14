@@ -83,7 +83,7 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
                             if input_shred_ids.contains(circuit_node_source) {
                                 None
                             } else {
-                                Some(circuit_node_source.clone())
+                                Some(*circuit_node_source)
                             }
                         })
                         .collect(),
@@ -114,7 +114,7 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
             return Err(anyhow!(LayoutingError::CircularDependency));
         }
         let neighbors = self.repr.get(node).unwrap();
-        if neighbors.len() == 0 {
+        if neighbors.is_empty() {
             exploring_nodes.remove(node);
             terminated_nodes.insert(node.clone());
             topological_order.push(node.clone());
@@ -164,7 +164,7 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
         let mut topological_order: Vec<N> = Vec::with_capacity(self.repr.len());
         let mut exploring_nodes: HashSet<N> = HashSet::new();
 
-        while !(topological_order.len() == self.repr.len()) {
+        while topological_order.len() != self.repr.len() {
             for node in self.repr.keys() {
                 self.visit_node_dfs(
                     node,
@@ -201,23 +201,24 @@ type LayouterNodes<F> = (
 /// * The `fiat_shamir_challenge_nodes` are to be compiled next, so they are
 ///   returned as is.
 /// * `sector_nodes`, `gate_nodes`, `identity_gate_nodes`, `matmult_nodes`, and
-///    `split_nodes` are considered intermediate nodes. `sector_nodes` are the
-///    only nodes which can be combined with each other via a selector.
-///    Therefore, first we topologically sort the intermediate nodes by creating
-///    a dependency graph using their specified sources. Then, we do a forward
-///    pass through these sorted nodes, identify which ones are the sectors, and
-///    combine them greedily (if there is no dependency between them, we
-///    combine). We then return a [Vec<Vec<Box<dyn CompilableNode<F>>>>] for
-///    which each inner vector represents nodes that can be combined into a
-///    single layer.
+///   `split_nodes` are considered intermediate nodes. `sector_nodes` are the
+///   only nodes which can be combined with each other via a selector.
+///   Therefore, first we topologically sort the intermediate nodes by creating
+///   a dependency graph using their specified sources. Then, we do a forward
+///   pass through these sorted nodes, identify which ones are the sectors, and
+///   combine them greedily (if there is no dependency between them, we
+///   combine). We then return a [Vec<Vec<Box<dyn CompilableNode<F>>>>] for
+///   which each inner vector represents nodes that can be combined into a
+///   single layer.
 /// * `lookup_constraint_nodes` are added to their respective
-///    `lookup_table_nodes`. Because no nodes are dependent on lookups (their
-///    results are always outputs), we compile them after the intermediate
-///    nodes.
+///   `lookup_table_nodes`. Because no nodes are dependent on lookups (their
+///   results are always outputs), we compile them after the intermediate
+///   nodes.
 /// * `output_nodes` are compiled last, so they are returned as is.
 ///
 /// The ordering in which the nodes are returned as [LayouterNodes] is the order
 /// in which the nodes are expected to be compiled into layers.
+#[allow(clippy::too_many_arguments)]
 pub fn layout<F: Field>(
     mut input_layer_nodes: Vec<InputLayerNode>,
     input_shred_nodes: Vec<InputShred>,

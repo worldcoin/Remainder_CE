@@ -893,7 +893,7 @@ where
     digest = PoseidonSpongeHasher::new_merkle_hasher(master_default_poseidon_merkle_hasher);
     let mut col = col_num;
     for p in &column.path[..] {
-        if col % 2 == 0 {
+        if col.is_multiple_of(2) {
             digest.update(&[hash]);
             digest.update(&[*p]);
         } else {

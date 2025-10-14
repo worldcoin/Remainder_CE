@@ -21,15 +21,14 @@ impl DigitComponents {
 
         let b_s_initial_acc = AbstractExpression::<F>::constant(F::ZERO);
 
-        let sector_expr = mles.into_iter().enumerate().fold(
+        let sector_expr = mles.iter().enumerate().fold(
             b_s_initial_acc,
             |acc_expr, (bit_idx, bin_decomp_node)| {
                 let power = F::from(base.pow((num_digits - (bit_idx + 1)) as u32));
                 acc_expr + *bin_decomp_node * power
             },
         );
-        let sector = builder_ref.add_sector(sector_expr);
-        sector
+        builder_ref.add_sector(sector_expr)
     }
 
     /// Checks that the complementary decomposition of a signed
@@ -53,8 +52,7 @@ impl DigitComponents {
             pow *= F::from(base);
         }
 
-        let sector = builder_ref.add_sector(bits * pow - unsigned_recomps - values);
-        sector
+        builder_ref.add_sector(bits * pow - unsigned_recomps - values)
     }
 
     /// Ensures that each bit is either 0 or 1. Add self.sector to the circuit as an
@@ -63,8 +61,7 @@ impl DigitComponents {
         builder_ref: &mut CircuitBuilder<F>,
         values_node: &NodeRef<F>,
     ) -> NodeRef<F> {
-        let sector = builder_ref.add_sector(values_node * values_node - values_node);
-        sector
+        builder_ref.add_sector(values_node * values_node - values_node)
     }
 
     /// A component that concatenates all the separate digit MLEs (there is one for
@@ -74,8 +71,6 @@ impl DigitComponents {
         builder_ref: &mut CircuitBuilder<F>,
         mles: &[&NodeRef<F>],
     ) -> NodeRef<F> {
-        let sector =
-            builder_ref.add_sector(AbstractExpression::binary_tree_selector(mles.to_vec()));
-        sector
+        builder_ref.add_sector(AbstractExpression::binary_tree_selector(mles.to_vec()))
     }
 }
