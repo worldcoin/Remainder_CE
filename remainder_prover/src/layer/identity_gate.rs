@@ -5,7 +5,6 @@ use std::{
     cmp::Ordering,
     collections::HashSet,
     fmt::{Debug, Formatter},
-    slice,
 };
 
 use crate::{
@@ -306,7 +305,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         );
 
         PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
-            slice::from_ref(&self.source_mle),
+            std::slice::from_ref(&self.source_mle),
             f_1_gu,
             round_challenges,
         )])
@@ -733,7 +732,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         );
 
         PostSumcheckLayer(vec![Product::<F, F>::new(
-            slice::from_ref(&self.source_mle),
+            std::slice::from_ref(&self.source_mle),
             f_1_gu,
         )])
     }

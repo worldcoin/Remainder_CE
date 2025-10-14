@@ -21,7 +21,6 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
-    slice,
 };
 
 use remainder_shared_types::{transcript::VerifierTranscript, Field};
@@ -605,7 +604,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             }
             ExpressionNode::Mle(mle) => {
                 products.push(Product::<F, Option<F>>::new(
-                    slice::from_ref(mle),
+                    std::slice::from_ref(mle),
                     multiplier,
                     challenges,
                 ));
