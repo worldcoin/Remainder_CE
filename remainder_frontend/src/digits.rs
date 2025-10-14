@@ -35,7 +35,7 @@ pub fn unsigned_decomposition<const BASE: u64, const N: usize>(value: u64) -> Op
 }
 
 /// Decompose a number into N digits in a given BASE, MSB first, in the complementary representation, i.e.
-///   `value = b * BASE^N - (d\[0\] * BASE^(N-1) + d\[1\] * BASE^(N-2) + ... + d\[N-1\] * BASE^0)`
+///   `value = b * BASE^N - (d[0] * BASE^(N-1) + d[1] * BASE^(N-2) + ... + d[N-1] * BASE^0)`
 /// where `(d, b)` is the result.
 /// Returns None iff value is out of range.
 /// # Requires:
