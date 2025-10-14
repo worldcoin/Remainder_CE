@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
-use remainder_frontend::zk_iriscode_ss::{io::read_bytes_from_file, parameters::IRISCODE_LEN};
+use remainder_frontend::{
+    hyrax_worldcoin_mpc::mpc_prover::print_features_status,
+    zk_iriscode_ss::{io::read_bytes_from_file, parameters::IRISCODE_LEN},
+};
 use remainder_shared_types::{
     config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
     perform_function_under_expected_configs,
@@ -16,14 +19,12 @@ struct CliArguments {
 }
 
 fn main() {
-    /*
     // Sanitycheck by logging the current settings.
     perform_function_under_expected_configs!(
         print_features_status,
-        &EXPECTED_PROVER_CONFIG,
-        &tfh_config::EXPECTED_VERIFIER_CONFIG,
+        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
+        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
     );
-    */
 
     // Parse arguments and verify secret share generation proofs.
     let cli = CliArguments::parse();
