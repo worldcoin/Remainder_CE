@@ -19,7 +19,6 @@ impl Components {
         lhs: &NodeRef<F>,
         rhs: &NodeRef<F>,
     ) -> NodeRef<F> {
-        let sector = builder_ref.add_sector(lhs - rhs);
-        sector
+        builder_ref.add_sector(lhs - rhs)
     }
 }

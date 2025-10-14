@@ -193,7 +193,7 @@ impl<F: Field> AbstractExpression<F> {
         let base = node_id;
         let mut result = base.clone();
         for _ in 1..pow {
-            result = result * base.clone();
+            result *= base.clone();
         }
         result
     }

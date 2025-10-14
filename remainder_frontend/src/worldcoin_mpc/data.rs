@@ -139,7 +139,7 @@ pub fn gen_mpc_input_data<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
     let evaluation_points_times_slopes = compute_gate_data_outputs(
         GR4_MULTIPLICATION_WIRINGS.to_vec(),
         log2(num_copies.next_power_of_two()) as usize,
-        &evaluation_points,
+        evaluation_points,
         slopes,
         BinaryOperation::Mul,
     );
@@ -301,43 +301,6 @@ pub fn generate_trivial_test_data<
 
     (mpc_aux_data, mpc_input_data)
 }
-
-/// create a secret share circuit inputs from the mle of iris_codes,
-/// masks, and slopes
-/*
-pub fn create_ss_circuit_inputs<
-    F: Field,
-    const NUM_IRIS_4_CHUNKS: usize,
-    const PARTY_IDX: usize,
->(
-    iris_codes: &MultilinearExtension<F>,
-    masks: &MultilinearExtension<F>,
-    slopes: &MultilinearExtension<F>,
-) -> MPCCircuitInputData<F> {
-    assert_eq!(iris_codes.len(), NUM_IRIS_4_CHUNKS * 4);
-    assert_eq!(masks.len(), NUM_IRIS_4_CHUNKS * 4);
-    assert_eq!(slopes.len(), NUM_IRIS_4_CHUNKS * 4);
-
-    let (
-        quotients,
-        shares_reduced_modulo_gr4_modulus,
-        multiplicities_shares,
-        multiplicities_slopes,
-        lookup_table_values,
-    ) = calculate_aux_data::<F, NUM_IRIS_4_CHUNKS, PARTY_IDX>(iris_codes, masks, slopes);
-
-    MPCCircuitInputData {
-        iris_codes: iris_codes.clone(),
-        masks: masks.clone(),
-        slopes: slopes.clone(),
-        quotients,
-        shares_reduced_modulo_gr4_modulus,
-        multiplicities_shares,
-        multiplicities_slopes,
-        lookup_table_values,
-    }
-}
-*/
 
 /// Fetch one quadruplets from the test data given by Inversed,
 /// `test_idx` specifies which copy

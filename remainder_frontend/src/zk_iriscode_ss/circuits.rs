@@ -225,10 +225,10 @@ pub fn build_iriscode_circuit_description<
         BASE,
         NUM_DIGITS,
     );
-    let _complementary_checker_output = builder.set_output(&complementary_checker);
+    builder.set_output(&complementary_checker);
 
     let bits_are_binary = DigitComponents::bits_are_binary(&mut builder, &sign_bits);
-    let _bits_are_binary_output = builder.set_output(&bits_are_binary);
+    builder.set_output(&bits_are_binary);
 
     // Generate the circuit description and input builder
     builder.build()

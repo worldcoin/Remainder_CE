@@ -204,7 +204,8 @@ impl<F: Field> BitPackedVector<F> {
 
         assert!(
             bits_per_element == 4 * entry_width
-                || (bits_per_element <= entry_width && entry_width % bits_per_element == 0)
+                || (bits_per_element <= entry_width
+                    && entry_width.is_multiple_of(bits_per_element))
         );
 
         if bits_per_element > entry_width {
