@@ -2,7 +2,7 @@ use remainder_shared_types::{transcript::VerifierTranscript, Field};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    expression::expr_errors::ExpressionError, layer::LayerId, layouter::layouting::CircuitMap,
+    circuit_layout::CircuitEvalMap, expression::expr_errors::ExpressionError, layer::LayerId,
 };
 
 use super::{dense::DenseMle, verifier_mle::VerifierMle, MleIndex};
@@ -90,7 +90,7 @@ impl<F: Field> MleDescription<F> {
     /// Convert this MLE into a [DenseMle] using the [CircuitMap],
     /// which holds information using the prefix bits and layer id
     /// on the data that should be stored in this MLE.
-    pub fn into_dense_mle(&self, circuit_map: &CircuitMap<F>) -> DenseMle<F> {
+    pub fn into_dense_mle(&self, circuit_map: &CircuitEvalMap<F>) -> DenseMle<F> {
         let data = circuit_map.get_data_from_circuit_mle(self).unwrap();
         DenseMle::new_with_prefix_bits((*data).clone(), self.layer_id(), self.prefix_bits())
     }
