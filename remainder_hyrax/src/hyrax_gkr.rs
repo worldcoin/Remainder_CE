@@ -1,13 +1,11 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
+use crate::circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit};
+use crate::hyrax_gkr::hyrax_input_layer::HyraxInputLayerProof;
 use crate::utils::vandermonde::VandermondeInverse;
 use ark_std::{end_timer, start_timer};
-use hyrax_input_layer::{
-    commit_to_input_values, HyraxInputLayerDescription, HyraxInputLayerProof,
-    HyraxProverInputCommitment,
-};
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
@@ -17,7 +15,7 @@ use remainder::input_layer::fiat_shamir_challenge::FiatShamirChallenge;
 use remainder::layer::LayerId;
 use remainder::layer::{Layer, LayerDescription};
 use remainder::mle::evals::MultilinearExtension;
-use remainder::mle::Mle;
+use remainder::mle::{Mle, MleIndex};
 use remainder::prover::helpers::get_circuit_description_hash_as_field_elems;
 use remainder::prover::{GKRCircuitDescription, InstantiatedCircuit};
 
@@ -34,6 +32,8 @@ use serde::{Deserialize, Serialize};
 
 use self::hyrax_layer::HyraxLayerProof;
 
+use anyhow::Result;
+
 pub mod helpers;
 /// The module that contains all functions necessary to do operations on a Hyrax
 /// input layer using the Hyrax PCS.
@@ -44,9 +44,6 @@ pub mod hyrax_layer;
 /// The module that contains all functions necessary to do operations on an
 /// output layer.
 pub mod hyrax_output_layer;
-#[cfg(test)]
-/// The testing module for integration tests
-pub mod tests;
 
 /// The struct that holds all the respective proofs that the verifier needs in
 /// order to verify a Hyrax proof, i.e. the circuit proof along with the proofs
@@ -138,6 +135,8 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
     /// # Requires:
     ///   * `circuit_description.index_mle_indices(0)` has been called
     pub fn prove(
+        provable_circuit: &mut HyraxProvableCircuit<C>,
+        /*
         inputs: &HashMap<LayerId, MultilinearExtension<C::Scalar>>,
         hyrax_input_layers: &HashMap<
             LayerId,
@@ -147,6 +146,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
             ),
         >,
         circuit_description: &GKRCircuitDescription<C::Scalar>,
+        */
         committer: &PedersenCommitter<C>,
         mut rng: &mut (impl CryptoRng + RngCore),
         converter: &mut VandermondeInverse<C::Scalar>,
@@ -157,7 +157,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
 
         // Generate circuit description hash and append to transcript
         let hash_value_as_field_elems = get_circuit_description_hash_as_field_elems(
-            circuit_description,
+            provable_circuit.get_gkr_circuit_description_ref(),
             global_prover_circuit_description_hash_type(),
         );
         transcript
@@ -167,12 +167,17 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         // transcript. Select the public input layers from the input layers, and
         // sort them by layer id, and append their input values to the
         // transcript.
-        inputs
+        provable_circuit
+            .get_inputs_ref()
             .keys()
-            .filter(|layer_id| !hyrax_input_layers.contains_key(layer_id))
+            .filter(|layer_id| {
+                !provable_circuit
+                    .get_private_input_layer_ids()
+                    .contains(layer_id)
+            })
             .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
             .for_each(|layer_id| {
-                let mle = inputs.get(layer_id).unwrap();
+                let mle = provable_circuit.get_input_mle(*layer_id).unwrap();
                 let public_il_to_transcript_timer =
                     start_timer!(|| format!("adding il elements to transcript for {layer_id}"));
                 transcript.append_input_scalar_field_elems(
@@ -182,41 +187,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
                 end_timer!(public_il_to_transcript_timer);
             });
 
-        // For each hyrax input layer, calculate commitments if not already
-        // provided, and then append each commitment to the transcript.
-        let mut hyrax_input_commitments = HashMap::<LayerId, HyraxProverInputCommitment<C>>::new();
-        hyrax_input_layers
-            .keys()
-            .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
-            .for_each(|layer_id| {
-                // Commit to the Hyrax input layer, if it is not already
-                // committed to.
-                let (desc, maybe_precommitment) = hyrax_input_layers.get(layer_id).unwrap();
-                let prover_commitment: HyraxProverInputCommitment<C> =
-                    if let Some(prover_commitment) = maybe_precommitment {
-                        // Use the commitment provided by the calling context
-                        (*prover_commitment).clone()
-                    } else {
-                        // Commit to the values of the input layer
-                        let input_mle = inputs.get(layer_id).unwrap();
-                        let hyrax_il_commit_timer =
-                            start_timer!(|| format!("commit to hyrax input layer {layer_id}"));
-                        let commitment =
-                            commit_to_input_values(desc, input_mle, committer, &mut rng);
-                        end_timer!(hyrax_il_commit_timer);
-                        commitment
-                    };
-
-                // Add the verifier's view of the commitment to transcript
-                transcript.append_input_ec_points(
-                    "Hyrax input layer commitment",
-                    prover_commitment.commitment.clone(),
-                );
-
-                // Store the prover's view for later use in the evaluation
-                // proofs.
-                hyrax_input_commitments.insert(*layer_id, prover_commitment);
-            });
+        provable_circuit.commit(committer, rng, transcript);
 
         // Get the verifier challenges from the transcript.
         let mut challenge_sampler =
@@ -225,8 +196,10 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
 
         // Instantiate the circuit description given the data from sampling
         // verifier challenges.
-        let mut instantiated_circuit =
-            circuit_description.instantiate(inputs, &mut challenge_sampler);
+        let mut instantiated_circuit = provable_circuit
+            .get_gkr_circuit_description_ref()
+            .clone()
+            .instantiate(provable_circuit.get_inputs_ref(), &mut challenge_sampler);
         end_timer!(instantiation_timer);
 
         // Generate the circuit proof, which is, starting from claims generated
@@ -249,11 +222,12 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         end_timer!(layer_proving_timer);
 
         // Collect the values of the public inputs
-        let public_inputs = inputs
+        let public_inputs = provable_circuit
+            .get_inputs_ref()
             .keys()
-            .filter(|layer_id| !hyrax_input_layers.contains_key(layer_id))
+            .filter(|layer_id| !provable_circuit.is_private_input_layer(**layer_id))
             .map(|layer_id| {
-                let mle = inputs.get(layer_id).unwrap();
+                let mle = provable_circuit.get_input_mle(*layer_id).unwrap();
                 (*layer_id, Some(mle.clone()))
             })
             .collect_vec();
@@ -264,7 +238,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         let mut claims_on_hyrax_input_layers =
             HashMap::<LayerId, Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>>::new();
         claims_on_input_layers.iter().for_each(|claim| {
-            if hyrax_input_layers.contains_key(&claim.to_layer_id) {
+            if provable_circuit.is_private_input_layer(claim.to_layer_id) {
                 if let Some(curr_claims) = claims_on_hyrax_input_layers.get_mut(&claim.to_layer_id)
                 {
                     curr_claims.push(claim.clone());
@@ -279,7 +253,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         // If in debug mode, then check the claims on all input layers.
         if cfg!(debug_assertions) {
             for claim in claims_on_input_layers.iter() {
-                let input_mle = inputs.get(&claim.to_layer_id).unwrap();
+                let input_mle = provable_circuit.get_input_mle(claim.to_layer_id).unwrap();
                 let public_il_verification_timer =
                     start_timer!(|| format!("public il eval for {0}", claim.to_layer_id));
                 let evaluation = input_mle.evaluate_at_point(&claim.point);
@@ -294,29 +268,36 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         }
 
         // Prove the claims on the Hyrax input layers
-        let hyrax_input_proofs = hyrax_input_layers
-            .keys()
+        let hyrax_input_proofs = provable_circuit
+            .get_private_input_layer_ids()
+            .iter()
             .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
             .map(|layer_id| {
-                let (desc, _) = hyrax_input_layers.get(layer_id).unwrap();
-                let commitment = hyrax_input_commitments.get_mut(layer_id).unwrap();
-                let committed_claims = claims_on_hyrax_input_layers.remove(layer_id).unwrap();
+                if let (desc, Some(commitment)) = provable_circuit
+                    .get_private_input_layer_mut_ref(*layer_id)
+                    .unwrap()
+                {
+                    // let commitment = provable_circuit.get_commitment_mut_ref(layer_id).unwrap();
+                    let committed_claims = claims_on_hyrax_input_layers.remove(layer_id).unwrap();
 
-                let hyrax_il_verification_timer = start_timer!(|| format!(
-                    "HyraxInputLayer::prove for {0} with {1} claims",
-                    layer_id,
-                    committed_claims.len()
-                ));
-                let il_proof = HyraxInputLayerProof::prove(
-                    desc,
-                    commitment,
-                    &committed_claims,
-                    committer,
-                    &mut rng,
-                    transcript,
-                );
-                end_timer!(hyrax_il_verification_timer);
-                il_proof
+                    let hyrax_il_verification_timer = start_timer!(|| format!(
+                        "HyraxInputLayer::prove for {0} with {1} claims",
+                        layer_id,
+                        committed_claims.len()
+                    ));
+                    let il_proof = HyraxInputLayerProof::prove(
+                        desc,
+                        commitment,
+                        &committed_claims,
+                        committer,
+                        &mut rng,
+                        transcript,
+                    );
+                    end_timer!(hyrax_il_verification_timer);
+                    il_proof
+                } else {
+                    panic!("Input layer with ID {layer_id} missing committment!")
+                }
             })
             .collect_vec();
 
@@ -333,6 +314,22 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
             proof_config,
         )
     }
+
+    pub fn get_commitment_ref(&self, layer_id: LayerId) -> Result<&Vec<C>> {
+        let input_layer_proofs = self
+            .hyrax_input_proofs
+            .iter()
+            .filter(|proof| proof.layer_id == layer_id)
+            .collect_vec();
+
+        if input_layer_proofs.len() > 1 {
+            panic!("Multiple input layer proofs found for Input Layer with ID '{layer_id}'");
+        } else if input_layer_proofs.is_empty() {
+            panic!("No private input layer found with id '{layer_id}'");
+        }
+
+        Ok(&input_layer_proofs[0].input_commitment)
+    }
 }
 
 /// Verify this [HyraxProof] instance, matching it against the provided circuit
@@ -342,8 +339,11 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
 ///   * `circuit_description.index_mle_indices(0)` has been called
 pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
     hyrax_proof: &HyraxProof<C>,
+    verifiable_circuit: &HyraxVerifiableCircuit<C>,
+    /*
     hyrax_input_layers: &HashMap<LayerId, HyraxInputLayerDescription>,
     circuit_description: &GKRCircuitDescription<C::Scalar>,
+    */
     committer: &PedersenCommitter<C>,
     transcript: &mut impl ECTranscriptTrait<C>,
     proof_config: &ProofConfig,
@@ -357,19 +357,28 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
     // in the proof.
     assert_eq!(
         hyrax_proof.hyrax_input_proofs.len() + hyrax_proof.public_inputs.len(),
-        circuit_description.input_layers.len()
+        verifiable_circuit
+            .get_gkr_circuit_description_ref()
+            .input_layers
+            .len()
     );
     assert_eq!(
-        hyrax_input_layers.len(),
+        verifiable_circuit.get_private_inputs_ref().len(),
         hyrax_proof.hyrax_input_proofs.len()
     );
     assert_eq!(
         hyrax_proof.circuit_proof.layer_proofs.len(),
-        circuit_description.intermediate_layers.len()
+        verifiable_circuit
+            .get_gkr_circuit_description_ref()
+            .intermediate_layers
+            .len()
     );
     assert_eq!(
         hyrax_proof.circuit_proof.output_layer_proofs.len(),
-        circuit_description.output_layers.len()
+        verifiable_circuit
+            .get_gkr_circuit_description_ref()
+            .output_layers
+            .len()
     );
 
     // Generate circuit description hash and append to transcript Note that this
@@ -378,7 +387,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
     // our own transcript.
     let hash_timer = start_timer!(|| "Hashing circuit description");
     let hash_value_as_field_elems = get_circuit_description_hash_as_field_elems(
-        circuit_description,
+        verifiable_circuit.get_gkr_circuit_description_ref(),
         global_verifier_circuit_description_hash_type(),
     );
     end_timer!(hash_timer);
@@ -417,7 +426,8 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
     end_timer!(hyrax_input_timer);
 
     // Get the verifier challenges from the transcript.
-    let fiat_shamir_challenges: Vec<FiatShamirChallenge<C::Scalar>> = circuit_description
+    let fiat_shamir_challenges: Vec<FiatShamirChallenge<C::Scalar>> = verifiable_circuit
+        .get_gkr_circuit_description_ref()
         .fiat_shamir_challenges
         .iter()
         .map(|fs_desc| {
@@ -436,7 +446,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
     // a layer as an expression in terms of other layers.
     let circuit_timer = start_timer!(|| "Verifying circuit proof");
     let input_layer_claims_vec = hyrax_proof.circuit_proof.verify(
-        circuit_description,
+        verifiable_circuit.get_gkr_circuit_description_ref(),
         committer,
         fiat_shamir_challenges,
         transcript,
@@ -464,7 +474,8 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
         .iter()
         .for_each(|(layer_id, values)| {
             let values = values.as_ref().unwrap();
-            let input_layer_description = circuit_description
+            let input_layer_description = verifiable_circuit
+                .get_gkr_circuit_description_ref()
                 .input_layers
                 .iter()
                 .find(|input_layer| input_layer.layer_id == *layer_id)
@@ -488,13 +499,27 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
             end_timer!(timer);
         });
 
+    hyrax_proof
+        .hyrax_input_proofs
+        .iter()
+        .for_each(|hyrax_input_proof| {
+            let layer_id = &hyrax_input_proof.layer_id;
+            let (_desc, _) = verifiable_circuit
+                .get_private_inputs_ref()
+                .get(layer_id)
+                .unwrap();
+        });
+
     // Verify the hyrax input layer proofs.
     hyrax_proof
         .hyrax_input_proofs
         .iter()
         .for_each(|hyrax_input_proof| {
             let layer_id = &hyrax_input_proof.layer_id;
-            let desc = hyrax_input_layers.get(layer_id).unwrap();
+            let (desc, optional_commitment) = verifiable_circuit
+                .get_private_inputs_ref()
+                .get(layer_id)
+                .unwrap();
             let layer_claims_vec = input_layer_claims.remove(layer_id).unwrap();
             let timer = start_timer!(|| format!(
                 "Verifying {0} claims for Hyrax input layer {1}",
@@ -502,6 +527,9 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
                 layer_id
             ));
             hyrax_input_proof.verify(desc, &layer_claims_vec, committer, transcript);
+            if let Some(comm) = optional_commitment {
+                assert_eq!(hyrax_input_proof.input_commitment, comm.commitment);
+            }
             end_timer!(timer);
         });
 
@@ -520,7 +548,7 @@ pub struct HyraxCircuitProof<C: PrimeOrderCurve> {
     pub layer_proofs: Vec<(LayerId, HyraxLayerProof<C>)>,
     /// A commitment to the output of the circuit, i.e. what the final value of
     /// the output layer is.
-    pub output_layer_proofs: Vec<(LayerId, HyraxOutputLayerProof<C>)>,
+    pub output_layer_proofs: Vec<(LayerId, Vec<MleIndex<C::Scalar>>, HyraxOutputLayerProof<C>)>,
     /// The prover's claims on verifier challenges, in CommittedScalar form,
     /// i.e. including the blinding factors (since the verifier needs to check
     /// these itself).
@@ -557,7 +585,6 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
 
         let output_layer_proofs = output_layers
             .iter_mut()
-            .sorted_by_key(|output_layer| output_layer.layer_id().get_raw_layer_id())
             .map(|output_layer| {
                 // Create the HyraxOutputLayerProof
                 let (output_layer_proof, committed_output_claim) =
@@ -565,7 +592,11 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
                 // Add the output claim to the claims table
                 let output_layer_id = output_layer.get_mle().layer_id();
                 claim_tracker.insert(output_layer_id, vec![committed_output_claim]);
-                (output_layer_id, output_layer_proof)
+                (
+                    output_layer.layer_id(),
+                    output_layer.get_mle().mle_indices().to_vec(),
+                    output_layer_proof,
+                )
             })
             .collect_vec();
 
@@ -662,33 +693,36 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
         // Keep track of all claim commitments for the hyrax layer verifier
         let mut claim_tracker: HashMap<LayerId, Vec<HyraxClaim<C::Scalar, C>>> = HashMap::new();
 
-        // Check that all output layers have *exactly* one proof associated
-        // with them.
-        let output_layer_ids: HashSet<LayerId> = circuit_description
-            .output_layers
-            .iter()
-            .map(|output_layer| output_layer.layer_id())
-            .collect();
-        let output_layer_proof_ids: HashSet<LayerId> = output_layer_proofs
-            .iter()
-            .map(|(layer_id, _output_layer)| *layer_id)
-            .collect();
-        assert_eq!(output_layer_ids, output_layer_proof_ids);
+        // Check that each pair of `output_layer` and `output_proof` have the same layer id and indices
         assert_eq!(
             circuit_description.output_layers.len(),
             output_layer_proofs.len()
         );
+        output_layer_proofs
+            .iter()
+            .zip(&circuit_description.output_layers)
+            .for_each(
+                |((proof_layer_id, proof_indices, _output_layer_proof), output_layer)| {
+                    assert_eq!(*proof_layer_id, output_layer.layer_id());
+                    let output_indices = output_layer.mle.var_indices();
+                    proof_indices
+                        .iter()
+                        .zip(output_indices)
+                        .for_each(|(pi, oi)| match (pi, oi) {
+                            (MleIndex::Fixed(_), _) => assert_eq!(pi, oi),
+                            (MleIndex::Bound(_, i), MleIndex::Indexed(j)) => assert_eq!(i, j),
+                            (x, y) => panic!(
+                                "Output mismatch: proof has index {x:?}, but mle has index {y:?}!"
+                            ),
+                        })
+                },
+            );
 
         // Output layer verification
         output_layer_proofs
             .iter()
-            .sorted_by_key(|(output_layer_id, _)| output_layer_id.get_raw_layer_id())
-            .for_each(|(output_layer_id, output_layer_proof)| {
-                let output_layer_desc = circuit_description
-                    .output_layers
-                    .iter()
-                    .find(|output_layer_desc| output_layer_desc.layer_id() == *output_layer_id)
-                    .unwrap();
+            .zip(&circuit_description.output_layers)
+            .for_each(|((_, _, output_layer_proof), output_layer_desc)| {
                 let output_layer_claim = HyraxOutputLayerProof::verify(
                     output_layer_proof,
                     output_layer_desc,

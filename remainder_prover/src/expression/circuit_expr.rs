@@ -3,11 +3,11 @@
 //! other layers. See documentation in [crate::expression] for more details.
 
 use crate::{
+    circuit_layout::CircuitEvalMap,
     layer::{
         gate::BinaryOperation,
         product::{PostSumcheckLayer, Product},
     },
-    layouter::layouting::CircuitMap,
     mle::{
         evals::MultilinearExtension, mle_description::MleDescription, verifier_mle::VerifierMle,
         MleIndex,
@@ -105,7 +105,10 @@ impl<F: Field> Expression<F, ExprDescription> {
 
     /// Get the [Expression<F, ProverExpr>] corresponding to this [Expression<F, ExprDescription>] using the
     /// associated data in the [CircuitMap].
-    pub fn into_prover_expression(&self, circuit_map: &CircuitMap<F>) -> Expression<F, ProverExpr> {
+    pub fn into_prover_expression(
+        &self,
+        circuit_map: &CircuitEvalMap<F>,
+    ) -> Expression<F, ProverExpr> {
         self.expression_node.into_prover_expression(circuit_map)
     }
 
@@ -206,7 +209,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     /// corresponding to the [MleDescription].
     pub fn compute_bookkeeping_table(
         &self,
-        circuit_map: &CircuitMap<F>,
+        circuit_map: &CircuitEvalMap<F>,
     ) -> Option<MultilinearExtension<F>> {
         let output_data: Option<MultilinearExtension<F>> = match self {
             ExpressionNode::Mle(circuit_mle) => {
@@ -530,7 +533,10 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     }
 
     /// Get the [ExpressionNode<F, ProverExpr>] recursively, for this expression.
-    pub fn into_prover_expression(&self, circuit_map: &CircuitMap<F>) -> Expression<F, ProverExpr> {
+    pub fn into_prover_expression(
+        &self,
+        circuit_map: &CircuitEvalMap<F>,
+    ) -> Expression<F, ProverExpr> {
         match self {
             ExpressionNode::Selector(_mle_index, a, b) => a
                 .into_prover_expression(circuit_map)
@@ -598,7 +604,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
             }
             ExpressionNode::Mle(mle) => {
                 products.push(Product::<F, Option<F>>::new(
-                    &[mle.clone()],
+                    std::slice::from_ref(mle),
                     multiplier,
                     challenges,
                 ));
@@ -746,8 +752,8 @@ impl<F: Field> Expression<F, ExprDescription> {
     /// Create a nested selector Expression that selects between 2^k Expressions
     /// by creating a binary tree of Selector Expressions.
     /// The order of the leaves is the order of the input expressions.
-    /// (Note that this is very different from calling `select()` consecutively.)
-    pub fn selectors(expressions: Vec<Self>) -> Self {
+    /// (Note that this is very different from calling [Self::select] consecutively.)
+    pub fn binary_tree_selector(expressions: Vec<Self>) -> Self {
         // Ensure length is a power of two
         assert!(expressions.len().is_power_of_two());
         let mut expressions = expressions;

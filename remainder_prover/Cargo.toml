@@ -59,19 +59,5 @@ print-trace = [
   "remainder-ligero/print-trace",
   "remainder-shared-types/print-trace",
 ]
-
-[[bench]]
-name = "fix_variable"
-harness = false
-
-[[bench]]
-name = "regular_layer"
-harness = false
-
-[[bench]]
-name = "evaluate_mle_full"
-harness = false
-
-[[bench]]
-name = "beta_cascade"
-harness = false
+# For printing circuit stats and other performance-related things.
+performance-debug = []

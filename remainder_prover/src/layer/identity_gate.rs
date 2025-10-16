@@ -8,12 +8,12 @@ use std::{
 };
 
 use crate::{
+    circuit_layout::{CircuitEvalMap, CircuitLocation},
     claims::{Claim, ClaimError, RawClaim},
     layer::{
         gate::gate_helpers::compute_fully_bound_identity_gate_function, LayerError,
         VerificationError,
     },
-    layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{
         betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension,
         mle_description::MleDescription, verifier_mle::VerifierMle, Mle, MleIndex,
@@ -305,7 +305,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         );
 
         PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
-            &[self.source_mle.clone()],
+            std::slice::from_ref(&self.source_mle),
             f_1_gu,
             round_challenges,
         )])
@@ -319,7 +319,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
         vec![&self.source_mle]
     }
 
-    fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
+    fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<F>) -> LayerEnum<F> {
         let source_mle = self.source_mle.into_dense_mle(circuit_map);
         let id_gate_layer = IdentityGate::new(
             self.layer_id(),
@@ -338,7 +338,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
     fn compute_data_outputs(
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
-        circuit_map: &mut CircuitMap<F>,
+        circuit_map: &mut CircuitEvalMap<F>,
     ) {
         // This may not be true, specifically because of e.g. `SplitNode`.
         // assert_eq!(mle_outputs_necessary.len(), 1);
@@ -765,7 +765,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         );
 
         PostSumcheckLayer(vec![Product::<F, F>::new(
-            &[self.source_mle.clone()],
+            std::slice::from_ref(&self.source_mle),
             f_1_gu,
         )])
     }

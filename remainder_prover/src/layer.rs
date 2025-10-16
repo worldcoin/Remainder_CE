@@ -16,9 +16,10 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
+    circuit_building_context::CircuitBuildingContext,
+    circuit_layout::CircuitEvalMap,
     claims::{Claim, ClaimError, RawClaim},
     expression::expr_errors::ExpressionError,
-    layouter::{context::CircuitBuildingContext, layouting::CircuitMap},
     mle::mle_description::MleDescription,
     sumcheck::InterpError,
 };
@@ -224,14 +225,14 @@ pub trait LayerDescription<F: Field> {
     fn compute_data_outputs(
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
-        circuit_map: &mut CircuitMap<F>,
+        circuit_map: &mut CircuitEvalMap<F>,
     );
 
     /// The [MleDescription]s that make up the leaves of the expression in this layer.
     fn get_circuit_mles(&self) -> Vec<&MleDescription<F>>;
 
     /// Given a [CircuitMap], turn this [LayerDescription] into a ProverLayer.
-    fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F>;
+    fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<F>) -> LayerEnum<F>;
 }
 
 /// A verifier counterpart of a GKR [Layer] trait.

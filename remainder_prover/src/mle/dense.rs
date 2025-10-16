@@ -56,7 +56,7 @@ impl<F: Field> Mle<F> for DenseMle<F> {
         self.mle.len()
     }
 
-    fn iter(&self) -> EvaluationsIterator<F> {
+    fn iter(&self) -> EvaluationsIterator<'_, F> {
         self.mle.iter()
     }
 

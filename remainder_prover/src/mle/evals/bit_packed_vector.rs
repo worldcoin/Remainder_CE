@@ -204,7 +204,8 @@ impl<F: Field> BitPackedVector<F> {
 
         assert!(
             bits_per_element == 4 * entry_width
-                || (bits_per_element <= entry_width && entry_width % bits_per_element == 0)
+                || (bits_per_element <= entry_width
+                    && entry_width.is_multiple_of(bits_per_element))
         );
 
         if bits_per_element > entry_width {
@@ -303,7 +304,7 @@ impl<F: Field> BitPackedVector<F> {
         self.bits_per_element
     }
 
-    pub fn iter(&self) -> BitPackedIterator<F> {
+    pub fn iter(&self) -> BitPackedIterator<'_, F> {
         BitPackedIterator {
             vec: self,
             current_index: 0,

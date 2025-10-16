@@ -178,7 +178,7 @@ pub(crate) fn get_dummy_expression_eval<F: Field>(
     let expression_linear_indices = expression.get_all_linear_rounds();
 
     let challenges = (0..num_vars)
-        .map(|_| (F::from(rng.gen::<u64>())))
+        .map(|_| F::from(rng.gen::<u64>()))
         .collect_vec();
     let challenges_enumerate = expression_nonlinear_indices
         .iter()

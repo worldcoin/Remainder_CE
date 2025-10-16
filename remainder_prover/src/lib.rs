@@ -9,19 +9,13 @@ extern crate quickcheck;
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
+pub mod circuit_building_context;
+
+pub mod circuit_layout;
+
 // module for tracking all the claims, aggregating them,
 // and generating proofs of aggregation
 pub mod claims;
-
-// Module for defining the re-usable components for circuit building
-pub mod components;
-
-// Defines components for use in building binary circuits.
-pub mod binary_operations;
-
-// Module containing functions for deriving digital decompositions and building associated circuit
-// components.
-pub mod digits;
 
 // module for defining the expressions (and relavant helper
 // functions) for which the prover and the verifier interact with
@@ -56,12 +50,4 @@ pub mod sumcheck;
 // module for useful functions
 pub mod utils;
 
-pub mod layouter;
-
 pub use remainder_shared_types;
-
-// module for worldcoin circuits
-pub mod zk_iriscode_ss;
-
-// module for worldcoin mpc circuits
-pub mod worldcoin_mpc;

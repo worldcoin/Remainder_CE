@@ -24,7 +24,7 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         }
     }
 
-    fn iter(&self) -> EvaluationsIterator<F> {
+    fn iter(&self) -> EvaluationsIterator<'_, F> {
         match self {
             MleEnum::Dense(item) => item.iter(),
             MleEnum::Zero(item) => item.iter(),

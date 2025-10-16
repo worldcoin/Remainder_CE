@@ -276,7 +276,7 @@ impl GKRCircuitVerifierConfig {
         Self {
             lazy_beta_evals: false,
             circuit_description_hash_type: CircuitHashType::Sha3_256,
-            claim_agg_strategy: ClaimAggregationStrategy::Interpolative,
+            claim_agg_strategy: ClaimAggregationStrategy::RLC,
             claim_agg_constant_column_optimization: false,
         }
     }
