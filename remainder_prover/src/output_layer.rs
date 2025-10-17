@@ -3,7 +3,6 @@
 //! intermediate/input layer whose [LayerId] it inherits. The MLE it stores is a
 //! restriction of an MLE defining its associated layer.
 
-use itertools::Itertools;
 use remainder_shared_types::{
     transcript::{TranscriptReaderError, VerifierTranscript},
     Field,
@@ -17,8 +16,8 @@ use crate::{
 };
 
 use crate::{
+    circuit_layout::CircuitEvalMap,
     claims::ClaimError,
-    layouter::layouting::CircuitMap,
     mle::{
         dense::DenseMle, mle_description::MleDescription, mle_enum::MleEnum,
         verifier_mle::VerifierMle, zero::ZeroMle, Mle, MleIndex,
@@ -72,7 +71,7 @@ impl<F: Field> OutputLayer<F> {
     }
 
     /// If the MLE is fully-bound, returns its evaluation.
-    /// Otherwise, it returns an [super::OutputLayerError].
+    /// Otherwise, it returns an [OutputLayerError].
     pub fn value(&self) -> Result<F> {
         match &self.mle {
             MleEnum::Dense(_) => unimplemented!(),
@@ -192,7 +191,7 @@ impl<F: Field> OutputLayerDescription<F> {
     }
 
     /// Convert this into the prover view of an output layer, using the [CircuitMap].
-    pub fn into_prover_output_layer(&self, circuit_map: &CircuitMap<F>) -> OutputLayer<F> {
+    pub fn into_prover_output_layer(&self, circuit_map: &CircuitEvalMap<F>) -> OutputLayer<F> {
         let output_mle = circuit_map.get_data_from_circuit_mle(&self.mle).unwrap();
         let prefix_bits = self.mle.prefix_bits();
         let prefix_bits_mle_index = prefix_bits
@@ -207,7 +206,6 @@ impl<F: Field> OutputLayerDescription<F> {
                     "WARNING: MLE for output layer {} is not zero",
                     self.mle.layer_id()
                 );
-                dbg!(output_mle.iter().take(10).collect_vec());
             }
             ZeroMle::new(
                 output_mle.num_vars(),

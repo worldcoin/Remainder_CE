@@ -16,18 +16,21 @@ use anyhow::{Ok, Result};
 pub trait ExpressionType<F: Field>: Serialize + for<'de> Deserialize<'de> {
     /// The type of thing representing an MLE within the leaves of an
     /// expression. Note that for most expression types, this is the
-    /// intuitive thing (e.g. for [CircuitExpr] this is an [MleDescription<F>]),
-    /// but for [ProverExpr] specifically this is an [MleVecIndex], i.e. the
-    /// index within the [MleVec] which contains the unique representation
+    /// intuitive thing (e.g. for [crate::expression::circuit_expr::ExprDescription]
+    /// this is an [crate::mle::mle_description::MleDescription<F>]),
+    /// but for [crate::expression::prover_expr::ProverExpr] specifically this
+    /// is an [crate::expression::prover_expr::MleVecIndex], i.e. the
+    /// index within the `MleVec` which contains the unique representation
     /// of the prover's view of each MLE.
     type MLENodeRepr: Clone + Serialize + for<'de> Deserialize<'de> + Hash;
 
     /// The idea here is that an expression may have many MLEs (or things
     /// representing MLEs) in its description, including duplicates, but
     /// we only wish to store one copy for each instance of a thing
-    /// representing an MLE. The [MleVec] represents that list of unique
+    /// representing an MLE. The `MleVec` represents that list of unique
     /// copies.
-    /// For example, this is Vec<DenseMle> for [ProverExpr].
+    /// For example, this is `Vec<DenseMle>` for
+    /// [crate::expression::prover_expr::ProverExpr].
     type MleVec: Serialize + for<'de> Deserialize<'de>;
 }
 

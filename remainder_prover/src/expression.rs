@@ -1,5 +1,5 @@
 //! This module describes the "regular"-style polynomial relationships described
-//! within [Tha13](https://eprint.iacr.org/2013/351.pdf), Theorem 1 on page 25.
+//! within <https://eprint.iacr.org/2013/351.pdf>, Theorem 1 on page 25.
 //!
 //! Specifically, polynomial relationships between GKR circuit layers which look
 //! like the following:
@@ -38,13 +38,12 @@
 //!   by those nodes.
 //! * [prover_expr::ProverExpr]: The prover's view of an expression. It contains
 //!   all the information within [circuit_expr::ExprDescription], but contains
-//!   [crate::mle::dense::DenseMle]s rather than [circuit_expr::MleDescription]s.
+//!   [crate::mle::dense::DenseMle]s rather than [crate::mle::mle_description::MleDescription]s.
 //! * [verifier_expr::VerifierExpr]: The verifier's view of an expression. It
 //!   contains all the information within [circuit_expr::ExprDescription], but contains
-//!   [verifier_expr::VerifierMle]s rather than [circuit_expr::MleDescription]s.
+//!   [crate::mle::verifier_mle::VerifierMle]s rather than [crate::mle::mle_description::MleDescription]s.
 
 #![allow(missing_docs)]
-pub mod abstract_expr;
 pub mod circuit_expr;
 pub mod expr_errors;
 pub mod generic_expr;

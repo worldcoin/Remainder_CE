@@ -1,15 +1,12 @@
-//! A wrapper `enum` type around various implementations of [MleRef]s.
-
-use itertools::{repeat_n, Itertools};
-use serde::{Deserialize, Serialize};
-
-use remainder_shared_types::Field;
-
-use crate::{layer::LayerId, mle::Mle};
+//! A wrapper `enum` type around various implementations of MLEs.
 
 use super::{dense::DenseMle, evals::EvaluationsIterator, zero::ZeroMle, MleIndex};
+use crate::{layer::LayerId, mle::Mle};
+use itertools::{repeat_n, Itertools};
+use remainder_shared_types::Field;
+use serde::{Deserialize, Serialize};
 
-/// A wrapper type for various kinds of [MleRef]s.
+/// A wrapper type for various kinds of MLEs.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(bound = "F: Field")]
 pub enum MleEnum<F: Field> {
@@ -27,7 +24,7 @@ impl<F: Field> Mle<F> for MleEnum<F> {
         }
     }
 
-    fn iter(&self) -> EvaluationsIterator<F> {
+    fn iter(&self) -> EvaluationsIterator<'_, F> {
         match self {
             MleEnum::Dense(item) => item.iter(),
             MleEnum::Zero(item) => item.iter(),

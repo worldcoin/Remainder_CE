@@ -1,6 +1,6 @@
 # Builder stage
-# FROM rust:latest as builder
-FROM rust:1.84.1-bookworm AS builder
+FROM rust:latest as builder
+# FROM rust:1.84.1-bookworm AS builder
 WORKDIR /app
 COPY . .
 RUN make prod-seq

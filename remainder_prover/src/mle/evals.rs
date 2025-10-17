@@ -34,7 +34,7 @@ pub enum DimensionError {
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
-/// the dimension information of the MLE. contains the dim: [IxDyn], see ndarray
+/// the dimension information of the MLE. contains the dim: [type@IxDyn], see ndarray
 /// for more detailed documentation and the names of the axes.
 pub struct DimInfo {
     dims: IxDyn,
@@ -209,7 +209,7 @@ impl<F: Field> Evaluations<F> {
 
     /// Returns an iterator that traverses the evaluations in "big-endian"
     /// order.
-    pub fn iter(&self) -> EvaluationsIterator<F> {
+    pub fn iter(&self) -> EvaluationsIterator<'_, F> {
         EvaluationsIterator::<F> {
             evals: self,
             current_index: 0,
@@ -468,7 +468,7 @@ impl<F: Field> MultilinearExtension<F> {
 
     /// Returns an iterator accessing the evaluations defining this MLE in
     /// "big-endian" order.
-    pub fn iter(&self) -> EvaluationsIterator<F> {
+    pub fn iter(&self) -> EvaluationsIterator<'_, F> {
         self.f.iter()
     }
 

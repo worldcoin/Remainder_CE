@@ -16,9 +16,10 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
+    circuit_building_context::CircuitBuildingContext,
+    circuit_layout::CircuitEvalMap,
     claims::{Claim, ClaimError, RawClaim},
     expression::expr_errors::ExpressionError,
-    layouter::{context::CircuitBuildingContext, layouting::CircuitMap},
     mle::mle_description::MleDescription,
     sumcheck::InterpError,
 };
@@ -110,7 +111,9 @@ pub trait Layer<F: Field> {
     fn initialize(&mut self, claim_point: &[F]) -> Result<()>;
 
     /// Tries to prove `claims` for this layer. There is only a single
-    /// aggregated claim if our [ClaimAggregationStrategy] is Interpolative,
+    /// aggregated claim if our
+    /// [remainder_shared_types::config::ClaimAggregationStrategy] is
+    /// [remainder_shared_types::config::ClaimAggregationStrategy::Interpolative],
     /// otherwise we have several claims we take the random linear
     /// combination over.
     ///
@@ -176,7 +179,8 @@ pub trait LayerDescription<F: Field> {
     /// Tries to verify `claims` for this layer and returns a [VerifierLayer]
     /// with a fully bound and evaluated expression.
     ///
-    /// There is only a single aggregated claim if our [ClaimAggregationStrategy]
+    /// There is only a single aggregated claim if our
+    /// [remainder_shared_types::config::ClaimAggregationStrategy]
     /// is Interpolative, otherwise we have several claims we take the random linear
     /// combination over.
     ///
@@ -213,7 +217,7 @@ pub trait LayerDescription<F: Field> {
     fn max_degree(&self) -> usize;
 
     /// Label the MLE indices, starting from the `start_index` by
-    /// converting [MleIndex::Free] to [MleIndex::IndexedBit].
+    /// converting [crate::mle::MleIndex::Free] to [crate::mle::MleIndex::Indexed].
     fn index_mle_indices(&mut self, start_index: usize);
 
     /// Given the [MleDescription]s of which outputs are expected of this layer, compute the data
@@ -221,14 +225,14 @@ pub trait LayerDescription<F: Field> {
     fn compute_data_outputs(
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
-        circuit_map: &mut CircuitMap<F>,
+        circuit_map: &mut CircuitEvalMap<F>,
     );
 
     /// The [MleDescription]s that make up the leaves of the expression in this layer.
     fn get_circuit_mles(&self) -> Vec<&MleDescription<F>>;
 
     /// Given a [CircuitMap], turn this [LayerDescription] into a ProverLayer.
-    fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F>;
+    fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<F>) -> LayerEnum<F>;
 }
 
 /// A verifier counterpart of a GKR [Layer] trait.
