@@ -376,7 +376,7 @@ impl<F: Field> Expression<F, ProverExpr> {
     }
 
     /// Mutate the MLE indices that are [MleIndex::Free] in the expression and
-    /// turn them into [MleIndex::IndexedBit]. Returns the max number of bits
+    /// turn them into [MleIndex::Indexed]. Returns the max number of bits
     /// that are indexed.
     pub fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         let (expression_node, mle_vec) = self.deconstruct_mut();
@@ -1037,7 +1037,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
     }
 
     /// Mutate the MLE indices that are [MleIndex::Free] in the expression and
-    /// turn them into [MleIndex::IndexedBit]. Returns the max number of bits
+    /// turn them into [MleIndex::Indexed]. Returns the max number of bits
     /// that are indexed.
     pub fn index_mle_indices_node(
         &mut self,
@@ -1282,7 +1282,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
                 assert!(mle.is_fully_bounded());
-                products.push(Product::<F, F>::new(&[mle.clone()], multiplier));
+                products.push(Product::<F, F>::new(std::slice::from_ref(mle), multiplier));
             }
             ExpressionNode::Product(mle_vec_indices) => {
                 let mles = mle_vec_indices

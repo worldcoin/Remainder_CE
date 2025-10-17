@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::{
+    circuit_layout::{CircuitEvalMap, CircuitLocation},
     claims::{Claim, ClaimError, RawClaim},
     expression::{
         circuit_expr::{filter_bookkeeping_table, ExprDescription},
@@ -23,7 +24,6 @@ use crate::{
         verifier_expr::VerifierExpr,
     },
     layer::{Layer, LayerId, VerificationError},
-    layouter::layouting::{CircuitLocation, CircuitMap},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_description::MleDescription, Mle},
     sumcheck::{evaluate_at_a_point, get_round_degree},
 };
@@ -486,7 +486,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
     fn compute_data_outputs(
         &self,
         mle_outputs_necessary: &HashSet<&MleDescription<F>>,
-        circuit_map: &mut CircuitMap<F>,
+        circuit_map: &mut CircuitEvalMap<F>,
     ) {
         let mut expression_nodes_to_compile =
             HashMap::<&ExpressionNode<F, ExprDescription>, Vec<(Vec<bool>, Vec<bool>)>>::new();
@@ -679,7 +679,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
                 // Compute `\beta((r_1, ..., r_n), (u_1, ..., u_n))`.
                 let claim_nonlinear_vals: Vec<F> = rounds_sumchecked_over
                     .iter()
-                    .map(|idx| (claims[0].get_point()[*idx]))
+                    .map(|idx| claims[0].get_point()[*idx])
                     .collect();
                 debug_assert_eq!(claim_nonlinear_vals.len(), challenges.len());
                 BetaValues::compute_beta_over_two_challenges(&claim_nonlinear_vals, &challenges)
@@ -807,7 +807,7 @@ impl<F: Field> LayerDescription<F> for RegularLayerDescription<F> {
         self.expression.get_circuit_mles()
     }
 
-    fn convert_into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
+    fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<F>) -> LayerEnum<F> {
         let prover_expr = self.expression.into_prover_expression(circuit_map);
         let regular_layer = RegularLayer::new_raw(self.layer_id(), prover_expr);
         regular_layer.into()

@@ -1,4 +1,4 @@
-//! A space-efficient implementation of an [MleRef] which contains only zeros.
+//! A space-efficient implementation of an MLE which contains only zeros.
 
 use itertools::{repeat_n, Itertools};
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use super::evals::{Evaluations, EvaluationsIterator};
 use super::Mle;
 use super::{mle_enum::MleEnum, MleIndex};
 
-/// An [MleRef] that contains only zeros; typically used for the output layer.
+/// An MLE that contains only zeros; typically used for the output layer.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(bound = "F: Field")]
 pub struct ZeroMle<F: Field> {
@@ -119,7 +119,7 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
         1
     }
 
-    fn iter(&self) -> EvaluationsIterator<F> {
+    fn iter(&self) -> EvaluationsIterator<'_, F> {
         self.zero_eval.iter()
     }
 

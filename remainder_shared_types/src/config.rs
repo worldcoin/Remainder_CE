@@ -17,7 +17,7 @@ pub enum ClaimAggregationStrategy {
 /// memory-efficient optimization), or e.g. which claim aggregation strategy to use.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GKRCircuitProverConfig {
-    /// Whether to evaluate the beta function within [Gate] layers lazily,
+    /// Whether to evaluate the beta function within gate layers lazily,
     /// i.e. to compute the values on the fly rather than via initializing
     /// a beta evaluations "table".
     lazy_beta_evals: bool,
@@ -41,13 +41,13 @@ pub struct GKRCircuitProverConfig {
     hyrax_input_layer_batch_opening: bool,
 
     /// Controls whether bit-packing is actually enabled. If set to `false`, the
-    /// [BitPackedVector] will default to storing each field element using the type
+    /// `BitPackedVector` will default to storing each field element using the type
     /// `F`, effectively behaving like a regular (immutable) `Vec<F>`. This is
     /// needed because bit-packing incurs a noticable runtime slowdown, and we need
     /// an easy way to turn it off if trading memory for speed is desirable.
     ///
     /// Note that because this is global, this option also implicitly affects
-    /// the verifier's [Evaluations<F>] structs!!!
+    /// the verifier's `Evaluations<F>` structs!!!
     enable_bit_packing: bool,
 }
 
@@ -201,7 +201,7 @@ impl GKRCircuitProverConfig {
 /// including flags e.g. how to aggregate claims.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct GKRCircuitVerifierConfig {
-    /// Whether to evaluate the beta function within [Gate] layers lazily,
+    /// Whether to evaluate the beta function within gate layers lazily,
     /// i.e. to compute the values on the fly rather than via initializing
     /// a beta evaluations "table".
     lazy_beta_evals: bool,
@@ -276,7 +276,7 @@ impl GKRCircuitVerifierConfig {
         Self {
             lazy_beta_evals: false,
             circuit_description_hash_type: CircuitHashType::Sha3_256,
-            claim_agg_strategy: ClaimAggregationStrategy::Interpolative,
+            claim_agg_strategy: ClaimAggregationStrategy::RLC,
             claim_agg_constant_column_optimization: false,
         }
     }

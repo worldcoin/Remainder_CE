@@ -25,8 +25,8 @@ pub mod mle_enum;
 /// tables of Beta functions.
 pub mod betavalues;
 
-/// Defines [Evaluations], [MultilinearExtension] for representing un-indexed
-/// MLEs.
+/// Defines [crate::mle::evals::Evaluations] and
+/// [crate::mle::evals::MultilinearExtension] for representing un-indexed MLEs.
 pub mod evals;
 
 /// Defines [crate::mle::mle_description::MleDescription], i.e. the in-circuit-context description
@@ -76,7 +76,7 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
     fn len(&self) -> usize;
 
     /// Returns an iterator over the evaluations of the current MLE.
-    fn iter(&self) -> EvaluationsIterator<F>;
+    fn iter(&self) -> EvaluationsIterator<'_, F>;
 
     /// Returns the first element in the bookkeeping table corresponding to the
     /// value of this Dense MLE when all free variables are set to zero. This

@@ -13,6 +13,8 @@ pub mod layers;
 use std::collections::{HashMap, HashSet};
 
 use self::layers::Layers;
+use crate::circuit_layout::{CircuitEvalMap, CircuitLocation};
+use crate::circuit_layout::{ProvableCircuit, VerifiableCircuit};
 use crate::claims::claim_aggregation::{prover_aggregate_claims, verifier_aggregate_claims};
 use crate::claims::{Claim, ClaimTracker};
 use crate::expression::circuit_expr::filter_bookkeeping_table;
@@ -24,14 +26,12 @@ use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{layer_enum::LayerEnum, LayerId};
 use crate::layer::{Layer, LayerDescription, VerifierLayer};
-use crate::layouter::builder::{ProvableCircuit, VerifiableCircuit};
-use crate::layouter::layouting::{CircuitLocation, CircuitMap};
-use crate::layouter::nodes::NodeId;
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
 use crate::mle::mle_enum::MleEnum;
 use crate::output_layer::{OutputLayer, OutputLayerDescription};
+use crate::utils::debug::sanitycheck_input_layers_and_claims;
 use crate::utils::mle::verify_claim;
 use ark_std::{end_timer, start_timer};
 use helpers::get_circuit_description_hash_as_field_elems;
@@ -44,9 +44,8 @@ use remainder_shared_types::config::global_config::{
     get_current_global_prover_config, get_current_global_verifier_config, global_claim_agg_strategy,
 };
 use remainder_shared_types::config::{ClaimAggregationStrategy, ProofConfig};
-use remainder_shared_types::transcript::poseidon_sponge::PoseidonSponge;
-use remainder_shared_types::transcript::VerifierTranscript;
 use remainder_shared_types::transcript::{ProverTranscript, TranscriptWriter};
+use remainder_shared_types::transcript::{TranscriptSponge, VerifierTranscript};
 use remainder_shared_types::{Field, Halo2FFTFriendlyField};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -82,7 +81,7 @@ pub enum GKRError {
     ErrorWhenVerifyingOutputLayer,
     /// InputShred length mismatch
     #[error("InputShred with NodeId {0} should have {1} variables, but has {2}")]
-    InputShredLengthMismatch(NodeId, usize, usize),
+    InputShredLengthMismatch(usize, usize, usize),
 }
 
 /// A proof of the sumcheck protocol; Outer vec is rounds, inner vec is evaluations
@@ -117,10 +116,10 @@ pub struct InstantiatedCircuit<F: Field> {
 /// * `inputs` - a map from input layer ID to the MLE of its values (in the clear) for _all_ input layers.
 /// * `ligero_input_layers` - a vector of [LigeroInputLayerDescription]s, optionally paired with pre-computed commitments to their values (if provided, this are not checked, but simply used as is).
 /// * `circuit_description` - the [GKRCircuitDescription] of the circuit to be proven.
-pub fn prove<F: Halo2FFTFriendlyField>(
+pub fn prove<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
     provable_circuit: &ProvableCircuit<F>,
     circuit_description_hash_type: CircuitHashType,
-    transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
+    transcript_writer: &mut TranscriptWriter<F, Tr>,
 ) -> Result<ProofConfig> {
     // Grab proof config from global config
     let proof_config = ProofConfig::new_from_prover_config(&get_current_global_prover_config());
@@ -176,6 +175,15 @@ pub fn prove<F: Halo2FFTFriendlyField>(
     // and return the claims on the input layer.
     let input_layer_claims = prove_circuit(provable_circuit, transcript_writer).unwrap();
 
+    // If in performance debugging mode, print the number of claims on input
+    // layers and input layer sizes.
+    if cfg!(feature = "performance-debug") {
+        sanitycheck_input_layers_and_claims(
+            &input_layer_claims,
+            provable_circuit.get_gkr_circuit_description_ref(),
+        );
+    }
+
     // If in debug mode, then check the claims on all input layers.
     if cfg!(debug_assertions) {
         for claim in input_layer_claims.iter() {
@@ -215,6 +223,7 @@ pub fn prove<F: Halo2FFTFriendlyField>(
 /// Verify a GKR proof from a transcript.
 pub fn verify<F: Halo2FFTFriendlyField>(
     verifiable_circuit: &VerifiableCircuit<F>,
+    mut predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
     circuit_description_hash_type: CircuitHashType,
     transcript: &mut impl VerifierTranscript<F>,
     proof_config: &ProofConfig,
@@ -228,7 +237,7 @@ pub fn verify<F: Halo2FFTFriendlyField>(
     // for the input layers, because for intermediate and output layers, the proof is in the
     // transcript, which the verifier checks shape against the circuit description already.
     assert_eq!(
-        verifiable_circuit.get_public_inputs_ref().len()
+        verifiable_circuit.get_public_input_layer_ids().len()
             + verifiable_circuit.get_private_inputs_ref().len(),
         verifiable_circuit
             .get_gkr_circuit_description_ref()
@@ -261,17 +270,36 @@ pub fn verify<F: Halo2FFTFriendlyField>(
                 .iter()
                 .find(|desc| desc.layer_id == layer_id)
                 .unwrap();
-            let (transcript_mle, _expected_input_hash_chain_digest) = transcript
+            let (transcript_evaluations, _expected_input_hash_chain_digest) = transcript
                 .consume_input_elements("Public input layer", 1 << layer_desc.num_vars)
                 .unwrap();
-            let expected_mle = verifiable_circuit.get_public_input_mle(layer_id).unwrap();
-            if expected_mle.f.iter().collect_vec() != transcript_mle {
-                Err(anyhow!(GKRError::PublicInputLayerValuesMismatch(layer_id)))
-            } else {
-                Ok(())
+            match predetermined_public_inputs.get(&layer_id) {
+                Some(predetermined_public_input) => {
+                    // If the verifier already knows what the input should be
+                    // ahead of time, check against the transcript evaluations
+                    // sent by the prover.
+                    if predetermined_public_input.f.iter().collect_vec() != transcript_evaluations {
+                        Err(anyhow!(GKRError::PublicInputLayerValuesMismatch(layer_id)))
+                    } else {
+                        Ok(())
+                    }
+                }
+                None => {
+                    // Otherwise, we append the proof values read from
+                    // transcript to the public inputs.
+                    predetermined_public_inputs
+                        .insert(layer_id, MultilinearExtension::new(transcript_evaluations));
+                    Ok(())
+                }
             }
         })
         .collect::<Result<Vec<_>>>()?;
+
+    // Sanitycheck: ensure that all of the public inputs are populated
+    assert_eq!(
+        predetermined_public_inputs.len(),
+        verifiable_circuit.get_public_input_layer_ids().len()
+    );
 
     // Read the Ligero input layer commitments from transcript in order of layer id.
     let mut ligero_commitments = HashMap::<LayerId, F>::new();
@@ -297,7 +325,7 @@ pub fn verify<F: Halo2FFTFriendlyField>(
     let mut ligero_input_layer_claims = vec![];
     input_layer_claims.into_iter().for_each(|claim| {
         let layer_id = claim.get_to_layer_id();
-        if verifiable_circuit.get_public_inputs_ref().contains_key(&layer_id) {
+        if verifiable_circuit.get_public_input_layer_ids().contains(&layer_id) {
             public_input_layer_claims.push(claim);
         } else if ligero_commitments.contains_key(&layer_id) {
             ligero_input_layer_claims.push(claim);
@@ -310,8 +338,7 @@ pub fn verify<F: Halo2FFTFriendlyField>(
 
     // Check the claims on public input layers via explicit evaluation.
     for claim in public_input_layer_claims.iter() {
-        let input_mle = verifiable_circuit
-            .get_public_inputs_ref()
+        let input_mle = predetermined_public_inputs
             .get(&claim.get_to_layer_id())
             .unwrap();
         let evaluation = input_mle.evaluate_at_point(claim.get_point());
@@ -346,9 +373,9 @@ pub fn verify<F: Halo2FFTFriendlyField>(
 
 /// Assumes that the inputs have already been added to the transcript (if necessary).
 /// Returns the vector of claims on the input layers.
-pub fn prove_circuit<F: Field>(
+pub fn prove_circuit<F: Field, Tr: TranscriptSponge<F>>(
     provable_circuit: &ProvableCircuit<F>,
-    transcript_writer: &mut TranscriptWriter<F, PoseidonSponge<F>>,
+    transcript_writer: &mut TranscriptWriter<F, Tr>,
 ) -> Result<Vec<Claim<F>>> {
     // Note: no need to return the Transcript, since it is already in the TranscriptWriter!
     // Note(Ben): this can't be an instance method, because it consumes the intermediate layers!
@@ -593,7 +620,7 @@ impl<F: Field> GKRCircuitDescription<F> {
 
         // Step 1: populate the circuit map with all of the data necessary in
         // order to instantiate the circuit.
-        let mut circuit_map = CircuitMap::new();
+        let mut circuit_map = CircuitEvalMap::new();
         let mut prover_input_layers: Vec<InputLayer<F>> = Vec::new();
         let mut fiat_shamir_challenges = Vec::new();
         // Step 1a: populate the circuit map by compiling the necessary data

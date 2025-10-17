@@ -197,7 +197,7 @@ pub fn verify_claim<F: Field>(mle_unpadded_evaluations: &[F], claim: &RawClaim<F
     let filtered_claim = claim
         .get_point()
         .iter()
-        .skip_while(|x| (x == &&F::ZERO || x == &&F::ONE))
+        .skip_while(|x| x == &&F::ZERO || x == &&F::ONE)
         .copied()
         .collect_vec();
     let mle = MultilinearExtension::new(mle_evaluations.to_vec());

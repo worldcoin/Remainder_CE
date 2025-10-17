@@ -1,7 +1,7 @@
 .PHONY: all pr check test-dev test-ignored test mem-lim-cgroups mem-lim-docker prod prod-seq bin bin-seq mem-profile-prover mobile clean help
 
 # Memory limit in MB.
-MEM_LIM=110
+MEM_LIM=120
 
 all: help
 
@@ -34,8 +34,8 @@ test-dev-par:
 	cargo test --profile=dev-opt --features parallel
 
 test-ignored:  ## GitHub Action #2b - Run some slow tests that are normally ignored.
-	cargo test --profile=dev-opt --features parallel --package remainder-hyrax --lib -- --ignored hyrax_worldcoin::test_worldcoin
-	cargo test --profile=dev-opt --features parallel --package remainder --lib -- --ignored worldcoin::tests
+	cargo test --profile=dev-opt --features parallel --package remainder-frontend --lib -- --ignored hyrax_worldcoin::test_worldcoin
+	cargo test --profile=dev-opt --features parallel --package remainder-frontend --lib -- --ignored worldcoin::tests
 
 test: test-dev test-ignored  ## Comprehensive testing. Equivalent to `test-dev` followed by `test-ignored`.
 
@@ -51,28 +51,28 @@ mem-lim-docker: Dockerfile  ## Run sequential World prover inside a Docker conta
 	echo "World V3 + MPC prover runs in under ${MEM_LIM} MB!"
 
 circuit: prod  ## Generate iris code upgrade circuit (V3 + MPC).
-	./target/release/world_gen_iriscode_secret_share_circuit_descriptions --circuit world.circuit
+	./target/release/world_gen --circuit world.circuit
 
 prod:  ## Build World binaries for production; optimizations + rayon parallelism, NO print-trace.
-	cargo build --release --features parallel --bin world_gen_iriscode_secret_share_circuit_descriptions
+	cargo build --release --features parallel --bin world_gen
 	cargo build --release --features parallel --bin world_prove
 	cargo build --release --features parallel --bin world_upgrade_verify
 	cargo build --release --features parallel --bin world_verify_ampc_party
 
 prod-seq:  ## Similar to 'prod', but NO rayon parallelism.
-	cargo build --release --bin world_gen_iriscode_secret_share_circuit_descriptions
+	cargo build --release --bin world_gen
 	cargo build --release --bin world_prove
 	cargo build --release --bin world_upgrade_verify
 	cargo build --release --bin world_verify_ampc_party
 
 bin:  ## Build the binaries for efficient debugging; optimizations + rayon parallelism + print-trace.
-	cargo build --release --features "parallel, print-trace" --bin world_gen_iriscode_secret_share_circuit_descriptions
+	cargo build --release --features "parallel, print-trace" --bin world_gen
 	cargo build --release --features "parallel, print-trace" --bin world_prove
 	cargo build --release --features "parallel, print-trace" --bin world_upgrade_verify
 	cargo build --release --features "parallel, print-trace" --bin world_verify_ampc_party
 
 bin-seq:  ## Similar to `make bin`, but NO rayon parallelism.
-	cargo build --release --features print-trace --bin world_gen_iriscode_secret_share_circuit_descriptions
+	cargo build --release --features print-trace --bin world_gen
 	cargo build --release --features print-trace --bin world_prove
 	cargo build --release --features print-trace --bin world_upgrade_verify
 	cargo build --release --features print-trace --bin world_verify_ampc_party

@@ -244,15 +244,16 @@ impl From<InputLayerDescription> for HyraxInputLayerDescription {
     }
 }
 
-/// Given a [HyraxInputLayerDescription] and values for its MLE, compute the
-/// [HyraxInputCommitment] for the input layer.
+/// Given the parameters of a Hyrax Input Layer and values for its MLE, compute the
+/// [HyraxProverInputCommitment] for the input layer.
 pub fn commit_to_input_values<C: PrimeOrderCurve>(
-    input_layer_desc: &HyraxInputLayerDescription,
+    num_vars: usize,
+    log_num_cols: usize,
     input_mle: &MultilinearExtension<C::Scalar>,
     committer: &PedersenCommitter<C>,
     mut rng: &mut impl Rng,
 ) -> HyraxProverInputCommitment<C> {
-    let num_rows = 1 << (input_layer_desc.num_vars - input_layer_desc.log_num_cols);
+    let num_rows = 1 << (num_vars - log_num_cols);
     // Sample the blinding factors
     let mut blinding_factors_matrix = vec![C::Scalar::ZERO; num_rows];
     blinding_factors_matrix
@@ -263,7 +264,7 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
         });
     let mle_coeffs_vec = MultilinearExtension::new(input_mle.f.iter().collect_vec());
     let commitment_values = HyraxPCSEvaluationProof::compute_matrix_commitments(
-        input_layer_desc.log_num_cols,
+        log_num_cols,
         &mle_coeffs_vec,
         committer,
         &blinding_factors_matrix,
@@ -277,7 +278,7 @@ pub fn commit_to_input_values<C: PrimeOrderCurve>(
 
 /// The prover's view of the commitment to the input layer, which includes the
 /// blinding factors and the plaintext values.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "C: PrimeOrderCurve")]
 pub struct HyraxProverInputCommitment<C: PrimeOrderCurve> {
     /// The plaintext values
