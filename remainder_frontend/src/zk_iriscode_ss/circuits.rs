@@ -231,7 +231,7 @@ pub fn build_iriscode_circuit_description<
     builder.set_output(&bits_are_binary);
 
     // Generate the circuit description and input builder
-    builder.build_with_layer_combination()
+    builder.build_without_layer_combination()
 }
 
 pub fn iriscode_ss_attach_aux_data<F: Field, const BASE: u64>(
