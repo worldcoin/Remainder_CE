@@ -113,25 +113,21 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
             return Err(anyhow!(LayoutingError::CircularDependency));
         }
         let neighbors = self.repr.get(node).unwrap();
-        if neighbors.is_empty() {
-            exploring_nodes.remove(node);
-            terminated_nodes.insert(node.clone());
-            topological_order.push(node.clone());
-            return Ok(());
-        } else {
-            exploring_nodes.insert(node.clone());
-            for neighbor_not_terminated in neighbors {
-                self.visit_node_dfs(
-                    neighbor_not_terminated,
-                    exploring_nodes,
-                    terminated_nodes,
-                    topological_order,
-                )?;
-            }
+
+        exploring_nodes.insert(node.clone());
+        for neighbor_not_terminated in neighbors {
+            self.visit_node_dfs(
+                neighbor_not_terminated,
+                exploring_nodes,
+                terminated_nodes,
+                topological_order,
+            )?;
         }
         exploring_nodes.remove(node);
+
         terminated_nodes.insert(node.clone());
         topological_order.push(node.clone());
+
         Ok(())
     }
 
@@ -147,16 +143,17 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
         let mut topological_order: Vec<N> = Vec::with_capacity(self.repr.len());
         let mut exploring_nodes: HashSet<N> = HashSet::new();
 
-        while topological_order.len() != self.repr.len() {
-            for node in self.repr.keys() {
-                self.visit_node_dfs(
-                    node,
-                    &mut exploring_nodes,
-                    &mut terminated_nodes,
-                    &mut topological_order,
-                )?;
-            }
+        for node in self.repr.keys() {
+            self.visit_node_dfs(
+                node,
+                &mut exploring_nodes,
+                &mut terminated_nodes,
+                &mut topological_order,
+            )?;
         }
+
+        assert_eq!(topological_order.len(), self.repr.len());
+
         Ok(topological_order)
     }
 
@@ -180,6 +177,13 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
             }
         }
         latest_dependency_idx
+    }
+
+    fn gen_latest_dependecy_indices(&self, topological_order: &[N]) -> Vec<Option<usize>> {
+        let n = topological_order.len();
+        (0..n)
+            .map(|i| self.get_index_of_latest_dependency(topological_order, i))
+            .collect()
     }
 }
 
@@ -295,13 +299,6 @@ pub fn layout<F: Field>(
         .collect();
     let topo_sorted_intermediate_node_ids = &circuit_node_graph.topo_sort()?;
 
-    // We topologically sort via NodeId and map them back to their respective
-    // node.
-    let mut topo_sorted_nodes = topo_sorted_intermediate_node_ids
-        .iter()
-        .map(|node_id| id_to_node_mapping.remove(node_id).unwrap())
-        .collect_vec();
-
     // Step 2b: Determine which nodes can be combined into one.
     //
     // Re-order the topological order so that nodes that are not sector nodes
@@ -309,6 +306,17 @@ pub fn layout<F: Field>(
     // as dividers for which sectors can be combined with each other. I.e.,
     // sector nodes before a certain non-sector node cannot be combined with
     // sector nodes after that same non-sector node.
+
+    // OLD WAY:
+    // -------------------------------------------------------------------------
+    /*
+    // We topologically sort via NodeId and map them back to their respective
+    // node.
+    let mut topo_sorted_nodes = topo_sorted_intermediate_node_ids
+        .iter()
+        .map(|node_id| id_to_node_mapping.remove(node_id).unwrap())
+        .collect_vec();
+
     topo_sorted_intermediate_node_ids
         .iter()
         .enumerate()
@@ -326,6 +334,51 @@ pub fn layout<F: Field>(
                 }
             }
         });
+    */
+    // -------------------------------------------------------------------------
+
+    // NEW WAY:
+    // -------------------------------------------------------------------------
+    let latest_dependency_indices =
+        circuit_node_graph.gen_latest_dependecy_indices(&topo_sorted_intermediate_node_ids);
+
+    let mut adjusted_priority = vec![0; topo_sorted_intermediate_node_ids.len()];
+
+    let mut nodes_with_priority = topo_sorted_intermediate_node_ids
+        .iter()
+        .enumerate()
+        .map(|(idx, node_id)| {
+            let node = id_to_node_mapping.remove(node_id).unwrap();
+            if sector_node_ids.contains(node_id) {
+                // A sector node's priority is it's current index in the topological sorting.
+                if idx > 0 {
+                    adjusted_priority[idx] = adjusted_priority[idx - 1] + 1;
+                }
+                (node, (adjusted_priority[idx], 0))
+            } else {
+                // A non-sector node's priority is the index of it's latest dependency.
+                if idx > 0 {
+                    adjusted_priority[idx] = adjusted_priority[idx - 1];
+                }
+                (
+                    node,
+                    (
+                        adjusted_priority[latest_dependency_indices[idx].unwrap_or(0)],
+                        1,
+                    ),
+                )
+            }
+        })
+        .collect_vec();
+
+    nodes_with_priority.sort_by_key(|&(_, priority)| priority);
+
+    let topo_sorted_nodes = nodes_with_priority
+        .into_iter()
+        .map(|(val, _)| val)
+        .collect_vec();
+
+    // -------------------------------------------------------------------------
 
     let mut intermediate_layers: Vec<Vec<Box<dyn CompilableNode<F>>>> = Vec::new();
     let mut node_to_layer_map: HashMap<NodeId, usize> = HashMap::new();

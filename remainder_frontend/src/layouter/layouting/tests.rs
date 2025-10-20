@@ -258,6 +258,55 @@ quickcheck! {
     }
 }
 
+/*
+#[quickcheck]
+fn test_layout_non_sectors_to_the_front(nodes_to_layout: NodesToLayout<Fr>) -> TestResult {
+    let sector_node_ids: HashSet<NodeId> = nodes_to_layout
+        .sector_nodes
+        .iter()
+        .map(|node| node.id())
+        .collect();
+
+    let (input_layer_nodes, fs_challenge_nodes, intermediate_nodes, _, _) =
+        nodes_to_layout.layout();
+    let mut ids_seen = HashSet::new();
+    input_layer_nodes.iter().for_each(|input_layer| {
+        input_layer.input_shreds.iter().for_each(|shred| {
+            ids_seen.insert(shred.id());
+        })
+    });
+    ids_seen.extend(fs_challenge_nodes.iter().map(|fs_node| fs_node.id()));
+
+    let mut last_group_node_ids: HashSet<NodeId> =
+        input_layer_nodes.iter().map(|node| node.id()).collect();
+
+    TestResult::from_bool(all(intermediate_nodes, |group| {
+        assert!(group.len() > 0);
+        println!(
+            "Group: {:#?}",
+            group.iter().map(|node| node.id()).collect_vec()
+        );
+        if sector_node_ids.contains(&group[0].id()) {
+            println!("This is a SECTOR node.");
+            last_group_node_ids = group.iter().map(|node| node.id()).collect();
+            true
+        } else {
+            assert_eq!(group.len(), 1);
+            let res = any(group[0].sources(), |node_id| {
+                last_group_node_ids.contains(&node_id)
+            });
+            if !res {
+                println!("Test fails for this group!");
+            }
+
+            last_group_node_ids.insert(group[0].id());
+
+            res
+        }
+    }))
+}
+*/
+
 #[test]
 #[should_panic]
 fn test_error_on_cycle() {
