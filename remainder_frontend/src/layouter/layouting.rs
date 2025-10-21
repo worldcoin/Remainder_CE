@@ -180,6 +180,30 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
     }
 
     fn gen_latest_dependecy_indices(&self, topological_order: &[N]) -> Vec<Option<usize>> {
+        let mut node_order = HashMap::<N, usize>::new();
+        topological_order
+            .iter()
+            .enumerate()
+            .for_each(|(idx, node)| {
+                node_order.insert(node.clone(), idx);
+            });
+
+        let latest_dependency = topological_order
+            .iter()
+            .map(|u| {
+                let deps = self.repr.get(u).unwrap();
+
+                deps.iter().map(|u| node_order[u]).max()
+            })
+            .collect_vec();
+
+        latest_dependency
+    }
+
+    pub fn naive_gen_latest_dependecy_indices(
+        &self,
+        topological_order: &[N],
+    ) -> Vec<Option<usize>> {
         let n = topological_order.len();
         (0..n)
             .map(|i| self.get_index_of_latest_dependency(topological_order, i))
@@ -341,6 +365,10 @@ pub fn layout<F: Field>(
     // -------------------------------------------------------------------------
     let latest_dependency_indices =
         circuit_node_graph.gen_latest_dependecy_indices(&topo_sorted_intermediate_node_ids);
+    debug_assert_eq!(
+        latest_dependency_indices,
+        circuit_node_graph.naive_gen_latest_dependecy_indices(&topo_sorted_intermediate_node_ids)
+    );
 
     let mut adjusted_priority = vec![0; topo_sorted_intermediate_node_ids.len()];
 
@@ -380,6 +408,8 @@ pub fn layout<F: Field>(
 
     // -------------------------------------------------------------------------
 
+    // Turn the input shred ID vector into a hash set for easier searching.
+    // let input_shred_ids: HashSet<NodeId> = input_shred_ids.into_iter().collect();
     let mut intermediate_layers: Vec<Vec<Box<dyn CompilableNode<F>>>> = Vec::new();
     let mut node_to_layer_map: HashMap<NodeId, usize> = HashMap::new();
     // The first layer that stores sectors.
