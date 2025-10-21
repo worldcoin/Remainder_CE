@@ -49,12 +49,12 @@ pub enum LayoutingError {
 /// the key to all the nodes in its values.
 #[derive(Clone, Debug)]
 pub struct Graph<N: Hash + Eq + Clone + Debug> {
-    repr: HashMap<N, HashSet<N>>,
+    repr: HashMap<N, Vec<N>>,
 }
 
 impl<N: Hash + Eq + Clone + Debug> Graph<N> {
     /// Constructor given the map of dependencies.
-    fn new_from_map(map: HashMap<N, HashSet<N>>) -> Self {
+    fn new_from_map(map: HashMap<N, Vec<N>>) -> Self {
         Self { repr: map }
     }
     /// Constructor specifically for a [Graph<NodeId>], which will convert an
@@ -67,7 +67,7 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
         intermediate_circuit_nodes: &[Box<dyn CompilableNode<F>>],
         input_shred_ids: &[NodeId],
     ) -> Graph<NodeId> {
-        let mut children_to_parent_map: HashMap<NodeId, HashSet<NodeId>> = HashMap::new();
+        let mut children_to_parent_map: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
         intermediate_circuit_nodes.iter().for_each(|circuit_node| {
             // Disregard the nodes which are input shreds.
             if !input_shred_ids.contains(&circuit_node.id()) {
