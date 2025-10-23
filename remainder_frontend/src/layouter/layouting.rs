@@ -67,6 +67,9 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
         intermediate_circuit_nodes: &[Box<dyn CompilableNode<F>>],
         input_shred_ids: &[NodeId],
     ) -> Graph<NodeId> {
+        // Turn the Input Shred IDs into a hash set for O(1) membership queries.
+        let input_shred_ids: HashSet<NodeId> = input_shred_ids.into_iter().map(|x| *x).collect();
+
         let mut children_to_parent_map: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
         intermediate_circuit_nodes.iter().for_each(|circuit_node| {
             // Disregard the nodes which are input shreds.
