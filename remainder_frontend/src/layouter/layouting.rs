@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::process::id;
 
 use itertools::Itertools;
 use remainder_shared_types::Field;
@@ -44,9 +45,15 @@ pub enum LayoutingError {
     #[error("This circuit location does not exist, or has not been compiled yet")]
     NoCircuitLocation,
 }
-/// A directed graph represented by a HashMap from a node in the graph to the
-/// nodes that it depends on. I.e., there is a directed edge from the node in
-/// the key to all the nodes in its values.
+/// A directed graph represented with an adjacency list.
+///
+/// `repr` maps each vertex `u` to a vector of all vertices `v` such that `(u, v)` is an edge in the
+/// graph.
+///
+/// In the context of this module, vertices correspond to Circuit Nodes, and edges represent
+/// precedence constraints: there is an edge `(u, v)` if `v`'s input depends on `u`'s output.
+///
+/// Type `N` is typically a node-identifying type, such as `NodeId`.
 #[derive(Clone, Debug)]
 pub struct Graph<N: Hash + Eq + Clone + Debug> {
     repr: HashMap<N, Vec<N>>,
@@ -57,6 +64,7 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
     fn new_from_map(map: HashMap<N, Vec<N>>) -> Self {
         Self { repr: map }
     }
+
     /// Constructor specifically for a [Graph<NodeId>], which will convert an
     /// array of [CompilableNode], each of which reference their sources, and
     /// convert that into the graph representation.
@@ -65,11 +73,8 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
     /// provide `input_shred_ids` to exclude them from the graph.
     fn new_from_circuit_nodes<F: Field>(
         intermediate_circuit_nodes: &[Box<dyn CompilableNode<F>>],
-        input_shred_ids: &[NodeId],
+        input_shred_ids: &HashSet<NodeId>,
     ) -> Graph<NodeId> {
-        // Turn the Input Shred IDs into a hash set for O(1) membership queries.
-        let input_shred_ids: HashSet<NodeId> = input_shred_ids.into_iter().map(|x| *x).collect();
-
         let mut children_to_parent_map: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
         intermediate_circuit_nodes.iter().for_each(|circuit_node| {
             // Disregard the nodes which are input shreds.
@@ -92,6 +97,7 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
                 );
             }
         });
+
         Graph::<NodeId>::new_from_map(children_to_parent_map)
     }
 
@@ -277,10 +283,10 @@ pub fn layout<F: Field>(
 
     // Step 1: Add `input_shred_nodes` to their specified `input_layer_nodes`
     // parent.
-    let mut input_shred_ids = vec![];
+    let mut input_shred_ids = HashSet::<NodeId>::new();
     for input_shred in input_shred_nodes {
         let input_layer_id = input_shred.get_parent();
-        input_shred_ids.push(input_shred.id());
+        input_shred_ids.insert(input_shred.id());
         let input_layer = input_layer_map
             .get_mut(&input_layer_id)
             .ok_or(LayoutingError::DanglingNodeId(input_layer_id))?;
@@ -333,7 +339,6 @@ pub fn layout<F: Field>(
     // as dividers for which sectors can be combined with each other. I.e.,
     // sector nodes before a certain non-sector node cannot be combined with
     // sector nodes after that same non-sector node.
-
     // OLD WAY:
     // -------------------------------------------------------------------------
     /*
@@ -363,48 +368,65 @@ pub fn layout<F: Field>(
         });
     */
     // -------------------------------------------------------------------------
-
     // NEW WAY:
     // -------------------------------------------------------------------------
+    // For each node, compute the maximum index (in the topological ordering) of all of its
+    // dependencies.
+    //
+    // More precicelly, if we denote the elements of `topo_sorted_intermediate_node_ids` as
+    // `v_0, v_1, ..., v_{n-1}`, then `latest_dependency_indices[i] == Some(j)` iff
+    // (a) there is a edge/dependency (v_i, v_j) in the graph, and
+    // (b) j is the maximum index for which such an edge exists.
+    // If there are no edges coming out of `v_i`, then `latest_dependency_indices[i] == None`.
     let latest_dependency_indices =
         circuit_node_graph.gen_latest_dependecy_indices(&topo_sorted_intermediate_node_ids);
+
     debug_assert_eq!(
         latest_dependency_indices,
         circuit_node_graph.naive_gen_latest_dependecy_indices(&topo_sorted_intermediate_node_ids)
     );
 
-    let mut adjusted_priority = vec![0; topo_sorted_intermediate_node_ids.len()];
+    // Step 2c: Re-order the topological ordering such that non-sector nodes appear as early as
+    // possible.
+    // This is done by sorting the nodes according to the tuple `(adjusted_priority, node-type)`.
+    // See comments below for definitions of those quantities.
+    let mut adjusted_priority: Vec<usize> = vec![0; topo_sorted_intermediate_node_ids.len()];
+    let mut idx_of_latest_sector_node: Option<usize> = None;
 
-    let mut nodes_with_priority = topo_sorted_intermediate_node_ids
+    let mut nodes_with_sorting_key = topo_sorted_intermediate_node_ids
         .iter()
         .enumerate()
         .map(|(idx, node_id)| {
             let node = id_to_node_mapping.remove(node_id).unwrap();
+
             if sector_node_ids.contains(node_id) {
-                // A sector node's priority is it's current index in the topological sorting.
-                if idx > 0 {
-                    adjusted_priority[idx] = adjusted_priority[idx - 1] + 1;
-                }
+                // For a sector node, its adjusted priority is defined as its index among the other
+                // sector nodes in the original topological ordering.
+
+                let new_priority = idx_of_latest_sector_node
+                    .map(|idx| adjusted_priority[idx] + 1)
+                    .unwrap_or(1);
+                adjusted_priority[idx] = new_priority;
+
+                idx_of_latest_sector_node = Some(idx);
+
                 (node, (adjusted_priority[idx], 0))
             } else {
-                // A non-sector node's priority is the index of it's latest dependency.
-                if idx > 0 {
-                    adjusted_priority[idx] = adjusted_priority[idx - 1];
-                }
-                (
-                    node,
-                    (
-                        adjusted_priority[latest_dependency_indices[idx].unwrap_or(0)],
-                        1,
-                    ),
-                )
+                // A non-sector node's adjusted priority is the adjusted priority  of it's latest
+                // dependency.
+
+                adjusted_priority[idx] = latest_dependency_indices[idx]
+                    .map(|latest_idx| adjusted_priority[latest_idx])
+                    .unwrap_or(0);
+
+                (node, (adjusted_priority[idx], 1))
             }
         })
         .collect_vec();
 
-    nodes_with_priority.sort_by_key(|&(_, priority)| priority);
+    nodes_with_sorting_key.sort_by_key(|&(_, priority)| priority);
 
-    let topo_sorted_nodes = nodes_with_priority
+    let topo_sorted_nodes = nodes_with_sorting_key
         .into_iter()
         .map(|(val, _)| val)
         .collect_vec();
