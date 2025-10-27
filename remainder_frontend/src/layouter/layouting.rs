@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::process::id;
 
 use itertools::Itertools;
 use remainder_shared_types::Field;
@@ -188,32 +187,45 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
         latest_dependency_idx
     }
 
+    /// Given a _valid_ topological ordering `topological_order == [v_0, v_1, ..., v_{n-1}]`, this
+    /// method returns a vector `latest_dependency_indices` such that `latest_dependency_indices[i]
+    /// == Some(j)` iff:
+    /// (a) there is a edge/dependency (v_i, v_j) in the graph, and
+    /// (b) j is the maximum index for which such an edge exists.
+    /// If there are no edges coming out of `v_i`, then `latest_dependency_indices[i] == None`.
+    ///
+    /// # Complexity
+    /// Linear in the size of the graph: `O(|V| + |E|)`.
     fn gen_latest_dependecy_indices(&self, topological_order: &[N]) -> Vec<Option<usize>> {
-        let mut node_order = HashMap::<N, usize>::new();
+        assert_eq!(topological_order.len(), self.repr.len());
+
+        // Invert `topological_order` to map nodes to their index in the topological ordering.
+        let mut node_idx = HashMap::<N, usize>::new();
         topological_order
             .iter()
             .enumerate()
             .for_each(|(idx, node)| {
-                node_order.insert(node.clone(), idx);
+                debug_assert!(self.repr.contains_key(node));
+                node_idx.insert(node.clone(), idx);
             });
 
-        let latest_dependency = topological_order
+        topological_order
             .iter()
             .map(|u| {
                 let deps = self.repr.get(u).unwrap();
-
-                deps.iter().map(|u| node_order[u]).max()
+                deps.iter().map(|u| node_idx[u]).max()
             })
-            .collect_vec();
-
-        latest_dependency
+            .collect_vec()
     }
 
+    /// Inefficient variant of `gen_latest_dependency_indices` used for correctness tests.
     pub fn naive_gen_latest_dependecy_indices(
         &self,
         topological_order: &[N],
     ) -> Vec<Option<usize>> {
-        let n = topological_order.len();
+        let n = self.repr.len();
+        assert_eq!(topological_order.len(), n);
+
         (0..n)
             .map(|i| self.get_index_of_latest_dependency(topological_order, i))
             .collect()
@@ -325,74 +337,27 @@ pub fn layout<F: Field>(
     // their sources.
     let circuit_node_graph =
         Graph::<NodeId>::new_from_circuit_nodes(&intermediate_nodes, &input_shred_ids);
+    let topo_sorted_intermediate_node_ids = &circuit_node_graph.topo_sort()?;
 
+    // Maintain a `NodeId` to `CompilableNode` mapping for later use.
     let mut id_to_node_mapping: HashMap<NodeId, Box<dyn CompilableNode<F>>> = intermediate_nodes
         .into_iter()
         .map(|node| (node.id(), node))
         .collect();
-    let topo_sorted_intermediate_node_ids = &circuit_node_graph.topo_sort()?;
 
-    // Step 2b: Determine which nodes can be combined into one.
-    //
-    // Re-order the topological order so that nodes that are not sector nodes
-    // appear in their first valid position. This means that these nodes serve
-    // as dividers for which sectors can be combined with each other. I.e.,
-    // sector nodes before a certain non-sector node cannot be combined with
-    // sector nodes after that same non-sector node.
-    // OLD WAY:
-    // -------------------------------------------------------------------------
-    /*
-    // We topologically sort via NodeId and map them back to their respective
-    // node.
-    let mut topo_sorted_nodes = topo_sorted_intermediate_node_ids
-        .iter()
-        .map(|node_id| id_to_node_mapping.remove(node_id).unwrap())
-        .collect_vec();
-
-    topo_sorted_intermediate_node_ids
-        .iter()
-        .enumerate()
-        .for_each(|(top_idx, node_id)| {
-            if !(sector_node_ids.contains(node_id)) {
-                let maybe_first_idx_can_appear = circuit_node_graph.get_index_of_latest_dependency(
-                    &(topo_sorted_nodes.iter().map(|node| node.id())).collect_vec(),
-                    top_idx,
-                );
-                let node = topo_sorted_nodes.remove(top_idx);
-                if let Some(first_idx_can_appear) = maybe_first_idx_can_appear {
-                    topo_sorted_nodes.insert(first_idx_can_appear + 1, node);
-                } else {
-                    topo_sorted_nodes.insert(0, node);
-                }
-            }
-        });
-    */
-    // -------------------------------------------------------------------------
-    // NEW WAY:
-    // -------------------------------------------------------------------------
     // For each node, compute the maximum index (in the topological ordering) of all of its
     // dependencies.
-    //
-    // More precicelly, if we denote the elements of `topo_sorted_intermediate_node_ids` as
-    // `v_0, v_1, ..., v_{n-1}`, then `latest_dependency_indices[i] == Some(j)` iff
-    // (a) there is a edge/dependency (v_i, v_j) in the graph, and
-    // (b) j is the maximum index for which such an edge exists.
-    // If there are no edges coming out of `v_i`, then `latest_dependency_indices[i] == None`.
     let latest_dependency_indices =
-        circuit_node_graph.gen_latest_dependecy_indices(&topo_sorted_intermediate_node_ids);
+        circuit_node_graph.gen_latest_dependecy_indices(topo_sorted_intermediate_node_ids);
 
-    debug_assert_eq!(
-        latest_dependency_indices,
-        circuit_node_graph.naive_gen_latest_dependecy_indices(&topo_sorted_intermediate_node_ids)
-    );
-
-    // Step 2c: Re-order the topological ordering such that non-sector nodes appear as early as
+    // Step 2b: Re-order the topological ordering such that non-sector nodes appear as early as
     // possible.
-    // This is done by sorting the nodes according to the tuple `(adjusted_priority, node-type)`.
+    // This is done by sorting the nodes according to the tuple `(adjusted_priority, node_type)`.
     // See comments below for definitions of those quantities.
     let mut adjusted_priority: Vec<usize> = vec![0; topo_sorted_intermediate_node_ids.len()];
     let mut idx_of_latest_sector_node: Option<usize> = None;
 
+    // A vector containing `(node, sorting_key)`, where `sorting_key = (adjusted_priority, node_type)`.
     let mut nodes_with_sorting_key = topo_sorted_intermediate_node_ids
         .iter()
         .enumerate()
@@ -400,41 +365,49 @@ pub fn layout<F: Field>(
             let node = id_to_node_mapping.remove(node_id).unwrap();
 
             if sector_node_ids.contains(node_id) {
-                // For a sector node, its adjusted priority is defined as its index among the other
-                // sector nodes in the original topological ordering.
+                // For a sector node, its adjusted priority is defined as its 1-based index among
+                // only the other sector nodes in the original topological ordering.
+                // A 1-based index is used as way of handling non-sector nodes with no (direct or
+                // indirect) dependencies on sector nodes. See comment on the "else" case of this if
+                // statement.
 
-                let new_priority = idx_of_latest_sector_node
-                    .map(|idx| adjusted_priority[idx] + 1)
+                // The adjusted priority of this sector node is one more than the adjusted priority
+                // of the last seen sector node, or `1` if no other sector has been seen yet.
+                adjusted_priority[idx] = idx_of_latest_sector_node
+                    .map(|last_sector_idx| adjusted_priority[last_sector_idx] + 1)
                     .unwrap_or(1);
-                adjusted_priority[idx] = new_priority;
 
                 idx_of_latest_sector_node = Some(idx);
 
+                // Sector nodes have `node_type == 0` to give them priority in the new ordering.
                 (node, (adjusted_priority[idx], 0))
             } else {
-                // A non-sector node's adjusted priority is the adjusted priority  of it's latest
-                // dependency.
-
+                // A non-sector node's adjusted priority is the adjusted priority of its latest
+                // dependencly.
+                // If this node has no dependencies, set its priority to zero, which is equivalent
+                // to having a dummy sector node on index `0` on which all other nodes depend on.
                 adjusted_priority[idx] = latest_dependency_indices[idx]
                     .map(|latest_idx| adjusted_priority[latest_idx])
                     .unwrap_or(0);
 
+                // Non-sector nodes have `node_type == 1`, which in the new ordering places them
+                // right _after_ the sector nodes they directly depend on.
                 (node, (adjusted_priority[idx], 1))
             }
         })
         .collect_vec();
 
+    // Sort in increasing order according to the adjusted `sorting_key`.
     nodes_with_sorting_key.sort_by_key(|&(_, priority)| priority);
 
+    // Remove the sorting key.
     let topo_sorted_nodes = nodes_with_sorting_key
         .into_iter()
         .map(|(val, _)| val)
         .collect_vec();
 
-    // -------------------------------------------------------------------------
+    // Step 2c: Determine which nodes can be combined into one.
 
-    // Turn the input shred ID vector into a hash set for easier searching.
-    // let input_shred_ids: HashSet<NodeId> = input_shred_ids.into_iter().collect();
     let mut intermediate_layers: Vec<Vec<Box<dyn CompilableNode<F>>>> = Vec::new();
     let mut node_to_layer_map: HashMap<NodeId, usize> = HashMap::new();
     // The first layer that stores sectors.
