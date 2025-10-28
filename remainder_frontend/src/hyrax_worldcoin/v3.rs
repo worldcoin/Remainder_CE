@@ -152,15 +152,6 @@ pub fn prove_with_image_precommit(
     ProofConfig,
     HyraxProverInputCommitment<Bn256Point>,
 )) {
-    // Set up Hyrax input layer specification.
-    let mut hyrax_input_layers: HashMap<
-        LayerId,
-        (
-            HyraxInputLayerDescription,
-            Option<HyraxProverInputCommitment<Bn256Point>>,
-        ),
-    > = HashMap::new();
-
     provable_circuit
         .set_pre_commitment(
             image_layer_label,
@@ -199,20 +190,15 @@ pub fn prove_with_image_precommit(
         .clone();
     assert_eq!(*code_commit_in_proof, code_commit.commitment);
 
-    // TODO: Refactor into the new builder design.
-    /*
-    // Zeroize each value in the HashMap
-    for (_, mut mle) in inputs {
-        mle.zeroize();
-    }
-
-    // Zeroize the image precommit.
-    let (image_hyrax_input_layer_desc, image_precommit) = hyrax_input_layers
-        .get_mut(&ic_circuit_desc.image_input_layer.layer_id)
+ 
+    // Zeroize each of the commitments once we have grabbed the commitments that we need.
+    let private_input_layer_ids = provable_circuit.get_private_input_layer_ids();
+    private_input_layer_ids.iter().for_each(|layer_id| {
+        let commitment = provable_circuit
+        .get_commitment_mut_ref(layer_id)
         .unwrap();
-
-    image_precommit.as_mut().unwrap().zeroize();
-    */
+        commitment.zeroize();
+    });
 
     (proof, proof_config, code_commit)
 }
