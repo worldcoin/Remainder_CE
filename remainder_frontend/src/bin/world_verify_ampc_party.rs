@@ -19,15 +19,13 @@ use remainder_frontend::{
         parameters::GR4_MODULUS,
     },
     zk_iriscode_ss::{
+        self,
         io::read_bytes_from_file,
         parameters::{IRISCODE_LEN, SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS},
     },
 };
 use remainder_hyrax::utils::convert_fr_into_u16;
-use remainder_shared_types::{
-    config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
-    perform_function_under_expected_configs, Bn256Point, Fr,
-};
+use remainder_shared_types::{perform_function_under_expected_configs, Bn256Point, Fr};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -66,16 +64,16 @@ fn main() {
     // Sanitycheck by logging the current settings.
     perform_function_under_expected_configs!(
         print_features_status,
-        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
-        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
+        &zk_iriscode_ss::EXPECTED_PROVER_CONFIG,
+        &zk_iriscode_ss::EXPECTED_VERIFIER_CONFIG,
     );
 
     // Parse arguments and verify secret share generation proofs.
     let cli = CliArguments::parse();
     perform_function_under_expected_configs!(
         verify_secret_share_proofs,
-        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
-        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
+        &zk_iriscode_ss::EXPECTED_PROVER_CONFIG,
+        &zk_iriscode_ss::EXPECTED_VERIFIER_CONFIG,
         &cli.circuit,
         &cli.hashes,
         &cli.secret_share_proof,
