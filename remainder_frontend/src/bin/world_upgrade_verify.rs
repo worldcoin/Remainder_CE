@@ -11,14 +11,12 @@ use remainder_frontend::{
     },
     hyrax_worldcoin_mpc::mpc_prover::{print_features_status, V3MPCCommitments},
     zk_iriscode_ss::{
+        self,
         circuits::{iriscode_ss_attach_aux_data, V3_INPUT_IMAGE_LAYER, V3_SIGN_BITS_LAYER},
         io::read_bytes_from_file,
     },
 };
-use remainder_shared_types::{
-    config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
-    perform_function_under_expected_configs, Bn256Point, Fr,
-};
+use remainder_shared_types::{perform_function_under_expected_configs, Bn256Point, Fr};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -47,16 +45,16 @@ fn main() {
     // Sanitycheck by logging the current settings.
     perform_function_under_expected_configs!(
         print_features_status,
-        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
-        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
+        &zk_iriscode_ss::EXPECTED_PROVER_CONFIG,
+        &zk_iriscode_ss::EXPECTED_VERIFIER_CONFIG,
     );
 
     let cli = CliArguments::parse();
 
     perform_function_under_expected_configs!(
         verify_v3_iriscode_proof,
-        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
-        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
+        &zk_iriscode_ss::EXPECTED_PROVER_CONFIG,
+        &zk_iriscode_ss::EXPECTED_VERIFIER_CONFIG,
         &cli.circuit,
         &cli.hashes,
         &cli.v3_proof,
