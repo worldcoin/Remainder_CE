@@ -172,7 +172,6 @@ pub fn circuit_description_and_inputs(
         let remainder_prover_root_dir = env!("CARGO_MANIFEST_DIR");
         let image_path =
             format!("{remainder_prover_root_dir}/src/zk_iriscode_ss/constants/v3-split-images/{image_type}/test_image.bin");
-        dbg!(&image_path);
         read_bytes_from_file(&image_path)
     };
     let circuit = circuit_description().unwrap();
