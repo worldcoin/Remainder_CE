@@ -85,22 +85,6 @@ fn prove_all_proofs(
     let v3_mpc_circuit_and_aux_data =
         V3MPCCircuitAndAuxMles::<Fr>::deserialize(&serialized_circuit);
 
-    // 1. Do we need to check the circuit SHA?
-    // Proof transcript contains a SHA so we're probably good and this is a sanity check.
-    /*
-    let expected_circuit_description =
-        circuit_description().expect("Failed to create circuit description.");
-
-    // Make sure that the circuit description we read is equal to the one we built.
-    let circuit_hash = sha256::digest(bincode::serialize(&expected_circuit_description).unwrap());
-    println!("Circuit hash: {circuit_hash}");
-
-    assert_eq!(
-        bincode::serialize(&expected_circuit_description).unwrap(),
-        serialized_circuit
-    );
-    */
-
     let mut v3_mpc_prover = V3MPCProver::new(
         zk_iriscode_ss::EXPECTED_PROVER_CONFIG,
         v3_mpc_circuit_and_aux_data.v3_circuit_and_aux_data,
