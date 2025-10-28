@@ -280,7 +280,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
                     // let commitment = provable_circuit.get_commitment_mut_ref(layer_id).unwrap();
                     let committed_claims = claims_on_hyrax_input_layers.remove(layer_id).unwrap();
 
-                    let hyrax_il_verification_timer = start_timer!(|| format!(
+                    let hyrax_il_proving_timer = start_timer!(|| format!(
                         "HyraxInputLayer::prove for {0} with {1} claims",
                         layer_id,
                         committed_claims.len()
@@ -293,7 +293,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
                         &mut rng,
                         transcript,
                     );
-                    end_timer!(hyrax_il_verification_timer);
+                    end_timer!(hyrax_il_proving_timer);
                     il_proof
                 } else {
                     panic!("Input layer with ID {layer_id} missing committment!")
