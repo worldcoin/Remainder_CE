@@ -229,6 +229,7 @@ pub struct MPCCircuitConstData<F: Field> {
     pub lookup_table_values: MultilinearExtension<F>,
 }
 
+// TODO: Add similar API to V3CircuitAndAuxData/ConstData.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: Field")]
 pub struct MPCCircuitsAndConstData<F: Field> {
