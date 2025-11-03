@@ -127,7 +127,7 @@ mod tests {
             )
             .unwrap();
 
-        let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
+        let verifiable_circuit = provable_circuit._gen_hyrax_verifiable_circuit();
 
         // Create a fresh transcript.
         let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -263,7 +263,7 @@ pub fn test_iriscode_circuit_with_public_layers_helper(
     let gkr_circuit_verifier_config =
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
-    let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
+    let verifiable_circuit = provable_circuit._gen_hyrax_verifiable_circuit();
 
     // --- Compute actual Hyrax proof ---
     let (proof, proof_config) = perform_function_under_prover_config!(
@@ -333,7 +333,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
     let gkr_circuit_verifier_config =
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
-    let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
+    let verifiable_circuit = provable_circuit._gen_hyrax_verifiable_circuit();
 
     // --- Compute actual Hyrax proof ---
     let prove_timer = start_timer!(|| "Proving");
