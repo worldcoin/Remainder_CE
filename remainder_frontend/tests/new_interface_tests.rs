@@ -106,7 +106,7 @@ mod tests {
         circuit.set_input("First MLE Shred", first_mle);
         circuit.set_input("Second MLE Shred", second_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         // Prove/verify the circuit
         test_circuit_with_runtime_optimized_config(&provable_circuit);
@@ -164,7 +164,7 @@ mod tests {
         circuit.set_input("First MLE", first_mle);
         circuit.set_input("One Element MLE", mle_one_element);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         // Prove/verify the circuit
         test_circuit_with_runtime_optimized_config(&provable_circuit);
@@ -261,7 +261,7 @@ mod tests {
         circuit.set_input("Dataparallel First MLE", dataparallel_first_mle);
         circuit.set_input("Dataparallel Second MLE", dataparallel_second_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         // Prove/verify the circuit
         test_circuit_with_runtime_optimized_config(&provable_circuit);
@@ -316,7 +316,7 @@ mod tests {
         circuit.set_input("Dataparallel First MLE", dataparallel_first_mle);
         circuit.set_input("Dataparallel Second MLE", dataparallel_second_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         // Prove/verify the circuit
         test_circuit_with_runtime_optimized_config(&provable_circuit);
@@ -400,7 +400,7 @@ mod tests {
         circuit.set_input("Dataparallel First MLE", dataparallel_first_mle);
         circuit.set_input("Dataparallel One Element MLE", dataparallel_mle_one_element);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         // Prove/verify the circuit
         test_circuit_with_runtime_optimized_config(&provable_circuit);
@@ -456,7 +456,7 @@ mod tests {
         circuit.set_input("Input MLE", mle);
         circuit.set_input("Neg Input MLE", neg_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
@@ -522,7 +522,7 @@ mod tests {
         circuit.set_input("Dataparallel Input MLE", mle_dataparallel);
         circuit.set_input("Dataparallel Neg Input MLE", neg_mle_dataparallel);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
@@ -569,7 +569,7 @@ mod tests {
         circuit.set_input("Input MLE", mle);
         circuit.set_input("Neg Input MLE", neg_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
@@ -636,7 +636,7 @@ mod tests {
         circuit.set_input("Input MLE 2", mle_2);
         circuit.set_input("Neg Input MLE 2", neg_mle_2);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
@@ -697,7 +697,7 @@ mod tests {
         circuit.set_input("Dataparallel Input MLE", mle_dataparallel);
         circuit.set_input("Dataparallel Neg Input MLE", neg_mle_dataparallel);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
@@ -777,7 +777,7 @@ mod tests {
         circuit.set_input("Input MLE 2", mle_2_dataparallel);
         circuit.set_input("Neg Input MLE 2", neg_mle_2_dataparallel);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }

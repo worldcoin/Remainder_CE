@@ -28,10 +28,10 @@ check:  ## GitHub Action #1 - compile, run formatter and linter.
 test-dev: test-dev-seq test-dev-par  ## GitHub Action #2a - Basic unit testing. With and without parallel features.
 
 test-dev-seq:
-	cargo test --profile=dev-opt
+	cargo test --profile=dev-opt -- --test-threads=1
 
 test-dev-par:
-	cargo test --profile=dev-opt --features parallel
+	cargo test --profile=dev-opt --features parallel -- --test-threads=1
 
 test-ignored:  ## GitHub Action #2b - Run some slow tests that are normally ignored.
 	cargo test --profile=dev-opt --features parallel --package remainder-frontend --lib -- --ignored hyrax_worldcoin::test_worldcoin

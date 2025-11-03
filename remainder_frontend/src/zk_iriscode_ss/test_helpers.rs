@@ -86,26 +86,26 @@ fn small_circuit_with_inputs<F: Field>(use_private_layers: bool) -> Result<Circu
 /// circuit.
 pub fn small_circuit_with_public_inputs() -> Result<ProvableCircuit<Fr>> {
     let circuit = small_circuit_with_inputs(false)?;
-    circuit.finalize()
+    circuit.gen_provable_circuit()
 }
 
 /// Return a provable circuit description with public inputs for a trivial 2x2 identity matrix
 /// circuit.
 pub fn small_circuit_with_private_inputs() -> Result<ProvableCircuit<Fr>> {
     let circuit = small_circuit_with_inputs(true)?;
-    circuit.finalize()
+    circuit.gen_provable_circuit()
 }
 
 /// Return a hyrax provable circuit description with public inputs for a trivial 2x2 identity matrix
 /// circuit.
 pub fn small_hyrax_circuit_with_public_inputs() -> Result<HyraxProvableCircuit<Bn256Point>> {
     let circuit = small_circuit_with_inputs(false)?;
-    circuit.finalize_hyrax()
+    circuit.gen_hyrax_provable_circuit()
 }
 
 /// Return a hyrax provable circuit description with hyrax private inputs for a trivial 2x2 identity
 /// matrix circuit.
 pub fn small_hyrax_circuit_with_private_inputs() -> Result<HyraxProvableCircuit<Bn256Point>> {
     let circuit = small_circuit_with_inputs(true)?;
-    circuit.finalize_hyrax()
+    circuit.gen_hyrax_provable_circuit()
 }

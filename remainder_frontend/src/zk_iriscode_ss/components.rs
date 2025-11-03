@@ -114,7 +114,7 @@ mod test {
             );
         });
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }

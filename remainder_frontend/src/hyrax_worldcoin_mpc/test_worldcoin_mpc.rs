@@ -42,7 +42,7 @@ mod tests {
         let circuit = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
             LayerVisibility::Private,
         );
-        let provable_circuit = circuit.finalize_hyrax::<Bn256Point>().unwrap();
+        let provable_circuit = circuit.gen_hyrax_provable_circuit::<Bn256Point>().unwrap();
         test_mpc_circuit_with_hyrax_helper(provable_circuit);
     }
 
@@ -54,7 +54,7 @@ mod tests {
         let circuit = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
             LayerVisibility::Private,
         );
-        let provable_circuit = circuit.finalize_hyrax::<Bn256Point>().unwrap();
+        let provable_circuit = circuit.gen_hyrax_provable_circuit::<Bn256Point>().unwrap();
         test_mpc_circuit_with_hyrax_helper(provable_circuit);
     }
 
@@ -66,7 +66,7 @@ mod tests {
         let circuit = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
             LayerVisibility::Private,
         );
-        let provable_circuit = circuit.finalize_hyrax::<Bn256Point>().unwrap();
+        let provable_circuit = circuit.gen_hyrax_provable_circuit::<Bn256Point>().unwrap();
         test_mpc_circuit_with_hyrax_helper(provable_circuit);
     }
 
@@ -107,7 +107,7 @@ mod tests {
         let circuit = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
             LayerVisibility::Public,
         );
-        let provable_circuit = circuit.finalize_hyrax().unwrap();
+        let provable_circuit = circuit.gen_hyrax_provable_circuit().unwrap();
 
         // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
         let gkr_circuit_prover_config =
@@ -134,7 +134,7 @@ mod tests {
             TEST_IDX,
             LayerVisibility::Private,
         );
-        let provable_circuit = circuit.finalize_hyrax().unwrap();
+        let provable_circuit = circuit.gen_hyrax_provable_circuit().unwrap();
         let verifiable_circuit = circuit
             .gen_hyrax_verifiable_circuit::<Bn256Point>()
             .unwrap();
@@ -156,7 +156,7 @@ mod tests {
             TEST_IDX,
             LayerVisibility::Private,
         );
-        let provable_circuit = circuit.finalize_hyrax().unwrap();
+        let provable_circuit = circuit.gen_hyrax_provable_circuit().unwrap();
 
         test_mpc_circuit_with_hyrax_helper(provable_circuit);
     }
@@ -191,7 +191,7 @@ mod tests {
             TEST_IDX,
             LayerVisibility::Public,
         );
-        let provable_circuit = circuit.finalize_hyrax().unwrap();
+        let provable_circuit = circuit.gen_hyrax_provable_circuit().unwrap();
 
         test_mpc_circuit_with_public_layers_helper(provable_circuit);
     }

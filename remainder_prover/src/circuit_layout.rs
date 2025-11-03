@@ -1,5 +1,6 @@
 //! Defines the utilities for taking a list of nodes and turning it into a
 //! layedout circuit
+use std::collections::HashSet;
 use std::collections::{hash_map::Entry, HashMap};
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -9,7 +10,7 @@ use remainder_shared_types::Field;
 use serde::{Deserialize, Serialize};
 
 use crate::input_layer::ligero_input_layer::{
-    LigeroInputLayerDescription, LigeroInputLayerDescriptionWithPrecommit,
+    LigeroInputLayerDescription, LigeroInputLayerDescriptionWithOptionalProverPrecommit,
 };
 use crate::prover::GKRCircuitDescription;
 use crate::{
@@ -116,7 +117,8 @@ impl CircuitLocation {
 pub struct ProvableCircuit<F: Field> {
     circuit_description: GKRCircuitDescription<F>,
     inputs: HashMap<LayerId, MultilinearExtension<F>>,
-    private_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithPrecommit<F>>,
+    private_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithOptionalProverPrecommit<F>>,
+    layer_label_to_layer_id: HashMap<String, LayerId>,
 }
 
 impl<F: Field> ProvableCircuit<F> {
@@ -124,12 +126,14 @@ impl<F: Field> ProvableCircuit<F> {
     pub fn new(
         circuit_description: GKRCircuitDescription<F>,
         inputs: HashMap<LayerId, MultilinearExtension<F>>,
-        private_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithPrecommit<F>>,
+        private_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithOptionalProverPrecommit<F>>,
+        layer_label_to_layer_id: HashMap<String, LayerId>,
     ) -> Self {
         Self {
             circuit_description,
             inputs,
             private_inputs,
+            layer_label_to_layer_id,
         }
     }
 
@@ -140,6 +144,14 @@ impl<F: Field> ProvableCircuit<F> {
     /// This is done by erasing all input data associated with private input layers, along with any
     /// commitments (the latter can be found in the proof).
     pub fn _gen_verifiable_circuit(&self) -> VerifiableCircuit<F> {
+        let public_ids: HashSet<LayerId> = self.get_public_input_layer_ids().into_iter().collect();
+        let predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>> = self
+            .inputs
+            .clone()
+            .into_iter()
+            .filter(|(layer_id, _)| public_ids.contains(layer_id))
+            .collect();
+
         let private_inputs: HashMap<LayerId, LigeroInputLayerDescription<F>> = self
             .private_inputs
             .clone()
@@ -149,7 +161,9 @@ impl<F: Field> ProvableCircuit<F> {
 
         VerifiableCircuit {
             circuit_description: self.circuit_description.clone(),
+            predetermined_public_inputs,
             private_inputs,
+            layer_label_to_layer_id: self.layer_label_to_layer_id.clone(),
         }
     }
 
@@ -192,7 +206,7 @@ impl<F: Field> ProvableCircuit<F> {
     pub fn get_private_input_layer(
         &self,
         layer_id: LayerId,
-    ) -> Result<LigeroInputLayerDescriptionWithPrecommit<F>> {
+    ) -> Result<LigeroInputLayerDescriptionWithOptionalProverPrecommit<F>> {
         self.private_inputs
             .get(&layer_id)
             .ok_or(anyhow!("Unrecognized Layer ID '{layer_id}'"))
@@ -214,18 +228,24 @@ impl<F: Field> ProvableCircuit<F> {
 #[derive(Clone, Debug)]
 pub struct VerifiableCircuit<F: Field> {
     circuit_description: GKRCircuitDescription<F>,
+    pub predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
     private_inputs: HashMap<LayerId, LigeroInputLayerDescription<F>>,
+    layer_label_to_layer_id: HashMap<String, LayerId>,
 }
 
 impl<F: Field> VerifiableCircuit<F> {
     /// Returns a [VerifiableCircuit] initialized with the given data.
     pub fn new(
         circuit_description: GKRCircuitDescription<F>,
+        predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
         private_inputs: HashMap<LayerId, LigeroInputLayerDescription<F>>,
+        layer_label_to_layer_id: HashMap<String, LayerId>,
     ) -> Self {
         Self {
             circuit_description,
+            predetermined_public_inputs,
             private_inputs,
+            layer_label_to_layer_id,
         }
     }
 
@@ -265,5 +285,11 @@ impl<F: Field> VerifiableCircuit<F> {
     /// [LayerVisibility::Private].
     pub fn get_private_input_layer_ids(&self) -> Vec<LayerId> {
         self.private_inputs.keys().cloned().collect_vec()
+    }
+
+    /// Returns the data associated with the public input layer with ID `layer_id`, or None if
+    /// no such public input layer exists.
+    pub fn get_public_input_mle_ref(&self, layer_id: &LayerId) -> Option<&MultilinearExtension<F>> {
+        self.predetermined_public_inputs.get(layer_id)
     }
 }

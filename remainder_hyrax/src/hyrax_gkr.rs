@@ -29,6 +29,7 @@ use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 use remainder_shared_types::transcript::ec_transcript::ECTranscriptTrait;
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use self::hyrax_layer::HyraxLayerProof;
 
@@ -363,7 +364,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
             .len()
     );
     assert_eq!(
-        verifiable_circuit.get_private_inputs_ref().len(),
+        verifiable_circuit.get_num_private_layers(),
         hyrax_proof.hyrax_input_proofs.len()
     );
     assert_eq!(
@@ -474,14 +475,23 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
         .iter()
         .for_each(|(layer_id, values)| {
             let values = values.as_ref().unwrap();
+
+            // Check the shape of the input layer description against the input layer in the proof.
             let input_layer_description = verifiable_circuit
                 .get_gkr_circuit_description_ref()
                 .input_layers
                 .iter()
                 .find(|input_layer| input_layer.layer_id == *layer_id)
                 .unwrap();
-            // Check the shape of the input layer description against the input layer in the proof.
             assert_eq!(input_layer_description.num_vars, values.num_vars());
+
+            // Check the MLE in the proof against any pre-existing public MLE in the circuit
+            // description.
+            if let Some(expected_mle) = verifiable_circuit.get_public_input_mle_ref(layer_id) {
+                debug!("Found MLE for Layer with ID {layer_id} in HyraxVerifiableCircuit. Checking against MLE in HyraxProof...");
+                assert_eq!(expected_mle, values);
+            }
+
             let claims_as_commitments = input_layer_claims.remove(layer_id).unwrap();
             let plaintext_claims = match_claims(
                 &claims_as_commitments,
@@ -505,10 +515,8 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
         .iter()
         .for_each(|hyrax_input_proof| {
             let layer_id = &hyrax_input_proof.layer_id;
-            let (desc, optional_commitment) = verifiable_circuit
-                .get_private_inputs_ref()
-                .get(layer_id)
-                .unwrap();
+            let (desc, optional_commitment) =
+                verifiable_circuit.get_private_input_layer_data_ref(layer_id);
             let layer_claims_vec = input_layer_claims.remove(layer_id).unwrap();
             let timer = start_timer!(|| format!(
                 "Verifying {0} claims for Hyrax input layer {1}",
@@ -517,6 +525,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
             ));
             hyrax_input_proof.verify(desc, &layer_claims_vec, committer, transcript);
             if let Some(comm) = optional_commitment {
+                debug!("Found pre-commitment in Layer with ID {layer_id} in HyraxVerifiableCircuit. Checking against commitment in HyraxProof...");
                 assert_eq!(hyrax_input_proof.input_commitment, comm.commitment);
             }
             end_timer!(timer);

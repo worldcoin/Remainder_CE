@@ -54,7 +54,7 @@ fn tutorial_test() {
     prover_circuit.set_input("Expected output", expected_output_data); // This is public!
 
     // Create a version of the circuit description which the prover can use.
-    let provable_circuit = prover_circuit.finalize().unwrap();
+    let provable_circuit = prover_circuit.gen_provable_circuit().unwrap();
 
     let (proof_config, proof_as_transcript) =
         prove_circuit_with_runtime_optimized_config::<Fr, PoseidonSponge<Fr>>(&provable_circuit);
@@ -63,12 +63,10 @@ fn tutorial_test() {
 
     // Here we don't have any pre-determined public inputs from the verifier,
     // so we can directly call the `gen_verifiable_circuit()` function.
-    let (verifiable_circuit, verifier_predetermined_public_inputs) =
-        verifier_circuit.gen_verifiable_circuit().unwrap();
+    let verifiable_circuit = verifier_circuit.gen_verifiable_circuit().unwrap();
 
     verify_circuit_with_proof_config::<Fr, PoseidonSponge<Fr>>(
         &verifiable_circuit,
-        verifier_predetermined_public_inputs,
         &proof_config,
         proof_as_transcript,
     );
