@@ -16,7 +16,7 @@ use remainder_hyrax::{
     hyrax_gkr::hyrax_input_layer::HyraxInputLayerDescription,
 };
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
-use remainder_shared_types::{curves::PrimeOrderCurve, Field};
+use remainder_shared_types::{curves::PrimeOrderCurve, Field, Halo2FFTFriendlyField};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -1313,36 +1313,6 @@ impl<F: Field> Circuit<F> {
             .collect()
     }
 
-    /// Returns a [VerifiableCircuit] initialized with all input data which is already
-    /// known to the verifier, but no commitments to the private input layers
-    /// yet.
-    #[allow(clippy::type_complexity)]
-    pub fn gen_verifiable_circuit(&self) -> Result<VerifiableCircuit<F>> {
-        // Input data which is known to the verifier ahead of time -- note that
-        // this data was manually appended using the `circuit.set_input()`
-        // function.
-        let verifier_predetermined_public_inputs = self.build_public_input_layer_data(true)?;
-
-        // Sets default Ligero parameters for each of the private input layers.
-        let ligero_private_inputs = self
-            .get_all_private_input_layer_descriptions_to_ligero()
-            .into_iter()
-            .map(|ligero_input_layer_description| {
-                (
-                    ligero_input_layer_description.layer_id,
-                    ligero_input_layer_description,
-                )
-            })
-            .collect();
-
-        Ok(VerifiableCircuit::new(
-            self.circuit_description.clone(),
-            verifier_predetermined_public_inputs,
-            ligero_private_inputs,
-            self.circuit_map.layer_label_to_layer_id.clone(),
-        ))
-    }
-
     /// Returns a [HyraxVerifiableCircuit] containing the public input layer data that have been
     /// added to `self` so far.
     pub fn gen_hyrax_verifiable_circuit<C>(&self) -> Result<HyraxVerifiableCircuit<C>>
@@ -1392,35 +1362,6 @@ impl<F: Field> Circuit<F> {
         ))
     }
 
-    /// Produces a provable form of this circuit for the vanilla GKR proving system which uses
-    /// Ligero as a commitment scheme for private input layers, and does _not_ offer any
-    /// zero-knowledge guarantees.
-    /// Requires all input data to be populated (use `Self::set_input()` on _all_ input shreds).
-    ///
-    /// # Returns
-    /// The generated provable circuit, or an error if the [self] is missing input data.
-    pub fn gen_provable_circuit(&self) -> Result<ProvableCircuit<F>> {
-        let inputs = self.build_all_input_layer_data()?;
-
-        let ligero_private_inputs = self
-            .get_all_private_input_layer_descriptions_to_ligero()
-            .into_iter()
-            .map(|ligero_input_layer_description| {
-                (
-                    ligero_input_layer_description.layer_id,
-                    (ligero_input_layer_description, None),
-                )
-            })
-            .collect();
-
-        Ok(ProvableCircuit::new(
-            self.circuit_description.clone(),
-            inputs,
-            ligero_private_inputs,
-            self.circuit_map.layer_label_to_layer_id.clone(),
-        ))
-    }
-
     /// Produces a provable form of this circuit for the Hyrax-GKR proving system which uses Hyrax
     /// as a commitment scheme for private input layers, and offers zero-knowledge guarantees.
     /// Requires all input data to be populated (use `Self::set_input()` on _all_ input shreds).
@@ -1464,6 +1405,67 @@ impl<F: Field> Circuit<F> {
             self.circuit_description.clone(),
             inputs,
             hyrax_private_inputs,
+            self.circuit_map.layer_label_to_layer_id.clone(),
+        ))
+    }
+}
+
+impl<F: Halo2FFTFriendlyField> Circuit<F> {
+    /// Produces a provable form of this circuit for the vanilla GKR proving system which uses
+    /// Ligero as a commitment scheme for private input layers, and does _not_ offer any
+    /// zero-knowledge guarantees.
+    /// Requires all input data to be populated (use `Self::set_input()` on _all_ input shreds).
+    ///
+    /// # Returns
+    /// The generated provable circuit, or an error if the [self] is missing input data.
+    pub fn gen_provable_circuit(&self) -> Result<ProvableCircuit<F>> {
+        let inputs = self.build_all_input_layer_data()?;
+
+        let ligero_private_inputs = self
+            .get_all_private_input_layer_descriptions_to_ligero()
+            .into_iter()
+            .map(|ligero_input_layer_description| {
+                (
+                    ligero_input_layer_description.layer_id,
+                    (ligero_input_layer_description, None),
+                )
+            })
+            .collect();
+
+        Ok(ProvableCircuit::new(
+            self.circuit_description.clone(),
+            inputs,
+            ligero_private_inputs,
+            self.circuit_map.layer_label_to_layer_id.clone(),
+        ))
+    }
+
+    /// Returns a [VerifiableCircuit] initialized with all input data which is already
+    /// known to the verifier, but no commitments to the private input layers
+    /// yet.
+    #[allow(clippy::type_complexity)]
+    pub fn gen_verifiable_circuit(&self) -> Result<VerifiableCircuit<F>> {
+        // Input data which is known to the verifier ahead of time -- note that
+        // this data was manually appended using the `circuit.set_input()`
+        // function.
+        let verifier_predetermined_public_inputs = self.build_public_input_layer_data(true)?;
+
+        // Sets default Ligero parameters for each of the private input layers.
+        let ligero_private_inputs = self
+            .get_all_private_input_layer_descriptions_to_ligero()
+            .into_iter()
+            .map(|ligero_input_layer_description| {
+                (
+                    ligero_input_layer_description.layer_id,
+                    (ligero_input_layer_description, None),
+                )
+            })
+            .collect();
+
+        Ok(VerifiableCircuit::new(
+            self.circuit_description.clone(),
+            verifier_predetermined_public_inputs,
+            ligero_private_inputs,
             self.circuit_map.layer_label_to_layer_id.clone(),
         ))
     }

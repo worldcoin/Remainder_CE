@@ -353,14 +353,20 @@ pub fn verify<F: Halo2FFTFriendlyField>(
     for claim in ligero_input_layer_claims.iter() {
         let claim_layer_id = claim.get_to_layer_id();
         let commitment = ligero_commitments.get(&claim_layer_id).unwrap();
-        let desc = verifiable_circuit
+
+        let (_, (desc, opt_pre_commitment)) = verifiable_circuit
             .get_private_inputs_ref()
             .iter()
             .find(|(layer_id, _)| **layer_id == claim_layer_id)
             .unwrap();
+
+        if let Some(pre_commitment) = opt_pre_commitment {
+            assert_eq!(pre_commitment.root, *commitment);
+        }
+
         remainder_ligero_verify::<F>(
             commitment,
-            &desc.1.aux,
+            &desc.aux,
             transcript,
             claim.get_point(),
             claim.get_eval(),
@@ -372,7 +378,7 @@ pub fn verify<F: Halo2FFTFriendlyField>(
 
 /// Assumes that the inputs have already been added to the transcript (if necessary).
 /// Returns the vector of claims on the input layers.
-pub fn prove_circuit<F: Field, Tr: TranscriptSponge<F>>(
+pub fn prove_circuit<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
     provable_circuit: &ProvableCircuit<F>,
     transcript_writer: &mut TranscriptWriter<F, Tr>,
 ) -> Result<Vec<Claim<F>>> {
