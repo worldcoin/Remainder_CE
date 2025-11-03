@@ -360,13 +360,8 @@ impl MPCProver {
             ECTranscript::new("MPC Circuit Pipeline");
 
         // Prove the relationship between iris/mask code and image.
-        let (proof, _proof_config) = HyraxProof::prove(
-            &mut mpc_provable_circuit,
-            committer,
-            blinding_rng,
-            converter,
-            &mut transcript,
-        );
+        let (proof, _proof_config) =
+            mpc_provable_circuit.prove(committer, blinding_rng, converter, &mut transcript);
 
         proof
     }

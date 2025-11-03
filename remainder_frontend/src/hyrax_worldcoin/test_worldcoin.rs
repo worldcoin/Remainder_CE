@@ -11,8 +11,7 @@ use remainder_shared_types::{
 };
 
 use remainder_hyrax::{
-    circuit_layout::HyraxProvableCircuit,
-    hyrax_gkr::{verify_hyrax_proof, HyraxProof},
+    circuit_layout::HyraxProvableCircuit, hyrax_gkr::verify_hyrax_proof,
     utils::vandermonde::VandermondeInverse,
 };
 
@@ -134,13 +133,8 @@ mod tests {
             ECTranscript::new("V3 Iriscode Circuit Pipeline");
 
         // Prove the relationship between iris/mask code and image.
-        let (proof, proof_config) = HyraxProof::prove(
-            &mut provable_circuit,
-            &committer,
-            blinding_rng,
-            converter,
-            &mut transcript,
-        );
+        let (proof, proof_config) =
+            provable_circuit.prove(&committer, blinding_rng, converter, &mut transcript);
 
         let code_commit = provable_circuit
             .get_commitment_ref_by_label(V3_SIGN_BITS_LAYER)
@@ -267,7 +261,7 @@ pub fn test_iriscode_circuit_with_public_layers_helper(
 
     // --- Compute actual Hyrax proof ---
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        HyraxProvableCircuit::prove,
         &gkr_circuit_prover_config,
         &mut provable_circuit,
         &committer,
@@ -338,7 +332,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
     // --- Compute actual Hyrax proof ---
     let prove_timer = start_timer!(|| "Proving");
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        HyraxProvableCircuit::prove,
         &gkr_circuit_prover_config,
         &mut provable_circuit,
         &committer,

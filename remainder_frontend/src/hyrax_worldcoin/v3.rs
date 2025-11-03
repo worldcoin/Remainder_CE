@@ -165,13 +165,8 @@ pub fn prove_with_image_precommit(
         ECTranscript::new("V3 Iriscode Circuit Pipeline");
 
     // Prove the relationship between iris/mask code and image.
-    let (proof, proof_config) = HyraxProof::prove(
-        &mut provable_circuit,
-        &committer,
-        blinding_rng,
-        converter,
-        &mut transcript,
-    );
+    let (proof, proof_config) =
+        provable_circuit.prove(&committer, blinding_rng, converter, &mut transcript);
 
     let code_layer_id = *provable_circuit
         .layer_label_to_layer_id

@@ -1,7 +1,6 @@
 #![allow(clippy::type_complexity)]
 
 use crate::circuit_layout::{ProvableCircuit, VerifiableCircuit};
-use crate::prover::verify;
 use ark_std::{end_timer, start_timer};
 
 use itertools::Itertools;
@@ -27,7 +26,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::BufWriter;
 use std::path::Path;
 
-use super::{prove, GKRCircuitDescription};
+use super::GKRCircuitDescription;
 
 /// Writes the circuit description for the provided [GKRCircuitDescription]
 /// to the `circuit_description_path` specified, in JSON format.
@@ -179,8 +178,7 @@ fn prove_circuit_internal<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
     let mut transcript_writer = TranscriptWriter::<F, Tr>::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
 
-    match prove(
-        provable_circuit,
+    match provable_circuit.prove(
         global_prover_circuit_description_hash_type(),
         &mut transcript_writer,
     ) {
@@ -213,8 +211,7 @@ fn verify_circuit_internal<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
 ) {
     let verifier_timer = start_timer!(|| "Proof verification");
 
-    match verify(
-        verifiable_circuit,
+    match verifiable_circuit.verify(
         global_verifier_circuit_description_hash_type(),
         &mut proof_as_transcript,
         proof_config,
