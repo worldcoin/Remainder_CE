@@ -6,11 +6,12 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use itertools::Itertools;
-use remainder_shared_types::Field;
+use remainder_shared_types::{Field, Halo2FFTFriendlyField};
 use serde::{Deserialize, Serialize};
 
 use crate::input_layer::ligero_input_layer::{
-    LigeroInputLayerDescription, LigeroInputLayerDescriptionWithOptionalProverPrecommit,
+    LigeroInputLayerDescriptionWithOptionalProverPrecommit,
+    LigeroInputLayerDescriptionWithOptionalVerifierPrecommit,
 };
 use crate::prover::GKRCircuitDescription;
 use crate::{
@@ -114,14 +115,14 @@ impl CircuitLocation {
 /// system which uses Ligero as a PCS for private input layers, and provides no zero-knowledge
 /// guarantees.
 #[derive(Clone, Debug)]
-pub struct ProvableCircuit<F: Field> {
+pub struct ProvableCircuit<F: Halo2FFTFriendlyField> {
     circuit_description: GKRCircuitDescription<F>,
     inputs: HashMap<LayerId, MultilinearExtension<F>>,
     private_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithOptionalProverPrecommit<F>>,
     layer_label_to_layer_id: HashMap<String, LayerId>,
 }
 
-impl<F: Field> ProvableCircuit<F> {
+impl<F: Halo2FFTFriendlyField> ProvableCircuit<F> {
     /// Constructor
     pub fn new(
         circuit_description: GKRCircuitDescription<F>,
@@ -152,11 +153,16 @@ impl<F: Field> ProvableCircuit<F> {
             .filter(|(layer_id, _)| public_ids.contains(layer_id))
             .collect();
 
-        let private_inputs: HashMap<LayerId, LigeroInputLayerDescription<F>> = self
+        let private_inputs: HashMap<
+            LayerId,
+            LigeroInputLayerDescriptionWithOptionalVerifierPrecommit<F>,
+        > = self
             .private_inputs
             .clone()
             .into_iter()
-            .map(|(layer_id, (desc, _))| (layer_id, desc))
+            .map(|(layer_id, (desc, opt_commit))| {
+                (layer_id, (desc, opt_commit.map(|commit| commit.get_root())))
+            })
             .collect();
 
         VerifiableCircuit {
@@ -226,19 +232,22 @@ impl<F: Field> ProvableCircuit<F> {
 /// A circuit that contains a [GKRCircuitDescription] alongside a description of
 /// the private input layers.
 #[derive(Clone, Debug)]
-pub struct VerifiableCircuit<F: Field> {
+pub struct VerifiableCircuit<F: Halo2FFTFriendlyField> {
     circuit_description: GKRCircuitDescription<F>,
     pub predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
-    private_inputs: HashMap<LayerId, LigeroInputLayerDescription<F>>,
+    private_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithOptionalVerifierPrecommit<F>>,
     layer_label_to_layer_id: HashMap<String, LayerId>,
 }
 
-impl<F: Field> VerifiableCircuit<F> {
+impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
     /// Returns a [VerifiableCircuit] initialized with the given data.
     pub fn new(
         circuit_description: GKRCircuitDescription<F>,
         predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
-        private_inputs: HashMap<LayerId, LigeroInputLayerDescription<F>>,
+        private_inputs: HashMap<
+            LayerId,
+            LigeroInputLayerDescriptionWithOptionalVerifierPrecommit<F>,
+        >,
         layer_label_to_layer_id: HashMap<String, LayerId>,
     ) -> Self {
         Self {
@@ -254,7 +263,9 @@ impl<F: Field> VerifiableCircuit<F> {
     ///
     /// TODO: This is too transparent. Replace this with methods that answer the queries of the
     /// prover directly, and do _not_ expose it to the circuit developer.
-    pub fn get_private_inputs_ref(&self) -> &HashMap<LayerId, LigeroInputLayerDescription<F>> {
+    pub fn get_private_inputs_ref(
+        &self,
+    ) -> &HashMap<LayerId, LigeroInputLayerDescriptionWithOptionalVerifierPrecommit<F>> {
         &self.private_inputs
     }
 
