@@ -201,7 +201,7 @@ mod tests {
 pub fn test_mpc_circuit_with_public_layers_helper(
     mut mpc_circuit: HyraxProvableCircuit<Bn256Point>,
 ) {
-    let verifiable_circuit = mpc_circuit._gen_verifiable_circuit();
+    let verifiable_circuit = mpc_circuit._gen_hyrax_verifiable_circuit();
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
@@ -239,7 +239,7 @@ pub fn test_mpc_circuit_with_public_layers_helper(
 /// Helper function for testing an Shamir's secret sharing circuit with Hyrax input
 /// layers for the private data.
 pub fn test_mpc_circuit_with_hyrax_helper(mut mpc_circuit: HyraxProvableCircuit<Bn256Point>) {
-    let verifiable_circuit = mpc_circuit._gen_verifiable_circuit();
+    let verifiable_circuit = mpc_circuit._gen_hyrax_verifiable_circuit();
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
@@ -346,7 +346,7 @@ pub fn test_mpc_circuit_with_precommits_hyrax_helper(
     inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
     */
 ) {
-    let verifiable_circuit = mpc_circuit._gen_verifiable_circuit();
+    let verifiable_circuit = mpc_circuit._gen_hyrax_verifiable_circuit();
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");

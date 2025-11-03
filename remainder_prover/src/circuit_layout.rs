@@ -6,12 +6,13 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use itertools::Itertools;
+use remainder_ligero::{LcCommit, LcRoot};
 use remainder_shared_types::{Field, Halo2FFTFriendlyField};
 use serde::{Deserialize, Serialize};
 
 use crate::input_layer::ligero_input_layer::{
     LigeroInputLayerDescriptionWithOptionalProverPrecommit,
-    LigeroInputLayerDescriptionWithOptionalVerifierPrecommit,
+    LigeroInputLayerDescriptionWithOptionalVerifierPrecommit, LigeroRoot,
 };
 use crate::prover::GKRCircuitDescription;
 use crate::{
@@ -302,5 +303,28 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
     /// no such public input layer exists.
     pub fn get_public_input_mle_ref(&self, layer_id: &LayerId) -> Option<&MultilinearExtension<F>> {
         self.predetermined_public_inputs.get(layer_id)
+    }
+
+    /// Sets the pre-commitment of the input layer with label `layer_label` to `commitment`.
+    /// Pre-commitments allow the verifier to check that an input layer commitment in the
+    /// proof is the same as the expected `commitment` provided here.
+    ///
+    /// # Panics
+    /// If `layer_label` is not a valid private input layer label.
+    pub fn set_pre_commitment(
+        &mut self,
+        layer_label: &str,
+        commitment: LigeroRoot<F>,
+    ) -> Result<()> {
+        let layer_id = self.layer_label_to_layer_id.get(layer_label).unwrap();
+
+        let (_, optional_commitment) = self
+            .private_inputs
+            .get_mut(layer_id)
+            .expect("Layer {layer_id} either does not exist, or is not a private input layer.");
+
+        *optional_commitment = Some(commitment);
+
+        Ok(())
     }
 }
