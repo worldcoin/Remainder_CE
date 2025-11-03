@@ -190,13 +190,10 @@ pub fn prove_with_image_precommit(
         .clone();
     assert_eq!(*code_commit_in_proof, code_commit.commitment);
 
- 
     // Zeroize each of the commitments once we have grabbed the commitments that we need.
     let private_input_layer_ids = provable_circuit.get_private_input_layer_ids();
     private_input_layer_ids.iter().for_each(|layer_id| {
-        let commitment = provable_circuit
-        .get_commitment_mut_ref(layer_id)
-        .unwrap();
+        let commitment = provable_circuit.get_commitment_mut_ref(layer_id).unwrap();
         commitment.zeroize();
     });
 
@@ -311,7 +308,7 @@ impl V3Prover {
         >(circuit, input_data, aux_data)
         .unwrap();
 
-        let provable_circuit = circuit_with_inputs.finalize_hyrax().unwrap();
+        let provable_circuit = circuit_with_inputs.gen_hyrax_provable_circuit().unwrap();
 
         // Prove the iriscode circuit with the image precommit.
         let (proof, _, code_commit) = prove_with_image_precommit(

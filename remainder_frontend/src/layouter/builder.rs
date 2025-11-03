@@ -49,6 +49,8 @@ use remainder::{
 
 use anyhow::{anyhow, bail, Result};
 
+use tracing::debug;
+
 /// A dynamically-typed reference to a [CircuitNode].
 /// Used only in the front-end during the circuit-building phase.
 ///
@@ -1311,16 +1313,11 @@ impl<F: Field> Circuit<F> {
             .collect()
     }
 
-    /// Returns a [VerifiableCircuit], alongside all input data which is already
+    /// Returns a [VerifiableCircuit] initialized with all input data which is already
     /// known to the verifier, but no commitments to the private input layers
     /// yet.
     #[allow(clippy::type_complexity)]
-    pub fn gen_verifiable_circuit(
-        &self,
-    ) -> Result<(
-        VerifiableCircuit<F>,
-        HashMap<LayerId, MultilinearExtension<F>>,
-    )> {
+    pub fn gen_verifiable_circuit(&self) -> Result<VerifiableCircuit<F>> {
         // Input data which is known to the verifier ahead of time -- note that
         // this data was manually appended using the `circuit.set_input()`
         // function.
@@ -1338,19 +1335,27 @@ impl<F: Field> Circuit<F> {
             })
             .collect();
 
-        Ok((
-            VerifiableCircuit::new(self.circuit_description.clone(), ligero_private_inputs),
+        Ok(VerifiableCircuit::new(
+            self.circuit_description.clone(),
             verifier_predetermined_public_inputs,
+            ligero_private_inputs,
+            self.circuit_map.layer_label_to_layer_id.clone(),
         ))
     }
 
-    /// Returns a [HyraxVerifiableCircuit] containing the public input layer data, but no
-    /// commitments to the private input layers yet.
+    /// Returns a [HyraxVerifiableCircuit] containing the public input layer data that have been
+    /// added to `self` so far.
     pub fn gen_hyrax_verifiable_circuit<C>(&self) -> Result<HyraxVerifiableCircuit<C>>
     where
         C: PrimeOrderCurve<Scalar = F>,
     {
         let public_inputs = self.build_public_input_layer_data(false)?;
+
+        debug!("Public inputs available: {:#?}", public_inputs.keys());
+        debug!(
+            "Layer Labels to Layer ID map: {:#?}",
+            self.circuit_map.layer_label_to_layer_id
+        );
 
         let hyrax_private_inputs = self
             .circuit_map
@@ -1369,19 +1374,10 @@ impl<F: Field> Circuit<F> {
                 let padded_needed_capacity = (1 << log2(raw_needed_capacity)) as usize;
                 let total_num_vars = log2(padded_needed_capacity) as usize;
 
-                // Aim for square matrix.
-                let log_num_cols = total_num_vars / 2;
-
-                // let layer_label = self.circuit_map.get_label_from_layer_id(layer_id)?;
-                // let commitment = pre_commitments.get(&layer_label).cloned();
                 Ok((
                     layer_id,
                     (
-                        HyraxInputLayerDescription {
-                            layer_id,
-                            num_vars: total_num_vars,
-                            log_num_cols,
-                        },
+                        HyraxInputLayerDescription::new(layer_id, total_num_vars),
                         None,
                     ),
                 ))
@@ -1397,12 +1393,13 @@ impl<F: Field> Circuit<F> {
     }
 
     /// Produces a provable form of this circuit for the vanilla GKR proving system which uses
-    /// Ligero as a commitment scheme for private input layers, and does not offer any
+    /// Ligero as a commitment scheme for private input layers, and does _not_ offer any
     /// zero-knowledge guarantees.
+    /// Requires all input data to be populated (use `Self::set_input()` on _all_ input shreds).
     ///
     /// # Returns
     /// The generated provable circuit, or an error if the [self] is missing input data.
-    pub fn finalize(&self) -> Result<ProvableCircuit<F>> {
+    pub fn gen_provable_circuit(&self) -> Result<ProvableCircuit<F>> {
         let inputs = self.build_all_input_layer_data()?;
 
         let ligero_private_inputs = self
@@ -1420,18 +1417,17 @@ impl<F: Field> Circuit<F> {
             self.circuit_description.clone(),
             inputs,
             ligero_private_inputs,
+            self.circuit_map.layer_label_to_layer_id.clone(),
         ))
     }
 
-    /// Produces a provable form of this circuit for the Hyrax GKR proving system which uses Hyrax
+    /// Produces a provable form of this circuit for the Hyrax-GKR proving system which uses Hyrax
     /// as a commitment scheme for private input layers, and offers zero-knowledge guarantees.
+    /// Requires all input data to be populated (use `Self::set_input()` on _all_ input shreds).
     ///
     /// # Returns
     /// The generated provable circuit, or an error if the [self] is missing input data.
-    pub fn finalize_hyrax<C>(
-        &self,
-        // pre_commitments: HashMap<String, HyraxProverInputCommitment<C>>,
-    ) -> Result<HyraxProvableCircuit<C>>
+    pub fn gen_hyrax_provable_circuit<C>(&self) -> Result<HyraxProvableCircuit<C>>
     where
         C: PrimeOrderCurve<Scalar = F>,
     {
@@ -1454,20 +1450,10 @@ impl<F: Field> Circuit<F> {
                 let padded_needed_capacity = (1 << log2(raw_needed_capacity)) as usize;
                 let total_num_vars = log2(padded_needed_capacity) as usize;
 
-                // Aim for square matrix.
-                // TODO: Allow for custom parameters.
-                let log_num_cols = total_num_vars / 2;
-
-                // let layer_label = self.circuit_map.get_label_from_layer_id(layer_id)?;
-                // let commitment = pre_commitments.get(&layer_label).cloned();
                 Ok((
                     layer_id,
                     (
-                        HyraxInputLayerDescription {
-                            layer_id,
-                            num_vars: total_num_vars,
-                            log_num_cols,
-                        },
+                        HyraxInputLayerDescription::new(layer_id, total_num_vars),
                         None,
                     ),
                 ))

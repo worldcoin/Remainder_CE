@@ -49,7 +49,7 @@ fn test_basic_circuit() {
     circuit.set_input("Input 2", input_shred_2_data);
     circuit.set_input("Expected Output", expected_output_data);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }

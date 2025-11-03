@@ -117,7 +117,7 @@ mod tests {
             )
             .unwrap();
 
-        let mut provable_circuit = circuit.finalize_hyrax().unwrap();
+        let mut provable_circuit = circuit.gen_hyrax_provable_circuit().unwrap();
 
         provable_circuit
             .set_pre_commitment(
@@ -238,7 +238,7 @@ mod tests {
 /// case.
 pub fn test_iriscode_v3_with_hyrax_helper(mask: bool) {
     let circuit = circuit_description_and_inputs(mask, None).unwrap();
-    let provable_circuit = circuit.finalize_hyrax().unwrap();
+    let provable_circuit = circuit.gen_hyrax_provable_circuit().unwrap();
     test_iriscode_circuit_with_hyrax_helper(provable_circuit);
 }
 

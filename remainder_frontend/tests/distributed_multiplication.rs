@@ -123,7 +123,7 @@ fn test_dataparallel_wraparound_multiplication_circuit() {
     circuit.set_input("Dataparallel Bigger MLE", dataparallel_mle_bigger);
     circuit.set_input("Dataparallel Combined MLE", dataparallel_mle_combined);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

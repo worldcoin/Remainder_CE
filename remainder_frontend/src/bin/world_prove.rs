@@ -17,6 +17,11 @@ use remainder_hyrax::hyrax_gkr::hyrax_input_layer::HyraxProverInputCommitment;
 use remainder_shared_types::{perform_function_under_expected_configs, Bn256Point, Fr};
 use zeroize::Zeroize;
 
+#[cfg(feature = "print-trace")]
+use tracing::Level;
+#[cfg(feature = "print-trace")]
+use tracing_subscriber::fmt;
+
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct CliArguments {
@@ -34,6 +39,9 @@ struct CliArguments {
 }
 
 fn main() {
+    #[cfg(feature = "print-trace")]
+    let _subscriber = fmt().with_max_level(Level::DEBUG).init();
+
     // Sanitycheck by logging the current settings.
     perform_function_under_expected_configs!(
         print_features_status,

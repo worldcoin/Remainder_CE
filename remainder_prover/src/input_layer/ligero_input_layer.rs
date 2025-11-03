@@ -14,10 +14,13 @@ pub type LigeroRoot<F> = LcRoot<LigeroAuxInfo<F>, F>;
 
 /// Type alias for Ligero input layer description + optional precommit,
 /// to be used on the prover's end.
-pub type LigeroInputLayerDescriptionWithPrecommit<F> = (
-    LigeroInputLayerDescription<F>,
-    Option<LcCommit<PoseidonSpongeHasher<F>, LigeroAuxInfo<F>, F>>,
-);
+pub type LigeroInputLayerDescriptionWithOptionalProverPrecommit<F> =
+    (LigeroInputLayerDescription<F>, Option<LigeroCommitment<F>>);
+
+/// Type alias for Ligero input layer description + optional precommit,
+/// to be used on the verifier's end.
+pub type LigeroInputLayerDescriptionWithOptionalVerifierPrecommit<F> =
+    (LigeroInputLayerDescription<F>, Option<LigeroRoot<F>>);
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Hash)]
 #[serde(bound = "F: Field")]

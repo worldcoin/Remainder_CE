@@ -99,7 +99,7 @@ fn test_linear_and_nonlinear_vars_circuit_newmainder() {
     circuit.set_input("Selector MLE", selector_mle);
     circuit.set_input("Product MLE", product_mle);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

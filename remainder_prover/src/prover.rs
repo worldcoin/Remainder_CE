@@ -223,7 +223,6 @@ pub fn prove<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
 /// Verify a GKR proof from a transcript.
 pub fn verify<F: Halo2FFTFriendlyField>(
     verifiable_circuit: &VerifiableCircuit<F>,
-    mut predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
     circuit_description_hash_type: CircuitHashType,
     transcript: &mut impl VerifierTranscript<F>,
     proof_config: &ProofConfig,
@@ -258,6 +257,8 @@ pub fn verify<F: Halo2FFTFriendlyField>(
         hash_value_as_field_elems
     );
 
+    let mut public_inputs = verifiable_circuit.predetermined_public_inputs.clone();
+
     // Read and check public input values to transcript in order of layer id.
     verifiable_circuit
         .get_public_input_layer_ids()
@@ -273,7 +274,7 @@ pub fn verify<F: Halo2FFTFriendlyField>(
             let (transcript_evaluations, _expected_input_hash_chain_digest) = transcript
                 .consume_input_elements("Public input layer", 1 << layer_desc.num_vars)
                 .unwrap();
-            match predetermined_public_inputs.get(&layer_id) {
+            match verifiable_circuit.get_public_input_mle_ref(&layer_id) {
                 Some(predetermined_public_input) => {
                     // If the verifier already knows what the input should be
                     // ahead of time, check against the transcript evaluations
@@ -287,7 +288,7 @@ pub fn verify<F: Halo2FFTFriendlyField>(
                 None => {
                     // Otherwise, we append the proof values read from
                     // transcript to the public inputs.
-                    predetermined_public_inputs
+                    public_inputs
                         .insert(layer_id, MultilinearExtension::new(transcript_evaluations));
                     Ok(())
                 }
@@ -297,7 +298,7 @@ pub fn verify<F: Halo2FFTFriendlyField>(
 
     // Sanitycheck: ensure that all of the public inputs are populated
     assert_eq!(
-        predetermined_public_inputs.len(),
+        public_inputs.len(),
         verifiable_circuit.get_public_input_layer_ids().len()
     );
 
@@ -338,9 +339,7 @@ pub fn verify<F: Halo2FFTFriendlyField>(
 
     // Check the claims on public input layers via explicit evaluation.
     for claim in public_input_layer_claims.iter() {
-        let input_mle = predetermined_public_inputs
-            .get(&claim.get_to_layer_id())
-            .unwrap();
+        let input_mle = public_inputs.get(&claim.get_to_layer_id()).unwrap();
         let evaluation = input_mle.evaluate_at_point(claim.get_point());
         if evaluation != claim.get_eval() {
             return Err(anyhow!(GKRError::EvaluationMismatch(

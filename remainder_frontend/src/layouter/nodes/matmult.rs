@@ -208,7 +208,7 @@ mod test {
         circuit.set_input("Matrix B MLE", matrix_b_mle);
         circuit.set_input("Expected Result MLE", expected_matrix_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         // Prove/verify the circuit
         test_circuit_with_runtime_optimized_config(&provable_circuit);
@@ -254,7 +254,7 @@ mod test {
         circuit.set_input("Matrix B MLE", matrix_b_mle);
         circuit.set_input("Expected Result MLE", expected_matrix_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         // Prove/verify the circuit
         test_circuit_with_runtime_optimized_config(&provable_circuit);
