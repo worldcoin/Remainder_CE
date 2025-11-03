@@ -1,7 +1,6 @@
 use remainder::{
     circuit_layout::{ProvableCircuit, VerifiableCircuit},
     mle::evals::MultilinearExtension,
-    prover::{prove, verify},
 };
 use remainder_frontend::{
     abstract_expr::AbstractExpression,
@@ -67,12 +66,12 @@ fn build_circuit() -> Circuit<Fr> {
 fn prove_circuit(provable_circuit: &ProvableCircuit<Fr>) -> (Transcript<Fr>, ProofConfig) {
     let mut transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("dummy label");
 
-    let proof_config = prove(
-        provable_circuit,
-        remainder_shared_types::circuit_hash::CircuitHashType::Poseidon,
-        &mut transcript_writer,
-    )
-    .expect("Proving failed!");
+    let proof_config = provable_circuit
+        .prove(
+            remainder_shared_types::circuit_hash::CircuitHashType::Poseidon,
+            &mut transcript_writer,
+        )
+        .expect("Proving failed!");
 
     let proof = transcript_writer.get_transcript();
 
@@ -86,13 +85,13 @@ fn verify_circuit(
 ) {
     let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(proof);
 
-    verify(
-        verifiable_circuit,
-        remainder_shared_types::circuit_hash::CircuitHashType::Poseidon,
-        &mut transcript_reader,
-        proof_config,
-    )
-    .expect("Verification Failed!");
+    verifiable_circuit
+        .verify(
+            remainder_shared_types::circuit_hash::CircuitHashType::Poseidon,
+            &mut transcript_reader,
+            proof_config,
+        )
+        .expect("Verification Failed!");
 }
 
 #[test]

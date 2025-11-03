@@ -8,7 +8,7 @@ use remainder_shared_types::{
 
 use crate::{
     circuit_layout::HyraxProvableCircuit,
-    hyrax_gkr::{verify_hyrax_proof, HyraxProof},
+    hyrax_gkr::verify_hyrax_proof,
     utils::{get_crypto_chacha20_prng, vandermonde::VandermondeInverse},
 };
 
@@ -43,7 +43,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
 
     // --- Compute actual Hyrax proof ---
     let (proof, proof_config) = perform_function_under_expected_configs!(
-        HyraxProof::prove,
+        HyraxProvableCircuit::prove,
         &gkr_circuit_prover_config,
         &gkr_circuit_verifier_config,
         &mut provable_circuit,

@@ -9,7 +9,7 @@ use remainder_shared_types::{
 
 use remainder_hyrax::{
     circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit},
-    hyrax_gkr::{verify_hyrax_proof, HyraxProof},
+    hyrax_gkr::verify_hyrax_proof,
     utils::vandermonde::VandermondeInverse,
 };
 
@@ -215,13 +215,8 @@ pub fn test_mpc_circuit_with_public_layers_helper(
     );
 
     // --- Compute actual Hyrax proof ---
-    let (proof, proof_config) = HyraxProof::prove(
-        &mut mpc_circuit,
-        &committer,
-        blinding_rng,
-        converter,
-        &mut transcript,
-    );
+    let (proof, proof_config) =
+        mpc_circuit.prove(&committer, blinding_rng, converter, &mut transcript);
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
@@ -261,7 +256,7 @@ pub fn test_mpc_circuit_with_hyrax_helper(mut mpc_circuit: HyraxProvableCircuit<
 
     // --- Compute actual Hyrax proof ---
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        HyraxProvableCircuit::prove,
         &gkr_circuit_prover_config,
         &mut mpc_circuit,
         &committer,
@@ -311,7 +306,7 @@ pub fn test_mpc_circuit_with_hyrax_helper_and_verifiable_circuit(
 
     // --- Compute actual Hyrax proof ---
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        HyraxProvableCircuit::prove,
         &gkr_circuit_prover_config,
         &mut mpc_circuit,
         &committer,
@@ -368,7 +363,7 @@ pub fn test_mpc_circuit_with_precommits_hyrax_helper(
 
     // --- Compute actual Hyrax proof ---
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        HyraxProvableCircuit::prove,
         &gkr_circuit_prover_config,
         &mut mpc_circuit,
         &committer,
