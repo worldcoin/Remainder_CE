@@ -362,7 +362,7 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
                     )
                     .unwrap_or(F::ZERO);
                 remap_table[num_entries_per_dataparallel_instance * data_parallel_idx
-                    + (*dest_idx as usize)] = id_val;
+                    + (*dest_idx as usize)] += id_val;
             });
         });
         let output_data = MultilinearExtension::new(remap_table);
