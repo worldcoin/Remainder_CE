@@ -7,9 +7,6 @@ pub mod components;
 // components.
 pub mod digits;
 
-// Module containing example code from the documentation
-pub mod examples;
-
 pub mod layouter;
 
 // module for worldcoin circuits
