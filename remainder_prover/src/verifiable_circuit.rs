@@ -24,11 +24,15 @@ use anyhow::{anyhow, Result};
 /// the private input layers.
 #[derive(Clone, Debug)]
 pub struct VerifiableCircuit<F: Halo2FFTFriendlyField> {
-    pub(crate) circuit_description: GKRCircuitDescription<F>,
-    pub(crate) predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
-    pub(crate) private_inputs:
-        HashMap<LayerId, LigeroInputLayerDescriptionWithOptionalVerifierPrecommit<F>>,
-    pub(crate) layer_label_to_layer_id: HashMap<String, LayerId>,
+    circuit_description: GKRCircuitDescription<F>,
+    /// A partial mapping of public input layers to MLEs.
+    /// Some (or all) public input layer IDs may be missing.
+    /// The input layers present in this mapping are public input data that the verifier placed in
+    /// the circuit, and which will be checked for equality with the respective public inputs in the
+    /// proof during verification.
+    predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
+    private_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithOptionalVerifierPrecommit<F>>,
+    layer_label_to_layer_id: HashMap<String, LayerId>,
 }
 
 impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
@@ -92,7 +96,10 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
 
     /// Returns the data associated with the public input layer with ID `layer_id`, or None if
     /// no such public input layer exists.
-    pub fn get_public_input_mle_ref(&self, layer_id: &LayerId) -> Option<&MultilinearExtension<F>> {
+    pub fn get_predetermined_public_input_mle_ref(
+        &self,
+        layer_id: &LayerId,
+    ) -> Option<&MultilinearExtension<F>> {
         self.predetermined_public_inputs.get(layer_id)
     }
 
@@ -168,7 +175,7 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
                 let (transcript_evaluations, _expected_input_hash_chain_digest) = transcript
                     .consume_input_elements("Public input layer", 1 << layer_desc.num_vars)
                     .unwrap();
-                match self.get_public_input_mle_ref(&layer_id) {
+                match self.get_predetermined_public_input_mle_ref(&layer_id) {
                     Some(predetermined_public_input) => {
                         // If the verifier already knows what the input should be
                         // ahead of time, check against the transcript evaluations
