@@ -1,6 +1,6 @@
 use remainder::{
-    circuit_layout::{ProvableCircuit, VerifiableCircuit},
-    mle::evals::MultilinearExtension,
+    mle::evals::MultilinearExtension, provable_circuit::ProvableCircuit,
+    verifiable_circuit::VerifiableCircuit,
 };
 use remainder_frontend::{
     abstract_expr::AbstractExpression,

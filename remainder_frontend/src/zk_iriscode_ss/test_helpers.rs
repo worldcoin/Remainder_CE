@@ -6,11 +6,11 @@ use crate::zk_iriscode_ss::data::{
     IriscodeCircuitAuxData, IriscodeCircuitInputData,
 };
 use ndarray::Array2;
-use remainder::circuit_layout::ProvableCircuit;
 use remainder::input_layer::{
     ligero_input_layer::LigeroInputLayerDescription, InputLayerDescription,
 };
-use remainder_hyrax::circuit_layout::HyraxProvableCircuit;
+use remainder::provable_circuit::ProvableCircuit;
+use remainder_hyrax::provable_circuit::HyraxProvableCircuit;
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::{Bn256Point, Field, Fr};
 

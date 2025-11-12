@@ -11,7 +11,7 @@ use remainder_shared_types::{
 };
 
 use remainder_hyrax::{
-    circuit_layout::HyraxProvableCircuit, hyrax_gkr::verify_hyrax_proof,
+    hyrax_gkr::verify_hyrax_proof, provable_circuit::HyraxProvableCircuit,
     utils::vandermonde::VandermondeInverse,
 };
 
@@ -42,9 +42,9 @@ mod tests {
     };
     use rand::rngs::ThreadRng;
     use remainder_hyrax::{
-        circuit_layout::HyraxVerifiableCircuit,
         hyrax_gkr::{hyrax_input_layer::HyraxProverInputCommitment, HyraxProof},
         utils::vandermonde::VandermondeInverse,
+        verifiable_circuit::HyraxVerifiableCircuit,
     };
     use remainder_shared_types::{
         config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig, ProofConfig},

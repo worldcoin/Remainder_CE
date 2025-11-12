@@ -2,9 +2,9 @@
 #![allow(clippy::too_many_arguments)]
 use std::collections::HashMap;
 
-use crate::circuit_layout::HyraxVerifiableCircuit;
 use crate::hyrax_gkr::hyrax_input_layer::HyraxInputLayerProof;
 use crate::utils::vandermonde::VandermondeInverse;
+use crate::verifiable_circuit::HyraxVerifiableCircuit;
 use ark_std::{end_timer, start_timer};
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;

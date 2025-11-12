@@ -24,7 +24,7 @@ use remainder::mle::evals::MultilinearExtension;
 use remainder::prover::GKRCircuitDescription;
 use remainder::utils::mle::pad_with;
 use remainder::{
-    circuit_building_context::CircuitBuildingContext, circuit_layout::VerifiableCircuit,
+    circuit_building_context::CircuitBuildingContext, verifiable_circuit::VerifiableCircuit,
 };
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::halo2curves::{bn256::G1 as Bn256Point, group::Group};
@@ -47,14 +47,14 @@ use super::orb::SerializedImageCommitment;
 use crate::hyrax_worldcoin::orb::{IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING};
 use remainder_hyrax::utils::vandermonde::VandermondeInverse;
 use remainder_hyrax::{
-    circuit_layout::HyraxProvableCircuit,
-    hyrax_gkr::{self, verify_hyrax_proof, HyraxProof},
-};
-use remainder_hyrax::{
-    circuit_layout::HyraxVerifiableCircuit,
     hyrax_gkr::hyrax_input_layer::{
         commit_to_input_values, HyraxInputLayerDescription, HyraxProverInputCommitment,
     },
+    verifiable_circuit::HyraxVerifiableCircuit,
+};
+use remainder_hyrax::{
+    hyrax_gkr::{self, verify_hyrax_proof, HyraxProof},
+    provable_circuit::HyraxProvableCircuit,
 };
 use sha256::digest as sha256_digest;
 use thiserror::Error;

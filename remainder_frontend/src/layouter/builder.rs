@@ -12,8 +12,8 @@ use std::{
 use ark_std::log2;
 use itertools::Itertools;
 use remainder_hyrax::{
-    circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit},
     hyrax_gkr::hyrax_input_layer::HyraxInputLayerDescription,
+    provable_circuit::HyraxProvableCircuit, verifiable_circuit::HyraxVerifiableCircuit,
 };
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::{curves::PrimeOrderCurve, Field, Halo2FFTFriendlyField};
@@ -38,13 +38,15 @@ use crate::{
     },
 };
 use remainder::{
-    circuit_layout::{CircuitLocation, ProvableCircuit, VerifiableCircuit},
+    circuit_layout::CircuitLocation,
     input_layer::{ligero_input_layer::LigeroInputLayerDescription, InputLayerDescription},
     layer::{gate::BinaryOperation, layer_enum::LayerDescriptionEnum, LayerId},
     mle::evals::MultilinearExtension,
     output_layer::OutputLayerDescription,
+    provable_circuit::ProvableCircuit,
     prover::{GKRCircuitDescription, GKRError},
     utils::mle::build_composite_mle,
+    verifiable_circuit::VerifiableCircuit,
 };
 
 use anyhow::{anyhow, bail, Result};

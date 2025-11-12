@@ -1,6 +1,5 @@
 #![allow(clippy::type_complexity)]
 
-use crate::circuit_layout::{ProvableCircuit, VerifiableCircuit};
 use ark_std::{end_timer, start_timer};
 
 use itertools::Itertools;
@@ -25,6 +24,9 @@ use std::fs::File;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::BufWriter;
 use std::path::Path;
+
+use crate::provable_circuit::ProvableCircuit;
+use crate::verifiable_circuit::VerifiableCircuit;
 
 use super::GKRCircuitDescription;
 
