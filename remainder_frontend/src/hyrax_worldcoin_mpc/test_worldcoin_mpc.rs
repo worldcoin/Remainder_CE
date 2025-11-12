@@ -8,9 +8,8 @@ use remainder_shared_types::{
 };
 
 use remainder_hyrax::{
-    circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit},
-    hyrax_gkr::verify_hyrax_proof,
-    utils::vandermonde::VandermondeInverse,
+    hyrax_gkr::verify_hyrax_proof, provable_circuit::HyraxProvableCircuit,
+    utils::vandermonde::VandermondeInverse, verifiable_circuit::HyraxVerifiableCircuit,
 };
 
 // TODO: Make sure the descriptions of the tests match what they actually do!!

@@ -15,12 +15,13 @@ use crate::{
     zk_iriscode_ss::parameters::{IRISCODE_LEN, SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS},
 };
 use remainder_hyrax::{
-    circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit},
     hyrax_gkr::{
         hyrax_input_layer::{commit_to_input_values, HyraxProverInputCommitment},
         verify_hyrax_proof, HyraxProof,
     },
+    provable_circuit::HyraxProvableCircuit,
     utils::vandermonde::VandermondeInverse,
+    verifiable_circuit::HyraxVerifiableCircuit,
 };
 
 use itertools::Itertools;

@@ -13,7 +13,6 @@ pub mod layers;
 use std::collections::{HashMap, HashSet};
 
 use self::layers::Layers;
-use crate::circuit_layout::ProvableCircuit;
 use crate::circuit_layout::{CircuitEvalMap, CircuitLocation};
 use crate::claims::claim_aggregation::{prover_aggregate_claims, verifier_aggregate_claims};
 use crate::claims::{Claim, ClaimTracker};
@@ -30,6 +29,7 @@ use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
 use crate::mle::mle_enum::MleEnum;
 use crate::output_layer::{OutputLayer, OutputLayerDescription};
+use crate::provable_circuit::ProvableCircuit;
 use crate::utils::mle::verify_claim;
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;

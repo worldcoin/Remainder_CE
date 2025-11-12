@@ -7,8 +7,8 @@ use remainder_shared_types::{
 };
 
 use crate::{
-    circuit_layout::HyraxProvableCircuit,
     hyrax_gkr::verify_hyrax_proof,
+    provable_circuit::HyraxProvableCircuit,
     utils::{get_crypto_chacha20_prng, vandermonde::VandermondeInverse},
 };
 
