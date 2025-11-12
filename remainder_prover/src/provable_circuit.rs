@@ -78,12 +78,12 @@ impl<F: Halo2FFTFriendlyField> ProvableCircuit<F> {
             })
             .collect();
 
-        VerifiableCircuit {
-            circuit_description: self.circuit_description.clone(),
+        VerifiableCircuit::new(
+            self.circuit_description.clone(),
             predetermined_public_inputs,
             private_inputs,
-            layer_label_to_layer_id: self.layer_label_to_layer_id.clone(),
-        }
+            self.layer_label_to_layer_id.clone(),
+        )
     }
 
     /// Returns a reference to the [GKRCircuitDescription] of this circuit.

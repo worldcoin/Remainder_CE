@@ -15,11 +15,15 @@ use anyhow::{anyhow, Result};
 /// and the data for all the public input layers, ready to be verified against a proof.
 #[derive(Clone, Debug)]
 pub struct HyraxVerifiableCircuit<C: PrimeOrderCurve> {
-    pub(crate) circuit_description: GKRCircuitDescription<C::Scalar>,
-    pub(crate) predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<C::Scalar>>,
-    pub(crate) private_inputs:
-        HashMap<LayerId, HyraxInputLayerDescriptionWithOptionalVerifierPrecommit<C>>,
-    pub(crate) layer_label_to_layer_id: HashMap<String, LayerId>,
+    circuit_description: GKRCircuitDescription<C::Scalar>,
+    /// A partial mapping of public input layers to MLEs.
+    /// Some (or all) public input layer IDs may be missing.
+    /// The input layers present in this mapping are public input data that the verifier placed in
+    /// the circuit, and which will be checked for equality with the respective public inputs in the
+    /// proof during verification.
+    predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<C::Scalar>>,
+    private_inputs: HashMap<LayerId, HyraxInputLayerDescriptionWithOptionalVerifierPrecommit<C>>,
+    layer_label_to_layer_id: HashMap<String, LayerId>,
 }
 
 impl<C: PrimeOrderCurve> HyraxVerifiableCircuit<C> {
@@ -91,7 +95,7 @@ impl<C: PrimeOrderCurve> HyraxVerifiableCircuit<C> {
 
     /// Returns the data associated with the public input layer with ID `layer_id`, or None if
     /// no such public input layer exists.
-    pub fn get_public_input_mle_ref(
+    pub fn get_predetermined_public_input_mle_ref(
         &self,
         layer_id: &LayerId,
     ) -> Option<&MultilinearExtension<C::Scalar>> {

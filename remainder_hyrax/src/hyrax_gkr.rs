@@ -287,7 +287,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
 
             // Check the MLE in the proof against any pre-existing public MLE in the circuit
             // description.
-            if let Some(expected_mle) = verifiable_circuit.get_public_input_mle_ref(layer_id) {
+            if let Some(expected_mle) = verifiable_circuit.get_predetermined_public_input_mle_ref(layer_id) {
                 debug!("Found MLE for Layer with ID {layer_id} in HyraxVerifiableCircuit. Checking against MLE in HyraxProof...");
                 assert_eq!(expected_mle, values);
             }

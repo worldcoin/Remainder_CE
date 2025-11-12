@@ -101,12 +101,12 @@ impl<C: PrimeOrderCurve> HyraxProvableCircuit<C> {
             self.inputs.keys().cloned().sorted().collect_vec()
         );
 
-        HyraxVerifiableCircuit {
-            circuit_description: self.circuit_description.clone(),
-            predetermined_public_inputs: public_inputs,
+        HyraxVerifiableCircuit::new(
+            self.circuit_description.clone(),
+            public_inputs,
             private_inputs,
-            layer_label_to_layer_id: self.layer_label_to_layer_id.clone(),
-        }
+            self.layer_label_to_layer_id.clone(),
+        )
     }
 
     /// Returns a reference to the [GKRCircuitDescription] of this circuit.
