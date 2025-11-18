@@ -36,7 +36,12 @@ parallel = [
     "remainder/parallel",
     "remainder-ligero/parallel",
 ]
-print-trace = ["remainder-shared-types/print-trace"]
+print-trace = [
+    "remainder-shared-types/print-trace",
+    "remainder-hyrax/print-trace",
+    "remainder/print-trace",
+    "remainder-ligero/print-trace",
+]
 # For printing circuit stats and other performance-related things.
 performance-debug = ["remainder/performance-debug"]
 
