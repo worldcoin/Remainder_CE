@@ -57,7 +57,7 @@ fn main() {
     prover_circuit.set_input("Witness", witness_mle);
     prover_circuit.set_input("Multiplicities", multiplicities_mle);
 
-    let provable_circuit = prover_circuit.finalize().unwrap();
+    let provable_circuit = prover_circuit.gen_provable_circuit().unwrap();
 
     // Prove the circuit
     let (proof_config, proof_as_transcript) =
@@ -66,12 +66,6 @@ fn main() {
     // Create verifier circuit description and attach lookup table as public
     // input to it.
     verifier_circuit.set_input("Table", table_mle);
-    let (verifiable_circuit, predetermined_public_inputs) =
-        verifier_circuit.gen_verifiable_circuit().unwrap();
-    verify_circuit_with_proof_config(
-        &verifiable_circuit,
-        predetermined_public_inputs,
-        &proof_config,
-        proof_as_transcript,
-    );
+    let verifiable_circuit = verifier_circuit.gen_verifiable_circuit().unwrap();
+    verify_circuit_with_proof_config(&verifiable_circuit, &proof_config, proof_as_transcript);
 }

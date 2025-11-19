@@ -76,7 +76,7 @@ fn main() {
     prover_circuit.set_input("RHS candidates for binary gate", rhs_mle.clone());
     prover_circuit.set_input("Expected output", expected_output_mle.clone());
 
-    let provable_circuit = prover_circuit.finalize().unwrap();
+    let provable_circuit = prover_circuit.gen_provable_circuit().unwrap();
 
     // Prove the circuit
     let (proof_config, proof_as_transcript) =
@@ -87,12 +87,6 @@ fn main() {
     verifier_circuit.set_input("RHS candidates for binary gate", rhs_mle);
     verifier_circuit.set_input("Expected output", expected_output_mle);
 
-    let (verifiable_circuit, predetermined_public_inputs) =
-        verifier_circuit.gen_verifiable_circuit().unwrap();
-    verify_circuit_with_proof_config(
-        &verifiable_circuit,
-        predetermined_public_inputs,
-        &proof_config,
-        proof_as_transcript,
-    );
+    let verifiable_circuit = verifier_circuit.gen_verifiable_circuit().unwrap();
+    verify_circuit_with_proof_config(&verifiable_circuit, &proof_config, proof_as_transcript);
 }

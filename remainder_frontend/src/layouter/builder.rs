@@ -393,15 +393,21 @@ impl<F: Field> CircuitBuilder<F> {
         Ok(Circuit::new(circuit_description, self.circuit_map))
     }
 
-    /// A default build function that combines layers greedily such that
-    /// the circuit is optimized for having the smallest number of layers possible.
+    /// A build function that combines layers greedily such that the circuit is optimized for having
+    /// the smallest number of layers possible.
     pub fn build_with_layer_combination(self) -> Result<Circuit<F>> {
         self.build_with_max_layer_size(None)
     }
 
-    /// A default build function that does not combine any layers.
+    /// A build function that does not combine any layers.
     pub fn build_without_layer_combination(self) -> Result<Circuit<F>> {
         self.build_with_max_layer_size(Some(0))
+    }
+
+    /// A default build function which does _not_ combine layers.
+    /// Equivalent to `build_without_layer_combination`.
+    pub fn build(self) -> Result<Circuit<F>> {
+        self.build_without_layer_combination()
     }
 }
 
