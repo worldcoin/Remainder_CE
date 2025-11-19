@@ -6,8 +6,8 @@ use crate::{
     layouter::builder::{Circuit, LayerVisibility},
     worldcoin_mpc::{
         circuits::{
-            build_circuit, mpc_attach_data, MPC_IRISCODE_INPUT_LAYER, MPC_MASKCODE_INPUT_LAYER,
-            MPC_SLOPES_LAYER,
+            build_circuit, mpc_attach_data, MPC_AUXILIARY_INVARIANT_LAYER, MPC_AUXILIARY_LAYER,
+            MPC_IRISCODE_INPUT_LAYER, MPC_MASKCODE_INPUT_LAYER, MPC_SHARES_LAYER, MPC_SLOPES_LAYER,
         },
         data::{gen_mpc_encoding_matrix, gen_mpc_evaluation_points, gen_mpc_input_data},
         parameters::{GR4_MODULUS, MPC_NUM_IRIS_4_CHUNKS},
@@ -292,6 +292,29 @@ impl MPCProver {
         mpc_circuit_and_aux_mles_all_3_parties: MPCCircuitsAndConstData<Fr>,
         rng: &mut (impl CryptoRng + RngCore),
     ) -> Self {
+        // Verify `circuit` contains the necessary input layers, which do _not_ contain any data
+        // yet.
+        // TODO: Provide methods in the `Circuit` struct that can check whether
+        // 1. All input MLEs are empty, and
+        // 2. The circuit contains input layers with labels corresponding exactly to a given list of
+        // labels.
+        // Having those we can replace the below tests with two such method calls.
+        let circuit = &mpc_circuit_and_aux_mles_all_3_parties.mpc_circuit;
+        assert!(!circuit
+            .input_layer_contains_data(MPC_AUXILIARY_LAYER)
+            .unwrap());
+        assert!(!circuit
+            .input_layer_contains_data(MPC_AUXILIARY_INVARIANT_LAYER)
+            .unwrap());
+        assert!(!circuit.input_layer_contains_data(MPC_SHARES_LAYER).unwrap());
+        assert!(!circuit.input_layer_contains_data(MPC_SLOPES_LAYER).unwrap());
+        assert!(!circuit
+            .input_layer_contains_data(MPC_IRISCODE_INPUT_LAYER)
+            .unwrap());
+        assert!(!circuit
+            .input_layer_contains_data(MPC_MASKCODE_INPUT_LAYER)
+            .unwrap());
+
         let committer = Self::default_committer();
 
         let slope_input_layer_description = &mpc_circuit_and_aux_mles_all_3_parties

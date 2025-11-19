@@ -593,6 +593,11 @@ impl<F: Field> V3CircuitAndAuxData<F> {
     ) -> Self {
         // Verify `circuit` contains the necessary input layers, which do _not_ contain any data
         // yet.
+        // TODO: Provide methods in the `Circuit` struct that can check whether
+        // 1. All input MLEs are empty, and
+        // 2. The circuit contains input layers with labels corresponding exactly to a given list of
+        // labels.
+        // Having those we can replace the below tests with two such method calls.
         assert!(!circuit
             .input_layer_contains_data(V3_INPUT_IMAGE_LAYER)
             .unwrap());
