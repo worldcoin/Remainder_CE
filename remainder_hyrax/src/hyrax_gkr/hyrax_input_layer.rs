@@ -4,7 +4,7 @@ use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use rand::{CryptoRng, Rng, RngCore};
 use remainder::{
-    input_layer::InputLayerDescription, layer::LayerId, mle::evals::MultilinearExtension,
+    input_layer::InputLayerDescription, layer::LayerId, mle::evals::MultilinearExtension, 
 };
 use remainder_shared_types::{
     config::global_config::global_prover_hyrax_batch_opening,
@@ -89,13 +89,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                 .collect_vec()
         };
 
-        // Zeroize each of the blinding factors once we have committed to all of the claims.
-        prover_commitment
-            .blinding_factors_matrix
-            .iter_mut()
-            .for_each(|blinding_factor| {
-                blinding_factor.zeroize();
-            });
         end_timer!(eval_proof_timer);
 
         HyraxInputLayerProof {

@@ -78,8 +78,7 @@ fn prove_circuit(provable_circuit: &ProvableCircuit<Fr>) -> (Transcript<Fr>, Pro
     .expect("Proving failed!");
 
     let proof = transcript_writer.get_transcript();
-    dbg!(&proof);
-
+    
     (proof, proof_config)
 }
 

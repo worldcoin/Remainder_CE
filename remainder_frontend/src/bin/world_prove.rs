@@ -11,13 +11,10 @@ use remainder_frontend::{
     hyrax_worldcoin::orb::load_image_commitment,
     hyrax_worldcoin_mpc::mpc_prover::{print_features_status, V3MPCCircuitAndAuxMles, V3MPCProver},
     worldcoin_mpc::parameters::NUM_PARTIES,
-    zk_iriscode_ss::io::read_bytes_from_file,
+    zk_iriscode_ss::{self, io::read_bytes_from_file},
 };
 use remainder_hyrax::hyrax_gkr::hyrax_input_layer::HyraxProverInputCommitment;
-use remainder_shared_types::{
-    config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
-    perform_function_under_expected_configs, Bn256Point, Fr,
-};
+use remainder_shared_types::{perform_function_under_expected_configs, Bn256Point, Fr};
 use zeroize::Zeroize;
 
 #[derive(Parser)]
@@ -40,16 +37,16 @@ fn main() {
     // Sanitycheck by logging the current settings.
     perform_function_under_expected_configs!(
         print_features_status,
-        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
-        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
+        &zk_iriscode_ss::EXPECTED_PROVER_CONFIG,
+        &zk_iriscode_ss::EXPECTED_VERIFIER_CONFIG,
     );
 
     // Compute all proofs and serialize.
     let cli = CliArguments::parse();
     perform_function_under_expected_configs!(
         prove_all_proofs,
-        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
-        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
+        &zk_iriscode_ss::EXPECTED_PROVER_CONFIG,
+        &zk_iriscode_ss::EXPECTED_VERIFIER_CONFIG,
         &cli.circuit,
         &cli.input,
         &cli.output_dir
@@ -88,24 +85,8 @@ fn prove_all_proofs(
     let v3_mpc_circuit_and_aux_data =
         V3MPCCircuitAndAuxMles::<Fr>::deserialize(&serialized_circuit);
 
-    // 1. Do we need to check the circuit SHA?
-    // Proof transcript contains a SHA so we're probably good and this is a sanity check.
-    /*
-    let expected_circuit_description =
-        circuit_description().expect("Failed to create circuit description.");
-
-    // Make sure that the circuit description we read is equal to the one we built.
-    let circuit_hash = sha256::digest(bincode::serialize(&expected_circuit_description).unwrap());
-    println!("Circuit hash: {circuit_hash}");
-
-    assert_eq!(
-        bincode::serialize(&expected_circuit_description).unwrap(),
-        serialized_circuit
-    );
-    */
-
     let mut v3_mpc_prover = V3MPCProver::new(
-        GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
+        zk_iriscode_ss::EXPECTED_PROVER_CONFIG,
         v3_mpc_circuit_and_aux_data.v3_circuit_and_aux_data,
         v3_mpc_circuit_and_aux_data.mpc_circuit_and_aux_mles_all_3_parties,
         &mut prng,
