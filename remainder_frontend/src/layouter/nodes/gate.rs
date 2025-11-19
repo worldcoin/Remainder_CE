@@ -181,7 +181,7 @@ mod test {
         circuit.set_input("Positive Input", mle);
         circuit.set_input("Negative Input", neg_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
@@ -237,7 +237,7 @@ mod test {
         circuit.set_input("Positive Input", mle);
         circuit.set_input("Negative Input", neg_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }

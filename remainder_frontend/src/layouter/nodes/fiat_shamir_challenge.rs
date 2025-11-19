@@ -108,7 +108,7 @@ mod test {
         let mut circuit = builder.build_with_layer_combination().unwrap();
         circuit.set_input("input a", input_a_data);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }

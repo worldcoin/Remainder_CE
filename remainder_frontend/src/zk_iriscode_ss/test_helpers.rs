@@ -6,11 +6,11 @@ use crate::zk_iriscode_ss::data::{
     IriscodeCircuitAuxData, IriscodeCircuitInputData,
 };
 use ndarray::Array2;
-use remainder::circuit_layout::ProvableCircuit;
 use remainder::input_layer::{
     ligero_input_layer::LigeroInputLayerDescription, InputLayerDescription,
 };
-use remainder_hyrax::circuit_layout::HyraxProvableCircuit;
+use remainder::provable_circuit::ProvableCircuit;
+use remainder_hyrax::provable_circuit::HyraxProvableCircuit;
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::{Bn256Point, Field, Fr};
 
@@ -86,26 +86,26 @@ fn small_circuit_with_inputs<F: Field>(use_private_layers: bool) -> Result<Circu
 /// circuit.
 pub fn small_circuit_with_public_inputs() -> Result<ProvableCircuit<Fr>> {
     let circuit = small_circuit_with_inputs(false)?;
-    circuit.finalize()
+    circuit.gen_provable_circuit()
 }
 
 /// Return a provable circuit description with public inputs for a trivial 2x2 identity matrix
 /// circuit.
 pub fn small_circuit_with_private_inputs() -> Result<ProvableCircuit<Fr>> {
     let circuit = small_circuit_with_inputs(true)?;
-    circuit.finalize()
+    circuit.gen_provable_circuit()
 }
 
 /// Return a hyrax provable circuit description with public inputs for a trivial 2x2 identity matrix
 /// circuit.
 pub fn small_hyrax_circuit_with_public_inputs() -> Result<HyraxProvableCircuit<Bn256Point>> {
     let circuit = small_circuit_with_inputs(false)?;
-    circuit.finalize_hyrax()
+    circuit.gen_hyrax_provable_circuit()
 }
 
 /// Return a hyrax provable circuit description with hyrax private inputs for a trivial 2x2 identity
 /// matrix circuit.
 pub fn small_hyrax_circuit_with_private_inputs() -> Result<HyraxProvableCircuit<Bn256Point>> {
     let circuit = small_circuit_with_inputs(true)?;
-    circuit.finalize_hyrax()
+    circuit.gen_hyrax_provable_circuit()
 }

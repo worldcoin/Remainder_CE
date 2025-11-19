@@ -60,7 +60,7 @@ fn test_complementary_recomposition_vertical() {
     circuit.set_input("Bits Input Shred", bits.into());
     circuit.set_input("Values Input Shred", values.into());
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }
@@ -102,7 +102,7 @@ fn test_unsigned_recomposition() {
     });
     circuit.set_input("Expected Input Shred", expected);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }
@@ -156,7 +156,7 @@ fn test_complementary_recomposition() {
     circuit.set_input("Expected Input Shred", expected);
     circuit.set_input("Bits Input Shred", bits);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }
@@ -176,7 +176,7 @@ fn test_bits_are_binary_soundness() {
 
     circuit.set_input("Bits Input Shred", bits);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }
@@ -195,7 +195,7 @@ fn test_bits_are_binary() {
 
     circuit.set_input("Bits Input Shred", bits);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }

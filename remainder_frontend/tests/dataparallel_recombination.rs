@@ -118,7 +118,7 @@ fn test_dataparallel_recombination_newmainder() {
     circuit.set_input("MLE 4", mle_4);
     circuit.set_input("Combined Dataparallel MLE", dataparallel_combined_mle);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

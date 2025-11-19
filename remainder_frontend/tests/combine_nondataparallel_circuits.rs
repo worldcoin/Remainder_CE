@@ -165,7 +165,7 @@ fn test_combined_nondataparallel_circuit_newmainder() {
     circuit.set_input("MLE 1", mle_1);
     circuit.set_input("MLE 2", mle_2);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);
