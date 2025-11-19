@@ -1,4 +1,5 @@
 //! Contains the v3 iriscode circuit implemented using an RLC of image strips.
+use remainder_shared_types::config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig};
 
 /// The circuit itself
 pub mod circuits;
@@ -27,3 +28,9 @@ pub mod test_helpers;
 
 /// v3 data loaders
 pub mod v3;
+
+// The expected verifier config is enforced as a constant.
+pub const EXPECTED_VERIFIER_CONFIG: GKRCircuitVerifierConfig =
+    GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default();
+pub const EXPECTED_PROVER_CONFIG: GKRCircuitProverConfig =
+    GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default();

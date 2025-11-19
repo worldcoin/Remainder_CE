@@ -306,7 +306,7 @@ impl<F: Field> CircuitBuilder<F> {
                 let input_layer_description = input_layer_node
                     .generate_input_layer_description::<F>(&mut self.circuit_map)
                     .unwrap();
-                self.circuit_map.insert_layer(
+                self.circuit_map.insert_shreds_into_input_layer(
                     input_layer_description.layer_id,
                     input_layer_node
                         .input_shreds
@@ -831,15 +831,15 @@ impl CircuitMap {
         self.node_location.insert(node_id, value);
     }
 
-    /// Adds a collection of `shreds` to Input Layer with ID `layer_id`.
+    /// Adds a collection of `shreds` to Input Layer with ID `input_layer_id`.
     ///
     /// # Panics
     /// If [self] is not in state [CircuitMapState::UnderConstruction],
-    /// or if `layer_id` has already been assigned shreds.
-    pub fn insert_layer(&mut self, layer_id: LayerId, shreds: Vec<NodeId>) {
+    /// or if `input_layer_id` has already been assigned shreds.
+    pub fn insert_shreds_into_input_layer(&mut self, input_layer_id: LayerId, shreds: Vec<NodeId>) {
         assert_eq!(self.state, CircuitMapState::UnderConstruction);
-        assert!(!self.shreds_in_layer.contains_key(&layer_id));
-        self.shreds_in_layer.insert(layer_id, shreds);
+        assert!(!self.shreds_in_layer.contains_key(&input_layer_id));
+        self.shreds_in_layer.insert(input_layer_id, shreds);
     }
 
     /// Using `node_id`, retrieves the number of variables and location of this
