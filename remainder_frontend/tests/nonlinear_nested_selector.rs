@@ -128,7 +128,7 @@ fn test_nonlinear_nested_sel_circuit_newmainder() {
     circuit.set_input("Right Product MLE 1", right_prod_mle_1);
     circuit.set_input("Right Product MLE 2", right_prod_mle_2);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

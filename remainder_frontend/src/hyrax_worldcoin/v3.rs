@@ -24,7 +24,7 @@ use remainder::mle::evals::MultilinearExtension;
 use remainder::prover::GKRCircuitDescription;
 use remainder::utils::mle::pad_with;
 use remainder::{
-    circuit_building_context::CircuitBuildingContext, circuit_layout::VerifiableCircuit,
+    circuit_building_context::CircuitBuildingContext, verifiable_circuit::VerifiableCircuit,
 };
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::halo2curves::{bn256::G1 as Bn256Point, group::Group};
@@ -47,14 +47,14 @@ use super::orb::SerializedImageCommitment;
 use crate::hyrax_worldcoin::orb::{IMAGE_COMMIT_LOG_NUM_COLS, PUBLIC_STRING};
 use remainder_hyrax::utils::vandermonde::VandermondeInverse;
 use remainder_hyrax::{
-    circuit_layout::HyraxProvableCircuit,
-    hyrax_gkr::{self, verify_hyrax_proof, HyraxProof},
-};
-use remainder_hyrax::{
-    circuit_layout::HyraxVerifiableCircuit,
     hyrax_gkr::hyrax_input_layer::{
         commit_to_input_values, HyraxInputLayerDescription, HyraxProverInputCommitment,
     },
+    verifiable_circuit::HyraxVerifiableCircuit,
+};
+use remainder_hyrax::{
+    hyrax_gkr::{self, verify_hyrax_proof, HyraxProof},
+    provable_circuit::HyraxProvableCircuit,
 };
 use sha256::digest as sha256_digest;
 use thiserror::Error;
@@ -165,13 +165,8 @@ pub fn prove_with_image_precommit(
         ECTranscript::new("V3 Iriscode Circuit Pipeline");
 
     // Prove the relationship between iris/mask code and image.
-    let (proof, proof_config) = HyraxProof::prove(
-        &mut provable_circuit,
-        &committer,
-        blinding_rng,
-        converter,
-        &mut transcript,
-    );
+    let (proof, proof_config) =
+        provable_circuit.prove(&committer, blinding_rng, converter, &mut transcript);
 
     let code_layer_id = *provable_circuit
         .layer_label_to_layer_id
@@ -190,13 +185,10 @@ pub fn prove_with_image_precommit(
         .clone();
     assert_eq!(*code_commit_in_proof, code_commit.commitment);
 
- 
     // Zeroize each of the commitments once we have grabbed the commitments that we need.
     let private_input_layer_ids = provable_circuit.get_private_input_layer_ids();
     private_input_layer_ids.iter().for_each(|layer_id| {
-        let commitment = provable_circuit
-        .get_commitment_mut_ref(layer_id)
-        .unwrap();
+        let commitment = provable_circuit.get_commitment_mut_ref(layer_id).unwrap();
         commitment.zeroize();
     });
 
@@ -311,7 +303,7 @@ impl V3Prover {
         >(circuit, input_data, aux_data)
         .unwrap();
 
-        let provable_circuit = circuit_with_inputs.finalize_hyrax().unwrap();
+        let provable_circuit = circuit_with_inputs.gen_hyrax_provable_circuit().unwrap();
 
         // Prove the iriscode circuit with the image precommit.
         let (proof, _, code_commit) = prove_with_image_precommit(

@@ -18,6 +18,11 @@ use remainder_frontend::{
 };
 use remainder_shared_types::{perform_function_under_expected_configs, Bn256Point, Fr};
 
+#[cfg(feature = "print-trace")]
+use tracing::Level;
+#[cfg(feature = "print-trace")]
+use tracing_subscriber::fmt;
+
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct CliArguments {
@@ -42,6 +47,9 @@ struct CliArguments {
 }
 
 fn main() {
+    #[cfg(feature = "print-trace")]
+    let _subscriber = fmt().with_max_level(Level::DEBUG).init();
+
     // Sanitycheck by logging the current settings.
     perform_function_under_expected_configs!(
         print_features_status,
@@ -114,27 +122,6 @@ fn verify_v3_iriscode_proof(
 
             let circuit = v3_circuit_and_aux_data.get_circuit();
 
-            // check that the commitments are the same for iris code
-            {
-                let code_layer_id = v3_circuit_and_aux_data
-                    .get_circuit()
-                    .get_input_layer_description_ref(V3_SIGN_BITS_LAYER)
-                    .layer_id;
-                let code_commitment = v3_proof
-                    .get(is_mask, is_left_eye)
-                    .hyrax_input_proofs
-                    .iter()
-                    .find(|proof| proof.layer_id == code_layer_id)
-                    .unwrap()
-                    .input_commitment
-                    .clone();
-
-                assert_eq!(
-                    &code_commitment,
-                    v3_mpc_commitments.get_code_commit_ref(is_mask, is_left_eye)
-                );
-            }
-
             let aux_data = if is_mask {
                 v3_circuit_and_aux_data.get_mask_aux_data_ref().clone()
             } else {
@@ -151,9 +138,21 @@ fn verify_v3_iriscode_proof(
                 .gen_hyrax_verifiable_circuit::<Bn256Point>()
                 .unwrap();
 
+            // Use custom commitment parameters for the input layer containing the iris image.
             verifiable_circuit
                 .set_commitment_parameters(V3_INPUT_IMAGE_LAYER, IMAGE_COMMIT_LOG_NUM_COLS)
                 .expect("Could not modify the verifier circuit commitment parameters");
+
+            // Add the expected commitment to iriscode as a pre-commitment, for the verifier to
+            // check equality against the commitment in the proof.
+            verifiable_circuit
+                .set_pre_commitment(
+                    V3_SIGN_BITS_LAYER,
+                    v3_mpc_commitments
+                        .get_code_commit_ref(is_mask, is_left_eye)
+                        .clone(),
+                )
+                .expect("Setting pre-commitment failed.");
 
             if let Err(err) =
                 v3_proof.verify(is_mask, is_left_eye, &verifiable_circuit, commitment_hash)

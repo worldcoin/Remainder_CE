@@ -20,7 +20,7 @@ fn test_mpc_circuit_with_mock_data() {
     // Convert input data into circuit inputs which are assignable by prover
     mpc_attach_data(&mut circuit, const_data, input_data);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_memory_optimized_config(&provable_circuit);
 }
@@ -42,7 +42,7 @@ fn test_mpc_circuit_with_inverse_data() {
 
         mpc_attach_data(&mut circuit, const_data, input_data);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_memory_optimized_config(&provable_circuit);
     }
@@ -61,7 +61,7 @@ fn test_mpc_circuit_batched_with_mock_data() {
 
     mpc_attach_data(&mut circuit, const_data, input_data);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_memory_optimized_config(&provable_circuit);
 }
@@ -81,7 +81,7 @@ fn test_mpc_circuit_batched_with_inverse_data() {
 
     mpc_attach_data(&mut circuit, const_data, input_data);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_memory_optimized_config(&provable_circuit);
 }
@@ -99,7 +99,7 @@ fn test_mpc_circuit_batched_non_power_of_2_with_mock_data() {
 
     mpc_attach_data(&mut circuit, const_data, input_data);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_memory_optimized_config(&provable_circuit);
 }
@@ -119,7 +119,7 @@ fn test_mpc_circuit_batched_non_power_of_2_with_inverse_data() {
 
     mpc_attach_data(&mut circuit, const_data, input_data);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_memory_optimized_config(&provable_circuit);
 }

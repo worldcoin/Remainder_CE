@@ -5,19 +5,23 @@ use crate::{
     },
     layouter::builder::{Circuit, LayerVisibility},
     worldcoin_mpc::{
-        circuits::{build_circuit, mpc_attach_data, MPC_SLOPES_LAYER},
+        circuits::{
+            build_circuit, mpc_attach_data, MPC_IRISCODE_INPUT_LAYER, MPC_MASKCODE_INPUT_LAYER,
+            MPC_SLOPES_LAYER,
+        },
         data::{gen_mpc_encoding_matrix, gen_mpc_evaluation_points, gen_mpc_input_data},
         parameters::{GR4_MODULUS, MPC_NUM_IRIS_4_CHUNKS},
     },
     zk_iriscode_ss::parameters::{IRISCODE_LEN, SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS},
 };
 use remainder_hyrax::{
-    circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit},
     hyrax_gkr::{
         hyrax_input_layer::{commit_to_input_values, HyraxProverInputCommitment},
         verify_hyrax_proof, HyraxProof,
     },
+    provable_circuit::HyraxProvableCircuit,
     utils::vandermonde::VandermondeInverse,
+    verifiable_circuit::HyraxVerifiableCircuit,
 };
 
 use itertools::Itertools;
@@ -331,15 +335,13 @@ impl MPCProver {
     #[allow(clippy::too_many_arguments)]
     pub fn prove_mpc_with_precommits(
         mut mpc_provable_circuit: HyraxProvableCircuit<Bn256Point>,
-        _iris_precommit: &HyraxProverInputCommitment<Bn256Point>,
-        _mask_precommit: &HyraxProverInputCommitment<Bn256Point>,
-        _slope_precommit: &HyraxProverInputCommitment<Bn256Point>,
+        iris_precommit: &HyraxProverInputCommitment<Bn256Point>,
+        mask_precommit: &HyraxProverInputCommitment<Bn256Point>,
+        slope_precommit: &HyraxProverInputCommitment<Bn256Point>,
         committer: &PedersenCommitter<Bn256Point>,
         blinding_rng: &mut (impl CryptoRng + RngCore),
         converter: &mut VandermondeInverse<Scalar>,
     ) -> HyraxProof<Bn256Point> {
-        // TODO: Restore the precommits and fix the resulting bug!!
-        /*
         mpc_provable_circuit
             .set_pre_commitment(MPC_IRISCODE_INPUT_LAYER, iris_precommit.clone(), None)
             .unwrap();
@@ -353,20 +355,14 @@ impl MPCProver {
                 Some(SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS),
             )
             .unwrap();
-        */
 
         // Create a fresh transcript.
         let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
             ECTranscript::new("MPC Circuit Pipeline");
 
         // Prove the relationship between iris/mask code and image.
-        let (proof, _proof_config) = HyraxProof::prove(
-            &mut mpc_provable_circuit,
-            committer,
-            blinding_rng,
-            converter,
-            &mut transcript,
-        );
+        let (proof, _proof_config) =
+            mpc_provable_circuit.prove(committer, blinding_rng, converter, &mut transcript);
 
         proof
     }
@@ -421,7 +417,7 @@ impl MPCProver {
                 mpc_attach_data(&mut circuit, const_data, input_data);
 
                 let provable_circuit = circuit
-                    .finalize_hyrax()
+                    .gen_hyrax_provable_circuit()
                     .expect("Failed to finalize circuit");
 
                 Self::prove_mpc_with_precommits(

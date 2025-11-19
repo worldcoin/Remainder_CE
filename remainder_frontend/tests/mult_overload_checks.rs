@@ -1,10 +1,6 @@
-use std::collections::HashMap;
-
 use remainder::{
-    circuit_layout::{ProvableCircuit, VerifiableCircuit},
-    layer::LayerId,
-    mle::evals::MultilinearExtension,
-    prover::{prove, verify},
+    mle::evals::MultilinearExtension, provable_circuit::ProvableCircuit,
+    verifiable_circuit::VerifiableCircuit,
 };
 use remainder_frontend::{
     abstract_expr::AbstractExpression,
@@ -70,34 +66,32 @@ fn build_circuit() -> Circuit<Fr> {
 fn prove_circuit(provable_circuit: &ProvableCircuit<Fr>) -> (Transcript<Fr>, ProofConfig) {
     let mut transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("dummy label");
 
-    let proof_config = prove(
-        provable_circuit,
-        remainder_shared_types::circuit_hash::CircuitHashType::Poseidon,
-        &mut transcript_writer,
-    )
-    .expect("Proving failed!");
+    let proof_config = provable_circuit
+        .prove(
+            remainder_shared_types::circuit_hash::CircuitHashType::Poseidon,
+            &mut transcript_writer,
+        )
+        .expect("Proving failed!");
 
     let proof = transcript_writer.get_transcript();
-    
+
     (proof, proof_config)
 }
 
 fn verify_circuit(
     verifiable_circuit: &VerifiableCircuit<Fr>,
-    predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<Fr>>,
     proof: Transcript<Fr>,
     proof_config: &ProofConfig,
 ) {
     let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(proof);
 
-    verify(
-        verifiable_circuit,
-        predetermined_public_inputs,
-        remainder_shared_types::circuit_hash::CircuitHashType::Poseidon,
-        &mut transcript_reader,
-        proof_config,
-    )
-    .expect("Verification Failed!");
+    verifiable_circuit
+        .verify(
+            remainder_shared_types::circuit_hash::CircuitHashType::Poseidon,
+            &mut transcript_reader,
+            proof_config,
+        )
+        .expect("Verification Failed!");
 }
 
 #[test]
@@ -117,20 +111,18 @@ fn mult_overload_checks() {
     circuit.set_input("RHS MLE", rhs_data);
     circuit.set_input("Expected Output MLE", expected_output_data);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     let (proof, proof_config) =
         perform_function_under_prover_config!(prove_circuit, &prover_config, &provable_circuit);
     let verifier_config = GKRCircuitVerifierConfig::new_from_proof_config(&proof_config, true);
 
     let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
-    let predetermined_public_inputs = HashMap::new();
 
     perform_function_under_verifier_config!(
         verify_circuit,
         &verifier_config,
         &verifiable_circuit,
-        predetermined_public_inputs,
         proof,
         &proof_config
     );

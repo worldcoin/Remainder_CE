@@ -5,8 +5,9 @@
 // not part of Remainder and are therefore out of our control) over the
 // `impl Rng` which is passed in.
 #![allow(clippy::needless_borrows_for_generic_args)]
-pub mod circuit_layout;
 pub mod hyrax_gkr;
 pub mod hyrax_pcs;
 pub mod hyrax_primitives;
+pub mod provable_circuit;
 pub mod utils;
+pub mod verifiable_circuit;

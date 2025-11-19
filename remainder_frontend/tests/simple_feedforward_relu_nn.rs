@@ -281,7 +281,7 @@ fn test_build_simple_two_layer_nn_circuit() {
     circuit.set_input("W2 MLE", w2_mle);
     circuit.set_input("b2 MLE", b2_mle);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

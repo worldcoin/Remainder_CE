@@ -74,7 +74,7 @@ fn test_product_checker() {
     circuit.set_input("MLE 2", mle_2);
     circuit.set_input("Expected MLE", mle_expected);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

@@ -104,6 +104,7 @@ pub fn get_num_wlx_evaluations<F: Field>(
     let mut num_constant_columns = num_vars as i64;
     let mut common_idx = vec![];
     let mut non_common_idx = vec![];
+    #[allow(clippy::needless_range_loop)]
     for j in 0..num_vars {
         let mut degree_reduced = true;
         for i in 1..num_claims {
