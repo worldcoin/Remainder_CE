@@ -289,10 +289,6 @@ pub fn test_iriscode_circuit_with_public_layers_helper(
 /// layers for the private data.
 pub fn test_iriscode_circuit_with_hyrax_helper(
     mut provable_circuit: HyraxProvableCircuit<Bn256Point>,
-    /*
-    ic_circuit_desc: IriscodeCircuitDescription<Scalar>,
-    inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
-    */
 ) {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
@@ -304,22 +300,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
         "modulus modulus modulus modulus modulus",
         None,
     );
-    /*
-    // Set up Hyrax input layer specification.
-    let mut prover_hyrax_input_layers = HashMap::new();
-    prover_hyrax_input_layers.insert(
-        ic_circuit_desc.image_input_layer.layer_id,
-        (ic_circuit_desc.image_input_layer.clone().into(), None),
-    );
-    prover_hyrax_input_layers.insert(
-        ic_circuit_desc.code_input_layer.layer_id,
-        (ic_circuit_desc.code_input_layer.clone().into(), None),
-    );
-    prover_hyrax_input_layers.insert(
-        ic_circuit_desc.digits_input_layer.layer_id,
-        (ic_circuit_desc.digits_input_layer.clone().into(), None),
-    );
-    */
+
     // Prove.
     // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
     let gkr_circuit_prover_config =
@@ -345,21 +326,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
     // Verify.
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-    /*
-    let mut verifier_hyrax_input_layers = HashMap::new();
-    verifier_hyrax_input_layers.insert(
-        ic_circuit_desc.image_input_layer.layer_id,
-        ic_circuit_desc.image_input_layer.clone().into(),
-    );
-    verifier_hyrax_input_layers.insert(
-        ic_circuit_desc.code_input_layer.layer_id,
-        ic_circuit_desc.code_input_layer.clone().into(),
-    );
-    verifier_hyrax_input_layers.insert(
-        ic_circuit_desc.digits_input_layer.layer_id,
-        ic_circuit_desc.digits_input_layer.clone().into(),
-    );
-    */
+
     let verification_timer = start_timer!(|| "verification timer");
     perform_function_under_verifier_config!(
         verify_hyrax_proof,

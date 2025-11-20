@@ -18,11 +18,11 @@ fn build_example_indexed_lookup_circuit<F: Field>(
     let table_input = builder.add_input_shred("Table input", table_num_vars, &public);
     let table_output = builder.add_input_shred("Table output", table_num_vars, &public);
 
-    // Witness values are typically private, as are multiplicities
-    let private = builder.add_input_layer("Private", LayerVisibility::Private);
-    let witness_input = builder.add_input_shred("Witness input", witness_num_vars, &private);
-    let witness_output = builder.add_input_shred("Witness output", witness_num_vars, &private);
-    let multiplicities = builder.add_input_shred("Multiplicities", table_num_vars, &private);
+    // Witness values are typically committed, as are multiplicities
+    let committed = builder.add_input_layer("Committed", LayerVisibility::Committed);
+    let witness_input = builder.add_input_shred("Witness input", witness_num_vars, &committed);
+    let witness_output = builder.add_input_shred("Witness output", witness_num_vars, &committed);
+    let multiplicities = builder.add_input_shred("Multiplicities", table_num_vars, &committed);
 
     // A Fiat-Shamir challenge node is needed to combine input and output values
     let rlc_fiat_shamir_challenge_node = builder.add_fiat_shamir_challenge_node(1);

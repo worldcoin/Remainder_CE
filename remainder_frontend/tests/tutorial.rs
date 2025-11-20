@@ -13,7 +13,7 @@ fn build_circuit() -> Circuit<Fr> {
     let mut builder = CircuitBuilder::<Fr>::new();
 
     let lhs_rhs_input_layer =
-        builder.add_input_layer("LHS RHS input layer", LayerVisibility::Private);
+        builder.add_input_layer("LHS RHS input layer", LayerVisibility::Committed);
     let expected_output_input_layer =
         builder.add_input_layer("Expected output", LayerVisibility::Public);
 
@@ -49,8 +49,8 @@ fn tutorial_test() {
 
     // Append circuit inputs to their respective input "shreds" in the prover's
     // view of the circuit.
-    prover_circuit.set_input("LHS", lhs_data); // This is private!
-    prover_circuit.set_input("RHS", rhs_data); // This is private!
+    prover_circuit.set_input("LHS", lhs_data); // This is committed!
+    prover_circuit.set_input("RHS", rhs_data); // This is committed!
     prover_circuit.set_input("Expected output", expected_output_data); // This is public!
 
     // Create a version of the circuit description which the prover can use.

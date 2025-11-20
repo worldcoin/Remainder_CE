@@ -766,7 +766,7 @@ mod test {
         let mut builder = CircuitBuilder::<Fr>::new();
 
         let input_layer1 = builder.add_input_layer("Input Layer 1", LayerVisibility::Public);
-        let input_layer2 = builder.add_input_layer("Input Layer 2", LayerVisibility::Private);
+        let input_layer2 = builder.add_input_layer("Input Layer 2", LayerVisibility::Committed);
 
         builder.add_input_shred("shred1", 1, &input_layer1);
         builder.add_input_shred("shred1", 1, &input_layer2);
@@ -782,7 +782,7 @@ pub enum LayerVisibility {
     /// Input layers whose data are only accessible through their commitments; according to some
     /// Polynomial Commitment Scheme (PCS). The specific commitment scheme is determined when the
     /// circuit is finalized.
-    Private,
+    Committed,
 }
 
 /// Used only inside a [CircuitMap] to keep track of its state.
@@ -1049,7 +1049,7 @@ impl CircuitMap {
             .iter()
             .filter_map(|(layer_id, visibility)| match *visibility {
                 LayerVisibility::Public => Some(layer_id),
-                LayerVisibility::Private => None,
+                LayerVisibility::Committed => None,
             })
             .cloned()
             .collect_vec()
@@ -1084,17 +1084,18 @@ impl CircuitMap {
             .cloned()
     }
 
-    /// Returns a vector with all [LayerId]s of the Input Layers with [LayerVisibility::Private] visibility.
+    /// Returns a vector with all [LayerId]s of the Input Layers with [LayerVisibility::Committed]
+    /// visibility.
     ///
     /// # Panics
     /// If [self] is _not_ in [CircuitMapState::Ready] state.
-    pub fn get_all_private_layers(&self) -> Vec<LayerId> {
+    pub fn get_all_committed_layers(&self) -> Vec<LayerId> {
         assert_eq!(self.state, CircuitMapState::Ready);
 
         self.layer_visibility
             .iter()
             .filter_map(|(layer_id, layer_visibility)| {
-                if *layer_visibility == LayerVisibility::Private {
+                if *layer_visibility == LayerVisibility::Committed {
                     Some(layer_id)
                 } else {
                     None
@@ -1301,22 +1302,22 @@ impl<F: Field> Circuit<F> {
         Ok(inputs)
     }
 
-    /// Helper function for grabbing all of the private input layers + descriptions
+    /// Helper function for grabbing all of the committed input layers + descriptions
     /// from the circuit map.
     ///
     /// We do this by first filtering all input layers which are
-    /// [LayerVisibility::Private], getting all input "shreds" which correspond to
+    /// [LayerVisibility::Committed], getting all input "shreds" which correspond to
     /// those input layers, and aggregating those to compute the number of variables
     /// required to represent each input layer.
     ///
     /// Finally, we set a default configuration for the Ligero PCS used to commit to
-    /// each of the private input layers' MLEs. TODO(tfHARD team): add support for
+    /// each of the committed input layers' MLEs. TODO(tfHARD team): add support for
     /// custom settings for the PCS configurations.
-    fn get_all_private_input_layer_descriptions_to_ligero(
+    fn get_all_committed_input_layer_descriptions_to_ligero(
         &self,
     ) -> Vec<LigeroInputLayerDescription<F>> {
         self.circuit_map
-            .get_all_private_layers()
+            .get_all_committed_layers()
             .into_iter()
             .map(|layer_id| {
                 let raw_needed_capacity = self
@@ -1356,7 +1357,7 @@ impl<F: Field> Circuit<F> {
 
         let hyrax_private_inputs = self
             .circuit_map
-            .get_all_private_layers()
+            .get_all_committed_layers()
             .into_iter()
             .map(|layer_id| {
                 let raw_needed_capacity = self
@@ -1403,7 +1404,7 @@ impl<F: Field> Circuit<F> {
 
         let hyrax_private_inputs = self
             .circuit_map
-            .get_all_private_layers()
+            .get_all_committed_layers()
             .into_iter()
             .map(|layer_id| {
                 let raw_needed_capacity = self
@@ -1439,7 +1440,7 @@ impl<F: Field> Circuit<F> {
 
 impl<F: Halo2FFTFriendlyField> Circuit<F> {
     /// Produces a provable form of this circuit for the vanilla GKR proving system which uses
-    /// Ligero as a commitment scheme for private input layers, and does _not_ offer any
+    /// Ligero as a commitment scheme for committed input layers, and does _not_ offer any
     /// zero-knowledge guarantees.
     /// Requires all input data to be populated (use `Self::set_input()` on _all_ input shreds).
     ///
@@ -1448,8 +1449,8 @@ impl<F: Halo2FFTFriendlyField> Circuit<F> {
     pub fn gen_provable_circuit(&self) -> Result<ProvableCircuit<F>> {
         let inputs = self.build_all_input_layer_data()?;
 
-        let ligero_private_inputs = self
-            .get_all_private_input_layer_descriptions_to_ligero()
+        let ligero_committed_inputs = self
+            .get_all_committed_input_layer_descriptions_to_ligero()
             .into_iter()
             .map(|ligero_input_layer_description| {
                 (
@@ -1462,13 +1463,13 @@ impl<F: Halo2FFTFriendlyField> Circuit<F> {
         Ok(ProvableCircuit::new(
             self.circuit_description.clone(),
             inputs,
-            ligero_private_inputs,
+            ligero_committed_inputs,
             self.circuit_map.layer_label_to_layer_id.clone(),
         ))
     }
 
     /// Returns a [VerifiableCircuit] initialized with all input data which is already
-    /// known to the verifier, but no commitments to the private input layers
+    /// known to the verifier, but no commitments to the data in the committed input layers
     /// yet.
     #[allow(clippy::type_complexity)]
     pub fn gen_verifiable_circuit(&self) -> Result<VerifiableCircuit<F>> {
@@ -1477,9 +1478,9 @@ impl<F: Halo2FFTFriendlyField> Circuit<F> {
         // function.
         let verifier_predetermined_public_inputs = self.build_public_input_layer_data(true)?;
 
-        // Sets default Ligero parameters for each of the private input layers.
-        let ligero_private_inputs = self
-            .get_all_private_input_layer_descriptions_to_ligero()
+        // Sets default Ligero parameters for each of the committed input layers.
+        let ligero_committed_inputs = self
+            .get_all_committed_input_layer_descriptions_to_ligero()
             .into_iter()
             .map(|ligero_input_layer_description| {
                 (
@@ -1492,7 +1493,7 @@ impl<F: Halo2FFTFriendlyField> Circuit<F> {
         Ok(VerifiableCircuit::new(
             self.circuit_description.clone(),
             verifier_predetermined_public_inputs,
-            ligero_private_inputs,
+            ligero_committed_inputs,
             self.circuit_map.layer_label_to_layer_id.clone(),
         ))
     }

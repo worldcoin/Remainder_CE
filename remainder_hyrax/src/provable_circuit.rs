@@ -39,8 +39,9 @@ pub type HyraxInputLayerDescriptionWithOptionalVerifierPrecommit<C> = (
 );
 
 /// A circuit, along with all of its input data, ready to be proven using the Hyrax-GKR proving
-/// system which uses Hyrax as a PCS for private input layers, and provides zero-knowledge
-/// guarantees.
+/// system which uses Hyrax as a PCS for committed input layers, and provides zero-knowledge
+/// guarantees. Because of the zk property, we'll refer to the committed layers of a
+/// [HyraxProvableCircuit] as private layers.
 #[derive(Clone, Debug)]
 pub struct HyraxProvableCircuit<C: PrimeOrderCurve> {
     circuit_description: GKRCircuitDescription<C::Scalar>,
@@ -127,7 +128,7 @@ impl<C: PrimeOrderCurve> HyraxProvableCircuit<C> {
             .collect()
     }
 
-    /// Returns a vector of the [LayerId]s of all input layers with visibility [LayerVisibility::Private].
+    /// Returns a vector of the [LayerId]s of all input layers with visibility [LayerVisibility::Committed].
     ///
     /// TODO: Consider returning an iterator instead.
     pub fn get_private_input_layer_ids(&self) -> Vec<LayerId> {

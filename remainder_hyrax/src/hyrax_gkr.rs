@@ -126,7 +126,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
         if input_layer_proofs.len() > 1 {
             panic!("Multiple input layer proofs found for Input Layer with ID '{layer_id}'");
         } else if input_layer_proofs.is_empty() {
-            panic!("No private input layer found with id '{layer_id}'");
+            panic!("No committed input layer found with id '{layer_id}'");
         }
 
         Ok(&input_layer_proofs[0].input_commitment)
@@ -141,10 +141,6 @@ impl<C: PrimeOrderCurve> HyraxProof<C> {
 pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
     hyrax_proof: &HyraxProof<C>,
     verifiable_circuit: &HyraxVerifiableCircuit<C>,
-    /*
-    hyrax_input_layers: &HashMap<LayerId, HyraxInputLayerDescription>,
-    circuit_description: &GKRCircuitDescription<C::Scalar>,
-    */
     committer: &PedersenCommitter<C>,
     transcript: &mut impl ECTranscriptTrait<C>,
     proof_config: &ProofConfig,

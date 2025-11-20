@@ -138,7 +138,7 @@ pub fn circuit_description() -> Result<Circuit<Fr>> {
         BASE,
         NUM_DIGITS,
     >(
-        LayerVisibility::Private,
+        LayerVisibility::Committed,
         image_strip_reroutings,
         lh_matrix_reroutings,
     )

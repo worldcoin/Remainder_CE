@@ -21,7 +21,7 @@ use crate::{layer::LayerId, mle::evals::MultilinearExtension};
 use anyhow::{anyhow, Result};
 
 /// A circuit that contains a [GKRCircuitDescription] alongside a description of
-/// the private input layers.
+/// the committed input layers.
 #[derive(Clone, Debug)]
 pub struct VerifiableCircuit<F: Halo2FFTFriendlyField> {
     circuit_description: GKRCircuitDescription<F>,
@@ -31,7 +31,7 @@ pub struct VerifiableCircuit<F: Halo2FFTFriendlyField> {
     /// the circuit, and which will be checked for equality with the respective public inputs in the
     /// proof during verification.
     predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
-    private_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithOptionalVerifierPrecommit<F>>,
+    committed_inputs: HashMap<LayerId, LigeroInputLayerDescriptionWithOptionalVerifierPrecommit<F>>,
     layer_label_to_layer_id: HashMap<String, LayerId>,
 }
 
@@ -40,7 +40,7 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
     pub fn new(
         circuit_description: GKRCircuitDescription<F>,
         predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
-        private_inputs: HashMap<
+        committed_inputs: HashMap<
             LayerId,
             LigeroInputLayerDescriptionWithOptionalVerifierPrecommit<F>,
         >,
@@ -49,20 +49,20 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
         Self {
             circuit_description,
             predetermined_public_inputs,
-            private_inputs,
+            committed_inputs,
             layer_label_to_layer_id,
         }
     }
 
-    /// Returns a reference to the mapping which maps a [LayerId] of a private input layer to its
+    /// Returns a reference to the mapping which maps a [LayerId] of a committed input layer to its
     /// description.
     ///
     /// TODO: This is too transparent. Replace this with methods that answer the queries of the
     /// prover directly, and do _not_ expose it to the circuit developer.
-    pub fn get_private_inputs_ref(
+    pub fn get_committed_inputs_ref(
         &self,
     ) -> &HashMap<LayerId, LigeroInputLayerDescriptionWithOptionalVerifierPrecommit<F>> {
-        &self.private_inputs
+        &self.committed_inputs
     }
 
     /// Returns a reference to the circuit description.
@@ -79,9 +79,9 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
             .input_layers
             .iter()
             .filter(|input_layer_description| {
-                // All input layers which are not private are public by default.
+                // All input layers which are not committed are public by default.
                 !self
-                    .private_inputs
+                    .committed_inputs
                     .contains_key(&input_layer_description.layer_id)
             })
             .map(|public_input_layer_description| public_input_layer_description.layer_id)
@@ -89,9 +89,9 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
     }
 
     /// Returns a vector of the [LayerId]s of all input layers with visibility
-    /// [LayerVisibility::Private].
-    pub fn get_private_input_layer_ids(&self) -> Vec<LayerId> {
-        self.private_inputs.keys().cloned().collect_vec()
+    /// [LayerVisibility::Committed].
+    pub fn get_committed_input_layer_ids(&self) -> Vec<LayerId> {
+        self.committed_inputs.keys().cloned().collect_vec()
     }
 
     /// Returns the data associated with the public input layer with ID `layer_id`, or None if
@@ -108,7 +108,7 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
     /// proof is the same as the expected `commitment` provided here.
     ///
     /// # Panics
-    /// If `layer_label` is not a valid private input layer label.
+    /// If `layer_label` is not a valid committed input layer label.
     pub fn set_pre_commitment(
         &mut self,
         layer_label: &str,
@@ -117,9 +117,9 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
         let layer_id = self.layer_label_to_layer_id.get(layer_label).unwrap();
 
         let (_, optional_commitment) = self
-            .private_inputs
+            .committed_inputs
             .get_mut(layer_id)
-            .expect("Layer {layer_id} either does not exist, or is not a private input layer.");
+            .expect("Layer {layer_id} either does not exist, or is not a committed input layer.");
 
         *optional_commitment = Some(commitment);
 
@@ -142,7 +142,7 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
         // for the input layers, because for intermediate and output layers, the proof is in the
         // transcript, which the verifier checks shape against the circuit description already.
         assert_eq!(
-            self.get_public_input_layer_ids().len() + self.get_private_inputs_ref().len(),
+            self.get_public_input_layer_ids().len() + self.get_committed_inputs_ref().len(),
             self.get_gkr_circuit_description_ref().input_layers.len()
         );
 
@@ -204,7 +204,7 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
 
         // Read the Ligero input layer commitments from transcript in order of layer id.
         let mut ligero_commitments = HashMap::<LayerId, F>::new();
-        self.get_private_input_layer_ids()
+        self.get_committed_input_layer_ids()
             .into_iter()
             .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
             .for_each(|layer_id| {
@@ -254,7 +254,7 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
             let commitment = ligero_commitments.get(&claim_layer_id).unwrap();
 
             let (_, (desc, opt_pre_commitment)) = self
-                .get_private_inputs_ref()
+                .get_committed_inputs_ref()
                 .iter()
                 .find(|(layer_id, _)| **layer_id == claim_layer_id)
                 .unwrap();
