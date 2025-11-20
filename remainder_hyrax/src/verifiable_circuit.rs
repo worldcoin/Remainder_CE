@@ -11,8 +11,12 @@ use crate::{
 
 use anyhow::{anyhow, Result};
 
-/// A circiuit that contans a [GKRCircuitDescription], a description of the private input layers,
-/// and the data for all the public input layers, ready to be verified against a proof.
+/// A circiuit that contans a [GKRCircuitDescription], a description of the committed input layers,
+/// and the data for all the public input layers, ready to be verified against a proof generated
+/// through [super::provable_circuit::HyraxProvableCircuit].
+///
+/// Since the Hyrax proving system provides zero-knowledge guarantees, we refer to committed input
+/// layers as private input layers.
 #[derive(Clone, Debug)]
 pub struct HyraxVerifiableCircuit<C: PrimeOrderCurve> {
     circuit_description: GKRCircuitDescription<C::Scalar>,
@@ -88,7 +92,8 @@ impl<C: PrimeOrderCurve> HyraxVerifiableCircuit<C> {
             .collect()
     }
 
-    /// Returns a vector of the [LayerId]s of all input layers with visibility [LayerVisibility::Private].
+    /// Returns a vector of the [LayerId]s of all input layers with visibility
+    /// [LayerVisibility::Committed].
     pub fn get_private_input_layer_ids(&self) -> Vec<LayerId> {
         self.private_inputs.keys().cloned().collect_vec()
     }

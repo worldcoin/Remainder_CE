@@ -17,10 +17,10 @@ fn build_example_lookup_circuit<F: Field>(
     let public = builder.add_input_layer("Public", LayerVisibility::Public);
     let table = builder.add_input_shred("Table", table_num_vars, &public);
 
-    // Witness values are typically private, as are multiplicities
-    let private = builder.add_input_layer("Private", LayerVisibility::Private);
-    let witness = builder.add_input_shred("Witness", witness_num_vars, &private);
-    let multiplicities = builder.add_input_shred("Multiplicities", table_num_vars, &private);
+    // Witness values are typically committed, as are multiplicities
+    let committed = builder.add_input_layer("Committed", LayerVisibility::Committed);
+    let witness = builder.add_input_shred("Witness", witness_num_vars, &committed);
+    let multiplicities = builder.add_input_shred("Multiplicities", table_num_vars, &committed);
 
     // Create the circuit components
     let fiat_shamir_challenge_node = builder.add_fiat_shamir_challenge_node(1);

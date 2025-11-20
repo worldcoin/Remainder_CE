@@ -2199,7 +2199,7 @@ struct MediumRegularCircuitTestInputs<F: Field> {
 /// function for ease of proving.
 ///
 /// Note that this function also returns the [LayerId] of its input layer
-/// to be used later for private input layer specification if needed.
+/// to be used later for committed input layer specification if needed.
 fn build_medium_regular_test_circuit<F: Field>(
     num_free_vars: usize,
 ) -> (
@@ -2209,7 +2209,7 @@ fn build_medium_regular_test_circuit<F: Field>(
 ) {
     let mut builder = CircuitBuilder::<F>::new();
 
-    // There is only one input layer; it can be public or private (for the purposes of testing)
+    // There is only one input layer; it can be public or committed (for the purposes of testing)
     let input_layer_node = builder.add_input_layer("Input Layer");
 
     // Circuit inputs
@@ -2415,7 +2415,7 @@ fn buld_identity_regular_test_circuit<F: Field>(
 ) {
     let mut builder = CircuitBuilder::<F>::new();
 
-    // There is only one input layer; it can be public or private (for the purposes of testing)
+    // There is only one input layer; it can be public or committed (for the purposes of testing)
     let input_layer_node = builder.add_input_layer("Input Layer");
 
     // Circuit inputs
@@ -2545,7 +2545,7 @@ fn build_matmult_regular_test_circuit<F: Field>(
 ) {
     let mut builder = CircuitBuilder::<F>::new();
 
-    // There is only one input layer; it can be public or private (for the purposes of testing)
+    // There is only one input layer; it can be public or committed (for the purposes of testing)
     let input_layer_node = builder.add_input_layer("Input Layer");
 
     // Circuit inputs
@@ -2674,7 +2674,7 @@ fn build_identity_matmult_regular_test_circuit<F: Field>(
 ) {
     let mut builder = CircuitBuilder::<F>::new();
 
-    // There is only one input layer; it can be public or private (for the purposes of testing)
+    // There is only one input layer; it can be public or committed (for the purposes of testing)
     let input_layer_node = builder.add_input_layer("Input Layer");
 
     // Circuit inputs

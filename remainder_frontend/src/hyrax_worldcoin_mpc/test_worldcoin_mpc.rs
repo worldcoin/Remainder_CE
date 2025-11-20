@@ -39,7 +39,7 @@ mod tests {
         const NUM_IRIS_4_CHUNKS: usize = 1;
         const PARTY_IDX: usize = 0;
         let circuit = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
-            LayerVisibility::Private,
+            LayerVisibility::Committed,
         );
         let provable_circuit = circuit.gen_hyrax_provable_circuit::<Bn256Point>().unwrap();
         test_mpc_circuit_with_hyrax_helper(provable_circuit);
@@ -51,7 +51,7 @@ mod tests {
         const NUM_IRIS_4_CHUNKS: usize = 4;
         const PARTY_IDX: usize = 0;
         let circuit = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
-            LayerVisibility::Private,
+            LayerVisibility::Committed,
         );
         let provable_circuit = circuit.gen_hyrax_provable_circuit::<Bn256Point>().unwrap();
         test_mpc_circuit_with_hyrax_helper(provable_circuit);
@@ -63,7 +63,7 @@ mod tests {
         const NUM_IRIS_4_CHUNKS: usize = 3;
         const PARTY_IDX: usize = 0;
         let circuit = small_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
-            LayerVisibility::Private,
+            LayerVisibility::Committed,
         );
         let provable_circuit = circuit.gen_hyrax_provable_circuit::<Bn256Point>().unwrap();
         test_mpc_circuit_with_hyrax_helper(provable_circuit);
@@ -131,7 +131,7 @@ mod tests {
 
         let circuit = inversed_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
             TEST_IDX,
-            LayerVisibility::Private,
+            LayerVisibility::Committed,
         );
         let provable_circuit = circuit.gen_hyrax_provable_circuit().unwrap();
         let verifiable_circuit = circuit
@@ -153,7 +153,7 @@ mod tests {
 
         let circuit = inversed_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
             TEST_IDX,
-            LayerVisibility::Private,
+            LayerVisibility::Committed,
         );
         let provable_circuit = circuit.gen_hyrax_provable_circuit().unwrap();
 
@@ -171,7 +171,7 @@ mod tests {
 
         let circuit = inversed_circuit_description_and_inputs::<NUM_IRIS_4_CHUNKS, PARTY_IDX>(
             TEST_IDX,
-            LayerVisibility::Private,
+            LayerVisibility::Committed,
         );
         let provable_circuit = circuit.finalize_hyrax().unwrap();
 

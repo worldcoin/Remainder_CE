@@ -26,9 +26,9 @@ fn build_product_checker_test_circuit<F: Field>(num_free_vars: usize) -> Circuit
     let mle_1_shred = builder.add_input_shred("MLE 1", num_free_vars, &public_input_layer_node);
     let mle_2_shred = builder.add_input_shred("MLE 2", num_free_vars, &public_input_layer_node);
 
-    // ...while the expected output is private
+    // ...while the expected output is committed
     let ligero_input_layer_node =
-        builder.add_input_layer("Ligero Input Layer", LayerVisibility::Private);
+        builder.add_input_layer("Ligero Input Layer", LayerVisibility::Committed);
     let mle_expected_shred =
         builder.add_input_shred("Expected MLE", num_free_vars, &ligero_input_layer_node);
 

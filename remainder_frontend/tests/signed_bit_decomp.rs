@@ -19,7 +19,7 @@ fn build_signed_bit_decomp_circuit() -> Circuit<Fr> {
     let int_layer = builder.add_input_layer("Int", LayerVisibility::Public); // for x
     let x = builder.add_input_shred("x", k, &int_layer);
 
-    let bit_layer = builder.add_input_layer("Bit", LayerVisibility::Private); // for bits
+    let bit_layer = builder.add_input_layer("Bit", LayerVisibility::Committed); // for bits
     let bs = builder.add_input_shred("bs", k, &bit_layer);
     let bi = (0..n - 1)
         .map(|i| builder.add_input_shred(&format!("b{i}"), k, &bit_layer))

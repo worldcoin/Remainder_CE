@@ -16,11 +16,6 @@ use crate::{
 /// data) with a Hyrax input layer.
 pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
     mut provable_circuit: HyraxProvableCircuit<C>,
-    /*
-    circuit_desc: GKRCircuitDescription<C::Scalar>,
-    private_layer_descriptions: HyraxInputLayerDescriptionWithPrecommit<C>,
-    inputs: HashMap<LayerId, MultilinearExtension<C::Scalar>>,
-    */
 ) {
     let mut transcript: ECTranscript<C, PoseidonSponge<C::Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
@@ -55,13 +50,6 @@ pub fn test_iriscode_circuit_with_hyrax_helper<C: PrimeOrderCurve>(
 
     let mut transcript: ECTranscript<C, PoseidonSponge<C::Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-
-    /*
-    let verifier_hyrax_input_layers = private_layer_descriptions
-        .into_iter()
-        .map(|(k, v)| (k, v.0))
-        .collect();
-    */
 
     perform_function_under_expected_configs!(
         verify_hyrax_proof,

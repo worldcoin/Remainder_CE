@@ -78,7 +78,7 @@ fn build_simple_two_layer_nn_circuit<F: Field>(
 
     // Create an input layer for the weights.
     let model_weights_input_layer_node =
-        builder.add_input_layer("Model weights input layer", LayerVisibility::Private);
+        builder.add_input_layer("Model weights input layer", LayerVisibility::Committed);
     let w1_mle = builder.add_input_shred(
         "W1 MLE",
         input_num_free_vars + hidden_layer_1_num_free_vars,
@@ -104,7 +104,7 @@ fn build_simple_two_layer_nn_circuit<F: Field>(
     // Let's have our post-mul things be `u32`s, so that pre-mul we can have
     // at most `u8`s.
     let relu_decomps_input_layer_node =
-        builder.add_input_layer("ReLU decomps input layer", LayerVisibility::Private);
+        builder.add_input_layer("ReLU decomps input layer", LayerVisibility::Committed);
     let layer_1_relu_decomp = builder.add_input_shred(
         "Layer 1 ReLU decomp MLE",
         hidden_layer_1_num_free_vars + 5,

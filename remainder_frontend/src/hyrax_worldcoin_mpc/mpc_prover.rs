@@ -930,7 +930,7 @@ impl<F: Field> V3MPCCircuitAndAuxMles<F> {
 
 // Generate the circuit description and input builder used to generate the auxiliary MLEs.
 pub fn generate_mpc_circuit_and_aux_mles_all_3_parties<F: Field>() -> MPCCircuitsAndConstData<F> {
-    let mpc_circuit = build_circuit::<F, MPC_NUM_IRIS_4_CHUNKS>(LayerVisibility::Private);
+    let mpc_circuit = build_circuit::<F, MPC_NUM_IRIS_4_CHUNKS>(LayerVisibility::Committed);
 
     MPCCircuitsAndConstData {
         mpc_circuit,
