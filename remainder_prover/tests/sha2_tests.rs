@@ -87,7 +87,7 @@ fn attach_ch_gate_data<const POSITIVE: bool>(mut circuit: Circuit<Fr>) -> Provab
 
     circuit.set_input("All Inputs", input_mle);
 
-    circuit.finalize().unwrap()
+    circuit.gen_provable_circuit().unwrap()
 }
 
 fn build_maj_gate_circuit() -> Circuit<Fr> {
@@ -153,7 +153,7 @@ fn attach_maj_gate_data<const POSITIVE: bool>(mut circuit: Circuit<Fr>) -> Prova
 
     circuit.set_input("All Inputs", input_mle);
 
-    circuit.finalize().unwrap()
+    circuit.gen_provable_circuit().unwrap()
 }
 
 fn build_sigma_gate_circuit<
@@ -248,7 +248,7 @@ where
 
     circuit.set_input("All Inputs", input_mle);
 
-    circuit.finalize().unwrap()
+    circuit.gen_provable_circuit().unwrap()
 }
 
 // Adder Gate Tests
@@ -306,7 +306,7 @@ fn attach_full_adder_gate_data(mut circuit: Circuit<Fr>) -> ProvableCircuit<Fr> 
 
     circuit.set_input("All Inputs", input_mle);
 
-    circuit.finalize().unwrap()
+    circuit.gen_provable_circuit().unwrap()
 }
 
 fn constant_gate_circuit<T>(gate_data: T) -> Circuit<Fr>
@@ -349,7 +349,7 @@ where
             .collect_vec(),
     );
     circuit.set_input("Expected output", expected_mle);
-    circuit.finalize().unwrap()
+    circuit.gen_provable_circuit().unwrap()
 }
 
 #[test]

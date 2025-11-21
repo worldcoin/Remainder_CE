@@ -59,7 +59,7 @@ fn sample_left_rot_data(mut circuit: Circuit<Fr>) -> ProvableCircuit<Fr> {
 
     circuit.set_input("All Inputs", input_mle);
 
-    circuit.finalize().unwrap()
+    circuit.gen_provable_circuit().unwrap()
 }
 
 fn sample_right_rot_data(mut circuit: Circuit<Fr>) -> ProvableCircuit<Fr> {
@@ -78,7 +78,7 @@ fn sample_right_rot_data(mut circuit: Circuit<Fr>) -> ProvableCircuit<Fr> {
 
     circuit.set_input("All Inputs", input_mle);
 
-    circuit.finalize().unwrap()
+    circuit.gen_provable_circuit().unwrap()
 }
 
 #[test]
