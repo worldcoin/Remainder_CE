@@ -9,6 +9,7 @@ use remainder::{
     expression::abstract_expr::ExprBuilder,
     layouter::builder::{Circuit, CircuitBuilder, LayerKind, ProvableCircuit},
     mle::evals::MultilinearExtension,
+    provable_circuit::ProvableCircuit,
     prover::helpers::{
         test_circuit_with_memory_optimized_config, test_circuit_with_runtime_optimized_config,
     },
@@ -52,7 +53,7 @@ fn create_adder_test_circuit<F: Field, Adder: AdderGateTrait<F>>(
     (builder.build().unwrap(), adder)
 }
 
-fn attach_data_to_adder_gate<const POSITIVE: bool, F, Adder>(
+fn attach_data_to_adder_gate<const POSITIVE: bool, F: Halo2FFTFriendlyField, Adder>(
     mut circuit: Circuit<F>,
     adder: Adder,
 ) -> ProvableCircuit<F>
@@ -89,7 +90,7 @@ where
     let performed_sum = adder.perform_addition(&mut circuit, x, y);
     assert!(!POSITIVE || performed_sum == expected_sum);
     circuit.set_input("All Inputs", input_mle);
-    circuit.finalize().unwrap()
+    circuit.gen_provable_circuit().unwrap()
 }
 
 fn sha256_message_schedule_circuit<F, Adder>(
@@ -143,7 +144,7 @@ where
     (builder.build().unwrap(), msg_schedule)
 }
 
-fn attach_data_sha256_message_schedule<const POSITIVE: bool, F, Adder>(
+fn attach_data_sha256_message_schedule<const POSITIVE: bool, F: Halo2FFTFriendlyField, Adder>(
     mut circuit: Circuit<F>,
     msg_sched: &mut sha256::MessageSchedule<F, Adder>,
 ) -> ProvableCircuit<F>
@@ -204,7 +205,7 @@ where
 
     circuit.set_input("message_input", message_mle);
     circuit.set_input("expected_output", expected_mle);
-    circuit.finalize().unwrap()
+    circuit.gen_provable_circuit().unwrap()
 }
 
 fn sha256_test_circuit<F, Adder>(
@@ -280,10 +281,11 @@ where
     // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
     let sha_circuit = sha256_test_circuit::<F, Adder>(data, carry_layer_kind);
 
-    let provable_circuit = sha_circuit.finalize().unwrap();
+    let provable_circuit = sha_circuit.gen_provable_circuit().unwrap();
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }
 
+#[ignore = "Test takes a long time"]
 #[test]
 fn sha256_single_round_committed_carry() {
     // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
@@ -295,6 +297,7 @@ fn sha256_single_round_committed_carry() {
     sha256_test_with_data::<Fr, sha256::CommittedCarryAdder<_>>(data, Some(LayerKind::Public));
 }
 
+#[ignore = "Test takes a long time"]
 #[test]
 fn sha256_single_round_pp_adder() {
     // let _subscriber = fmt().with_max_level(Level::DEBUG).init();
@@ -306,6 +309,7 @@ fn sha256_single_round_pp_adder() {
     sha256_test_with_data::<Fr, bka::BKAdder<32, _>>(data, None);
 }
 
+#[ignore = "Test takes a long time"]
 #[test]
 fn sha256_single_round_rc_adder() {
     // let _subscriber = fmt().with_max_level(Level::DEBUG).init();

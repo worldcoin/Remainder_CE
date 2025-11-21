@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use remainder::provable_circuit::ProvableCircuit;
 use remainder::{
     binary_operations::binary_adder::BinaryAdder,
     expression::abstract_expr::ExprBuilder,
@@ -77,7 +78,7 @@ fn attach_data(mut circuit: Circuit<Fr>) -> ProvableCircuit<Fr> {
 
     circuit.set_input("All Inputs", input_mle);
 
-    circuit.finalize().unwrap()
+    circuit.gen_provable_circuit().unwrap()
 }
 
 #[test]
