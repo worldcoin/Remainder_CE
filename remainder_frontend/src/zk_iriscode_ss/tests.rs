@@ -1,7 +1,7 @@
 use remainder::prover::helpers::test_circuit_with_runtime_optimized_config;
 
 use crate::zk_iriscode_ss::test_helpers::{
-    small_circuit_with_private_inputs, small_circuit_with_public_inputs,
+    small_circuit_with_committed_inputs, small_circuit_with_public_inputs,
 };
 
 use super::v3::circuit_description_and_inputs;
@@ -14,7 +14,7 @@ fn test_small_circuit_both_layers_public() {
 
 #[test]
 fn test_small_circuit_with_ligero_layers() {
-    let provable_circuit = small_circuit_with_private_inputs().unwrap();
+    let provable_circuit = small_circuit_with_committed_inputs().unwrap();
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }
 
@@ -22,6 +22,6 @@ fn test_small_circuit_with_ligero_layers() {
 #[test]
 fn test_worldcoin_circuit_iris_v3_public_inputs() {
     let circuit = circuit_description_and_inputs(false, None).unwrap();
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }

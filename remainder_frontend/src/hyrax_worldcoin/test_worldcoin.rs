@@ -11,8 +11,7 @@ use remainder_shared_types::{
 };
 
 use remainder_hyrax::{
-    circuit_layout::HyraxProvableCircuit,
-    hyrax_gkr::{verify_hyrax_proof, HyraxProof},
+    hyrax_gkr::verify_hyrax_proof, provable_circuit::HyraxProvableCircuit,
     utils::vandermonde::VandermondeInverse,
 };
 
@@ -43,9 +42,9 @@ mod tests {
     };
     use rand::rngs::ThreadRng;
     use remainder_hyrax::{
-        circuit_layout::HyraxVerifiableCircuit,
         hyrax_gkr::{hyrax_input_layer::HyraxProverInputCommitment, HyraxProof},
         utils::vandermonde::VandermondeInverse,
+        verifiable_circuit::HyraxVerifiableCircuit,
     };
     use remainder_shared_types::{
         config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig, ProofConfig},
@@ -117,7 +116,7 @@ mod tests {
             )
             .unwrap();
 
-        let mut provable_circuit = circuit.finalize_hyrax().unwrap();
+        let mut provable_circuit = circuit.gen_hyrax_provable_circuit().unwrap();
 
         provable_circuit
             .set_pre_commitment(
@@ -127,20 +126,15 @@ mod tests {
             )
             .unwrap();
 
-        let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
+        let verifiable_circuit = provable_circuit._gen_hyrax_verifiable_circuit();
 
         // Create a fresh transcript.
         let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
             ECTranscript::new("V3 Iriscode Circuit Pipeline");
 
         // Prove the relationship between iris/mask code and image.
-        let (proof, proof_config) = HyraxProof::prove(
-            &mut provable_circuit,
-            &committer,
-            blinding_rng,
-            converter,
-            &mut transcript,
-        );
+        let (proof, proof_config) =
+            provable_circuit.prove(&committer, blinding_rng, converter, &mut transcript);
 
         let code_commit = provable_circuit
             .get_commitment_ref_by_label(V3_SIGN_BITS_LAYER)
@@ -238,7 +232,7 @@ mod tests {
 /// case.
 pub fn test_iriscode_v3_with_hyrax_helper(mask: bool) {
     let circuit = circuit_description_and_inputs(mask, None).unwrap();
-    let provable_circuit = circuit.finalize_hyrax().unwrap();
+    let provable_circuit = circuit.gen_hyrax_provable_circuit().unwrap();
     test_iriscode_circuit_with_hyrax_helper(provable_circuit);
 }
 
@@ -263,11 +257,11 @@ pub fn test_iriscode_circuit_with_public_layers_helper(
     let gkr_circuit_verifier_config =
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
-    let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
+    let verifiable_circuit = provable_circuit._gen_hyrax_verifiable_circuit();
 
     // --- Compute actual Hyrax proof ---
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        HyraxProvableCircuit::prove,
         &gkr_circuit_prover_config,
         &mut provable_circuit,
         &committer,
@@ -295,10 +289,6 @@ pub fn test_iriscode_circuit_with_public_layers_helper(
 /// layers for the private data.
 pub fn test_iriscode_circuit_with_hyrax_helper(
     mut provable_circuit: HyraxProvableCircuit<Bn256Point>,
-    /*
-    ic_circuit_desc: IriscodeCircuitDescription<Scalar>,
-    inputs: HashMap<LayerId, MultilinearExtension<Scalar>>,
-    */
 ) {
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
@@ -310,22 +300,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
         "modulus modulus modulus modulus modulus",
         None,
     );
-    /*
-    // Set up Hyrax input layer specification.
-    let mut prover_hyrax_input_layers = HashMap::new();
-    prover_hyrax_input_layers.insert(
-        ic_circuit_desc.image_input_layer.layer_id,
-        (ic_circuit_desc.image_input_layer.clone().into(), None),
-    );
-    prover_hyrax_input_layers.insert(
-        ic_circuit_desc.code_input_layer.layer_id,
-        (ic_circuit_desc.code_input_layer.clone().into(), None),
-    );
-    prover_hyrax_input_layers.insert(
-        ic_circuit_desc.digits_input_layer.layer_id,
-        (ic_circuit_desc.digits_input_layer.clone().into(), None),
-    );
-    */
+
     // Prove.
     // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
     let gkr_circuit_prover_config =
@@ -333,12 +308,12 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
     let gkr_circuit_verifier_config =
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
-    let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
+    let verifiable_circuit = provable_circuit._gen_hyrax_verifiable_circuit();
 
     // --- Compute actual Hyrax proof ---
     let prove_timer = start_timer!(|| "Proving");
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        HyraxProvableCircuit::prove,
         &gkr_circuit_prover_config,
         &mut provable_circuit,
         &committer,
@@ -351,21 +326,7 @@ pub fn test_iriscode_circuit_with_hyrax_helper(
     // Verify.
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-    /*
-    let mut verifier_hyrax_input_layers = HashMap::new();
-    verifier_hyrax_input_layers.insert(
-        ic_circuit_desc.image_input_layer.layer_id,
-        ic_circuit_desc.image_input_layer.clone().into(),
-    );
-    verifier_hyrax_input_layers.insert(
-        ic_circuit_desc.code_input_layer.layer_id,
-        ic_circuit_desc.code_input_layer.clone().into(),
-    );
-    verifier_hyrax_input_layers.insert(
-        ic_circuit_desc.digits_input_layer.layer_id,
-        ic_circuit_desc.digits_input_layer.clone().into(),
-    );
-    */
+
     let verification_timer = start_timer!(|| "verification timer");
     perform_function_under_verifier_config!(
         verify_hyrax_proof,

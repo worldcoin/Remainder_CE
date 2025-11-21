@@ -78,7 +78,7 @@ mod tests {
         let _component_2 =
             TestComponents::equality_check(&mut builder, &gate_node, &second_mle_shred);
 
-        builder.build().unwrap()
+        builder.build_with_layer_combination().unwrap()
     }
 
     /// A circuit which takes in two MLEs, select the first half of the first MLE
@@ -106,7 +106,7 @@ mod tests {
         circuit.set_input("First MLE Shred", first_mle);
         circuit.set_input("Second MLE Shred", second_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         // Prove/verify the circuit
         test_circuit_with_runtime_optimized_config(&provable_circuit);
@@ -136,7 +136,7 @@ mod tests {
         let _component_2 =
             TestComponents::equality_check(&mut builder, &gate_node, &mle_one_element_shred);
 
-        builder.build().unwrap()
+        builder.build_with_layer_combination().unwrap()
     }
 
     /// A circuit which takes in two MLEs, select the second element of the first MLE
@@ -164,7 +164,7 @@ mod tests {
         circuit.set_input("First MLE", first_mle);
         circuit.set_input("One Element MLE", mle_one_element);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         // Prove/verify the circuit
         test_circuit_with_runtime_optimized_config(&provable_circuit);
@@ -214,7 +214,7 @@ mod tests {
             &dataparallel_second_mle_shred,
         );
 
-        builder.build().unwrap()
+        builder.build_with_layer_combination().unwrap()
     }
 
     /// Performs a dataparallel version of [test_identity_gate_circuit_newmainder()].
@@ -261,7 +261,7 @@ mod tests {
         circuit.set_input("Dataparallel First MLE", dataparallel_first_mle);
         circuit.set_input("Dataparallel Second MLE", dataparallel_second_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         // Prove/verify the circuit
         test_circuit_with_runtime_optimized_config(&provable_circuit);
@@ -316,7 +316,7 @@ mod tests {
         circuit.set_input("Dataparallel First MLE", dataparallel_first_mle);
         circuit.set_input("Dataparallel Second MLE", dataparallel_second_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         // Prove/verify the circuit
         test_circuit_with_runtime_optimized_config(&provable_circuit);
@@ -363,7 +363,7 @@ mod tests {
             &dataparallel_mle_one_element_shred,
         );
 
-        builder.build().unwrap()
+        builder.build_with_layer_combination().unwrap()
     }
 
     /// performs a dataparallel version of [test_uneven_identity_gate_circuit_newmainder()].
@@ -400,7 +400,7 @@ mod tests {
         circuit.set_input("Dataparallel First MLE", dataparallel_first_mle);
         circuit.set_input("Dataparallel One Element MLE", dataparallel_mle_one_element);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         // Prove/verify the circuit
         test_circuit_with_runtime_optimized_config(&provable_circuit);
@@ -451,12 +451,12 @@ mod tests {
 
         let _component_2 = TestComponents::difference(&mut builder, &gate_node);
 
-        let mut circuit = builder.build().unwrap();
+        let mut circuit = builder.build_with_layer_combination().unwrap();
 
         circuit.set_input("Input MLE", mle);
         circuit.set_input("Neg Input MLE", neg_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
@@ -517,12 +517,12 @@ mod tests {
 
         let _component_2 = TestComponents::difference(&mut builder, &gate_node);
 
-        let mut circuit = builder.build().unwrap();
+        let mut circuit = builder.build_with_layer_combination().unwrap();
 
         circuit.set_input("Dataparallel Input MLE", mle_dataparallel);
         circuit.set_input("Dataparallel Neg Input MLE", neg_mle_dataparallel);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
@@ -564,12 +564,12 @@ mod tests {
 
         let _component_2 = TestComponents::difference(&mut builder, &gate_node);
 
-        let mut circuit = builder.build().unwrap();
+        let mut circuit = builder.build_with_layer_combination().unwrap();
 
         circuit.set_input("Input MLE", mle);
         circuit.set_input("Neg Input MLE", neg_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
@@ -630,13 +630,13 @@ mod tests {
 
         let _component_2 = TestComponents::difference(&mut builder, &add_gate_layer_output);
 
-        let mut circuit = builder.build().unwrap();
+        let mut circuit = builder.build_with_layer_combination().unwrap();
 
         circuit.set_input("Input MLE 1", mle_1);
         circuit.set_input("Input MLE 2", mle_2);
         circuit.set_input("Neg Input MLE 2", neg_mle_2);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
@@ -692,12 +692,12 @@ mod tests {
 
         let _component_2 = TestComponents::difference(&mut builder, &gate_node);
 
-        let mut circuit = builder.build().unwrap();
+        let mut circuit = builder.build_with_layer_combination().unwrap();
 
         circuit.set_input("Dataparallel Input MLE", mle_dataparallel);
         circuit.set_input("Dataparallel Neg Input MLE", neg_mle_dataparallel);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
@@ -771,13 +771,13 @@ mod tests {
 
         let _component_2 = TestComponents::difference(&mut builder, &add_gate_layer_output);
 
-        let mut circuit = builder.build().unwrap();
+        let mut circuit = builder.build_with_layer_combination().unwrap();
 
         circuit.set_input("Input MLE 1", mle_1_dataparallel);
         circuit.set_input("Input MLE 2", mle_2_dataparallel);
         circuit.set_input("Neg Input MLE 2", neg_mle_2_dataparallel);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }

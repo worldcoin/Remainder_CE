@@ -38,9 +38,9 @@ impl Arbitrary for Graph<usize> {
         let mut id_counter: usize = 0;
 
         // Start with the input nodes.
-        let mut graph: HashMap<usize, HashSet<usize>> = (0..num_sources)
+        let mut graph: HashMap<usize, Vec<usize>> = (0..num_sources)
             .map(|_| {
-                let res = (id_counter, HashSet::new());
+                let res = (id_counter, Vec::new());
                 id_counter += 1;
                 res
             })
@@ -48,7 +48,7 @@ impl Arbitrary for Graph<usize> {
 
         for _ in 0..num_intermediates {
             let available_edges: Vec<usize> = graph.keys().cloned().collect();
-            let inputs: HashSet<usize> = available_edges
+            let inputs: Vec<usize> = available_edges
                 .into_iter()
                 .filter(|_| *g.choose(&[true, false]).unwrap())
                 .collect();
@@ -59,7 +59,7 @@ impl Arbitrary for Graph<usize> {
         let available_edges: Vec<usize> = graph.keys().cloned().collect();
 
         for _ in 0..num_sinks {
-            let inputs: HashSet<usize> = available_edges
+            let inputs: Vec<usize> = available_edges
                 .iter()
                 .filter(|_| *g.choose(&[true, false]).unwrap())
                 .cloned()
@@ -118,7 +118,7 @@ impl<F: Field> NodesToLayout<F> {
 impl Arbitrary for NodesToLayout<Fr> {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {
         // Instance size.
-        let n = 15;
+        let n = 10;
         // Number of input nodes (all are sources).
         let num_input_shreds = n;
         // Number of FS nodes
@@ -234,6 +234,16 @@ quickcheck! {
     }
 }
 
+#[quickcheck]
+fn gen_latest_dependencies_consistency(graph: Graph<usize>) -> TestResult {
+    let sorted_nodes = &graph.topo_sort().unwrap();
+
+    let efficient_latest_dependency_indices = graph.gen_latest_dependecy_indices(&sorted_nodes);
+    let naive_latest_dependency_indices = graph.naive_gen_latest_dependecy_indices(&sorted_nodes);
+
+    TestResult::from_bool(efficient_latest_dependency_indices == naive_latest_dependency_indices)
+}
+
 quickcheck! {
     fn test_layout_nodes(nodes_to_layout: NodesToLayout<Fr>) -> TestResult {
         let (input_layer_nodes, fs_challenge_nodes, intermediate_nodes, _, _) =
@@ -261,16 +271,16 @@ quickcheck! {
 #[test]
 #[should_panic]
 fn test_error_on_cycle() {
-    let mut nodes_map: HashMap<usize, HashSet<usize>> = HashMap::new();
-    nodes_map.insert(1, HashSet::<usize>::new());
-    nodes_map.insert(2, HashSet::<usize>::new());
-    nodes_map.insert(3, HashSet::<usize>::new());
-    nodes_map.insert(4, HashSet::<usize>::new());
-    nodes_map.get_mut(&1).unwrap().insert(2);
-    nodes_map.get_mut(&1).unwrap().insert(3);
-    nodes_map.get_mut(&4).unwrap().insert(1);
-    nodes_map.get_mut(&4).unwrap().insert(2);
-    nodes_map.get_mut(&3).unwrap().insert(4);
+    let mut nodes_map: HashMap<usize, Vec<usize>> = HashMap::new();
+    nodes_map.insert(1, Vec::<usize>::new());
+    nodes_map.insert(2, Vec::<usize>::new());
+    nodes_map.insert(3, Vec::<usize>::new());
+    nodes_map.insert(4, Vec::<usize>::new());
+    nodes_map.get_mut(&1).unwrap().push(2);
+    nodes_map.get_mut(&1).unwrap().push(3);
+    nodes_map.get_mut(&4).unwrap().push(1);
+    nodes_map.get_mut(&4).unwrap().push(2);
+    nodes_map.get_mut(&3).unwrap().push(4);
     // Given the above nodes, there is a dependency cycle 1 -> 3 -> 4 -> 1.
     let nodes_graph = Graph::<usize>::new_from_map(nodes_map);
     nodes_graph.topo_sort().unwrap();

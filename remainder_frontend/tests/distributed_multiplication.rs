@@ -68,7 +68,7 @@ fn build_dataparallel_wraparound_multiplication_test_circuit<F: Field>(
     let _component_2 =
         diff_two_inputs(&mut builder, &component_1, &dataparallel_mle_combined_shred);
 
-    builder.build().unwrap()
+    builder.build_with_layer_combination().unwrap()
 }
 
 #[test]
@@ -123,7 +123,7 @@ fn test_dataparallel_wraparound_multiplication_circuit() {
     circuit.set_input("Dataparallel Bigger MLE", dataparallel_mle_bigger);
     circuit.set_input("Dataparallel Combined MLE", dataparallel_mle_combined);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

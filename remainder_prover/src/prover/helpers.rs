@@ -1,9 +1,5 @@
 #![allow(clippy::type_complexity)]
 
-use crate::circuit_layout::{ProvableCircuit, VerifiableCircuit};
-use crate::layer::LayerId;
-use crate::mle::evals::MultilinearExtension;
-use crate::prover::verify;
 use ark_std::{end_timer, start_timer};
 
 use itertools::Itertools;
@@ -24,13 +20,15 @@ use remainder_shared_types::{
 use serde_json;
 use sha3::Digest;
 use sha3::Sha3_256;
-use std::collections::HashMap;
 use std::fs::File;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::BufWriter;
 use std::path::Path;
 
-use super::{prove, GKRCircuitDescription};
+use crate::provable_circuit::ProvableCircuit;
+use crate::verifiable_circuit::VerifiableCircuit;
+
+use super::GKRCircuitDescription;
 
 /// Writes the circuit description for the provided [GKRCircuitDescription]
 /// to the `circuit_description_path` specified, in JSON format.
@@ -166,10 +164,8 @@ fn test_circuit_internal<F: Halo2FFTFriendlyField>(provable_circuit: &ProvableCi
     let verifiable_circuit = provable_circuit._gen_verifiable_circuit();
     let (proof_config, proof_as_transcript_reader) =
         prove_circuit_internal::<F, PoseidonSponge<F>>(provable_circuit);
-    let verifier_predetermined_public_inputs = HashMap::new();
     verify_circuit_internal::<F, PoseidonSponge<F>>(
         &verifiable_circuit,
-        verifier_predetermined_public_inputs,
         &proof_config,
         proof_as_transcript_reader,
     );
@@ -184,8 +180,7 @@ fn prove_circuit_internal<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
     let mut transcript_writer = TranscriptWriter::<F, Tr>::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
 
-    match prove(
-        provable_circuit,
+    match provable_circuit.prove(
         global_prover_circuit_description_hash_type(),
         &mut transcript_writer,
     ) {
@@ -213,15 +208,12 @@ fn prove_circuit_internal<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
 /// prover in transcript.
 fn verify_circuit_internal<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
     verifiable_circuit: &VerifiableCircuit<F>,
-    predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
     proof_config: &ProofConfig,
     mut proof_as_transcript: TranscriptReader<F, Tr>,
 ) {
     let verifier_timer = start_timer!(|| "Proof verification");
 
-    match verify(
-        verifiable_circuit,
-        predetermined_public_inputs,
+    match verifiable_circuit.verify(
         global_verifier_circuit_description_hash_type(),
         &mut proof_as_transcript,
         proof_config,
@@ -256,7 +248,6 @@ pub fn prove_circuit_with_runtime_optimized_config<
 /// corresponding to the provided prover config.
 pub fn verify_circuit_with_proof_config<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
     verifiable_circuit: &VerifiableCircuit<F>,
-    predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
     proof_config: &ProofConfig,
     proof_as_transcript: TranscriptReader<F, Tr>,
 ) {
@@ -266,7 +257,6 @@ pub fn verify_circuit_with_proof_config<F: Halo2FFTFriendlyField, Tr: Transcript
         verify_circuit_internal,
         &verifier_runtime_optimized_config,
         verifiable_circuit,
-        predetermined_public_inputs,
         proof_config,
         proof_as_transcript
     )

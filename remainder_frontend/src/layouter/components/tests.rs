@@ -52,7 +52,7 @@ fn test_complementary_recomposition_vertical() {
 
     builder.set_output(&comp_checker);
 
-    let mut circuit = builder.build().unwrap();
+    let mut circuit = builder.build_with_layer_combination().unwrap();
 
     digits.iter().enumerate().for_each(|(i, mle)| {
         circuit.set_input(&format!("Digits Input Shred {i}"), mle.clone());
@@ -95,7 +95,7 @@ fn test_unsigned_recomposition() {
     let equality_checker = Components::equality_check(&mut builder, &expected_input_shred, &recomp);
     builder.set_output(&equality_checker);
 
-    let mut circuit = builder.build().unwrap();
+    let mut circuit = builder.build_with_layer_combination().unwrap();
 
     digits.into_iter().enumerate().for_each(|(i, mle)| {
         circuit.set_input(&format!("Digits Input Shred {i}"), mle);
@@ -148,7 +148,7 @@ fn test_complementary_recomposition() {
 
     builder.set_output(&signed_recomp_checker);
 
-    let mut circuit = builder.build().unwrap();
+    let mut circuit = builder.build_with_layer_combination().unwrap();
 
     digits.into_iter().enumerate().for_each(|(i, mle)| {
         circuit.set_input(&format!("Digits Input Shred {i}"), mle);
@@ -172,7 +172,7 @@ fn test_bits_are_binary_soundness() {
     let component = DigitComponents::bits_are_binary(&mut builder, &bits_input_shred);
     let _output = builder.set_output(&component);
 
-    let mut circuit = builder.build().unwrap();
+    let mut circuit = builder.build_with_layer_combination().unwrap();
 
     circuit.set_input("Bits Input Shred", bits);
 
@@ -191,7 +191,7 @@ fn test_bits_are_binary() {
     let component = DigitComponents::bits_are_binary(&mut builder, &bits_input_shred);
     let _output = builder.set_output(&component);
 
-    let mut circuit = builder.build().unwrap();
+    let mut circuit = builder.build_with_layer_combination().unwrap();
 
     circuit.set_input("Bits Input Shred", bits);
 

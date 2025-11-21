@@ -29,6 +29,7 @@ rand = "0.8"
 sha256 = "1.5.0"
 zeroize = "^1.7"
 ark-serialize = { version = "0.5.0", features = ["derive"] }    # For serialization
+quickcheck_macros = "1.0.0"
 
 [features]
 parallel = [
@@ -36,7 +37,12 @@ parallel = [
     "remainder/parallel",
     "remainder-ligero/parallel",
 ]
-print-trace = ["remainder-shared-types/print-trace"]
+print-trace = [
+    "remainder-shared-types/print-trace",
+    "remainder-hyrax/print-trace",
+    "remainder/print-trace",
+    "remainder-ligero/print-trace",
+]
 # For printing circuit stats and other performance-related things.
 performance-debug = ["remainder/performance-debug"]
 

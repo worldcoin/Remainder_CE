@@ -19,7 +19,7 @@ fn build_signed_bit_decomp_circuit() -> Circuit<Fr> {
     let int_layer = builder.add_input_layer("Int", LayerVisibility::Public); // for x
     let x = builder.add_input_shred("x", k, &int_layer);
 
-    let bit_layer = builder.add_input_layer("Bit", LayerVisibility::Private); // for bits
+    let bit_layer = builder.add_input_layer("Bit", LayerVisibility::Committed); // for bits
     let bs = builder.add_input_shred("bs", k, &bit_layer);
     let bi = (0..n - 1)
         .map(|i| builder.add_input_shred(&format!("b{i}"), k, &bit_layer))
@@ -44,7 +44,7 @@ fn build_signed_bit_decomp_circuit() -> Circuit<Fr> {
     let assemb_sector = builder.add_sector(assemb_expr - x);
     builder.set_output(&assemb_sector);
 
-    builder.build().unwrap()
+    builder.build_with_layer_combination().unwrap()
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn signed_bit_decomp_test() {
         circuit.set_input(&format!("b{i}"), mle);
     });
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

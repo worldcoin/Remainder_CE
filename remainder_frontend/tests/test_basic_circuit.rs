@@ -43,13 +43,13 @@ fn test_basic_circuit() {
 
     builder.set_output(&final_sector);
 
-    let mut circuit = builder.build().unwrap();
+    let mut circuit = builder.build_with_layer_combination().unwrap();
 
     circuit.set_input("Input 1", input_shred_1_data);
     circuit.set_input("Input 2", input_shred_2_data);
     circuit.set_input("Expected Output", expected_output_data);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }

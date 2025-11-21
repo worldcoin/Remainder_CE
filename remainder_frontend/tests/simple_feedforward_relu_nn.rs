@@ -78,7 +78,7 @@ fn build_simple_two_layer_nn_circuit<F: Field>(
 
     // Create an input layer for the weights.
     let model_weights_input_layer_node =
-        builder.add_input_layer("Model weights input layer", LayerVisibility::Private);
+        builder.add_input_layer("Model weights input layer", LayerVisibility::Committed);
     let w1_mle = builder.add_input_shred(
         "W1 MLE",
         input_num_free_vars + hidden_layer_1_num_free_vars,
@@ -104,7 +104,7 @@ fn build_simple_two_layer_nn_circuit<F: Field>(
     // Let's have our post-mul things be `u32`s, so that pre-mul we can have
     // at most `u8`s.
     let relu_decomps_input_layer_node =
-        builder.add_input_layer("ReLU decomps input layer", LayerVisibility::Private);
+        builder.add_input_layer("ReLU decomps input layer", LayerVisibility::Committed);
     let layer_1_relu_decomp = builder.add_input_shred(
         "Layer 1 ReLU decomp MLE",
         hidden_layer_1_num_free_vars + 5,
@@ -144,7 +144,7 @@ fn build_simple_two_layer_nn_circuit<F: Field>(
     let model_output_check = builder.add_sector(w2h1_plus_b2.expr() - expected_output_mle.expr());
     builder.set_output(&model_output_check);
 
-    builder.build().unwrap()
+    builder.build_with_layer_combination().unwrap()
 }
 
 /// Takes in a slice of `u32` values, e.g. [a, b, c, d], and returns a `Vec<F>`
@@ -281,7 +281,7 @@ fn test_build_simple_two_layer_nn_circuit() {
     circuit.set_input("W2 MLE", w2_mle);
     circuit.set_input("b2 MLE", b2_mle);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

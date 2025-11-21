@@ -1,4 +1,4 @@
-.PHONY: all pr check test-dev test-ignored test mem-lim-cgroups mem-lim-docker prod prod-seq bin bin-seq mem-profile-prover mobile clean help
+.PHONY: all pr check test-dev test-ignored test examples mem-lim-cgroups mem-lim-docker prod prod-seq bin bin-seq mem-profile-prover mobile clean help
 
 # Memory limit in MB.
 MEM_LIM=120
@@ -28,16 +28,23 @@ check:  ## GitHub Action #1 - compile, run formatter and linter.
 test-dev: test-dev-seq test-dev-par  ## GitHub Action #2a - Basic unit testing. With and without parallel features.
 
 test-dev-seq:
-	cargo test --profile=dev-opt
+	cargo test --profile=dev-opt -- --test-threads=1
 
 test-dev-par:
-	cargo test --profile=dev-opt --features parallel
+	cargo test --profile=dev-opt --features parallel -- --test-threads=1
 
 test-ignored:  ## GitHub Action #2b - Run some slow tests that are normally ignored.
 	cargo test --profile=dev-opt --features parallel --package remainder-frontend --lib -- --ignored hyrax_worldcoin::test_worldcoin
 	cargo test --profile=dev-opt --features parallel --package remainder-frontend --lib -- --ignored worldcoin::tests
 
-test: test-dev test-ignored  ## Comprehensive testing. Equivalent to `test-dev` followed by `test-ignored`.
+test: test-dev test-ignored examples ## Comprehensive testing. Equivalent to `test-dev` followed by `test-ignored` and `examples`.
+
+examples:  ## GitHub Action #2c - Run all examples under `remainder-frontend/examples`.
+	@for example in remainder_frontend/examples/*.rs; do \
+		name=$$(basename $$example .rs); \
+		echo "Running Example $$name"; \
+		cargo run --release --package remainder-frontend --example $$name; \
+	done
 
 mem-lim-cgroups:  ## GitHub Action #3 - Run sequential world prover with a memory limit. Only available on Linux!
 	$(MAKE) prod-seq

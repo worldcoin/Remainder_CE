@@ -154,7 +154,7 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
     let _lookup_constraint_slopes =
         builder.add_lookup_constraint(&lookup_table, &slopes, &multiplicities_slopes);
 
-    builder.build().unwrap()
+    builder.build_without_layer_combination().unwrap()
 }
 
 /// Generates a mapping from Layer IDs to their respective MLEs,

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use rand::{CryptoRng, Rng, RngCore};
@@ -89,13 +87,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                 .collect_vec()
         };
 
-        // Zeroize each of the blinding factors once we have committed to all of the claims.
-        prover_commitment
-            .blinding_factors_matrix
-            .iter_mut()
-            .for_each(|blinding_factor| {
-                blinding_factor.zeroize();
-            });
         end_timer!(eval_proof_timer);
 
         HyraxInputLayerProof {
@@ -214,15 +205,6 @@ pub struct HyraxInputLayerDescription {
     pub log_num_cols: usize,
 }
 
-/// Type alias for a Hyrax input layer's description + optional precommit.
-pub type HyraxInputLayerDescriptionWithPrecommit<C> = HashMap<
-    LayerId,
-    (
-        HyraxInputLayerDescription,
-        Option<HyraxProverInputCommitment<C>>,
-    ),
->;
-
 impl HyraxInputLayerDescription {
     /// Create a [HyraxInputLayerDescription] specifying the use of a square
     /// matrix ("default setup"; build the struct directly for custom setup).
@@ -298,5 +280,19 @@ impl<C: PrimeOrderCurve> Zeroizable for HyraxProverInputCommitment<C> {
         for bf in &mut self.blinding_factors_matrix {
             bf.zeroize();
         }
+    }
+}
+
+/// The verifier's view of the commitment to the input layer, which includes only the commitment
+/// vector.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "C: PrimeOrderCurve")]
+pub struct HyraxVerifierInputCommitment<C: PrimeOrderCurve> {
+    pub commitment: Vec<C>,
+}
+
+impl<C: PrimeOrderCurve> HyraxVerifierInputCommitment<C> {
+    pub fn new(commitment: Vec<C>) -> Self {
+        Self { commitment }
     }
 }
