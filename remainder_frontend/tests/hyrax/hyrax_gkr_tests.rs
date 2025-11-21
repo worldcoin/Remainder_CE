@@ -2022,7 +2022,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     let input_shred_id = builder.get_id(&input_shred);
 
     let (circuit_desc, input_layer_id_to_input_shred_ids, circuit_description_map) =
-        builder.build().unwrap();
+        builder.build_with_layer_combination().unwrap();
 
     let mut input_nodes = HashMap::new();
     input_nodes.insert(input_shred_id, input_multilinear_extension);
@@ -2108,7 +2108,7 @@ fn build_small_regular_test_circuit<F: Field>(
     let _output_node = builder.set_output(&subtract_sector);
 
     let (circuit_description, input_layer_id_to_input_shred_ids, circuit_description_map) =
-        builder.build().unwrap();
+        builder.build_with_layer_combination().unwrap();
 
     // Write closure which allows easy usage of circuit inputs
     let circuit_data_fn = move |test_inputs: SmallRegularCircuitTestInputs<F>| {
@@ -2199,7 +2199,7 @@ struct MediumRegularCircuitTestInputs<F: Field> {
 /// function for ease of proving.
 ///
 /// Note that this function also returns the [LayerId] of its input layer
-/// to be used later for private input layer specification if needed.
+/// to be used later for committed input layer specification if needed.
 fn build_medium_regular_test_circuit<F: Field>(
     num_free_vars: usize,
 ) -> (
@@ -2209,7 +2209,7 @@ fn build_medium_regular_test_circuit<F: Field>(
 ) {
     let mut builder = CircuitBuilder::<F>::new();
 
-    // There is only one input layer; it can be public or private (for the purposes of testing)
+    // There is only one input layer; it can be public or committed (for the purposes of testing)
     let input_layer_node = builder.add_input_layer("Input Layer");
 
     // Circuit inputs
@@ -2245,7 +2245,7 @@ fn build_medium_regular_test_circuit<F: Field>(
     let _output_node = builder.set_output(&subtract_sector);
 
     let (circuit_description, input_layer_id_to_input_shred_ids, circuit_description_map) =
-        builder.build().unwrap();
+        builder.build_with_layer_combination().unwrap();
 
     // Write closure which allows easy usage of circuit inputs
     let circuit_data_fn = move |test_inputs: MediumRegularCircuitTestInputs<F>| {
@@ -2415,7 +2415,7 @@ fn buld_identity_regular_test_circuit<F: Field>(
 ) {
     let mut builder = CircuitBuilder::<F>::new();
 
-    // There is only one input layer; it can be public or private (for the purposes of testing)
+    // There is only one input layer; it can be public or committed (for the purposes of testing)
     let input_layer_node = builder.add_input_layer("Input Layer");
 
     // Circuit inputs
@@ -2447,7 +2447,7 @@ fn buld_identity_regular_test_circuit<F: Field>(
     let _output_node = builder.set_output(&subtract_sector);
 
     let (circuit_description, input_layer_id_to_input_shred_ids, circuit_description_map) =
-        builder.build().unwrap();
+        builder.build_with_layer_combination().unwrap();
 
     // Write closure which allows easy usage of circuit inputs
     let circuit_data_fn = move |test_inputs: IdentityRegularCircuitTestInputs<F>| {
@@ -2545,7 +2545,7 @@ fn build_matmult_regular_test_circuit<F: Field>(
 ) {
     let mut builder = CircuitBuilder::<F>::new();
 
-    // There is only one input layer; it can be public or private (for the purposes of testing)
+    // There is only one input layer; it can be public or committed (for the purposes of testing)
     let input_layer_node = builder.add_input_layer("Input Layer");
 
     // Circuit inputs
@@ -2574,7 +2574,7 @@ fn build_matmult_regular_test_circuit<F: Field>(
     let _output_node = builder.set_output(&subtract_sector);
 
     let (circuit_description, input_layer_id_to_input_shred_ids, circuit_description_map) =
-        builder.build().unwrap();
+        builder.build_with_layer_combination().unwrap();
 
     // Write closure which allows easy usage of circuit inputs
     let circuit_data_fn = move |test_inputs: MatmultRegularCircuitTestInputs<F>| {
@@ -2674,7 +2674,7 @@ fn build_identity_matmult_regular_test_circuit<F: Field>(
 ) {
     let mut builder = CircuitBuilder::<F>::new();
 
-    // There is only one input layer; it can be public or private (for the purposes of testing)
+    // There is only one input layer; it can be public or committed (for the purposes of testing)
     let input_layer_node = builder.add_input_layer("Input Layer");
 
     // Circuit inputs
@@ -2716,7 +2716,7 @@ fn build_identity_matmult_regular_test_circuit<F: Field>(
     let _output_node = builder.set_output(&subtract_sector);
 
     let (circuit_description, input_layer_id_to_input_shred_ids, circuit_description_map) =
-        builder.build().unwrap();
+        builder.build_with_layer_combination().unwrap();
 
     // Write closure which allows easy usage of circuit inputs
     let circuit_data_fn = move |test_inputs: MatmultIdentityRegularCircuitTestInputs<F>| {

@@ -139,7 +139,7 @@ mod test {
         let subtractor = builder.add_sector(&splits[0] - &splits[1]);
         builder.set_output(&subtractor);
 
-        builder.build().unwrap()
+        builder.build_with_layer_combination().unwrap()
     }
 
     #[test]
@@ -152,7 +152,7 @@ mod test {
         let mle = MultilinearExtension::new(values.into_iter().map(|v| Fr::from(v)).collect());
         let mut circuit = build_basic_split_circuit::<Fr>();
         circuit.set_input("Input", mle);
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
 
@@ -163,7 +163,7 @@ mod test {
         let mle = MultilinearExtension::new(values.into_iter().map(|v| Fr::from(v)).collect());
         let mut circuit = build_basic_split_circuit::<Fr>();
         circuit.set_input("Input", mle);
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
 
@@ -193,7 +193,7 @@ mod test {
         );
         builder.set_output(&subtractor);
 
-        builder.build().unwrap()
+        builder.build_with_layer_combination().unwrap()
     }
 
     #[test]
@@ -218,7 +218,7 @@ mod test {
             MultilinearExtension::new(vec![Fr::from(13), Fr::from(14), Fr::from(15), Fr::from(16)]),
         );
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }

@@ -3,12 +3,9 @@ use std::path::{Path, PathBuf};
 use clap::Parser;
 use remainder_frontend::{
     hyrax_worldcoin_mpc::mpc_prover::print_features_status,
-    zk_iriscode_ss::{io::read_bytes_from_file, parameters::IRISCODE_LEN},
+    zk_iriscode_ss::{self, io::read_bytes_from_file, parameters::IRISCODE_LEN},
 };
-use remainder_shared_types::{
-    config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
-    perform_function_under_expected_configs,
-};
+use remainder_shared_types::perform_function_under_expected_configs;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -22,16 +19,16 @@ fn main() {
     // Sanitycheck by logging the current settings.
     perform_function_under_expected_configs!(
         print_features_status,
-        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
-        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
+        &zk_iriscode_ss::EXPECTED_PROVER_CONFIG,
+        &zk_iriscode_ss::EXPECTED_VERIFIER_CONFIG,
     );
 
     // Parse arguments and verify secret share generation proofs.
     let cli = CliArguments::parse();
     perform_function_under_expected_configs!(
         sanitycheck_secret_shares,
-        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
-        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
+        &zk_iriscode_ss::EXPECTED_PROVER_CONFIG,
+        &zk_iriscode_ss::EXPECTED_VERIFIER_CONFIG,
         &cli.secret_share_bytes_path
     );
 }

@@ -52,7 +52,7 @@ fn test_complementary_recomposition_vertical() {
 
     builder.set_output(&comp_checker);
 
-    let mut circuit = builder.build().unwrap();
+    let mut circuit = builder.build_with_layer_combination().unwrap();
 
     digits.iter().enumerate().for_each(|(i, mle)| {
         circuit.set_input(&format!("Digits Input Shred {i}"), mle.clone());
@@ -60,7 +60,7 @@ fn test_complementary_recomposition_vertical() {
     circuit.set_input("Bits Input Shred", bits.into());
     circuit.set_input("Values Input Shred", values.into());
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }
@@ -95,14 +95,14 @@ fn test_unsigned_recomposition() {
     let equality_checker = Components::equality_check(&mut builder, &expected_input_shred, &recomp);
     builder.set_output(&equality_checker);
 
-    let mut circuit = builder.build().unwrap();
+    let mut circuit = builder.build_with_layer_combination().unwrap();
 
     digits.into_iter().enumerate().for_each(|(i, mle)| {
         circuit.set_input(&format!("Digits Input Shred {i}"), mle);
     });
     circuit.set_input("Expected Input Shred", expected);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }
@@ -148,7 +148,7 @@ fn test_complementary_recomposition() {
 
     builder.set_output(&signed_recomp_checker);
 
-    let mut circuit = builder.build().unwrap();
+    let mut circuit = builder.build_with_layer_combination().unwrap();
 
     digits.into_iter().enumerate().for_each(|(i, mle)| {
         circuit.set_input(&format!("Digits Input Shred {i}"), mle);
@@ -156,7 +156,7 @@ fn test_complementary_recomposition() {
     circuit.set_input("Expected Input Shred", expected);
     circuit.set_input("Bits Input Shred", bits);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }
@@ -172,11 +172,11 @@ fn test_bits_are_binary_soundness() {
     let component = DigitComponents::bits_are_binary(&mut builder, &bits_input_shred);
     let _output = builder.set_output(&component);
 
-    let mut circuit = builder.build().unwrap();
+    let mut circuit = builder.build_with_layer_combination().unwrap();
 
     circuit.set_input("Bits Input Shred", bits);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }
@@ -191,11 +191,11 @@ fn test_bits_are_binary() {
     let component = DigitComponents::bits_are_binary(&mut builder, &bits_input_shred);
     let _output = builder.set_output(&component);
 
-    let mut circuit = builder.build().unwrap();
+    let mut circuit = builder.build_with_layer_combination().unwrap();
 
     circuit.set_input("Bits Input Shred", bits);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     test_circuit_with_runtime_optimized_config(&provable_circuit);
 }

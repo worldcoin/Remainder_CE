@@ -166,7 +166,7 @@ fn build_combined_dataparallel_nondataparallel_test_circuit<F: Field>(
         TripleNestedSelectorNodes::new(&mut builder, &mle_4_shred, &mle_5_shred, &mle_6_shred);
     let _component_3 = ScaledProductNodes::new(&mut builder, &mle_3_shred, &mle_4_shred);
 
-    builder.build().unwrap()
+    builder.build_with_layer_combination().unwrap()
 }
 
 /// A circuit which combines the [DataParallelNodes], [TripleNestedSelectorNodes],
@@ -225,7 +225,7 @@ fn test_combined_dataparallel_nondataparallel_circuit_newmainder() {
     circuit.set_input("MLE 5", mle_5);
     circuit.set_input("MLE 6", mle_6);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

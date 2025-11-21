@@ -14,14 +14,12 @@ use std::collections::{HashMap, HashSet};
 
 use self::layers::Layers;
 use crate::circuit_layout::{CircuitEvalMap, CircuitLocation};
-use crate::circuit_layout::{ProvableCircuit, VerifiableCircuit};
 use crate::claims::claim_aggregation::{prover_aggregate_claims, verifier_aggregate_claims};
 use crate::claims::{Claim, ClaimTracker};
 use crate::expression::circuit_expr::filter_bookkeeping_table;
 use crate::input_layer::fiat_shamir_challenge::{
     FiatShamirChallenge, FiatShamirChallengeDescription,
 };
-use crate::input_layer::ligero_input_layer::LigeroCommitment;
 use crate::input_layer::{InputLayer, InputLayerDescription};
 use crate::layer::layer_enum::{LayerDescriptionEnum, VerifierLayerEnum};
 use crate::layer::{layer_enum::LayerEnum, LayerId};
@@ -31,19 +29,12 @@ use crate::mle::evals::MultilinearExtension;
 use crate::mle::mle_description::MleDescription;
 use crate::mle::mle_enum::MleEnum;
 use crate::output_layer::{OutputLayer, OutputLayerDescription};
-use crate::utils::debug::sanitycheck_input_layers_and_claims;
+use crate::provable_circuit::ProvableCircuit;
 use crate::utils::mle::verify_claim;
 use ark_std::{end_timer, start_timer};
-use helpers::get_circuit_description_hash_as_field_elems;
 use itertools::Itertools;
-use remainder_ligero::ligero_commit::{
-    remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify,
-};
-use remainder_shared_types::circuit_hash::CircuitHashType;
-use remainder_shared_types::config::global_config::{
-    get_current_global_prover_config, get_current_global_verifier_config, global_claim_agg_strategy,
-};
-use remainder_shared_types::config::{ClaimAggregationStrategy, ProofConfig};
+use remainder_shared_types::config::global_config::global_claim_agg_strategy;
+use remainder_shared_types::config::ClaimAggregationStrategy;
 use remainder_shared_types::transcript::{ProverTranscript, TranscriptWriter};
 use remainder_shared_types::transcript::{TranscriptSponge, VerifierTranscript};
 use remainder_shared_types::{Field, Halo2FFTFriendlyField};
@@ -110,270 +101,9 @@ pub struct InstantiatedCircuit<F: Field> {
     pub layer_map: HashMap<LayerId, Vec<DenseMle<F>>>,
 }
 
-/// Write the GKR proof to transcript.
-/// Appends inputs and Ligero input layer commitments to the transcript: public inputs first, then Ligero input layers, ordering by layer id in both cases.
-/// Arguments:
-/// * `inputs` - a map from input layer ID to the MLE of its values (in the clear) for _all_ input layers.
-/// * `ligero_input_layers` - a vector of [LigeroInputLayerDescription]s, optionally paired with pre-computed commitments to their values (if provided, this are not checked, but simply used as is).
-/// * `circuit_description` - the [GKRCircuitDescription] of the circuit to be proven.
-pub fn prove<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
-    provable_circuit: &ProvableCircuit<F>,
-    circuit_description_hash_type: CircuitHashType,
-    transcript_writer: &mut TranscriptWriter<F, Tr>,
-) -> Result<ProofConfig> {
-    // Grab proof config from global config
-    let proof_config = ProofConfig::new_from_prover_config(&get_current_global_prover_config());
-
-    // Generate circuit description hash and append to transcript
-    let hash_value_as_field_elems = get_circuit_description_hash_as_field_elems(
-        provable_circuit.get_gkr_circuit_description_ref(),
-        circuit_description_hash_type,
-    );
-    transcript_writer.append_elements("Circuit description hash", &hash_value_as_field_elems);
-
-    // Add the input values of any public (i.e. non-ligero) input layers to transcript.
-    // Select the public input layers from the input layers, and sort them by layer id, and append
-    // their input values to the transcript.
-    provable_circuit
-        .get_public_input_layer_ids()
-        .into_iter()
-        .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
-        .for_each(|layer_id| {
-            let mle = provable_circuit.get_input_mle(layer_id).unwrap();
-            transcript_writer
-                .append_input_elements("Public input layer", &mle.iter().collect_vec());
-        });
-
-    // For each Ligero input layer, calculate commitments if not already provided, and then add each
-    // commitment to the transcript.
-    let mut ligero_input_commitments = HashMap::<LayerId, LigeroCommitment<F>>::new();
-
-    provable_circuit
-        .get_private_input_layer_ids()
-        .into_iter()
-        .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
-        .for_each(|layer_id| {
-            // Commit to the Ligero input layer, if it is not already committed to.
-            let (desc, maybe_precommitment) =
-                provable_circuit.get_private_input_layer(layer_id).unwrap();
-            let commitment = if let Some(commitment) = maybe_precommitment {
-                commitment.clone()
-            } else {
-                let input_mle = provable_circuit.get_input_mle(layer_id).unwrap();
-                let (commitment, _) =
-                    remainder_ligero_commit(&input_mle.iter().collect_vec(), &desc.aux);
-                commitment
-            };
-            // Add the root of the commitment to the transcript.
-            let root = commitment.get_root();
-            transcript_writer.append_input_elements("Ligero commit", &[root.into_raw()]);
-            // Store the commitment for later use.
-            ligero_input_commitments.insert(layer_id, commitment);
-        });
-
-    // Mutate the transcript to contain the proof of the intermediate layers of the circuit,
-    // and return the claims on the input layer.
-    let input_layer_claims = prove_circuit(provable_circuit, transcript_writer).unwrap();
-
-    // If in performance debugging mode, print the number of claims on input
-    // layers and input layer sizes.
-    if cfg!(feature = "performance-debug") {
-        sanitycheck_input_layers_and_claims(
-            &input_layer_claims,
-            provable_circuit.get_gkr_circuit_description_ref(),
-        );
-    }
-
-    // If in debug mode, then check the claims on all input layers.
-    if cfg!(debug_assertions) {
-        for claim in input_layer_claims.iter() {
-            let input_mle = provable_circuit
-                .get_input_mle(claim.get_to_layer_id())
-                .unwrap();
-            let evaluation = input_mle.evaluate_at_point(claim.get_point());
-            if evaluation != claim.get_eval() {
-                return Err(anyhow!(GKRError::EvaluationMismatch(
-                    claim.get_to_layer_id(),
-                    claim.get_to_layer_id(),
-                )));
-            }
-        }
-    }
-
-    // Create a Ligero evaluation proof for each claim on a Ligero input layer, writing it to transcript.
-    for claim in input_layer_claims.iter() {
-        let layer_id = claim.get_to_layer_id();
-        if let Ok((desc, _)) = provable_circuit.get_private_input_layer(layer_id) {
-            let mle = provable_circuit.get_input_mle(layer_id).unwrap();
-            let commitment = ligero_input_commitments.get(&layer_id).unwrap();
-            remainder_ligero_eval_prove(
-                &mle.f.iter().collect_vec(),
-                claim.get_point(),
-                transcript_writer,
-                &desc.aux,
-                commitment,
-            )
-            .unwrap();
-        }
-    }
-
-    Ok(proof_config)
-}
-
-/// Verify a GKR proof from a transcript.
-pub fn verify<F: Halo2FFTFriendlyField>(
-    verifiable_circuit: &VerifiableCircuit<F>,
-    mut predetermined_public_inputs: HashMap<LayerId, MultilinearExtension<F>>,
-    circuit_description_hash_type: CircuitHashType,
-    transcript: &mut impl VerifierTranscript<F>,
-    proof_config: &ProofConfig,
-) -> Result<()> {
-    // Check whether proof config matches current global verifier config
-    if !get_current_global_verifier_config().matches_proof_config(proof_config) {
-        panic!("Error: Attempted to verify a GKR proof whose config doesn't match that of the verifier.");
-    }
-
-    // Check the shape of the circuit description against the proof -- only needed to be done
-    // for the input layers, because for intermediate and output layers, the proof is in the
-    // transcript, which the verifier checks shape against the circuit description already.
-    assert_eq!(
-        verifiable_circuit.get_public_input_layer_ids().len()
-            + verifiable_circuit.get_private_inputs_ref().len(),
-        verifiable_circuit
-            .get_gkr_circuit_description_ref()
-            .input_layers
-            .len()
-    );
-
-    // Generate circuit description hash and check against prover-provided circuit description hash
-    let hash_value_as_field_elems = get_circuit_description_hash_as_field_elems(
-        verifiable_circuit.get_gkr_circuit_description_ref(),
-        circuit_description_hash_type,
-    );
-    let prover_supplied_circuit_description_hash = transcript
-        .consume_elements("Circuit description hash", hash_value_as_field_elems.len())
-        .unwrap();
-    assert_eq!(
-        prover_supplied_circuit_description_hash,
-        hash_value_as_field_elems
-    );
-
-    // Read and check public input values to transcript in order of layer id.
-    verifiable_circuit
-        .get_public_input_layer_ids()
-        .into_iter()
-        .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
-        .map(|layer_id| {
-            let layer_desc = verifiable_circuit
-                .get_gkr_circuit_description_ref()
-                .input_layers
-                .iter()
-                .find(|desc| desc.layer_id == layer_id)
-                .unwrap();
-            let (transcript_evaluations, _expected_input_hash_chain_digest) = transcript
-                .consume_input_elements("Public input layer", 1 << layer_desc.num_vars)
-                .unwrap();
-            match predetermined_public_inputs.get(&layer_id) {
-                Some(predetermined_public_input) => {
-                    // If the verifier already knows what the input should be
-                    // ahead of time, check against the transcript evaluations
-                    // sent by the prover.
-                    if predetermined_public_input.f.iter().collect_vec() != transcript_evaluations {
-                        Err(anyhow!(GKRError::PublicInputLayerValuesMismatch(layer_id)))
-                    } else {
-                        Ok(())
-                    }
-                }
-                None => {
-                    // Otherwise, we append the proof values read from
-                    // transcript to the public inputs.
-                    predetermined_public_inputs
-                        .insert(layer_id, MultilinearExtension::new(transcript_evaluations));
-                    Ok(())
-                }
-            }
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    // Sanitycheck: ensure that all of the public inputs are populated
-    assert_eq!(
-        predetermined_public_inputs.len(),
-        verifiable_circuit.get_public_input_layer_ids().len()
-    );
-
-    // Read the Ligero input layer commitments from transcript in order of layer id.
-    let mut ligero_commitments = HashMap::<LayerId, F>::new();
-    verifiable_circuit
-        .get_private_input_layer_ids()
-        .into_iter()
-        .sorted_by_key(|layer_id| layer_id.get_raw_input_layer_id())
-        .for_each(|layer_id| {
-            let (commitment_as_vec, _expected_input_hash_chain_digest) = transcript
-                .consume_input_elements("Ligero commit", 1)
-                .unwrap();
-            assert_eq!(commitment_as_vec.len(), 1);
-            ligero_commitments.insert(layer_id, commitment_as_vec[0]);
-        });
-
-    let input_layer_claims = verifiable_circuit
-        .get_gkr_circuit_description_ref()
-        .verify(transcript)
-        .unwrap();
-
-    // Every input layer claim is either for a public- or Ligero- input layer.
-    let mut public_input_layer_claims = vec![];
-    let mut ligero_input_layer_claims = vec![];
-    input_layer_claims.into_iter().for_each(|claim| {
-        let layer_id = claim.get_to_layer_id();
-        if verifiable_circuit.get_public_input_layer_ids().contains(&layer_id) {
-            public_input_layer_claims.push(claim);
-        } else if ligero_commitments.contains_key(&layer_id) {
-            ligero_input_layer_claims.push(claim);
-        } else {
-            // This can only be a programming error on our part (since there was sufficient input
-            // data to verify the proof of the circuit).
-            panic!("Input layer {layer_id:?} has a claim but is not a public input layer nor a Ligero input layer.");
-        }
-    });
-
-    // Check the claims on public input layers via explicit evaluation.
-    for claim in public_input_layer_claims.iter() {
-        let input_mle = predetermined_public_inputs
-            .get(&claim.get_to_layer_id())
-            .unwrap();
-        let evaluation = input_mle.evaluate_at_point(claim.get_point());
-        if evaluation != claim.get_eval() {
-            return Err(anyhow!(GKRError::EvaluationMismatch(
-                claim.get_to_layer_id(),
-                claim.get_from_layer_id(),
-            )));
-        }
-    }
-
-    // Check the claims on Ligero input layers via their evaluation proofs.
-    for claim in ligero_input_layer_claims.iter() {
-        let claim_layer_id = claim.get_to_layer_id();
-        let commitment = ligero_commitments.get(&claim_layer_id).unwrap();
-        let desc = verifiable_circuit
-            .get_private_inputs_ref()
-            .iter()
-            .find(|(layer_id, _)| **layer_id == claim_layer_id)
-            .unwrap();
-        remainder_ligero_verify::<F>(
-            commitment,
-            &desc.1.aux,
-            transcript,
-            claim.get_point(),
-            claim.get_eval(),
-        );
-    }
-
-    Ok(())
-}
-
 /// Assumes that the inputs have already been added to the transcript (if necessary).
 /// Returns the vector of claims on the input layers.
-pub fn prove_circuit<F: Field, Tr: TranscriptSponge<F>>(
+pub fn prove_circuit<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
     provable_circuit: &ProvableCircuit<F>,
     transcript_writer: &mut TranscriptWriter<F, Tr>,
 ) -> Result<Vec<Claim<F>>> {
@@ -714,7 +444,10 @@ impl<F: Field> GKRCircuitDescription<F> {
     /// * `transcript_reader`: servers as the proof.
     /// Returns claims on the input layers.
     #[instrument(skip_all, err)]
-    fn verify(&self, transcript_reader: &mut impl VerifierTranscript<F>) -> Result<Vec<Claim<F>>> {
+    pub fn verify(
+        &self,
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<Vec<Claim<F>>> {
         // Get the verifier challenges from the transcript.
         let fiat_shamir_challenges: Vec<FiatShamirChallenge<F>> = self
             .fiat_shamir_challenges

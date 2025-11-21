@@ -1,3 +1,10 @@
+#[cfg(test)]
+extern crate quickcheck;
+
+#[cfg(test)]
+#[macro_use(quickcheck)]
+extern crate quickcheck_macros;
+
 pub mod abstract_expr;
 
 // Module for defining the re-usable components for circuit building

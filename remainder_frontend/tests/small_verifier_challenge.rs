@@ -34,7 +34,7 @@ fn build_fs_challenge_sub_test_circuit<F: Field>(num_free_vars: usize) -> Circui
     let checker = fs_challenge(&mut builder, &fs_challenge_mle_shred, &mle_shred);
     let _output = TestUtilComponents::difference(&mut builder, &checker);
 
-    builder.build().unwrap()
+    builder.build_with_layer_combination().unwrap()
 }
 
 #[test]
@@ -48,7 +48,7 @@ fn test_fs_challenge_sub_circuit() {
 
     circuit.set_input("MLE", mle);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

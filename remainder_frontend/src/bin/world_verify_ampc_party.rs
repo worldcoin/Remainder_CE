@@ -13,21 +13,25 @@ use remainder_frontend::{
     },
     worldcoin_mpc::{
         circuits::{
-            MPC_ENCODING_MATRIX_SHRED, MPC_EVALUATION_POINTS_SHRED, MPC_LOOKUP_TABLE_VALUES_SHRED,
-            MPC_SHARES_LAYER, MPC_SHARES_SHRED, MPC_SLOPES_LAYER,
+            MPC_ENCODING_MATRIX_SHRED, MPC_EVALUATION_POINTS_SHRED, MPC_IRISCODE_INPUT_LAYER,
+            MPC_LOOKUP_TABLE_VALUES_SHRED, MPC_MASKCODE_INPUT_LAYER, MPC_SHARES_LAYER,
+            MPC_SHARES_SHRED, MPC_SLOPES_LAYER,
         },
         parameters::GR4_MODULUS,
     },
     zk_iriscode_ss::{
+        self,
         io::read_bytes_from_file,
         parameters::{IRISCODE_LEN, SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS},
     },
 };
 use remainder_hyrax::utils::convert_fr_into_u16;
-use remainder_shared_types::{
-    config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig},
-    perform_function_under_expected_configs, Bn256Point, Fr,
-};
+use remainder_shared_types::{perform_function_under_expected_configs, Bn256Point, Fr};
+
+#[cfg(feature = "print-trace")]
+use tracing::Level;
+#[cfg(feature = "print-trace")]
+use tracing_subscriber::fmt;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -63,19 +67,22 @@ struct CliArguments {
 }
 
 fn main() {
+    #[cfg(feature = "print-trace")]
+    let _subscriber = fmt().with_max_level(Level::DEBUG).init();
+
     // Sanitycheck by logging the current settings.
     perform_function_under_expected_configs!(
         print_features_status,
-        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
-        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
+        &zk_iriscode_ss::EXPECTED_PROVER_CONFIG,
+        &zk_iriscode_ss::EXPECTED_VERIFIER_CONFIG,
     );
 
     // Parse arguments and verify secret share generation proofs.
     let cli = CliArguments::parse();
     perform_function_under_expected_configs!(
         verify_secret_share_proofs,
-        &GKRCircuitProverConfig::hyrax_compatible_memory_optimized_default(),
-        &GKRCircuitVerifierConfig::hyrax_compatible_runtime_optimized_default(),
+        &zk_iriscode_ss::EXPECTED_PROVER_CONFIG,
+        &zk_iriscode_ss::EXPECTED_VERIFIER_CONFIG,
         &cli.circuit,
         &cli.hashes,
         &cli.secret_share_proof,
@@ -118,7 +125,7 @@ fn verify_secret_share_proofs(
     let serialized_commitments =
         read_bytes_from_file(path_to_aux_commitments.as_os_str().to_str().unwrap());
 
-    let _v3_mpc_commitments = V3MPCCommitments::<Bn256Point>::deserialize(&serialized_commitments);
+    let v3_mpc_commitments = V3MPCCommitments::<Bn256Point>::deserialize(&serialized_commitments);
 
     let hashes_file = File::open(path_to_hashes_json).expect("Could not open hashes.json file.");
     let _parsed_hashes: serde_json::Value =
@@ -176,95 +183,30 @@ fn verify_secret_share_proofs(
             .set_commitment_parameters(MPC_SLOPES_LAYER, SHAMIR_SECRET_SHARE_SLOPE_LOG_NUM_COLS)
             .unwrap();
 
-        // check that the commitments are the same for iris code
-        // TODO: Restore this check and fix resulting bug!!
-        /*
-        {
-            println!("Checking that the iris code commitment with the proof matches that within the V3MPCCommitments struct...");
-            let iris_code_input_layer_id = mpc_circuit_ref
-                .mpc_circuit
-                .get_input_layer_description_ref(MPC_IRISCODE_INPUT_LAYER)
-                .layer_id;
+        verifiable_circuit
+            .set_pre_commitment(
+                MPC_IRISCODE_INPUT_LAYER,
+                v3_mpc_commitments
+                    .get_code_commit_ref(false, is_left_eye)
+                    .clone(),
+            )
+            .expect("Failed to set pre-commitment for the MPC Iriscode Input Layer");
 
-            let iris_code_commitment = proof
-                .hyrax_input_proofs
-                .iter()
-                .find(|proof| proof.layer_id == iris_code_input_layer_id)
-                .unwrap()
-                .input_commitment
-                .clone();
+        verifiable_circuit
+            .set_pre_commitment(
+                MPC_MASKCODE_INPUT_LAYER,
+                v3_mpc_commitments
+                    .get_code_commit_ref(true, is_left_eye)
+                    .clone(),
+            )
+            .expect("Failed to set pre-commitment for the MPC Maskcode Input Layer");
 
-            assert_eq!(
-                &iris_code_commitment,
-                v3_mpc_commitments.get_code_commit_ref(false, is_left_eye)
-            );
-            println!("Iris code commitment matches!");
-        }
-        */
-
-        // check that the commitments are the same for mask code
-        // TODO: Restore this check and fix resulting bug!!
-        /*
-        {
-            println!("Checking that the mask code commitment with the proof matches that within the V3MPCCommitments struct...");
-
-            let mask_code_input_layer_id = mpc_circuit_ref
-                .mpc_circuit
-                .get_input_layer_description_ref(MPC_MASKCODE_INPUT_LAYER)
-                .layer_id;
-
-            let mask_code_commitment = proof
-                .hyrax_input_proofs
-                .iter()
-                .find(|proof| proof.layer_id == mask_code_input_layer_id)
-                .unwrap()
-                .input_commitment
-                .clone();
-
-            assert_eq!(
-                &mask_code_commitment,
-                v3_mpc_commitments.get_code_commit_ref(true, is_left_eye)
-            );
-            println!("Mask code commitment matches!");
-        }
-        */
-
-        // check that the slope commitment is the same
-        // TODO: Restore this check and fix resulting bug!!
-        /*
-        {
-            println!("Checking that the Shamir SS polynomial's slope commitment with the proof matches that within the V3MPCCommitments struct...");
-            let slope_input_layer_id = mpc_circuit_ref
-                .mpc_circuit
-                .get_input_layer_description_ref(MPC_SLOPES_LAYER)
-                .layer_id;
-
-            let slope_commitment = proof
-                .hyrax_input_proofs
-                .iter()
-                .find(|proof| proof.layer_id == slope_input_layer_id)
-                .unwrap()
-                .input_commitment
-                .clone();
-
-            assert_eq!(
-                &slope_commitment,
-                v3_mpc_commitments.get_slope_commit_ref(is_left_eye)
-            );
-            println!("Shamir SS polynomial's slope commitment matches!");
-        }
-        */
-
-        // The verifier forcibly inserts the correct public "auxiliary" MLEs
-        // (e.g. lookup table, evaluation points, encoding matrix) into the
-        // proof, since these are omitted by the prover by construction.
-        /*
-        mpc_party_proof.insert_aux_public_data_by_id(
-            is_left_eye,
-            aux_mle,
-            circuit.auxiliary_invariant_public_input_layer.layer_id,
-        );
-        */
+        verifiable_circuit
+            .set_pre_commitment(
+                MPC_SLOPES_LAYER,
+                v3_mpc_commitments.get_slope_commit_ref(is_left_eye).clone(),
+            )
+            .expect("Failed to set pre-commitment for the MPC Slopes Input Layer");
 
         match mpc_party_proof.verify_mpc_proof(is_left_eye, &verifiable_circuit, shares_layer_id) {
             Ok(secret_share_mle) => {

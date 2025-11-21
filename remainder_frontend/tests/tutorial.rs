@@ -13,7 +13,7 @@ fn build_circuit() -> Circuit<Fr> {
     let mut builder = CircuitBuilder::<Fr>::new();
 
     let lhs_rhs_input_layer =
-        builder.add_input_layer("LHS RHS input layer", LayerVisibility::Private);
+        builder.add_input_layer("LHS RHS input layer", LayerVisibility::Committed);
     let expected_output_input_layer =
         builder.add_input_layer("Expected output", LayerVisibility::Public);
 
@@ -29,7 +29,7 @@ fn build_circuit() -> Circuit<Fr> {
 
     builder.set_output(&subtraction_sector);
 
-    builder.build().unwrap()
+    builder.build_with_layer_combination().unwrap()
 }
 
 #[test]
@@ -49,12 +49,12 @@ fn tutorial_test() {
 
     // Append circuit inputs to their respective input "shreds" in the prover's
     // view of the circuit.
-    prover_circuit.set_input("LHS", lhs_data); // This is private!
-    prover_circuit.set_input("RHS", rhs_data); // This is private!
+    prover_circuit.set_input("LHS", lhs_data); // This is committed!
+    prover_circuit.set_input("RHS", rhs_data); // This is committed!
     prover_circuit.set_input("Expected output", expected_output_data); // This is public!
 
     // Create a version of the circuit description which the prover can use.
-    let provable_circuit = prover_circuit.finalize().unwrap();
+    let provable_circuit = prover_circuit.gen_provable_circuit().unwrap();
 
     let (proof_config, proof_as_transcript) =
         prove_circuit_with_runtime_optimized_config::<Fr, PoseidonSponge<Fr>>(&provable_circuit);
@@ -63,12 +63,10 @@ fn tutorial_test() {
 
     // Here we don't have any pre-determined public inputs from the verifier,
     // so we can directly call the `gen_verifiable_circuit()` function.
-    let (verifiable_circuit, verifier_predetermined_public_inputs) =
-        verifier_circuit.gen_verifiable_circuit().unwrap();
+    let verifiable_circuit = verifier_circuit.gen_verifiable_circuit().unwrap();
 
     verify_circuit_with_proof_config::<Fr, PoseidonSponge<Fr>>(
         &verifiable_circuit,
-        verifier_predetermined_public_inputs,
         &proof_config,
         proof_as_transcript,
     );

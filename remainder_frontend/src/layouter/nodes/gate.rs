@@ -176,12 +176,12 @@ mod test {
 
         builder.set_output(&gate_sector);
 
-        let mut circuit = builder.build().unwrap();
+        let mut circuit = builder.build_with_layer_combination().unwrap();
 
         circuit.set_input("Positive Input", mle);
         circuit.set_input("Negative Input", neg_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }
@@ -232,12 +232,12 @@ mod test {
 
         let _output = builder.set_output(&gate_sector);
 
-        let mut circuit = builder.build().unwrap();
+        let mut circuit = builder.build_with_layer_combination().unwrap();
 
         circuit.set_input("Positive Input", mle);
         circuit.set_input("Negative Input", neg_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }

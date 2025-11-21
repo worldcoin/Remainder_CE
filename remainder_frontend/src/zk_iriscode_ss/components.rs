@@ -78,7 +78,7 @@ mod test {
 
         let _output = builder.set_output(&sop);
 
-        builder.build()
+        builder.build_with_layer_combination()
     }
 
     #[test]
@@ -114,7 +114,7 @@ mod test {
             );
         });
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         test_circuit_with_runtime_optimized_config(&provable_circuit);
     }

@@ -91,7 +91,7 @@ fn build_dataparallel_selector_test_circuit<F: Field>(
         &dataparallel_mle_4_shred,
     );
 
-    builder.build().unwrap()
+    builder.build_with_layer_combination().unwrap()
 }
 
 /// A circuit which does the following:
@@ -172,7 +172,7 @@ fn test_dataparallel_selector_alt_newmainder() {
     circuit.set_input("Dataprallel MLE 3", dataparallel_mle_3);
     circuit.set_input("Dataprallel MLE 4", dataparallel_mle_4);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

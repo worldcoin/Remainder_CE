@@ -80,7 +80,7 @@ fn build_dataparallel_recombination_test_circuit<F: Field>(
     let _component_2 =
         diff_two_inputs(&mut builder, &component_1, &combined_dataparallel_mle_shred);
 
-    builder.build().unwrap()
+    builder.build_with_layer_combination().unwrap()
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn test_dataparallel_recombination_newmainder() {
     circuit.set_input("MLE 4", mle_4);
     circuit.set_input("Combined Dataparallel MLE", dataparallel_combined_mle);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

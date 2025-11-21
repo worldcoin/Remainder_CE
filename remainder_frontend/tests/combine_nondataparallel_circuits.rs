@@ -147,7 +147,7 @@ fn build_combined_nondataparallel_circuit<F: Field>(mle_1_2_vars: usize) -> Circ
     let _component_2 = SumConstantCircuitNodes::new(&mut builder, &mle_1_shred, &mle_2_shred);
     let _component_3 = ConstantScaledCircuitNodes::new(&mut builder, &mle_1_shred, &mle_2_shred);
 
-    builder.build().unwrap()
+    builder.build_with_layer_combination().unwrap()
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn test_combined_nondataparallel_circuit_newmainder() {
     circuit.set_input("MLE 1", mle_1);
     circuit.set_input("MLE 2", mle_2);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_runtime_optimized_config(&provable_circuit);

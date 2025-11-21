@@ -167,7 +167,7 @@ fn build_combined_dataparallel_test_circuit<F: Field>(
         &dataparallel_mle_2_shred,
     );
 
-    builder.build().unwrap()
+    builder.build_with_layer_combination().unwrap()
 }
 
 #[test]
@@ -212,7 +212,7 @@ fn test_combined_dataparallel_circuit_alt_newmainder() {
     circuit.set_input("Dataparallel MLE 1", dataparallel_mle_1);
     circuit.set_input("Dataparallel MLE 2", dataparallel_mle_2);
 
-    let provable_circuit = circuit.finalize().unwrap();
+    let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
     // Prove/verify the circuit
     test_circuit_with_memory_optimized_config(&provable_circuit);

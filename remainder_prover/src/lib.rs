@@ -13,6 +13,10 @@ pub mod circuit_building_context;
 
 pub mod circuit_layout;
 
+pub mod provable_circuit;
+
+pub mod verifiable_circuit;
+
 // module for tracking all the claims, aggregating them,
 // and generating proofs of aggregation
 pub mod claims;

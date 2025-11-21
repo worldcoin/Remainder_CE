@@ -10,8 +10,8 @@ use crate::{
 
 use super::circuits::mpc_attach_data;
 
-/// Return the circuit description, "private" input layer description and inputs for a trivial
-/// mpc circuit.
+/// Return the circuit description, with the specified `layer_visibility` for privacy-sensitive
+/// layers, and inputs for a trivial mpc circuit.
 pub fn small_circuit_description_and_inputs<
     const NUM_IRIS_4_CHUNKS: usize,
     const PARTY_IDX: usize,
@@ -27,8 +27,8 @@ pub fn small_circuit_description_and_inputs<
     circuit
 }
 
-/// Return the circuit description, "private" input layer description and inputs for a
-/// mpc circuit, with data from Inversed
+/// Return the circuit description, with the specified `layer_visibility` for privacy-sensitive
+/// layers, with the input data from Inversed Tech.
 pub fn inversed_circuit_description_and_inputs<
     const NUM_IRIS_4_CHUNKS: usize,
     const PARTY_IDX: usize,

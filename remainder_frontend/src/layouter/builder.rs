@@ -12,11 +12,11 @@ use std::{
 use ark_std::log2;
 use itertools::Itertools;
 use remainder_hyrax::{
-    circuit_layout::{HyraxProvableCircuit, HyraxVerifiableCircuit},
     hyrax_gkr::hyrax_input_layer::HyraxInputLayerDescription,
+    provable_circuit::HyraxProvableCircuit, verifiable_circuit::HyraxVerifiableCircuit,
 };
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
-use remainder_shared_types::{curves::PrimeOrderCurve, Field};
+use remainder_shared_types::{curves::PrimeOrderCurve, Field, Halo2FFTFriendlyField};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -38,16 +38,20 @@ use crate::{
     },
 };
 use remainder::{
-    circuit_layout::{CircuitLocation, ProvableCircuit, VerifiableCircuit},
+    circuit_layout::CircuitLocation,
     input_layer::{ligero_input_layer::LigeroInputLayerDescription, InputLayerDescription},
     layer::{gate::BinaryOperation, layer_enum::LayerDescriptionEnum, LayerId},
     mle::evals::MultilinearExtension,
     output_layer::OutputLayerDescription,
+    provable_circuit::ProvableCircuit,
     prover::{GKRCircuitDescription, GKRError},
     utils::mle::build_composite_mle,
+    verifiable_circuit::VerifiableCircuit,
 };
 
 use anyhow::{anyhow, bail, Result};
+
+use tracing::debug;
 
 /// A dynamically-typed reference to a [CircuitNode].
 /// Used only in the front-end during the circuit-building phase.
@@ -226,7 +230,6 @@ pub struct CircuitBuilder<F: Field> {
     matmult_nodes: Vec<Rc<MatMultNode>>,
     lookup_constraint_nodes: Vec<Rc<LookupConstraint>>,
     lookup_table_nodes: Vec<Rc<LookupTable>>,
-
     node_to_ptr: HashMap<NodeId, NodeRef<F>>,
     circuit_map: CircuitMap,
 }
@@ -261,7 +264,10 @@ impl<F: Field> CircuitBuilder<F> {
     ///
     /// Returns a [Circuit] struct containing the circuit description and all necessary metadata for
     /// attaching inputs.
-    pub fn build(mut self) -> Result<Circuit<F>> {
+    pub fn build_with_max_layer_size(
+        mut self,
+        maybe_maximum_log_layer_size: Option<usize>,
+    ) -> Result<Circuit<F>> {
         let input_layer_nodes = Self::into_owned_helper(self.input_layer_nodes);
         let input_shred_nodes = Self::into_owned_helper(self.input_shred_nodes);
         let fiat_shamir_challenge_nodes = Self::into_owned_helper(self.fiat_shamir_challenge_nodes);
@@ -309,7 +315,7 @@ impl<F: Field> CircuitBuilder<F> {
                 let input_layer_description = input_layer_node
                     .generate_input_layer_description::<F>(&mut self.circuit_map)
                     .unwrap();
-                self.circuit_map.insert_layer(
+                self.circuit_map.insert_shreds_into_input_layer(
                     input_layer_description.layer_id,
                     input_layer_node
                         .input_shreds
@@ -354,6 +360,7 @@ impl<F: Field> CircuitBuilder<F> {
                 intermediate_layers.extend(generate_sector_circuit_description(
                     &sectors,
                     &mut self.circuit_map,
+                    maybe_maximum_log_layer_size,
                 ));
             }
         }
@@ -388,6 +395,23 @@ impl<F: Field> CircuitBuilder<F> {
         circuit_description.index_mle_indices(0);
 
         Ok(Circuit::new(circuit_description, self.circuit_map))
+    }
+
+    /// A build function that combines layers greedily such that the circuit is optimized for having
+    /// the smallest number of layers possible.
+    pub fn build_with_layer_combination(self) -> Result<Circuit<F>> {
+        self.build_with_max_layer_size(None)
+    }
+
+    /// A build function that does not combine any layers.
+    pub fn build_without_layer_combination(self) -> Result<Circuit<F>> {
+        self.build_with_max_layer_size(Some(0))
+    }
+
+    /// A default build function which does _not_ combine layers.
+    /// Equivalent to `build_without_layer_combination`.
+    pub fn build(self) -> Result<Circuit<F>> {
+        self.build_without_layer_combination()
     }
 }
 
@@ -746,7 +770,7 @@ mod test {
         let mut builder = CircuitBuilder::<Fr>::new();
 
         let input_layer1 = builder.add_input_layer("Input Layer 1", LayerVisibility::Public);
-        let input_layer2 = builder.add_input_layer("Input Layer 2", LayerVisibility::Private);
+        let input_layer2 = builder.add_input_layer("Input Layer 2", LayerVisibility::Committed);
 
         builder.add_input_shred("shred1", 1, &input_layer1);
         builder.add_input_shred("shred1", 1, &input_layer2);
@@ -762,7 +786,7 @@ pub enum LayerVisibility {
     /// Input layers whose data are only accessible through their commitments; according to some
     /// Polynomial Commitment Scheme (PCS). The specific commitment scheme is determined when the
     /// circuit is finalized.
-    Private,
+    Committed,
 }
 
 /// Used only inside a [CircuitMap] to keep track of its state.
@@ -821,15 +845,15 @@ impl CircuitMap {
         self.node_location.insert(node_id, value);
     }
 
-    /// Adds a collection of `shreds` to Input Layer with ID `layer_id`.
+    /// Adds a collection of `shreds` to Input Layer with ID `input_layer_id`.
     ///
     /// # Panics
     /// If [self] is not in state [CircuitMapState::UnderConstruction],
-    /// or if `layer_id` has already been assigned shreds.
-    pub fn insert_layer(&mut self, layer_id: LayerId, shreds: Vec<NodeId>) {
+    /// or if `input_layer_id` has already been assigned shreds.
+    pub fn insert_shreds_into_input_layer(&mut self, input_layer_id: LayerId, shreds: Vec<NodeId>) {
         assert_eq!(self.state, CircuitMapState::UnderConstruction);
-        assert!(!self.shreds_in_layer.contains_key(&layer_id));
-        self.shreds_in_layer.insert(layer_id, shreds);
+        assert!(!self.shreds_in_layer.contains_key(&input_layer_id));
+        self.shreds_in_layer.insert(input_layer_id, shreds);
     }
 
     /// Using `node_id`, retrieves the number of variables and location of this
@@ -1029,7 +1053,7 @@ impl CircuitMap {
             .iter()
             .filter_map(|(layer_id, visibility)| match *visibility {
                 LayerVisibility::Public => Some(layer_id),
-                LayerVisibility::Private => None,
+                LayerVisibility::Committed => None,
             })
             .cloned()
             .collect_vec()
@@ -1064,17 +1088,18 @@ impl CircuitMap {
             .cloned()
     }
 
-    /// Returns a vector with all [LayerId]s of the Input Layers with [LayerVisibility::Private] visibility.
+    /// Returns a vector with all [LayerId]s of the Input Layers with [LayerVisibility::Committed]
+    /// visibility.
     ///
     /// # Panics
     /// If [self] is _not_ in [CircuitMapState::Ready] state.
-    pub fn get_all_private_layers(&self) -> Vec<LayerId> {
+    pub fn get_all_committed_layers(&self) -> Vec<LayerId> {
         assert_eq!(self.state, CircuitMapState::Ready);
 
         self.layer_visibility
             .iter()
             .filter_map(|(layer_id, layer_visibility)| {
-                if *layer_visibility == LayerVisibility::Private {
+                if *layer_visibility == LayerVisibility::Committed {
                     Some(layer_id)
                 } else {
                     None
@@ -1123,6 +1148,11 @@ impl<F: Field> Circuit<F> {
             circuit_map: circuit_map.freeze(),
             partial_inputs: HashMap::new(),
         }
+    }
+
+    /// Return the [GKRCircuitDescription] inside this [Circuit].
+    pub fn get_circuit_description(&self) -> &GKRCircuitDescription<F> {
+        &self.circuit_description
     }
 
     /// Assign `data` to the Input Shred with label `shred_label`.
@@ -1276,22 +1306,22 @@ impl<F: Field> Circuit<F> {
         Ok(inputs)
     }
 
-    /// Helper function for grabbing all of the private input layers + descriptions
+    /// Helper function for grabbing all of the committed input layers + descriptions
     /// from the circuit map.
     ///
     /// We do this by first filtering all input layers which are
-    /// [LayerVisibility::Private], getting all input "shreds" which correspond to
+    /// [LayerVisibility::Committed], getting all input "shreds" which correspond to
     /// those input layers, and aggregating those to compute the number of variables
     /// required to represent each input layer.
     ///
     /// Finally, we set a default configuration for the Ligero PCS used to commit to
-    /// each of the private input layers' MLEs. TODO(tfHARD team): add support for
+    /// each of the committed input layers' MLEs. TODO(tfHARD team): add support for
     /// custom settings for the PCS configurations.
-    fn get_all_private_input_layer_descriptions_to_ligero(
+    fn get_all_committed_input_layer_descriptions_to_ligero(
         &self,
     ) -> Vec<LigeroInputLayerDescription<F>> {
         self.circuit_map
-            .get_all_private_layers()
+            .get_all_committed_layers()
             .into_iter()
             .map(|layer_id| {
                 let raw_needed_capacity = self
@@ -1315,50 +1345,23 @@ impl<F: Field> Circuit<F> {
             .collect()
     }
 
-    /// Returns a [VerifiableCircuit], alongside all input data which is already
-    /// known to the verifier, but no commitments to the private input layers
-    /// yet.
-    #[allow(clippy::type_complexity)]
-    pub fn gen_verifiable_circuit(
-        &self,
-    ) -> Result<(
-        VerifiableCircuit<F>,
-        HashMap<LayerId, MultilinearExtension<F>>,
-    )> {
-        // Input data which is known to the verifier ahead of time -- note that
-        // this data was manually appended using the `circuit.set_input()`
-        // function.
-        let verifier_predetermined_public_inputs = self.build_public_input_layer_data(true)?;
-
-        // Sets default Ligero parameters for each of the private input layers.
-        let ligero_private_inputs = self
-            .get_all_private_input_layer_descriptions_to_ligero()
-            .into_iter()
-            .map(|ligero_input_layer_description| {
-                (
-                    ligero_input_layer_description.layer_id,
-                    ligero_input_layer_description,
-                )
-            })
-            .collect();
-
-        Ok((
-            VerifiableCircuit::new(self.circuit_description.clone(), ligero_private_inputs),
-            verifier_predetermined_public_inputs,
-        ))
-    }
-
-    /// Returns a [HyraxVerifiableCircuit] containing the public input layer data, but no
-    /// commitments to the private input layers yet.
+    /// Returns a [HyraxVerifiableCircuit] containing the public input layer data that have been
+    /// added to `self` so far.
     pub fn gen_hyrax_verifiable_circuit<C>(&self) -> Result<HyraxVerifiableCircuit<C>>
     where
         C: PrimeOrderCurve<Scalar = F>,
     {
         let public_inputs = self.build_public_input_layer_data(false)?;
 
+        debug!("Public inputs available: {:#?}", public_inputs.keys());
+        debug!(
+            "Layer Labels to Layer ID map: {:#?}",
+            self.circuit_map.layer_label_to_layer_id
+        );
+
         let hyrax_private_inputs = self
             .circuit_map
-            .get_all_private_layers()
+            .get_all_committed_layers()
             .into_iter()
             .map(|layer_id| {
                 let raw_needed_capacity = self
@@ -1373,19 +1376,10 @@ impl<F: Field> Circuit<F> {
                 let padded_needed_capacity = (1 << log2(raw_needed_capacity)) as usize;
                 let total_num_vars = log2(padded_needed_capacity) as usize;
 
-                // Aim for square matrix.
-                let log_num_cols = total_num_vars / 2;
-
-                // let layer_label = self.circuit_map.get_label_from_layer_id(layer_id)?;
-                // let commitment = pre_commitments.get(&layer_label).cloned();
                 Ok((
                     layer_id,
                     (
-                        HyraxInputLayerDescription {
-                            layer_id,
-                            num_vars: total_num_vars,
-                            log_num_cols,
-                        },
+                        HyraxInputLayerDescription::new(layer_id, total_num_vars),
                         None,
                     ),
                 ))
@@ -1400,42 +1394,13 @@ impl<F: Field> Circuit<F> {
         ))
     }
 
-    /// Produces a provable form of this circuit for the vanilla GKR proving system which uses
-    /// Ligero as a commitment scheme for private input layers, and does not offer any
-    /// zero-knowledge guarantees.
-    ///
-    /// # Returns
-    /// The generated provable circuit, or an error if the [self] is missing input data.
-    pub fn finalize(&self) -> Result<ProvableCircuit<F>> {
-        let inputs = self.build_all_input_layer_data()?;
-
-        let ligero_private_inputs = self
-            .get_all_private_input_layer_descriptions_to_ligero()
-            .into_iter()
-            .map(|ligero_input_layer_description| {
-                (
-                    ligero_input_layer_description.layer_id,
-                    (ligero_input_layer_description, None),
-                )
-            })
-            .collect();
-
-        Ok(ProvableCircuit::new(
-            self.circuit_description.clone(),
-            inputs,
-            ligero_private_inputs,
-        ))
-    }
-
-    /// Produces a provable form of this circuit for the Hyrax GKR proving system which uses Hyrax
+    /// Produces a provable form of this circuit for the Hyrax-GKR proving system which uses Hyrax
     /// as a commitment scheme for private input layers, and offers zero-knowledge guarantees.
+    /// Requires all input data to be populated (use `Self::set_input()` on _all_ input shreds).
     ///
     /// # Returns
     /// The generated provable circuit, or an error if the [self] is missing input data.
-    pub fn finalize_hyrax<C>(
-        &self,
-        // pre_commitments: HashMap<String, HyraxProverInputCommitment<C>>,
-    ) -> Result<HyraxProvableCircuit<C>>
+    pub fn gen_hyrax_provable_circuit<C>(&self) -> Result<HyraxProvableCircuit<C>>
     where
         C: PrimeOrderCurve<Scalar = F>,
     {
@@ -1443,7 +1408,7 @@ impl<F: Field> Circuit<F> {
 
         let hyrax_private_inputs = self
             .circuit_map
-            .get_all_private_layers()
+            .get_all_committed_layers()
             .into_iter()
             .map(|layer_id| {
                 let raw_needed_capacity = self
@@ -1458,20 +1423,10 @@ impl<F: Field> Circuit<F> {
                 let padded_needed_capacity = (1 << log2(raw_needed_capacity)) as usize;
                 let total_num_vars = log2(padded_needed_capacity) as usize;
 
-                // Aim for square matrix.
-                // TODO: Allow for custom parameters.
-                let log_num_cols = total_num_vars / 2;
-
-                // let layer_label = self.circuit_map.get_label_from_layer_id(layer_id)?;
-                // let commitment = pre_commitments.get(&layer_label).cloned();
                 Ok((
                     layer_id,
                     (
-                        HyraxInputLayerDescription {
-                            layer_id,
-                            num_vars: total_num_vars,
-                            log_num_cols,
-                        },
+                        HyraxInputLayerDescription::new(layer_id, total_num_vars),
                         None,
                     ),
                 ))
@@ -1482,6 +1437,67 @@ impl<F: Field> Circuit<F> {
             self.circuit_description.clone(),
             inputs,
             hyrax_private_inputs,
+            self.circuit_map.layer_label_to_layer_id.clone(),
+        ))
+    }
+}
+
+impl<F: Halo2FFTFriendlyField> Circuit<F> {
+    /// Produces a provable form of this circuit for the vanilla GKR proving system which uses
+    /// Ligero as a commitment scheme for committed input layers, and does _not_ offer any
+    /// zero-knowledge guarantees.
+    /// Requires all input data to be populated (use `Self::set_input()` on _all_ input shreds).
+    ///
+    /// # Returns
+    /// The generated provable circuit, or an error if the [self] is missing input data.
+    pub fn gen_provable_circuit(&self) -> Result<ProvableCircuit<F>> {
+        let inputs = self.build_all_input_layer_data()?;
+
+        let ligero_committed_inputs = self
+            .get_all_committed_input_layer_descriptions_to_ligero()
+            .into_iter()
+            .map(|ligero_input_layer_description| {
+                (
+                    ligero_input_layer_description.layer_id,
+                    (ligero_input_layer_description, None),
+                )
+            })
+            .collect();
+
+        Ok(ProvableCircuit::new(
+            self.circuit_description.clone(),
+            inputs,
+            ligero_committed_inputs,
+            self.circuit_map.layer_label_to_layer_id.clone(),
+        ))
+    }
+
+    /// Returns a [VerifiableCircuit] initialized with all input data which is already
+    /// known to the verifier, but no commitments to the data in the committed input layers
+    /// yet.
+    #[allow(clippy::type_complexity)]
+    pub fn gen_verifiable_circuit(&self) -> Result<VerifiableCircuit<F>> {
+        // Input data which is known to the verifier ahead of time -- note that
+        // this data was manually appended using the `circuit.set_input()`
+        // function.
+        let verifier_predetermined_public_inputs = self.build_public_input_layer_data(true)?;
+
+        // Sets default Ligero parameters for each of the committed input layers.
+        let ligero_committed_inputs = self
+            .get_all_committed_input_layer_descriptions_to_ligero()
+            .into_iter()
+            .map(|ligero_input_layer_description| {
+                (
+                    ligero_input_layer_description.layer_id,
+                    (ligero_input_layer_description, None),
+                )
+            })
+            .collect();
+
+        Ok(VerifiableCircuit::new(
+            self.circuit_description.clone(),
+            verifier_predetermined_public_inputs,
+            ligero_committed_inputs,
             self.circuit_map.layer_label_to_layer_id.clone(),
         ))
     }

@@ -157,7 +157,7 @@ mod test {
 
         builder.set_output(&diff_sector);
 
-        builder.build().unwrap()
+        builder.build_with_layer_combination().unwrap()
     }
 
     #[test]
@@ -181,7 +181,7 @@ mod test {
         circuit.set_input("Input MLE", mle);
         circuit.set_input("Shifter Input MLE", shifted_mle);
 
-        let provable_circuit = circuit.finalize().unwrap();
+        let provable_circuit = circuit.gen_provable_circuit().unwrap();
 
         // Prove/verify the circuit
         test_circuit_with_runtime_optimized_config(&provable_circuit);

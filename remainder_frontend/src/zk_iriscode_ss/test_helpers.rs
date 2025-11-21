@@ -6,11 +6,11 @@ use crate::zk_iriscode_ss::data::{
     IriscodeCircuitAuxData, IriscodeCircuitInputData,
 };
 use ndarray::Array2;
-use remainder::circuit_layout::ProvableCircuit;
 use remainder::input_layer::{
     ligero_input_layer::LigeroInputLayerDescription, InputLayerDescription,
 };
-use remainder_hyrax::circuit_layout::HyraxProvableCircuit;
+use remainder::provable_circuit::ProvableCircuit;
+use remainder_hyrax::provable_circuit::HyraxProvableCircuit;
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::{Bn256Point, Field, Fr};
 
@@ -36,7 +36,7 @@ pub fn build_ligero_layer_spec(
 }
 
 pub fn build_small_circuit_and_data<F: Field, const BASE: u64>(
-    use_private_layers: bool,
+    use_committed_layers: bool,
 ) -> Result<(
     Circuit<F>,
     IriscodeCircuitAuxData<F>,
@@ -46,8 +46,8 @@ pub fn build_small_circuit_and_data<F: Field, const BASE: u64>(
     let wirings = &[(0, 0, 0, 0), (0, 1, 0, 1), (1, 0, 1, 0), (1, 1, 1, 1)];
     let reroutings = wirings_to_reroutings(wirings, 2, 2);
     let circuit = build_iriscode_circuit_description::<F, 2, 2, 2, 1, 1, 1, BASE, 2>(
-        if use_private_layers {
-            LayerVisibility::Private
+        if use_committed_layers {
+            LayerVisibility::Committed
         } else {
             LayerVisibility::Public
         },
@@ -73,11 +73,11 @@ pub fn build_small_circuit_and_data<F: Field, const BASE: u64>(
     Ok((circuit, aux_data, input_data))
 }
 
-fn small_circuit_with_inputs<F: Field>(use_private_layers: bool) -> Result<Circuit<F>> {
+fn small_circuit_with_inputs<F: Field>(use_committed_layers: bool) -> Result<Circuit<F>> {
     const BASE: u64 = 16;
 
     let (circuit, aux_data, input_data) =
-        build_small_circuit_and_data::<_, BASE>(use_private_layers)?;
+        build_small_circuit_and_data::<_, BASE>(use_committed_layers)?;
 
     iriscode_ss_attach_input_data::<_, BASE>(circuit, input_data, aux_data)
 }
@@ -86,26 +86,26 @@ fn small_circuit_with_inputs<F: Field>(use_private_layers: bool) -> Result<Circu
 /// circuit.
 pub fn small_circuit_with_public_inputs() -> Result<ProvableCircuit<Fr>> {
     let circuit = small_circuit_with_inputs(false)?;
-    circuit.finalize()
+    circuit.gen_provable_circuit()
 }
 
-/// Return a provable circuit description with public inputs for a trivial 2x2 identity matrix
+/// Return a provable circuit description with committed inputs for a trivial 2x2 identity matrix
 /// circuit.
-pub fn small_circuit_with_private_inputs() -> Result<ProvableCircuit<Fr>> {
+pub fn small_circuit_with_committed_inputs() -> Result<ProvableCircuit<Fr>> {
     let circuit = small_circuit_with_inputs(true)?;
-    circuit.finalize()
+    circuit.gen_provable_circuit()
 }
 
 /// Return a hyrax provable circuit description with public inputs for a trivial 2x2 identity matrix
 /// circuit.
 pub fn small_hyrax_circuit_with_public_inputs() -> Result<HyraxProvableCircuit<Bn256Point>> {
     let circuit = small_circuit_with_inputs(false)?;
-    circuit.finalize_hyrax()
+    circuit.gen_hyrax_provable_circuit()
 }
 
 /// Return a hyrax provable circuit description with hyrax private inputs for a trivial 2x2 identity
 /// matrix circuit.
 pub fn small_hyrax_circuit_with_private_inputs() -> Result<HyraxProvableCircuit<Bn256Point>> {
     let circuit = small_circuit_with_inputs(true)?;
-    circuit.finalize_hyrax()
+    circuit.gen_hyrax_provable_circuit()
 }
