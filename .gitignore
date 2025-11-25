@@ -23,6 +23,7 @@ target/
 # EXCEPT worldcoin data. We need them for testing.
 !hyrax/sample-generators.json
 !hyrax/iriscode_pcp_example/hashes.json
+!shared_types/sample-generators.json
 
 # Scripts for specific customers
 scripts-ion/
