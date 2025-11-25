@@ -810,6 +810,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
+name = "frontend"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ark-serialize",
+ "ark-std",
+ "bincode",
+ "clap",
+ "criterion",
+ "hyrax",
+ "itertools 0.14.0",
+ "ligero",
+ "ndarray",
+ "ndarray-npy",
+ "once_cell",
+ "quickcheck",
+ "quickcheck_macros",
+ "rand",
+ "rand_chacha",
+ "rayon",
+ "remainder",
+ "serde",
+ "serde_json",
+ "sha256",
+ "shared-types",
+ "thiserror 2.0.16",
+ "tracing",
+ "tracing-subscriber",
+ "zeroize",
+]
+
+[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -994,6 +1026,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b112acc8b3adf4b107a8ec20977da0273a8c386765a3ec0229bd500a1443f9f"
 
 [[package]]
+name = "hyrax"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ark-std",
+ "bincode",
+ "clap",
+ "criterion",
+ "ff 0.13.1",
+ "itertools 0.11.0",
+ "ndarray",
+ "ndarray-npy",
+ "num",
+ "num-bigint",
+ "parking_lot",
+ "pasta_curves",
+ "rand",
+ "rand_chacha",
+ "rayon",
+ "remainder",
+ "serde",
+ "serde_json",
+ "sha256",
+ "sha3 0.10.8",
+ "shared-types",
+ "thiserror 1.0.69",
+ "tracing",
+ "zeroize",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1120,6 +1183,35 @@ name = "libc"
 version = "0.2.175"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a82ae493e598baaea5209805c49bbf2ea7de956d50d7da0da1164f9c6d28543"
+
+[[package]]
+name = "ligero"
+version = "0.1.0"
+dependencies = [
+ "ark-bn254",
+ "ark-ff",
+ "ark-poly",
+ "ark-serialize",
+ "ark-std",
+ "bincode",
+ "blake3",
+ "digest 0.9.0",
+ "ff 0.12.1",
+ "halo2_proofs",
+ "halo2curves 0.4.0",
+ "itertools 0.10.5",
+ "lazy_static",
+ "merlin",
+ "once_cell",
+ "rand",
+ "rand_chacha",
+ "rayon",
+ "serde",
+ "serde_bytes",
+ "shared-types",
+ "thiserror 1.0.69",
+ "tracing",
+]
 
 [[package]]
 name = "lock_api"
@@ -1681,6 +1773,7 @@ dependencies = [
  "funty",
  "hex",
  "itertools 0.11.0",
+ "ligero",
  "log",
  "ndarray",
  "ndarray-npy",
@@ -1696,134 +1789,14 @@ dependencies = [
  "quickcheck_macros",
  "rand",
  "rayon",
- "remainder-ligero",
- "remainder-shared-types",
  "serde",
  "serde_json",
  "sha3 0.10.8",
+ "shared-types",
  "thiserror 1.0.69",
  "tracing",
  "tracing-subscriber",
  "zeroize",
-]
-
-[[package]]
-name = "remainder-frontend"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ark-serialize",
- "ark-std",
- "bincode",
- "clap",
- "criterion",
- "itertools 0.14.0",
- "ndarray",
- "ndarray-npy",
- "once_cell",
- "quickcheck",
- "quickcheck_macros",
- "rand",
- "rand_chacha",
- "rayon",
- "remainder",
- "remainder-hyrax",
- "remainder-ligero",
- "remainder-shared-types",
- "serde",
- "serde_json",
- "sha256",
- "thiserror 2.0.16",
- "tracing",
- "tracing-subscriber",
- "zeroize",
-]
-
-[[package]]
-name = "remainder-hyrax"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ark-std",
- "bincode",
- "clap",
- "criterion",
- "ff 0.13.1",
- "itertools 0.11.0",
- "ndarray",
- "ndarray-npy",
- "num",
- "num-bigint",
- "parking_lot",
- "pasta_curves",
- "rand",
- "rand_chacha",
- "rayon",
- "remainder",
- "remainder-shared-types",
- "serde",
- "serde_json",
- "sha256",
- "sha3 0.10.8",
- "thiserror 1.0.69",
- "tracing",
- "zeroize",
-]
-
-[[package]]
-name = "remainder-ligero"
-version = "0.1.0"
-dependencies = [
- "ark-bn254",
- "ark-ff",
- "ark-poly",
- "ark-serialize",
- "ark-std",
- "bincode",
- "blake3",
- "digest 0.9.0",
- "ff 0.12.1",
- "halo2_proofs",
- "halo2curves 0.4.0",
- "itertools 0.10.5",
- "lazy_static",
- "merlin",
- "once_cell",
- "rand",
- "rand_chacha",
- "rayon",
- "remainder-shared-types",
- "serde",
- "serde_bytes",
- "thiserror 1.0.69",
- "tracing",
-]
-
-[[package]]
-name = "remainder-shared-types"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ark-std",
- "criterion",
- "ff 0.13.1",
- "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
- "itertools 0.11.0",
- "num",
- "num-bigint",
- "once_cell",
- "parking_lot",
- "pasta_curves",
- "poseidon",
- "rand",
- "rayon",
- "serde",
- "serde_json",
- "sha2",
- "sha3 0.10.8",
- "subtle",
- "thiserror 1.0.69",
- "tracing",
 ]
 
 [[package]]
@@ -1977,6 +1950,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "shared-types"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ark-std",
+ "criterion",
+ "ff 0.13.1",
+ "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
+ "itertools 0.11.0",
+ "num",
+ "num-bigint",
+ "once_cell",
+ "parking_lot",
+ "pasta_curves",
+ "poseidon",
+ "rand",
+ "rayon",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sha3 0.10.8",
+ "subtle",
+ "thiserror 1.0.69",
+ "tracing",
 ]
 
 [[package]]

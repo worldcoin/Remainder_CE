@@ -11,10 +11,10 @@ pr:  ## Prepare for a PR; run all GitHub CI Actions.
 	$(MAKE) mem-lim-docker
 
 check:  ## GitHub Action #1 - compile, run formatter and linter.
-	@if find remainder_*/src -name mod.rs | grep -q .; then \
+	@if find */src -name mod.rs | grep -q .; then \
 		echo; \
 	 	echo "Found the following 'mod.rs' files in a src directory:"; \
-		find remainder_*/src -name mod.rs; \
+		find */src -name mod.rs; \
 		echo; \
 		echo "Please follow the '[module_name].rs' instead of '[module_name]/mod.rs' file naming convention."; \
 		echo;  \
@@ -34,16 +34,16 @@ test-dev-par:
 	cargo test --profile=dev-opt --features parallel -- --test-threads=1
 
 test-ignored:  ## GitHub Action #2b - Run some slow tests that are normally ignored.
-	cargo test --profile=dev-opt --features parallel --package remainder-frontend --lib -- --ignored hyrax_worldcoin::test_worldcoin
-	cargo test --profile=dev-opt --features parallel --package remainder-frontend --lib -- --ignored worldcoin::tests
+	cargo test --profile=dev-opt --features parallel --package frontend --lib -- --ignored hyrax_worldcoin::test_worldcoin
+	cargo test --profile=dev-opt --features parallel --package frontend --lib -- --ignored worldcoin::tests
 
 test: test-dev test-ignored examples ## Comprehensive testing. Equivalent to `test-dev` followed by `test-ignored` and `examples`.
 
-examples:  ## GitHub Action #2c - Run all examples under `remainder-frontend/examples`.
-	@for example in remainder_frontend/examples/*.rs; do \
+examples:  ## GitHub Action #2c - Run all examples under `frontend/examples`.
+	@for example in frontend/examples/*.rs; do \
 		name=$$(basename $$example .rs); \
 		echo "Running Example $$name"; \
-		cargo run --release --package remainder-frontend --example $$name; \
+		cargo run --release --package frontend --example $$name; \
 	done
 
 mem-lim-cgroups:  ## GitHub Action #3 - Run sequential world prover with a memory limit. Only available on Linux!
