@@ -48,24 +48,9 @@ fn build_product_checker_test_circuit<F: Field>(num_free_vars: usize) -> Circuit
 fn test_product_checker() {
     const NUM_FREE_VARS: usize = 2;
 
-    let mle_1 = MultilinearExtension::new(vec![
-        Fr::from(3u64),
-        Fr::from(2u64),
-        Fr::from(3u64),
-        Fr::from(2u64),
-    ]);
-    let mle_2 = MultilinearExtension::new(vec![
-        Fr::from(5u64),
-        Fr::from(6u64),
-        Fr::from(5u64),
-        Fr::from(6u64),
-    ]);
-    let mle_expected = MultilinearExtension::new(vec![
-        Fr::from(15u64),
-        Fr::from(12u64),
-        Fr::from(15u64),
-        Fr::from(12u64),
-    ]);
+    let mle_1: MultilinearExtension<Fr> = vec![3, 2, 3, 2].into();
+    let mle_2: MultilinearExtension<Fr> = vec![5, 6, 5, 6].into();
+    let mle_expected: MultilinearExtension<Fr> = vec![15, 12, 15, 12].into();
 
     // Create circuit description + input helper function
     let mut circuit = build_product_checker_test_circuit(NUM_FREE_VARS);

@@ -172,30 +172,19 @@ mod test {
         let matrix_a_num_cols_vars = 1;
         let matrix_b_num_rows_vars = 1;
 
-        let matrix_a_mle = MultilinearExtension::new(vec![
-            Fr::from(1),
-            Fr::from(2),
-            Fr::from(9),
-            Fr::from(10),
-            Fr::from(13),
-            Fr::from(1),
-            Fr::from(3),
-            Fr::from(10),
-        ]);
-
-        let matrix_b_mle =
-            MultilinearExtension::new(vec![Fr::from(3), Fr::from(5), Fr::from(9), Fr::from(6)]);
-
-        let expected_matrix_mle = MultilinearExtension::new(vec![
-            Fr::from(3 + 2 * 9),
-            Fr::from(5 + 2 * 6),
-            Fr::from(9 * 3 + 10 * 9),
-            Fr::from(9 * 5 + 10 * 6),
-            Fr::from(13 * 3 + 9),
-            Fr::from(13 * 5 + 6),
-            Fr::from(3 * 3 + 10 * 9),
-            Fr::from(3 * 5 + 10 * 6),
-        ]);
+        let matrix_a_mle: MultilinearExtension<Fr> = vec![1, 2, 9, 10, 13, 1, 3, 10].into();
+        let matrix_b_mle: MultilinearExtension<Fr> = vec![3, 5, 9, 6].into();
+        let expected_matrix_mle: MultilinearExtension<Fr> = vec![
+            3 + 2 * 9,
+            5 + 2 * 6,
+            9 * 3 + 10 * 9,
+            9 * 5 + 10 * 6,
+            13 * 3 + 9,
+            13 * 5 + 6,
+            3 * 3 + 10 * 9,
+            3 * 5 + 10 * 6,
+        ]
+        .into();
 
         // Create circuit description + input helper function
         let mut circuit = build_matmul_test_circuit_description(
@@ -222,26 +211,17 @@ mod test {
         let matrix_a_num_cols_vars = 1;
         let matrix_b_num_rows_vars = 1;
 
-        let matrix_a_mle = MultilinearExtension::new(vec![
-            Fr::from(1),
-            Fr::from(2),
-            Fr::from(9),
-            Fr::from(10),
-            Fr::from(13),
-            Fr::from(1),
-        ]);
-
-        let matrix_b_mle =
-            MultilinearExtension::new(vec![Fr::from(3), Fr::from(5), Fr::from(9), Fr::from(6)]);
-
-        let expected_matrix_mle = MultilinearExtension::new(vec![
-            Fr::from(3 + 2 * 9),
-            Fr::from(5 + 2 * 6),
-            Fr::from(9 * 3 + 10 * 9),
-            Fr::from(9 * 5 + 10 * 6),
-            Fr::from(13 * 3 + 9),
-            Fr::from(13 * 5 + 6),
-        ]);
+        let matrix_a_mle: MultilinearExtension<Fr> = vec![1, 2, 9, 10, 13, 1].into();
+        let matrix_b_mle: MultilinearExtension<Fr> = vec![3, 5, 9, 6].into();
+        let expected_matrix_mle: MultilinearExtension<Fr> = vec![
+            3 + 2 * 9,
+            5 + 2 * 6,
+            9 * 3 + 10 * 9,
+            9 * 5 + 10 * 6,
+            13 * 3 + 9,
+            13 * 5 + 6,
+        ]
+        .into();
 
         // Create circuit description + input helper function
         let mut circuit = build_matmul_test_circuit_description(

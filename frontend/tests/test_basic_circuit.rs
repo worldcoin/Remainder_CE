@@ -1,7 +1,6 @@
 use frontend::layouter::builder::{CircuitBuilder, LayerVisibility};
 use remainder::{
-    mle::evals::{Evaluations, MultilinearExtension},
-    prover::helpers::test_circuit_with_runtime_optimized_config,
+    mle::evals::MultilinearExtension, prover::helpers::test_circuit_with_runtime_optimized_config,
 };
 use shared_types::Fr;
 
@@ -12,15 +11,9 @@ fn test_basic_circuit() {
     let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Public);
 
     let input_shred_1 = builder.add_input_shred("Input 1", 2, &input_layer);
-    let input_shred_1_data = MultilinearExtension::new_from_evals(Evaluations::new(
-        2,
-        vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
-    ));
+    let input_shred_1_data: MultilinearExtension<Fr> = vec![1, 1, 1, 1].into();
     let input_shred_2 = builder.add_input_shred("Input 2", 2, &input_layer);
-    let input_shred_2_data = MultilinearExtension::new_from_evals(Evaluations::new(
-        2,
-        vec![Fr::from(16), Fr::from(16), Fr::from(16), Fr::from(16)],
-    ));
+    let input_shred_2_data: MultilinearExtension<Fr> = vec![16, 16, 16, 16].into();
 
     let sector_1 = builder.add_sector(&input_shred_1 + &input_shred_2);
 
@@ -29,15 +22,8 @@ fn test_basic_circuit() {
     let out_sector = builder.add_sector(sector_1 * sector_2);
 
     let expected_output_shred = builder.add_input_shred("Expected Output", 2, &input_layer);
-    let expected_output_data = MultilinearExtension::new_from_evals(Evaluations::new(
-        2,
-        vec![
-            Fr::from(16 * 17),
-            Fr::from(16 * 17),
-            Fr::from(16 * 17),
-            Fr::from(16 * 17),
-        ],
-    ));
+    let expected_output_data: MultilinearExtension<Fr> =
+        vec![16 * 17, 16 * 17, 16 * 17, 16 * 17].into();
 
     let final_sector = builder.add_sector(out_sector - expected_output_shred);
 

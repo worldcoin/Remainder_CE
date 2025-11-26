@@ -1986,12 +1986,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
         None,
     );
     // INPUT LAYER CONSTRUCTION
-    let input_multilinear_extension = MultilinearExtension::new(vec![
-        Scalar::from(8797),
-        Scalar::from(7308),
-        Scalar::from(94),
-        Scalar::from(67887),
-    ]);
+    let input_multilinear_extension: MultilinearExtension<Scalar> = vec![8797, 7308, 94, 67887].into();
 
     let mut builder = CircuitBuilder::<Fr>::new();
 

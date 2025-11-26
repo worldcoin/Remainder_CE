@@ -32,8 +32,7 @@ fn create_mle_dim_mismatch_dims() {
 #[test]
 /// Test `fix_variable` on an MLE with two variables.
 fn fix_variable_two_vars() {
-    let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
-    let mut mle = MultilinearExtension::new(mle_vec);
+    let mut mle: MultilinearExtension<Fr> = vec![5, 2, 1, 3].into();
     mle.fix_variable(Fr::from(1));
 
     let mle_vec_exp = vec![Fr::from(1), Fr::from(3)];
@@ -43,17 +42,7 @@ fn fix_variable_two_vars() {
 #[test]
 /// Test `fix_variable` on an MLE with two variables.
 fn fix_variable_three_vars() {
-    let mle_vec = vec![
-        Fr::from(0),
-        Fr::from(2),
-        Fr::from(0),
-        Fr::from(2),
-        Fr::from(0),
-        Fr::from(3),
-        Fr::from(1),
-        Fr::from(4),
-    ];
-    let mut mle = MultilinearExtension::new(mle_vec);
+    let mut mle: MultilinearExtension<Fr> = vec![0, 2, 0, 2, 0, 3, 1, 4].into();
     mle.fix_variable(Fr::from(3));
 
     let mle_vec_exp = vec![Fr::from(0), Fr::from(5), Fr::from(3), Fr::from(8)];
@@ -63,17 +52,7 @@ fn fix_variable_three_vars() {
 #[test]
 /// Test iteratively `fix_variable` on an MLE with three variables.
 fn fix_variable_nested() {
-    let mle_vec = vec![
-        Fr::from(0),
-        Fr::from(2),
-        Fr::from(0),
-        Fr::from(2),
-        Fr::from(0),
-        Fr::from(3),
-        Fr::from(1),
-        Fr::from(4),
-    ];
-    let mut mle = MultilinearExtension::new(mle_vec);
+    let mut mle: MultilinearExtension<Fr> = vec![0, 2, 0, 2, 0, 3, 1, 4].into();
 
     mle.fix_variable(Fr::from(3));
     mle.fix_variable(Fr::from(2));
@@ -85,17 +64,7 @@ fn fix_variable_nested() {
 #[test]
 /// Test fixing all the variables in an MLE using `fix_variable`.
 fn fix_variable_full() {
-    let mle_vec = vec![
-        Fr::from(0),
-        Fr::from(2),
-        Fr::from(0),
-        Fr::from(2),
-        Fr::from(0),
-        Fr::from(3),
-        Fr::from(1),
-        Fr::from(4),
-    ];
-    let mut mle = MultilinearExtension::new(mle_vec);
+    let mut mle: MultilinearExtension<Fr> = vec![0, 2, 0, 2, 0, 3, 1, 4].into();
     mle.fix_variable(Fr::from(3));
     mle.fix_variable(Fr::from(2));
     mle.fix_variable(Fr::from(4));

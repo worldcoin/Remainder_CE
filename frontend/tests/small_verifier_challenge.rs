@@ -39,7 +39,7 @@ fn build_fs_challenge_sub_test_circuit<F: Field>(num_free_vars: usize) -> Circui
 fn test_fs_challenge_sub_circuit() {
     const NUM_FREE_VARS: usize = 1;
 
-    let mle = MultilinearExtension::new(vec![Fr::from(3), Fr::from(2)]);
+    let mle: MultilinearExtension<Fr> = vec![3, 2].into();
 
     // Create circuit description + input helper function
     let mut circuit = build_fs_challenge_sub_test_circuit(NUM_FREE_VARS);
