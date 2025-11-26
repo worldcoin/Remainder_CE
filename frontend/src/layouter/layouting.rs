@@ -339,7 +339,7 @@ pub fn layout<F: Field>(
     let circuit_node_graph =
         Graph::<NodeId>::new_from_circuit_nodes(&intermediate_nodes, &input_shred_ids);
     let topo_sorted_intermediate_node_ids = &circuit_node_graph.topo_sort()?;
-    
+
     // Maintain a `NodeId` to `CompilableNode` mapping for later use.
     let mut id_to_node_mapping: HashMap<NodeId, Box<dyn CompilableNode<F>>> = intermediate_nodes
         .into_iter()
@@ -351,9 +351,11 @@ pub fn layout<F: Field>(
     // In this case, we do not wish to combine any sectors together into the same layer.
     if !should_combine {
         // We take the topologically sorted nodes, and each one of them forms their own layer.
-        topo_sorted_intermediate_node_ids.iter().for_each(|node_id| {
-            intermediate_layers.push(vec![id_to_node_mapping.remove(node_id).unwrap()])
-        });
+        topo_sorted_intermediate_node_ids
+            .iter()
+            .for_each(|node_id| {
+                intermediate_layers.push(vec![id_to_node_mapping.remove(node_id).unwrap()])
+            });
         assert!(id_to_node_mapping.is_empty())
     }
     // Otherwise, combine the sectors according to the max layer size (if provided), otherwise optimizing

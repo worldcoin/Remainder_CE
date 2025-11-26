@@ -110,7 +110,7 @@ impl<F: Field> NodesToLayout<F> {
             self.matmult_nodes.clone(),
             self.lookup_constraint_nodes.clone(),
             self.lookup_table_nodes.clone(),
-            true
+            true,
         )
         .unwrap()
     }
