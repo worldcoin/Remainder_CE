@@ -792,7 +792,7 @@ mod tests {
     #[should_panic]
     fn test_evaluate_mle_at_a_point_1_variable_gray_codes_parallel_more_threads_than_mle_length() {
         const K: usize = 3;
-        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2)]);
+        let mut mle: MultilinearExtension<Fr> = vec![1, 2].into();
         let point = &[Fr::from(2)];
         let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
         let expected_evaluation =
@@ -803,7 +803,7 @@ mod tests {
     #[test]
     fn test_evaluate_mle_at_a_point_1_variable_gray_codes_parallel_1_thread() {
         const K: usize = 1;
-        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2)]);
+        let mut mle: MultilinearExtension<Fr> = vec![1, 2].into();
         let point = &[Fr::from(2)];
         let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
         let expected_evaluation =
@@ -814,7 +814,7 @@ mod tests {
     #[test]
     fn test_evaluate_mle_at_a_point_1_variable_gray_codes_parallel_2_threads() {
         const K: usize = 2;
-        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2)]);
+        let mut mle: MultilinearExtension<Fr> = vec![1, 2].into();
         let point = &[Fr::from(2)];
         let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
         let expected_evaluation =
@@ -824,7 +824,7 @@ mod tests {
 
     #[test]
     fn test_evaluate_mle_at_a_point_1_variable_gray_codes() {
-        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2)]);
+        let mut mle: MultilinearExtension<Fr> = vec![1, 2].into();
         let point = &[Fr::from(2)];
         let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
         let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
@@ -833,7 +833,7 @@ mod tests {
 
     #[test]
     fn test_evaluate_mle_at_a_point_2_variable_gray_codes() {
-        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2), Fr::ONE, Fr::from(2)]);
+        let mut mle: MultilinearExtension<Fr> = vec![1, 2, 1, 2].into();
         let point = &[Fr::from(2), Fr::from(3)];
         let computed_evaluation = evaluate_mle_at_a_point_gray_codes(&mle, point);
         let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
@@ -864,7 +864,7 @@ mod tests {
 
     #[test]
     fn test_evaluate_mle_at_a_point_1_variable_lexicographic() {
-        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2)]);
+        let mut mle: MultilinearExtension<Fr> = vec![1, 2].into();
         let point = &[Fr::from(2)];
         let computed_evaluation = evaluate_mle_at_a_point_lexicographic_order(&mle, point);
         let expected_evaluation = evaluate_mle_destructive(&mut mle, point);
@@ -873,7 +873,7 @@ mod tests {
 
     #[test]
     fn test_evaluate_mle_at_a_point_2_variable_lexicographic() {
-        let mut mle = MultilinearExtension::new(vec![Fr::ONE, Fr::from(2), Fr::ONE, Fr::from(2)]);
+        let mut mle: MultilinearExtension<Fr> = vec![1, 2, 1, 2].into();
         let point = &[Fr::from(2), Fr::from(3)];
         let computed_evaluation = evaluate_mle_at_a_point_lexicographic_order(&mle, point);
         let expected_evaluation = evaluate_mle_destructive(&mut mle, point);

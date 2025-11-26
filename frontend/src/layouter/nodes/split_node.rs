@@ -149,7 +149,7 @@ mod test {
         let b = 2;
         // the following values work if SplitNode is LITTLE endian
         let values: Vec<u64> = vec![a, a, 111, 1111, b, b, 11111, 111111];
-        let mle = MultilinearExtension::new(values.into_iter().map(|v| Fr::from(v)).collect());
+        let mle: MultilinearExtension<Fr> = values.into();
         let mut circuit = build_basic_split_circuit::<Fr>();
         circuit.set_input("Input", mle);
         let provable_circuit = circuit.gen_provable_circuit().unwrap();
@@ -160,7 +160,7 @@ mod test {
     fn test_that_split_node_works_big_endian() {
         // the following values work if SplitNode is BIG endian
         let values: Vec<u64> = vec![11, 2, 11, 2, 123, 124, 125, 126];
-        let mle = MultilinearExtension::new(values.into_iter().map(|v| Fr::from(v)).collect());
+        let mle: MultilinearExtension<Fr> = values.into();
         let mut circuit = build_basic_split_circuit::<Fr>();
         circuit.set_input("Input", mle);
         let provable_circuit = circuit.gen_provable_circuit().unwrap();
@@ -201,22 +201,10 @@ mod test {
     fn test_splits_and_selectors() {
         let mut circuit = build_splits_and_selectors_circuit::<Fr>();
 
-        circuit.set_input(
-            "Input 0",
-            MultilinearExtension::new(vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)]),
-        );
-        circuit.set_input(
-            "Input 1",
-            MultilinearExtension::new(vec![Fr::from(5), Fr::from(6), Fr::from(7), Fr::from(8)]),
-        );
-        circuit.set_input(
-            "Input 2",
-            MultilinearExtension::new(vec![Fr::from(9), Fr::from(10), Fr::from(11), Fr::from(12)]),
-        );
-        circuit.set_input(
-            "Input 3",
-            MultilinearExtension::new(vec![Fr::from(13), Fr::from(14), Fr::from(15), Fr::from(16)]),
-        );
+        circuit.set_input("Input 0", vec![1, 2, 3, 4].into());
+        circuit.set_input("Input 1", vec![5, 6, 7, 8].into());
+        circuit.set_input("Input 2", vec![9, 10, 11, 12].into());
+        circuit.set_input("Input 3", vec![13, 14, 15, 16].into());
 
         let provable_circuit = circuit.gen_provable_circuit().unwrap();
 

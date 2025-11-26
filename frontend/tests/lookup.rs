@@ -57,14 +57,9 @@ pub fn single_shred_test() {
     const WITNESS_MLE_NUM_VARS: usize = 2;
 
     // Input generation
-    let table_mle = MultilinearExtension::new(vec![Fr::from(0u64), Fr::from(1u64)]);
-    let witness_mle = MultilinearExtension::new(vec![
-        Fr::from(0u64),
-        Fr::from(1u64),
-        Fr::from(1u64),
-        Fr::from(1u64),
-    ]);
-    let multiplicities_mle = MultilinearExtension::new(vec![Fr::from(1u64), Fr::from(3u64)]);
+    let table_mle: MultilinearExtension<Fr> = vec![0, 1].into();
+    let witness_mle: MultilinearExtension<Fr> = vec![0u64, 1u64, 1u64, 1u64].into();
+    let multiplicities_mle: MultilinearExtension<Fr> = vec![1, 3].into();
 
     // Create circuit description + input helper function
     let mut prover_circuit =
@@ -96,10 +91,9 @@ pub fn single_shred_test_non_power_of_2() {
     const WITNESS_MLE_NUM_VARS: usize = 2;
 
     // Input generation
-    let table_mle = MultilinearExtension::new(vec![Fr::from(0u64), Fr::from(1u64)]);
-    let witness_mle =
-        MultilinearExtension::new(vec![Fr::from(0u64), Fr::from(1u64), Fr::from(1u64)]);
-    let multiplicities_mle = MultilinearExtension::new(vec![Fr::from(2u64), Fr::from(2u64)]);
+    let table_mle: MultilinearExtension<Fr> = vec![0, 1].into();
+    let witness_mle: MultilinearExtension<Fr> = vec![0, 1, 1].into();
+    let multiplicities_mle: MultilinearExtension<Fr> = vec![2, 2].into();
 
     // Create circuit description + input helper function
     let mut prover_circuit =
@@ -226,35 +220,15 @@ pub fn multi_shred_test() {
     const WITNESS_MLE_4_NUM_VARS: usize = 2;
 
     // Input generation
-    let table_mle = MultilinearExtension::new(vec![Fr::from(3u64), Fr::from(4u64)]);
-    let witness_mle_1 = MultilinearExtension::new(vec![
-        Fr::from(3u64),
-        Fr::from(3u64),
-        Fr::from(3u64),
-        Fr::from(4u64),
-    ]);
-    let multiplicities_mle_1 = MultilinearExtension::new(vec![Fr::from(3u64), Fr::from(1u64)]);
-    let witness_mle_2 = MultilinearExtension::new(vec![
-        Fr::from(4u64),
-        Fr::from(4u64),
-        Fr::from(4u64),
-        Fr::from(4u64),
-    ]);
-    let multiplicities_mle_2 = MultilinearExtension::new(vec![Fr::from(0u64), Fr::from(4u64)]);
-    let witness_mle_3 = MultilinearExtension::new(vec![
-        Fr::from(4u64),
-        Fr::from(3u64),
-        Fr::from(3u64),
-        Fr::from(4u64),
-    ]);
-    let multiplicities_mle_3 = MultilinearExtension::new(vec![Fr::from(2u64), Fr::from(2u64)]);
-    let witness_mle_4 = MultilinearExtension::new(vec![
-        Fr::from(4u64),
-        Fr::from(4u64),
-        Fr::from(4u64),
-        Fr::from(3u64),
-    ]);
-    let multiplicities_mle_4 = MultilinearExtension::new(vec![Fr::from(1u64), Fr::from(3u64)]);
+    let table_mle: MultilinearExtension<Fr> = vec![3, 4].into();
+    let witness_mle_1: MultilinearExtension<Fr> = vec![3, 3, 3, 4].into();
+    let multiplicities_mle_1: MultilinearExtension<Fr> = vec![3, 1].into();
+    let witness_mle_2: MultilinearExtension<Fr> = vec![4, 4, 4, 4].into();
+    let multiplicities_mle_2: MultilinearExtension<Fr> = vec![0, 4].into();
+    let witness_mle_3: MultilinearExtension<Fr> = vec![4, 3, 3, 4].into();
+    let multiplicities_mle_3: MultilinearExtension<Fr> = vec![2, 2].into();
+    let witness_mle_4: MultilinearExtension<Fr> = vec![4, 4, 4, 3].into();
+    let multiplicities_mle_4: MultilinearExtension<Fr> = vec![1, 3].into();
 
     // Create circuit description + input helper function
     let mut prover_circuit = build_multi_shred_lookup_test_circuit(
@@ -297,14 +271,9 @@ pub fn test_not_satisfied() {
     const WITNESS_MLE_NUM_VARS: usize = 2;
 
     // Input generation
-    let table_mle = MultilinearExtension::new(vec![Fr::from(0u64), Fr::from(1u64)]);
-    let witness_mle = MultilinearExtension::new(vec![
-        Fr::from(3u64),
-        Fr::from(1u64),
-        Fr::from(1u64),
-        Fr::from(1u64),
-    ]);
-    let multiplicities_mle = MultilinearExtension::new(vec![Fr::from(1u64), Fr::from(3u64)]);
+    let table_mle: MultilinearExtension<Fr> = vec![0, 1].into();
+    let witness_mle: MultilinearExtension<Fr> = vec![3, 1, 1, 1].into();
+    let multiplicities_mle: MultilinearExtension<Fr> = vec![1, 3].into();
 
     // Create circuit description + input helper function
     let mut circuit =
