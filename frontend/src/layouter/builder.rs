@@ -281,11 +281,7 @@ impl<F: Field> CircuitBuilder<F> {
             .collect();
 
         // If the specified maximum layer size is 0, then this means we do not want to combine any layers.
-        let should_combine = if maybe_maximum_log_layer_size == Some(0) {
-            false
-        } else {
-            true
-        };
+        let should_combine = maybe_maximum_log_layer_size != Some(0);
 
         let (
             input_layer_nodes,
@@ -305,7 +301,7 @@ impl<F: Field> CircuitBuilder<F> {
             matmult_nodes,
             lookup_constraint_nodes,
             lookup_table_nodes,
-            should_combine
+            should_combine,
         )
         .unwrap();
 
