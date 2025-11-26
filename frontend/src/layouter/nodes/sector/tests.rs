@@ -57,7 +57,7 @@ impl Arbitrary for QuickCheckCircuit<Fr> {
 }
 
 #[quickcheck]
-fn test_combine_with_max_layer_size(quickcheck_circuit: QuickCheckCircuit<Fr>) {
+fn test_combine_layers(quickcheck_circuit: QuickCheckCircuit<Fr>) {
     let circuit = quickcheck_circuit.circuit;
     let description = circuit.get_circuit_description();
     let intermediate_layers = &description.intermediate_layers;

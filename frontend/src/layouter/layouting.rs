@@ -285,6 +285,7 @@ pub fn layout<F: Field>(
     matmult_nodes: Vec<MatMultNode>,
     lookup_constraint_nodes: Vec<LookupConstraint>,
     mut lookup_table_nodes: Vec<LookupTable>,
+    should_combine: bool,
 ) -> Result<LayouterNodes<F>> {
     let mut input_layer_map: HashMap<NodeId, &mut InputLayerNode> = HashMap::new();
     let sector_node_ids: HashSet<NodeId> = sector_nodes.iter().map(|sector| sector.id()).collect();
@@ -338,157 +339,169 @@ pub fn layout<F: Field>(
     let circuit_node_graph =
         Graph::<NodeId>::new_from_circuit_nodes(&intermediate_nodes, &input_shred_ids);
     let topo_sorted_intermediate_node_ids = &circuit_node_graph.topo_sort()?;
-
+    
     // Maintain a `NodeId` to `CompilableNode` mapping for later use.
     let mut id_to_node_mapping: HashMap<NodeId, Box<dyn CompilableNode<F>>> = intermediate_nodes
         .into_iter()
         .map(|node| (node.id(), node))
         .collect();
 
-    // For each node, compute the maximum index (in the topological ordering) of all of its
-    // dependencies.
-    let latest_dependency_indices =
-        circuit_node_graph.gen_latest_dependecy_indices(topo_sorted_intermediate_node_ids);
-
-    // Step 2b: Re-order the topological ordering such that non-sector nodes appear as early as
-    // possible.
-    // This is done by sorting the nodes according to the tuple `(adjusted_priority, node_type)`.
-    // See comments below for definitions of those quantities.
-    let mut adjusted_priority: Vec<usize> = vec![0; topo_sorted_intermediate_node_ids.len()];
-    let mut idx_of_latest_sector_node: Option<usize> = None;
-
-    // A vector containing `(node, sorting_key)`, where `sorting_key = (adjusted_priority, node_type)`.
-    let mut nodes_with_sorting_key = topo_sorted_intermediate_node_ids
-        .iter()
-        .enumerate()
-        .map(|(idx, node_id)| {
-            let node = id_to_node_mapping.remove(node_id).unwrap();
-
-            if sector_node_ids.contains(node_id) {
-                // For a sector node, its adjusted priority is defined as its 1-based index among
-                // only the other sector nodes in the original topological ordering.
-                // A 1-based index is used as way of handling non-sector nodes with no (direct or
-                // indirect) dependencies on sector nodes. See comment on the "else" case of this if
-                // statement.
-
-                // The adjusted priority of this sector node is one more than the adjusted priority
-                // of the last seen sector node, or `1` if no other sector has been seen yet.
-                adjusted_priority[idx] = idx_of_latest_sector_node
-                    .map(|last_sector_idx| adjusted_priority[last_sector_idx] + 1)
-                    .unwrap_or(1);
-
-                idx_of_latest_sector_node = Some(idx);
-
-                // Sector nodes have `node_type == 0` to give them priority in the new ordering.
-                (node, (adjusted_priority[idx], 0))
-            } else {
-                // A non-sector node's adjusted priority is the adjusted priority of its latest
-                // dependencly.
-                // If this node has no dependencies, set its priority to zero, which is equivalent
-                // to having a dummy sector node on index `0` on which all other nodes depend on.
-                adjusted_priority[idx] = latest_dependency_indices[idx]
-                    .map(|latest_idx| adjusted_priority[latest_idx])
-                    .unwrap_or(0);
-
-                // Non-sector nodes have `node_type == 1`, which in the new ordering places them
-                // right _after_ the sector nodes they directly depend on.
-                (node, (adjusted_priority[idx], 1))
-            }
-        })
-        .collect_vec();
-
-    // Sort in increasing order according to the adjusted `sorting_key`.
-    nodes_with_sorting_key.sort_by_key(|&(_, priority)| priority);
-
-    // Remove the sorting key.
-    let topo_sorted_nodes = nodes_with_sorting_key
-        .into_iter()
-        .map(|(val, _)| val)
-        .collect_vec();
-
-    // Step 2c: Determine which nodes can be combined into one.
-
     let mut intermediate_layers: Vec<Vec<Box<dyn CompilableNode<F>>>> = Vec::new();
-    let mut node_to_layer_map: HashMap<NodeId, usize> = HashMap::new();
-    // The first layer that stores sectors.
-    let mut first_sector_layer_idx = 0;
 
-    // For index i in the vector, keep track of the layer number corresponding to the next
-    // sector layer, None if it does not exist.
-    //
-    // For example, if we have the layers [non-sector, sector, non-sector, non-sector, sector, non-sector],
-    // the list would be [1, 4, 4, 4, 0, 0]
-    let mut next_sector_layer_idx_list = Vec::new();
+    // In this case, we do not wish to combine any sectors together into the same layer.
+    if !should_combine {
+        // We take the topologically sorted nodes, and each one of them forms their own layer.
+        topo_sorted_intermediate_node_ids.iter().for_each(|node_id| {
+            intermediate_layers.push(vec![id_to_node_mapping.remove(node_id).unwrap()])
+        });
+        assert!(id_to_node_mapping.is_empty())
+    }
+    // Otherwise, combine the sectors according to the max layer size (if provided), otherwise optimizing
+    // to create the least number of layers as possible.
+    else {
+        // For each node, compute the maximum index (in the topological ordering) of all of its
+        // dependencies.
+        let latest_dependency_indices =
+            circuit_node_graph.gen_latest_dependecy_indices(topo_sorted_intermediate_node_ids);
 
-    topo_sorted_nodes.into_iter().for_each(|node| {
-        // If it is a non-sector node, insert it as its own layer
-        // Note that non-sector nodes are already re-ordered to the earliest possible location,
-        // so their layers are also the earliest possible layer.
-        let layer_idx = if !(sector_node_ids.contains(&node.id())) {
-            // Insert a new layer.
-            intermediate_layers.push(Vec::new());
-            // Next sector layer is currently unknown:
-            next_sector_layer_idx_list.push(0);
-            let layer_idx = intermediate_layers.len() - 1;
-            // If every layer so far are non-sector, then the first sector layer hasn't appeared.
-            if layer_idx == first_sector_layer_idx {
-                first_sector_layer_idx += 1;
-            }
-            layer_idx
-        }
-        // If it is a sector node:
-        else {
-            let maybe_latest_layer_dependency = node
-                .sources()
-                .iter()
-                .filter_map(|node_source| {
-                    if input_shred_ids.contains(node_source) {
-                        None
-                    } else {
-                        Some(node_to_layer_map.get(node_source).unwrap())
-                    }
-                })
-                .max();
-            // If it is dependent on some previous node:
-            if let Some(layer_of_node) = maybe_latest_layer_dependency {
-                // There is no sector layer after the layer it is dependent on.
-                if next_sector_layer_idx_list[*layer_of_node] == 0 {
-                    // If the dependency is at the last sector layer, create a new layer.
-                    intermediate_layers.push(Vec::new());
-                    // The next sector layer is currently unknown.
-                    next_sector_layer_idx_list.push(0);
-                    let layer_to_insert = intermediate_layers.len() - 1;
-                    // All the previous layers with unknown next sector must all be the
-                    // newest layers. Find them and update their next sector layer.
-                    for i in (0..intermediate_layers.len() - 1).rev() {
-                        if next_sector_layer_idx_list[i] == 0 {
-                            next_sector_layer_idx_list[i] = layer_to_insert;
-                        } else {
-                            break;
-                        }
-                    }
-                    layer_to_insert
+        // Step 2b: Re-order the topological ordering such that non-sector nodes appear as early as
+        // possible.
+        // This is done by sorting the nodes according to the tuple `(adjusted_priority, node_type)`.
+        // See comments below for definitions of those quantities.
+        let mut adjusted_priority: Vec<usize> = vec![0; topo_sorted_intermediate_node_ids.len()];
+        let mut idx_of_latest_sector_node: Option<usize> = None;
+
+        // A vector containing `(node, sorting_key)`, where `sorting_key = (adjusted_priority, node_type)`.
+        let mut nodes_with_sorting_key = topo_sorted_intermediate_node_ids
+            .iter()
+            .enumerate()
+            .map(|(idx, node_id)| {
+                let node = id_to_node_mapping.remove(node_id).unwrap();
+
+                if sector_node_ids.contains(node_id) {
+                    // For a sector node, its adjusted priority is defined as its 1-based index among
+                    // only the other sector nodes in the original topological ordering.
+                    // A 1-based index is used as way of handling non-sector nodes with no (direct or
+                    // indirect) dependencies on sector nodes. See comment on the "else" case of this if
+                    // statement.
+
+                    // The adjusted priority of this sector node is one more than the adjusted priority
+                    // of the last seen sector node, or `1` if no other sector has been seen yet.
+                    adjusted_priority[idx] = idx_of_latest_sector_node
+                        .map(|last_sector_idx| adjusted_priority[last_sector_idx] + 1)
+                        .unwrap_or(1);
+
+                    idx_of_latest_sector_node = Some(idx);
+
+                    // Sector nodes have `node_type == 0` to give them priority in the new ordering.
+                    (node, (adjusted_priority[idx], 0))
+                } else {
+                    // A non-sector node's adjusted priority is the adjusted priority of its latest
+                    // dependencly.
+                    // If this node has no dependencies, set its priority to zero, which is equivalent
+                    // to having a dummy sector node on index `0` on which all other nodes depend on.
+                    adjusted_priority[idx] = latest_dependency_indices[idx]
+                        .map(|latest_idx| adjusted_priority[latest_idx])
+                        .unwrap_or(0);
+
+                    // Non-sector nodes have `node_type == 1`, which in the new ordering places them
+                    // right _after_ the sector nodes they directly depend on.
+                    (node, (adjusted_priority[idx], 1))
                 }
-                // There exists a sector layer after the layer it is dependent on.
-                else {
-                    next_sector_layer_idx_list[*layer_of_node]
+            })
+            .collect_vec();
+
+        // Sort in increasing order according to the adjusted `sorting_key`.
+        nodes_with_sorting_key.sort_by_key(|&(_, priority)| priority);
+
+        // Remove the sorting key.
+        let topo_sorted_nodes = nodes_with_sorting_key
+            .into_iter()
+            .map(|(val, _)| val)
+            .collect_vec();
+
+        // Step 2c: Determine which nodes can be combined into one.
+        let mut node_to_layer_map: HashMap<NodeId, usize> = HashMap::new();
+        // The first layer that stores sectors.
+        let mut first_sector_layer_idx = 0;
+
+        // For index i in the vector, keep track of the layer number corresponding to the next
+        // sector layer, None if it does not exist.
+        //
+        // For example, if we have the layers [non-sector, sector, non-sector, non-sector, sector, non-sector],
+        // the list would be [1, 4, 4, 4, 0, 0]
+        let mut next_sector_layer_idx_list = Vec::new();
+
+        topo_sorted_nodes.into_iter().for_each(|node| {
+            // If it is a non-sector node, insert it as its own layer
+            // Note that non-sector nodes are already re-ordered to the earliest possible location,
+            // so their layers are also the earliest possible layer.
+            let layer_idx = if !(sector_node_ids.contains(&node.id())) {
+                // Insert a new layer.
+                intermediate_layers.push(Vec::new());
+                // Next sector layer is currently unknown:
+                next_sector_layer_idx_list.push(0);
+                let layer_idx = intermediate_layers.len() - 1;
+                // If every layer so far are non-sector, then the first sector layer hasn't appeared.
+                if layer_idx == first_sector_layer_idx {
+                    first_sector_layer_idx += 1;
                 }
+                layer_idx
             }
-            // Otherwise it is not dependent on any node:
+            // If it is a sector node:
             else {
-                // Add it to the first layer.
-                if intermediate_layers.len() == first_sector_layer_idx {
-                    intermediate_layers.push(Vec::new());
-                    // The next sector layer is currently unknown.
-                    next_sector_layer_idx_list.push(0);
-                    first_sector_layer_idx = intermediate_layers.len() - 1
+                let maybe_latest_layer_dependency = node
+                    .sources()
+                    .iter()
+                    .filter_map(|node_source| {
+                        if input_shred_ids.contains(node_source) {
+                            None
+                        } else {
+                            Some(node_to_layer_map.get(node_source).unwrap())
+                        }
+                    })
+                    .max();
+                // If it is dependent on some previous node:
+                if let Some(layer_of_node) = maybe_latest_layer_dependency {
+                    // There is no sector layer after the layer it is dependent on.
+                    if next_sector_layer_idx_list[*layer_of_node] == 0 {
+                        // If the dependency is at the last sector layer, create a new layer.
+                        intermediate_layers.push(Vec::new());
+                        // The next sector layer is currently unknown.
+                        next_sector_layer_idx_list.push(0);
+                        let layer_to_insert = intermediate_layers.len() - 1;
+                        // All the previous layers with unknown next sector must all be the
+                        // newest layers. Find them and update their next sector layer.
+                        for i in (0..intermediate_layers.len() - 1).rev() {
+                            if next_sector_layer_idx_list[i] == 0 {
+                                next_sector_layer_idx_list[i] = layer_to_insert;
+                            } else {
+                                break;
+                            }
+                        }
+                        layer_to_insert
+                    }
+                    // There exists a sector layer after the layer it is dependent on.
+                    else {
+                        next_sector_layer_idx_list[*layer_of_node]
+                    }
                 }
-                first_sector_layer_idx
-            }
-        };
-        node_to_layer_map.insert(node.id(), layer_idx);
-        intermediate_layers[layer_idx].push(node);
-    });
+                // Otherwise it is not dependent on any node:
+                else {
+                    // Add it to the first layer.
+                    if intermediate_layers.len() == first_sector_layer_idx {
+                        intermediate_layers.push(Vec::new());
+                        // The next sector layer is currently unknown.
+                        next_sector_layer_idx_list.push(0);
+                        first_sector_layer_idx = intermediate_layers.len() - 1
+                    }
+                    first_sector_layer_idx
+                }
+            };
+            node_to_layer_map.insert(node.id(), layer_idx);
+            intermediate_layers[layer_idx].push(node);
+        });
+    }
 
     // Step 3: Add LookupConstraints to their respective LookupTables. Build a
     // map node id -> LookupTable
