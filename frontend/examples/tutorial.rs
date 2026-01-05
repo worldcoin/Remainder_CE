@@ -29,11 +29,10 @@ fn build_circuit() -> Circuit<Fr> {
 
     builder.set_output(&subtraction_sector);
 
-    builder.build_with_layer_combination().unwrap()
+    builder.build().expect("Failed to build circuit")
 }
 
-#[test]
-fn tutorial_test() {
+fn main() {
     // For tracing.
     let _subscriber = fmt().with_max_level(Level::DEBUG).init();
 
@@ -54,7 +53,9 @@ fn tutorial_test() {
     prover_circuit.set_input("Expected output", expected_output_data); // This is public!
 
     // Create a version of the circuit description which the prover can use.
-    let provable_circuit = prover_circuit.gen_provable_circuit().unwrap();
+    let provable_circuit = prover_circuit
+        .gen_provable_circuit()
+        .expect("Failed to generate provable circuit");
 
     let (proof_config, proof_as_transcript) =
         prove_circuit_with_runtime_optimized_config::<Fr, PoseidonSponge<Fr>>(&provable_circuit);
@@ -63,7 +64,9 @@ fn tutorial_test() {
 
     // Here we don't have any pre-determined public inputs from the verifier,
     // so we can directly call the `gen_verifiable_circuit()` function.
-    let verifiable_circuit = verifier_circuit.gen_verifiable_circuit().unwrap();
+    let verifiable_circuit = verifier_circuit
+        .gen_verifiable_circuit()
+        .expect("Failed to generate verifiable circuit");
 
     verify_circuit_with_proof_config::<Fr, PoseidonSponge<Fr>>(
         &verifiable_circuit,
