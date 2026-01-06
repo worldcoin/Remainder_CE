@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use clap::{command, Parser};
+use clap::Parser;
 use frontend::{
     hyrax_worldcoin::{
         orb::IMAGE_COMMIT_LOG_NUM_COLS,
