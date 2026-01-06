@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use clap::{command, Parser};
+use clap::Parser;
 use frontend::{
     hyrax_worldcoin::orb::load_image_commitment,
     hyrax_worldcoin_mpc::mpc_prover::{print_features_status, V3MPCCircuitAndAuxMles, V3MPCProver},

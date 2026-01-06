@@ -1,6 +1,6 @@
 use std::{fs::File, io::Write, path::PathBuf};
 
-use clap::{command, Parser};
+use clap::Parser;
 use frontend::{
     hyrax_worldcoin_mpc::mpc_prover::{
         generate_mpc_circuit_and_aux_mles_all_3_parties, print_features_status,
