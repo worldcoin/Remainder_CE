@@ -1,13 +1,13 @@
-name: master-pull
+name: main-pull
 permissions:
   contents: read
   pull-requests: read
-run-name: CI/CD Pipeline to run on merge to master
+run-name: CI/CD Pipeline to run on merge to main
 on:
   push:
-    branches: master
+    branches: main
   pull_request:
-    branches: master
+    branches: main
 jobs:
   fmt_and_lint:
     name: Compile and check formatting/linting.
