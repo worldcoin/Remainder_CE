@@ -16,9 +16,6 @@ use crate::{
     verify_column_path, verify_column_value, LcColumn,
 };
 
-// For serialization/deserialization of the various structs
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-
 use halo2_proofs::poly::EvaluationDomain;
 // For BN-254
 use itertools::{iterate, Itertools};
