@@ -265,7 +265,7 @@ macro_rules! perform_function_under_expected_configs {
             // Extra scope allows us to automatically drop the reader reference
             {
                 // Attempt to get read lock and check prover/verifier config matches
-                let prover_verifier_static_config_read_instance = remainder_shared_types::config::global_config::PROVER_VERIFIER_CONFIG.read();
+                let prover_verifier_static_config_read_instance = shared_types::config::global_config::PROVER_VERIFIER_CONFIG.read();
                 if $expected_prover_config
                     .matches_global_prover_config(&prover_verifier_static_config_read_instance)
                     && $expected_verifier_config
@@ -278,20 +278,20 @@ macro_rules! perform_function_under_expected_configs {
 
             // Otherwise, write the desired prover/verifier config to the global static var, downgrade into a read lock, and perform the action
             if let Some(mut prover_verifier_static_config_write_instance) =
-                remainder_shared_types::config::global_config::PROVER_VERIFIER_CONFIG.try_write()
+                shared_types::config::global_config::PROVER_VERIFIER_CONFIG.try_write()
             {
-                remainder_shared_types::config::global_config::set_global_prover_config(
+                shared_types::config::global_config::set_global_prover_config(
                     $expected_prover_config,
                     &mut prover_verifier_static_config_write_instance,
                 );
-                remainder_shared_types::config::global_config::set_global_verifier_config(
+                shared_types::config::global_config::set_global_verifier_config(
                     $expected_verifier_config,
                     &mut prover_verifier_static_config_write_instance,
                 );
 
                 // Downgrade into a read lock and perform the function (this should unblock other readers)
                 let _prover_verifier_static_config_read_instance =
-                    remainder_shared_types::config::global_config::downgrade(prover_verifier_static_config_write_instance);
+                    shared_types::config::global_config::downgrade(prover_verifier_static_config_write_instance);
 
                 // Execute the function with the provided arguments
                 let ret = $func($($arg),*);
@@ -365,58 +365,6 @@ macro_rules! perform_function_under_verifier_config {
             if let Some(mut prover_verifier_static_config_write_instance) =
                 shared_types::config::global_config::PROVER_VERIFIER_CONFIG.try_write()
             {
-                shared_types::config::global_config::set_global_verifier_config(
-                    $expected_verifier_config,
-                    &mut prover_verifier_static_config_write_instance,
-                );
-
-                // Downgrade into a read lock and perform the function (this should unblock other readers)
-                let _prover_verifier_static_config_read_instance =
-                    shared_types::config::global_config::downgrade(prover_verifier_static_config_write_instance);
-
-                // Execute the function with the provided arguments
-                let ret = $func($($arg),*);
-                break ret;
-            }
-        }
-    }};
-}
-
-/// This function will run the given function _only_ under the given configs!
-/// It does this by first reading the global config and checking whether
-/// that config matches the expected configs which are passed in, then
-/// * If matches, it performs the function immediately while holding the read
-///   lock and returns.
-/// * If doesn't match, it attempts to acquire a write lock, then writes the
-///   config to the global one, downgrades the write lock to a read lock
-///   (thereby unblocking all other readers), and performs the function.
-#[macro_export]
-macro_rules! perform_function_under_expected_configs {
-    ($func:expr, $expected_prover_config: expr, $expected_verifier_config:expr, $($arg:expr),*) => {{
-
-        loop {
-            // Extra scope allows us to automatically drop the reader reference
-            {
-                // Attempt to get read lock and check prover/verifier config matches
-                let prover_verifier_static_config_read_instance = shared_types::config::global_config::PROVER_VERIFIER_CONFIG.read();
-                if $expected_prover_config
-                    .matches_global_prover_config(&prover_verifier_static_config_read_instance)
-                    && $expected_verifier_config
-                        .matches_global_verifier_config(&prover_verifier_static_config_read_instance)
-                {
-                    let ret = $func($($arg),*);
-                    break ret;
-                }
-            }
-
-            // Otherwise, write the desired prover/verifier config to the global static var, downgrade into a read lock, and perform the action
-            if let Some(mut prover_verifier_static_config_write_instance) =
-                shared_types::config::global_config::PROVER_VERIFIER_CONFIG.try_write()
-            {
-                shared_types::config::global_config::set_global_prover_config(
-                    $expected_prover_config,
-                    &mut prover_verifier_static_config_write_instance,
-                );
                 shared_types::config::global_config::set_global_verifier_config(
                     $expected_verifier_config,
                     &mut prover_verifier_static_config_write_instance,
