@@ -3,13 +3,14 @@
 //! https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf
 
 #![allow(non_snake_case)]
-
-use crate::binary_operations::{logical_shift::ShiftNode, rotate_bits::RotateNode};
-use crate::expression::abstract_expr::ExprBuilder;
-use crate::layouter::builder::{Circuit, CircuitBuilder, LayerKind, NodeRef};
-use crate::mle::evals::MultilinearExtension;
+use crate::{
+    abstract_expr::AbstractExpression,
+    components::binary_operations::{logical_shift::ShiftNode, rotate_bits::RotateNode},
+    layouter::builder::{Circuit, CircuitBuilder, NodeRef},
+};
 use itertools::Itertools;
-use remainder_shared_types::Field;
+use remainder::mle::evals::MultilinearExtension;
+use shared_types::Field;
 use std::ops::{BitOr, BitXor, Shl, Shr};
 
 /// A trait to deal with bit decomposition and bit rotation as needed by
@@ -143,7 +144,7 @@ where
 /// bound to the circuit at a later time.
 #[derive(Clone, Debug)]
 pub struct ConstInputGate<F: Field> {
-    data_node: NodeRef,
+    data_node: NodeRef<F>,
     bits_mle: MultilinearExtension<F>,
     constant_name: String,
 }
@@ -161,7 +162,10 @@ impl<F: Field> ConstInputGate<F> {
         T: IsBitDecomposable,
         u64: From<T>,
     {
-        let input_layer = builder_ref.add_input_layer(constant_name, LayerKind::Public);
+        let input_layer = builder_ref.add_input_layer(
+            constant_name,
+            crate::layouter::builder::LayerVisibility::Public,
+        );
 
         let bits = bit_decompose_msb_first(constant_value);
         let num_vars = bits.len().ilog2() as usize;
@@ -174,7 +178,7 @@ impl<F: Field> ConstInputGate<F> {
         // Make sure inputs are all 1s or zero 0s by creating an assert0
         // check over x*(1-x).
         let b = &data_node;
-        let b_sq = ExprBuilder::products(vec![b.id(), b.id()]);
+        let b_sq = AbstractExpression::products(vec![b.id(), b.id()]);
         let b = b.expr();
         let binary_sector = builder_ref.add_sector(b - b_sq);
         builder_ref.set_output(&binary_sector);
@@ -200,31 +204,31 @@ impl<F: Field> ConstInputGate<F> {
     /// Returns the node that represents this constant. If the same
     /// constant is used in multiple places, this allows re-using the
     /// same constant input gate.
-    pub fn get_output(&self) -> NodeRef {
+    pub fn get_output(&self) -> NodeRef<F> {
         self.data_node.clone()
     }
 
     /// Returns the constant gate nodes
-    pub fn get_output_ref(&self) -> &NodeRef {
+    pub fn get_output_ref(&self) -> &NodeRef<F> {
         &self.data_node
     }
 }
 
 /// Multiplexer gate as defined by SHA-2 family of circuits.
 #[derive(Clone, Debug)]
-pub struct ChGate {
-    ch_sector: NodeRef,
+pub struct ChGate<F: Field> {
+    ch_sector: NodeRef<F>,
 }
 
-impl ChGate {
+impl<F: Field> ChGate<F> {
     /// Computes bit_wise selection of y_vars or x_vars as defined in
     /// SHA-2 spec. Assumes inputs to the gate are normalized (i.e. in
     /// {0,1}).
-    pub fn new<F: Field>(
+    pub fn new(
         builder_ref: &mut CircuitBuilder<F>,
-        x_vars: &NodeRef,
-        y_vars: &NodeRef,
-        z_vars: &NodeRef,
+        x_vars: &NodeRef<F>,
+        y_vars: &NodeRef<F>,
+        z_vars: &NodeRef<F>,
     ) -> Self {
         debug_assert!(x_vars.get_num_vars() == 5 || x_vars.get_num_vars() == 6);
         debug_assert!(y_vars.get_num_vars() == 5 || x_vars.get_num_vars() == 6);
@@ -234,10 +238,10 @@ impl ChGate {
         assert!(x_vars.get_num_vars() == z_vars.get_num_vars());
 
         // Compute x `and` y
-        let x_AND_y = ExprBuilder::products(vec![x_vars.clone().id(), y_vars.clone().id()]);
+        let x_AND_y = AbstractExpression::products(vec![x_vars.clone().id(), y_vars.clone().id()]);
 
         // Compute NOT x = 1 - x
-        let NOT_x = builder_ref.add_sector(ExprBuilder::constant(F::ONE) - x_vars.expr());
+        let NOT_x = builder_ref.add_sector(AbstractExpression::constant(F::ONE) - x_vars.expr());
 
         // Compute (x `and` y) `xor` (NOT x `and` Z). Note that x only
         // selects one bit from either x or z, so the output is
@@ -251,7 +255,7 @@ impl ChGate {
 
     /// Returns the output values of the ChGate in MSB first
     /// bit-decomposed form
-    pub fn get_output(&self) -> NodeRef {
+    pub fn get_output(&self) -> NodeRef<F> {
         self.ch_sector.clone()
     }
 
@@ -264,17 +268,17 @@ impl ChGate {
 /// Bitwise majority selector gate as defined by SHA-2 family of Hash
 /// functions.
 #[derive(Clone, Debug)]
-pub struct MajGate {
-    maj_sector: NodeRef,
+pub struct MajGate<F: Field> {
+    maj_sector: NodeRef<F>,
 }
 
-impl MajGate {
+impl<F: Field> MajGate<F> {
     /// Compute bit-wise majority of `x_vars`, `y_vars`, and `z_vars`.
-    pub fn new<F: Field>(
+    pub fn new(
         builder_ref: &mut CircuitBuilder<F>,
-        x_vars: &NodeRef,
-        y_vars: &NodeRef,
-        z_vars: &NodeRef,
+        x_vars: &NodeRef<F>,
+        y_vars: &NodeRef<F>,
+        z_vars: &NodeRef<F>,
     ) -> Self {
         debug_assert!(x_vars.get_num_vars() == 5 || x_vars.get_num_vars() == 6);
         debug_assert!(y_vars.get_num_vars() == 5 || x_vars.get_num_vars() == 6);
@@ -289,7 +293,7 @@ impl MajGate {
         // maj(x,y,z) = x*y + y*z + x*z - 2*x*y*z*(x + y + z - 2*x*y*z)
         //
 
-        let const_2 = ExprBuilder::constant(F::from(2));
+        let const_2 = AbstractExpression::constant(F::from(2));
         let xy = x_vars.expr() * y_vars.expr();
         let yz = y_vars.expr() * z_vars.expr();
         let xz = x_vars.expr() * z_vars.expr();
@@ -304,7 +308,7 @@ impl MajGate {
 
     /// Returns the output values of MajGate in MSB first bit-decomposed
     /// form
-    pub fn get_output(&self) -> NodeRef {
+    pub fn get_output(&self) -> NodeRef<F> {
         self.maj_sector.clone()
     }
 
@@ -319,15 +323,21 @@ impl MajGate {
 /// rotations defined in NIST spec. Bits are assumed to be in MSB first
 /// decomposition form.
 #[derive(Clone, Debug)]
-pub struct Sigma<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i32> {
-    sigma_sector: NodeRef,
+pub struct Sigma<
+    F: Field,
+    const WORD_SIZE: usize,
+    const ROTR1: i32,
+    const ROTR2: i32,
+    const ROTR3: i32,
+> {
+    sigma_sector: NodeRef<F>,
 }
 
-impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i32>
-    Sigma<WORD_SIZE, ROTR1, ROTR2, ROTR3>
+impl<F: Field, const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i32>
+    Sigma<F, WORD_SIZE, ROTR1, ROTR2, ROTR3>
 {
     /// Compute capital Sigma of `x_vars`
-    pub fn new<F: Field>(builder_ref: &mut CircuitBuilder<F>, x_vars: &NodeRef) -> Self {
+    pub fn new(builder_ref: &mut CircuitBuilder<F>, x_vars: &NodeRef<F>) -> Self {
         let num_vars: usize = sha_words_2_num_vars(WORD_SIZE);
         let rotr1 = RotateNode::new(builder_ref, num_vars, ROTR1, x_vars);
         let rotr2 = RotateNode::new(builder_ref, num_vars, ROTR2, x_vars);
@@ -337,10 +347,10 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i3
         let r2_expr = rotr2.get_output().expr();
         let r3_expr = rotr3.get_output().expr();
         let r1_xor_r2 = r1_expr.clone() + r2_expr.clone()
-            - ExprBuilder::constant(F::from(2)) * r1_expr * r2_expr;
+            - AbstractExpression::constant(F::from(2)) * r1_expr * r2_expr;
 
         let r1_xor_r2_xor_r3 = r1_xor_r2.clone() + r3_expr.clone()
-            - ExprBuilder::constant(F::from(2)) * r1_xor_r2 * r3_expr;
+            - AbstractExpression::constant(F::from(2)) * r1_xor_r2 * r3_expr;
 
         let sigma_sector = builder_ref.add_sector(r1_xor_r2_xor_r3);
 
@@ -348,7 +358,7 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i3
     }
 
     /// Get output of capital Sigma gate in MSB-first bit decomposed form
-    pub fn get_output(&self) -> NodeRef {
+    pub fn get_output(&self) -> NodeRef<F> {
         self.sigma_sector.clone()
     }
 
@@ -371,15 +381,21 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const ROTR3: i3
 ///  SHR3 : Value of rotation in third SHR
 /// MSB-first bit decomposition required.
 #[derive(Clone, Debug)]
-pub struct SmallSigma<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32> {
-    sigma_sector: NodeRef,
+pub struct SmallSigma<
+    F: Field,
+    const WORD_SIZE: usize,
+    const ROTR1: i32,
+    const ROTR2: i32,
+    const SHR3: i32,
+> {
+    sigma_sector: NodeRef<F>,
 }
 
-impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32>
-    SmallSigma<WORD_SIZE, ROTR1, ROTR2, SHR3>
+impl<F: Field, const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32>
+    SmallSigma<F, WORD_SIZE, ROTR1, ROTR2, SHR3>
 {
     /// Compute small Sigma of `x_vars`
-    pub fn new<F: Field>(builder_ref: &mut CircuitBuilder<F>, x_vars: &NodeRef) -> Self {
+    pub fn new(builder_ref: &mut CircuitBuilder<F>, x_vars: &NodeRef<F>) -> Self {
         let num_vars: usize = sha_words_2_num_vars(WORD_SIZE);
         let rotr1 = RotateNode::new(builder_ref, num_vars, ROTR1, x_vars);
         let rotr2 = RotateNode::new(builder_ref, num_vars, ROTR2, x_vars);
@@ -390,10 +406,10 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32
         let s3_expr = shr3.get_output().expr();
 
         let r1_xor_r2 = r1_expr.clone() + r2_expr.clone()
-            - ExprBuilder::constant(F::from(2)) * r1_expr * r2_expr;
+            - AbstractExpression::constant(F::from(2)) * r1_expr * r2_expr;
 
         let r1_xor_r2_xor_s3 = r1_xor_r2.clone() + s3_expr.clone()
-            - ExprBuilder::constant(F::from(2)) * r1_xor_r2 * s3_expr;
+            - AbstractExpression::constant(F::from(2)) * r1_xor_r2 * s3_expr;
 
         let sigma_sector = builder_ref.add_sector(r1_xor_r2_xor_s3);
 
@@ -401,7 +417,7 @@ impl<const WORD_SIZE: usize, const ROTR1: i32, const ROTR2: i32, const SHR3: i32
     }
 
     /// Return output of Small Sigma
-    pub fn get_output(&self) -> NodeRef {
+    pub fn get_output(&self) -> NodeRef<F> {
         self.sigma_sector.clone()
     }
 

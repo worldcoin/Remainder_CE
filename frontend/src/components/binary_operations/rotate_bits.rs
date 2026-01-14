@@ -1,6 +1,6 @@
 //! Implements bit shifting gates.
 
-use remainder_shared_types::Field;
+use shared_types::Field;
 
 use crate::layouter::builder::{CircuitBuilder, NodeRef};
 
@@ -20,11 +20,11 @@ use crate::layouter::builder::{CircuitBuilder, NodeRef};
 /// Requires that the input node has already been verified to contain
 /// binary digits.
 #[derive(Clone, Debug)]
-pub struct RotateNode {
-    output: NodeRef,
+pub struct RotateNode<F: Field> {
+    output: NodeRef<F>,
 }
 
-impl RotateNode {
+impl<F: Field> RotateNode<F> {
     /// Create a new [ShiftNode] that performs a rotation by `rotate_amount` (to the right if
     /// `rotate_amount > 0` or to the left if `rotate_amount < 0`) on `input` node which contains
     /// `2^num_vars` binary digits.
@@ -32,11 +32,11 @@ impl RotateNode {
     /// # Requires
     /// `input` is assumed to only contain binary digits (i.e. only values from the set
     /// `{F::ZERO, F::ONE}` for a field `F`).
-    pub fn new<F: Field>(
+    pub fn new(
         builder_ref: &mut CircuitBuilder<F>,
         num_vars: usize,
         rotate_amount: i32,
-        input: &NodeRef,
+        input: &NodeRef<F>,
     ) -> Self {
         // Compute the bit reroutings that effectively shift the
         // input MLE by the appropriate amount.
@@ -47,7 +47,7 @@ impl RotateNode {
     }
 
     /// Returns a reference to the node containing the shifted value.
-    pub fn get_output(&self) -> NodeRef {
+    pub fn get_output(&self) -> NodeRef<F> {
         self.output.clone()
     }
 }

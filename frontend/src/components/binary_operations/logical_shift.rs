@@ -3,8 +3,7 @@
 use std::cmp::{max, min};
 
 use itertools::Itertools;
-use num::abs;
-use remainder_shared_types::Field;
+use shared_types::Field;
 
 use crate::layouter::builder::{CircuitBuilder, NodeRef};
 
@@ -18,11 +17,11 @@ use crate::layouter::builder::{CircuitBuilder, NodeRef};
 ///
 /// Requires that the input node has already been verified to contain binary digits.
 #[derive(Clone, Debug)]
-pub struct ShiftNode {
-    output: NodeRef,
+pub struct ShiftNode<F: Field> {
+    output: NodeRef<F>,
 }
 
-impl ShiftNode {
+impl<F: Field> ShiftNode<F> {
     /// Create a new [ShiftNode] that performs a shift by `shift_amount` (to the right if
     /// `shift_amount > 0` or to the left if `shift_amount < 0`) on `input` node which contains
     /// `2^num_vars` binary digits.
@@ -30,11 +29,11 @@ impl ShiftNode {
     /// # Requires
     /// `input` is assumed to only contain binary digits (i.e. only values from the set
     /// `{F::ZERO, F::ONE}` for a field `F`).
-    pub fn new<F: Field>(
+    pub fn new(
         builder_ref: &mut CircuitBuilder<F>,
         num_vars: usize,
         shift_amount: i32,
-        input: &NodeRef,
+        input: &NodeRef<F>,
     ) -> Self {
         // Compute the bit reroutings that effectively shift the
         // input MLE by the appropriate amount.
@@ -45,7 +44,7 @@ impl ShiftNode {
     }
 
     /// Returns a reference to the node containing the shifted value.
-    pub fn get_output(&self) -> NodeRef {
+    pub fn get_output(&self) -> NodeRef<F> {
         self.output.clone()
     }
 }
@@ -69,7 +68,7 @@ fn generate_shift_wirings(num_vars: usize, shift_amount: i32) -> Vec<(u32, u32)>
             .map(|i| (i + shift_amount, i))
             .collect_vec()
     } else {
-        let shift_amount = abs(shift_amount) as u32;
+        let shift_amount = (shift_amount.abs()) as u32;
         (0..(1 << num_vars) - shift_amount as u32)
             .map(|i| (i, i + shift_amount))
             .collect_vec()

@@ -1,13 +1,13 @@
 use std::collections::HashMap;
-use std::rc::Weak;
-
-use crate::gkr::hyrax_input_layer::HyraxInputLayerProof;
-use crate::gkr::hyrax_layer::HyraxClaim;
-
-use crate::gkr::{verify_hyrax_proof, HyraxProof};
-use crate::utils::vandermonde::VandermondeInverse;
 
 use ark_std::test_rng;
+use frontend::abstract_expr::AbstractExpression;
+use frontend::layouter::builder::{Circuit, CircuitBuilder};
+use hyrax::gkr::input_layer::{
+    commit_to_input_values, HyraxInputLayerDescription, HyraxInputLayerProof,
+};
+use hyrax::gkr::layer::{HyraxClaim, HyraxLayerProof};
+use hyrax::utils::vandermonde::VandermondeInverse;
 use itertools::{repeat_n, Itertools};
 use rand::RngCore;
 use remainder::expression::circuit_expr::ExprDescription;
@@ -19,8 +19,6 @@ use remainder::layer::layer_enum::{LayerDescriptionEnum, LayerEnum};
 use remainder::layer::matmult::{MatMult, MatMultLayerDescription, Matrix, MatrixDescription};
 use remainder::layer::regular_layer::{RegularLayer, RegularLayerDescription};
 use remainder::layer::{LayerDescription, LayerId};
-use remainder::layouter::builder::CircuitBuilder;
-use remainder::layouter::nodes::{CircuitNode, NodeId};
 use remainder::mle::dense::DenseMle;
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
 use remainder::mle::mle_description::MleDescription;
@@ -39,9 +37,6 @@ use shared_types::{
     Field,
 };
 use shared_types::{perform_function_under_verifier_config, Fr};
-
-use super::hyrax_input_layer::{commit_to_input_values, HyraxInputLayerDescription};
-use super::hyrax_layer::HyraxLayerProof;
 type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
 
@@ -1933,8 +1928,13 @@ fn hyrax_input_layer_proof_test() {
     );
 
     let input_layer_desc = HyraxInputLayerDescription::new(layer_id, input_mle.num_vars());
-    let mut prover_commitment =
-        commit_to_input_values(&input_layer_desc, &input_mle, &committer, blinding_rng);
+    let mut prover_commitment = commit_to_input_values(
+        input_layer_desc.num_vars,
+        input_layer_desc.log_num_cols,
+        &input_mle,
+        &committer,
+        blinding_rng,
+    );
 
     transcript.append_ec_points("Hyrax PCS commit", &prover_commitment.commitment);
 
@@ -1986,7 +1986,8 @@ fn small_regular_circuit_hyrax_input_layer_test() {
         None,
     );
     // INPUT LAYER CONSTRUCTION
-    let input_multilinear_extension: MultilinearExtension<Scalar> = vec![8797, 7308, 94, 67887].into();
+    let input_multilinear_extension: MultilinearExtension<Scalar> =
+        vec![8797, 7308, 94, 67887].into();
 
     let mut builder = CircuitBuilder::<Fr>::new();
 
@@ -1998,26 +1999,20 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     );
 
     // Middle layer 1: square the input.
-    let squaring_sector = builder.add_sector(&[&input_shred], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        mle * mle
-    });
+    let squaring_sector = builder.add_sector(input_shred.expr() * input_shred.expr());
 
     // Middle layer 2: subtract middle layer 1 from itself.
-    let subtract_sector = builder.add_sector(&[&squaring_sector], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        mle.expr() - mle.expr()
-    });
+    let subtract_sector = builder.add_sector(squaring_sector.expr() - squaring_sector.expr());
 
     // Make this an output node.
     let _output_node = builder.set_output(&subtract_sector);
 
-    let input_shred_id = builder.get_id(&input_shred);
+    let input_shred_id = input_shred.id();
 
-    let (circuit_desc, input_layer_id_to_input_shred_ids, circuit_description_map) =
-        builder.build_with_layer_combination().unwrap();
+    // circuit_desc, input_layer_id_to_input_shred_ids, circuit_description_map
+    let small_circuit = builder.build_with_layer_combination().unwrap();
+    let circuit_desc = small_circuit.get_circuit_description();
+    let circuit_description_map = small_circuit.circuit_map;
 
     let mut input_nodes = HashMap::new();
     input_nodes.insert(input_shred_id, input_multilinear_extension);

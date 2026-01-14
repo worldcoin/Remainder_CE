@@ -1,16 +1,15 @@
+use frontend::{
+    abstract_expr::AbstractExpression,
+    components::sha2_gkr::{self, nonlinear_gates::IsBitDecomposable},
+    layouter::builder::{Circuit, CircuitBuilder, LayerVisibility},
+};
 use itertools::Itertools;
 use rand::{thread_rng, RngCore};
 use remainder::{
-    components::sha2::nonlinear_gates as sha2,
-    components::sha2::nonlinear_gates::IsBitDecomposable,
-    components::sha2::ripple_carry_adder as rca,
-    components::sha2::sha256_bit_decomp as sha256,
-    expression::abstract_expr::ExprBuilder,
-    layouter::builder::{Circuit, CircuitBuilder, LayerKind, ProvableCircuit},
-    mle::evals::MultilinearExtension,
+    mle::evals::MultilinearExtension, provable_circuit::ProvableCircuit,
     prover::helpers::test_circuit_with_memory_optimized_config,
 };
-use remainder_shared_types::Fr;
+use shared_types::Fr;
 use std::ops::{BitAnd, BitOr, BitXor, Shl, Shr};
 
 // use tracing::Level;
@@ -27,14 +26,15 @@ where
 fn build_ch_gate_circuit() -> Circuit<Fr> {
     let mut builder = CircuitBuilder::new();
 
-    let input_layer = builder.add_input_layer(LayerKind::Public);
+    let input_layer =
+        builder.add_input_layer("ch_gate_circuit_input_layer", LayerVisibility::Public);
     let log_bit_width = 5; // SHA-256 num vars
 
     // All inputs includes 32*3 input wires + 32 expected output
     let all_inputs = builder.add_input_shred("All Inputs", 2 + log_bit_width, &input_layer);
 
     let b = &all_inputs;
-    let b_sq = ExprBuilder::products(vec![b.id(), b.id()]);
+    let b_sq = AbstractExpression::products(vec![b.id(), b.id()]);
     let b = b.expr();
 
     // Check that all input bits are binary.
@@ -48,7 +48,7 @@ fn build_ch_gate_circuit() -> Circuit<Fr> {
 
     let [x_vars, y_vars, z_vars, expected_result] = splits.try_into().unwrap();
 
-    let ch_gate = sha2::ChGate::new(&mut builder, &x_vars, &y_vars, &z_vars);
+    let ch_gate = sha2_gkr::nonlinear_gates::ChGate::new(&mut builder, &x_vars, &y_vars, &z_vars);
 
     let compare_sector = builder.add_sector(expected_result.expr() - ch_gate.get_output().expr());
     builder.set_output(&compare_sector);
@@ -69,10 +69,10 @@ fn attach_ch_gate_data<const POSITIVE: bool>(mut circuit: Circuit<Fr>) -> Provab
         trng.next_u32()
     };
 
-    let x_bits = sha2::bit_decompose_msb_first(x);
-    let y_bits = sha2::bit_decompose_msb_first(y);
-    let z_bits = sha2::bit_decompose_msb_first(z);
-    let expected_bits = sha2::bit_decompose_msb_first(expected_value);
+    let x_bits = sha2_gkr::nonlinear_gates::bit_decompose_msb_first(x);
+    let y_bits = sha2_gkr::nonlinear_gates::bit_decompose_msb_first(y);
+    let z_bits = sha2_gkr::nonlinear_gates::bit_decompose_msb_first(z);
+    let expected_bits = sha2_gkr::nonlinear_gates::bit_decompose_msb_first(expected_value);
 
     let input_mle = MultilinearExtension::new(
         x_bits
@@ -93,14 +93,15 @@ fn attach_ch_gate_data<const POSITIVE: bool>(mut circuit: Circuit<Fr>) -> Provab
 fn build_maj_gate_circuit() -> Circuit<Fr> {
     let mut builder = CircuitBuilder::new();
 
-    let input_layer = builder.add_input_layer(LayerKind::Public);
+    let input_layer =
+        builder.add_input_layer("maj_gate_circuit_input_layer", LayerVisibility::Public);
     let log_bit_width = 5; // SHA-256 num vars
 
     // All inputs includes 32*3 input wires + 32 expected output
     let all_inputs = builder.add_input_shred("All Inputs", 2 + log_bit_width, &input_layer);
 
     let b = &all_inputs;
-    let b_sq = ExprBuilder::products(vec![b.id(), b.id()]);
+    let b_sq = AbstractExpression::products(vec![b.id(), b.id()]);
     let b = b.expr();
 
     // Check that all input bits are binary.
@@ -114,7 +115,7 @@ fn build_maj_gate_circuit() -> Circuit<Fr> {
 
     let [x_vars, y_vars, z_vars, expected_result] = splits.try_into().unwrap();
 
-    let ch_gate = sha2::MajGate::new(&mut builder, &x_vars, &y_vars, &z_vars);
+    let ch_gate = sha2_gkr::nonlinear_gates::MajGate::new(&mut builder, &x_vars, &y_vars, &z_vars);
 
     let compare_sector = builder.add_sector(expected_result.expr() - ch_gate.get_output().expr());
     builder.set_output(&compare_sector);
@@ -135,10 +136,10 @@ fn attach_maj_gate_data<const POSITIVE: bool>(mut circuit: Circuit<Fr>) -> Prova
         trng.next_u32()
     };
 
-    let x_bits = sha2::bit_decompose_msb_first(x);
-    let y_bits = sha2::bit_decompose_msb_first(y);
-    let z_bits = sha2::bit_decompose_msb_first(z);
-    let expected_bits = sha2::bit_decompose_msb_first(expected_value);
+    let x_bits = sha2_gkr::nonlinear_gates::bit_decompose_msb_first(x);
+    let y_bits = sha2_gkr::nonlinear_gates::bit_decompose_msb_first(y);
+    let z_bits = sha2_gkr::nonlinear_gates::bit_decompose_msb_first(z);
+    let expected_bits = sha2_gkr::nonlinear_gates::bit_decompose_msb_first(expected_value);
 
     let input_mle = MultilinearExtension::new(
         x_bits
@@ -166,14 +167,15 @@ fn build_sigma_gate_circuit<
 ) -> Circuit<Fr> {
     let mut builder = CircuitBuilder::new();
 
-    let input_layer = builder.add_input_layer(LayerKind::Public);
+    let input_layer =
+        builder.add_input_layer("sigma_gate_circuit_input_layer", LayerVisibility::Public);
     let log_bit_width = if WORD_SIZE == 32 { 5 } else { 6 }; // SHA-256 num vars
 
     // All inputs includes 32*3 input wires + 32 expected output
     let all_inputs = builder.add_input_shred("All Inputs", 1 + log_bit_width, &input_layer);
 
     let b = &all_inputs;
-    let b_sq = ExprBuilder::products(vec![b.id(), b.id()]);
+    let b_sq = AbstractExpression::products(vec![b.id(), b.id()]);
     let b = b.expr();
 
     // Check that all input bits are binary.
@@ -188,11 +190,18 @@ fn build_sigma_gate_circuit<
     let [x_vars, expected_result] = splits.try_into().unwrap();
 
     let compare_sector = if is_big_sigma_gate {
-        let sigma_gate = sha2::Sigma::<WORD_SIZE, ROTR1, ROTR2, ROTR3>::new(&mut builder, &x_vars);
+        let sigma_gate =
+            sha2_gkr::nonlinear_gates::Sigma::<Fr, WORD_SIZE, ROTR1, ROTR2, ROTR3>::new(
+                &mut builder,
+                &x_vars,
+            );
         builder.add_sector(expected_result.expr() - sigma_gate.get_output().expr())
     } else {
         let sigma_gate =
-            sha2::SmallSigma::<WORD_SIZE, ROTR1, ROTR2, ROTR3>::new(&mut builder, &x_vars);
+            sha2_gkr::nonlinear_gates::SmallSigma::<Fr, WORD_SIZE, ROTR1, ROTR2, ROTR3>::new(
+                &mut builder,
+                &x_vars,
+            );
         builder.add_sector(expected_result.expr() - sigma_gate.get_output().expr())
     };
 
@@ -234,8 +243,8 @@ where
         random_data
     };
 
-    let x_bits = sha2::bit_decompose_msb_first(random_data);
-    let expected_bits = sha2::bit_decompose_msb_first(expected_value);
+    let x_bits = sha2_gkr::nonlinear_gates::bit_decompose_msb_first(random_data);
+    let expected_bits = sha2_gkr::nonlinear_gates::bit_decompose_msb_first(expected_value);
 
     let input_mle = MultilinearExtension::new(
         x_bits
@@ -255,13 +264,16 @@ where
 fn build_full_adder_gate_circuit() -> Circuit<Fr> {
     let mut builder = CircuitBuilder::new();
 
-    let input_layer = builder.add_input_layer(LayerKind::Public);
+    let input_layer = builder.add_input_layer(
+        "full_adder_gate_circuit_input_layer",
+        LayerVisibility::Public,
+    );
 
     // Inputs are x, y, c, 0 and outputs are expected to be s,c,0,0
     let all_inputs = builder.add_input_shred("All Inputs", 3, &input_layer);
 
     let b = &all_inputs;
-    let b_sq = ExprBuilder::products(vec![b.id(), b.id()]);
+    let b_sq = AbstractExpression::products(vec![b.id(), b.id()]);
     let b = b.expr();
 
     // Check that all input bits are binary.
@@ -280,7 +292,7 @@ fn build_full_adder_gate_circuit() -> Circuit<Fr> {
     let [x, y, c, _] = args_split.try_into().unwrap();
     let [expected_sum, expected_carry, _, _] = res_split.try_into().unwrap();
 
-    let fa_gate = rca::FullAdder::new(&mut builder, &x, &y, &c);
+    let fa_gate = sha2_gkr::ripple_carry_adder::FullAdder::new(&mut builder, &x, &y, &c);
     let (s, c) = fa_gate.get_output();
     let sum_is_valid = builder.add_sector(s.expr() - expected_sum.expr());
     let carry_is_valid = builder.add_sector(c.expr() - expected_carry.expr());
@@ -316,11 +328,13 @@ where
 {
     let mut builder = CircuitBuilder::new();
 
-    let input_layer = builder.add_input_layer(LayerKind::Public);
+    let input_layer =
+        builder.add_input_layer("constant_gate_circuit_input_layer", LayerVisibility::Public);
 
     let num_vars = 3 + std::mem::size_of::<T>().ilog2() as usize;
 
-    let const_msb_gate = sha2::ConstInputGate::new(&mut builder, "random_data", gate_data);
+    let const_msb_gate =
+        sha2_gkr::nonlinear_gates::ConstInputGate::new(&mut builder, "random_data", gate_data);
 
     // Inputs for expected values
     let expected_output = builder.add_input_shred("Expected output", num_vars, &input_layer);
@@ -340,7 +354,7 @@ where
     T: IsBitDecomposable,
     u64: From<T>,
 {
-    let x_bits = sha2::bit_decompose_msb_first(x);
+    let x_bits = sha2_gkr::nonlinear_gates::bit_decompose_msb_first(x);
     let expected_mle = MultilinearExtension::new(
         x_bits
             .into_iter()
@@ -447,11 +461,15 @@ fn sha256_big_sigma_gate_positive_tests() {
     // https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf
     // printed page number 10 for SHA-256.
 
-    let sigma_0 = build_sigma_gate_circuit::<{ sha256::WORD_SIZE }, 2, 13, 22>(true);
-    let sigma_1 = build_sigma_gate_circuit::<{ sha256::WORD_SIZE }, 6, 11, 25>(true);
+    let sigma_0 =
+        build_sigma_gate_circuit::<{ sha2_gkr::sha256_bit_decomp::WORD_SIZE }, 2, 13, 22>(true);
+    let sigma_1 =
+        build_sigma_gate_circuit::<{ sha2_gkr::sha256_bit_decomp::WORD_SIZE }, 6, 11, 25>(true);
 
-    let small_sigma_0 = build_sigma_gate_circuit::<{ sha256::WORD_SIZE }, 7, 18, 3>(false);
-    let small_sigma_1 = build_sigma_gate_circuit::<{ sha256::WORD_SIZE }, 17, 19, 10>(false);
+    let small_sigma_0 =
+        build_sigma_gate_circuit::<{ sha2_gkr::sha256_bit_decomp::WORD_SIZE }, 7, 18, 3>(false);
+    let small_sigma_1 =
+        build_sigma_gate_circuit::<{ sha2_gkr::sha256_bit_decomp::WORD_SIZE }, 17, 19, 10>(false);
 
     for _ in 0..10 {
         let random_data = trng.next_u32();

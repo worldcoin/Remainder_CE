@@ -2,13 +2,14 @@
 
 use std::cmp::max;
 
-use remainder_shared_types::Field;
+use shared_types::Field;
 
 use crate::{
-    binary_operations::logical_shift::ShiftNode,
-    expression::abstract_expr::ExprBuilder,
+    abstract_expr::AbstractExpression,
+    components::binary_operations::logical_shift::ShiftNode,
     layouter::builder::{CircuitBuilder, NodeRef},
 };
+// use remainder::expression::abstract_expr::ExprBuilder;
 
 /// Performs binary addition between two nodes that represent binary values, given the vector of
 /// carries as a witness. Works with bit-widths that are powers of 2 up to `2^30 = 1,073,741,824`
@@ -18,18 +19,18 @@ use crate::{
 /// All inputs are assumed to only contain binary digits (i.e. only values from the set
 /// `{F::ZERO, F::ONE}` for a field `F`).
 #[derive(Clone, Debug)]
-pub struct BinaryAdder {
-    adder_sector: NodeRef,
+pub struct BinaryAdder<F: Field> {
+    adder_sector: NodeRef<F>,
 }
 
-impl BinaryAdder {
+impl<F: Field> BinaryAdder<F> {
     /// Generates a new [BinaryAdder] adding the values in nodes `lhs_bits` and `rhs_bits`, given
     /// the `carry_bits` as a witness.
-    pub fn new<F: Field>(
+    pub fn new(
         builder_ref: &mut CircuitBuilder<F>,
-        lhs_bits: &NodeRef,
-        rhs_bits: &NodeRef,
-        carry_bits: &NodeRef,
+        lhs_bits: &NodeRef<F>,
+        rhs_bits: &NodeRef<F>,
+        carry_bits: &NodeRef<F>,
     ) -> Self {
         let num_vars = max(
             carry_bits.get_num_vars(),
@@ -44,15 +45,15 @@ impl BinaryAdder {
         let b1 = rhs_bits;
         let c = shifted_carries.get_output();
 
-        let b0_c = ExprBuilder::products(vec![b0.id(), c.id()]);
-        let b1_c = ExprBuilder::products(vec![b1.id(), c.id()]);
-        let b0_b1 = ExprBuilder::products(vec![b0.id(), b1.id()]);
-        let b0_b1_c = ExprBuilder::products(vec![b0.id(), b1.id(), c.id()]);
+        let b0_c = AbstractExpression::products(vec![b0.id(), c.id()]);
+        let b1_c = AbstractExpression::products(vec![b1.id(), c.id()]);
+        let b0_b1 = AbstractExpression::products(vec![b0.id(), b1.id()]);
+        let b0_b1_c = AbstractExpression::products(vec![b0.id(), b1.id(), c.id()]);
 
-        let two_b0_c = ExprBuilder::scaled(b0_c, F::from(2));
-        let two_b1_c = ExprBuilder::scaled(b1_c, F::from(2));
-        let two_b0_b1 = ExprBuilder::scaled(b0_b1, F::from(2));
-        let four_b0_b1_c = ExprBuilder::scaled(b0_b1_c, F::from(4));
+        let two_b0_c = AbstractExpression::scaled(b0_c, F::from(2));
+        let two_b1_c = AbstractExpression::scaled(b1_c, F::from(2));
+        let two_b0_b1 = AbstractExpression::scaled(b0_b1, F::from(2));
+        let four_b0_b1_c = AbstractExpression::scaled(b0_b1_c, F::from(4));
 
         let full_adder_result_sector = builder_ref.add_sector(
             // The following expression is equivalent to: `b0 XOR b1 XOR c`
@@ -83,7 +84,7 @@ impl BinaryAdder {
     }
 
     /// Returns a reference to the output of the adder circuit.
-    pub fn get_output(&self) -> NodeRef {
+    pub fn get_output(&self) -> NodeRef<F> {
         self.adder_sector.clone()
     }
 }

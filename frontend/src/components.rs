@@ -9,7 +9,7 @@ pub mod digits;
 // Defines components for use in building binary circuits.
 pub mod binary_operations;
 
-pub mod sha2;
+pub mod sha2_gkr;
 
 #[cfg(test)]
 mod tests;
