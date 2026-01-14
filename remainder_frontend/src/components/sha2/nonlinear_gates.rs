@@ -161,7 +161,7 @@ impl<F: Field> ConstInputGate<F> {
         T: IsBitDecomposable,
         u64: From<T>,
     {
-        let input_layer = builder_ref.add_input_layer(LayerKind::Public);
+        let input_layer = builder_ref.add_input_layer(constant_name, LayerKind::Public);
 
         let bits = bit_decompose_msb_first(constant_value);
         let num_vars = bits.len().ilog2() as usize;

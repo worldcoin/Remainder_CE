@@ -21,16 +21,6 @@ pub mod verifiable_circuit;
 // and generating proofs of aggregation
 pub mod claims;
 
-// Module for defining the re-usable components for circuit building
-pub mod components;
-
-// Defines components for use in building binary circuits.
-pub mod binary_operations;
-
-// Module containing functions for deriving digital decompositions and building associated circuit
-// components.
-pub mod digits;
-
 // module for defining the expressions (and relavant helper
 // functions) for which the prover and the verifier interact with
 pub mod expression;
