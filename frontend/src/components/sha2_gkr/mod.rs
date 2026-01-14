@@ -4,7 +4,7 @@ pub mod nonlinear_gates;
 pub mod ripple_carry_adder;
 pub mod sha256_bit_decomp;
 use crate::layouter::builder::{Circuit, CircuitBuilder, InputLayerNodeRef, NodeRef};
-use remainder_shared_types::Field;
+use shared_types::Field;
 
 /// Trait that's implemented by all SHA256 adders
 pub trait AdderGateTrait<F: Field> {
@@ -16,15 +16,15 @@ pub trait AdderGateTrait<F: Field> {
     /// Auxiliary data is meant for passing in any additional layer or
     /// circuit or wire information that can help the prover.
     fn layout_adder_circuit(
-        circuit_builder: &mut CircuitBuilder<F>, // Circuit builder
-        x_node: &NodeRef,                        // reference to x in x + y
-        y_node: &NodeRef,                        // reference to y in x + y
-        carry_layer: Option<InputLayerNodeRef>,  // Carry Layer information
+        circuit_builder: &mut CircuitBuilder<F>,   // Circuit builder
+        x_node: &NodeRef<F>,                       // reference to x in x + y
+        y_node: &NodeRef<F>,                       // reference to y in x + y
+        carry_layer: Option<InputLayerNodeRef<F>>, // Carry Layer information
     ) -> Self;
 
     /// Returns a reference to the note that corresponds to the adder
     /// gate
-    fn get_output(&self) -> NodeRef;
+    fn get_output(&self) -> NodeRef<F>;
 
     /// Optional trait that compute the actual sum and create any possible commitments
     /// needed.

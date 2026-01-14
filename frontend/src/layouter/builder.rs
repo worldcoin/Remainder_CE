@@ -1138,7 +1138,6 @@ impl Default for CircuitMap {
 pub struct Circuit<F: Field> {
     circuit_description: GKRCircuitDescription<F>,
     pub circuit_map: CircuitMap,
-
     partial_inputs: HashMap<NodeId, MultilinearExtension<F>>,
 }
 

@@ -3,34 +3,36 @@
 //! For a comparison of different adders, see also https://www.lirmm.fr/arith18/papers/patil-RobustEnergyEffcientAdder.pdf
 
 use super::AdderGateTrait;
-use crate::expression::abstract_expr::ExprBuilder;
-use crate::layouter::builder::{CircuitBuilder, InputLayerNodeRef, NodeRef};
-use remainder_shared_types::Field;
+use crate::{
+    abstract_expr::AbstractExpression,
+    layouter::builder::{CircuitBuilder, InputLayerNodeRef, NodeRef},
+};
+use shared_types::Field;
 use std::marker::PhantomData;
 
 #[inline(always)]
-fn mul<F: Field>(a: ExprBuilder<F>, b: ExprBuilder<F>) -> ExprBuilder<F> {
+fn mul<F: Field>(a: AbstractExpression<F>, b: AbstractExpression<F>) -> AbstractExpression<F> {
     a * b
 }
 
 #[inline(always)]
-fn xor<F: Field>(a: ExprBuilder<F>, b: ExprBuilder<F>) -> ExprBuilder<F> {
-    a.clone() + b.clone() - ExprBuilder::constant(F::from(2)) * a * b
+fn xor<F: Field>(a: AbstractExpression<F>, b: AbstractExpression<F>) -> AbstractExpression<F> {
+    a.clone() + b.clone() - AbstractExpression::constant(F::from(2)) * a * b
 }
 
 // #[inline(always)]
-// fn or<F: Field>(a: ExprBuilder<F>, b: ExprBuilder<F>) -> ExprBuilder<F> {
+// fn or<F: Field>(a: AbstractExpression<F>, b: AbstractExpression<F>) -> AbstractExpression<F> {
 //     a.clone() + b.clone() - a * b
 // }
 
 // Input values in MSB format and compute the 4-bit parallel prefix
 // adder
-fn pp_adder_4_bit<F>(
+fn pp_adder_4_bit<F: Field>(
     builder_ref: &mut CircuitBuilder<F>,
-    x_val: NodeRef,
-    y_val: NodeRef,
-    carry_in: Option<NodeRef>,
-) -> (NodeRef /* sum */, NodeRef /*carry  */)
+    x_val: NodeRef<F>,
+    y_val: NodeRef<F>,
+    carry_in: Option<NodeRef<F>>,
+) -> (NodeRef<F> /* sum */, NodeRef<F> /*carry  */)
 where
     F: Field,
 {
@@ -43,7 +45,7 @@ where
 
     let propagate = builder_ref.add_sector(
         x_val.expr() + y_val.expr()
-            - ExprBuilder::constant(F::from(2)) * x_val.expr() * y_val.expr(),
+            - AbstractExpression::constant(F::from(2)) * x_val.expr() * y_val.expr(),
     );
     let generate = builder_ref.add_sector(x_val.expr() * y_val.expr());
     let mut p = builder_ref.add_split_node(&propagate, 2);
@@ -70,7 +72,7 @@ where
     // Step 3: Calculate carries
     let c0 = carry_in
         .map(|v| v.expr())
-        .unwrap_or(ExprBuilder::constant(F::ZERO));
+        .unwrap_or(AbstractExpression::constant(F::ZERO));
     let tmp = mul(p[0].expr(), c0.clone());
     let c1 = xor(g[0].expr(), tmp);
     let tmp = mul(p0p1.clone(), c0.clone());
@@ -91,7 +93,7 @@ where
     ];
 
     (
-        builder_ref.add_sector(ExprBuilder::selectors(sum)),
+        builder_ref.add_sector(AbstractExpression::binary_tree_selector(sum)),
         builder_ref.add_sector(c4),
     )
 }
@@ -99,7 +101,7 @@ where
 /// Brent-Kung Adder
 #[derive(Debug, Clone)]
 pub struct BKAdder<const BitWidth: usize, F: Field> {
-    sum_node: NodeRef,
+    sum_node: NodeRef<F>,
     _phantom: PhantomData<F>,
 }
 
@@ -107,16 +109,16 @@ impl<F: Field> AdderGateTrait<F> for BKAdder<32, F> {
     type IntegralType = u32;
 
     fn layout_adder_circuit(
-        circuit_builder: &mut CircuitBuilder<F>, // Circuit builder
-        x_node: &NodeRef,                        // reference to x in x + y
-        y_node: &NodeRef,                        // reference to y in x + y
-        carry_layer: Option<InputLayerNodeRef>,  // Carry Layer information
+        circuit_builder: &mut CircuitBuilder<F>,   // Circuit builder
+        x_node: &NodeRef<F>,                       // reference to x in x + y
+        y_node: &NodeRef<F>,                       // reference to y in x + y
+        carry_layer: Option<InputLayerNodeRef<F>>, // Carry Layer information
     ) -> Self {
         Self::new(circuit_builder, x_node, y_node, carry_layer)
     }
 
     /// Returns the output of AdderNoCarry
-    fn get_output(&self) -> NodeRef {
+    fn get_output(&self) -> NodeRef<F> {
         self.sum_node.clone()
     }
 
@@ -136,9 +138,9 @@ where
 {
     fn new(
         builder_ref: &mut CircuitBuilder<F>,
-        x_word: &NodeRef,
-        y_word: &NodeRef,
-        carry_layer: Option<InputLayerNodeRef>,
+        x_word: &NodeRef<F>,
+        y_word: &NodeRef<F>,
+        _carry_layer: Option<InputLayerNodeRef<F>>,
     ) -> Self {
         assert!(
             BITWIDTH % 8 == 0,
@@ -156,8 +158,8 @@ where
         let x_4bit_chunks = builder_ref.add_split_node(x_word, chunks);
         let y_4bit_chunks = builder_ref.add_split_node(y_word, chunks);
 
-        let mut sum_chunks = Vec::<NodeRef>::new();
-        let mut carry: Option<NodeRef> = None;
+        let mut sum_chunks = Vec::<NodeRef<F>>::new();
+        let mut carry: Option<NodeRef<F>> = None;
 
         x_4bit_chunks
             .into_iter()
@@ -174,12 +176,12 @@ where
         let final_carry = carry.map(|c| c.expr()).unwrap();
 
         let final_carry_is_one_or_zero = builder_ref
-            .add_sector(final_carry.clone() * (ExprBuilder::constant(F::ONE) - final_carry));
+            .add_sector(final_carry.clone() * (AbstractExpression::constant(F::ONE) - final_carry));
 
         builder_ref.set_output(&final_carry_is_one_or_zero);
 
         Self {
-            sum_node: builder_ref.add_sector(ExprBuilder::selectors(final_sum)),
+            sum_node: builder_ref.add_sector(AbstractExpression::binary_tree_selector(final_sum)),
             _phantom: Default::default(),
         }
     }

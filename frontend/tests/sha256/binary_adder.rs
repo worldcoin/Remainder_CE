@@ -1,13 +1,12 @@
+use frontend::abstract_expr::AbstractExpression;
+use frontend::components::binary_operations::binary_adder::BinaryAdder;
+use frontend::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility};
 use itertools::Itertools;
 use remainder::provable_circuit::ProvableCircuit;
 use remainder::{
-    binary_operations::binary_adder::BinaryAdder,
-    expression::abstract_expr::ExprBuilder,
-    layouter::builder::{Circuit, CircuitBuilder, LayerKind, ProvableCircuit},
-    mle::evals::MultilinearExtension,
-    prover::helpers::test_circuit_with_memory_optimized_config,
+    mle::evals::MultilinearExtension, prover::helpers::test_circuit_with_memory_optimized_config,
 };
-use remainder_shared_types::Fr;
+use shared_types::Fr;
 
 use tracing::Level;
 use tracing_subscriber::fmt;
@@ -16,7 +15,8 @@ use tracing_subscriber::{self};
 fn build_circuit() -> Circuit<Fr> {
     let mut builder = CircuitBuilder::new();
 
-    let input_layer = builder.add_input_layer(LayerKind::Public);
+    let input_layer =
+        builder.add_input_layer("binary_adder_circuit_input_layer", LayerVisibility::Public);
 
     // Create a circuit for adding two `2^log_bit_width = 8`-bit binary unsigned integers.
     let log_bit_width = 3;
@@ -34,7 +34,7 @@ fn build_circuit() -> Circuit<Fr> {
     let all_inputs = builder.add_input_shred("All Inputs", 2 + log_bit_width, &input_layer);
 
     let b = &all_inputs;
-    let b_sq = ExprBuilder::products(vec![b.id(), b.id()]);
+    let b_sq = AbstractExpression::products(vec![b.id(), b.id()]);
     let b = b.expr();
 
     // Check that all input bits are binary.

@@ -1,12 +1,14 @@
+use frontend::{
+    abstract_expr::AbstractExpression,
+    components::binary_operations::rotate_bits::RotateNode,
+    layouter::builder::{Circuit, CircuitBuilder, LayerVisibility},
+};
 use itertools::Itertools;
 use remainder::{
-    binary_operations::rotate_bits::RotateNode,
-    expression::abstract_expr::ExprBuilder,
-    layouter::builder::{Circuit, CircuitBuilder, LayerKind, ProvableCircuit},
-    mle::evals::MultilinearExtension,
+    mle::evals::MultilinearExtension, provable_circuit::ProvableCircuit,
     prover::helpers::test_circuit_with_memory_optimized_config,
 };
-use remainder_shared_types::Fr;
+use shared_types::Fr;
 // use tracing::Level;
 // use tracing_subscriber::fmt;
 // use tracing_subscriber::{self};
@@ -14,13 +16,14 @@ use remainder_shared_types::Fr;
 fn build_rotate_circuit(arity: usize, rotation_bits: i32) -> Circuit<Fr> {
     let mut builder = CircuitBuilder::new();
 
-    let input_layer = builder.add_input_layer(LayerKind::Public);
+    let input_layer =
+        builder.add_input_layer("rotate_circuit_input_layer", LayerVisibility::Public);
 
     // Keep input and output in the same shred.
     let all_inputs = builder.add_input_shred("All Inputs", 1 + arity, &input_layer);
 
     let b = &all_inputs;
-    let b_sq = ExprBuilder::products(vec![b.id(), b.id()]);
+    let b_sq = AbstractExpression::products(vec![b.id(), b.id()]);
     let b = b.expr();
 
     // Check that all input bits are binary, including the expected output.
