@@ -220,21 +220,21 @@ where
                 ckt_builder,
                 &small_sigma_1_val.get_output(),
                 &w_first,
-                carry_layer.map(InputLayerNodeRef::clone),
+                carry_layer.cloned(),
             );
 
             let sum_b_leaf = Adder::layout_adder_circuit(
                 ckt_builder,
                 &small_sigma_0_val.get_output(),
                 &w_second,
-                carry_layer.map(InputLayerNodeRef::clone),
+                carry_layer.cloned(),
             );
 
             let sum_a_b = Adder::layout_adder_circuit(
                 ckt_builder,
                 &sum_a_leaf.get_output(),
                 &sum_b_leaf.get_output(),
-                carry_layer.map(InputLayerNodeRef::clone),
+                carry_layer.cloned(),
             );
 
             let current_state = MessageScheduleState {
@@ -473,7 +473,7 @@ where
                 ckt_builder,
                 &d,
                 &t1.last().unwrap().get_output(),
-                carry_layer.map(InputLayerNodeRef::clone),
+                carry_layer.cloned(),
             );
             e = e_sum.get_output();
             d = ckt_builder.add_sector(c.expr());
@@ -483,7 +483,7 @@ where
                 ckt_builder,
                 &t1.last().unwrap().get_output(),
                 &t2.get_output(),
-                carry_layer.map(InputLayerNodeRef::clone),
+                carry_layer.cloned(),
             );
             a = a_sum.get_output();
             round_carries.push(CompressionFnRoundCarries {
@@ -499,14 +499,7 @@ where
         let output = input_schedule
             .iter()
             .zip(intermediates.iter())
-            .map(|(h, x)| {
-                Adder::layout_adder_circuit(
-                    ckt_builder,
-                    h,
-                    x,
-                    carry_layer.map(InputLayerNodeRef::clone),
-                )
-            })
+            .map(|(h, x)| Adder::layout_adder_circuit(ckt_builder, h, x, carry_layer.cloned()))
             .collect();
 
         Self {
@@ -516,6 +509,7 @@ where
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn compute_t1(
         ckt_builder: &mut CircuitBuilder<F>,
         carry_layer: Option<&InputLayerNodeRef<F>>,
@@ -541,7 +535,7 @@ where
             ckt_builder,
             h,
             &t1_sigma_1.get_output(),
-            carry_layer.map(InputLayerNodeRef::clone),
+            carry_layer.cloned(),
         );
 
         // ch(e,f,g) + K_t
@@ -549,7 +543,7 @@ where
             ckt_builder,
             &t1_ch.get_output(),
             k_t,
-            carry_layer.map(InputLayerNodeRef::clone),
+            carry_layer.cloned(),
         );
 
         // h1 + Sigma1(e) + ch(e,f,g) + K_t
@@ -557,16 +551,12 @@ where
             ckt_builder,
             &sum1.get_output(),
             &sum2.get_output(),
-            carry_layer.map(InputLayerNodeRef::clone),
+            carry_layer.cloned(),
         );
 
         // h1 + Sigma1(e) + ch(e,f,g) + K_t + W_t
-        let sum4 = Adder::layout_adder_circuit(
-            ckt_builder,
-            &sum3.get_output(),
-            w_t,
-            carry_layer.map(InputLayerNodeRef::clone),
-        );
+        let sum4 =
+            Adder::layout_adder_circuit(ckt_builder, &sum3.get_output(), w_t, carry_layer.cloned());
 
         [sum1, sum2, sum3, sum4]
     }
@@ -584,7 +574,7 @@ where
             ckt_builder,
             &s1.get_output(),
             &m1.get_output(),
-            carry_layer.map(InputLayerNodeRef::clone),
+            carry_layer.cloned(),
         )
     }
 
@@ -630,11 +620,10 @@ where
         //     &input_words,
         // );
 
-        for t in 0..64 {
-            let w_t = message_words[t];
+        for (t, w_t) in message_words.iter().enumerate().take(64) {
             let k_t = KeySchedule::<F>::ROUND_KEYS[t];
             let [sum1, sum2, sum3, sum4] = &self.round_carries[t].t1_carries;
-            let t1 = Self::populate_t1(circuit, sum1, sum2, sum3, sum4, e, f, g, h, w_t, k_t);
+            let t1 = Self::populate_t1(circuit, sum1, sum2, sum3, sum4, e, f, g, h, *w_t, k_t);
             let t2 = Self::populate_t2(circuit, &self.round_carries[t].t2_carries, a, b, c);
             h = g;
             g = f;
@@ -666,6 +655,7 @@ where
             .collect()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn populate_t1(
         circuit: &mut Circuit<F>,
         sum1: &Adder,
@@ -692,9 +682,7 @@ where
         let sum3 = sum3.perform_addition(circuit, sum1, sum2);
 
         // h1 + Sigma1(e) + ch(e,f,g) + K_t + W_t
-        let sum4 = sum4.perform_addition(circuit, sum3, w_t);
-
-        sum4
+        sum4.perform_addition(circuit, sum3, w_t)
     }
 
     fn populate_t2(circuit: &mut Circuit<F>, sum1: &Adder, a: u32, b: u32, c: u32) -> u32 {
@@ -715,9 +703,9 @@ fn sha256_padded_input(mut input_data: Vec<u8>) -> Vec<u32> {
     let pad_bits = 448 - ((input_len_bits + 1) % 512);
     let zero_bytes = pad_bits / 8;
     input_data.push(0x80);
-    input_data.extend(std::iter::repeat(0_u8).take(zero_bytes));
+    input_data.extend(std::iter::repeat_n(0_u8, zero_bytes));
     input_data.extend_from_slice(input_len_bits.to_be_bytes().as_slice());
-    assert!(input_data.len() % 64 == 0);
+    assert!(input_data.len().is_multiple_of(64));
 
     input_data
         .as_slice()
@@ -810,8 +798,7 @@ where
     pub fn padded_data_chunks(&self) -> Vec<u32> {
         self.round_states
             .iter()
-            .map(|st| st.input_chunks.clone())
-            .flatten()
+            .flat_map(|st| st.input_chunks.clone())
             .collect()
     }
 
@@ -844,8 +831,7 @@ where
         let all_bits = self
             .round_states
             .iter()
-            .map(|st| st.input_chunks.iter().map(|v| bit_decompose_msb_first(*v)))
-            .flatten()
+            .flat_map(|st| st.input_chunks.iter().map(|v| bit_decompose_msb_first(*v)))
             .flatten()
             .map(u64::from)
             .map(F::from)

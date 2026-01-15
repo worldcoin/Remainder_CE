@@ -32,10 +32,7 @@ fn pp_adder_4_bit<F: Field>(
     x_val: NodeRef<F>,
     y_val: NodeRef<F>,
     carry_in: Option<NodeRef<F>>,
-) -> (NodeRef<F> /* sum */, NodeRef<F> /*carry  */)
-where
-    F: Field,
-{
+) -> (NodeRef<F> /* sum */, NodeRef<F> /*carry  */) {
     debug_assert!(x_val.get_num_vars() == 2);
     debug_assert!(y_val.get_num_vars() == 2);
     debug_assert!(carry_in
@@ -143,7 +140,7 @@ where
         _carry_layer: Option<InputLayerNodeRef<F>>,
     ) -> Self {
         assert!(
-            BITWIDTH % 8 == 0,
+            BITWIDTH.is_multiple_of(8),
             "Only bitwidths of multiple of 8 are supported"
         );
 
