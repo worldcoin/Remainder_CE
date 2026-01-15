@@ -100,7 +100,7 @@ where
 
 /// Brent-Kung Adder
 #[derive(Debug, Clone)]
-pub struct BKAdder<const BitWidth: usize, F: Field> {
+pub struct BKAdder<const BITWIDTH: usize, F: Field> {
     sum_node: NodeRef<F>,
     _phantom: PhantomData<F>,
 }
