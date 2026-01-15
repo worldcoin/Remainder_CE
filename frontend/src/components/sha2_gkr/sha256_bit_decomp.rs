@@ -19,16 +19,16 @@ pub const WORD_SIZE: usize = 32;
 
 /// See https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf for details about constants
 /// Sigma0 of SHA-256
-pub type Sigma0<F: Field> = Sigma<F, WORD_SIZE, 2, 13, 22>;
+pub type Sigma0<F> = Sigma<F, WORD_SIZE, 2, 13, 22>;
 
 /// Sigma0 of SHA-256
-pub type Sigma1<F: Field> = Sigma<F, WORD_SIZE, 6, 11, 25>;
+pub type Sigma1<F> = Sigma<F, WORD_SIZE, 6, 11, 25>;
 
 /// Little Sigma0
-pub type SmallSigma0<F: Field> = SmallSigma<F, WORD_SIZE, 7, 18, 3>;
+pub type SmallSigma0<F> = SmallSigma<F, WORD_SIZE, 7, 18, 3>;
 
 /// Little Sigma1
-pub type SmallSigma1<F: Field> = SmallSigma<F, WORD_SIZE, 17, 19, 10>;
+pub type SmallSigma1<F> = SmallSigma<F, WORD_SIZE, 17, 19, 10>;
 
 /// Specific adder for SHA256
 pub type Sha256Adder<F> = CommittedCarryAdder<F>;
