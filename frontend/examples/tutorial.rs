@@ -73,4 +73,6 @@ fn main() {
         &proof_config,
         proof_as_transcript,
     );
+
+    println!("All done! GKR proof generated + verified.");
 }
