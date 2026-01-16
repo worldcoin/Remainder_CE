@@ -6,8 +6,7 @@ use thiserror::Error;
 
 pub mod vandermonde;
 
-/// Returns `true` if the parallel feature is on for the [remainder_hyrax]
-/// crate.
+/// Returns `true` if the parallel feature is on for the this crate.
 pub fn is_parallel_feature_on() -> bool {
     #[cfg(feature = "parallel")]
     return true;
@@ -16,8 +15,7 @@ pub fn is_parallel_feature_on() -> bool {
     return false;
 }
 
-/// Returns `true` if the parallel feature is on for the [remainder_prover]
-/// crate.
+/// Returns `true` if the parallel feature is on for the [remainder] crate.
 pub fn is_remainder_parallel_feature_on() -> bool {
     remainder::utils::is_parallel_feature_on()
 }

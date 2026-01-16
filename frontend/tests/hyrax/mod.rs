@@ -1,13 +1,11 @@
-use std::collections::HashMap;
-use std::rc::Weak;
-
-use crate::gkr::hyrax_input_layer::HyraxInputLayerProof;
-use crate::gkr::hyrax_layer::HyraxClaim;
-
-use crate::gkr::{verify_hyrax_proof, HyraxProof};
-use crate::utils::vandermonde::VandermondeInverse;
-
 use ark_std::test_rng;
+use frontend::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility};
+use hyrax::gkr::input_layer::{
+    commit_to_input_values, HyraxInputLayerDescription, HyraxInputLayerProof,
+};
+use hyrax::gkr::layer::{HyraxClaim, HyraxLayerProof};
+use hyrax::gkr::verify_hyrax_proof;
+use hyrax::utils::vandermonde::VandermondeInverse;
 use itertools::{repeat_n, Itertools};
 use rand::RngCore;
 use remainder::expression::circuit_expr::ExprDescription;
@@ -19,13 +17,10 @@ use remainder::layer::layer_enum::{LayerDescriptionEnum, LayerEnum};
 use remainder::layer::matmult::{MatMult, MatMultLayerDescription, Matrix, MatrixDescription};
 use remainder::layer::regular_layer::{RegularLayer, RegularLayerDescription};
 use remainder::layer::{LayerDescription, LayerId};
-use remainder::layouter::builder::CircuitBuilder;
-use remainder::layouter::nodes::{CircuitNode, NodeId};
 use remainder::mle::dense::DenseMle;
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
 use remainder::mle::mle_description::MleDescription;
 use remainder::mle::{Mle, MleIndex};
-use remainder::prover::GKRCircuitDescription;
 use remainder::utils::mle::get_random_mle;
 use shared_types::config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig};
 use shared_types::transcript::ec_transcript::{ECTranscript, ECTranscriptTrait};
@@ -39,9 +34,6 @@ use shared_types::{
     Field,
 };
 use shared_types::{perform_function_under_verifier_config, Fr};
-
-use super::hyrax_input_layer::{commit_to_input_values, HyraxInputLayerDescription};
-use super::hyrax_layer::HyraxLayerProof;
 type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
 
@@ -1933,8 +1925,13 @@ fn hyrax_input_layer_proof_test() {
     );
 
     let input_layer_desc = HyraxInputLayerDescription::new(layer_id, input_mle.num_vars());
-    let mut prover_commitment =
-        commit_to_input_values(&input_layer_desc, &input_mle, &committer, blinding_rng);
+    let mut prover_commitment = commit_to_input_values(
+        input_layer_desc.num_vars,
+        input_layer_desc.log_num_cols,
+        &input_mle,
+        &committer,
+        blinding_rng,
+    );
 
     transcript.append_ec_points("Hyrax PCS commit", &prover_commitment.commitment);
 
@@ -1986,11 +1983,12 @@ fn small_regular_circuit_hyrax_input_layer_test() {
         None,
     );
     // INPUT LAYER CONSTRUCTION
-    let input_multilinear_extension: MultilinearExtension<Scalar> = vec![8797, 7308, 94, 67887].into();
+    let input_multilinear_extension: MultilinearExtension<Scalar> =
+        vec![8797, 7308, 94, 67887].into();
 
     let mut builder = CircuitBuilder::<Fr>::new();
 
-    let input_layer = builder.add_input_layer("Input Layer");
+    let input_layer = builder.add_input_layer("Input Layer", LayerVisibility::Committed);
     let input_shred = builder.add_input_shred(
         "Input",
         input_multilinear_extension.num_vars(),
@@ -1998,32 +1996,17 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     );
 
     // Middle layer 1: square the input.
-    let squaring_sector = builder.add_sector(&[&input_shred], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        mle * mle
-    });
+    let squaring_sector = builder.add_sector(input_shred.expr() * input_shred.expr());
 
     // Middle layer 2: subtract middle layer 1 from itself.
-    let subtract_sector = builder.add_sector(&[&squaring_sector], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        mle.expr() - mle.expr()
-    });
+    let subtract_sector = builder.add_sector(squaring_sector.expr() - squaring_sector.expr());
 
     // Make this an output node.
     let _output_node = builder.set_output(&subtract_sector);
 
-    let input_shred_id = builder.get_id(&input_shred);
-
-    let (circuit_desc, input_layer_id_to_input_shred_ids, circuit_description_map) =
-        builder.build_with_layer_combination().unwrap();
-
-    let mut input_nodes = HashMap::new();
-    input_nodes.insert(input_shred_id, input_multilinear_extension);
-    let inputs = circuit_description_map
-        .convert_input_shreds_to_input_layers(&input_layer_id_to_input_shred_ids, &input_nodes)
-        .unwrap();
+    // circuit_desc, input_layer_id_to_input_shred_ids, circuit_description_map
+    let mut small_circuit = builder.build_with_layer_combination().unwrap();
+    small_circuit.set_input("Input", input_multilinear_extension);
 
     // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
     let gkr_circuit_prover_config =
@@ -2031,13 +2014,12 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     let gkr_circuit_verifier_config =
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
-    // --- Compute actual Hyrax proof ---
+    // Compute actual Hyrax proof
+    let mut hyrax_provable_circuit = small_circuit.gen_hyrax_provable_circuit().unwrap();
+    let hyrax_verifiable_circuit = hyrax_provable_circuit._gen_hyrax_verifiable_circuit(); // For testing only
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        |w, x, y, z| hyrax_provable_circuit.prove(w, x, y, z), // Thanks Chat!
         &gkr_circuit_prover_config,
-        &inputs,
-        &HashMap::new(),
-        &circuit_desc,
         &committer,
         &mut blinding_rng,
         converter,
@@ -2051,81 +2033,39 @@ fn small_regular_circuit_hyrax_input_layer_test() {
         verify_hyrax_proof,
         &gkr_circuit_verifier_config,
         &proof,
-        &HashMap::new(),
-        &circuit_desc,
+        &hyrax_verifiable_circuit,
         &committer,
         &mut transcript,
         &proof_config
     );
 }
 
-/// Struct which allows for easy "semantic" feeding of inputs into the circuit proving process.
-struct SmallRegularCircuitTestInputs<F: Field> {
-    input_mle: MultilinearExtension<F>,
-}
-
-/// Creates the [GKRCircuitDescription] and an associated helper input
-/// function for ease of proving.
-fn build_small_regular_test_circuit<F: Field>(
-    num_free_vars: usize,
-) -> (
-    GKRCircuitDescription<F>,
-    impl Fn(SmallRegularCircuitTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
-) {
+/// Creates the [Circuit<F>] for ease of re-use.
+fn build_small_regular_test_circuit<F: Field>(num_free_vars: usize) -> Circuit<F> {
     let mut builder = CircuitBuilder::new();
 
     // All inputs are public inputs
-    let public_input_layer_node = builder.add_input_layer("Input Layer");
+    let public_input_layer_node = builder.add_input_layer("Input Layer", LayerVisibility::Public);
 
     // Circuit inputs
     let input_mle_shred =
         builder.add_input_shred("Input MLE", num_free_vars, &public_input_layer_node);
 
-    // Save IDs to be used later
-    let input_mle_id = builder.get_id(&input_mle_shred);
-
     // Create the circuit components
     // Middle layer 1: square the input.
-    let squaring_sector = builder.add_sector(&[&input_mle_shred], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        mle * mle
-    });
+    let squaring_sector = builder.add_sector(input_mle_shred.expr() * input_mle_shred.expr());
 
     // Middle layer 2: subtract middle layer 1 from itself.
-    let subtract_sector = builder.add_sector(&[&squaring_sector], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        mle.expr() - mle.expr()
-    });
+    let subtract_sector = builder.add_sector(squaring_sector.expr() - squaring_sector.expr());
 
     // Make this an output node.
     let _output_node = builder.set_output(&subtract_sector);
 
-    let (circuit_description, input_layer_id_to_input_shred_ids, circuit_description_map) =
-        builder.build_with_layer_combination().unwrap();
-
-    // Write closure which allows easy usage of circuit inputs
-    let circuit_data_fn = move |test_inputs: SmallRegularCircuitTestInputs<F>| {
-        let input_shred_id_to_data_mapping: HashMap<NodeId, MultilinearExtension<F>> =
-            vec![(input_mle_id, test_inputs.input_mle)]
-                .into_iter()
-                .collect();
-        circuit_description_map
-            .convert_input_shreds_to_input_layers(
-                &input_layer_id_to_input_shred_ids,
-                &input_shred_id_to_data_mapping,
-            )
-            .unwrap()
-    };
-
-    (circuit_description, circuit_data_fn)
+    builder.build_with_layer_combination().unwrap()
 }
 
 #[test]
 fn small_regular_circuit_public_input_layer_test() {
-    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscript::new("modulus modulus modulus modulus modulus");
     let mut blinding_rng = rand::thread_rng();
     let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
@@ -2141,11 +2081,8 @@ fn small_regular_circuit_public_input_layer_test() {
     let input_mle = get_random_mle(NUM_FREE_VARS, &mut rng).mle;
 
     // Create circuit description + semantic input mapping
-    let (circuit_desc, input_builder) = build_small_regular_test_circuit(NUM_FREE_VARS);
-    let inputs = input_builder(SmallRegularCircuitTestInputs { input_mle });
-
-    // Create mapping of Hyrax input layers + prove
-    let prover_hyrax_input_layers = HashMap::new();
+    let mut circuit_desc = build_small_regular_test_circuit(NUM_FREE_VARS);
+    circuit_desc.set_input("Input MLE", input_mle);
 
     // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
     let gkr_circuit_prover_config =
@@ -2154,40 +2091,33 @@ fn small_regular_circuit_public_input_layer_test() {
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
     // --- Compute actual Hyrax proof ---
+    let mut hyrax_provable_circuit = circuit_desc.gen_hyrax_provable_circuit().unwrap();
+    let hyrax_verifiable_circuit = hyrax_provable_circuit._gen_hyrax_verifiable_circuit(); // Testing only
+    let mut prover_transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        |w, x, y, z| hyrax_provable_circuit.prove(w, x, y, z), // Thanks Chat!
         &gkr_circuit_prover_config,
-        &inputs,
-        &prover_hyrax_input_layers,
-        &circuit_desc,
         &committer,
         &mut blinding_rng,
         converter,
-        &mut transcript
+        &mut prover_transcript
     );
 
     // Create new transcript for holistic verifier to follow along with
-    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+    let mut verifier_transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-
-    // Create mapping of Hyrax input layers + verify
-    let verifier_hyrax_input_layers = HashMap::new();
 
     perform_function_under_verifier_config!(
         verify_hyrax_proof,
         &gkr_circuit_verifier_config,
         &proof,
-        &verifier_hyrax_input_layers,
-        &circuit_desc,
+        &hyrax_verifiable_circuit,
         &committer,
-        &mut transcript,
+        &mut verifier_transcript,
         &proof_config
     );
-}
-
-/// Struct which allows for easy "semantic" feeding of inputs into the circuit proving process.
-struct MediumRegularCircuitTestInputs<F: Field> {
-    input_mle: MultilinearExtension<F>,
 }
 
 /// Creates the [GKRCircuitDescription] and an associated helper input
@@ -2197,72 +2127,37 @@ struct MediumRegularCircuitTestInputs<F: Field> {
 /// to be used later for committed input layer specification if needed.
 fn build_medium_regular_test_circuit<F: Field>(
     num_free_vars: usize,
-) -> (
-    GKRCircuitDescription<F>,
-    impl Fn(MediumRegularCircuitTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
-    LayerId,
-) {
+    input_layer_vis: LayerVisibility,
+) -> Circuit<F> {
     let mut builder = CircuitBuilder::<F>::new();
 
     // There is only one input layer; it can be public or committed (for the purposes of testing)
-    let input_layer_node = builder.add_input_layer("Input Layer");
+    let input_layer_node = builder.add_input_layer("Input Layer", input_layer_vis);
 
     // Circuit inputs
     let input_mle_shred = builder.add_input_shred("Input MLE", num_free_vars, &input_layer_node);
 
-    // Save IDs to be used later
-    let input_mle_id = builder.get_id(&input_mle_shred);
-    let input_layer_id = builder.get_input_layer_id(&input_layer_node);
-
     // Create the circuit components
     // Middle layer 1: square the input.
-    let squaring_sector = builder.add_sector(&[&input_mle_shred], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        mle * mle
-    });
+    let squaring_sector = builder.add_sector(input_mle_shred.expr() * input_mle_shred.expr());
 
     // Middle layer 2: Create a layer builder which is sel(square_output + square_output, square_output)
-    let selector_squaring_sector = builder.add_sector(&[&squaring_sector], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        (mle.expr() + mle.expr()).select(mle.expr())
-    });
+    let selector_squaring_sector = builder.add_sector(
+        (squaring_sector.expr() + squaring_sector.expr()).select(squaring_sector.expr()),
+    );
 
     // Middle layer 3: subtract middle layer 2 from itself.
-    let subtract_sector = builder.add_sector(&[&selector_squaring_sector], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        mle.expr() - mle.expr()
-    });
+    let subtract_sector =
+        builder.add_sector(selector_squaring_sector.expr() - selector_squaring_sector.expr());
 
     // Make this an output node.
     let _output_node = builder.set_output(&subtract_sector);
 
-    let (circuit_description, input_layer_id_to_input_shred_ids, circuit_description_map) =
-        builder.build_with_layer_combination().unwrap();
-
-    // Write closure which allows easy usage of circuit inputs
-    let circuit_data_fn = move |test_inputs: MediumRegularCircuitTestInputs<F>| {
-        let input_shred_id_to_data_mapping: HashMap<NodeId, MultilinearExtension<F>> =
-            vec![(input_mle_id, test_inputs.input_mle)]
-                .into_iter()
-                .collect();
-        circuit_description_map
-            .convert_input_shreds_to_input_layers(
-                &input_layer_id_to_input_shred_ids,
-                &input_shred_id_to_data_mapping,
-            )
-            .unwrap()
-    };
-
-    (circuit_description, circuit_data_fn, input_layer_id)
+    builder.build().unwrap()
 }
 
 #[test]
 fn medium_regular_circuit_hyrax_input_layer_test() {
-    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscript::new("modulus modulus modulus modulus modulus");
     let mut blinding_rng = rand::thread_rng();
     let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
@@ -2278,11 +2173,9 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
     let input_mle = get_random_mle(NUM_FREE_VARS, &mut rng).mle;
 
     // Create circuit description + semantic input mapping
-    let (circuit_desc, input_builder, _) = build_medium_regular_test_circuit(NUM_FREE_VARS);
-    let inputs = input_builder(MediumRegularCircuitTestInputs { input_mle });
-
-    // Create mapping of Hyrax input layers + prove
-    let prover_hyrax_input_layers = HashMap::new();
+    let mut circuit_desc =
+        build_medium_regular_test_circuit(NUM_FREE_VARS, LayerVisibility::Committed);
+    circuit_desc.set_input("Input MLE", input_mle);
 
     // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
     let gkr_circuit_prover_config =
@@ -2291,41 +2184,37 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
     // --- Compute actual Hyrax proof ---
+    let mut hyrax_provable_circuit = circuit_desc.gen_hyrax_provable_circuit().unwrap();
+    let hyrax_verifiable_circuit = hyrax_provable_circuit._gen_hyrax_verifiable_circuit(); // Testing only
+    let mut prover_transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        |w, x, y, z| hyrax_provable_circuit.prove(w, x, y, z), // Thanks Chat!
         &gkr_circuit_prover_config,
-        &inputs,
-        &prover_hyrax_input_layers,
-        &circuit_desc,
         &committer,
         &mut blinding_rng,
         converter,
-        &mut transcript
+        &mut prover_transcript
     );
 
     // Create new transcript for holistic verifier to follow along with
-    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+    let mut verifier_transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-
-    // Create mapping of Hyrax input layers + verify
-    let verifier_hyrax_input_layers = HashMap::new();
 
     perform_function_under_verifier_config!(
         verify_hyrax_proof,
         &gkr_circuit_verifier_config,
         &proof,
-        &verifier_hyrax_input_layers,
-        &circuit_desc,
+        &hyrax_verifiable_circuit,
         &committer,
-        &mut transcript,
+        &mut verifier_transcript,
         &proof_config
     );
 }
 
 #[test]
 fn medium_regular_circuit_public_input_layer_test() {
-    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscript::new("modulus modulus modulus modulus modulus");
     let mut blinding_rng = rand::thread_rng();
     let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
@@ -2341,18 +2230,9 @@ fn medium_regular_circuit_public_input_layer_test() {
     let input_mle = get_random_mle(NUM_FREE_VARS, &mut rng).mle;
 
     // Create circuit description + semantic input mapping
-    let (circuit_desc, input_builder, input_layer_id) =
-        build_medium_regular_test_circuit(NUM_FREE_VARS);
-    let inputs = input_builder(MediumRegularCircuitTestInputs { input_mle });
-
-    // Create mapping of Hyrax input layers + prove
-    let hyrax_input_layer_desc_and_precommit = (
-        HyraxInputLayerDescription::new(input_layer_id, NUM_FREE_VARS),
-        None,
-    );
-    let prover_hyrax_input_layers = vec![(input_layer_id, hyrax_input_layer_desc_and_precommit)]
-        .into_iter()
-        .collect();
+    let mut circuit_desc =
+        build_medium_regular_test_circuit(NUM_FREE_VARS, LayerVisibility::Public);
+    circuit_desc.set_input("Input MLE", input_mle);
 
     // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
     let gkr_circuit_prover_config =
@@ -2361,110 +2241,68 @@ fn medium_regular_circuit_public_input_layer_test() {
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
     // --- Compute actual Hyrax proof ---
+    let mut hyrax_provable_circuit = circuit_desc.gen_hyrax_provable_circuit().unwrap();
+    let hyrax_verifiable_circuit = hyrax_provable_circuit._gen_hyrax_verifiable_circuit(); // Testing only
+    let mut prover_transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        |w, x, y, z| hyrax_provable_circuit.prove(w, x, y, z), // Thanks Chat!
         &gkr_circuit_prover_config,
-        &inputs,
-        &prover_hyrax_input_layers,
-        &circuit_desc,
         &committer,
         &mut blinding_rng,
         converter,
-        &mut transcript
+        &mut prover_transcript
     );
 
     // Create new transcript for holistic verifier to follow along with
-    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+    let mut verifier_transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-
-    // Create mapping of Hyrax input layers + verify
-    let verifier_hyrax_input_layers = prover_hyrax_input_layers
-        .into_iter()
-        .map(|(layer_id, (input_layer_desc, _))| (layer_id, input_layer_desc))
-        .collect();
 
     perform_function_under_verifier_config!(
         verify_hyrax_proof,
         &gkr_circuit_verifier_config,
         &proof,
-        &verifier_hyrax_input_layers,
-        &circuit_desc,
+        &hyrax_verifiable_circuit,
         &committer,
-        &mut transcript,
+        &mut verifier_transcript,
         &proof_config
     );
 }
 
-/// Struct which allows for easy "semantic" feeding of inputs into the circuit proving process.
-struct IdentityRegularCircuitTestInputs<F: Field> {
-    input_mle: MultilinearExtension<F>,
-}
-
 /// Creates the [GKRCircuitDescription] and an associated helper input
 /// function for ease of proving.
-fn buld_identity_regular_test_circuit<F: Field>(
+fn build_identity_regular_test_circuit<F: Field>(
     num_free_vars: usize,
-) -> (
-    GKRCircuitDescription<F>,
-    impl Fn(IdentityRegularCircuitTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
-) {
+    input_layer_vis: LayerVisibility,
+) -> Circuit<F> {
     let mut builder = CircuitBuilder::<F>::new();
 
     // There is only one input layer; it can be public or committed (for the purposes of testing)
-    let input_layer_node = builder.add_input_layer("Input Layer");
+    let input_layer_node = builder.add_input_layer("Input Layer", input_layer_vis);
 
     // Circuit inputs
     let input_mle_shred = builder.add_input_shred("Input MLE", num_free_vars, &input_layer_node);
 
-    // Save IDs to be used later
-    let input_mle_id = builder.get_id(&input_mle_shred);
-
     // Create the circuit components
     // Middle layer 1: square the input.
-    let squaring_sector = builder.add_sector(&[&input_mle_shred], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        mle * mle
-    });
+    let squaring_sector = builder.add_sector(input_mle_shred.expr() * input_mle_shred.expr());
 
     // Create identity gate layer
     let nonzero_gate_wiring = vec![(0, 2), (1, 1)];
     let id_layer = builder.add_identity_gate_node(&squaring_sector, nonzero_gate_wiring, 1, None);
 
     // Middle layer 2: subtract middle layer 1 from itself.
-    let subtract_sector = builder.add_sector(&[&id_layer], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        mle.expr() - mle.expr()
-    });
+    let subtract_sector = builder.add_sector(id_layer.expr() - id_layer.expr());
 
     // Make this an output node.
     let _output_node = builder.set_output(&subtract_sector);
 
-    let (circuit_description, input_layer_id_to_input_shred_ids, circuit_description_map) =
-        builder.build_with_layer_combination().unwrap();
-
-    // Write closure which allows easy usage of circuit inputs
-    let circuit_data_fn = move |test_inputs: IdentityRegularCircuitTestInputs<F>| {
-        let input_shred_id_to_data_mapping: HashMap<NodeId, MultilinearExtension<F>> =
-            vec![(input_mle_id, test_inputs.input_mle)]
-                .into_iter()
-                .collect();
-        circuit_description_map
-            .convert_input_shreds_to_input_layers(
-                &input_layer_id_to_input_shred_ids,
-                &input_shred_id_to_data_mapping,
-            )
-            .unwrap()
-    };
-
-    (circuit_description, circuit_data_fn)
+    builder.build().unwrap()
 }
 
 #[test]
 fn identity_public_input_layer_test() {
-    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscript::new("modulus modulus modulus modulus modulus");
     let mut blinding_rng = rand::thread_rng();
     let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 10;
@@ -2480,11 +2318,9 @@ fn identity_public_input_layer_test() {
     let input_mle = get_random_mle(NUM_FREE_VARS, &mut rng).mle;
 
     // Create circuit description + semantic input mapping
-    let (circuit_desc, input_builder) = buld_identity_regular_test_circuit(NUM_FREE_VARS);
-    let inputs = input_builder(IdentityRegularCircuitTestInputs { input_mle });
-
-    // Create mapping of Hyrax input layers + prove
-    let prover_hyrax_input_layers = HashMap::new();
+    let mut circuit_desc =
+        build_identity_regular_test_circuit(NUM_FREE_VARS, LayerVisibility::Committed);
+    circuit_desc.set_input("Input MLE", input_mle);
 
     // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
     let gkr_circuit_prover_config =
@@ -2493,40 +2329,33 @@ fn identity_public_input_layer_test() {
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
     // --- Compute actual Hyrax proof ---
+    let mut hyrax_provable_circuit = circuit_desc.gen_hyrax_provable_circuit().unwrap();
+    let hyrax_verifiable_circuit = hyrax_provable_circuit._gen_hyrax_verifiable_circuit(); // Testing only
+    let mut prover_transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        |w, x, y, z| hyrax_provable_circuit.prove(w, x, y, z), // Thanks Chat!
         &gkr_circuit_prover_config,
-        &inputs,
-        &prover_hyrax_input_layers,
-        &circuit_desc,
         &committer,
         &mut blinding_rng,
         converter,
-        &mut transcript
+        &mut prover_transcript
     );
 
     // Create new transcript for holistic verifier to follow along with
-    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+    let mut verifier_transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-
-    // Create mapping of Hyrax input layers + verify
-    let verifier_hyrax_input_layers = HashMap::new();
 
     perform_function_under_verifier_config!(
         verify_hyrax_proof,
         &gkr_circuit_verifier_config,
         &proof,
-        &verifier_hyrax_input_layers,
-        &circuit_desc,
+        &hyrax_verifiable_circuit,
         &committer,
-        &mut transcript,
+        &mut verifier_transcript,
         &proof_config
     );
-}
-
-/// Struct which allows for easy "semantic" feeding of inputs into the circuit proving process.
-struct MatmultRegularCircuitTestInputs<F: Field> {
-    input_mle: MultilinearExtension<F>,
 }
 
 /// Creates the [GKRCircuitDescription] and an associated helper input
@@ -2534,21 +2363,16 @@ struct MatmultRegularCircuitTestInputs<F: Field> {
 fn build_matmult_regular_test_circuit<F: Field>(
     num_row_vars: usize,
     num_col_vars: usize,
-) -> (
-    GKRCircuitDescription<F>,
-    impl Fn(MatmultRegularCircuitTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
-) {
+    input_layer_vis: LayerVisibility,
+) -> Circuit<F> {
     let mut builder = CircuitBuilder::<F>::new();
 
     // There is only one input layer; it can be public or committed (for the purposes of testing)
-    let input_layer_node = builder.add_input_layer("Input Layer");
+    let input_layer_node = builder.add_input_layer("Input Layer", input_layer_vis);
 
     // Circuit inputs
     let input_mle_shred =
         builder.add_input_shred("Input MLE", num_row_vars + num_col_vars, &input_layer_node);
-
-    // Save IDs to be used later
-    let input_mle_id = builder.get_id(&input_mle_shred);
 
     // Create the circuit components
     let matmult_layer = builder.add_matmult_node(
@@ -2559,39 +2383,16 @@ fn build_matmult_regular_test_circuit<F: Field>(
     );
 
     // Middle layer 1: subtract middle layer 0 from itself.
-    let subtract_sector = builder.add_sector(&[&matmult_layer], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        mle.expr() - mle.expr()
-    });
+    let subtract_sector = builder.add_sector(matmult_layer.expr() - matmult_layer.expr());
 
     // Make this an output node.
     let _output_node = builder.set_output(&subtract_sector);
 
-    let (circuit_description, input_layer_id_to_input_shred_ids, circuit_description_map) =
-        builder.build_with_layer_combination().unwrap();
-
-    // Write closure which allows easy usage of circuit inputs
-    let circuit_data_fn = move |test_inputs: MatmultRegularCircuitTestInputs<F>| {
-        let input_shred_id_to_data_mapping: HashMap<NodeId, MultilinearExtension<F>> =
-            vec![(input_mle_id, test_inputs.input_mle)]
-                .into_iter()
-                .collect();
-        circuit_description_map
-            .convert_input_shreds_to_input_layers(
-                &input_layer_id_to_input_shred_ids,
-                &input_shred_id_to_data_mapping,
-            )
-            .unwrap()
-    };
-
-    (circuit_description, circuit_data_fn)
+    builder.build().unwrap()
 }
 
 #[test]
 fn regular_matmult_hyrax_input_layer_test() {
-    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscript::new("modulus modulus modulus modulus modulus");
     let mut blinding_rng = rand::thread_rng();
     let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 12;
@@ -2608,12 +2409,9 @@ fn regular_matmult_hyrax_input_layer_test() {
     let input_mle = get_random_mle(NUM_ROW_VARS + NUM_COL_VARS, &mut rng).mle;
 
     // Create circuit description + semantic input mapping
-    let (circuit_desc, input_builder) =
-        build_matmult_regular_test_circuit(NUM_ROW_VARS, NUM_COL_VARS);
-    let inputs = input_builder(MatmultRegularCircuitTestInputs { input_mle });
-
-    // Create mapping of Hyrax input layers + prove
-    let prover_hyrax_input_layers = HashMap::new();
+    let mut circuit_desc =
+        build_matmult_regular_test_circuit(NUM_ROW_VARS, NUM_COL_VARS, LayerVisibility::Committed);
+    circuit_desc.set_input("Input MLE", input_mle);
 
     // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
     let gkr_circuit_prover_config =
@@ -2622,40 +2420,33 @@ fn regular_matmult_hyrax_input_layer_test() {
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
     // --- Compute actual Hyrax proof ---
+    let mut hyrax_provable_circuit = circuit_desc.gen_hyrax_provable_circuit().unwrap();
+    let hyrax_verifiable_circuit = hyrax_provable_circuit._gen_hyrax_verifiable_circuit(); // Testing only
+    let mut prover_transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        |w, x, y, z| hyrax_provable_circuit.prove(w, x, y, z), // Thanks Chat!
         &gkr_circuit_prover_config,
-        &inputs,
-        &prover_hyrax_input_layers,
-        &circuit_desc,
         &committer,
         &mut blinding_rng,
         converter,
-        &mut transcript
+        &mut prover_transcript
     );
 
     // Create new transcript for holistic verifier to follow along with
-    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+    let mut verifier_transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-
-    // Create mapping of Hyrax input layers + verify
-    let verifier_hyrax_input_layers = HashMap::new();
 
     perform_function_under_verifier_config!(
         verify_hyrax_proof,
         &gkr_circuit_verifier_config,
         &proof,
-        &verifier_hyrax_input_layers,
-        &circuit_desc,
+        &hyrax_verifiable_circuit,
         &committer,
-        &mut transcript,
+        &mut verifier_transcript,
         &proof_config
     );
-}
-
-/// Struct which allows for easy "semantic" feeding of inputs into the circuit proving process.
-struct MatmultIdentityRegularCircuitTestInputs<F: Field> {
-    input_mle: MultilinearExtension<F>,
 }
 
 /// Creates the [GKRCircuitDescription] and an associated helper input
@@ -2663,29 +2454,20 @@ struct MatmultIdentityRegularCircuitTestInputs<F: Field> {
 fn build_identity_matmult_regular_test_circuit<F: Field>(
     num_row_vars: usize,
     num_col_vars: usize,
-) -> (
-    GKRCircuitDescription<F>,
-    impl Fn(MatmultIdentityRegularCircuitTestInputs<F>) -> HashMap<LayerId, MultilinearExtension<F>>,
-) {
+    input_layer_vis: LayerVisibility,
+) -> Circuit<F> {
     let mut builder = CircuitBuilder::<F>::new();
 
     // There is only one input layer; it can be public or committed (for the purposes of testing)
-    let input_layer_node = builder.add_input_layer("Input Layer");
+    let input_layer_node = builder.add_input_layer("Input Layer", input_layer_vis);
 
     // Circuit inputs
     let input_mle_shred =
         builder.add_input_shred("Input MLE", num_row_vars + num_col_vars, &input_layer_node);
 
-    // Save IDs to be used later
-    let input_mle_id = builder.get_id(&input_mle_shred);
-
     // Create the circuit components
     // Middle layer 1: square the input.
-    let squaring_sector = builder.add_sector(&[&input_mle_shred], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        mle * mle
-    });
+    let squaring_sector = builder.add_sector(input_mle_shred.expr() * input_mle_shred.expr());
 
     // Create identity gate layer A
     let nonzero_gate_wiring_a = vec![(0, 2), (1, 1), (2, 0), (3, 1)];
@@ -2701,39 +2483,16 @@ fn build_identity_matmult_regular_test_circuit<F: Field>(
     let matmult_layer = builder.add_matmult_node(&id_layer_a, (1, 1), &id_layer_b, (1, 1));
 
     // Middle layer 5: subtract middle layer 4 from itself.
-    let subtract_sector = builder.add_sector(&[&matmult_layer], |mle_vec| {
-        assert_eq!(mle_vec.len(), 1);
-        let mle = mle_vec[0];
-        mle.expr() - mle.expr()
-    });
+    let subtract_sector = builder.add_sector(matmult_layer.expr() - matmult_layer.expr());
 
     // Make this an output node.
     let _output_node = builder.set_output(&subtract_sector);
 
-    let (circuit_description, input_layer_id_to_input_shred_ids, circuit_description_map) =
-        builder.build_with_layer_combination().unwrap();
-
-    // Write closure which allows easy usage of circuit inputs
-    let circuit_data_fn = move |test_inputs: MatmultIdentityRegularCircuitTestInputs<F>| {
-        let input_shred_id_to_data_mapping: HashMap<NodeId, MultilinearExtension<F>> =
-            vec![(input_mle_id, test_inputs.input_mle)]
-                .into_iter()
-                .collect();
-        circuit_description_map
-            .convert_input_shreds_to_input_layers(
-                &input_layer_id_to_input_shred_ids,
-                &input_shred_id_to_data_mapping,
-            )
-            .unwrap()
-    };
-
-    (circuit_description, circuit_data_fn)
+    builder.build().unwrap()
 }
 
 #[test]
 fn regular_identity_matmult_public_input_layer_test() {
-    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscript::new("modulus modulus modulus modulus modulus");
     let mut blinding_rng = rand::thread_rng();
     let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     const NUM_GENERATORS: usize = 30;
@@ -2750,12 +2509,12 @@ fn regular_identity_matmult_public_input_layer_test() {
     let input_mle = get_random_mle(NUM_ROW_VARS + NUM_COL_VARS, &mut rng).mle;
 
     // Create circuit description + semantic input mapping
-    let (circuit_desc, input_builder) =
-        build_identity_matmult_regular_test_circuit(NUM_ROW_VARS, NUM_COL_VARS);
-    let inputs = input_builder(MatmultIdentityRegularCircuitTestInputs { input_mle });
-
-    // Create mapping of Hyrax input layers + prove
-    let prover_hyrax_input_layers = HashMap::new();
+    let mut circuit_desc = build_identity_matmult_regular_test_circuit(
+        NUM_ROW_VARS,
+        NUM_COL_VARS,
+        LayerVisibility::Committed,
+    );
+    circuit_desc.set_input("Input MLE", input_mle);
 
     // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
     let gkr_circuit_prover_config =
@@ -2764,33 +2523,31 @@ fn regular_identity_matmult_public_input_layer_test() {
         GKRCircuitVerifierConfig::new_from_prover_config(&gkr_circuit_prover_config, false);
 
     // --- Compute actual Hyrax proof ---
+    let mut hyrax_provable_circuit = circuit_desc.gen_hyrax_provable_circuit().unwrap();
+    let hyrax_verifiable_circuit = hyrax_provable_circuit._gen_hyrax_verifiable_circuit(); // Testing only
+    let mut prover_transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscript::new("modulus modulus modulus modulus modulus");
+
     let (proof, proof_config) = perform_function_under_prover_config!(
-        HyraxProof::prove,
+        |w, x, y, z| hyrax_provable_circuit.prove(w, x, y, z), // Thanks Chat!
         &gkr_circuit_prover_config,
-        &inputs,
-        &prover_hyrax_input_layers,
-        &circuit_desc,
         &committer,
         &mut blinding_rng,
         converter,
-        &mut transcript
+        &mut prover_transcript
     );
 
     // Create new transcript for holistic verifier to follow along with
-    let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
+    let mut verifier_transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
         ECTranscript::new("modulus modulus modulus modulus modulus");
-
-    // Create mapping of Hyrax input layers + verify
-    let verifier_hyrax_input_layers = HashMap::new();
 
     perform_function_under_verifier_config!(
         verify_hyrax_proof,
         &gkr_circuit_verifier_config,
         &proof,
-        &verifier_hyrax_input_layers,
-        &circuit_desc,
+        &hyrax_verifiable_circuit,
         &committer,
-        &mut transcript,
+        &mut verifier_transcript,
         &proof_config
     );
 }

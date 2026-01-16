@@ -35,7 +35,7 @@ pub struct FiatShamirChallengeDescription<F: Field> {
 }
 
 impl<F: Field> FiatShamirChallengeDescription<F> {
-    /// Constructor for the [CircuitFiatShamirChallenge] using the
+    /// Constructor for the [FiatShamirChallengeDescription] using the
     /// number of bits that are in the MLE of the layer.
     pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         Self {
@@ -71,8 +71,10 @@ impl<F: Field> FiatShamirChallengeDescription<F> {
         self.layer_id
     }
 
-    /// Create a [FiatShamirChallenge] from this [CircuitFiatShamirChallenge] and the given values.
-    /// Panics if the length of `values` is not equal to the number of evaluations in the MLE.
+    /// Create a [FiatShamirChallenge] from this
+    /// [FiatShamirChallengeDescription] and the given values.
+    /// Panics if the length of `values` is not equal to the number of
+    /// evaluations in the MLE.
     pub fn instantiate(&self, values: Vec<F>) -> FiatShamirChallenge<F> {
         assert_eq!(values.len(), 1 << self.num_bits);
         FiatShamirChallenge {
