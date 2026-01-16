@@ -1354,7 +1354,7 @@ impl<F: Field> Circuit<F> {
     where
         C: PrimeOrderCurve<Scalar = F>,
     {
-        let public_inputs = self.build_public_input_layer_data(false)?;
+        let public_inputs = self.build_public_input_layer_data(true)?;
 
         debug!("Public inputs available: {:#?}", public_inputs.keys());
         debug!(
