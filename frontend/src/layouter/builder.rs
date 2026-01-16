@@ -5,7 +5,7 @@ use core::fmt;
 use std::{
     collections::{HashMap, HashSet},
     marker::PhantomData,
-    ops::{Add, Mul, Sub},
+    ops::{Add, BitXor, Mul, Sub},
     rc::{Rc, Weak},
 };
 
@@ -82,6 +82,11 @@ impl<F: Field> NodeRef<F> {
     /// Returns the [NodeId] of the node references by [Self].
     pub fn id(&self) -> NodeId {
         self.ptr.upgrade().unwrap().id()
+    }
+
+    /// Returns the number of variables of the MLE of this node.
+    pub fn get_num_vars(&self) -> usize {
+        self.ptr.upgrade().unwrap().get_num_vars()
     }
 }
 
@@ -376,7 +381,6 @@ impl<F: Field> CircuitBuilder<F> {
                 (lookup_intermediate_acc, lookup_output_acc)
             },
         );
-
         output_layers =
             output_nodes
                 .iter()
@@ -1134,7 +1138,6 @@ impl Default for CircuitMap {
 pub struct Circuit<F: Field> {
     circuit_description: GKRCircuitDescription<F>,
     pub circuit_map: CircuitMap,
-
     partial_inputs: HashMap<NodeId, MultilinearExtension<F>>,
 }
 
@@ -1557,3 +1560,21 @@ impl_mul!(InputLayerNodeRef<F>);
 impl_mul!(&InputLayerNodeRef<F>);
 impl_mul!(FSNodeRef<F>);
 impl_mul!(&FSNodeRef<F>);
+
+macro_rules! impl_xor {
+    ($Lhs:ty) => {
+        impl<F: Field, Rhs: Into<AbstractExpression<F>>> BitXor<Rhs> for $Lhs {
+            type Output = AbstractExpression<F>;
+
+            fn bitxor(self, rhs: Rhs) -> Self::Output {
+                self.expr() ^ rhs.into()
+            }
+        }
+    };
+}
+impl_xor!(NodeRef<F>);
+impl_xor!(&NodeRef<F>);
+impl_xor!(InputLayerNodeRef<F>);
+impl_xor!(&InputLayerNodeRef<F>);
+impl_xor!(FSNodeRef<F>);
+impl_xor!(&FSNodeRef<F>);

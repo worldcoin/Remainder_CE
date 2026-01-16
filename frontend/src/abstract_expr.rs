@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     cmp::max,
     collections::HashMap,
-    ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
+    ops::{Add, AddAssign, BitXor, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
 use shared_types::Field;
@@ -376,6 +376,13 @@ impl<F: Field> Neg for AbstractExpression<F> {
     }
 }
 
+impl<F: Field> Neg for &AbstractExpression<F> {
+    type Output = AbstractExpression<F>;
+    fn neg(self) -> Self::Output {
+        AbstractExpression::<F>::negated(self.clone())
+    }
+}
+
 impl<F: Field> From<F> for AbstractExpression<F> {
     fn from(f: F) -> Self {
         AbstractExpression::<F>::constant(f)
@@ -389,6 +396,13 @@ impl<F: Field, Rhs: Into<AbstractExpression<F>>> Add<Rhs> for AbstractExpression
         AbstractExpression::sum(self, rhs.into())
     }
 }
+impl<F: Field, Rhs: Into<AbstractExpression<F>>> Add<Rhs> for &AbstractExpression<F> {
+    type Output = AbstractExpression<F>;
+    fn add(self, rhs: Rhs) -> Self::Output {
+        AbstractExpression::sum(self.clone(), rhs.into())
+    }
+}
+
 impl<F: Field, Rhs: Into<AbstractExpression<F>>> AddAssign<Rhs> for AbstractExpression<F> {
     fn add_assign(&mut self, rhs: Rhs) {
         *self = self.clone() + rhs;
@@ -399,6 +413,12 @@ impl<F: Field, Rhs: Into<AbstractExpression<F>>> Sub<Rhs> for AbstractExpression
     type Output = AbstractExpression<F>;
     fn sub(self, rhs: Rhs) -> Self::Output {
         AbstractExpression::sum(self, rhs.into().neg())
+    }
+}
+impl<F: Field, Rhs: Into<AbstractExpression<F>>> Sub<Rhs> for &AbstractExpression<F> {
+    type Output = AbstractExpression<F>;
+    fn sub(self, rhs: Rhs) -> Self::Output {
+        AbstractExpression::sum(self.clone(), rhs.into().neg())
     }
 }
 impl<F: Field, Rhs: Into<AbstractExpression<F>>> SubAssign<Rhs> for AbstractExpression<F> {
@@ -413,9 +433,36 @@ impl<F: Field, Rhs: Into<AbstractExpression<F>>> Mul<Rhs> for AbstractExpression
         AbstractExpression::mult(self, rhs.into())
     }
 }
+impl<F: Field, Rhs: Into<AbstractExpression<F>>> Mul<Rhs> for &AbstractExpression<F> {
+    type Output = AbstractExpression<F>;
+    fn mul(self, rhs: Rhs) -> Self::Output {
+        AbstractExpression::mult(self.clone(), rhs.into())
+    }
+}
 impl<F: Field, Rhs: Into<AbstractExpression<F>>> MulAssign<Rhs> for AbstractExpression<F> {
     fn mul_assign(&mut self, rhs: Rhs) {
         *self = self.clone() * rhs;
+    }
+}
+
+impl<F: Field, Rhs: Into<AbstractExpression<F>>> BitXor<Rhs> for AbstractExpression<F> {
+    type Output = AbstractExpression<F>;
+    fn bitxor(self, rhs: Rhs) -> Self::Output {
+        let rhs_expr: AbstractExpression<F> = rhs.into();
+        self.clone() + rhs_expr.clone() - self * rhs_expr * F::from(2)
+    }
+}
+impl<F: Field, Rhs: Into<AbstractExpression<F>>> BitXor<Rhs> for &AbstractExpression<F> {
+    type Output = AbstractExpression<F>;
+    fn bitxor(self, rhs: Rhs) -> Self::Output {
+        let rhs_expr: &AbstractExpression<F> = &rhs.into();
+        self.clone() + rhs_expr.clone() - self.clone() * rhs_expr * F::from(2)
+    }
+}
+
+impl<F: Field> From<&AbstractExpression<F>> for AbstractExpression<F> {
+    fn from(val: &AbstractExpression<F>) -> Self {
+        val.clone()
     }
 }
 
