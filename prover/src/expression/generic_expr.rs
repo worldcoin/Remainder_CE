@@ -17,7 +17,7 @@ pub trait ExpressionType<F: Field>: Serialize + for<'de> Deserialize<'de> {
     /// The type of thing representing an MLE within the leaves of an
     /// expression. Note that for most expression types, this is the
     /// intuitive thing (e.g. for [crate::expression::circuit_expr::ExprDescription]
-    /// this is an [crate::mle::mle_description::MleDescription<F>]),
+    /// this is an [`crate::mle::mle_description::MleDescription<F>`]),
     /// but for [crate::expression::prover_expr::ProverExpr] specifically this
     /// is an [crate::expression::prover_expr::MleVecIndex], i.e. the
     /// index within the `MleVec` which contains the unique representation

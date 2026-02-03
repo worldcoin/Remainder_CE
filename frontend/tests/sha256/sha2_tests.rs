@@ -458,7 +458,7 @@ fn sha256_big_sigma_gate_positive_tests() {
     let mut trng = rand::thread_rng();
 
     // The shift values are taken from NIST SP-180-4:
-    // https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf
+    // <https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf>
     // printed page number 10 for SHA-256.
 
     let sigma_0 =

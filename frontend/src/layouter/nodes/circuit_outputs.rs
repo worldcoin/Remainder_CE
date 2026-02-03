@@ -53,7 +53,7 @@ impl OutputNode {
         }
     }
 
-    /// Using the [CircuitDescriptionMap], create a [OutputLayerDescription] which
+    /// Using the [CircuitMap], create a [OutputLayerDescription] which
     /// represents the circuit description of an [OutputNode].
     pub fn generate_circuit_description<F: Field>(
         &self,

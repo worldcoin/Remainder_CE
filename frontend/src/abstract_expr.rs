@@ -2,7 +2,7 @@
 //! a template of polynomial relationships between an output computational
 //! graph node and outputs from source computational graph nodes.
 //!
-//! WARNING: because [AbstractExpr] does *not* contain any semblance of MLE
+//! WARNING: because [AbstractExpression] does *not* contain any semblance of MLE
 //! sizes nor indices, it can thus represent an entire class of polynomial
 //! relationships, depending on its circuit-time instantiation. For example,
 //! the simple relationship of
@@ -124,7 +124,7 @@ impl<F: Field> AbstractExpression<F> {
 
     /// Convert the abstract expression into a circuit expression, which
     /// stores information on the shape of the expression, using the
-    /// [CircuitDescriptionMap].
+    /// [CircuitMap].
     pub fn build_circuit_expr(
         self,
         circuit_map: &CircuitMap,
@@ -150,8 +150,7 @@ impl<F: Field> AbstractExpression<F> {
         Ok(Expression::new(expression_node, ()))
     }
 
-    /// See documentation for `select()` function within [crate::expression::circuit_expr::ExprDescription]
-    /// See also: [Self::sel] below
+    /// See documentation for `select()` function within [remainder::expression::circuit_expr::ExprDescription]
     pub fn select(self, rhs: Self) -> Self {
         Self::Selector(MleIndex::Free, Box::new(self), Box::new(rhs))
     }

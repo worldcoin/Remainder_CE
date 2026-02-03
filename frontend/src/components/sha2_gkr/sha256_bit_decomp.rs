@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// SHA256 Works with word size 32
 pub const WORD_SIZE: usize = 32;
 
-/// See https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf for details about constants
+/// See <https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf> for details about constants
 /// Sigma0 of SHA-256
 pub type Sigma0<F> = Sigma<F, WORD_SIZE, 2, 13, 22>;
 

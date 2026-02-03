@@ -64,7 +64,7 @@ impl<N: Hash + Eq + Clone + Debug> Graph<N> {
         Self { repr: map }
     }
 
-    /// Constructor specifically for a [Graph<NodeId>], which will convert an
+    /// Constructor specifically for a [`Graph<NodeId>`], which will convert an
     /// array of [CompilableNode], each of which reference their sources, and
     /// convert that into the graph representation.
     ///
@@ -246,7 +246,7 @@ type LayouterNodes<F> = (
 );
 
 /// Given the nodes provided by the circuit builder, this function returns a
-/// tuple of type [LayouterNodes].
+/// tuple of type `LayouterNodes`.
 ///
 /// This function categorizes nodes into their respective layers, by doing the
 /// following:
@@ -261,7 +261,7 @@ type LayouterNodes<F> = (
 ///   a dependency graph using their specified sources. Then, we do a forward
 ///   pass through these sorted nodes, identify which ones are the sectors, and
 ///   combine them greedily (if there is no dependency between them, we
-///   combine). We then return a [Vec<Vec<Box<dyn CompilableNode<F>>>>] for
+///   combine). We then return a [`Vec<Vec<Box<dyn CompilableNode<F>>>>`] for
 ///   which each inner vector represents nodes that can be combined into a
 ///   single layer.
 /// * `lookup_constraint_nodes` are added to their respective
@@ -270,7 +270,7 @@ type LayouterNodes<F> = (
 ///   nodes.
 /// * `output_nodes` are compiled last, so they are returned as is.
 ///
-/// The ordering in which the nodes are returned as [LayouterNodes] is the order
+/// The ordering in which the nodes are returned as `LayouterNodes` is the order
 /// in which the nodes are expected to be compiled into layers.
 #[allow(clippy::too_many_arguments)]
 pub fn layout<F: Field>(

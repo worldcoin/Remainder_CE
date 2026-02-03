@@ -58,7 +58,7 @@ use tracing::debug;
 ///
 /// A developer building a circuit can use these references to
 /// 1. indicate specific nodes when calling methods of [CircuitBuilder],
-/// 2. generate [Expression]s, typically to be used in defining [Sector] nodes.
+/// 2. generate [AbstractExpression]s, typically to be used in defining [Sector] nodes.
 #[derive(Clone, Debug)]
 pub struct NodeRef<F: Field> {
     ptr: Weak<dyn CircuitNode>,
@@ -819,9 +819,9 @@ pub struct CircuitMap {
 }
 
 impl CircuitMap {
-    /// Constructs an empty [CircuitMap] in a [CircuitMapState::UnderConstruction] state.
+    /// Constructs an empty [CircuitMap] in a `CircuitMapState::UnderConstruction` state.
     /// It can receive new data until the [Self::freeze] method is called which will transition it
-    /// to the [CircuitMapState::Ready] state, at which point it can only be used to answer queries.
+    /// to the `CircuitMapState::Ready` state, at which point it can only be used to answer queries.
     pub fn new() -> Self {
         Self {
             state: CircuitMapState::UnderConstruction,
@@ -837,7 +837,7 @@ impl CircuitMap {
     /// number of variables.
     ///
     /// # Panics
-    /// If [self] is not in state [CircuitMapState::UnderConstruction],
+    /// If [self] is not in state `CircuitMapState::UnderConstruction`,
     /// or if the node with ID `node_id` has already been assigned a location.
     pub fn add_node_id_and_location_num_vars(
         &mut self,
@@ -852,7 +852,7 @@ impl CircuitMap {
     /// Adds a collection of `shreds` to Input Layer with ID `input_layer_id`.
     ///
     /// # Panics
-    /// If [self] is not in state [CircuitMapState::UnderConstruction],
+    /// If [self] is not in state `CircuitMapState::UnderConstruction`,
     /// or if `input_layer_id` has already been assigned shreds.
     pub fn insert_shreds_into_input_layer(&mut self, input_layer_id: LayerId, shreds: Vec<NodeId>) {
         assert_eq!(self.state, CircuitMapState::UnderConstruction);
@@ -862,7 +862,7 @@ impl CircuitMap {
 
     /// Using `node_id`, retrieves the number of variables and location of this
     /// node in the circuit, or returns an error if `node_id` is missing.
-    /// This method is safe to use in any [CircuitMapState].
+    /// This method is safe to use in any `CircuitMapState`.
     pub fn get_location_num_vars_from_node_id(
         &self,
         node_id: &NodeId,
@@ -876,7 +876,7 @@ impl CircuitMap {
     /// `layer_kind`.
     ///
     /// # Panics
-    /// If [self] is _not_ in state [CircuitMapState::UnderConstruction], or if a layer already
+    /// If [self] is _not_ in state `CircuitMapState::UnderConstruction`, or if a layer already
     /// exists with either an ID equal to `layer_id` or a label equal to `layer_label`.
     pub fn add_input_layer(
         &mut self,
@@ -895,7 +895,7 @@ impl CircuitMap {
     /// Adds a new Input Shred labeled `label` with node ID `shred_id`.
     ///
     /// # Panics
-    /// If [self] is _not_ in a [CircuitMapState::UnderConstruction], or if `label` is already in
+    /// If [self] is _not_ in a `CircuitMapState::UnderConstruction`, or if `label` is already in
     /// use.
     ///
     /// # Note
@@ -908,12 +908,12 @@ impl CircuitMap {
         self.label_to_shred_id.insert(String::from(label), shred_id);
     }
 
-    /// Desctructively mutates [self] to transition it from a [CircuitMapState::UnderConstruction]
-    /// state to a [CircuitMapState::Ready] state. As part of the transition, consistency checks are
+    /// Desctructively mutates [self] to transition it from a `CircuitMapState::UnderConstruction`
+    /// state to a `CircuitMapState::Ready` state. As part of the transition, consistency checks are
     /// performed to ensure all internal mappings have all the expected properties.
     ///
     /// # Panics
-    /// If [self] is already in a [CircuitMapState::Ready] state, or if its internal state is
+    /// If [self] is already in a `CircuitMapState::Ready` state, or if its internal state is
     /// inconsistent.
     pub fn freeze(mut self) -> Self {
         assert_eq!(self.state, CircuitMapState::UnderConstruction);
@@ -991,7 +991,7 @@ impl CircuitMap {
     /// Returns a vector of all [NodeId]s of Input Shreds.
     ///
     /// # Panics
-    /// If [self] is _not_ in [CircuiMapState::Ready] state.
+    /// If [self] is _not_ in `CircuitMapState::Ready` state.
     pub fn get_all_input_shred_ids(&self) -> Vec<NodeId> {
         assert_eq!(self.state, CircuitMapState::Ready);
 
@@ -1004,7 +1004,7 @@ impl CircuitMap {
     /// Intended to be used only for error-reporting; current implementation is inefficient.
     ///
     /// # Panics
-    /// If [self] is _not_ in state [CircuitMapState::Ready].
+    /// If [self] is _not_ in state `CircuitMapState::Ready`.
     pub fn get_shred_label_from_id(&self, shred_id: NodeId) -> Result<String> {
         assert_eq!(self.state, CircuitMapState::Ready);
 
@@ -1037,7 +1037,7 @@ impl CircuitMap {
     /// TODO: Consider returning an iterator instead of `Vec`.
     ///
     /// # Panics
-    /// If [self] is _not_ in [CircuitMapState::Ready] state.
+    /// If [self] is _not_ in `CircuitMapState::Ready` state.
     pub fn get_all_input_layer_ids(&self) -> Vec<LayerId> {
         assert_eq!(self.state, CircuitMapState::Ready);
 
@@ -1049,7 +1049,7 @@ impl CircuitMap {
     /// TODO: Consider returning an iterator instead of `Vec`.
     ///
     /// # Panics
-    /// If [self] is _not_ in [CircuitMapState::Ready] state.
+    /// If [self] is _not_ in `CircuitMapState::Ready` state.
     pub fn get_all_public_input_layer_ids(&self) -> Vec<LayerId> {
         assert_eq!(self.state, CircuitMapState::Ready);
 
@@ -1067,7 +1067,7 @@ impl CircuitMap {
     /// if there is no input layer with that ID.
     ///
     /// # Panics
-    /// If [self] is _not_ in [CircuitMapState::Ready].
+    /// If [self] is _not_ in `CircuitMapState::Ready`.
     pub fn get_input_shreds_from_layer_id(&self, layer_id: LayerId) -> Result<Vec<NodeId>> {
         assert_eq!(self.state, CircuitMapState::Ready);
 
@@ -1082,7 +1082,7 @@ impl CircuitMap {
     /// or an error if no input shred with this ID exists.
     ///
     /// # Panics
-    /// If [self] is _not_ in [CircuitMapState::Ready] state.
+    /// If [self] is _not_ in `CircuitMapState::Ready` state.
     pub fn get_shred_location(&self, shred_id: NodeId) -> Result<(CircuitLocation, usize)> {
         assert_eq!(self.state, CircuitMapState::Ready);
 
@@ -1096,7 +1096,7 @@ impl CircuitMap {
     /// visibility.
     ///
     /// # Panics
-    /// If [self] is _not_ in [CircuitMapState::Ready] state.
+    /// If [self] is _not_ in `CircuitMapState::Ready` state.
     pub fn get_all_committed_layers(&self) -> Vec<LayerId> {
         assert_eq!(self.state, CircuitMapState::Ready);
 
@@ -1162,7 +1162,7 @@ impl<F: Field> Circuit<F> {
     ///
     /// # Panics
     /// If `shred_label` does not correspond to any Input Shred, or if the this Input Shred has
-    /// already been assigned data. Use [Self::update_data] for replacing the data of a shred.
+    /// already been assigned data. Use [Self::update_input] for replacing the data of a shred.
     pub fn set_input(&mut self, shred_label: &str, data: MultilinearExtension<F>) {
         let node_id = self.circuit_map.get_node_id(shred_label).unwrap();
 

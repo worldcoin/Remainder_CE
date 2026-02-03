@@ -87,7 +87,7 @@ impl<F: Field> MleDescription<F> {
             .collect()
     }
 
-    /// Convert this MLE into a [DenseMle] using the [CircuitMap],
+    /// Convert this MLE into a [DenseMle] using the [CircuitEvalMap],
     /// which holds information using the prefix bits and layer id
     /// on the data that should be stored in this MLE.
     pub fn into_dense_mle(&self, circuit_map: &CircuitEvalMap<F>) -> DenseMle<F> {

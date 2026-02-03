@@ -3,9 +3,8 @@
 use shared_types::Field;
 
 use crate::layouter::builder::{CircuitBuilder, NodeRef};
-
 /// A component that performs bit (wire rotation) using
-/// [IdentityGateNode] (i.e., rewire).
+/// [crate::layouter::nodes::identity_gate::IdentityGateNode] (i.e., rewire).
 ///
 /// TODO: Generalize to a wire shuffle (permute) gate.
 ///
@@ -25,7 +24,7 @@ pub struct RotateNode<F: Field> {
 }
 
 impl<F: Field> RotateNode<F> {
-    /// Create a new [ShiftNode] that performs a rotation by `rotate_amount` (to the right if
+    /// Create a new [crate::components::binary_operations::logical_shift::ShiftNode] that performs a rotation by `rotate_amount` (to the right if
     /// `rotate_amount > 0` or to the left if `rotate_amount < 0`) on `input` node which contains
     /// `2^num_vars` binary digits.
     ///
