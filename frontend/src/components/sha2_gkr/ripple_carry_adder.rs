@@ -103,7 +103,7 @@ where
 {
     /// Creates a BITWIDTH word Integer adder. For SHA-256/224 BITWIDTH is 32, for SHA-512/384, BITWIDTH is 64
     ///
-    /// [x_word] and [y_word] are assumed to be MSB-first decomposition of
+    /// `x_word` and `y_word` are assumed to be MSB-first decomposition of
     /// of the data.
     pub fn new(
         builder_ref: &mut CircuitBuilder<F>,

@@ -44,7 +44,7 @@ pub struct IriscodeCircuitAuxData<F: Field> {
 /// the destination matrix. This function returns the corresponding Vec of 2-tuples of
 /// usize, which are the re-routings of the 1d MLEs.
 /// Input order is `(src_row_idx, src_col_idx, dest_row_idx, dest_col_idx)`.
-/// Output order is `(dest_idx, src_idx)` (to match [crate::layer::identity_gate::IdentityGate]).
+/// Output order is `(dest_idx, src_idx)` (to match [remainder::layer::identity_gate::IdentityGate]).
 pub fn wirings_to_reroutings(
     wirings: &[(u16, u16, u16, u16)],
     src_arr_num_cols: usize,
@@ -112,7 +112,7 @@ pub fn build_iriscode_circuit_auxiliary_data<
     }
 }
 
-/// Build an instance of [IriscodeCircuitData] from the given image, RH multiplicand, thresholds and
+/// Build an instance of [IriscodeCircuitInputData] from the given image, RH multiplicand, thresholds and
 /// wiring data, by deriving the iris code.
 pub fn build_iriscode_circuit_data<
     F: Field,

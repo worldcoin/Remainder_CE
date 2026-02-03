@@ -1,4 +1,4 @@
-//! Implements [BitPackedVector], a version of an immutable vector optimized for
+//! Implements `BitPackedVector`, a version of an immutable vector optimized for
 //! storing field elements compactly.
 #![allow(clippy::needless_lifetimes)]
 use ::serde::{Deserialize, Serialize};
@@ -97,7 +97,7 @@ pub(in crate::mle::evals) struct BitPackedVector<F: Field> {
     /// For now, we're keeping it always to `u64` to make it easier to
     /// work with `F` chunks.
     ///
-    /// *Invariant*: For every instance of a [BitPackedVector], either
+    /// *Invariant*: For every instance of a `BitPackedVector`, either
     /// [BitPackedVector::buf] or [BitPackedVector::naive_buf] is populated but
     /// NEVER both.
     buf: Vec<u64>,
@@ -107,7 +107,7 @@ pub(in crate::mle::evals) struct BitPackedVector<F: Field> {
     /// representation. In that case, `Self::buf` is never used but instead
     /// `Self::naive_buf` is populated.
     ///
-    /// *Invariant*: For every instance of a [BitPackedVector], either
+    /// *Invariant*: For every instance of a `BitPackedVector`, either
     /// [BitPackedVector::buf] or [BitPackedVector::naive_buf] is populated but
     /// NEVER both.
     naive_buf: Vec<F>,
@@ -317,7 +317,7 @@ impl<F: Field> BitPackedVector<F> {
     }
 }
 
-/// Iterator for a `BitPackedVector`. See [BitPackedVector::iter] for generating
+/// Iterator for a `BitPackedVector`. See `BitPackedVector::iter` for generating
 /// one.
 pub struct BitPackedIterator<'a, F: Field> {
     vec: &'a BitPackedVector<F>,

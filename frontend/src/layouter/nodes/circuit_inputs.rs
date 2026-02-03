@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use shared_types::Field;
 
 /// A struct that represents input data that will be used to instantiate a
-/// [crate::prover::GKRCircuitDescription] in order to generate a full circuit.
+/// [remainder::prover::GKRCircuitDescription] in order to generate a full circuit.
 #[derive(Debug, Clone)]
 pub struct InputLayerNodeData<F: Field> {
     /// The [InputLayerNode] ID in the circuit building process that corresponds to

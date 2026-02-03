@@ -75,7 +75,7 @@ impl<C: PrimeOrderCurve> HyraxVerifiableCircuit<C> {
         &self.circuit_description
     }
 
-    /// Returns a vector of the [LayerId]s of all input layers with visibility [LayerVisibility::Public].
+    /// Returns a vector of the [LayerId]s of all input layers which are public.
     pub fn get_public_input_layer_ids(&self) -> Vec<LayerId> {
         let all_input_layer_ids: HashSet<LayerId> =
             self.layer_label_to_layer_id.values().cloned().collect();
@@ -92,8 +92,8 @@ impl<C: PrimeOrderCurve> HyraxVerifiableCircuit<C> {
             .collect()
     }
 
-    /// Returns a vector of the [LayerId]s of all input layers with visibility
-    /// [LayerVisibility::Committed].
+    /// Returns a vector of the [LayerId]s of all input layers committed using
+    /// the Hyrax PCS.
     pub fn get_private_input_layer_ids(&self) -> Vec<LayerId> {
         self.private_inputs.keys().cloned().collect_vec()
     }
