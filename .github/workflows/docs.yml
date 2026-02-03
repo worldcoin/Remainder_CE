@@ -28,7 +28,7 @@ jobs:
         run: cargo doc --no-deps --lib --document-private-items
       
       - name: Add redirect
-        run: echo '<meta http-equiv="refresh" content="0;url=frontend/index.html">' > target/doc/index.html
+        run: echo '<meta http-equiv="refresh" content="0;url=remainder/index.html">' > target/doc/index.html
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
