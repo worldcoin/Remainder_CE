@@ -143,7 +143,7 @@ fn test_bit_packed_vector_get_large_2() {
     assert!(bpv.get(n).is_none());
 }
 
-/// This function tests whether the [BitPackedVector] is creating the
+/// This function tests whether the `BitPackedVector` is creating the
 /// correct representation re: number of bits of representation per
 /// element. The function is intended to be run under both "memory"-
 /// and "runtime"-optimized defaults.

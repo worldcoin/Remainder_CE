@@ -104,7 +104,7 @@ impl<F: Field> Expression<F, ExprDescription> {
     }
 
     /// Get the [Expression<F, ProverExpr>] corresponding to this [Expression<F, ExprDescription>] using the
-    /// associated data in the [CircuitMap].
+    /// associated data in the [CircuitEvalMap].
     pub fn into_prover_expression(
         &self,
         circuit_map: &CircuitEvalMap<F>,
@@ -205,7 +205,7 @@ impl<F: Field> ExpressionNode<F, ExprDescription> {
     }
 
     /// Compute the expression-wise bookkeeping table (coefficients of the MLE representing the expression)
-    /// for a given [ExprDescription]. This uses a [CircuitMap] in order to grab the correct data
+    /// for a given [ExprDescription]. This uses a [CircuitEvalMap] in order to grab the correct data
     /// corresponding to the [MleDescription].
     pub fn compute_bookkeeping_table(
         &self,

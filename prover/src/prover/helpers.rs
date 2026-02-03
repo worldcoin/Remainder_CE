@@ -104,7 +104,7 @@ pub fn get_circuit_description_hash_as_field_elems<F: Field>(
     }
 }
 
-/// Function which calls [test_circuit_internal] with the appropriate expected
+/// Function which calls `test_circuit_internal` with the appropriate expected
 /// prover/verifier config.
 pub fn test_circuit_with_config<F: Halo2FFTFriendlyField>(
     provable_circuit: &ProvableCircuit<F>,
@@ -119,7 +119,7 @@ pub fn test_circuit_with_config<F: Halo2FFTFriendlyField>(
     )
 }
 
-/// Function which calls [test_circuit_internal] with the appropriate expected
+/// Function which calls `test_circuit_internal` with the appropriate expected
 /// prover/verifier config.
 pub fn test_circuit_with_runtime_optimized_config<F: Halo2FFTFriendlyField>(
     provable_circuit: &ProvableCircuit<F>,
@@ -135,7 +135,7 @@ pub fn test_circuit_with_runtime_optimized_config<F: Halo2FFTFriendlyField>(
     )
 }
 
-/// Function which calls [test_circuit_internal] with a memory-optimized default.
+/// Function which calls `test_circuit_internal` with a memory-optimized default.
 pub fn test_circuit_with_memory_optimized_config<F: Halo2FFTFriendlyField>(
     provable_circuit: &ProvableCircuit<F>,
 ) {
@@ -171,7 +171,7 @@ fn test_circuit_internal<F: Halo2FFTFriendlyField>(provable_circuit: &ProvableCi
 
 /// Generates a GKR proof (in the form of a [TranscriptReader<F, Tr>]) and a
 /// [ProofConfig] (to be used in verification) for the given
-/// [ProvableCircuit<F>].
+/// [`ProvableCircuit<F>`].
 fn prove_circuit_internal<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
     provable_circuit: &ProvableCircuit<F>,
 ) -> (ProofConfig, TranscriptReader<F, Tr>) {
@@ -197,8 +197,8 @@ fn prove_circuit_internal<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
     }
 }
 
-/// Takes in a verifier-ready [VerifiableCircuit<F>], proof config [ProofConfig]
-/// and GKR proof in the form of a [TranscriptReader<F, Tr>], and attempts to
+/// Takes in a verifier-ready [`VerifiableCircuit<F>`], proof config [ProofConfig]
+/// and GKR proof in the form of a [`TranscriptReader<F, Tr>`], and attempts to
 /// verify the proof against the circuit.
 ///
 /// Additionally, takes in a map of public inputs which are already known to
@@ -226,7 +226,7 @@ fn verify_circuit_internal<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
     }
 }
 
-/// Wrapper around [prove_circuit_internal()] which uses a runtime-optimized
+/// Wrapper around `prove_circuit_internal()` which uses a runtime-optimized
 /// prover config.
 pub fn prove_circuit_with_runtime_optimized_config<
     F: Halo2FFTFriendlyField,
@@ -242,7 +242,7 @@ pub fn prove_circuit_with_runtime_optimized_config<
     )
 }
 
-/// Wrapper around [verify_circuit_internal()] which uses a verifier config
+/// Wrapper around `verify_circuit_internal()` which uses a verifier config
 /// corresponding to the provided prover config.
 pub fn verify_circuit_with_proof_config<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
     verifiable_circuit: &VerifiableCircuit<F>,

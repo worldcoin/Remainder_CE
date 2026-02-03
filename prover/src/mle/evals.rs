@@ -136,7 +136,7 @@ impl<F: Field> Evaluations<F> {
 
     /// Builds an evaluation representation for a function `f: {0, 1}^num_vars
     /// -> F` from a vector of evaluations in big-endian order (see
-    /// documentation comment for [Self::evals] for explanation).
+    /// documentation comment for `Self::evals` for explanation).
     ///
     /// # Example
     /// For a function `f: {0, 1}^2 -> F`, an evaluations table may be built as:
@@ -160,7 +160,7 @@ impl<F: Field> Evaluations<F> {
 
     /// Builds an evaluation representation for a function `f: {0, 1}^num_vars
     /// -> F` from a vector of evaluations in _little-endian_ order (see
-    /// documentation comment for [Self::evals] for explanation).
+    /// documentation comment for `Self::evals` for explanation).
     ///
     /// # Example
     /// For a function `f: {0, 1}^2 -> F`, an evaluations table may be built as:
@@ -194,7 +194,7 @@ impl<F: Field> Evaluations<F> {
     /// [Self::num_vars] is zero, there is a non-zero number of vertices on the
     /// boolean hypercube and hence there's at least one evaluation stored in
     /// the bookkeeping table, either explicitly as a value inside
-    /// [Self::evals], or implicitly if it's a `F::ZERO` that has been pruned as
+    /// `Self::evals`, or implicitly if it's a `F::ZERO` that has been pruned as
     /// part of a zero suffix.
     pub fn first(&self) -> F {
         self.evals.get(0).unwrap_or(F::ZERO)

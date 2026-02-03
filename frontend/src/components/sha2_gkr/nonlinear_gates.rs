@@ -1,6 +1,6 @@
 //! Implementation of Different non-linear Gates used in SHA-2 family of
 //! circuits as described in NIST SP-180-4
-//! https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf
+//! <https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf>
 
 #![allow(non_snake_case)]
 use crate::{

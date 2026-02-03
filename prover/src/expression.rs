@@ -31,11 +31,6 @@
 //!   from above), with the leaves of the expression tree always being
 //!   [generic_expr::ExpressionNode::Constant]s or [generic_expr::ExpressionNode::Mle]s
 //!   or [generic_expr::ExpressionNode::Product]s.
-//! * [abstract_expr::AbstractExpr]: The circuit-builder's view of an expression
-//!   (again, see documentation under TODO(vishady)). It describes the structural
-//!   relationship between the current graph node and the nodes which that node
-//!   depends on, without specifying the sizes of any MLEs which are represented
-//!   by those nodes.
 //! * [prover_expr::ProverExpr]: The prover's view of an expression. It contains
 //!   all the information within [circuit_expr::ExprDescription], but contains
 //!   [crate::mle::dense::DenseMle]s rather than [crate::mle::mle_description::MleDescription]s.

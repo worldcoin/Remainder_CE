@@ -47,7 +47,7 @@ pub struct ClaimGroup<F: Field> {
 
 impl<F: Field> ClaimGroup<F> {
     /// Generates a [ClaimGroup] from a collection of [Claim]s.
-    /// All claims agree on the [Claim::to_layer_id] field and returns
+    /// All claims agree on the `Claim::to_layer_id` field and returns
     /// [ClaimError::LayerIdMismatch] otherwise.  Returns
     /// [ClaimError::NumVarsMismatch] if the collection of claims do not all
     /// agree on the number of variables.

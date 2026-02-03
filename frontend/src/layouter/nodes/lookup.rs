@@ -80,7 +80,7 @@ type LookupCircuitDescription<F> = (Vec<LayerDescriptionEnum<F>>, OutputLayerDes
 /// To adapt this to a small field setting, consider using Fermat's Little Theorem.
 ///
 /// For a more detailed description of the soundness argument for the above, see
-/// https://www.notion.so/LogUp-ext-f846956acc3640a68bad51f7897fe32f?pvs=4#15b68687d27e807fae3fcdff59791174
+/// <https://www.notion.so/LogUp-ext-f846956acc3640a68bad51f7897fe32f?pvs=4#15b68687d27e807fae3fcdff59791174>
 #[derive(Clone, Debug)]
 pub struct LookupTable {
     id: NodeId,

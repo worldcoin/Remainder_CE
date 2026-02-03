@@ -231,7 +231,7 @@ pub trait LayerDescription<F: Field> {
     /// The [MleDescription]s that make up the leaves of the expression in this layer.
     fn get_circuit_mles(&self) -> Vec<&MleDescription<F>>;
 
-    /// Given a [CircuitMap], turn this [LayerDescription] into a ProverLayer.
+    /// Given a [CircuitEvalMap], turn this [LayerDescription] into a ProverLayer.
     fn convert_into_prover_layer(&self, circuit_map: &CircuitEvalMap<F>) -> LayerEnum<F>;
 }
 

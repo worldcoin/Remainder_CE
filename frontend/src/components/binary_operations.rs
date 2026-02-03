@@ -1,4 +1,4 @@
-//! Defines [Component]s needed for building binary circuits.
+//! Defines components needed for building binary circuits.
 
 // Implements bit shifting gates.
 pub mod logical_shift;

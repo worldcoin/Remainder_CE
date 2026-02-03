@@ -7,7 +7,7 @@ use shared_types::Field;
 
 use crate::layouter::builder::{CircuitBuilder, NodeRef};
 
-/// A component that performs logical bit shift operations using [IdentityGateNode].
+/// A component that performs logical bit shift operations using [crate::layouter::nodes::identity_gate::IdentityGateNode].
 ///
 /// Both left and right shifts are supported by using negative/positive values in the `shift_amount`
 /// parameter.
