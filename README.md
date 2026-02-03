@@ -16,8 +16,11 @@ Parts of _Remainder_ have been audited in the past, although we provide **no off
 
 ## Installation
 _Remainder_ is fully implemented in Rust, and requires the (stable) version specified in the `rust-toolchain.toml` file. Once you have [installed Rust](https://doc.rust-lang.org/book/ch01-01-installation.html) -- 
-```
-make check && make test-dev
+```bash
+git clone https://github.com/worldcoin/Remainder.git
+cd Remainder
+make check # Compiles + lints
+make test-dev # Runs all fast unit tests; skips slower integration tests
 ```
 This will compile, lint, and run all tests but the particularly expensive ones. You may run `make test` to run all tests (this will compile in release mode and may take >5 minutes). 
 
@@ -29,12 +32,17 @@ This will compile, lint, and run all tests but the particularly expensive ones. 
 * [`shared_types`](./shared_types/): Crate defining base traits/types (finite field, elliptic curve, multilinear extension, transcript, etc). 
 
 ## Examples
-See [`frontend/examples`](./frontend/examples) directory for circuit examples! Additionally, see the _Remainder_ book's [quickstart](https://worldcoin.github.io/remainder-documentation/quickstart.html) and [frontend](https://worldcoin.github.io/remainder-documentation/frontend/frontend_components.html) tutorial sections for more details.
+See [`frontend/examples`](./frontend/examples) directory for circuit examples! Additionally, see the _Remainder_ book's [quickstart](https://worldcoin.github.io/remainder-documentation/quickstart.html) and [frontend](https://worldcoin.github.io/remainder-documentation/frontend/frontend_components.html) tutorial sections for more details. To run the basic example highlighted in the quickstart:
+```bash
+cargo run --package frontend --example tutorial
+```
 
 ## Contributing
 Note: We plan to accept contributions at a later date, and have minimal bandwidth to review PRs currently.
 
 Likewise, we are providing this source code for the benefit of the community, but cannot commit to any SemVer or API stability guarantees. Be warned: we may change things in a backwards-incompatible way at any time!
+
+For soundness or other security-related issues, see [SECURITY.md](./SECURITY.md). 
 
 ## License
 Unless otherwise specified, all code in this repository is dual-licensed under either:
