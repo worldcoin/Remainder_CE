@@ -117,7 +117,7 @@ impl<C: PrimeOrderCurve> HyraxProvableCircuit<C> {
         &self.circuit_description
     }
 
-    /// Returns a vector of the [LayerId]s of all input layers with visibility [LayerVisibility::Public].
+    /// Returns a vector of the [LayerId]s of all input layers with public visibility.
     ///
     /// TODO: Consider returning an iterator instead.
     pub fn get_public_input_layer_ids(&self) -> Vec<LayerId> {
@@ -128,7 +128,7 @@ impl<C: PrimeOrderCurve> HyraxProvableCircuit<C> {
             .collect()
     }
 
-    /// Returns a vector of the [LayerId]s of all input layers with visibility [LayerVisibility::Committed].
+    /// Returns a vector of the [LayerId]s of all input layers which must be committed to using the Hyrax PCS.
     ///
     /// TODO: Consider returning an iterator instead.
     pub fn get_private_input_layer_ids(&self) -> Vec<LayerId> {

@@ -96,7 +96,7 @@ impl<F: Halo2FFTFriendlyField> ProvableCircuit<F> {
         &self.circuit_description
     }
 
-    /// Returns a vector of the [LayerId]s of all input layers with visibility [LayerVisibility::Public].
+    /// Returns a vector of the [LayerId]s of all input layers which are public.
     ///
     /// TODO: Consider returning an iterator instead.
     pub fn get_public_input_layer_ids(&self) -> Vec<LayerId> {
@@ -107,8 +107,8 @@ impl<F: Halo2FFTFriendlyField> ProvableCircuit<F> {
             .collect()
     }
 
-    /// Returns a vector of the [LayerId]s of all input layers with visibility
-    /// [LayerVisibility::Committed].
+    /// Returns a vector of the [LayerId]s of all input layers which are committed
+    /// to using a PCS.
     ///
     /// TODO: Consider returning an iterator instead.
     pub fn get_committed_input_layer_ids(&self) -> Vec<LayerId> {
@@ -148,9 +148,8 @@ impl<F: Halo2FFTFriendlyField> ProvableCircuit<F> {
     /// Write the GKR proof to transcript.
     /// Appends inputs and Ligero input layer commitments to the transcript: public inputs first, then Ligero input layers, ordering by layer id in both cases.
     /// Arguments:
-    /// * `inputs` - a map from input layer ID to the MLE of its values (in the clear) for _all_ input layers.
-    /// * `ligero_input_layers` - a vector of [LigeroInputLayerDescription]s, optionally paired with pre-computed commitments to their values (if provided, this are not checked, but simply used as is).
-    /// * `circuit_description` - the [GKRCircuitDescription] of the circuit to be proven.
+    /// * `circuit_description_hash_type`: The hash function we wish to use to hash the circuit description.
+    /// * `transcript_writer`: The struct used by the prover to write messages to the transcript, which will be used by the verifier to verify the circuit.
     pub fn prove<Tr: TranscriptSponge<F>>(
         &self,
         circuit_description_hash_type: CircuitHashType,

@@ -31,8 +31,7 @@ pub const V3_RH_MATMULT_SHRED: &str = "RH Multiplicand of MatMult";
 pub const V3_LOOKUP_SHRED: &str = "Lookup table values for digit range check";
 pub const V3_SIGN_BITS_SHRED: &str = "Sign Bits";
 
-/// Build the [IriscodeCircuitDescription], return the circuit description and
-/// the input builder metadata, for the v3 (RLC) iriscode circuit.
+/// Build the [`Circuit<F>`] which is the circuit description of the iris code circuit.
 pub fn build_iriscode_circuit_description<
     F: Field,
     const IM_STRIP_ROWS: usize,

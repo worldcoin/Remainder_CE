@@ -23,12 +23,9 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      
-      - name: Clean build directory
-        run: cargo clean
 
       - name: Build docs
-        run: cargo doc --no-deps --lib
+        run: cargo doc --no-deps --lib --document-private-items
       
       - name: Add redirect
         run: echo '<meta http-equiv="refresh" content="0;url=frontend/index.html">' > target/doc/index.html

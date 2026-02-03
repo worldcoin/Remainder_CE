@@ -335,7 +335,7 @@ impl<F: Field> MatrixDescription<F> {
     }
 
     /// Convert the circuit description of a matrix into the prover
-    /// view of a matrix, using the [CircuitMap].
+    /// view of a matrix, using the [CircuitEvalMap].
     pub fn into_matrix(&self, circuit_map: &CircuitEvalMap<F>) -> Matrix<F> {
         let dense_mle = self.mle.into_dense_mle(circuit_map);
         Matrix {
