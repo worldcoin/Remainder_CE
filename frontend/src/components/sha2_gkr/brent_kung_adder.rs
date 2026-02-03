@@ -1,6 +1,6 @@
-//! Brent-Kung adder is a parallel prefix adder described here https://maths-people.anu.edu.au/~brent/pd/rpb060_IEEETC.pdf
+//! Brent-Kung adder is a parallel prefix adder described here <https://maths-people.anu.edu.au/~brent/pd/rpb060_IEEETC.pdf>
 //!
-//! For a comparison of different adders, see also https://www.lirmm.fr/arith18/papers/patil-RobustEnergyEffcientAdder.pdf
+//! For a comparison of different adders, see also <https://www.lirmm.fr/arith18/papers/patil-RobustEnergyEffcientAdder.pdf>
 
 use super::AdderGateTrait;
 use crate::{

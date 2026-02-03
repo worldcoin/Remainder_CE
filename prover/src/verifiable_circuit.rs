@@ -72,8 +72,7 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
         &self.circuit_description
     }
 
-    /// Returns a vector of the [LayerId]s of all input layers with visibility
-    /// [LayerVisibility::Public].
+    /// Returns a vector of the [LayerId]s of all input layers which are public.
     pub fn get_public_input_layer_ids(&self) -> Vec<LayerId> {
         self.circuit_description
             .input_layers
@@ -88,8 +87,8 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
             .collect()
     }
 
-    /// Returns a vector of the [LayerId]s of all input layers with visibility
-    /// [LayerVisibility::Committed].
+    /// Returns a vector of the [LayerId]s of all input layers which are committed
+    /// to using a PCS.
     pub fn get_committed_input_layer_ids(&self) -> Vec<LayerId> {
         self.committed_inputs.keys().cloned().collect_vec()
     }

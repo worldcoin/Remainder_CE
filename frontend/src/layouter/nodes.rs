@@ -44,7 +44,7 @@ impl NodeId {
         Self(id)
     }
 
-    /// creates an [AbstractExpression<F>] from this NodeId
+    /// creates an [`AbstractExpression<F>`] from this NodeId
     pub fn expr<F: Field>(self) -> AbstractExpression<F> {
         AbstractExpression::<F>::mle(self)
     }

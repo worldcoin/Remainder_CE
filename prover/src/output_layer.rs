@@ -190,7 +190,7 @@ impl<F: Field> OutputLayerDescription<F> {
         self.mle.index_mle_indices(start_index);
     }
 
-    /// Convert this into the prover view of an output layer, using the [CircuitMap].
+    /// Convert this into the prover view of an output layer, using the [CircuitEvalMap].
     pub fn into_prover_output_layer(&self, circuit_map: &CircuitEvalMap<F>) -> OutputLayer<F> {
         let output_mle = circuit_map.get_data_from_circuit_mle(&self.mle).unwrap();
         let prefix_bits = self.mle.prefix_bits();
