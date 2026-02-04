@@ -56,3 +56,16 @@ Unless otherwise specified, all code in this repository is dual-licensed under e
 * Apache License, Version 2.0, with LLVM Exceptions ([LICENSE-APACHE](./LICENSE-APACHE)) at your option. This means you may select the license you prefer to use.
 
 Any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+
+## Acknowledgements
+In addition to the primary contributors listed on GitHub, we would like to thank the following individuals/teams for their advice and contributions to _Remainder_:
+
+* **Zhenfei Zhang**, for endless optimization and implementation discussions, and for being our first believer
+* **Riad Wahby**, for greatly assisting in our implementation of Hyrax and always putting a smile on our face
+* The **Hungry Cats Studio** team, for writing a Halo2-based recursive verifier for an early version of _Remainder_
+* **Justin Thaler**, for dispensing wisdom about sumcheck and GKR and helping us understand when _not_ to use sumcheck
+* **Vishnu Sampathkumar**, for testing an early version of _Remainder_ against an actual neural network
+
+And countless others who pointed out bugs, optimizations, and so much more!
+
+Additionally, _Remainder_'s early design was heavily inspired by the [Arkworks](https://github.com/arkworks-rs) and [Halo2](https://github.com/zcash/halo2) repositories, and the _Remainder_ book itself is also inspired by the [Halo2 book](https://zcash.github.io/halo2/). 
