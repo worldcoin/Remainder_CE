@@ -37,7 +37,7 @@ This will compile, lint, and run all tests but the particularly expensive ones. 
 * [`shared_types`](./shared_types/): Crate defining base traits/types (finite field, elliptic curve, multilinear extension, transcript, etc). 
 
 ## Examples
-See [`frontend/examples`](./frontend/examples) directory for circuit examples! Additionally, see the _Remainder_ book's [quickstart](https://worldcoin.github.io/remainder-documentation/quickstart.html) and [frontend](https://worldcoin.github.io/remainder-documentation/frontend/frontend_components.html) tutorial sections for more details. To run the basic example highlighted in the quickstart:
+See the [`frontend/examples`](./frontend/examples) directory for circuit examples! Additionally, see the _Remainder_ book's [quickstart](https://worldcoin.github.io/remainder-documentation/quickstart.html) and [frontend](https://worldcoin.github.io/remainder-documentation/frontend/frontend_components.html) tutorial sections for more details. To run the basic example highlighted in the quickstart:
 ```bash
 cargo run --package frontend --example tutorial
 ```
