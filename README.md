@@ -1,4 +1,4 @@
-# _Remainder_: <ins>Re</ins>asonable <ins>Ma</ins>chine learn<ins>in</ins>g <ins>D</ins>oubly-<ins>E</ins>fficient prove<ins>r</ins>
+# _Remainder_ CE: <ins>Re</ins>asonable <ins>Ma</ins>chine learn<ins>in</ins>g <ins>D</ins>oubly-<ins>E</ins>fficient prove<ins>r</ins> (Community Edition)
 
 ## Overview
 _Remainder_ is an open-source "GKR-ish" implementation, with a custom circuit creation frontend, prover, and verifier. _Remainder_ is fully written in Rust and only has CPU bindings, and seamlessly bundles together a basket of techniques, including
@@ -22,7 +22,7 @@ Parts of _Remainder_ have been audited in the past, although we currently provid
 ## Installation
 _Remainder_ is fully implemented in Rust, and requires the (stable) version specified in the `rust-toolchain.toml` file. Once you have [installed Rust](https://doc.rust-lang.org/book/ch01-01-installation.html) -- 
 ```bash
-git clone https://github.com/worldcoin/Remainder.git
+git clone https://github.com/worldcoin/Remainder_CE.git
 cd Remainder
 make check # Compiles + lints
 make test-dev # Runs all fast unit tests; skips slower integration tests
@@ -58,14 +58,14 @@ Unless otherwise specified, all code in this repository is dual-licensed under e
 Any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
 ## Acknowledgements
-In addition to the primary contributors listed on GitHub, we would like to thank the following individuals/teams for their advice and contributions to _Remainder_:
+In addition to the primary contributors listed on GitHub, we would like to especially thank the following individuals/teams for their advice and contributions to _Remainder_:
 
 * **Zhenfei Zhang**, for endless optimization and implementation discussions, and for being our first believer
 * **Riad Wahby**, for greatly assisting in our implementation of Hyrax and always putting a smile on our face
 * The **Hungry Cats Studio** team, for writing a Halo2-based recursive verifier for an early version of _Remainder_
 * **Justin Thaler**, for dispensing wisdom about sumcheck and GKR and helping us understand when _not_ to use sumcheck
-* **Vishnu Sampathkumar**, for testing an early version of _Remainder_ against an actual neural network
+* **Tianyi Zhang**, for sharing numerous tips and tricks with us from the [zkCNN](https://github.com/TAMUCrypto/zkCNN) codebase, a super fast GKR implementation written in C++. 
 
-And countless others who pointed out bugs, optimizations, and so much more!
+And countless others who pointed out bugs, optimizations, and so much more (see [`CONTRIBUTORS.md`](./CONTRIBUTORS.md) for a list of current and past code contributors)!
 
 Additionally, _Remainder_'s early design was heavily inspired by the [Arkworks](https://github.com/arkworks-rs) and [Halo2](https://github.com/zcash/halo2) repositories, and the _Remainder_ book itself is also inspired by the [Halo2 book](https://zcash.github.io/halo2/). 
