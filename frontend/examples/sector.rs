@@ -233,7 +233,7 @@ fn build_selector_expression_circuit<F: Field>() -> Circuit<F> {
     // Expected Output MLE.
     let expected_output = builder.add_input_shred("Expected Output", 2, &input_layer);
 
-    // Split V1(z_1, z_2) into V1_l(z_1) = V1(z_1, 0) and V1_r(z_1) = V1(z_1, 1).
+    // Split V1(z_1, z_2) into V1_l(z_1) = V1(0, z_1) and V1_r(z_1) = V1(1, z_1).
     let [v1_l, v1_r]: [_; 2] = builder.add_split_node(&v1, 1).try_into().unwrap();
 
     // Selector layer.
