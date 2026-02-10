@@ -7,8 +7,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: "pages"
@@ -26,7 +24,7 @@ jobs:
 
       - name: Build docs
         run: cargo doc --no-deps --lib --document-private-items
-      
+
       - name: Add redirect
         run: echo '<meta http-equiv="refresh" content="0;url=remainder/index.html">' > target/doc/index.html
 
@@ -39,6 +37,9 @@ jobs:
           path: target/doc
 
   deploy:
+    permissions:
+      pages: write
+      id-token: write
     needs: build
     runs-on: ubuntu-latest
     environment:
