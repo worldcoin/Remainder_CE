@@ -12,13 +12,13 @@ jobs:
   execute-relyance-sci:
     name: Relyance SCI Job
     runs-on:
-      group: arc-large-amd64-runner
+      group: arc-public-large-amd64-runner
     permissions:
       contents: read
 
     steps:
       - name: Run Relyance SCI
-        uses: worldcoin/gh-actions-public/relyance@c90a8cc53088a3322e9f5936ced806487c66429c # main
+        uses: worldcoin/gh-actions-public/relyance@main
         # More information: https://github.com/worldcoin/gh-actions-public/tree/main/relyance
         with:
           secrets-dpp-sci-key: ${{ secrets.DPP_SCI_KEY }}
