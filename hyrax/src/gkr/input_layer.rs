@@ -59,6 +59,10 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             claims_grouped_by_common_points
                 .iter()
                 .map(|claim_group| {
+                    let random_coefficients = transcript.get_scalar_field_challenges(
+                        "Random coefficients for batch opening of Hyrax commitments",
+                        claim_group.len(),
+                    );
                     HyraxPCSEvaluationProof::prove(
                         input_layer_desc.log_num_cols,
                         &prover_commitment.mle,
@@ -67,6 +71,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                         blinding_rng,
                         transcript,
                         &mut prover_commitment.blinding_factors_matrix,
+                        &random_coefficients,
                     )
                 })
                 .collect_vec()
@@ -82,6 +87,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                         blinding_rng,
                         transcript,
                         &mut prover_commitment.blinding_factors_matrix,
+                        &[C::Scalar::ONE],
                     )
                 })
                 .collect_vec()
@@ -131,12 +137,27 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                     assert!(claim_group
                         .iter()
                         .all(|claim| claim.point.len() == input_layer_desc.num_vars));
+                    let random_coefficients = transcript.get_scalar_field_challenges(
+                        "Random coefficients for batch opening of Hyrax commitments",
+                        claim_group.len(),
+                    );
+                    let rlc_gkr_claimed_evaluation = claim_group
+                        .iter()
+                        .zip(random_coefficients.iter())
+                        .fold(C::zero(), |acc, (claim, random_coeff)| {
+                            acc + claim.evaluation * *random_coeff
+                        });
+                    assert_eq!(
+                        rlc_gkr_claimed_evaluation,
+                        eval_proof.commitment_to_evaluation
+                    );
                     eval_proof.verify(
                         input_layer_desc.log_num_cols,
                         committer,
                         &self.input_commitment,
                         &claim_group.iter().map(|claim| &claim.point).collect_vec(),
                         transcript,
+                        &random_coefficients,
                     );
                 });
         } else {
@@ -155,6 +176,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
                         &self.input_commitment,
                         &[&claim.point],
                         transcript,
+                        &[C::Scalar::ONE],
                     );
                 })
         }

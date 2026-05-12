@@ -6,7 +6,6 @@ use rand::{CryptoRng, RngCore};
 use remainder::mle::evals::{bit_packed_vector::num_bits, MultilinearExtension};
 use serde::{Deserialize, Serialize};
 use shared_types::{
-    config::global_config::global_prover_hyrax_batch_opening,
     curves::PrimeOrderCurve,
     pedersen::{CommittedScalar, PedersenCommitter},
     utils::bookkeeping_table::{initialize_tensor, initialize_tensor_rlc},
@@ -215,20 +214,13 @@ impl<C: PrimeOrderCurve> HyraxPCSEvaluationProof<C> {
         // The blinding factors to commit to each of the rows of the MLE
         // coefficient matrix.
         blinding_factors_matrix: &mut [C::Scalar],
+        // Random coefficients in order to batch Hyrax proofs.
+        random_coefficients: &[C::Scalar],
     ) -> Self {
-        let random_coefficients = if !global_prover_hyrax_batch_opening() {
-            assert_eq!(claims.len(), 1);
-            vec![C::Scalar::ONE]
-        } else {
-            transcript.get_scalar_field_challenges(
-                "Random coefficients for batch opening of Hyrax commitments",
-                claims.len(),
-            )
-        };
         let (l_vector, r_vector) = HyraxPCSEvaluationProof::<C>::compute_l_r_from_log_n_cols(
             log_n_cols,
             &claims.iter().map(|claim| &claim.point).collect_vec(),
-            &random_coefficients,
+            random_coefficients,
         );
 
         // Since the prover knows the T matrix (matrix of MLE coefficients), the
@@ -307,16 +299,8 @@ impl<C: PrimeOrderCurve> HyraxPCSEvaluationProof<C> {
         commitment_to_coeff_matrix: &[C],
         challenge_coordinates: &[&Vec<C::Scalar>],
         transcript: &mut impl ECTranscriptTrait<C>,
+        random_coefficients: &[C::Scalar],
     ) {
-        let random_coefficients = if !global_prover_hyrax_batch_opening() {
-            assert_eq!(challenge_coordinates.len(), 1);
-            vec![C::Scalar::ONE]
-        } else {
-            transcript.get_scalar_field_challenges(
-                "Random coefficients for batch opening of Hyrax commitments",
-                challenge_coordinates.len(),
-            )
-        };
         let Self {
             podp_evaluation_proof,
             commitment_to_evaluation,
@@ -324,7 +308,7 @@ impl<C: PrimeOrderCurve> HyraxPCSEvaluationProof<C> {
         let (l_vector, r_vector) = HyraxPCSEvaluationProof::<C>::compute_l_r_from_log_n_cols(
             log_n_cols,
             challenge_coordinates,
-            &random_coefficients,
+            random_coefficients,
         );
 
         // The verifier uses the L vector and does a scalar multiplication to

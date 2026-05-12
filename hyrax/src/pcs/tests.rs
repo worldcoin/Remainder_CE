@@ -58,6 +58,7 @@ fn sanity_check_test_honest_prover_small_identity() {
         prover_random_generator,
         &mut transcript,
         &mut blinding_factors_matrix_rows,
+        &[Scalar::one()],
     );
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -68,6 +69,7 @@ fn sanity_check_test_honest_prover_small_identity() {
         &comm_to_matrix,
         &[&challenge_coordinates],
         &mut transcript,
+        &[Scalar::one()],
     );
 }
 
@@ -116,6 +118,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
         prover_random_generator,
         &mut transcript,
         &mut blinding_factors_matrix_rows,
+        &[Scalar::one()],
     );
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -126,6 +129,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
         &comm_to_matrix,
         &[&challenge_coordinates],
         &mut transcript,
+        &[Scalar::one()],
     );
 }
 
@@ -199,6 +203,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         prover_random_generator,
         &mut transcript,
         &mut blinding_factors_matrix_rows,
+        &[Scalar::one()],
     );
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -209,6 +214,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         &comm_to_matrix,
         &[&challenge_coordinates],
         &mut transcript,
+        &[Scalar::one()],
     );
 }
 
@@ -277,6 +283,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         prover_random_generator,
         &mut transcript,
         &mut blinding_factors_matrix_rows,
+        &[Scalar::one()],
     );
 
     let mut transcript: ECTranscript<Bn256Point, PoseidonSponge<Base>> =
@@ -287,5 +294,6 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         &comm_to_matrix,
         &[&challenge_coordinates],
         &mut transcript,
+        &[Scalar::one()],
     );
 }
