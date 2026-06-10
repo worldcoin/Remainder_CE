@@ -117,8 +117,11 @@ fn merkle_path(builder: &mut CircuitBuilder<Fr>, leafs: Vec<NodeRef<Fr>>, path: 
     let leaf_len = leafs.len();
     let leaf_concat = [vec![iv.clone()], leafs, vec![zero.clone(); pad_len - leaf_len - 1]].concat();
     let leaf_state = builder.add_sector(AbstractExpression::binary_tree_selector(leaf_concat));
+
     // hash leaf
     let leaf_state = full_poseidon(builder, leaf_state, round_consts, mds_matrix);
+    // DO NOT REMOVE THIS!!! Applying split node directly after mat mult causes bug in the circuit map creator.
+    let leaf_state = builder.add_sector(leaf_state + Fr::zero());
     let mut node_hash = builder.add_split_node(&leaf_state, NUM_VARS_T)[0].clone();
 
     for (internal_node, branch) in path {
