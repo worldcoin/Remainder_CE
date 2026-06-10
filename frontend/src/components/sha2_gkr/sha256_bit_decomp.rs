@@ -44,7 +44,7 @@ fn add_get_carry_bits_lsb(x: u32, y: u32, mut c_in: u32) -> (u32, Vec<u32>) {
     let y_vec = bit_decompose_lsb_first(y);
     let mut carry = Vec::<u32>::with_capacity(33);
     let mut sum = 0x0u32;
-    for (i, (x, y)) in x_vec.into_iter().zip(y_vec.into_iter()).enumerate() {
+    for (i, (x, y)) in x_vec.into_iter().zip(y_vec).enumerate() {
         let this_sum = x + y + c_in;
         c_in = this_sum / 2;
         carry.push(c_in);

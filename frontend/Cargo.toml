@@ -30,6 +30,7 @@ sha256 = "1.5.0"
 zeroize = "^1.7"
 ark-serialize = { version = "0.5.0", features = ["derive"] }    # For serialization
 quickcheck_macros = "1.0.0"
+poseidon = { path = "../../poseidon" }
 
 [features]
 parallel = [
