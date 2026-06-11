@@ -18,7 +18,7 @@ fn build_circuit() -> Circuit<Fr> {
     let lhs = builder.add_input_shred("LHS", 1, &lhs_rhs_input_layer);
     let matrix = builder.add_input_shred("Matrix", 2, &lhs_rhs_input_layer);
     let sq_sector = builder.add_matmult_node(&matrix, (1, 1), &lhs, (1, 0));
-    let sq_sector = builder.add_sector(sq_sector + Fr::zero());
+    let sq_sector = builder.add_sector(sq_sector + Fr::zero()); // removing this line breaks the example
     let first = builder.add_split_node(&sq_sector, 1)[0].clone();
 
     // let multiplication_sector = lhs * rhs;

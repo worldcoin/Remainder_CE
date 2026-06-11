@@ -242,6 +242,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
     // claims generated are always made from "left to right" when viewing
     // a layer as an expression in terms of other layers.
     let circuit_timer = start_timer!(|| "Verifying circuit proof");
+    let timer_1 = std::time::Instant::now();
     let input_layer_claims_vec = hyrax_proof.circuit_proof.verify(
         verifiable_circuit.get_gkr_circuit_description_ref(),
         committer,
@@ -249,6 +250,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
         transcript,
     );
     end_timer!(circuit_timer);
+    println!("Circuit proof verification time: {} ms", timer_1.elapsed().as_millis());
     let mut input_layer_claims: HashMap<LayerId, Vec<HyraxClaim<C::Scalar, C>>> = HashMap::new();
     input_layer_claims_vec.into_iter().for_each(|claim| {
         if let std::collections::hash_map::Entry::Vacant(e) =
@@ -266,6 +268,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
     // For each public input layer, pop the claims, match them up with the
     // corresponding claims on public values provided by the prover, and verify
     // them directly.
+    let timer_2 = std::time::Instant::now();
     hyrax_proof
         .public_inputs
         .iter()
@@ -294,6 +297,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
                 &hyrax_proof.claims_on_public_values,
                 committer,
             );
+            println!("Plaintext claims length for layer {layer_id}: {}", plaintext_claims.len());
             let timer = start_timer!(|| format!(
                 "Verifying {0} claims for {1} (public)",
                 plaintext_claims.len(),
@@ -304,7 +308,9 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
             });
             end_timer!(timer);
         });
+    println!("Public input layer claim verification time: {} ms", timer_2.elapsed().as_millis());
 
+    let timer_3 = std::time::Instant::now();
     // Verify the hyrax input layer proofs.
     hyrax_proof
         .hyrax_input_proofs
@@ -326,6 +332,7 @@ pub fn verify_hyrax_proof<C: PrimeOrderCurve>(
             }
             end_timer!(timer);
         });
+    println!("Hyrax input layer proof verification time: {} ms", timer_3.elapsed().as_millis());
 
     // Check that there are no claims left in the input layer claims table.
     assert!(input_layer_claims.is_empty());
