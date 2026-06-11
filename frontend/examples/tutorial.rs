@@ -23,7 +23,7 @@ fn build_circuit() -> Circuit<Fr> {
         builder.add_input_shred("Expected output", 2, &expected_output_input_layer);
 
     // let multiplication_sector = lhs * rhs;
-    let multiplication_sector = builder.add_sector(lhs * rhs);
+    let multiplication_sector = builder.add_sector(lhs * rhs.clone() * rhs);
 
     let subtraction_sector = builder.add_sector(multiplication_sector - expected_output);
 
@@ -44,7 +44,7 @@ fn main() {
     // Generate circuit inputs.
     let lhs_data = vec![1, 2, 3, 4].into();
     let rhs_data = vec![5, 6, 7, 8].into();
-    let expected_output_data = vec![5, 12, 21, 32].into();
+    let expected_output_data = vec![25, 72, 147, 256].into();
 
     // Append circuit inputs to their respective input "shreds" in the prover's
     // view of the circuit.

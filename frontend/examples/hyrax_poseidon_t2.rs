@@ -39,10 +39,7 @@ fn poseidon_iv() -> Fr {
 
 /// Compute x^5
 fn sbox(builder: &mut CircuitBuilder<Fr>, base: &NodeRef<Fr>) -> NodeRef<Fr> {
-    let partial_sbox_1 = builder.add_sector(base.clone() * base.clone());
-    let partial_sbox_2 = builder.add_sector(partial_sbox_1.clone() * partial_sbox_1.clone());
-    let sbox = builder.add_sector(base * partial_sbox_2);
-    sbox
+    builder.add_sector(base.clone() * base.clone() * base.clone() * base.clone() * base)
 }
 
 /// One full poseidon
@@ -332,7 +329,7 @@ fn main() {
     let proof_size = bincode::serialized_size(&proof).unwrap();
     let proof_config_size = bincode::serialized_size(&proof_config).unwrap();
     let total_size = vc_size + proof_size + proof_config_size;
-    println!("Total proof size (verifiable circuit + proof + proof config): {} kb", total_size / 1024);
+    println!("Total proof size: {} kb", total_size / 1024);
     println!("  verifiable circuit = {} kb\n  proof = {} kb", vc_size / 1024, proof_size / 1024);
 
     println!("All done! Hyrax proof generated and verified.");

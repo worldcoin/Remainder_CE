@@ -13,7 +13,7 @@ use shared_types::{
     Bn256Point, Fq, Fr, ff_field, perform_function_under_prover_config, perform_function_under_verifier_config
 };
 
-use poseidon::SpecRef;
+use poseidon::Spec;
 use tracing::Level;
 use tracing_subscriber::fmt;
 use tracing_subscriber::{self};
@@ -36,9 +36,27 @@ fn poseidon_iv() -> Fr {
     Fr::from_u128(1 << 64)
 }
 
+/// Add constants
+fn add_constants(builder: &mut CircuitBuilder<Fr>, state: Vec<NodeRef<Fr>>, constants: &[Fr]) -> Vec<NodeRef<Fr>> {
+    state.into_iter().zip(constants.into_iter())
+        .map(|(s, c)| builder.add_sector(s + *c))
+        .collect()
+}
+fn add_constant(builder: &mut CircuitBuilder<Fr>, mut state: Vec<NodeRef<Fr>>, constant: &Fr) -> Vec<NodeRef<Fr>> {
+    state[0] = builder.add_sector(state[0].clone() + *constant);
+    state
+}
+
 /// Compute x^5
 fn sbox(builder: &mut CircuitBuilder<Fr>, base: &NodeRef<Fr>) -> NodeRef<Fr> {
     builder.add_sector(base.clone() * base.clone() * base.clone() * base.clone() * base)
+}
+fn sbox_full(builder: &mut CircuitBuilder<Fr>, state: Vec<NodeRef<Fr>>) -> Vec<NodeRef<Fr>> {
+    state.iter().map(|s| sbox(builder, s)).collect()
+}
+fn sbox_part(builder: &mut CircuitBuilder<Fr>, mut state: Vec<NodeRef<Fr>>) -> Vec<NodeRef<Fr>> {
+    state[0] = sbox(builder, &state[0]);
+    state
 }
 
 /// Compute mds mat mult
@@ -52,56 +70,67 @@ fn mds(builder: &mut CircuitBuilder<Fr>, mds_matrix: &Vec<Vec<Fr>>, columns: &Ve
     }).collect()
 }
 
+fn mds_sparse(builder: &mut CircuitBuilder<Fr>, row: &[Fr; T], col_hat: &[Fr; RATE], state: Vec<NodeRef<Fr>>) -> Vec<NodeRef<Fr>> {
+    let old_first = state[0].clone();                 // OLD state[0]
+    let new_first = {
+        let term = row.iter().zip(state.iter())
+            .map(|(&coeff, col)| col.clone() * coeff)
+            .reduce(|acc, term| builder.add_sector(acc + term).into())
+            .unwrap();
+        builder.add_sector(term)
+    };
+    let mut new_state = Vec::with_capacity(T);
+    new_state.push(new_first);
+    for i in 1..T {
+        new_state.push(builder.add_sector(old_first.clone() * col_hat[i - 1] + state[i].clone()));
+    }
+    new_state
+}
+
 /// One full poseidon
 /// Use inputs by column
-fn full_poseidon(builder: &mut CircuitBuilder<Fr>, mut state_by_col: Vec<NodeRef<Fr>>, round_consts: &Vec<Vec<Fr>>, mds_matrix: &Vec<Vec<Fr>>) -> Vec<NodeRef<Fr>> {
+fn full_poseidon(builder: &mut CircuitBuilder<Fr>, mut state_by_col: Vec<NodeRef<Fr>>, spec: &Spec<Fr, T, RATE>) -> Vec<NodeRef<Fr>> {
     // Prepend IV
     assert_eq!(state_by_col.len(), T - 1);
     let iv = builder.add_sector(AbstractExpression::Constant(poseidon_iv()));
     state_by_col.insert(0, iv);
+    
+    let r_f = R_F / 2;
     // Full rounds
-    for i in 0..R_F / 2 {
-        // state += round_constants
-        for j in 0..T {
-            state_by_col[j] = builder.add_sector(state_by_col[j].clone() + round_consts[i][j]);
-        }
-        // state = state^5
-        for j in 0..T {
-            state_by_col[j] = sbox(builder, &state_by_col[j]);
-        }
-        // state = MDS_matrix * state
-        state_by_col = mds(builder, mds_matrix, &state_by_col);
+    state_by_col = add_constants(builder, state_by_col, &spec.constants().start()[0]);
+    for round_constants in spec.constants().start().iter().skip(1).take(r_f - 1) {
+        state_by_col = sbox_full(builder, state_by_col);
+        state_by_col = add_constants(builder, state_by_col, round_constants);
+        state_by_col = mds(builder, &spec.mds_matrices().mds().as_vec(), &state_by_col);
     }
+    state_by_col = sbox_full(builder, state_by_col);
+    state_by_col = add_constants(builder, state_by_col, spec.constants().start().last().unwrap());
+    state_by_col = mds(builder, &spec.mds_matrices().pre_sparse_mds().as_vec(), &state_by_col);
+
     // Partial rounds
-    for i in R_F / 2..R_F / 2 + R_P {
-        // state += round_constants
-        for j in 0..T {
-            state_by_col[j] = builder.add_sector(state_by_col[j].clone() + round_consts[i][j]);
-        }
-        // state = state^5 ON THE FIRST ELEMENT ONLY
-        state_by_col[0] = sbox(builder, &state_by_col[0]);
-        // state = MDS_matrix * state
-        // state = MDS_matrix * state
-        state_by_col = mds(builder, mds_matrix, &state_by_col);
+    for (round_constant, sparse_mds) in spec
+        .constants()
+        .partial()
+        .iter()
+        .zip(spec.mds_matrices().sparse_matrices().iter())
+    {
+        state_by_col = sbox_part(builder, state_by_col);
+        state_by_col = add_constant(builder, state_by_col, round_constant);
+        state_by_col = mds_sparse(builder, sparse_mds.row(), sparse_mds.col_hat(), state_by_col);
     }
     // Full rounds
-    for i in R_F / 2 + R_P..R_F + R_P {
-        // state += round_constants
-        for j in 0..T {
-            state_by_col[j] = builder.add_sector(state_by_col[j].clone() + round_consts[i][j]);
-        }
-        // state = state^5
-        for j in 0..T {
-            state_by_col[j] = sbox(builder, &state_by_col[j]);
-        }
-        // state = MDS_matrix * state
-        state_by_col = mds(builder, mds_matrix, &state_by_col);
+    for round_constants in spec.constants().end().iter() {
+        state_by_col = sbox_full(builder, state_by_col);
+        state_by_col = add_constants(builder, state_by_col, round_constants);
+        state_by_col = mds(builder, &spec.mds_matrices().mds().as_vec(), &state_by_col);
     }
+    state_by_col = sbox_full(builder, state_by_col);
+    state_by_col = mds(builder, &spec.mds_matrices().mds().as_vec(), &state_by_col);
     state_by_col
 }
 
 /// number of poseidon in parallel, assume power of 2
-fn build_circuit(num_poseidons: usize, round_consts: &Vec<Vec<Fr>>, mds_matrix: &Vec<Vec<Fr>>) -> Circuit<Fr> {
+fn build_circuit(num_poseidons: usize, spec: &Spec<Fr, T, RATE>) -> Circuit<Fr> {
     assert!(num_poseidons.is_power_of_two());
     let mut builder = CircuitBuilder::<Fr>::new();
 
@@ -121,7 +150,7 @@ fn build_circuit(num_poseidons: usize, round_consts: &Vec<Vec<Fr>>, mds_matrix: 
         init_state_shred
     }).collect::<Vec<NodeRef<Fr>>>();
 
-    let final_state = full_poseidon(&mut builder, init_state_list, &round_consts, &mds_matrix);
+    let final_state = full_poseidon(&mut builder, init_state_list, &spec);
 
     // Expected final state grouped by poseidon entry
     let expected_final_state = (0..T).map(|i| {
@@ -140,20 +169,6 @@ fn build_circuit(num_poseidons: usize, round_consts: &Vec<Vec<Fr>>, mds_matrix: 
     }
 
     builder.build().expect("Failed to build circuit")
-}
-
-// generate poseidon specs
-fn gen_poseidon_spec() -> (
-    Vec<Vec<Fr>>, // constants,
-    Vec<Vec<Fr>>, // mds matrix, 
-) {
-    // specs
-    let spec = SpecRef::<Fr, T, RATE>::new(R_F, R_P);
-    let (constants, mds_matrix) = (spec.constants(), spec.mds_matrices());
-    let constants = constants.into_iter().map(|round_consts| {
-        round_consts.to_vec()
-    }).collect();
-    (constants, mds_matrix.as_vec())
 }
 
 // generate poseidon tests
@@ -187,8 +202,8 @@ fn main() {
 
     // Create the base layered circuit description.
     let circuit_compile_start = std::time::Instant::now();
-    let (constants, mds_matrix) = gen_poseidon_spec();
-    let base_circuit = build_circuit(PATH_LEN, &constants, &mds_matrix);
+    let spec = Spec::<Fr, T, RATE>::new(R_F, R_P);
+    let base_circuit = build_circuit(PATH_LEN, &spec);
     let mut prover_circuit = base_circuit.clone();
     let verifier_circuit = base_circuit.clone();
     println!("Circuit build time: {} ms", circuit_compile_start.elapsed().as_millis());

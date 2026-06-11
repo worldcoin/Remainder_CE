@@ -246,6 +246,8 @@ impl<F: Field, T: Clone> Product<F, T> {
     pub fn get_product_triples(&self) -> Option<Vec<(T, T, T)>> {
         if self.intermediates.len() > 1 {
             assert!(self.intermediates.len() >= 3);
+            // Chain layout: [f0, f1, p1, f2, p2, f3, p3, ...] — len is odd (2k+1).
+            debug_assert_eq!(self.intermediates.len() % 2, 1);
             let values = self
                 .intermediates
                 .iter()
@@ -255,14 +257,14 @@ impl<F: Field, T: Clone> Product<F, T> {
                 })
                 .collect::<Vec<_>>();
             Some(
-                values
-                    .windows(3)
-                    .map(|window| {
-                        if let [x, y, z] = window {
-                            (x.clone(), y.clone(), z.clone())
-                        } else {
-                            unreachable!()
-                        }
+                (0..values.len() - 2)
+                    .step_by(2)
+                    .map(|i| {
+                        (
+                            values[i].clone(),
+                            values[i + 1].clone(),
+                            values[i + 2].clone(),
+                        )
                     })
                     .collect::<Vec<_>>(),
             )
