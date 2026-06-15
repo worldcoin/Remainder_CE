@@ -135,7 +135,7 @@ fn build_circuit(num_poseidons: usize, spec: &Spec<Fr, T, RATE>) -> Circuit<Fr> 
     let mut builder = CircuitBuilder::<Fr>::new();
 
     let content_layer =
-        builder.add_input_layer("Content input layer", LayerVisibility::Committed);
+        builder.add_input_layer("Content input layer", LayerVisibility::Public);
     let expected_hash_layer =
         builder.add_input_layer("Expected hash", LayerVisibility::Public);
 

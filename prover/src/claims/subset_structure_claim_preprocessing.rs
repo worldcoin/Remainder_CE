@@ -29,16 +29,43 @@ pub struct SubsetStructureClaimGroup<F: Field> {
 impl<F: Field> SubsetStructureClaimGroup<F> {
     /// Constructor from a (complete) subset of claims.
     pub fn new(claims: Vec<Claim<F>>) -> Self {
+        for (i, claim) in claims.iter().enumerate() {
+            println!(
+                "Claim {i}: point {:?}, eval {:?}, from_layer_id {:?}, to_layer_id {:?}",
+                claim.get_point(),
+                claim.get_eval(),
+                claim.get_from_layer_id(),
+                claim.get_to_layer_id(),
+            );
+        }
+
         // Sanitycheck: Non-empty claim group
         assert!(!claims.is_empty());
         // Sanitycheck: All claims have the same length and come from the same
         // source layer
-        assert!(claims.iter().all(|claim| {
-            claim.get_point().len() == claims[0].get_point().len()
-                && claim.get_num_vars() == claims[0].get_num_vars()
-                && claim.get_from_layer_id() == claims[0].get_from_layer_id()
-                && claim.get_to_layer_id() == claims[0].get_to_layer_id()
-        }));
+        for (i, claim) in claims.iter().enumerate() {
+            assert_eq!(
+                claim.get_point().len(),
+                claims[0].get_point().len(),
+                "Claim {i} point length {} differs from claim 0 point length {}",
+                claim.get_point().len(),
+                claims[0].get_point().len(),
+            );
+            assert_eq!(
+                claim.get_num_vars(),
+                claims[0].get_num_vars(),
+                "Claim {i} num_vars {} differs from claim 0 num_vars {}",
+                claim.get_num_vars(),
+                claims[0].get_num_vars(),
+            );
+            assert_eq!(
+                claim.get_to_layer_id(),
+                claims[0].get_to_layer_id(),
+                "Claim {i} to_layer_id {:?} differs from claim 0 to_layer_id {:?}",
+                claim.get_to_layer_id(),
+                claims[0].get_to_layer_id(),
+            );
+        }
         // Compute the set of variables which differ between all the claims.
         let subset_vars = Self::compute_subset_vars_for_claim_group(&claims);
         Self {
