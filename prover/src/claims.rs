@@ -8,6 +8,7 @@ pub mod claim_group;
 pub mod tests;
 
 pub mod claim_aggregation;
+pub(crate) mod subset_structure_claim_preprocessing;
 
 use std::{collections::HashMap, fmt};
 
@@ -52,7 +53,7 @@ pub enum ClaimError {
 /// associated layer MLE is expected to evaluate to. In other words, if
 /// `\tilde{V} : F^n -> F` is the MLE of a layer, then this claim asserts:
 /// `\tilde{V}(point) == result`.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(bound = "F: Field")]
 pub struct RawClaim<F: Field> {
     /// The point in `F^n` at which to evaluate the layer MLE.
@@ -89,7 +90,7 @@ impl<F: Field> RawClaim<F> {
 /// `evaluation \in F`. The claim asserts that the layer MLE `\tilde{V} : F^n ->
 /// F` of the layer with ID `to_layer_id` evaluates to `evaluation` when
 /// computed on `point`: `tilde{V}(point) == result`.
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(bound = "F: Field")]
 pub struct Claim<F: Field> {
     /// The underlying claim.

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use itertools::Itertools;
 use num::Integer;
 use shared_types::Field;
 
@@ -30,6 +31,7 @@ pub fn sanitycheck_input_layers_and_claims<F: Field>(
         .collect();
     input_layer_claims_map
         .iter()
+        .sorted_by(|x, y| x.0.cmp(y.0))
         .for_each(|(layer_id, num_claims)| {
             let layer_num_vars = input_layers_map.get(layer_id).unwrap();
             println!("Layer ID {layer_id} with {num_claims} claims and {layer_num_vars} num vars");

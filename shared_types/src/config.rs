@@ -36,6 +36,12 @@ pub struct GKRCircuitProverConfig {
     /// where all challenges within that index are identical.
     claim_agg_constant_column_optimization: bool,
 
+    /// Whether to preprocess claims on a layer by examining whether there are
+    /// any "structured" subsets of claims and combining them via MLE definition.
+    ///
+    /// See corresponding documentation within prover/verifier for more details.
+    structured_claim_agg_preprocessing: bool,
+
     /// Hyrax input layer batch opening. Determines whether we attempt to aggregate
     /// Hyrax PCS Evaluation proofs by grouping common challenge coordinates together.
     hyrax_input_layer_batch_opening: bool,
@@ -61,6 +67,7 @@ impl GKRCircuitProverConfig {
             lazy_beta_evals: true,
             circuit_description_hash_type: CircuitHashType::Sha3_256,
             claim_agg_strategy: ClaimAggregationStrategy::Interpolative,
+            structured_claim_agg_preprocessing: true,
             claim_agg_constant_column_optimization: true,
             hyrax_input_layer_batch_opening: true,
             enable_bit_packing: true,
@@ -73,6 +80,7 @@ impl GKRCircuitProverConfig {
             lazy_beta_evals: false,
             circuit_description_hash_type: CircuitHashType::Sha3_256,
             claim_agg_strategy: ClaimAggregationStrategy::RLC,
+            structured_claim_agg_preprocessing: true,
             claim_agg_constant_column_optimization: true,
             hyrax_input_layer_batch_opening: true,
             enable_bit_packing: false,
@@ -91,6 +99,7 @@ impl GKRCircuitProverConfig {
             lazy_beta_evals: false,
             circuit_description_hash_type: CircuitHashType::Sha3_256,
             claim_agg_strategy: ClaimAggregationStrategy::RLC,
+            structured_claim_agg_preprocessing: false,
             claim_agg_constant_column_optimization: false,
             hyrax_input_layer_batch_opening: true,
             enable_bit_packing: false,
@@ -109,6 +118,7 @@ impl GKRCircuitProverConfig {
             lazy_beta_evals: true,
             circuit_description_hash_type: CircuitHashType::Sha3_256,
             claim_agg_strategy: ClaimAggregationStrategy::RLC,
+            structured_claim_agg_preprocessing: false,
             claim_agg_constant_column_optimization: false,
             hyrax_input_layer_batch_opening: true,
             enable_bit_packing: true,
@@ -121,6 +131,7 @@ impl GKRCircuitProverConfig {
         circuit_description_hash_type: CircuitHashType,
         claim_agg_strategy: ClaimAggregationStrategy,
         claim_agg_constant_column_optimization: bool,
+        structured_claim_agg_preprocessing: bool,
         hyrax_input_layer_batch_opening: bool,
         enable_bit_packing: bool,
     ) -> Self {
@@ -129,9 +140,18 @@ impl GKRCircuitProverConfig {
             circuit_description_hash_type,
             claim_agg_strategy,
             claim_agg_constant_column_optimization,
+            structured_claim_agg_preprocessing,
             hyrax_input_layer_batch_opening,
             enable_bit_packing,
         }
+    }
+
+    /// Setter function for structured claim aggregation preprocessing.
+    pub fn set_structured_claim_agg_preprocessing(
+        &mut self,
+        updated_structured_claim_agg_preprocessing: bool,
+    ) {
+        self.structured_claim_agg_preprocessing = updated_structured_claim_agg_preprocessing;
     }
 
     /// Setter function for lazy beta evals.
@@ -164,6 +184,11 @@ impl GKRCircuitProverConfig {
     /// Setter function for enabling bit packing.
     pub fn set_enable_bit_packing(&mut self, updated_enable_bit_packing: bool) {
         self.enable_bit_packing = updated_enable_bit_packing;
+    }
+
+    /// Getter function for structured claim aggregation preprocessing.
+    pub fn get_structured_claim_agg_preprocessing(&self) -> bool {
+        self.structured_claim_agg_preprocessing
     }
 
     /// Getter function for lazy beta evals.
@@ -214,6 +239,10 @@ pub struct GKRCircuitVerifierConfig {
     /// the validity of multiple claims on a layer to that of a single claim.
     claim_agg_strategy: ClaimAggregationStrategy,
 
+    /// See [GKRCircuitProverConfig::structured_claim_agg_preprocessing] for
+    /// more details.
+    structured_claim_agg_preprocessing: bool,
+
     /// Whether to use the "constant column optimization", i.e. whether to
     /// reduce the implicit degree of the prover-claimed polynomial
     /// Q(x) =? V_i(l(x)) when there are variable indices within all claims
@@ -231,6 +260,7 @@ impl GKRCircuitVerifierConfig {
         Self {
             lazy_beta_evals: verifier_lazy_beta_evals,
             claim_agg_strategy: prover_config.claim_agg_strategy,
+            structured_claim_agg_preprocessing: prover_config.structured_claim_agg_preprocessing,
             circuit_description_hash_type: prover_config.circuit_description_hash_type,
             claim_agg_constant_column_optimization: prover_config
                 .claim_agg_constant_column_optimization,
@@ -241,12 +271,14 @@ impl GKRCircuitVerifierConfig {
     pub const fn new(
         lazy_beta_evals: bool,
         circuit_description_hash_type: CircuitHashType,
+        structured_claim_agg_preprocessing: bool,
         claim_agg_strategy: ClaimAggregationStrategy,
         claim_agg_constant_column_optimization: bool,
     ) -> Self {
         Self {
             lazy_beta_evals,
             circuit_description_hash_type,
+            structured_claim_agg_preprocessing,
             claim_agg_strategy,
             claim_agg_constant_column_optimization,
         }
@@ -261,6 +293,7 @@ impl GKRCircuitVerifierConfig {
         Self {
             lazy_beta_evals: verifier_lazy_beta_evals,
             claim_agg_strategy: proof_config.claim_agg_strategy,
+            structured_claim_agg_preprocessing: proof_config.structured_claim_agg_preprocessing,
             claim_agg_constant_column_optimization: proof_config
                 .claim_agg_constant_column_optimization,
             circuit_description_hash_type: proof_config.circuit_description_hash_type,
@@ -276,6 +309,7 @@ impl GKRCircuitVerifierConfig {
         Self {
             lazy_beta_evals: false,
             circuit_description_hash_type: CircuitHashType::Sha3_256,
+            structured_claim_agg_preprocessing: false,
             claim_agg_strategy: ClaimAggregationStrategy::RLC,
             claim_agg_constant_column_optimization: false,
         }
@@ -308,6 +342,14 @@ impl GKRCircuitVerifierConfig {
             updated_claim_agg_constant_column_optimization;
     }
 
+    /// Setter function for structured claim aggregation preprocessing.
+    pub fn set_structured_claim_agg_preprocessing(
+        &mut self,
+        updated_structured_claim_agg_preprocessing: bool,
+    ) {
+        self.structured_claim_agg_preprocessing = updated_structured_claim_agg_preprocessing;
+    }
+
     /// Getter function for lazy beta evals.
     pub fn get_lazy_beta_evals(&self) -> bool {
         self.lazy_beta_evals
@@ -327,6 +369,11 @@ impl GKRCircuitVerifierConfig {
     pub fn get_claim_agg_constant_column_optimization(&self) -> bool {
         self.claim_agg_constant_column_optimization
     }
+
+    /// Getter function for structured claim aggregation preprocessing.
+    pub fn get_structured_claim_agg_preprocessing(&self) -> bool {
+        self.structured_claim_agg_preprocessing
+    }
 }
 
 // -------------------- Proof config --------------------
@@ -344,6 +391,10 @@ pub struct ProofConfig {
     /// the validity of multiple claims on a layer to that of a single claim.
     claim_agg_strategy: ClaimAggregationStrategy,
 
+    /// See [GKRCircuitProverConfig::structured_claim_agg_preprocessing] for
+    /// more information.
+    structured_claim_agg_preprocessing: bool,
+
     /// Whether to use the "constant column optimization", i.e. whether to
     /// reduce the implicit degree of the prover-claimed polynomial
     /// Q(x) =? V_i(l(x)) when there are variable indices within all claims
@@ -360,6 +411,7 @@ impl ProofConfig {
         Self {
             circuit_description_hash_type: prover_config.circuit_description_hash_type,
             claim_agg_strategy: prover_config.claim_agg_strategy,
+            structured_claim_agg_preprocessing: prover_config.structured_claim_agg_preprocessing,
             claim_agg_constant_column_optimization: prover_config
                 .claim_agg_constant_column_optimization,
         }
@@ -400,5 +452,10 @@ impl ProofConfig {
     /// Getter function for constant column optimization.
     pub fn get_claim_agg_constant_column_optimization(&self) -> bool {
         self.claim_agg_constant_column_optimization
+    }
+
+    /// Getter function for structured claim aggregation preprocessing.
+    pub fn get_structured_claim_agg_preprocessing(&self) -> bool {
+        self.structured_claim_agg_preprocessing
     }
 }

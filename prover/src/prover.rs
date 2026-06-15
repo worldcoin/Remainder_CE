@@ -15,6 +15,7 @@ use std::collections::{HashMap, HashSet};
 use self::layers::Layers;
 use crate::circuit_layout::{CircuitEvalMap, CircuitLocation};
 use crate::claims::claim_aggregation::{prover_aggregate_claims, verifier_aggregate_claims};
+use crate::claims::subset_structure_claim_preprocessing::{prover_aggregate_subset_structure_claims, verifier_aggregate_subset_structure_claims};
 use crate::claims::{Claim, ClaimTracker};
 use crate::expression::circuit_expr::filter_bookkeeping_table;
 use crate::input_layer::fiat_shamir_challenge::{
@@ -34,7 +35,7 @@ use crate::utils::mle::verify_claim;
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use shared_types::config::global_config::global_claim_agg_strategy;
+use shared_types::config::global_config::{global_claim_agg_strategy, global_structured_claim_agg_preprocessing};
 use shared_types::config::ClaimAggregationStrategy;
 use shared_types::transcript::{ProverTranscript, TranscriptWriter};
 use shared_types::transcript::{TranscriptSponge, VerifierTranscript};
@@ -174,14 +175,21 @@ pub fn prove_circuit<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
         info!("Starting claim aggregation...");
 
         let output_mles_from_layer = layer_map.remove(&layer_id).unwrap();
-        let layer_claims = claim_tracker.get(layer_id).unwrap();
+        let mut layer_claims = claim_tracker.get(layer_id).unwrap().clone();
+
+        // First we preprocess claims by combining ones which are subset
+        // structure combine-able.
+        if global_structured_claim_agg_preprocessing() {
+            layer_claims =
+                prover_aggregate_subset_structure_claims(&layer_claims, transcript_writer);
+        }
 
         // We always want to perform interpolative claim aggregation on MatMult layers.
         if let LayerEnum::MatMult(_) = layer {
             let claim_aggr_timer =
                 start_timer!(|| format!("Claim aggregation for layer {layer_id:?}"));
             let layer_claim =
-                prover_aggregate_claims(layer_claims, output_mles_from_layer, transcript_writer)?;
+                prover_aggregate_claims(&layer_claims, output_mles_from_layer, transcript_writer)?;
             end_timer!(claim_aggr_timer);
 
             info!("Prove sumcheck message");
@@ -202,7 +210,7 @@ pub fn prove_circuit<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
                     let claim_aggr_timer =
                         start_timer!(|| format!("Claim aggregation for layer {layer_id:?}"));
                     let layer_claim = prover_aggregate_claims(
-                        layer_claims,
+                        &layer_claims,
                         output_mles_from_layer,
                         transcript_writer,
                     )?;
@@ -492,7 +500,14 @@ impl<F: Field> GKRCircuitDescription<F> {
             info!("Intermediate Layer: {layer_id:?}");
             let layer_timer = start_timer!(|| format!("Proof verification for layer {layer_id:?}"));
 
-            let layer_claims = claim_tracker.remove(layer_id).unwrap();
+            let mut layer_claims = claim_tracker.remove(layer_id).unwrap();
+
+            // First we preprocess claims by combining ones which are subset
+            // structure combine-able.
+            if global_structured_claim_agg_preprocessing() {
+                layer_claims =
+                    verifier_aggregate_subset_structure_claims(&layer_claims, transcript_reader);
+            }
 
             let verifier_layer = match global_claim_agg_strategy() {
                 ClaimAggregationStrategy::Interpolative => {

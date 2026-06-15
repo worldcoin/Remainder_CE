@@ -58,6 +58,28 @@ pub fn set_global_verifier_config(
     prover_verifier_config_instance.1 = *expected_verifier_config;
 }
 
+// -------------------- Helper functions for accessing global fields (both) --------------------
+
+/// The variant of claim aggregation to be used
+/// (see documentation within [GKRCircuitProverConfig])
+/// NOTE: No distinction between "prover" and "verifier",
+/// for correctness both must be using the same strategy.
+pub fn global_claim_agg_strategy() -> ClaimAggregationStrategy {
+    let prover_verifier_config_instance = PROVER_VERIFIER_CONFIG.read();
+    prover_verifier_config_instance.0.get_claim_agg_strategy()
+}
+
+/// Whether to enable "structured claim aggregation preprocessing" (see
+/// documentation within [GKRCircuitProverConfig::structured_claim_agg_preprocessing])
+/// NOTE: No distinction between "prover" and "verifier",
+/// for correctness both must be using the same strategy.
+pub fn global_structured_claim_agg_preprocessing() -> bool {
+    let prover_verifier_config_instance = PROVER_VERIFIER_CONFIG.read();
+    prover_verifier_config_instance
+        .0
+        .get_structured_claim_agg_preprocessing()
+}
+
 // -------------------- Helper functions for accessing global fields (prover) --------------------
 
 /// Whether to turn on "lazy beta evals" optimization
@@ -75,16 +97,9 @@ pub fn global_prover_circuit_description_hash_type() -> CircuitHashType {
         .0
         .get_circuit_description_hash_type()
 }
-/// The variant of claim aggregation to be used
-/// (see documentation within [GKRCircuitProverConfig])
-/// NOTE: No distinction between "prover" and "verifier",
-/// for correctness both must be using the same strategy.
-pub fn global_claim_agg_strategy() -> ClaimAggregationStrategy {
-    let prover_verifier_config_instance = PROVER_VERIFIER_CONFIG.read();
-    prover_verifier_config_instance.0.get_claim_agg_strategy()
-}
+
 /// Whether to turn on "constant columns" optimization for deterministic claim agg
-/// (see documentation within [GKRCircuitProverConfig])
+/// (see documentation within [GKRCircuitProverConfig::claim_agg_constant_column_optimization])
 pub fn global_prover_claim_agg_constant_column_optimization() -> bool {
     let prover_verifier_config_instance = PROVER_VERIFIER_CONFIG.read();
     prover_verifier_config_instance
@@ -92,14 +107,14 @@ pub fn global_prover_claim_agg_constant_column_optimization() -> bool {
         .get_claim_agg_constant_column_optimization()
 }
 /// Whether to turn on "hyrax batch opening"
-/// (see documentation within [GKRCircuitProverConfig])
+/// (see documentation within [GKRCircuitProverConfig::hyrax_input_layer_batch_opening])
 pub fn global_prover_hyrax_batch_opening() -> bool {
     let prover_verifier_config_instance = PROVER_VERIFIER_CONFIG.read();
     prover_verifier_config_instance.0.get_hyrax_batch_opening()
 }
 
 /// Whether to turn on the "bit packed vector" optimization
-/// (see documentation within [GKRCircuitProverConfig])
+/// (see documentation within [GKRCircuitProverConfig::enable_bit_packing])
 pub fn global_prover_enable_bit_packing() -> bool {
     let prover_verifier_config_instance = PROVER_VERIFIER_CONFIG.read();
     prover_verifier_config_instance.0.get_enable_bit_packing()
@@ -117,6 +132,9 @@ pub fn get_current_global_prover_config() -> GKRCircuitProverConfig {
         prover_verifier_config_instance
             .0
             .get_claim_agg_constant_column_optimization(),
+        prover_verifier_config_instance
+            .0
+            .get_structured_claim_agg_preprocessing(),
         prover_verifier_config_instance.0.get_hyrax_batch_opening(),
         prover_verifier_config_instance.0.get_enable_bit_packing(),
     )
@@ -161,6 +179,9 @@ pub fn get_current_global_verifier_config() -> GKRCircuitVerifierConfig {
         prover_verifier_config_instance
             .1
             .get_circuit_description_hash_type(),
+        prover_verifier_config_instance
+            .1
+            .get_structured_claim_agg_preprocessing(),
         prover_verifier_config_instance.1.get_claim_agg_strategy(),
         prover_verifier_config_instance
             .1
@@ -197,6 +218,10 @@ impl GKRCircuitProverConfig {
                     .get_circuit_description_hash_type()
             && self.get_claim_agg_strategy()
                 == prover_verifier_config_instance.0.get_claim_agg_strategy()
+            && self.get_structured_claim_agg_preprocessing()
+                == prover_verifier_config_instance
+                    .0
+                    .get_structured_claim_agg_preprocessing()
     }
 }
 
@@ -226,6 +251,10 @@ impl GKRCircuitVerifierConfig {
                     .get_circuit_description_hash_type()
             && self.get_claim_agg_strategy()
                 == prover_verifier_config_instance.1.get_claim_agg_strategy()
+            && self.get_structured_claim_agg_preprocessing()
+                == prover_verifier_config_instance
+                    .1
+                    .get_structured_claim_agg_preprocessing()
     }
 
     /// Returns whether the current (expected) [GKRCircuitVerifierConfig] matches
@@ -236,6 +265,8 @@ impl GKRCircuitVerifierConfig {
             && self.get_circuit_description_hash_type()
                 == proof_config.get_circuit_description_hash_type()
             && self.get_claim_agg_strategy() == proof_config.get_claim_agg_strategy()
+            && self.get_structured_claim_agg_preprocessing()
+                == proof_config.get_structured_claim_agg_preprocessing()
     }
 }
 

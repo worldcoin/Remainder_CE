@@ -6,11 +6,12 @@ use std::fmt::Debug;
 use itertools::Itertools;
 use ligero::ligero_commit::ligero_verify;
 use shared_types::circuit_hash::CircuitHashType;
-use shared_types::config::global_config::get_current_global_verifier_config;
+use shared_types::config::global_config::{get_current_global_verifier_config, global_structured_claim_agg_preprocessing};
 use shared_types::config::ProofConfig;
 use shared_types::transcript::VerifierTranscript;
 use shared_types::Halo2FFTFriendlyField;
 
+use crate::claims::subset_structure_claim_preprocessing::verifier_input_layer_subset_structure_claim_agg;
 use crate::input_layer::ligero_input_layer::{
     LigeroInputLayerDescriptionWithOptionalVerifierPrecommit, LigeroRoot,
 };
@@ -214,15 +215,24 @@ impl<F: Halo2FFTFriendlyField> VerifiableCircuit<F> {
                 ligero_commitments.insert(layer_id, commitment_as_vec[0]);
             });
 
-        let input_layer_claims = self
+        let mut input_layer_claims = self
             .get_gkr_circuit_description_ref()
             .verify(transcript)
             .unwrap();
 
+        // If we opt for it, perform a preprocessing pass over the input layers'
+        // claims as well.
+        if global_structured_claim_agg_preprocessing() {
+            input_layer_claims = verifier_input_layer_subset_structure_claim_agg(
+                &input_layer_claims,
+                transcript,
+            );
+        }
+
         // Every input layer claim is either for a public- or Ligero- input layer.
         let mut public_input_layer_claims = vec![];
         let mut ligero_input_layer_claims = vec![];
-        input_layer_claims.into_iter().for_each(|claim| {
+        input_layer_claims.into_iter().sorted().for_each(|claim| {
             let layer_id = claim.get_to_layer_id();
             if self.get_public_input_layer_ids().contains(&layer_id) {
                 public_input_layer_claims.push(claim);

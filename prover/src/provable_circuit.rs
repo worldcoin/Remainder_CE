@@ -9,9 +9,11 @@ use ligero::ligero_commit::{ligero_commit, ligero_eval_prove};
 use shared_types::circuit_hash::CircuitHashType;
 use shared_types::config::global_config::get_current_global_prover_config;
 use shared_types::config::ProofConfig;
+use shared_types::config::global_config::global_structured_claim_agg_preprocessing;
 use shared_types::transcript::{ProverTranscript, TranscriptSponge, TranscriptWriter};
 use shared_types::Halo2FFTFriendlyField;
 
+use crate::claims::subset_structure_claim_preprocessing::prover_input_layer_subset_structure_claim_agg;
 use crate::input_layer::ligero_input_layer::{
     LigeroCommitment, LigeroInputLayerDescriptionWithOptionalProverPrecommit,
     LigeroInputLayerDescriptionWithOptionalVerifierPrecommit,
@@ -203,7 +205,7 @@ impl<F: Halo2FFTFriendlyField> ProvableCircuit<F> {
 
         // Mutate the transcript to contain the proof of the intermediate layers of the circuit,
         // and return the claims on the input layer.
-        let input_layer_claims = prove_circuit(self, transcript_writer).unwrap();
+        let mut input_layer_claims = prove_circuit(self, transcript_writer).unwrap();
 
         // If in performance debugging mode, print the number of claims on input
         // layers and input layer sizes.
@@ -228,8 +230,37 @@ impl<F: Halo2FFTFriendlyField> ProvableCircuit<F> {
             }
         }
 
+        // If in performance debugging mode, print the number of claims on input
+        // layers and input layer sizes.
+        if cfg!(feature = "performance-debug") {
+            println!("Before structured subset claim agg preprocessing");
+            sanitycheck_input_layers_and_claims(
+                &input_layer_claims,
+                self.get_gkr_circuit_description_ref(),
+            );
+        }
+
+        // If we opt for it, perform a preprocessing pass over the input layers'
+        // claims as well.
+        if global_structured_claim_agg_preprocessing() {
+            input_layer_claims = prover_input_layer_subset_structure_claim_agg(
+                &input_layer_claims,
+                transcript_writer,
+            );
+        }
+
+        // If in performance debugging mode, print the number of claims on input
+        // layers and input layer sizes.
+        if cfg!(feature = "performance-debug") {
+            println!("After structured subset claim agg preprocessing");
+            sanitycheck_input_layers_and_claims(
+                &input_layer_claims,
+                self.get_gkr_circuit_description_ref(),
+            );
+        }
+
         // Create a Ligero evaluation proof for each claim on a Ligero input layer, writing it to transcript.
-        for claim in input_layer_claims.iter() {
+        for claim in input_layer_claims.iter().sorted() {
             let layer_id = claim.get_to_layer_id();
             if let Ok((desc, _)) = self.get_committed_input_layer(layer_id) {
                 let mle = self.get_input_mle(layer_id).unwrap();
