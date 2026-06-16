@@ -29,16 +29,6 @@ pub struct SubsetStructureClaimGroup<F: Field> {
 impl<F: Field> SubsetStructureClaimGroup<F> {
     /// Constructor from a (complete) subset of claims.
     pub fn new(claims: Vec<Claim<F>>) -> Self {
-        for (i, claim) in claims.iter().enumerate() {
-            println!(
-                "Claim {i}: point {:?}, eval {:?}, from_layer_id {:?}, to_layer_id {:?}",
-                claim.get_point(),
-                claim.get_eval(),
-                claim.get_from_layer_id(),
-                claim.get_to_layer_id(),
-            );
-        }
-
         // Sanitycheck: Non-empty claim group
         assert!(!claims.is_empty());
         // Sanitycheck: All claims have the same length and come from the same

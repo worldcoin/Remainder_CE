@@ -180,13 +180,13 @@ impl<F: Field> Layer<F> for MatMult<F> {
         claims: &[&RawClaim<F>],
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<()> {
-        println!(
-            "MatMul::prove_rounds() for a product ({} x {}) * ({} x {}) matrix.",
-            self.matrix_a.rows_num_vars,
-            self.matrix_a.cols_num_vars,
-            self.matrix_b.rows_num_vars,
-            self.matrix_b.cols_num_vars
-        );
+        // println!(
+        //     "MatMul::prove_rounds() for a product ({} x {}) * ({} x {}) matrix.",
+        //     self.matrix_a.rows_num_vars,
+        //     self.matrix_a.cols_num_vars,
+        //     self.matrix_b.rows_num_vars,
+        //     self.matrix_b.cols_num_vars
+        // );
 
         // We always use interpolative claim aggregation for matmult layers
         // because the preprocessing step in matmult utilizes the fact that we

@@ -390,7 +390,6 @@ impl<C: PrimeOrderCurve> HyraxProvableCircuit<C> {
         // Additionally, claims generated are always made from "left to right"
         // when viewing a layer as an expression in terms of other layers.
         let layer_proving_timer = start_timer!(|| "proving intermediate layers");
-        let timer_1 = std::time::Instant::now();
         let (circuit_proof, claims_on_input_layers) = HyraxCircuitProof::prove(
             &mut instantiated_circuit,
             committer,
@@ -398,7 +397,6 @@ impl<C: PrimeOrderCurve> HyraxProvableCircuit<C> {
             converter,
             transcript,
         );
-        println!("Timer 1: proving intermediate layers took {} ms", timer_1.elapsed().as_millis());
         end_timer!(layer_proving_timer);
 
         // Collect the values of the public inputs
@@ -448,7 +446,6 @@ impl<C: PrimeOrderCurve> HyraxProvableCircuit<C> {
         }
 
         // Prove the claims on the Hyrax input layers
-        let timer_2 = std::time::Instant::now();
         let hyrax_input_proofs = self
             .get_private_input_layer_ids()
             .iter()
@@ -480,7 +477,6 @@ impl<C: PrimeOrderCurve> HyraxProvableCircuit<C> {
                 }
             })
             .collect_vec();
-        println!("Timer 2: proving Hyrax input layers took {} ms", timer_2.elapsed().as_millis());
 
         // Check that now Hyrax input layer claims remain
         assert!(claims_on_hyrax_input_layers.is_empty());

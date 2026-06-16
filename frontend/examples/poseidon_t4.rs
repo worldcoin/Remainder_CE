@@ -1,26 +1,17 @@
 use frontend::abstract_expr::AbstractExpression;
 use frontend::layouter::builder::{Circuit, CircuitBuilder, LayerVisibility, NodeRef};
 use remainder::mle::evals::MultilinearExtension;
-use hyrax::gkr::verify_hyrax_proof;
-use hyrax::utils::vandermonde::VandermondeInverse;
 use rand::thread_rng;
-use shared_types::config::{GKRCircuitProverConfig, GKRCircuitVerifierConfig};
+use remainder::prover::helpers::{prove_circuit_with_runtime_optimized_config, verify_circuit_with_proof_config};
 use shared_types::halo2curves::ff::PrimeField;
-use shared_types::pedersen::PedersenCommitter;
-use shared_types::transcript::ec_transcript::ECTranscript;
 use shared_types::transcript::poseidon_sponge::PoseidonSponge;
-use shared_types::{
-    Bn256Point, Fq, Fr, ff_field, perform_function_under_prover_config, perform_function_under_verifier_config
-};
+use shared_types::{Fr, ff_field};
 
 use poseidon::Spec;
-use tracing::Level;
-use tracing_subscriber::fmt;
-use tracing_subscriber::{self};
 
 const NUM_LEAFS: usize = 2;
-const PATH_LEN: usize = 32; // number of poseidons
-const NUM_VARS_PATH_LEN: usize = 5;
+const PATH_LEN: usize = 1024; // number of poseidons
+const NUM_VARS_PATH_LEN: usize = 10;
 
 const R_F: usize = 8;
 const R_P: usize = 57;
@@ -42,7 +33,7 @@ fn add_constants(builder: &mut CircuitBuilder<Fr>, state: Vec<NodeRef<Fr>>, cons
         .map(|(s, c)| builder.add_sector(s + *c))
         .collect()
 }
-fn _add_constant(builder: &mut CircuitBuilder<Fr>, mut state: Vec<NodeRef<Fr>>, constant: &Fr) -> Vec<NodeRef<Fr>> {
+fn add_constant(builder: &mut CircuitBuilder<Fr>, mut state: Vec<NodeRef<Fr>>, constant: &Fr) -> Vec<NodeRef<Fr>> {
     state[0] = builder.add_sector(state[0].clone() + *constant);
     state
 }
@@ -54,19 +45,8 @@ fn sbox(builder: &mut CircuitBuilder<Fr>, base: &NodeRef<Fr>) -> NodeRef<Fr> {
 fn sbox_full(builder: &mut CircuitBuilder<Fr>, state: Vec<NodeRef<Fr>>) -> Vec<NodeRef<Fr>> {
     state.iter().map(|s| sbox(builder, s)).collect()
 }
-fn _sbox_part(builder: &mut CircuitBuilder<Fr>, mut state: Vec<NodeRef<Fr>>) -> Vec<NodeRef<Fr>> {
+fn sbox_part(builder: &mut CircuitBuilder<Fr>, mut state: Vec<NodeRef<Fr>>) -> Vec<NodeRef<Fr>> {
     state[0] = sbox(builder, &state[0]);
-    state
-}
-
-/// Combinations
-fn sbox_full_and_add_constants(builder: &mut CircuitBuilder<Fr>, state: Vec<NodeRef<Fr>>, constants: &[Fr]) -> Vec<NodeRef<Fr>> {
-    state.into_iter().zip(constants.into_iter())
-        .map(|(s, c)| builder.add_sector(s.clone() * s.clone() * s.clone() * s.clone() * s + *c))
-        .collect()
-}
-fn sbox_part_and_add_constant(builder: &mut CircuitBuilder<Fr>, mut state: Vec<NodeRef<Fr>>, constant: &Fr) -> Vec<NodeRef<Fr>> {
-    state[0] = builder.add_sector(state[0].clone() * state[0].clone() * state[0].clone() * state[0].clone() * state[0].clone() + *constant);
     state
 }
 
@@ -75,7 +55,7 @@ fn mds(builder: &mut CircuitBuilder<Fr>, mds_matrix: &Vec<Vec<Fr>>, columns: &Ve
     mds_matrix.iter().map(|row| {
         let terms = row.iter().zip(columns.iter())
             .map(|(&coeff, col)| col.clone() * coeff)
-            .reduce(|acc, term| acc + term)
+            .reduce(|acc, term| builder.add_sector(acc + term).into())
             .unwrap_or_else(|| unreachable!());
         builder.add_sector(terms)
     }).collect()
@@ -86,7 +66,7 @@ fn mds_sparse(builder: &mut CircuitBuilder<Fr>, row: &[Fr; T], col_hat: &[Fr; RA
     let new_first = {
         let term = row.iter().zip(state.iter())
             .map(|(&coeff, col)| col.clone() * coeff)
-            .reduce(|acc, term| acc + term)
+            .reduce(|acc, term| builder.add_sector(acc + term).into())
             .unwrap();
         builder.add_sector(term)
     };
@@ -110,10 +90,12 @@ fn full_poseidon(builder: &mut CircuitBuilder<Fr>, mut state_by_col: Vec<NodeRef
     // Full rounds
     state_by_col = add_constants(builder, state_by_col, &spec.constants().start()[0]);
     for round_constants in spec.constants().start().iter().skip(1).take(r_f - 1) {
-        state_by_col = sbox_full_and_add_constants(builder, state_by_col, round_constants);
+        state_by_col = sbox_full(builder, state_by_col);
+        state_by_col = add_constants(builder, state_by_col, round_constants);
         state_by_col = mds(builder, &spec.mds_matrices().mds().as_vec(), &state_by_col);
     }
-    state_by_col = sbox_full_and_add_constants(builder, state_by_col, spec.constants().start().last().unwrap());
+    state_by_col = sbox_full(builder, state_by_col);
+    state_by_col = add_constants(builder, state_by_col, spec.constants().start().last().unwrap());
     state_by_col = mds(builder, &spec.mds_matrices().pre_sparse_mds().as_vec(), &state_by_col);
 
     // Partial rounds
@@ -123,12 +105,14 @@ fn full_poseidon(builder: &mut CircuitBuilder<Fr>, mut state_by_col: Vec<NodeRef
         .iter()
         .zip(spec.mds_matrices().sparse_matrices().iter())
     {
-        state_by_col = sbox_part_and_add_constant(builder, state_by_col, round_constant);
+        state_by_col = sbox_part(builder, state_by_col);
+        state_by_col = add_constant(builder, state_by_col, round_constant);
         state_by_col = mds_sparse(builder, sparse_mds.row(), sparse_mds.col_hat(), state_by_col);
     }
     // Full rounds
     for round_constants in spec.constants().end().iter() {
-        state_by_col = sbox_full_and_add_constants(builder, state_by_col, round_constants);
+        state_by_col = sbox_full(builder, state_by_col);
+        state_by_col = add_constants(builder, state_by_col, round_constants);
         state_by_col = mds(builder, &spec.mds_matrices().mds().as_vec(), &state_by_col);
     }
     state_by_col = sbox_full(builder, state_by_col);
@@ -175,7 +159,7 @@ fn build_circuit(num_poseidons: usize, spec: &Spec<Fr, T, RATE>) -> Circuit<Fr> 
         builder.set_output(&subtraction_sector);
     }
 
-    builder.build_with_layer_combination().expect("Failed to build circuit")
+    builder.build().expect("Failed to build circuit")
 }
 
 // generate poseidon tests
@@ -205,7 +189,7 @@ fn gen_poseidon_test(num_poseidons: usize) -> (
 
 fn main() {
     // For tracing.
-    let _subscriber = fmt().with_max_level(Level::INFO).init();
+    // let _subscriber = fmt().with_max_level(Level::INFO).init();
 
     // Create the base layered circuit description.
     let circuit_compile_start = std::time::Instant::now();
@@ -232,97 +216,41 @@ fn main() {
         prover_circuit.set_input(&expected_final_state_input_name, expected_final_state);
     }
 
-    // --- Create GKR circuit prover + verifier configs which work with Hyrax ---
-    let hyrax_circuit_prover_config =
-        GKRCircuitProverConfig::hyrax_compatible_runtime_optimized_default();
-    let hyrax_circuit_verifier_config =
-        GKRCircuitVerifierConfig::new_from_prover_config(&hyrax_circuit_prover_config, false);
-
     // Create a version of the circuit description which the prover can use.
-    // Note that in this case, we create a "Hyrax-provable" circuit rather than
-    // a "GKR-provable" one.
-    let mut hyrax_provable_circuit: hyrax::provable_circuit::HyraxProvableCircuit<Bn256Point> =
-        prover_circuit
-            .gen_hyrax_provable_circuit()
-            .expect("Failed to generate provable circuit");
+    let provable_circuit = prover_circuit
+        .gen_provable_circuit()
+        .expect("Failed to generate provable circuit");
 
-    // The Pedersen committer creates and keeps track of the shared generators
-    // between the prover and verifier. Note that the generators are created
-    // deterministically from the public string.
-    let prover_pedersen_committer =
-        PedersenCommitter::new(512, "Hyrax tutorial Pedersen committer", None);
-
-    // WARNING: This is for tutorial purposes ONLY. NEVER use anything but a CSPRNG for generating blinding factors!
-    let mut blinding_rng = thread_rng();
-
-    // The Vandermonde inverse matrix allows us to convert from evaluations
-    // to coefficients for interpolative claim aggregation. Note that the
-    // coefficient form allows the verifier to directly check relationships
-    // via the homomorphic properties of the curve.
-    let mut vandermonde_converter = VandermondeInverse::new();
-
-    // Finally, we instantiate a transcript over the base field. Note that
-    // prover messages are elliptic curve points which can be encoded as base
-    // field tuples, while verifier messages are scalar field elements of that
-    // curve. Thanks to Hasse's theorem, this results in a negligible completeness
-    // loss in the non-interactive case as we always attempt to coerce a base
-    // field challenge into a scalar field element and panic if the base field
-    // element sampled was larger than the scalar field modulus.
-    let mut prover_transcript: ECTranscript<Bn256Point, PoseidonSponge<Fq>> =
-        ECTranscript::new("Hyrax tutorial prover transcript");
-
-    // Use the `perform_function_under_prover_config!` macro to run the
-    // Hyrax prover's `prove` function with the above arguments, under the
-    // prover config passed in.
-    let (proof, proof_config) = perform_function_under_prover_config!(
-        // This is a hack to get around the macro's syntax for struct methods
-        // rather than function calls.
-        |w, x, y, z| hyrax_provable_circuit.prove(w, x, y, z),
-        &hyrax_circuit_prover_config,
-        &prover_pedersen_committer,
-        &mut blinding_rng,
-        &mut vandermonde_converter,
-        &mut prover_transcript
-    );
+    let (proof_config, proof_as_transcript) =
+        prove_circuit_with_runtime_optimized_config::<Fr, PoseidonSponge<Fr>>(&provable_circuit);
     println!("Proof generation time: {} ms", prove_start.elapsed().as_millis());
 
     // ------------ VERIFIER ------------
-    let verify_start = std::time::Instant::now();
-    // We generate a "Hyrax-verifiable" circuit from the `Circuit` struct,
-    // but we do not attach any circuit inputs to it (these must come from
-    // the proof itself).
-    let hyrax_verifiable_circuit = verifier_circuit
-        .gen_hyrax_verifiable_circuit()
-        .expect("Failed to generate Hyrax verifiable circuit");
-
-    // The verifier can (and should) derive the elliptic curve generators on
-    // its own from the public string and check the proof against these.
-    let verifier_pedersen_committer =
-        PedersenCommitter::new(512, "Hyrax tutorial Pedersen committer", None);
-
-    // The verifier instantiates its own transcript.
-    let mut verifier_transcript: ECTranscript<Bn256Point, PoseidonSponge<Fq>> =
-        ECTranscript::new("Hyrax tutorial verifier transcript");
-
-    // Finally, we verify the proof using the above committer + transcript, as
-    // well as the Hyrax verifier config generated from the prover one earlier.
-    perform_function_under_verifier_config!(
-        verify_hyrax_proof,
-        &hyrax_circuit_verifier_config,
-        &proof,
-        &hyrax_verifiable_circuit,
-        &verifier_pedersen_committer,
-        &mut verifier_transcript,
-        &proof_config
-    );
-    println!("Proof verification time: {} ms", verify_start.elapsed().as_millis());
-
     let vc_size = bincode::serialized_size(&verifier_circuit).unwrap();
-    let proof_size = bincode::serialized_size(&proof).unwrap();
+    let proof_size = bincode::serialized_size(&proof_as_transcript.transcript).unwrap();
     let proof_config_size = bincode::serialized_size(&proof_config).unwrap();
     let total_size = vc_size + proof_size + proof_config_size;
     println!("Total proof size: {} kb", total_size / 1024);
-    println!("  verifiable circuit = {} kb\n  proof = {} kb", vc_size / 1024, proof_size / 1024);
+    println!(
+        "  verifiable circuit = {} kb\n  proof = {} kb",
+        vc_size / 1024,
+        proof_size / 1024
+    );
+
+    let verify_start = std::time::Instant::now();
+    let verifiable_circuit = verifier_circuit
+        .gen_verifiable_circuit()
+        .expect("Failed to generate verifiable circuit");
+
+    verify_circuit_with_proof_config::<Fr, PoseidonSponge<Fr>>(
+        &verifiable_circuit,
+        &proof_config,
+        proof_as_transcript,
+    );
+    println!(
+        "Proof verification time: {} ms",
+        verify_start.elapsed().as_millis()
+    );
 
     println!("All done! Hyrax proof generated and verified.");
 }

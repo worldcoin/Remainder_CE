@@ -160,7 +160,7 @@ fn build_circuit(num_poseidons: usize, round_consts: &Vec<Vec<Fr>>) -> Circuit<F
         builder.set_output(&subtraction_sector);
     }
 
-    builder.build().expect("Failed to build circuit")
+    builder.build_with_layer_combination().expect("Failed to build circuit")
 }
 
 // generate poseidon specs

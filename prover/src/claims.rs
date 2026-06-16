@@ -8,6 +8,7 @@ pub mod claim_group;
 pub mod tests;
 
 pub mod claim_aggregation;
+pub(crate) mod claim_dedup;
 pub(crate) mod subset_structure_claim_preprocessing;
 
 use std::{collections::HashMap, fmt};

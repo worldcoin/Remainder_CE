@@ -308,7 +308,7 @@ pub struct TranscriptReader<F, T> {
 
     /// The transcript that this reader is using to consume elements from and
     /// verify the order of operations is valid.
-    transcript: Transcript<F>,
+    pub transcript: Transcript<F>,
 
     /// An internal state representing the position of the next operation on the
     /// transcript.
