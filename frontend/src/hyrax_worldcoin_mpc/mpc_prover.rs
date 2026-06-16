@@ -231,6 +231,7 @@ pub struct MPCCircuitConstData<F: Field> {
     pub encoding_matrix: MultilinearExtension<F>,
     pub evaluation_points: MultilinearExtension<F>,
     pub lookup_table_values: MultilinearExtension<F>,
+    pub lookup_table_values_2_20: MultilinearExtension<F>,
 }
 
 // TODO: Add similar API to V3CircuitAndAuxData/ConstData.
@@ -245,7 +246,7 @@ pub struct MPCCircuitsAndConstData<F: Field> {
 #[derive(Serialize, Deserialize)]
 pub struct MPCProver {
     #[serde(skip)]
-    #[serde(default = "V3Prover::default_committer")]
+    #[serde(default = "MPCProver::default_committer")]
     committer: PedersenCommitter<Bn256Point>,
 
     #[serde(skip)]
@@ -284,7 +285,7 @@ impl MPCProver {
     }
 
     pub fn default_committer() -> PedersenCommitter<Bn256Point> {
-        PedersenCommitter::new(512, PUBLIC_STRING, None)
+        PedersenCommitter::new(1024, PUBLIC_STRING, None)
     }
 
     pub fn new(
@@ -412,6 +413,8 @@ impl MPCProver {
 
         let lookup_table_values =
             MultilinearExtension::new((0..GR4_MODULUS).map(Fr::from).collect());
+        let lookup_table_values_2_20 =
+            MultilinearExtension::new((0..(1 << 20)).map(Fr::from).collect());
 
         let proofs_all_3_parties: Vec<_> = (0..3)
             .map(|party_idx| {
@@ -435,6 +438,7 @@ impl MPCProver {
                     encoding_matrix: encoding_matrix.clone(),
                     evaluation_points: evaluation_points.clone(),
                     lookup_table_values: lookup_table_values.clone(),
+                    lookup_table_values_2_20: lookup_table_values_2_20.clone(),
                 };
 
                 mpc_attach_data(&mut circuit, const_data, input_data);
@@ -686,7 +690,7 @@ impl V3MPCProver {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MPCPartyProof {
     #[serde(skip)]
-    #[serde(default = "V3Prover::default_committer")]
+    #[serde(default = "MPCProver::default_committer")]
     committer: PedersenCommitter<Bn256Point>,
 
     proof_config: ProofConfig,
@@ -701,7 +705,7 @@ impl MPCPartyProof {
         right_eye_proof: HyraxProof<Bn256Point>,
     ) -> Self {
         Self {
-            committer: V3Prover::default_committer(),
+            committer: MPCProver::default_committer(),
             proof_config,
             left_eye_proof,
             right_eye_proof,
