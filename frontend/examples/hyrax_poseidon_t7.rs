@@ -26,7 +26,7 @@ const NUM_VARS_PATH_LEN: usize = 5;
 
 const R_F: usize = 8;
 const R_P: usize = 57;
-const NUM_INTERMEDIATE_STATES: usize = 3; // excluding leafs and final state
+const NUM_INTERMEDIATE_STATES: usize = 4; // excluding leafs and final state
 const T: usize = 3;
 const RATE: usize = 2;
 
@@ -68,7 +68,8 @@ fn _add_constant(
 
 /// Compute x^5
 fn sbox(builder: &mut CircuitBuilder<Fr>, base: &NodeRef<Fr>) -> NodeRef<Fr> {
-    builder.add_sector(base.clone() * base.clone() * base.clone() * base.clone() * base)
+    let mult_int = builder.add_sector(base.clone() * base.clone());
+    builder.add_sector(mult_int.clone() * mult_int * base)
 }
 fn sbox_full(builder: &mut CircuitBuilder<Fr>, state: Vec<NodeRef<Fr>>) -> Vec<NodeRef<Fr>> {
     state.iter().map(|s| sbox(builder, s)).collect()
@@ -87,7 +88,10 @@ fn sbox_full_and_add_constants(
     state
         .into_iter()
         .zip(constants.into_iter())
-        .map(|(s, c)| builder.add_sector(s.clone() * s.clone() * s.clone() * s.clone() * s + *c))
+        .map(|(s, c)| {
+            let mult_int = builder.add_sector(s.clone() * s.clone());
+            builder.add_sector(mult_int.clone() * mult_int * s + *c)
+        })
         .collect()
 }
 fn sbox_part_and_add_constant(
@@ -95,11 +99,10 @@ fn sbox_part_and_add_constant(
     mut state: Vec<NodeRef<Fr>>,
     constant: &Fr,
 ) -> Vec<NodeRef<Fr>> {
+    let mult_int = builder.add_sector(state[0].clone() * state[0].clone());
     state[0] = builder.add_sector(
-        state[0].clone()
-            * state[0].clone()
-            * state[0].clone()
-            * state[0].clone()
+        mult_int.clone()
+            * mult_int
             * state[0].clone()
             + *constant,
     );
