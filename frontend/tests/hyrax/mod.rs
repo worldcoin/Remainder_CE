@@ -1996,7 +1996,8 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     );
 
     // Middle layer 1: compute the cube of the input.
-    let cubing_sector = builder.add_sector(input_shred.expr() * input_shred.expr() * input_shred.expr());
+    let cubing_sector =
+        builder.add_sector(input_shred.expr() * input_shred.expr() * input_shred.expr());
 
     // Middle layer 2: subtract middle layer 1 from itself.
     let subtract_sector = builder.add_sector(cubing_sector.expr() - cubing_sector.expr());
