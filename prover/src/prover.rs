@@ -169,8 +169,6 @@ pub fn prove_circuit<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
     // well as all the prover messages for claim aggregation at the
     // beginning of proving each layer.
     for mut layer in layers.layers.into_iter().rev() {
-        let layer_timer_debug = std::time::Instant::now();
-
         let layer_id = layer.layer_id();
         let layer_timer = start_timer!(|| format!("Generating proof for layer {layer_id:?}"));
         info!("Proving Intermediate Layer: {layer_id:?}");
@@ -252,8 +250,6 @@ pub fn prove_circuit<F: Halo2FFTFriendlyField, Tr: TranscriptSponge<F>>(
         for claim in layer.get_claims()? {
             claim_tracker.insert(claim.get_to_layer_id(), claim);
         }
-
-        println!("Proving layer {} of {} claims took {} ms", layer.layer_id(), layer.get_claims().unwrap().len(), layer_timer_debug.elapsed().as_millis());
         end_timer!(layer_timer);
     }
 

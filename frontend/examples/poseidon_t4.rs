@@ -10,8 +10,8 @@ use shared_types::{Fr, ff_field};
 use poseidon::Spec;
 
 const NUM_LEAFS: usize = 2;
-const PATH_LEN: usize = 1024; // number of poseidons
-const NUM_VARS_PATH_LEN: usize = 10;
+const PATH_LEN: usize = 32; // number of poseidons
+const NUM_VARS_PATH_LEN: usize = 5;
 
 const R_F: usize = 8;
 const R_P: usize = 57;
@@ -33,7 +33,7 @@ fn add_constants(builder: &mut CircuitBuilder<Fr>, state: Vec<NodeRef<Fr>>, cons
         .map(|(s, c)| builder.add_sector(s + *c))
         .collect()
 }
-fn add_constant(builder: &mut CircuitBuilder<Fr>, mut state: Vec<NodeRef<Fr>>, constant: &Fr) -> Vec<NodeRef<Fr>> {
+fn _add_constant(builder: &mut CircuitBuilder<Fr>, mut state: Vec<NodeRef<Fr>>, constant: &Fr) -> Vec<NodeRef<Fr>> {
     state[0] = builder.add_sector(state[0].clone() + *constant);
     state
 }
@@ -45,8 +45,19 @@ fn sbox(builder: &mut CircuitBuilder<Fr>, base: &NodeRef<Fr>) -> NodeRef<Fr> {
 fn sbox_full(builder: &mut CircuitBuilder<Fr>, state: Vec<NodeRef<Fr>>) -> Vec<NodeRef<Fr>> {
     state.iter().map(|s| sbox(builder, s)).collect()
 }
-fn sbox_part(builder: &mut CircuitBuilder<Fr>, mut state: Vec<NodeRef<Fr>>) -> Vec<NodeRef<Fr>> {
+fn _sbox_part(builder: &mut CircuitBuilder<Fr>, mut state: Vec<NodeRef<Fr>>) -> Vec<NodeRef<Fr>> {
     state[0] = sbox(builder, &state[0]);
+    state
+}
+
+/// Combinations
+fn sbox_full_and_add_constants(builder: &mut CircuitBuilder<Fr>, state: Vec<NodeRef<Fr>>, constants: &[Fr]) -> Vec<NodeRef<Fr>> {
+    state.into_iter().zip(constants.into_iter())
+        .map(|(s, c)| builder.add_sector(s.clone() * s.clone() * s.clone() * s.clone() * s + *c))
+        .collect()
+}
+fn sbox_part_and_add_constant(builder: &mut CircuitBuilder<Fr>, mut state: Vec<NodeRef<Fr>>, constant: &Fr) -> Vec<NodeRef<Fr>> {
+    state[0] = builder.add_sector(state[0].clone() * state[0].clone() * state[0].clone() * state[0].clone() * state[0].clone() + *constant);
     state
 }
 
@@ -90,12 +101,10 @@ fn full_poseidon(builder: &mut CircuitBuilder<Fr>, mut state_by_col: Vec<NodeRef
     // Full rounds
     state_by_col = add_constants(builder, state_by_col, &spec.constants().start()[0]);
     for round_constants in spec.constants().start().iter().skip(1).take(r_f - 1) {
-        state_by_col = sbox_full(builder, state_by_col);
-        state_by_col = add_constants(builder, state_by_col, round_constants);
+        state_by_col = sbox_full_and_add_constants(builder, state_by_col, round_constants);
         state_by_col = mds(builder, &spec.mds_matrices().mds().as_vec(), &state_by_col);
     }
-    state_by_col = sbox_full(builder, state_by_col);
-    state_by_col = add_constants(builder, state_by_col, spec.constants().start().last().unwrap());
+    state_by_col = sbox_full_and_add_constants(builder, state_by_col, spec.constants().start().last().unwrap());
     state_by_col = mds(builder, &spec.mds_matrices().pre_sparse_mds().as_vec(), &state_by_col);
 
     // Partial rounds
@@ -105,14 +114,12 @@ fn full_poseidon(builder: &mut CircuitBuilder<Fr>, mut state_by_col: Vec<NodeRef
         .iter()
         .zip(spec.mds_matrices().sparse_matrices().iter())
     {
-        state_by_col = sbox_part(builder, state_by_col);
-        state_by_col = add_constant(builder, state_by_col, round_constant);
+        state_by_col = sbox_part_and_add_constant(builder, state_by_col, round_constant);
         state_by_col = mds_sparse(builder, sparse_mds.row(), sparse_mds.col_hat(), state_by_col);
     }
     // Full rounds
     for round_constants in spec.constants().end().iter() {
-        state_by_col = sbox_full(builder, state_by_col);
-        state_by_col = add_constants(builder, state_by_col, round_constants);
+        state_by_col = sbox_full_and_add_constants(builder, state_by_col, round_constants);
         state_by_col = mds(builder, &spec.mds_matrices().mds().as_vec(), &state_by_col);
     }
     state_by_col = sbox_full(builder, state_by_col);
@@ -159,7 +166,7 @@ fn build_circuit(num_poseidons: usize, spec: &Spec<Fr, T, RATE>) -> Circuit<Fr> 
         builder.set_output(&subtraction_sector);
     }
 
-    builder.build().expect("Failed to build circuit")
+    builder.build_with_layer_combination().expect("Failed to build circuit")
 }
 
 // generate poseidon tests
