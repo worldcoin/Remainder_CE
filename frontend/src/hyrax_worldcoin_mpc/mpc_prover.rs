@@ -231,7 +231,7 @@ pub struct MPCCircuitConstData<F: Field> {
     pub encoding_matrix: MultilinearExtension<F>,
     pub evaluation_points: MultilinearExtension<F>,
     pub lookup_table_values: MultilinearExtension<F>,
-    pub lookup_table_values_2_20: MultilinearExtension<F>,
+    pub lookup_table_values_2_19: MultilinearExtension<F>,
 }
 
 // TODO: Add similar API to V3CircuitAndAuxData/ConstData.
@@ -413,8 +413,8 @@ impl MPCProver {
 
         let lookup_table_values =
             MultilinearExtension::new((0..GR4_MODULUS).map(Fr::from).collect());
-        let lookup_table_values_2_20 =
-            MultilinearExtension::new((0..(1 << 20)).map(Fr::from).collect());
+        let lookup_table_values_2_19 =
+            MultilinearExtension::new((0..(1 << 19)).map(Fr::from).collect());
 
         let proofs_all_3_parties: Vec<_> = (0..3)
             .map(|party_idx| {
@@ -438,7 +438,7 @@ impl MPCProver {
                     encoding_matrix: encoding_matrix.clone(),
                     evaluation_points: evaluation_points.clone(),
                     lookup_table_values: lookup_table_values.clone(),
-                    lookup_table_values_2_20: lookup_table_values_2_20.clone(),
+                    lookup_table_values_2_19: lookup_table_values_2_19.clone(),
                 };
 
                 mpc_attach_data(&mut circuit, const_data, input_data);

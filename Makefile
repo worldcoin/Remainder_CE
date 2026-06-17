@@ -1,7 +1,7 @@
 .PHONY: all pr check test-dev test-ignored test examples mem-lim-cgroups mem-lim-docker prod prod-seq bin bin-seq mem-profile-prover mobile clean help
 
 # Memory limit in MB.
-MEM_LIM=750
+MEM_LIM=300
 
 all: help
 

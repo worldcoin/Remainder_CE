@@ -45,7 +45,7 @@ pub const MPC_MULTIPLICITIES_QUOTIENTS_SHRED: &str = "Multiplicities Quotients";
 pub const MPC_ENCODING_MATRIX_SHRED: &str = "Encoding Matrix";
 pub const MPC_EVALUATION_POINTS_SHRED: &str = "Evaluation Points";
 pub const MPC_LOOKUP_TABLE_VALUES_SHRED: &str = "Lookup Table Values";
-pub const MPC_LOOKUP_TABLE_VALUES_SHRED_2_20: &str = "Lookup Table Values 2^20";
+pub const MPC_LOOKUP_TABLE_VALUES_SHRED_2_19: &str = "Lookup Table Values 2^19";
 
 /// Builds the mpc circuit.
 /// The full circuit spec can be referenced here:
@@ -100,7 +100,7 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
     );
     let multiplicities_quotients = builder.add_input_shred(
         MPC_MULTIPLICITIES_QUOTIENTS_SHRED,
-        20,
+        19,
         &auxilary_input_layer_node,
     );
 
@@ -123,13 +123,13 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
     let fiat_shamir_challenge_node = builder.add_fiat_shamir_challenge_node(1);
     let lookup_table = builder.add_lookup_table(&lookup_table_values, &fiat_shamir_challenge_node);
 
-    let lookup_table_values_2_20 = builder.add_input_shred(
-        MPC_LOOKUP_TABLE_VALUES_SHRED_2_20,
-        20,
+    let lookup_table_values_2_19 = builder.add_input_shred(
+        MPC_LOOKUP_TABLE_VALUES_SHRED_2_19,
+        19,
         &auxiliary_invariant_public_input_layer_node_2,
     );
-    let lookup_table_2_20 =
-        builder.add_lookup_table(&lookup_table_values_2_20, &fiat_shamir_challenge_node);
+    let lookup_table_2_19 =
+        builder.add_lookup_table(&lookup_table_values_2_19, &fiat_shamir_challenge_node);
 
     let masked_iris_code =
         WorldcoinMpcComponents::masked_iris_code(&mut builder, &iris_code, &mask_code);
@@ -173,7 +173,7 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
         builder.add_lookup_constraint(&lookup_table, &slopes, &multiplicities_slopes);
 
     let _lookup_constraint_quotients =
-        builder.add_lookup_constraint(&lookup_table_2_20, &quotients, &multiplicities_quotients);
+        builder.add_lookup_constraint(&lookup_table_2_19, &quotients, &multiplicities_quotients);
 
     builder.build_without_layer_combination().unwrap()
 }
@@ -213,7 +213,7 @@ pub fn mpc_attach_data<F: Field>(
         mpc_aux_data.lookup_table_values,
     );
     circuit.set_input(
-        MPC_LOOKUP_TABLE_VALUES_SHRED_2_20,
-        mpc_aux_data.lookup_table_values_2_20,
+        MPC_LOOKUP_TABLE_VALUES_SHRED_2_19,
+        mpc_aux_data.lookup_table_values_2_19,
     );
 }

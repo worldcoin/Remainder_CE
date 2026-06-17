@@ -99,13 +99,13 @@ pub fn gen_mpc_common_aux_data<F: Field, const NUM_IRIS_4_CHUNKS: usize, const P
     let evaluation_points = gen_mpc_evaluation_points::<F, NUM_IRIS_4_CHUNKS, PARTY_IDX>();
     let encoding_matrix = gen_mpc_encoding_matrix::<F, NUM_IRIS_4_CHUNKS>();
     let lookup_table_values = MultilinearExtension::new((0..GR4_MODULUS).map(F::from).collect());
-    let lookup_table_values_2_20 = MultilinearExtension::new((0..(1 << 20)).map(F::from).collect());
+    let lookup_table_values_2_19 = MultilinearExtension::new((0..(1 << 19)).map(F::from).collect());
 
     MPCCircuitConstData {
         evaluation_points,
         encoding_matrix,
         lookup_table_values,
-        lookup_table_values_2_20,
+        lookup_table_values_2_19,
     }
 }
 
@@ -219,13 +219,13 @@ pub fn gen_mpc_input_data<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
     // the same process for quotients
     let mut counts_quotients: HashMap<F, u64> = HashMap::new();
     quotients.iter().for_each(|x| {
-        // check that quotients are in the range [0, 2^20).
-        assert!(x < &F::from(1 << 20));
+        // check that quotients are in the range [0, 2^19).
+        assert!(x < &F::from(1 << 19));
 
         *counts_quotients.entry(*x).or_insert(0) += 1;
     });
 
-    let mut multiplicities_quotients = vec![F::ZERO; (1 << 20) as usize];
+    let mut multiplicities_quotients = vec![F::ZERO; (1 << 19) as usize];
     counts_quotients.iter().for_each(|(k, v)| {
         multiplicities_quotients[k.to_u64s_le()[0] as usize] = F::from(*v);
     });
@@ -324,7 +324,7 @@ pub fn generate_trivial_test_data<
         mpc_input_data.multiplicities_slopes.len(),
         GR4_MODULUS as usize
     );
-    assert_eq!(mpc_input_data.multiplicities_quotients.len(), (1 << 20));
+    assert_eq!(mpc_input_data.multiplicities_quotients.len(), (1 << 19));
     assert_eq!(mpc_aux_data.lookup_table_values.len(), GR4_MODULUS as usize);
 
     (mpc_aux_data, mpc_input_data)
