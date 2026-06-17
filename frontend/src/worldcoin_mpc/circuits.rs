@@ -100,7 +100,7 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
     );
     let multiplicities_quotients = builder.add_input_shred(
         MPC_MULTIPLICITIES_QUOTIENTS_SHRED,
-        20 as usize,
+        20,
         &auxilary_input_layer_node,
     );
 
@@ -125,7 +125,7 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
 
     let lookup_table_values_2_20 = builder.add_input_shred(
         MPC_LOOKUP_TABLE_VALUES_SHRED_2_20,
-        20 as usize,
+        20,
         &auxiliary_invariant_public_input_layer_node_2,
     );
     let lookup_table_2_20 =

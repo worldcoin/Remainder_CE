@@ -324,10 +324,7 @@ pub fn generate_trivial_test_data<
         mpc_input_data.multiplicities_slopes.len(),
         GR4_MODULUS as usize
     );
-    assert_eq!(
-        mpc_input_data.multiplicities_quotients.len(),
-        GR4_MODULUS as usize
-    );
+    assert_eq!(mpc_input_data.multiplicities_quotients.len(), (1 << 20));
     assert_eq!(mpc_aux_data.lookup_table_values.len(), GR4_MODULUS as usize);
 
     (mpc_aux_data, mpc_input_data)
