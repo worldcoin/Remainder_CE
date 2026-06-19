@@ -22,6 +22,7 @@ pub const MPC_AUXILIARY_LAYER: &str = "Auxiliary"; // Should be private + depend
 /// all other public inputs, such as the evaluation points, the encoding matrix,
 /// the lookup_table_values. Should (probably) be public + common among parties.
 pub const MPC_AUXILIARY_INVARIANT_LAYER: &str = "Auxiliary Invariant";
+pub const MPC_AUXILIARY_INVARIANT_LAYER_2: &str = "Auxiliary Invariant 2";
 /// The input layer for shares_reduced_modulo_gr4_modulus, public
 pub const MPC_SHARES_LAYER: &str = "Shares";
 /// The private input layer for the slope (private and generated randomly).
@@ -40,9 +41,11 @@ pub const MPC_QUOTIENTS_SHRED: &str = "Quotients";
 pub const MPC_SHARES_SHRED: &str = "Shares Reduced Modulo GR4 Modulus";
 pub const MPC_MULTIPLICITIES_SHARES_SHRED: &str = "Multiplicities Shares";
 pub const MPC_MULTIPLICITIES_SLOPES_SHRED: &str = "Multiplicities Slopes";
+pub const MPC_MULTIPLICITIES_QUOTIENTS_SHRED: &str = "Multiplicities Quotients";
 pub const MPC_ENCODING_MATRIX_SHRED: &str = "Encoding Matrix";
 pub const MPC_EVALUATION_POINTS_SHRED: &str = "Evaluation Points";
 pub const MPC_LOOKUP_TABLE_VALUES_SHRED: &str = "Lookup Table Values";
+pub const MPC_LOOKUP_TABLE_VALUES_SHRED_2_19: &str = "Lookup Table Values 2^19";
 
 /// Builds the mpc circuit.
 /// The full circuit spec can be referenced here:
@@ -68,6 +71,8 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
         builder.add_input_layer(MPC_SHARES_LAYER, LayerVisibility::Public);
     let auxiliary_invariant_public_input_layer_node =
         builder.add_input_layer(MPC_AUXILIARY_INVARIANT_LAYER, LayerVisibility::Public);
+    let auxiliary_invariant_public_input_layer_node_2 =
+        builder.add_input_layer(MPC_AUXILIARY_INVARIANT_LAYER_2, LayerVisibility::Public);
     let slope_input_layer_node = builder.add_input_layer(MPC_SLOPES_LAYER, layer_visibility);
     let iris_code_input_layer_node =
         builder.add_input_layer(MPC_IRISCODE_INPUT_LAYER, layer_visibility);
@@ -93,6 +98,11 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
         GR4_ELEM_BIT_LENGTH as usize,
         &auxilary_input_layer_node,
     );
+    let multiplicities_quotients = builder.add_input_shred(
+        MPC_MULTIPLICITIES_QUOTIENTS_SHRED,
+        19,
+        &auxilary_input_layer_node,
+    );
 
     let encoding_matrix = builder.add_input_shred(
         MPC_ENCODING_MATRIX_SHRED,
@@ -112,6 +122,14 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
     );
     let fiat_shamir_challenge_node = builder.add_fiat_shamir_challenge_node(1);
     let lookup_table = builder.add_lookup_table(&lookup_table_values, &fiat_shamir_challenge_node);
+
+    let lookup_table_values_2_19 = builder.add_input_shred(
+        MPC_LOOKUP_TABLE_VALUES_SHRED_2_19,
+        19,
+        &auxiliary_invariant_public_input_layer_node_2,
+    );
+    let lookup_table_2_19 =
+        builder.add_lookup_table(&lookup_table_values_2_19, &fiat_shamir_challenge_node);
 
     let masked_iris_code =
         WorldcoinMpcComponents::masked_iris_code(&mut builder, &iris_code, &mask_code);
@@ -154,6 +172,9 @@ pub fn build_circuit<F: Field, const NUM_IRIS_4_CHUNKS: usize>(
     let _lookup_constraint_slopes =
         builder.add_lookup_constraint(&lookup_table, &slopes, &multiplicities_slopes);
 
+    let _lookup_constraint_quotients =
+        builder.add_lookup_constraint(&lookup_table_2_19, &quotients, &multiplicities_quotients);
+
     builder.build_without_layer_combination().unwrap()
 }
 
@@ -181,10 +202,18 @@ pub fn mpc_attach_data<F: Field>(
         MPC_MULTIPLICITIES_SLOPES_SHRED,
         mpc_input_data.multiplicities_slopes,
     );
+    circuit.set_input(
+        MPC_MULTIPLICITIES_QUOTIENTS_SHRED,
+        mpc_input_data.multiplicities_quotients,
+    );
     circuit.set_input(MPC_ENCODING_MATRIX_SHRED, mpc_aux_data.encoding_matrix);
     circuit.set_input(MPC_EVALUATION_POINTS_SHRED, mpc_aux_data.evaluation_points);
     circuit.set_input(
         MPC_LOOKUP_TABLE_VALUES_SHRED,
         mpc_aux_data.lookup_table_values,
+    );
+    circuit.set_input(
+        MPC_LOOKUP_TABLE_VALUES_SHRED_2_19,
+        mpc_aux_data.lookup_table_values_2_19,
     );
 }
