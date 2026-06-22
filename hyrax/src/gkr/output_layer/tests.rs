@@ -10,8 +10,8 @@ type Base = <Bn256Point as CurveExt>::Base;
 
 const INIT_STR: &str = "modulus modulus modulus modulus modulus modulus";
 
-// An honest zero-test output layer commits its claim to zero, and the verifier
-// accepts it by recomputing the commitment from the revealed blinding factor.
+/// An honest zero-test output layer commits its claim to zero, and the verifier
+/// accepts it by recomputing the commitment from the revealed blinding factor.
 #[test]
 fn zero_output_layer_commits_to_zero_and_verifies() {
     let committer = PedersenCommitter::<Bn256Point>::new(2, INIT_STR, None);
@@ -47,9 +47,9 @@ fn zero_output_layer_commits_to_zero_and_verifies() {
     assert_eq!(claim.evaluation, proof.claim_commitment);
 }
 
-// A malicious prover that commits the true non-zero output (instead of zero)
-// must be rejected by the verifier of a zero-test output layer, regardless of
-// the blinding factor it reveals.
+/// A malicious prover that commits the true non-zero output (instead of zero)
+/// must be rejected by the verifier of a zero-test output layer, regardless of
+/// the blinding factor it reveals.
 #[test]
 #[should_panic(expected = "Zero-test output layer claim does not open to zero")]
 fn zero_output_layer_rejects_nonzero_commitment() {
