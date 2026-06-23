@@ -10,6 +10,9 @@ use shared_types::pedersen::{CommittedScalar, PedersenCommitter};
 
 use crate::gkr::layer::HyraxClaim;
 
+#[cfg(test)]
+mod tests;
+
 /// The proof structure for the proof of a Hyrax output layer, which
 /// doesn't need anything other than whether the challenges the
 /// output layer was evaluated on, so that the verifier can check
@@ -19,6 +22,12 @@ use crate::gkr::layer::HyraxClaim;
 pub struct HyraxOutputLayerProof<C: PrimeOrderCurve> {
     /// The commitment to the claim that the output layer is making
     pub claim_commitment: C,
+    /// The blinding factor of `claim_commitment`. It is revealed so that the
+    /// verifier can check that a zero-test output layer's claim opens to zero,
+    /// mirroring how other verifier-checked claims (e.g. claims on public
+    /// inputs) are sent with their openings. The committed value is public
+    /// (zero) for zero-test layers, so revealing the blinding leaks nothing.
+    pub claim_blinding: C::Scalar,
 }
 
 impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
@@ -36,9 +45,9 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         output_layer.fix_layer(&bindings).unwrap();
         let claim = output_layer.get_claim().unwrap();
 
-        // Convert to a CommittedScalar claim
-        let blinding_factor = &C::Scalar::random(blinding_rng);
-        let claim_commit = scalar_committer.committed_scalar(&claim.get_eval(), blinding_factor);
+        // Convert to a CommittedScalar claim.
+        let blinding_factor = C::Scalar::random(blinding_rng);
+        let claim_commit = scalar_committer.committed_scalar(&claim.get_eval(), &blinding_factor);
         let committed_claim = HyraxClaim {
             point: claim.get_point().to_vec(),
             to_layer_id: claim.get_to_layer_id(),
@@ -51,6 +60,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         (
             Self {
                 claim_commitment: commitment,
+                claim_blinding: blinding_factor,
             },
             committed_claim,
         )
@@ -66,6 +76,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     pub fn verify(
         proof: &HyraxOutputLayerProof<C>,
         layer_desc: &OutputLayerDescription<C::Scalar>,
+        committer: &PedersenCommitter<C>,
         transcript: &mut impl ECTranscriptTrait<C>,
     ) -> HyraxClaim<C::Scalar, C> {
         // Get the first set of challenges needed for the output layer.
@@ -85,6 +96,20 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         transcript.append_ec_point(
             "Commitment to claim on output layer",
             proof.claim_commitment,
+        );
+
+        // Soundness check for zero-test output layers: the committed claim must
+        // open to zero. We recompute the commitment to zero using the revealed
+        // blinding factor and require it to match. Without this check a
+        // malicious prover could commit to the true non-zero output and still
+        // produce an internally consistent proof, breaking soundness for any
+        // zero-test circuit. This mirrors the plaintext verifier's
+        // NonZeroEvalForZeroMle check in `remainder::output_layer`.
+        assert!(
+            !layer_desc.is_zero()
+                || proof.claim_commitment
+                    == committer.scalar_commit(&C::Scalar::ZERO, &proof.claim_blinding),
+            "Zero-test output layer claim does not open to zero"
         );
 
         HyraxClaim {

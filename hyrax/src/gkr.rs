@@ -520,6 +520,7 @@ impl<C: PrimeOrderCurve> HyraxCircuitProof<C> {
                 let output_layer_claim = HyraxOutputLayerProof::verify(
                     output_layer_proof,
                     output_layer_desc,
+                    committer,
                     transcript,
                 );
 
