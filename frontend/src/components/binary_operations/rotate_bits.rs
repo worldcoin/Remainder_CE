@@ -55,7 +55,7 @@ fn generate_rot_wirings(arity: usize, rot_amount: i32) -> Vec<(u32, u32)> {
     // Ensure `rot_amount` can represent all possible rotations for a
     // given value of `arity`. Here `rot_amount` is of type `i32` and a
     // -ve value means left rotation and a +ve value means right
-    // rotation. The amount of rotation
+    // rotation. The amount of rotation is taken modulo 2^arity.
 
     assert!(arity <= 30);
 
