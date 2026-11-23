@@ -23,7 +23,7 @@ Parts of _Remainder_ have been audited in the past, although we currently provid
 _Remainder_ is fully implemented in Rust, and requires the (stable) version specified in the `rust-toolchain.toml` file. Once you have [installed Rust](https://doc.rust-lang.org/book/ch01-01-installation.html) -- 
 ```bash
 git clone https://github.com/worldcoin/Remainder_CE.git
-cd Remainder
+cd Remainder_CE
 make check # Compiles + lints
 make test-dev # Runs all fast unit tests; skips slower integration tests
 ```
